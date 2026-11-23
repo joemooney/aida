@@ -111,7 +111,6 @@ pub(crate) fn collect_pr(
 /// (TASK-2019). Every snapshot git call is config-independent: no system
 /// config, no replace objects, no path quoting, explicit status options.
 // trace:TASK-2067 | ai:antigravity
-#[cfg(test)]
 pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
     let snapshot = store_snapshot_for_collection(store)?;
     ensure!(snapshot.dirt.as_deref() == Some(""), StoreDirty);
@@ -323,98 +322,10 @@ fn dirt_is_relevant(snapshot: &StoreSnapshot, scope: &EvidenceScope) -> bool {
 // trace:TASK-2067 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StoreSnapshot {
-    head: String,
+    pub(super) head: String,
     // None means dirt could not safely be scoped.
     dirt: Option<String>,
     refs: std::collections::BTreeMap<String, String>,
-}
-
-// trace:BUG-2727 | ai:codex
-impl StoreSnapshot {
-    pub(super) fn origin_head(&self) -> Option<&str> {
-        self.refs
-            .get("refs/remotes/origin/aida-store")
-            .map(String::as_str)
-    }
-
-    pub(super) fn resolution_head(&self, store: &Path) -> Result<&str> {
-        let origin = self.origin_head().context("missing origin/aida-store")?;
-        if origin == self.head {
-            return Ok(origin);
-        }
-        let ancestor = |a, b| snapshot_status(store, &["merge-base", "--is-ancestor", a, b]);
-        if ancestor(&self.head, origin) == Some(true) {
-            return Ok(origin);
-        }
-        ensure!(
-            ancestor(origin, &self.head) == Some(true),
-            "store HEAD {} and origin/aida-store {origin} have no verified fast-forward",
-            self.head
-        );
-        Ok(&self.head)
-    }
-}
-
-/// Read the pinned tree with the same Git environment as its stability checks.
-// trace:BUG-2727 | ai:codex
-pub(super) fn resolution_store(store: &Path, head: &str) -> Result<aida_core::RequirementsStore> {
-    let rows = snapshot_git(store, &["ls-tree", "-rz", head, "--", "objects/"], None)?;
-    let mut objects = Vec::new();
-    let mut requests = String::new();
-    for row in rows.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let (header, path) = std::str::from_utf8(row)?
-            .split_once('\t')
-            .context("invalid store tree entry")?;
-        if !path.ends_with(".yaml") {
-            continue;
-        }
-        let mut fields = header.split_whitespace();
-        ensure!(
-            matches!(fields.next(), Some("100644" | "100755")) && fields.next() == Some("blob"),
-            "invalid store object {path}"
-        );
-        let blob = fields
-            .next()
-            .filter(|id| oid(id))
-            .context("invalid store blob ID")?;
-        requests.push_str(blob);
-        requests.push('\n');
-        objects.push((path, blob));
-    }
-    let bodies = snapshot_git(store, &["cat-file", "--batch"], Some(requests.as_bytes()))?;
-    let mut remaining = bodies.as_slice();
-    let mut result: aida_core::RequirementsStore = Default::default();
-    let mut uuids = BTreeSet::new();
-    for (path, blob) in objects {
-        let end = remaining
-            .iter()
-            .position(|b| *b == b'\n')
-            .context("missing batch header")?;
-        let size: usize = std::str::from_utf8(&remaining[..end])?
-            .strip_prefix(&format!("{blob} blob "))
-            .context("unexpected store blob")?
-            .parse()?;
-        let data = &remaining[end + 1..];
-        ensure!(
-            data.get(size) == Some(&b'\n'),
-            "truncated store object {path}"
-        );
-        let req: aida_core::Requirement =
-            serde_yaml::from_slice(&data[..size]).with_context(|| format!("parse {path}"))?;
-        let stem = Path::new(path).file_stem().and_then(|s| s.to_str());
-        ensure!(
-            req.spec_id
-                .as_deref()
-                .zip(stem)
-                .is_some_and(|(id, name)| id.eq_ignore_ascii_case(name))
-                && uuids.insert(req.id),
-            "inconsistent store object {path}"
-        );
-        result.requirements.push(req);
-        remaining = &data[size + 1..];
-    }
-    ensure!(remaining.is_empty(), "unexpected trailing store blobs");
-    Ok(result)
 }
 
 /// TASK-2019: the store had uncommitted evidence when a snapshot was taken.

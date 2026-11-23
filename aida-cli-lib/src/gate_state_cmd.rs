@@ -432,7 +432,7 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
     )?;
     let head = info.head_oid.trim().to_string();
     let (ids, _branch, _forge_resolved, _authors) =
-        crate::pr_cmd::pr_gate_subject(&main, pr, &[], Some(&info.head_ref), None);
+        crate::pr_cmd::pr_gate_subject(&main, pr, &[], Some(&info.head_ref));
     let loaded = effective::load(&main, change, &ids)?;
     let state = effective::effective_gate_state(
         &head,

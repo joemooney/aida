@@ -7,8 +7,7 @@
 // trace:STORY-1700 | ai:claude
 // mandate-gate
 
-use crate::gate::approval::ship_approval_policy;
-use crate::pr_cmd::{fetch_change_info_via_resolved_forge, normalized_spec_ids, pr_gate_subject};
+use crate::pr_cmd::{fetch_change_info_via_resolved_forge, normalized_spec_ids};
 use crate::pr_ship;
 
 /// STORY-1698: who a fire-fighting mandate lets ship — the mandate id and the
@@ -131,17 +130,9 @@ pub(crate) fn resolve_exclusion_specs(
     let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
         // A colliding label cannot select whichever object Git listed first.
         // trace:BUG-2727 | ai:codex
-        let mut matches = store.into_iter().flat_map(|s| &s.requirements).filter(|r| {
-            [r.spec_id.as_deref(), r.agreed_id.as_deref()]
-                .into_iter()
-                .flatten()
-                .any(|label| label.trim().eq_ignore_ascii_case(id))
-        });
-        let mut req = matches.next().cloned();
-        let ambiguous = matches.next().is_some();
-        if ambiguous {
-            req = None;
-        }
+        let resolved = store.map(|s| s.get_requirement_unambiguous(id)).transpose();
+        let ambiguous = resolved.is_err();
+        let req = resolved.ok().flatten().flatten().cloned();
         // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
         // so that an agreed_id resolves to its stored spec_id object path for
         // history, and the ledger check / note_exclusions cover both keys.
@@ -695,36 +686,28 @@ fn collect_mandate_cover(
     // BUG-2195 / TASK-2019: a dirty store is retried within the bound, and
     // two snapshots are compared by the exclusion reader's stability rule.
     // trace:TASK-2067 | ai:antigravity
-    let snapshot = || match crate::gate::mandate_traces::store_snapshot_for_collection(&store_root)
-    {
+    let snapshot = || match crate::gate::mandate_traces::store_snapshot(&store_root) {
         Ok(snap) => Ok(Some(snap)),
         Err(e) if e.is::<crate::gate::mandate_traces::StoreDirty>() => Ok(None),
         Err(e) => Err(unreadable(e)),
     };
-    // BUG-056: the before snapshot pins the store version; only a change to
-    // the evidence this collection read (its specs' objects and ID lines)
-    // discards it, so concurrent commits of unrelated specs no longer count
-    // as a change. Both snapshots also retain uncommitted contents so dirt
-    // is judged against this same scope, including unchanged alias lines.
-    // A store that did not load is judged by the strict rule.
-    // trace:BUG-2647 | ai:codex
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+    // Coverage depends on the full relationship graph, including candidates it drops.
+    // trace:BUG-2727 | ai:codex
+    let (inputs, branch, forge_resolved, mut authorship_ids) =
+        crate::pr_service::pr_gate_inputs(main_worktree, pr, known_ids, head_branch);
     let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
                   after: &crate::gate::mandate_traces::StoreSnapshot,
-                  collected: &Result<
-        (String, Vec<crate::gate::mandate::ShipSpec>, _, _, bool, _),
+                  result: &Result<
+        (Vec<crate::gate::mandate::ShipSpec>, _, _, _),
         MandateRefusal,
     >| {
-        let Ok((_, specs, _, _, reads_carrier, _)) = collected else {
-            return true;
-        };
-        if before.origin_head() != after.origin_head()
-            || after.resolution_head(&store_root).is_err()
-        {
-            return false;
+        before.head == after.head && {
+            let scope = match result {
+                Ok((specs, ..)) => collection_evidence_scope(true, specs),
+                Err(_) => crate::gate::mandate_traces::EvidenceScope::strict(),
+            };
+            crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
         }
-        let scope = collection_evidence_scope(!reads_carrier, specs);
-        crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
     };
     // STORY-2884: the effective mode decides whether a spec needs the
     // mandate's supervised cover: the project's unset-mode drain default,
@@ -735,101 +718,110 @@ fn collect_mandate_cover(
         Some(changed_paths.as_slice()),
         &crate::gate::mandate_gates::ProtectedPaths::of(&gates),
     );
-    let (store_head, specs, ledger, supervised, _, subject) = collect_on_stable_store(
-        snapshot,
-        stable,
-        |before| {
-            // trace:BUG-2727 | ai:codex
-            let store_head = before.resolution_head(&store_root).map_err(&unreadable)?;
-            let store = crate::gate::mandate_traces::resolution_store(&store_root, store_head)
-                .map_err(|e| unreadable(e.context(format!("store {store_head}"))))?;
-
-            let subject = pr_gate_subject(main_worktree, pr, known_ids, head_branch, Some(&store));
-            let specs = resolve_exclusion_specs(
-                Some(&store),
-                &store_root,
-                &subject.0,
-                trace_evidence.ids.clone(),
-            );
-            // STORY-1698: every excluded class seen in any version goes into the
-            // append-only ledger first, then the ledger is read back as the first
-            // source of exclusion. trace:STORY-1698 | ai:claude
-            let mandate_dir = crate::gate::mandate::mandate_dir();
-            if record_exclusions {
-                if let Ok(dir) = &mandate_dir {
-                    for spec in &specs {
-                        let changes = spec
-                            .current
-                            .as_ref()
-                            .map(crate::gate::mandate::field_change_versions)
-                            .unwrap_or_default();
-                        let history: &[aida_core::Requirement] =
-                            spec.history.as_deref().unwrap_or(&[]);
-                        for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
-                            crate::gate::mandate::note_exclusions(
-                                dir,
-                                key,
-                                spec.current
-                                    .iter()
-                                    .chain(changes.iter())
-                                    .chain(history.iter()),
-                            );
-                        }
+    let attempt = |before: &crate::gate::mandate_traces::StoreSnapshot| {
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements =
+            aida_core::git_ops::load_requirements_strict(&store_root).map_err(|e| {
+                unreadable(e.context(format!(
+                    "PR spec IDs {} at store HEAD {}",
+                    inputs.join(", "),
+                    before.head
+                )))
+            })?;
+        let ids = crate::gate::trailer_coverage::covered_gate_ids_with_store(
+            main_worktree,
+            branch.as_deref().unwrap_or(""),
+            Some(pr),
+            inputs.clone(),
+            &store,
+        );
+        let specs =
+            resolve_exclusion_specs(Some(&store), &store_root, &ids, trace_evidence.ids.clone());
+        check_named_resolution(&specs, &before.head)?;
+        // STORY-1698: every excluded class seen in any version goes into the
+        // append-only ledger first, then the ledger is read back as the first
+        // source of exclusion. trace:STORY-1698 | ai:claude
+        let mandate_dir = crate::gate::mandate::mandate_dir();
+        if record_exclusions {
+            if let Ok(dir) = &mandate_dir {
+                for spec in &specs {
+                    let changes = spec
+                        .current
+                        .as_ref()
+                        .map(crate::gate::mandate::field_change_versions)
+                        .unwrap_or_default();
+                    let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
+                    for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
+                        crate::gate::mandate::note_exclusions(
+                            dir,
+                            key,
+                            spec.current
+                                .iter()
+                                .chain(changes.iter())
+                                .chain(history.iter()),
+                        );
                     }
                 }
             }
-            let ledger = match &mandate_dir {
-                Ok(dir) => crate::gate::mandate::read_exclusions(dir),
-                Err(e) => Err(format!("{e:#}")),
-            };
-            let mut reads_carrier = false;
-            let supervised = {
-                use aida_core::ExecutionMode;
-                specs
-                    .iter()
-                    .filter(|spec| spec.named)
-                    .try_fold(false, |found, spec| {
-                        let Some(req) = &spec.current else {
-                            return Ok(found);
-                        };
-                        reads_carrier |= req.execution_mode.is_none()
-                            && req.relationships.iter().any(|rel| {
-                                rel.rel_type == aida_core::RelationshipType::SupersededBy
-                            });
-                        let mode =
-                            crate::gate::ship::gating_execution_mode(&store.requirements, req);
-                        let class = match mode {
-                            Some(ExecutionMode::Operator) => Some("operator-only"),
-                            Some(ExecutionMode::Decide) => Some("decide-mode"),
-                            _ => None,
-                        };
-                        if let Some(class) = class {
-                            return Err(MandateRefusal::AlwaysHuman {
-                                spec: spec.id.clone(),
-                                class: class.into(),
-                            });
-                        }
-                        let mut effective = unset_mode.resolve(mode, req);
-                        effective.withdraw_for_change(Some(changed_paths.as_slice()));
-                        if let Some(why) = &unset_withheld {
-                            effective.withdraw(why.clone());
-                        }
-                        Ok(found || effective.requires_supervision())
-                    })
-            };
-            Ok((
-                store_head.to_owned(),
-                specs,
-                ledger,
-                supervised,
-                reads_carrier,
-                subject,
-            ))
-        },
-        MANDATE_COLLECT_BACKOFF,
-    )??;
-    check_named_resolution(&specs, &store_head)?;
-    let (ids, branch, forge_resolved, authorship_ids) = subject;
+        }
+        let ledger = match &mandate_dir {
+            Ok(dir) => crate::gate::mandate::read_exclusions(dir),
+            Err(e) => Err(format!("{e:#}")),
+        };
+        let supervised = {
+            use aida_core::ExecutionMode;
+            specs
+                .iter()
+                .filter(|spec| spec.named)
+                .try_fold(false, |found, spec| {
+                    let Some(req) = &spec.current else {
+                        return Ok(found);
+                    };
+                    let mode = crate::gate::ship::gating_execution_mode(&store.requirements, req);
+                    let class = match mode {
+                        Some(ExecutionMode::Operator) => Some("operator-only"),
+                        Some(ExecutionMode::Decide) => Some("decide-mode"),
+                        _ => None,
+                    };
+                    if let Some(class) = class {
+                        return Err(MandateRefusal::AlwaysHuman {
+                            spec: spec.id.clone(),
+                            class: class.into(),
+                        });
+                    }
+                    let mut effective = unset_mode.resolve(mode, req);
+                    effective.withdraw_for_change(Some(changed_paths.as_slice()));
+                    if let Some(why) = &unset_withheld {
+                        effective.withdraw(why.clone());
+                    }
+                    Ok(found || effective.requires_supervision())
+                })
+        };
+        Ok((specs, ledger, supervised, ids))
+    };
+    let collect = || collect_on_stable_store(snapshot, stable, attempt, MANDATE_COLLECT_BACKOFF)?;
+    let (specs, ledger, supervised, ids) = match collect() {
+        Err(miss @ MandateRefusal::MissingSpecs { .. }) => {
+            if aida_core::git_ops::current_branch(&store_root)
+                .as_deref()
+                .ok()
+                != Some("aida-store")
+            {
+                return Err(miss);
+            }
+            aida_core::git_ops::pull_rebase_store_retry(&store_root, "origin", "aida-store")
+                .map_err(|e| {
+                    MandateRefusal::TraceEvidenceUnreadable(format!(
+                        "{}; store refresh failed: {e:#}",
+                        miss.message(pr)
+                    ))
+                })?;
+            collect()?
+        }
+        result => result?,
+    };
+    authorship_ids.extend(ids.iter().cloned());
+    let authorship_ids = normalized_spec_ids(&authorship_ids);
     let candidates = crate::gate::ship::merge_gate_verdict_candidates(
         &[project_root, main_worktree],
         pr,

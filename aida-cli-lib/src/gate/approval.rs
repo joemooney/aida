@@ -306,7 +306,7 @@ pub(crate) fn merge_approval_subject_observed(
     bool,
 ) {
     let (ids, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch, None);
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     let candidates = crate::gate::ship::merge_gate_verdict_candidates(roots, pr, &ids, head_sha);
     // An unconfirmed subject (forge unreachable) names no author set: every
     // recorded author counts. trace:BUG-1918 | ai:claude
@@ -572,7 +572,7 @@ pub(crate) fn ship_author_ids(
     head_branch: Option<&str>,
 ) -> (Vec<String>, Option<String>) {
     let (_, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch, None);
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     (
         if forge_resolved {
             authorship_ids
