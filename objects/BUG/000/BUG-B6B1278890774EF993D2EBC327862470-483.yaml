@@ -8,8 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T02:24:26.292493928Z
+modified_at: 2026-11-23T02:26:01.252602664Z
 req_type: Bug
+comments:
+- id: 01a20639-b01d-7f20-bca0-6cd50f5e0501
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:26):
+    # BUG-2722: minimal slice split from BUG-2688 (advisor-122 ruling 2026-11-22 19:30 MST; relayed by product-15). Lane: CODEX. Drain-mode priority: it unblocks #4376 (BUG-2669). New branch, new PR.
+
+    Read `aida show BUG-2722`. Add an `aida doctor heal` action that releases ONE repair-journal (.aida/repair-journal.json) conflict reservation, and only when its lane's lease is ended AND its recorded tree is absent or salvaged. Otherwise it refuses with evidence: the lease state, tree state, and the inspection command. Keep the doctor finding plus heal shape consistent with the existing stale-leases category (dry-run and --yes, one id at a time).
+    Regression test for the dell1 entry-48 shape: PR #4376 reserved at 660c0e87 for lane 01a2053df3e6 (lease ended), tree .../aida-seat-...-433 moved away (absent). The heal releases it, and a following conflict rework is no longer refused with "retained conflicts require their host journal evidence".
+    Do NOT pull in BUG-2688's wider redesign. ADR-76 strict tier (lease/claim safety), so expect a STRICT review. Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2722 | ai:codex`. Commit `[AI:codex] feat(doctor): ... (BUG-2722)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T02:26:01.252602664Z
+  modified_at: 2026-11-23T02:26:01.252602664Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
