@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T03:29:49.638147479Z
+modified_at: 2026-11-23T03:44:46.674138819Z
 req_type: Bug
 tags:
 - recovery
@@ -109,6 +109,19 @@ comments:
   modified_at: 2026-11-23T03:27:03.761997435Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20681-9bb3-7c40-87aa-0f1d3c07f58d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 81a84bab07487f2f7fa1cc4d2dbdef380ab6b1db plus the native-lane working diff. Reviewed origin/main...HEAD, git diff HEAD and untracked additions.
+    AC1: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:799 exercises a real surviving child of the production WorkerExec, legacy grant-only evidence, and timeout-wrapped recovery. The partial-receipt path checks recorded identities and exact process tokens.
+    AC2: [evidence: behavioral-test] The same test checks PID, command and source on refusal for known and partial receipts, and that a refusal preserves the grant.
+    AC3: [evidence: behavioral-test] A live shell remains in the primary checkout during successful recovery and partial-receipt retirement. All three criteria resolve to the regression in aida criteria.
+    Lane job j20261123T033312891-2-0 passed both filtered tests. Checked exact NUL-delimited fields, empty grants, independent holders, missing start identity and unreadable environ. Proc enumeration in the fixture is limited to selected kernel entries. The portability gate identified a missing Linux cfg on the wrapper entry and it was added. Full FAST rerun in progress. Host publication creates the round-two commit.
+  created_at: 2026-11-23T03:44:46.674138819Z
+  modified_at: 2026-11-23T03:44:46.674138819Z
+  session_id: 01a2067395e9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
