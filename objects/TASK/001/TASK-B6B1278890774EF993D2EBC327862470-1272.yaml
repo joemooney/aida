@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: tests/test_pr_ship_preflight.py passes under CI discovery (fix the test or the code it covers; if the test is obsolete, delete it with a reason).
   - AC2: Remove its entry from the BUG-2734 known-failing list in the same PR.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:19:06.344317243Z
-modified_at: 2026-11-23T23:24:23.881605802Z
+modified_at: 2026-11-23T23:30:27.611357368Z
 req_type: Task
 tags:
 - ci
@@ -64,6 +64,13 @@ history:
   - field_name: tags
     old_value: ci, from-bug-2734, tests
     new_value: ci, from-bug-2734, tests, track:integration
+- id: 01a20abf-209b-7453-ba0c-ad57b203874a
+  author: aida-session-start
+  timestamp: 2026-11-23T23:30:27.611355319Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
