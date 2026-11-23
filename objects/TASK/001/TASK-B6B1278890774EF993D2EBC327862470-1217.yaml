@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The seat discipline docs, edited in the template master under aida-core/templates/ and mirrored with `make sync-templates` (`make check-templates` passes), state: "Claude seats: never run long-lived SANDBOXED commands or Monitor watches in the primary checkout; use unsandboxed background Bash for waits (one-shot, re-armed after each event)." They also include the symptom, and the safe cleanup: a 0-byte 0444 config.lock with no holder may be removed once its sandboxed owner has exited.
   - AC2: The guidance cites this spec and today's evidence in one short paragraph, not a narrative.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:38:36.398335378Z
-modified_at: 2026-11-23T16:06:48.951821538Z
+modified_at: 2026-11-23T17:08:26.928847627Z
 req_type: Task
 tags:
 - claude-seats
@@ -63,6 +63,22 @@ history:
   author: joe
   timestamp: 2026-11-23T16:06:49.085729763Z
   changes: []
+- id: 01a20961-626b-7b12-8e42-ffc2557fd756
+  author: aida-auto-bump
+  timestamp: 2026-11-23T17:08:26.859412926Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20961-62b0-7882-b19c-e2158ee8c80d
+  timestamp: 2026-11-23T17:08:26.928843011Z
+  agent: aida
+  commit_sha: ef906ec7464cf1b3100c4383085280c203722941
+  summary: 'Advisor review (independent; the integration seat authored it): docs-only, +86/-0, 3 template masters plus identical generated mirrors (make check-templates and check-ci-fast EXIT=0 per the author). The sandbox-and-git section correctly records today''s evidence (0444 config.lock placeholder held by long sandboxed commands, half-reset from a sandboxed reset, safe-cleanup rule). The small-brief rule (<=300 lines, 1-2 ACs, decompose before launch) matches the advisor ruling. Nit, not blocking: the parked-PR examples list four, and by end of day six were parked (also #4378, #4382).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
@@ -71,3 +87,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T17:08:26.859403395Z
+  completion_sha: ef906ec7464cf1b3100c4383085280c203722941
