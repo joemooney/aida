@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T21:06:26.004402549Z
+modified_at: 2026-11-23T21:22:48.889471238Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -173,6 +173,15 @@ comments:
   modified_at: 2026-11-23T20:41:08.267206241Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a4a-4554-76e1-949f-cb81db13f499
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 12f057bbe5565c23df5ddb78b6d3d18a2cc6c49c plus the native-lane working diff against HEAD. AC2: [evidence: behavioral-test] bug_2663_unheld_supervised_member_lands_with_mandate verifies preview/recording admission parity, a settled refusal, and unavailable evidence on a failed second pinned-label read. AC3: [evidence: behavioral-test] the same fixture checks config and six evidence paths, including absence of the cold history index and lock. The corrected targeted run passed (1 test). Inspected version and missing-ID alias paths, incremental refresh, missing/mismatched heads, and existing local hold contradictions. Both recording and preview fail closed. The fixture exercises cold history directly; stale and retained-anchor semantics use the shared refresh logic. No untracked additions.
+  created_at: 2026-11-23T21:22:48.889471238Z
+  modified_at: 2026-11-23T21:22:48.889471238Z
+  session_id: 01a20a3a8bfc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
