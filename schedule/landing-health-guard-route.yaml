@@ -8,6 +8,6 @@ note: 'Reran landing-health. Its three-PR shared signature is the aggregate and 
 due_since: 2026-11-21T07:03:33.426507094Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-23T03:23:07.793281126Z
+  trip_id: landing-health-guard@2026-11-23T03:39:03.677098973Z
   job: landing-health-guard
-  error: 'exit 1: landing-health: main tip age 113 minutes; 12 open PRs; #4403: awaiting review; #4402: merge hold; #4401: conflict; #4398: merge hold; #4397: merge hold; #4396: conflict; #4391: awaiting review; #4387: merge hold; #4382: awaiting review; #4380: merge hold; #4376: conflict; #4364: awaiting review'
+  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
