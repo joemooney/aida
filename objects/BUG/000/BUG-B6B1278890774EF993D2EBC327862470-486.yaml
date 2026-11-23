@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T05:17:23.526771436Z
+modified_at: 2026-11-23T05:40:53.323657881Z
 req_type: Bug
 tags:
 - knob
@@ -116,6 +116,18 @@ comments:
   modified_at: 2026-11-23T05:13:33.934361783Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206eb-ea59-7270-8efa-4b54b2f98505
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c7354092b2ad3ec5567007143150cf75bf8036d4 plus the native working-tree changes. Checked origin/main...HEAD, git diff HEAD and untracked files.
+    AC1: [evidence: behavioral-test] tests/story_2768_land_tests.rs:858 drives the live merge-tree, pins, ancestry and CI observer. Default strict updates, clean FULL trains, clean FAST dispatches review or waits after approval, current-base failure and conflicting history dispatch rework. Findings 1 (P1) and 6 (untested path) addressed.
+    AC2: [evidence: behavioral-test] tests/task_1945_review_watch_ready_tests.rs:1711 checks same-SHA foreign workflow jobs, actual train wake, GitLab fallback and conflict refusal. tests/story_2821_stale_base_policy_tests.rs:303 verifies independent overlap refusal and prevents updater calls before and after a clean probe. Findings 2, 3 and 4 (unmet claimed AC) and 5 (P2) addressed.
+    Checked unknown evidence, multiple runs, repository and workflow identity, wake deduplication, policy defaults, and head re-read. Strengthened the two-workflow control and migrated the fixtures to guarded Git. Final launcher job j20261123T053452389-3-0 executed four tests, all passed. git diff --check passed. Exact published-head CI belongs to the host publication. The accumulated diff exceeds the advisory size target, largely due to behavioral fixtures.
+  created_at: 2026-11-23T05:40:53.323657881Z
+  modified_at: 2026-11-23T05:40:53.323657881Z
+  session_id: 01a206d62de5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
