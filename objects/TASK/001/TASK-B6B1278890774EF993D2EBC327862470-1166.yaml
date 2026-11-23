@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.173596810Z
-modified_at: 2026-11-23T08:41:03.496593487Z
+modified_at: 2026-11-23T08:43:27.202761064Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -49,6 +49,22 @@ comments:
   content: 'Advisor-122 ruling 2026-11-23 01:40 (recorded by product-15): blocked-by STORY-2897 REMOVED. S3a is on main (a16f3592f01); this follow-up is independent of S1b/S3b. It targets main, and keeps out of review_draft.rs and land readiness (S1b #4401''s files).'
   created_at: 2026-11-23T08:41:03.496593487Z
   modified_at: 2026-11-23T08:41:03.496593487Z
+- id: 01a20793-3efb-76d0-933b-939e2e4c8c27
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:43):
+    # TASK-3218: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3218` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3218 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3218)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    GUARDS (advisor-122 01:40): target MAIN, not integration (S3a is on main as a16f3592f01). Do NOT change aida-cli-lib/src/review_draft.rs or the land readiness code that S1b (#4401) also changes; if the fix needs those files, stop and punt naming the overlap.
+  created_at: 2026-11-23T08:43:27.202761064Z
+  modified_at: 2026-11-23T08:43:27.202761064Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fd68-b1dd-78c2-a574-7b1a9c2b6017
   author: joe
