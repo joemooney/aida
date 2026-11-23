@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-23T21:25:43.388278008Z
+modified_at: 2026-11-23T21:26:13.558892331Z
 req_type: Bug
 tags:
 - ci
@@ -71,6 +71,12 @@ comments:
   content: 'Lane exit evidence: retained branch `int28-bug-2734` at head `54e9220e1db9175dbb2c284241aed674328067f6`.'
   created_at: 2026-11-23T21:25:43.388273976Z
   modified_at: 2026-11-23T21:25:43.388273976Z
+  session_id: 01a20a3ea6a7
+- id: 01a20a4d-6336-7bb2-935e-2759813642ce
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `int28-bug-2734` at head `54e9220e1db9175dbb2c284241aed674328067f6`.'
+  created_at: 2026-11-23T21:26:13.558886615Z
+  modified_at: 2026-11-23T21:26:13.558886615Z
   session_id: 01a20a3ea6a7
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
