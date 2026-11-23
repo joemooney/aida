@@ -1,0 +1,32 @@
+id: 01a20937-205f-72a2-bc1b-618937b90d12
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-230
+title: 'Review PR-4439: [AI:codex] fix(ci): overlap startup monitor pages across deletions (BUG-2592)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a208ea`) for branch `int26-bug-2592`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4439>
+  - Branch: `int26-bug-2592` → `integration`
+
+  ## Covers
+
+  - BUG-2592
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4439` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T16:22:17.439939708Z
+modified_at: 2026-11-23T16:22:17.439939708Z
+req_type: Story
+filed_at:
+  code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6708d633cf
+  session: 01a208ea8277
