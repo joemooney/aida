@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-23T19:54:00.873026904Z
+modified_at: 2026-11-23T20:12:37.845288037Z
 req_type: Bug
 tags:
 - doctor
@@ -86,6 +86,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Integration p27 is standard-tier only. The guard starts its detail budget after live_pass_with finishes every PR. During that pass land.rs:1185 synchronously calls gate/approval.rs:295 (merge_approval_subject_observed -> pr_gate_subject) without a caller deadline. A timer between PRs or around red details cannot interrupt that forge lookup or preserve coverage before the scheduler kills the process. Passing deadlines through the existing approval evidence reader touches a strict gate path.. No triage reason was given.'
   created_at: 2026-11-23T19:48:32.300464501Z
   modified_at: 2026-11-23T19:48:32.300464501Z
+- id: 01a20a0a-03fc-7c01-b904-32ce9b99bd57
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f1a50179e5a3640451b4232e08f2e589df93e7d5 plus the uncommitted native-lane diff. Merge-base diff empty, six modified files, no untracked additions.
+    AC1: [evidence: behavioral-test] land_stalls.rs:1506 and :1542 bound each primary PR observation to 20 seconds inside the 220-second scan and emit setup, observation and detail/report timings. The slow-forge test at tests/story_2906_throughput_guard_tests.rs:1614 verifies that a later fast PR survives the middle timeout. Timing fields inspected in source.
+    AC2: [evidence: behavioral-test] The same regression exercises a real sleeping forge executable through merge_approval_subject_observed, verifies unknown evidence, skips the pending suffix at the scan deadline and checks covered/skipped IDs in both the report and saved snapshot. Targeted regression passed, then all 26 guard tests passed in 4.05s. All 48 FAST source gates passed. Host PR CI pending publication.
+    Deep pass: report and snapshot use the same coverage text; legacy snapshots default the optional field. Zero/one/many PRs and a timeout in the middle were inspected. Fixed omitted PRs being treated as closed in readiness metrics and routing memory being pruned after partial scans. Forge reads inherit the scoped minimum deadline across subprocess attempts. Unanswered or expired observations cannot supply a row or approval. No new clearance, merge or grant path. Existing refusal tests retained.
+    Scope limit: coverage starts from a successfully discovered inventory. Initial listing errors propagate, and optional CI detail may be reported unread separately from primary PR coverage. No live 16-PR deployment measurement.
+  created_at: 2026-11-23T20:12:37.845288037Z
+  modified_at: 2026-11-23T20:12:37.845288037Z
+  session_id: 01a209f813f6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start

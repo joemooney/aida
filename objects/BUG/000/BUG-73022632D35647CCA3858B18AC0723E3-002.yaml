@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-23T19:44:18.777384987Z
+modified_at: 2026-11-23T20:12:48.224851429Z
 req_type: Bug
 tags:
 - bwrap
@@ -34,6 +34,18 @@ comments:
   modified_at: 2026-11-23T19:40:17.242416880Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a0a-2c64-70f0-a482-718a42aabdd6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f1a50179e5a3640451b4232e08f2e589df93e7d5 plus native working diff. Merge-base diff empty. One tracked test file, no untracked additions.
+    AC1: [evidence: behavioral-test] PR #4365 already restored only the private fixture after the nested tmpfs mount. Direct workspace fixtures normally use target, while dell1 lane fixtures use /tmp. Revalidated clone Git operations, historical controls and denials in bug_2169_contained_clone_bwrap_tests.rs:1361 and following. Lane job j20261123T194458102-2-0 ran all 10 matches, zero failures, ignores or SKIP messages.
+    AC2: [evidence: behavioral-test] Lines 54–98 distinguish absent executable and known namespace denial from unexpected errors. Required-live refusal exercised by bug_2169_bwrap_required_gate_fails_on_missing_capability. Probe review covered C locale, empty and unfamiliar diagnostics, both flag states and all shared callers. Unknown diagnostics fail closed. No production grants or fixture assertions changed.
+    make check-ci-fast exited 0 in j20261123T195116979-2-0. Launcher reported overlay-stale at teardown. No separate direct-host execution or published-head CI from this native seat.
+  created_at: 2026-11-23T20:12:48.224851429Z
+  modified_at: 2026-11-23T20:12:48.224851429Z
+  session_id: 01a209ef8404
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
