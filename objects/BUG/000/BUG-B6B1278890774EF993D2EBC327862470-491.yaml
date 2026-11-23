@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-23T20:12:37.845288037Z
+modified_at: 2026-11-23T20:40:14.722082272Z
 req_type: Bug
 tags:
 - doctor
@@ -97,6 +97,13 @@ comments:
     Scope limit: coverage starts from a successfully discovered inventory. Initial listing errors propagate, and optional CI detail may be reported unread separately from primary PR coverage. No live 16-PR deployment measurement.
   created_at: 2026-11-23T20:12:37.845288037Z
   modified_at: 2026-11-23T20:12:37.845288037Z
+  session_id: 01a209f813f6
+  harness_version: codex-cli 0.167.0
+- id: 01a20a23-4dec-7aa3-b1d8-3ebbca651d15
+  author: dirtlab
+  content: 'Final validation: make check-ci-fast exited 0, including all 48 FAST source gates, the compiled ratchets and the dynamic CLI manual check. The host PR should retain the follow-up for an expired initial inventory or a deadline reached only during supplementary detail reads.'
+  created_at: 2026-11-23T20:40:14.722082272Z
+  modified_at: 2026-11-23T20:40:14.722082272Z
   session_id: 01a209f813f6
   harness_version: codex-cli 0.167.0
 history:

@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T20:25:39.759566640Z
+modified_at: 2026-11-23T20:39:54.640452188Z
 req_type: Bug
 comments:
 - id: 01a209ea-ce0b-7581-b40a-6fbcbb2f8e9e
@@ -86,6 +86,17 @@ comments:
   content: 'Validation update: the lane job executed both bug_2710 regressions successfully (2 passed, 0 failed). git diff --check passed. FAST source/ratchet validation is running.'
   created_at: 2026-11-23T20:25:39.759566640Z
   modified_at: 2026-11-23T20:25:39.759566640Z
+  session_id: 01a20a01840f
+  harness_version: codex-cli 0.167.0
+- id: 01a20a22-ff1a-76c0-8c08-7c90a1c96c1a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f1a50179e5a3640451b4232e08f2e589df93e7d5 plus git diff HEAD. Empty origin/main...HEAD, seven tracked changes, no untracked additions, 293 changed lines.
+    AC1: [evidence: behavioral-test] bug_home_024_finished_lease_tests.rs:506 verifies the completed lease and registration are gone, the next ones survive, and resume releases the second session. AC2: [evidence: behavioral-test] same file:541 verifies equivalent reaped/deferred owner decisions in bounded and existing unbounded passes. Final lane job j20261123T203042277-2-0 executed both tests, 2 passed.
+    Self-review fix: session_reap.rs:1715 shares the original gone-tree checks and one lazy process snapshot across callers. The five renamed ownership inventory entries retain their original multiplicities. Checked ID ordering, a missing cursor, legacy state decoding, empty and multiple leases, live-owner refusal and protected branch classification. Deadline only at session boundaries. An unusually long single session or shared housekeeping can still exceed the budget. No exact PR-head CI before host publication.
+  created_at: 2026-11-23T20:39:54.640452188Z
+  modified_at: 2026-11-23T20:39:54.640452188Z
   session_id: 01a20a01840f
   harness_version: codex-cli 0.167.0
 history:
