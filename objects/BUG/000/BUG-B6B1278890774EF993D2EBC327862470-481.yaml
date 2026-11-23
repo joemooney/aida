@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-23T02:10:34.578346405Z
+modified_at: 2026-11-23T03:39:26.104109803Z
 req_type: Bug
 tags:
 - review-watch
@@ -25,6 +25,20 @@ comments:
   content: 'Scope add (advisor-122 19:20, relayed by product-15): a CAPPED PR (round cap reached, BLOCKED in land state) gets no automatic review at all. Review-watch silently skips it, so a final-round head the advisor has allowed (e.g. #4382 @3bf347a6, #4380, #4388) is never reviewed unless launched by hand, and each pass still reports ''0 dispatched, 0 refused''. AC4: a capped PR whose final round the advisor allowed is dispatched, or it''s listed in the pass summary as ''held by cap'' with the PR numbers.'
   created_at: 2026-11-23T02:10:34.578346405Z
   modified_at: 2026-11-23T02:10:34.578346405Z
+- id: 01a2067c-e794-7a32-bf4d-cfeafae6e9d3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:39):
+    # BUG-2720: SMALL pipeline fix (advisor-122 throughput plan 2026-11-22 20:40 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2720` and implement its acceptance criteria and nothing more. Code: aida-cli-lib/src/review_watch*.rs. Retry exited attempts after a transient pickup blocker clears; the pass summary names held, capped and skipped PRs.
+    SMALL-PR RULE: target <=300 changed lines. If the ACs can't be met in that budget, implement AC1 only plus its test, and say in the PR body which ACs remain, so product splits them.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2720 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2720)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T03:39:26.104109803Z
+  modified_at: 2026-11-23T03:39:26.104109803Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
