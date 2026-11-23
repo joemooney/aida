@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   aida-cli-lib/src/admission_drain.rs:102-134, 208-217, 282-290: an unreadable or invalid drain journal has no supported recovery. `drain` and `resume` both call observe_locked -> load, which fails on the same journal, so neither command can replace it. Meanwhile yield_reason and acquire_mode treat it as drained and the supervisor tick refuses to respawn, and unlike a real drain this state never expires: review-watch and auto-train stay off admission until someone deletes .aida/admission-owner/loops-drain.journal by hand. docs/cli/06-roles-sessions.md only says an unreadable journal counts as drained. Let an authorised `resume` (or `drain`) replace a journal that cannot be read, recording that it did so, or document the manual recovery. Add a test that an unreadable journal can be recovered through the command.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T12:36:38.859889004Z
+modified_at: 2026-11-23T12:39:23.476532652Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -150,6 +150,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a2086b-0e54-7531-9ccb-cf7ea20a34d5
+  author: aida-session-start
+  timestamp: 2026-11-23T12:39:23.476529902Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
