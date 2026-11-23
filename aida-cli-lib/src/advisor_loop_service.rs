@@ -2430,6 +2430,7 @@ mod loop_tests {
             dispatched: 1,
             unadmitted: Vec::new(),
             busy: watched.busy,
+            stopped: None,
         };
 
         // Without a controller (a manual watcher) nothing is recorded.
@@ -3416,6 +3417,7 @@ pub(super) struct PassCounts {
     pub(super) unadmitted: Vec<Unadmitted>,
     /// Changes that found watcher admission busy.
     pub(super) busy: usize,
+    pub(super) stopped: Option<String>,
 }
 
 /// One eligible head a pass could not admit, and why.
@@ -3451,7 +3453,9 @@ struct PassReport {
     unadmitted: usize,
     #[serde(default)]
     busy: usize,
-    /// Every refusal or stop in the pass; `errors` keeps a bounded sample.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stopped: Option<String>,
+    /// Every refusal in the pass; `errors` keeps a bounded sample.
     #[serde(default)]
     refused: usize,
     /// Start of the current run of passes that left eligible work refused,
@@ -3485,7 +3489,7 @@ fn next_pass_report(
     errors: &[String],
     now: DateTime<Utc>,
 ) -> PassReport {
-    let stuck = counts.busy + errors.len() > 0;
+    let stuck = counts.busy > 0 || !errors.is_empty() || counts.stopped.is_some();
     let stuck_since = if counts.dispatched > 0 || !stuck {
         None
     } else {
@@ -3512,6 +3516,7 @@ fn next_pass_report(
         unadmitted: counts.unadmitted.len(),
         busy: counts.busy,
         refused: errors.len(),
+        stopped: counts.stopped.as_deref().map(bounded_diagnostic),
         stuck_since,
         held,
         errors: errors
@@ -3617,6 +3622,9 @@ fn pass_degradation(
         .iter()
         .map(|e| format!("last pass: {e}"))
         .collect();
+    if let Some(stop) = &report.stopped {
+        reasons.push(format!("last pass: {stop}"));
+    }
     let omitted = report.refused.saturating_sub(report.errors.len());
     if omitted > 0 {
         reasons.push(format!(

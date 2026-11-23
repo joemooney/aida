@@ -15,6 +15,14 @@ silently becoming its approver. <!-- trace:STORY-1351 | ai:codex -->
 4. Product launches another eligible wave when the scheduler reports that the
    queue is ready and the drain lock is free.
 
+**Keep each unit small.** Every lane brief and spec product writes targets at
+most 300 changed lines and one or two acceptance criteria. Split larger work
+into vertical slices (`aida-decompose`) before launch, not after review stalls.
+Large PRs do not converge under strict review, while small ones approve in one
+or two rounds. On 2026-11-22, #4388, #4373, #4381 and #4395 parked, and #4399
+and #4391 approved in one or two rounds.
+<!-- trace:TASK-3841 | ai:claude -->
+
 Product never merges implementation or approves its own disputed judgment.
 Advisor never writes the implementation it will later gate, never merges its
 own code, and never clears an unresolved gate merely to preserve momentum.
