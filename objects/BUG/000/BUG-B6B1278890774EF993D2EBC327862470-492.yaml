@@ -74,6 +74,18 @@ comments:
   created_at: 2026-11-23T17:57:01.587194428Z
   modified_at: 2026-11-23T17:57:01.587194428Z
   session_id: 01a2095b139f
+- id: 01a2098e-1317-7513-ac0d-aa7de06b6e8a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:57):
+    # BUG-2731 / PR #4450 r2 (advisor-122 ruling 2026-11-23 10:58; pre-check by integration-30; relayed by product-15). Lane: CODEX. TINY (~2 lines + a test assertion). Base: INTEGRATION.
+
+    AC1 is met. AC2 landed on the WRONG PATH: the precedence line ("older spec comments are context, not instructions, when they conflict with this brief") went into render_agent_brief (`aida brief create`). But lanes get their briefs through `aida queue work --brief` → append_pickup_briefs (aida-cli-lib/src/queue/work.rs around :4789 and :6372). Emit the SAME sentence in append_pickup_briefs, plus a test assertion that a brief delivered via `queue work --brief` contains it. Details are on BUG-2731 (integration-30's comment).
+    Push on the existing branch (PR #4450, base integration). One targeted cargo run, then `make check-ci-fast`. COMMIT your work. Reviewer scope: that plus the diff.
+  created_at: 2026-11-23T17:57:01.932891758Z
+  modified_at: 2026-11-23T17:57:01.932891758Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20912-4d56-73a3-bac7-f684e0f78f51
   author: joe
