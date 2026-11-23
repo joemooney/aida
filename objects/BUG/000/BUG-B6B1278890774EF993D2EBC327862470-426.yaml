@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-22T22:54:05.185830505Z
+modified_at: 2026-11-23T02:09:22.747103912Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -666,6 +666,13 @@ comments:
   created_at: 2026-11-22T22:54:05.185822956Z
   modified_at: 2026-11-22T22:54:05.185822956Z
   session_id: 01a2053f59c6
+- id: 01a2062a-7741-75c3-b51c-cf8cc3276316
+  author: joe
+  content: 'ADVISOR RULING 2026-11-22 19:17 MST: parked; #4378 closed (branch kept). The final cap review at 27b4dfe9 still has 7 durability findings (review_commands.rs:2206/3664/2181, gate/ledger/mod.rs:482, review_authority.rs:1493, gate/ledger/store.rs:1385/1316). Revisit as a SKETCHED redesign of the recorder write path (one atomic append-with-mark, bounded non-blocking reads, explicit size accounting) with advisor signoff, not more patch rounds. The live symptom (verdicts written twice, seen on #4389/#4382 today) is cosmetic.'
+  created_at: 2026-11-23T02:09:22.747103912Z
+  modified_at: 2026-11-23T02:09:22.747103912Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
