@@ -60,8 +60,6 @@ struct Receipt {
 enum Event {
     Drain(Receipt),
     Resume { actor: String, at: DateTime<Utc> },
-    // trace:TASK-3246 | ai:codex
-    RecoveryResume { actor: String, at: DateTime<Utc> },
     Expired { at: DateTime<Utc> },
 }
 
@@ -121,8 +119,7 @@ fn load(root: &Path) -> Result<Journal> {
                         && receipt.expires_at > receipt.issued_at
                         && receipt.expires_at - receipt.issued_at
                             <= Duration::seconds(MAX_SECONDS as i64),
-                Event::Resume { actor, .. } | Event::RecoveryResume { actor, .. } =>
-                    valid_text(actor),
+                Event::Resume { actor, .. } => valid_text(actor),
                 Event::Expired { .. } => true,
             }),
         "invalid advisor loops drain journal"
@@ -288,9 +285,13 @@ fn change(
     let mut journal = match load(root) {
         Ok(journal) => observe_locked(root, journal, now)?,
         Err(error) if drain.is_none() => {
+            // Version 1 rejects extra event kinds and fields. Qualify the
+            // actor in the existing resume audit and enforce its wire limit.
+            let actor = format!("recovered unreadable journal by {actor}");
+            anyhow::ensure!(valid_text(&actor), "recovery audit actor exceeds 512 bytes");
             let mut replacement = Journal {
                 version: 1,
-                events: vec![Event::RecoveryResume { actor, at: now }],
+                events: vec![Event::Resume { actor, at: now }],
             };
             save(root, &mut replacement).context("could not replace unreadable drain journal")?;
             return Ok(format!(
@@ -708,11 +709,15 @@ mod tests {
             assert!(resume(&root).is_err());
             assert_eq!(std::fs::read(&path).unwrap(), damaged);
             env.set_key(GRANT_ENV, &advisor);
+            assert!(drain(&root, "land #4324", None).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), damaged);
+            assert!(active(&root).is_err());
             assert!(resume(&root).unwrap().contains("Replaced unreadable"));
             assert_eq!(active(&root).unwrap(), None);
             assert!(matches!(
                 load(&root).unwrap().events.as_slice(),
-                [Event::RecoveryResume { actor, .. }] if actor == &drained.actor
+                [Event::Resume { actor, .. }]
+                    if actor == &format!("recovered unreadable journal by {}", drained.actor)
             ));
         }
     }
