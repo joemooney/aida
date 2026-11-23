@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T04:06:03.840949650Z
+modified_at: 2026-11-23T04:44:45.037553928Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -731,6 +731,13 @@ comments:
   modified_at: 2026-11-23T04:06:03.840949650Z
   session_id: 01a2066533d8
   harness_version: codex-cli 0.167.0
+- id: 01a206b8-b687-7e13-965d-0c0257f1201e
+  author: joe
+  content: 'EVIDENCE at r3 head 58cb2188 (product-15, 2026-11-22 21:44 MST), with the same required-live command on BOTH hosts and aida built at 58cb2188. Both ran 1 test, and both FAILED at bug_2169_contained_clone_bwrap_tests.rs:2341: ''Codex :workspace denied a configured extra writable root: cannot create <HOME>/.cache/aida-test-scratch-XXXX/.tmpXXXX/codex-control-extra/probe: Read-only file system''. imac runs codex-cli 0.171.0 and dell1 runs codex-cli 0.167.0. r3 moved the root from /var/tmp to $HOME/.cache as ruled, and Codex STILL mounts it read-only. So the installed Codex :workspace sandbox does not honour the configured extra writable root (--add-dir) at ANY location. The test''s own preflight (:2304-2336) classifies exactly this as a host-capability SKIP reason, and it fails only because AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 forbids the skip. Conclusion: a Codex tool/host capability gap, not a defect in this PR. PR-4387 is not released; awaiting the advisor''s ruling.'
+  created_at: 2026-11-23T04:44:45.037553928Z
+  modified_at: 2026-11-23T04:44:45.037553928Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
