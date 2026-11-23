@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T14:55:36.748420701Z
+modified_at: 2026-11-23T15:42:38.593232639Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -150,6 +150,15 @@ comments:
   modified_at: 2026-11-23T13:40:27.440986686Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20912-d7dd-7cd3-92f1-418a8f3c3b69
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 039b73a30ef5d358d6a7bcb159710a3d401c0e83 plus native working-tree patch. AC1: [evidence: behavioral-test] admission_drain.rs:400 drains, corrupts, recovers and reloads the exact 512-byte UTF-8 actor. All seven admission_drain tests passed, including authorization refusal and revocation during lock contention. Inspected the merge-base diff, working diff and untracked additions. Recovery strips one literal audit prefix for length validation, keeps v1 event shape and writes one bounded replacement under lock after authorization. CLI documentation matches recovery behavior. Older binaries retain their original 512-byte total read limit. FAST gate stopped at cargo metadata, unsupported by lane job runner. Published-head CI pending.
+  created_at: 2026-11-23T15:42:38.593232639Z
+  modified_at: 2026-11-23T15:42:38.593232639Z
+  session_id: 01a208e78c54
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe
