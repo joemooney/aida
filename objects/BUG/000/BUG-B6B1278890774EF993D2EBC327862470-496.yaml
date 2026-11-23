@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: AIDA's own forge pollers (review-watch, auto-train, main-watch, and any seat watcher AIDA ships) check the remaining core budget (`gh api rate_limit` or the response headers) and BACK OFF when below 20% remaining. Landing-critical calls (train CI reads) get priority over watchers. The back-off is reported, not silent.
   - AC2: `aida doctor` (or `aida land status`) shows the remaining core budget and which pollers consumed it, so a seat can see when its own polling is starving the train. Test with a fake rate_limit response below the threshold.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-23T22:34:48.247107343Z
+modified_at: 2026-11-23T23:09:08.711054149Z
 req_type: Bug
 tags:
 - forge
@@ -56,6 +56,12 @@ comments:
   modified_at: 2026-11-23T22:34:48.247107343Z
   session_id: 01a20a7e7a2a
   harness_version: codex-cli 0.167.0
+- id: 01a20aab-9ce7-7970-82b9-732acff6b6f7
+  author: aida-publication-done
+  content: Implementer push 9b167d9eee8c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T23:09:08.711052488Z
+  modified_at: 2026-11-23T23:09:08.711052488Z
+  session_id: 01a20a7e7a2a
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
@@ -74,6 +80,14 @@ history:
   session_id: 01a20a7e7a2a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20aab-9ce7-7970-82b9-7312f83cc479
+  author: aida-publication-done
+  timestamp: 2026-11-23T23:09:08.711050756Z
+  session_id: 01a20a7e7a2a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
