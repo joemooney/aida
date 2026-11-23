@@ -1,0 +1,8 @@
+- user_id: claude-implementer-1072
+  requirement_id: 01a2071e-0105-7552-aff5-95b17fe9522f
+  position: 1000
+  added_by: claude-implementer-1072
+  note: auto-queued by `aida pr` ((no-sess); covers 2 specs
+  added_at: 2026-11-23T06:38:11.402146653Z
+  for_role: reviewer
+  added_by_machine: imac
