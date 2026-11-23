@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-eeadb833-5803-4bad-8739-7f23a43c2707",
+  "thread_id": "advisor-loop-review-watch-eeadb833-5803-4bad-8739-7f23a43c2707",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795405994996,
+  "body": "review-watch failed 3 consecutive times. Last failure: PR-4387: dispatcher exited exit status: 1. Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
