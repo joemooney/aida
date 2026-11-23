@@ -1,0 +1,29 @@
+id: 01a20918-0377-7fa0-a0a0-0c6f9fdf29c2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-493
+agreed_id: BUG-2732
+title: Manual train admission waits the full 180s on legacy review-watch/auto-train claims whose holder PIDs are already dead
+description: |
+  Found 2026-11-23 (advisor-122; filed by product-15). Joe's `aida pr train 4414` at ~08:44 MST failed with "admission busy … purpose legacy review-watch (PID 1665557) / legacy auto-train (PID 1734817) … gave up after 180s". Neither PID existed: both workers had rotated to new PIDs (2558341, 2595288). Manual train admission waited the full 180s bound on claims whose holders were already dead, so an operator landing command failed for no reason.
+
+  ## Acceptance
+  - AC1: A legacy review-watch/auto-train admission claim whose recorded pid+start-time is not live is treated as RELEASED immediately (the same liveness proof leases use: pid exists AND start time matches), so manual train admission proceeds without waiting out the bound.
+  - AC2: Test: a claim recorded for a dead pid (or a reused pid with a different start time) does not block admission; a claim for a live pid+start-time still does.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T15:48:18.423378315Z
+modified_at: 2026-11-23T15:48:18.423378315Z
+req_type: Bug
+tags:
+- admission
+- landing
+- small
+- train
+filed_at:
+  code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6708d633cf3
+  vendor: claude
