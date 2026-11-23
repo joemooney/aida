@@ -14,12 +14,12 @@ description: |
 
   - With a corrupt committed red-main journal line or an unreadable journal, keep merge, readiness, and review-round metrics available. Show that red-main metrics are unavailable in both human and JSON output, with a bounded diagnostic. Preserve the available red-main result shape for existing JSON callers.
   - Keep the existing valid-journal and absent-journal behavior. A truncated trailing line retains the journal reader's current handling. Exercise the CLI report with one corrupt committed line and assert independent metrics survive. Keep strict journal reads on paths that use it as state or transition evidence.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.340242990Z
-modified_at: 2026-11-23T08:42:56.149205230Z
+modified_at: 2026-11-23T08:47:59.894168979Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -107,6 +107,13 @@ history:
   author: joe
   timestamp: 2026-11-23T08:39:48.894029647Z
   changes: []
+- id: 01a20797-3596-7b30-b732-441d5bfe708d
+  author: aida-session-start
+  timestamp: 2026-11-23T08:47:59.894166043Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
