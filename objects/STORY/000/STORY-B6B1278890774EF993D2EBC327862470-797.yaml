@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-22T21:47:04.042542367Z
+modified_at: 2026-11-23T00:03:02.480520458Z
 req_type: Story
 tags:
 - landing
@@ -1170,6 +1170,32 @@ comments:
   created_at: 2026-11-22T21:47:04.042539511Z
   modified_at: 2026-11-22T21:47:04.042539511Z
   session_id: 01a20503a6bf
+- id: 01a205b6-cbd7-7d21-8cf1-03ed404eaf24
+  author: joe
+  content: |-
+    S1b PREP (implementer seat, 2026-11-22 17:10 MST). This is a plan only, no code until S3a (#4389, 78d0e918) lands on integration. It follows the signed sketch plus the 2026-11-20 16:40 rulings.
+
+    Start: a new sibling worktree on story-2897-s1b, branched from origin/integration after S3a merges (Q1 reads S3a's episode state). One PR -> integration, trailer (STORY-2897), STRICT.
+
+    (a) review_watch_ready.rs evaluate() (judge_commit_checks at about :170)
+    - The Evidence port gains landing_mode() (landing_policy::load from the trusted default branch; unreadable falls back to ci-gated) and red_main_episode() -> Option<{red_sha, failed check names}>.
+    - main_watch gains a read-only accessor: open_episode(root) through watch_directory(watch_root(root), create=false). It reads only; an unreadable state means no episode, so readiness fails closed.
+    - ci-gated: unchanged.
+    - review-gated: only policy.review_gated_checks (merge-hold-gate) must be green; pending, absent or failed in that set blocks. Other checks: pending or absent is info ("CI at head: Build pending"). A FAILED check outside the set BLOCKS unless every failed name is covered by the open episode's failing checks; then it is info naming the episode ("main red since <sha>"). A PR-caused red never reads ready.
+    - Tests: both modes x Build pending/failed/green; merge-hold-gate pending blocks in both modes; failed Build with a covering episode -> ready+info; failed Build with no episode or a non-covering one -> blocked; unreadable policy -> ci-gated; unreadable episode -> blocked; info text.
+
+    (b) review_commands.rs WAITING branch (BUG-2500, about :3080)
+    - Add a repeatable --needs <kind>:<detail> flag. The closed kinds are test, artifact, check and actor, and the detail must be non-empty. The syntax is validated whenever the flag is given, in either mode.
+    - In review-gated mode WAITING is refused, with nothing recorded, when there is no --needs, or when every --needs is a check: naming a generic aggregate (the policy's ci-gated required set, e.g. Build; ci-tier:*; CI_AGGREGATOR_CHECK). The refusal tells the reviewer to record APPROVED or CHANGES REQUESTED, with CI as info.
+    - The verdict record gains needs: Vec<{kind, detail}> (serde default, so old records read as empty). It is shown in `aida review verdict` and available to the throughput guard.
+    - Template master aida-review.md: add the --needs form and the refusal to the contract text (the "approve a defect-free head while CI is pending" lines), then make sync-templates and check-templates.
+    - Tests: the sketch's list plus old-record deserialisation and a malformed --needs.
+
+    Open for the advisor: (1) Knob: I read "project knobs per landing-mode config; default = current behaviour" as both behaviours keyed on landing mode = review-gated, with no new setting (as in the sketch's 10:37 trim). Confirm, or name the knob. (2) Vendor: the signoff said Claude+Fable, but Joe's 11-22 ruling is codex for all lanes. Who implements S1b?
+  created_at: 2026-11-23T00:03:02.480520458Z
+  modified_at: 2026-11-23T00:03:02.480520458Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
