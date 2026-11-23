@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T20:39:52.483731382Z
+modified_at: 2026-11-23T20:42:30.921732267Z
 req_type: Story
 tags:
 - autonomy
@@ -99,6 +99,29 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:39:52.341676742Z
   modified_at: 2026-11-23T20:39:52.341676742Z
+- id: 01a20a25-92f0-76e2-a3a6-3a23eb1a815f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:42):
+    # STORY-3038 / PR #4448 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: SCOPE CUT. AC1 uses an EXPLICIT strict-path list (one constant/config list of ADR-76 paths: sandbox/containment, authority/grant/identity, credentials, gate/guard, lease/claim) instead of name-word matching, AND the default must also apply on the completing-PR landing path. Any other blocker not caused by that same root: list it in the PR body as a follow-up, do NOT fix here.
+
+    CR at 4646e44f. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [major] STORY-3038.AC1 — The default disappears before the ordinary completing-PR landing path can use it. resolve at lines 275–286 requires the live enum to be Approved. publication_completion.rs:171–189 changes Approved/Planned/InProgress to Done on a successful completing push, and pr_service.rs:198–219 feeds that live record to the ship and train policy. The store records exactly that transition for this PR. Preserve or resolve trusted approval eligibility across publication while continuing to withhold it from ineligible or withdrawn specs. Add a publication-to-landing regression starting with an Approved small spec and an unset mode.
+
+    - [major] STORY-3038.AC1 — The strict-path exclusion at lines 506–520 admits authorization and grant code whose file names lack a matching word. For example, aida-cli-lib/src/role_cmd.rs:227–251 implements role entry and directly issues seat grants, but the path misses both sensitive_path and strict_terms and is outside the built-in protected floor. An otherwise eligible PR changing only that code can retain the default Drain, bypassing required supervision. Use a trusted classification that covers actual ADR-75/76 authority and gate surfaces and add an actual repository path as a regression.
+
+    - [major] STORY-3038.AC1 — Direct ship can rely on a stale Approved/small decision after CI waits. The unattended supervision decision at pr_cmd/mod.rs:1019–1049 reads the spec before CI. Under the merge lease (lines 1265–1309) the code rechecks review/CI/hold/head evidence but does not rerun the supervised-mode policy for a non-mandate ship. If the trusted store changes and the small tag is removed or status is withdrawn while CI is pending, the same PR SHA still passes the head check. Revalidate the approval and size eligibility against the current trusted store at the decisive merge boundary and cover a metadata change while CI is pending.
+
+    - [major] The supplied untraced list identifies STORY-3038.AC1 and AC2 (origin STORY-b6b1278890774ef993d2ebc327862470-820). The added test at lines 567–603 uses only a story-level trace and exercises an in-memory resolver with made-up path names. The train test change only initializes approved_small: false. Add criterion-level traces and gate regressions exercising the trusted opt-in through the real landing policy, including the publication status transition, actual strict paths and live eligibility revalidation. Keep the existing off/on and override assertions.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:42:30.921732267Z
+  modified_at: 2026-11-23T20:42:30.921732267Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
