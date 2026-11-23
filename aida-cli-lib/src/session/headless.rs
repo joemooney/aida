@@ -682,7 +682,7 @@ pub(crate) fn record_headless_session_end(worktree_root: &Path, session_id: &str
 /// cwd fallback could be `$HOME`. It uses [`contained_session_write_roots`],
 /// which has no fallback.
 /// trace:STORY-612 | ai:claude
-fn headless_worktree_root() -> PathBuf {
+pub(crate) fn headless_worktree_root() -> PathBuf {
     // trace:BUG-2001 | ai:antigravity
     #[cfg(test)]
     if let Some(cwd) = contained_cwd_seam::cwd() {
@@ -895,18 +895,8 @@ pub(crate) fn effective_agent_tuning(
     &'static str,
     &'static str,
 ) {
-    let (mut tuning, source) =
+    let (mut tuning, mut model_source, mut effort_source) =
         aida_core::agents_config::resolve_agent_tuning_with_source(root, vendor, seat);
-    let mut model_source = if tuning.model.is_some() {
-        source
-    } else {
-        "vendor default"
-    };
-    let mut effort_source = if tuning.effort.is_some() {
-        source
-    } else {
-        "vendor default"
-    };
     if let Some(model) = environment
         .var("AIDA_AGENT_MODEL")
         .ok()

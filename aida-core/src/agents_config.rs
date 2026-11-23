@@ -109,7 +109,12 @@ fn string_value(table: &toml::Value, key: &str) -> Option<Option<String>> {
     Some((!value.is_empty()).then_some(value.to_string()))
 }
 
-fn tuning_from_file(path: &Path, vendor: &str, seat: AgentSeat) -> Option<ResolvedAgentTuning> {
+fn tuning_from_file(
+    path: &Path,
+    vendor: &str,
+    seat: AgentSeat,
+    source: &'static str,
+) -> Option<(ResolvedAgentTuning, &'static str, &'static str)> {
     let body = std::fs::read_to_string(path).ok()?;
     let value: toml::Value = toml::from_str(&body).ok()?;
     let vendor_table = value
@@ -128,10 +133,24 @@ fn tuning_from_file(path: &Path, vendor: &str, seat: AgentSeat) -> Option<Resolv
         return None;
     }
 
-    Some(ResolvedAgentTuning {
-        model: model.unwrap_or(None),
-        effort: effort.unwrap_or(None),
-    })
+    let model_source = if model.is_some() {
+        source
+    } else {
+        "vendor default"
+    };
+    let effort_source = if effort.is_some() {
+        source
+    } else {
+        "vendor default"
+    };
+    Some((
+        ResolvedAgentTuning {
+            model: model.flatten(),
+            effort: effort.flatten(),
+        },
+        model_source,
+        effort_source,
+    ))
 }
 
 fn tiers_from_file(path: &Path, vendor: &str) -> Option<AgentModelTiers> {
@@ -239,19 +258,23 @@ fn tuning_with_source_from(
     project_agents_toml: Option<&Path>,
     vendor: &str,
     seat: AgentSeat,
-) -> (ResolvedAgentTuning, &'static str) {
+) -> (ResolvedAgentTuning, &'static str, &'static str) {
     if !vendor.trim().is_empty() {
         for (path, source) in [
             (project_agents_toml, ".aida/agents.toml"),
             (project_config_toml, ".aida/config.toml"),
             (global_agents_toml, "~/.aida/agents.toml"),
         ] {
-            if let Some(tuning) = path.and_then(|p| tuning_from_file(p, vendor, seat)) {
-                return (tuning, source);
+            if let Some(tuning) = path.and_then(|p| tuning_from_file(p, vendor, seat, source)) {
+                return tuning;
             }
         }
     }
-    (ResolvedAgentTuning::default(), "vendor default")
+    (
+        ResolvedAgentTuning::default(),
+        "vendor default",
+        "vendor default",
+    )
 }
 
 /// Resolve `[agents.<vendor>] tiers = [...]` for retry escalation.
@@ -336,7 +359,7 @@ pub fn resolve_agent_tuning_with_source(
     project_root: &Path,
     vendor: &str,
     seat: AgentSeat,
-) -> (ResolvedAgentTuning, &'static str) {
+) -> (ResolvedAgentTuning, &'static str, &'static str) {
     let global = crate::home::home_dir().map(|h| h.join(".aida").join("agents.toml"));
     let project_config = project_root.join(".aida").join("config.toml");
     let project_agents = project_root.join(".aida").join("agents.toml");

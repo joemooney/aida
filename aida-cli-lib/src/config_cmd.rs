@@ -1131,10 +1131,11 @@ fn render_effective_policy(project_root: &std::path::Path) {
     }
 
     let environment = aida_core::exec_context::Environment::capture();
+    let tuning_root = crate::session::headless_worktree_root();
     for profile in &aida_core::vendors::PROFILES {
         println!(
             "{}",
-            agent_tuning_section(project_root, profile.session_name, &environment)
+            agent_tuning_section(&tuning_root, profile, &environment)
         );
     }
 
@@ -1148,10 +1149,11 @@ fn render_effective_policy(project_root: &std::path::Path) {
 // trace:TASK-3171 | ai:codex
 fn agent_tuning_section(
     project_root: &std::path::Path,
-    vendor: &str,
+    profile: &aida_core::vendors::VendorProfile,
     environment: &aida_core::exec_context::Environment,
 ) -> String {
     use aida_core::agents_config::AgentSeat::*;
+    let vendor = profile.session_name;
     let tiers = aida_core::agents_config::resolve_agent_model_tiers(project_root, vendor);
     let mut lines = vec![
         format!("\n[agents.{vendor}]"),
@@ -1160,11 +1162,18 @@ fn agent_tuning_section(
     for seat in [Implementer, Reviewer, Advisor, Integrator, Product, Trivial] {
         let (tuning, model_source, effort_source) =
             crate::session::effective_agent_tuning(project_root, vendor, seat, environment);
+        let model = if profile.manages_headless_model() {
+            format!(
+                "{} ({model_source})",
+                tuning.model.as_deref().unwrap_or("default").escape_debug()
+            )
+        } else {
+            "unmanaged by headless launch".to_string()
+        };
         lines.push(format!(
-            "  {}: model={} ({model_source}), effort={} ({effort_source})",
+            "  {}: model={model}, effort={} ({effort_source})",
             seat.as_str(),
-            tuning.model.as_deref().unwrap_or("default"),
-            tuning.effort.as_deref().unwrap_or("default")
+            tuning.effort.as_deref().unwrap_or("default").escape_debug()
         ));
     }
     lines.join("\n")
@@ -5160,8 +5169,8 @@ mod bug_533_config_show_tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".aida")).unwrap();
         std::fs::write(dir.path().join(".aida/config.toml"),
-            "[agents.fixture]\nmodel = 'base'\ntiers = ['base', 'review']\n[agents.fixture.seats.reviewer]\nmodel = 'review'\neffort = 'low'").unwrap();
-        let section = agent_tuning_section(dir.path(), "fixture", &env);
+            "[agents.claude]\nmodel = 'base'\ntiers = ['base', 'review']\n[agents.claude.seats.reviewer]\nmodel = 'review'\neffort = 'low'").unwrap();
+        let section = agent_tuning_section(dir.path(), &aida_core::vendors::PROFILES[0], &env);
         assert!(section.contains(
             "reviewer: model=review (.aida/config.toml), effort=high (AIDA_AGENT_EFFORT)"
         ));
