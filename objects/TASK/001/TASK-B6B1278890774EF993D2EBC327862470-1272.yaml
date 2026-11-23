@@ -1,0 +1,28 @@
+id: 01a20ab4-bb68-7233-8a09-456a05e6528b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1272
+agreed_id: TASK-3849
+title: 'Known-failing test: tests/test_pr_ship_preflight.py fails once CI discovery runs it (from BUG-2734)'
+description: |
+  Known-failing Python test file found by BUG-2734 (2026-11-23): tests/test_pr_ship_preflight.py was never run in CI (wired by explicit filename, no discovery). When BUG-2734 wires discovery it fails, so it goes on the dated known-failing list pointing at this spec.
+
+  ## Acceptance
+  - AC1: tests/test_pr_ship_preflight.py passes under CI discovery (fix the test or the code it covers; if the test is obsolete, delete it with a reason).
+  - AC2: Remove its entry from the BUG-2734 known-failing list in the same PR.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T23:19:06.344317243Z
+modified_at: 2026-11-23T23:19:06.344317243Z
+req_type: Task
+tags:
+- ci
+- from-bug-2734
+- tests
+filed_at:
+  code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc8
+  vendor: claude
