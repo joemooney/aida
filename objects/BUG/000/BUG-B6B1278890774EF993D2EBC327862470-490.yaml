@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: An approval recorded through review-watch requests full-tier CI exactly as a manual `aida review record` approval does: ci:full is applied, or the full workflow is triggered, after any in-flight FAST run finishes, so no FAST run is cancelled (avoiding the BUG-2723 ghost red).
   - AC2: A regression test: a review-watch approval of a head without ci:full results in a full-tier request.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T10:30:22.405873715Z
+modified_at: 2026-11-23T10:53:13.228710829Z
 req_type: Bug
 tags:
 - ci
@@ -47,6 +47,12 @@ comments:
   modified_at: 2026-11-23T10:30:22.405873715Z
   session_id: 01a207e7f7cd
   harness_version: codex-cli 0.167.0
+- id: 01a20809-da8c-7d53-8818-691cb8569cd8
+  author: aida-publication-done
+  content: Implementer push f2f2903d70c9 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T10:53:13.228710232Z
+  modified_at: 2026-11-23T10:53:13.228710232Z
+  session_id: 01a207e7f7cd
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
@@ -61,6 +67,14 @@ history:
   session_id: 01a207e7f7cd
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20809-da8c-7d53-8818-690b00019708
+  author: aida-publication-done
+  timestamp: 2026-11-23T10:53:13.228708639Z
+  session_id: 01a207e7f7cd
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
   branch: main
