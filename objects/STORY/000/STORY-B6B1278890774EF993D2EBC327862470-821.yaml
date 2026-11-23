@@ -1,0 +1,37 @@
+id: 01a20976-6121-70a2-902b-0f119ab02ab3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-821
+agreed_id: STORY-3039
+title: 'Review PR-4446: [AI:claude] chore(integration): small-fix bundle [promotion 26] (TASK-3122 BUG-2592 BUG-2700)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d5e4`) for branch `promote/integration-26`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4446>
+  - Branch: `promote/integration-26` → `main`
+
+  ## Covers
+
+  - TASK-3122
+  - BUG-2592
+  - BUG-2700
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4446` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T17:31:22.785359861Z
+modified_at: 2026-11-23T17:31:22.785359861Z
+req_type: Story
+filed_at:
+  code_sha: e65378fe38d082a7e7eac228c9fbc86d18a80bf2
+  branch: promote/integration-26
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6708d633cf3
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
