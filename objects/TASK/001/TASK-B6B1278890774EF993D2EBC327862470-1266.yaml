@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-23T22:13:29.535918366Z
+modified_at: 2026-11-23T22:25:26.784838267Z
 req_type: Task
 tags:
 - doctor
@@ -51,6 +51,13 @@ comments:
     Reviewed HEAD: 77e36a0a3ccb50aa43acd328ce3277ff71b3b409 plus native worktree diff. Integration base includes #4460. AC1: [evidence: behavioral-test] mailbox_cmd.rs:695 and mail_backlog.rs:246 use the same report. AC2: [evidence: behavioral-test] story_1843_mailbox_view_tests.rs:1486 verifies hidden body, count, exact ID, inspection command and doctor finding after sender retirement. Targeted run in progress. Probes: sorted unique IDs from bounded lookup, safe ID alphabet, deleted replicas suppressed, retained successes and failed lookups excluded. Doctor inventories IDs without reader keys or a recipient UUID. No ownership or ACK behavior changed. No untracked additions. Operator inspection command covers the current checkout and canonical store; run it in the source checkout for local-only mail.
   created_at: 2026-11-23T22:13:29.535918366Z
   modified_at: 2026-11-23T22:13:29.535918366Z
+  session_id: 01a20a73aa39
+  harness_version: codex-cli 0.167.0
+- id: 01a20a83-9e5b-7c02-95c9-da5d77cd9e7a
+  author: dirtlab
+  content: 'Final-tree targeted validation passed: lane job j20261123T221144733-3-0 executed story2767_retired_sender_preserves_seat_delivery_ownership, 1 passed, 0 failed. FAST source gates and 51 CI guard tests passed; application ratchets are still running.'
+  created_at: 2026-11-23T22:25:26.784838267Z
+  modified_at: 2026-11-23T22:25:26.784838267Z
   session_id: 01a20a73aa39
   harness_version: codex-cli 0.167.0
 history:
