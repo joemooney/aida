@@ -35,7 +35,7 @@ fn journal_failure_preserves_independent_landing_metrics() {
     let report = |format: &str| {
         let output = Command::new(env!("CARGO_BIN_EXE_aida"))
             .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap())
+            .env("PATH", "/usr/bin:/bin")
             .env("HOME", home.path())
             .current_dir(root)
             .args([
