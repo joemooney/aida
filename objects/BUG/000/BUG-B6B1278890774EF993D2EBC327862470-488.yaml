@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T09:52:23.064219841Z
+modified_at: 2026-11-23T09:53:17.311604809Z
 req_type: Bug
 tags:
 - agreed-id
@@ -88,6 +88,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T09:52:22.912194429Z
   modified_at: 2026-11-23T09:52:22.912194429Z
+- id: 01a207d3-2ee2-7d41-ab17-332cf922e744
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:53):
+    # BUG-2727 / PR #4419 r2 = SCOPE CUT (advisor-122 ruling 2026-11-23 02:54 MST; relayed by product-15). Lane: CODEX. Target <=120 changed lines.
+
+    CR at 1adec850 (r1, +294/-74, 8 findings). The new pinned-tree store reader (mandate_traces.rs buffers the whole tree and every object, and requires an origin ref) caused most findings and breaks existing fixtures. RULING: DELETE the pinned-tree reader. Instead, when the mandate's spec resolution misses:
+    1. fetch origin/aida-store into the local store (the same bounded path `aida pull` uses), then
+    2. resolve the PR's trailer labels with the store's EXISTING unambiguous resolver (the one trailer coverage already uses; agreed_id labels and padding handled) for BOTH the coverage and current-record checks, so they never disagree (finding 2);
+    3. on a remaining miss, the refusal NAMES the unresolved labels (AC2).
+    Keep ship_gate_known_ids as is.
+    Tests: the #4414 shape (labels on origin but not local), a padded agreed id, and an existing fixture without refs/remotes/origin/aida-store that keeps working.
+    The reviewer scope is the scope cut plus the diff.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T09:53:17.311604809Z
+  modified_at: 2026-11-23T09:53:17.311604809Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
