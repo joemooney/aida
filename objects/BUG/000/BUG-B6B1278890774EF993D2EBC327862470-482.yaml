@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T02:22:44.104953130Z
+modified_at: 2026-11-23T02:25:46.538958793Z
 req_type: Bug
 tags:
 - recovery
@@ -25,6 +25,20 @@ comments:
   content: 'Data point (advisor-122 19:22, recorded by product-15): after the operator''s shell 411725 left, recover-launch for #4380''s attempt 346d4525 refused again, now on pid 511679 (another 5-day-old Terminator bash). About 30 live processes have cwd = /home/joe/ai/aida: every seat, deputy runner, product watcher, operator shell. The attempt''s recorded worktree IS the primary and its launcher pid is dead, so recover-launch can NEVER succeed for an attempt recorded against the primary. #4380''s final review waits on this fix. Priority: first lane when drain mode allows one.'
   created_at: 2026-11-23T02:22:44.104953130Z
   modified_at: 2026-11-23T02:22:44.104953130Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20639-76cf-78f1-9986-94c4adbc5025
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:25):
+    # BUG-2721: small fix (advisor-122 ruling 2026-11-22 19:22/19:30 MST; relayed by product-15). Lane: CODEX. Drain-mode priority: it unblocks #4380's final review. New branch, new PR.
+
+    Read `aida show BUG-2721` (ACs plus the 30-process data point). `aida agent recover-launch` treats ANY process whose cwd is the attempt's recorded worktree as proof the attempt is alive. When that worktree is the primary checkout (~30 seats, deputies and shells live there), recovery can never succeed, even though the launcher pid is dead.
+    Fix: judge liveness only from evidence bound to the attempt (its recorded launcher/worker pid plus start identity, or a process carrying the attempt token in its cmdline/env). Never use cwd alone, and never cwd when the path is the primary checkout. The refusal names the PID, command and reason. Regression test: a dead launcher's attempt recorded against the primary, with an unrelated live process in the primary, is recoverable.
+    ADR-76 strict tier (lease/claim safety), so expect a STRICT review. Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2721 | ai:codex`. Commit `[AI:codex] fix(agent): ... (BUG-2721)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T02:25:46.538958793Z
+  modified_at: 2026-11-23T02:25:46.538958793Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 filed_at:
