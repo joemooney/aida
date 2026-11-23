@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T05:16:58.536968628Z
+modified_at: 2026-11-23T05:18:31.301654730Z
 req_type: Bug
 tags:
 - recovery
@@ -161,6 +161,26 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T05:16:58.344465461Z
   modified_at: 2026-11-23T05:16:58.344465461Z
+- id: 01a206d7-c72a-7351-af2f-0d48063f7956
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:18):
+    # BUG-2721 / PR #4402 r3, round 3 of 4 (advisor-122 ruling 2026-11-22 22:20 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier.
+
+    CR at 281f415e (r2). AC2 and AC3 pass, including the wrapped-recovery regression with the primary shell kept alive. Three p1 security findings remain, all of the form "a surviving descendant slips past the new check". RULING: a LAYERED liveness rule. An attempt is ALIVE if ANY of these holds:
+    (a) any process in the recorded worker PGID or supervisor SID (scan /proc/<pid>/stat for pgrp and session);
+    (b) any process carrying the attempt token in its ENVIRONMENT, checked on EVERY exit path, including normal supervisor exit (:2146);
+    (c) when the attempt's worktree is NOT the primary checkout, the old cwd-under-worktree check, kept AS IS;
+    (d) for legacy or partial receipts without a grant or token (:854), REFUSE with "not provably over" plus an inspection command, never silently skipping the check.
+    Only when the worktree IS the primary does (c) not apply (that's the BUG-2721 fix).
+    Residual (a child that both setsids AND clears its env, outside any worktree): document it as accepted in the PR body; it's deferred.
+    Tests: one per layer, plus the three findings' scenarios. The reviewer scope is the three findings plus the diff.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T05:18:31.301654730Z
+  modified_at: 2026-11-23T05:18:31.301654730Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
