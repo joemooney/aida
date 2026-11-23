@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-23T21:03:58.967405100Z
+modified_at: 2026-11-23T21:05:02.490256289Z
 req_type: Bug
 tags:
 - ci
@@ -33,6 +33,21 @@ comments:
   content: 'Draft to Approved: advisor-122 disposition 2026-11-23 14:03 (p28 integration bundle, --mode drain). Slicing: AC1 discovery plus a wiring ratchet; AC2 known-failing files on an explicit dated list with follow-up IDs, not fixed here.'
   created_at: 2026-11-23T21:03:58.967405100Z
   modified_at: 2026-11-23T21:03:58.967405100Z
+- id: 01a20a3a-32e5-7e32-8604-2fe91121037b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:05):
+    # BUG-2734: 28 of 67 tests/test_*.py never run in CI (advisor-122 disposition 2026-11-23 14:03; filed by integration-30; product-15). Lane: CODEX. Integration bundle p28. PR INTO base `integration` (branch `int28-bug-2734`, cut from origin/integration 54e9220e1db).
+
+    Read `aida show BUG-2734` and integration-30's thread on it. ADVISOR SLICING:
+    - AC1: DISCOVERY plus a WIRING RATCHET. Python tests are found by discovery (or every tests/test_*.py is asserted to be wired), so a new test file can't silently skip CI. The ratchet fails when a test file exists but isn't run.
+    - AC2: files that FAIL when wired go on an EXPLICIT, DATED known-failing list, each with a follow-up spec ID (product files those). Do NOT fix them in this PR.
+    STRICT-PATH STOP: change only the test wiring (.github/workflows/ci.yml test invocations, a discovery helper, the ratchet). Do NOT change gate semantics or what scripts/check-ci-gates.py / check-exec-context.py decide; if wiring requires that, STOP and punt.
+    SMALL-PR RULE: <=300 changed lines. Add trace comments (# trace:BUG-2734 | ai:codex). Commit `[AI:codex] fix(ci): ... (BUG-2734)`. One targeted run, then `make check-ci-fast`, then ship the PR INTO integration. List the known-failing files in the PR body. COMMIT your work.
+  created_at: 2026-11-23T21:05:02.490256289Z
+  modified_at: 2026-11-23T21:05:02.490256289Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
   author: joe
