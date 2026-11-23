@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:29:16.458092613Z
-modified_at: 2026-11-23T03:37:05.709680047Z
+modified_at: 2026-11-23T03:42:29.310387399Z
 req_type: Bug
 tags:
 - admission
@@ -72,6 +72,20 @@ comments:
   modified_at: 2026-11-23T03:30:52.083949613Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2067f-82f0-7363-bcc6-9d0dd36d571b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1 plus uncommitted queue_cmd/work.rs. The merge-base diff was empty and there were no untracked additions.
+    AC1: [evidence: behavioral-test] Unimplemented. Moving a clone and ending its lease exposes uncovered pins to concurrent orphan reap (seat_clone.rs:6348). Strict-tier retention issue recorded in punt.
+    AC2: [evidence: behavioral-test] work.rs:4196 adds a veto for an observed cwd occupant with its PID. The targeted live-child test at work.rs:4272 passed, including unchanged lease and directory. Negative proc observations grant no new authority. Existing unknown-owner refusals remain.
+    AC3: [evidence: behavioral-test] Unimplemented. Existing orphan pin records contain only a basename and commit.
+    AC4: [evidence: behavioral-test] Live nested process covered. Unmerged predecessor recovery and successor start remain outstanding.
+    Deep pass: admission and reclaim share the same check, the underlying matcher uses path components, multiple occupants need only one witness for refusal, and unreadable processes are not positive proof of absence. No existing test was weakened. Punt vetoes publication.
+  created_at: 2026-11-23T03:42:29.310387399Z
+  modified_at: 2026-11-23T03:42:29.310387399Z
+  session_id: 01a20677b36e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20677-fbb8-72e1-a002-0f940a0ace7c
   author: aida-session-start
