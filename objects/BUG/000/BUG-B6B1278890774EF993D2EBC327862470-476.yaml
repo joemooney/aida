@@ -9,12 +9,12 @@ description: |
   - AC1: A malformed or invalid holder record is classified Unknown, never Dead, and is never reclaimed. A unit test covers truncated TOML, a wrong-type pid and a missing start identity.
   - AC2: A valid record whose holder is provably dead is still classified Dead (positive control).
   - AC3: The refusal for an Unknown holder names the record path and the read-only command that inspects it.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T00:09:40.224715576Z
+modified_at: 2026-11-23T00:11:17.999676088Z
 req_type: Bug
 tags:
 - authority
@@ -83,6 +83,11 @@ comments:
   content: 'CONSTRAINT (advisor-122 ruling 2026-11-22 17:12, relayed by product-15): any size-bounded claim/holder read must FAIL CLOSED. An oversized record is a refusal error, never absence. PR #4381 (TASK-3827) was closed because its 64 KiB bounded reader in coordination.rs turned a valid oversized claim into None, which let release delete a successor''s drain/solo lock and let reviewer admission overwrite a live foreign claim. Don''t recreate that in this fix. Add a test that an oversized valid record is never classified Dead or absent.'
   created_at: 2026-11-23T00:09:40.224715576Z
   modified_at: 2026-11-23T00:09:40.224715576Z
+- id: 01a205be-286f-7a92-9167-686697a2fc10
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2715 — request changes. Reviewed the complete landed diff against protected base 6be38166be85. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-23T00:11:17.999671207Z
+  modified_at: 2026-11-23T00:11:17.999671207Z
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
@@ -125,6 +130,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a205be-286f-7a92-9167-685a264e4735
+  author: joe
+  timestamp: 2026-11-23T00:11:17.999658978Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -132,16 +144,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    BUG-2715 — request changes. Reviewed the complete landed diff against protected base 6be38166be85. CI pending at review time.
-    AC1 — unverified. The inline regression covers malformed holder JSON, a wrong-type PID and a missing stamp on an admitted record. Explicit refusals, divergent ownership snapshots and malformed outer TOML still have gaps.
-    AC2 — verified by the waited-child Dead assertions in cargo test -p aida-cli-lib bug_2715_force_claim_requires_original_holder_evidence and the targeted passing run reported on BUG-2715.
-    AC3 — unverified. The inline regression verifies the path and inspection command for parsed leases, but malformed session TOML misses that diagnostic.
-    BUG-2715 (bug protocol): the PR touches at least one test file — met by the inline Rust test in ownership/reader.rs.
-  recovery_hint: address the review findings, move BUG-2715 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-22T23:16:23.049829593Z
