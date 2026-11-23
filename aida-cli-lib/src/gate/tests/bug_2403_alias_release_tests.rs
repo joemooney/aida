@@ -162,6 +162,7 @@ fn release(root: &Path, io: Io<'_>) -> (Result<Outcome>, Vec<String>) {
         root,
         &hold,
         AutoReleaseIo {
+            change_key: Some(crate::gate::ledger::ChangeKey::pr(PR)),
             coverage: &|_| Ok(None),
             live_head: &|| {
                 (io.on_read)(reads.get());
@@ -192,7 +193,7 @@ fn release(root: &Path, io: Io<'_>) -> (Result<Outcome>, Vec<String>) {
                 Some(forced) => forced.clone(),
                 None => sa::grant_check_for(root, id, subject),
             },
-            approval_authority: &|_| Ok(()),
+            approval_authority: &|_, _| Ok(()),
             mandate: &|| bail!("no mandate is active"),
             refusal_release: &|_, _| held_check(),
             comment: &|body| {
@@ -386,4 +387,80 @@ fn bug_2403_unproved_labels_do_not_release() {
     let error = format!("{:#}", result.unwrap_err());
     assert!(error.contains("verdict is not APPROVED"), "{error}");
     assert!(mh::hold_is_open(&root, PR));
+}
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_change_only_approval_releases_spec_hold() {
+    use crate::gate::ledger::{self, ChangeKey, EventBody, GateEvent};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let _env = AmbientGuard::hermetic_with_seat(&root, "reviewer", &[]);
+    commit_snapshot(&root);
+    arm(&root);
+    let change = ChangeKey::pr(PR);
+    let key = change.as_key();
+    let mut record = rv::build_verdict_object(
+        &root,
+        &rv::verdict_path(&root, &key),
+        Some("approved"),
+        Some(HEAD),
+        Some("story-2220-work"),
+        Some("reviewed"),
+        &[],
+        REVIEWER,
+    )
+    .unwrap();
+    stamp_record_grant(&root, &mut record);
+    let mut event = GateEvent::new(change, EventBody::Verdict { record });
+    event.head = Some(HEAD.into());
+    assert!(event.spec.is_none());
+    ledger::store::append(&ledger::store_root(&root).unwrap(), change, vec![event]).unwrap();
+
+    assert!(release(&root, lawful(&[MOVED])).0.is_err());
+    assert!(!has_clearance(&root));
+    assert_eq!(
+        release(&root, lawful(&[HEAD])).0.unwrap(),
+        Outcome::Released { mandate: None }
+    );
+    let clearance = Value::Object(mh::recorded_clearance(&root, PR).unwrap());
+    assert_eq!(clearance["released_by_verdict"]["key"], key);
+}
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_spec_bound_approval_releases_change_hold() {
+    use crate::gate::ledger::{self, ChangeKey, EventBody, GateEvent};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let _env = AmbientGuard::hermetic_with_seat(&root, "reviewer", &[]);
+    commit_snapshot(&root);
+    let change = ChangeKey::pr(PR);
+    let key = change.as_key();
+    record(&root, &key, "request-changes", OLD);
+    let mut hold = rework(&key);
+    hold.spec = Some(FRIENDLY.into());
+    mh::place_hold(&root, &hold).unwrap();
+
+    let mut approval = rv::build_verdict_object(
+        &root,
+        &rv::verdict_path(&root, FRIENDLY),
+        Some("approved"),
+        Some(HEAD),
+        Some("story-2220-work"),
+        Some("reviewed"),
+        &[],
+        REVIEWER,
+    )
+    .unwrap();
+    stamp_record_grant(&root, &mut approval);
+    let mut event = GateEvent::new(change, EventBody::Verdict { record: approval });
+    event.spec = Some(FRIENDLY.into());
+    event.head = Some(HEAD.into());
+    ledger::store::append(&ledger::store_root(&root).unwrap(), change, vec![event]).unwrap();
+    assert_eq!(
+        release(&root, lawful(&[HEAD])).0.unwrap(),
+        Outcome::Released { mandate: None }
+    );
+    assert!(has_clearance(&root));
 }

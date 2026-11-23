@@ -313,14 +313,7 @@ fn eligible_with_coverage(
     // it — inline `rounds` when the current file survived between rounds,
     // else the per-commit archive the reviewer launchers never clear.
     // trace:BUG-2186 | ai:claude
-    let inline = match body.get("rounds") {
-        None => &[][..],
-        Some(rounds) => rounds
-            .as_array()
-            .context("retained `rounds` is not an array")?
-            .as_slice(),
-    };
-    let rounds: Vec<&Value> = inline.iter().chain(&history.archived).collect();
+    let rounds = retained_rounds(body)?.iter().chain(&history.archived);
     let mut armed = false;
     for round in rounds {
         if rv::delivery_pending(round) {
@@ -654,6 +647,7 @@ struct AutoReleaseIo<'a> {
     live_head: &'a dyn Fn() -> Result<Option<mh::PinnedChange>>,
     read_hold: &'a dyn Fn() -> Option<mh::MergeHoldRecord>,
     covered_specs: &'a dyn Fn() -> Result<(Vec<String>, aida_core::RequirementsStore)>,
+    change_key: Option<crate::gate::ledger::ChangeKey>,
     read_body: &'a dyn Fn(&str) -> Result<Value>,
     /// The archived round history beside the arming verdict.
     // trace:BUG-2186 | ai:claude
@@ -662,7 +656,7 @@ struct AutoReleaseIo<'a> {
     grant_check: &'a dyn Fn(&str, &str) -> sa::GrantCheck,
     /// BUG-1918 attestation + head coverage ([`approval_attested`]).
     // trace:STORY-1697 | ai:claude
-    approval_authority: &'a dyn Fn(&str) -> Result<()>,
+    approval_authority: &'a dyn Fn(&str, Option<&rv::RecordedVerdict>) -> Result<()>,
     /// Revalidated durable coverage, reconciled with the live corpus on every pass.
     coverage: &'a dyn Fn(&str) -> Result<Option<crate::gate::review_carryover::CarryOver>>,
     /// The mandate covering a sensitive release, re-read on every call.
@@ -728,6 +722,59 @@ pub(crate) fn read_arming_body(root: &Path, project: &Path, key: &str) -> Result
         .or_else(|| rv::current_verdict(project, key))
         .with_context(|| format!("arming verdict {key} is missing"))?;
     Ok(serde_json::from_str(&current.body)?)
+}
+
+// trace:BUG-2718 | ai:codex
+fn retained_rounds(body: &Value) -> Result<&[Value]> {
+    match body.get("rounds") {
+        None => Ok(&[]),
+        Some(rounds) => Ok(rounds
+            .as_array()
+            .context("retained `rounds` is not an array")?
+            .as_slice()),
+    }
+}
+
+/// Match a change-only ledger approval to the effective change verdict and the
+/// pinned head. A verdict indexed for a sibling spec cannot answer this refusal.
+// trace:BUG-2718 | ai:codex
+fn change_approval(
+    root: &Path,
+    change: crate::gate::ledger::ChangeKey,
+    head: &str,
+) -> Result<Option<(Value, rv::RecordedVerdict)>> {
+    use crate::gate::ledger::{checked, store_root};
+    let events = checked::read_change_events(&store_root(root)?, change, &mut Default::default())
+        .map_err(|why| anyhow::anyhow!(why.to_string()))?;
+    let Some(event) = events
+        .iter()
+        .rev()
+        .find(|e| e.verdict_record().is_some() && !e.is_spec_only())
+    else {
+        return Ok(None);
+    };
+    let record = event.verdict_record().expect("selected a verdict");
+    if event.spec.is_some()
+        || event.head.as_deref() != Some(head)
+        || record.get("reviewed_sha").and_then(Value::as_str) != Some(head)
+        || record
+            .get("verdict")
+            .and_then(Value::as_str)
+            .map(rv::VerdictKind::parse)
+            != Some(rv::VerdictKind::Approved)
+    {
+        return Ok(None);
+    }
+    let key = change.as_key();
+    let current = rv::current_verdict(root, &key)
+        .with_context(|| format!("cannot read approval under {key}"))?;
+    let body: Value = serde_json::from_str(&current.body)?;
+    let selected = rv::parse_recorded_verdict(&current.body).context("invalid change approval")?;
+    ensure!(
+        body.as_object() == Some(record) && !rv::delivery_pending(&body) && !selected.is_closed(),
+        "approval under {key} is no longer current or deliverable"
+    );
+    Ok(Some((body, selected)))
 }
 
 /// The retained round history of every label in [`arming_labels`], so each
@@ -866,16 +913,23 @@ fn with_live_io<T>(
             .map_err(anyhow::Error::msg)
             .map_err(noted)
     };
-    let known_ids: Vec<String> = hold
+    let mut known_ids: Vec<String> = hold
         .spec
         .iter()
-        .filter(|spec| !spec.starts_with("PR-"))
+        .filter(|spec| crate::gate::ledger::ChangeKey::parse(spec).is_none())
         .cloned()
         .collect();
+    // Shared corpus readers add PR-N implicitly. Include the pinned MR key
+    // explicitly for GitLab without treating it as a covered requirement.
+    // trace:BUG-2718 | ai:codex
+    let change_key = crate::gate::ledger::ChangeKey::parse(&format!("{}-{pr}", kind.change_noun()));
+    let mr_key = (kind == crate::forge::ForgeKind::GitLab).then(|| format!("MR-{pr}"));
+    known_ids.extend(mr_key.iter().cloned());
     f(
         &root,
         &hold,
         AutoReleaseIo {
+            change_key,
             live_head: &live_head,
             read_hold: &|| mh::read_hold_record(&root, pr),
             covered_specs: &|| {
@@ -916,11 +970,13 @@ fn with_live_io<T>(
             read_body: &|key| read_arming_body(&root, project, key),
             read_history: &|key| read_arming_history(&root, key),
             read_corpus: &|ids| {
-                mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
+                let mut keys = ids.to_vec();
+                keys.extend(mr_key.iter().cloned());
+                mh::corpus_gate_bodies(&[project, &root], pr, &keys).map_err(anyhow::Error::msg)
             },
             grant_check: &|id, subject| sa::grant_check_for(&root, id, subject),
             // trace:STORY-1697 | ai:claude
-            approval_authority: &|head| {
+            approval_authority: &|head, selected| {
                 let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
                     &[project, root.as_path()],
                     &root,
@@ -929,6 +985,13 @@ fn with_live_io<T>(
                     None,
                     Some(head),
                 );
+                if let Some(selected) = selected {
+                    ensure!(
+                        candidates.contains(selected),
+                        "change approval is absent from the effective approval evidence"
+                    );
+                    approval_attested(std::slice::from_ref(selected), &policy, head, pr)?;
+                }
                 approval_attested(&candidates, &policy, head, pr)
             },
             coverage: &|head| {
@@ -1056,7 +1119,7 @@ fn covered_spec_ids(headlines: &[String], title: &str, hold: &mh::MergeHoldRecor
         hold.spec
             .iter()
             .chain(hold.absorbed.iter().filter_map(|a| a.spec.as_ref()))
-            .filter(|spec| !spec.starts_with("PR-"))
+            .filter(|spec| crate::gate::ledger::ChangeKey::parse(spec).is_none())
             .cloned(),
     );
     ids.sort();
@@ -1131,6 +1194,7 @@ fn auto_release_steps(
     let refs = arming_refs(hold)?;
     let check = |hold: &mh::MergeHoldRecord,
                  body: &Value,
+                 selected: Option<&rv::RecordedVerdict>,
                  history: &RetainedHistory,
                  ids: &[String],
                  store: &aida_core::RequirementsStore|
@@ -1178,6 +1242,7 @@ fn auto_release_steps(
             coverage
                 .as_ref()
                 .map_or(head.as_str(), |p| p.approved_sha.as_str()),
+            selected,
         )?;
         eligible_with_coverage(
             hold,
@@ -1202,8 +1267,37 @@ fn auto_release_steps(
             .map(|r| {
                 let mut armed = hold.clone();
                 armed.verdict_ref = Some(r.clone());
-                let judged = (io.read_body)(&r.key)
-                    .and_then(|body| check(&armed, &body, &(io.read_history)(&r.key)?, ids, store));
+                // trace:BUG-2718 | ai:codex
+                let judged = (|| -> Result<Release> {
+                    let body = (io.read_body)(&r.key)?;
+                    let mut history = (io.read_history)(&r.key)?;
+                    if body
+                        .get("verdict")
+                        .and_then(Value::as_str)
+                        .is_some_and(|raw| rv::VerdictKind::parse(raw).requires_changes())
+                        && !rv::delivery_pending(&body)
+                        && r.pr == Some(hold.pr)
+                        && crate::gate::ledger::ChangeKey::parse(&r.key).is_none()
+                    {
+                        if let Some(change) = io.change_key {
+                            if let Some((approval, selected)) =
+                                change_approval(root, change, &head)?
+                            {
+                                let key = change.as_key();
+                                history.archived.extend_from_slice(retained_rounds(&body)?);
+                                history.archived.push(body);
+                                let mut release =
+                                    check(&armed, &approval, Some(&selected), &history, ids, store)
+                                        .with_context(|| {
+                                            format!("refusal under {}, approval under {key}", r.key)
+                                        })?;
+                                release.verdict.key = key;
+                                return Ok(release);
+                            }
+                        }
+                    }
+                    check(&armed, &body, None, &history, ids, store)
+                })();
                 match judged {
                     Ok(release) => Ok(release),
                     Err(e) if refs.len() > 1 => Err(anyhow::anyhow!(

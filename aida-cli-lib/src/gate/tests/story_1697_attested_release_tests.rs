@@ -172,6 +172,7 @@ impl Case {
             root.path(),
             &self.hold,
             AutoReleaseIo {
+                change_key: None,
                 coverage: &|_| Ok(None),
                 live_head: &|| {
                     Ok(Some(mh::PinnedChange {
@@ -196,7 +197,7 @@ impl Case {
                     mh::corpus_gate_bodies(&[root.path()], PR, ids).map_err(anyhow::Error::msg)
                 },
                 grant_check: &|_, _| sa::GrantCheck::Valid(self.grant.clone()),
-                approval_authority: &|head| {
+                approval_authority: &|head, _| {
                     approval_attested(&self.candidates, &self.policy, head, PR)
                 },
                 mandate: &|| {
@@ -615,6 +616,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
         root,
         &hold,
         AutoReleaseIo {
+            change_key: None,
             coverage: &|_| Ok(None),
             live_head: &|| {
                 Ok(Some(mh::PinnedChange {
@@ -632,7 +634,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
             read_history: &|_| Ok(RetainedHistory::default()),
             read_corpus: &|_| Ok(vec![("TASK-37".into(), body.clone())]),
             grant_check: &|id, subject| sa::grant_check_for(root, id, subject),
-            approval_authority: &|live| {
+            approval_authority: &|live, _| {
                 approval_attested(std::slice::from_ref(&v), &policy, live, PR)
             },
             mandate: &|| panic!("ungranted artifact reached mandate"),

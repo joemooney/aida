@@ -126,6 +126,7 @@ fn release_hooks(
         root,
         &hold,
         AutoReleaseIo {
+            change_key: None,
             coverage: &|_| Ok(None),
             live_head: &|| {
                 on_read(reads.get());
@@ -159,7 +160,7 @@ fn release_hooks(
                 mh::corpus_gate_bodies(&[root], PR, ids).map_err(anyhow::Error::msg)
             },
             grant_check: &|id, subject| sa::grant_check_for(root, id, subject),
-            approval_authority: &|_| Ok(()),
+            approval_authority: &|_, _| Ok(()),
             mandate: &|| bail!("no mandate is active"),
             refusal_release: &|_, _| held_check(),
             comment: &|body| {

@@ -84,6 +84,7 @@ impl Case {
             self.root.path(),
             &self.hold,
             AutoReleaseIo {
+                change_key: None,
                 live_head: &|| {
                     Ok(Some(mh::PinnedChange {
                         state: mh::ChangeState::Open,
@@ -100,7 +101,7 @@ impl Case {
                 read_history: &|_| Ok(RetainedHistory::default()),
                 read_corpus: &|_| Ok(vec![("TASK-41".into(), self.body.to_string())]),
                 grant_check: &|_, _| sa::GrantCheck::Valid(self.grant.clone()),
-                approval_authority: &|_| Ok(()),
+                approval_authority: &|_, _| Ok(()),
                 coverage: &|_| Ok(None),
                 mandate,
                 refusal_release: &|_, _| held_check(),

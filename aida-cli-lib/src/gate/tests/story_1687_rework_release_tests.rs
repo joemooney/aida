@@ -667,6 +667,7 @@ fn auto_release_fixture(change: ReleaseChange) {
         root.path(),
         &f.hold,
         AutoReleaseIo {
+            change_key: None,
             coverage: &|_| Ok(None),
             live_head: &|| {
                 head_reads.set(head_reads.get() + 1);
@@ -937,7 +938,7 @@ fn auto_release_fixture(change: ReleaseChange) {
                     sa::GrantCheck::Valid(grant)
                 }
             },
-            approval_authority: &|_| Ok(()),
+            approval_authority: &|_, _| Ok(()),
             mandate: &no_mandate,
             refusal_release: &|_, _| held_check(),
             comment: &|body| {
@@ -1686,6 +1687,7 @@ fn carried_auto_release_case(failure: Option<&str>) {
         root.path(),
         &f.hold,
         AutoReleaseIo {
+            change_key: None,
             live_head: &|| {
                 Ok(Some(mh::PinnedChange {
                     state: mh::ChangeState::Open,
@@ -1712,7 +1714,7 @@ fn carried_auto_release_case(failure: Option<&str>) {
                 Ok(vec![("TASK-37".into(), body.to_string())])
             },
             grant_check: &|_, _| sa::GrantCheck::Valid(f.grant.clone()),
-            approval_authority: &|sha| {
+            approval_authority: &|sha, _| {
                 assert_eq!(sha, HEAD);
                 Ok(())
             },
