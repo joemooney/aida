@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T03:20:37.812704669Z
+modified_at: 2026-11-23T06:37:36.417446034Z
 req_type: Story
 tags:
 - landing
@@ -1315,6 +1315,15 @@ comments:
   content: 'Lane exit evidence: retained branch `story-2897-s1b` at head `unavailable`.'
   created_at: 2026-11-23T03:20:26.371644341Z
   modified_at: 2026-11-23T03:20:26.371644341Z
+- id: 01a2071f-d521-7933-90e8-c896f7eb8787
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] a16f3592f015
+    A reference merge (commit a16f3592f015, `(Refs STORY-2897)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-23T06:37:36.417432422Z
+  modified_at: 2026-11-23T06:37:36.417432422Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
