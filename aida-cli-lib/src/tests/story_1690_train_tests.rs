@@ -6488,3 +6488,68 @@ fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
         );
     }
 }
+
+// trace:STORY-3038.AC1 trace:STORY-3038.AC2 | ai:codex
+#[test]
+fn approved_small_publication_and_live_landing_checks() {
+    use crate::gate::unset_mode::{changed_paths, UnsetModePolicy};
+    use crate::pr_service::{
+        recheck_defaulted_specs, ship_gate_spec_records_for_ids, withdraw_unset_defaults,
+    };
+    use aida_core::RequirementStatus;
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
+    let config = "[gate.unset_mode]\ndefault = 'approved-small'\ndrain_types = 42";
+    let repo = repo();
+    write(repo.path(), ".aida/config.toml", config);
+    commit(repo.path(), "opt in to approved-small");
+    let ui_head = pr_branch(repo.path(), "ui", |root| {
+        write(
+            root,
+            "aida-web-react/src/hooks/useGlobalHotkeys.ts",
+            "// UI",
+        )
+    });
+    let role_head = pr_branch(repo.path(), "role", |root| {
+        write(root, "aida-cli-lib/src/role_cmd.rs", "// grant")
+    });
+    assert!(UnsetModePolicy::load(repo.path()).warnings.is_empty());
+    let storage = aida_core::Storage::new(repo.path().join("requirements.yaml"));
+    let mut store = aida_core::RequirementsStore::new();
+    let mut req = aida_core::Requirement::new("Fix Shift key handling".into(), String::new());
+    req.req_type = aida_core::RequirementType::Bug;
+    req.tags.insert("small".into());
+    let ids = vec!["BUG-123".to_string()];
+    req.spec_id = Some(ids[0].clone());
+    req.status = RequirementStatus::Approved;
+    assert!(crate::publication_completion::done_after_push_flip(
+        &mut req, &ui_head
+    ));
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    let ordinary = || changed_paths(repo.path(), "main", &ui_head);
+    let train = |changed| {
+        let mut records = ship_gate_spec_records_for_ids(repo.path(), ids.clone());
+        assert_eq!(records.len(), 1);
+        withdraw_unset_defaults(&mut records, || changed);
+        crate::pr_train::member_spec_policy_refusal(records, false, || Err(None))
+    };
+    assert!(train(ordinary()).is_none());
+    assert!(train(changed_paths(repo.path(), "main", &role_head)).is_some());
+    assert!(recheck_defaulted_specs(repo.path(), &ids, ordinary).is_ok());
+    // CI settles on the same SHA, but the store may have changed.
+    store.requirements[0].tags.clear();
+    storage.save(&store).unwrap();
+    assert!(recheck_defaulted_specs(repo.path(), &ids, ordinary).is_err());
+    store.requirements[0].tags.insert("small".into());
+    store.requirements[0].status = RequirementStatus::Planned;
+    assert!(crate::publication_completion::done_after_push_flip(
+        &mut store.requirements[0],
+        &ui_head
+    ));
+    storage.save(&store).unwrap();
+    assert!(train(ordinary()).is_some());
+    store.requirements.clear();
+    storage.save(&store).unwrap();
+    assert!(recheck_defaulted_specs(repo.path(), &ids, ordinary).is_err());
+}

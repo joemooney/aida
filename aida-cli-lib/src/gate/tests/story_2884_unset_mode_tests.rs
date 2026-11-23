@@ -564,11 +564,12 @@ fn show_label_follows_the_superseding_carrier() {
     assert_eq!(label, "drain (project default for unset bug)");
 }
 
-// trace:STORY-3038 | ai:codex
+// trace:STORY-3038.AC1 trace:STORY-3038.AC2 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-820.AC1 trace:STORY-b6b1278890774ef993d2ebc327862470-820.AC2 | ai:codex
 #[test]
 fn approved_small_default_requires_approval_size_and_standard_tier() {
     let enabled = policy("[gate.unset_mode]\ndefault = 'approved-small' # opt in");
-    let mut req = spec(RequirementType::Story, "fix list order", &["Small"]);
+    let mut req = spec(RequirementType::Story, "Fix Shift key handling", &["Small"]);
     assert!(enabled.resolve(None, &req).requires_supervision());
     req.status = aida_core::RequirementStatus::Approved;
     assert!(policy("").resolve(None, &req).requires_supervision());
@@ -578,12 +579,12 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
         Some(ExecutionMode::Drain)
     );
     for path in [
-        "src/claims.rs",
-        "src/grant_check.rs",
-        "src/lease.rs",
-        "src/guard.rs",
-        "src/seat.rs",
-        "src/credentials.rs",
+        "aida-cli-lib/src/role_cmd.rs",
+        "aida-cli-lib/src/launch/grant.rs",
+        "aida-cli-lib/src/worktree_lease.rs",
+        "aida-cli-lib/src/claim.rs",
+        "aida-cli-lib/src/seat_occupancy/runtime.rs",
+        "aida-core/src/git_ops/remote_credentials.rs",
         ".githooks/pre-commit",
     ] {
         assert!(

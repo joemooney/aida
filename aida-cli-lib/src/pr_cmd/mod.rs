@@ -1017,6 +1017,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     let interactive_tty = ship_interactive_tty();
     // trace:STORY-2884 | ai:claude
     let unset_default_heads = crate::gate::unset_mode::CheckedHeads::default();
+    let mut defaulted_ids = Vec::new();
     let supervised = if already_merged {
         Vec::new()
     } else {
@@ -1036,14 +1037,32 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &head,
             )
         };
-        let mut holds = supervised_specs_for_ship(&project_root, allowed, change_paths);
-        if pr_number > 0 && !allowed {
-            let mut records = ship_gate_spec_records_for_ids(&project_root, mandate_ids());
+        let mut records = ship_gate_spec_records(&project_root);
+        if !allowed {
+            if pr_number > 0 {
+                records.extend(ship_gate_spec_records_for_ids(&project_root, mandate_ids()));
+            }
             withdraw_unset_defaults(&mut records, change_paths);
-            holds.extend(supervised_specs_in(records, false));
-            holds.sort();
-            holds.dedup();
+            defaulted_ids.extend(
+                records
+                    .iter()
+                    .filter(|(_, _, mode)| {
+                        matches!(
+                            mode.source,
+                            crate::gate::unset_mode::ModeSource::ProjectDefault {
+                                approved_small: true,
+                                ..
+                            }
+                        )
+                    })
+                    .map(|(id, _, _)| id.clone()),
+            );
+            defaulted_ids.sort();
+            defaulted_ids.dedup();
         }
+        let mut holds = supervised_specs_in(records, allowed);
+        holds.sort();
+        holds.dedup();
         holds
     };
     if !supervised.is_empty() {
@@ -2011,6 +2030,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
             }
         }
+        // CI may have waited while the spec was withdrawn or resized.
+        // trace:STORY-3038.AC1 | ai:codex
+        recheck_defaulted_specs(&project_root, &defaulted_ids, || {
+            crate::gate::unset_mode::changed_paths(
+                &project_root,
+                &format!("origin/{retarget_base}"),
+                merged_head_sha.as_deref()?,
+            )
+        })?;
         // The landing re-checks, after every wait and immediately before the
         // merge: merger authority, and the no-train stacked proof against the
         // target as it is now. trace:STORY-2897 | ai:claude

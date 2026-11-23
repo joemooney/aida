@@ -151,6 +151,11 @@ impl UnsetModePolicy {
                 }
             },
         };
+        policy.configured_default = section.get("default").is_some();
+        policy.default = default;
+        if default != UnsetDefault::Drain {
+            return policy;
+        }
         let mut types = Vec::new();
         match section.get("drain_types") {
             None => {}
@@ -172,15 +177,13 @@ impl UnsetModePolicy {
                     .into(),
             ),
         }
-        if default == UnsetDefault::Drain && types.is_empty() {
+        if types.is_empty() {
             policy.warnings.push(
                 "`[gate.unset_mode] default = \"drain\"` lists no `drain_types`; an unset \
                  execution mode stays supervised"
                     .into(),
             );
         }
-        policy.configured_default = section.get("default").is_some();
-        policy.default = default;
         policy.drain_types = types;
         policy
     }
@@ -274,15 +277,17 @@ impl UnsetModePolicy {
         // trace:STORY-3038 | ai:codex
         let small_policy = self.default == UnsetDefault::ApprovedSmall;
         let withheld = if small_policy
-            && (req.status != aida_core::RequirementStatus::Approved
+            && (!approved_for_publication(req)
                 || !req
                     .tags
                     .iter()
                     .any(|t| t.trim().eq_ignore_ascii_case("small"))
-                || std::iter::once(&req.title)
-                    .chain(req.tags.iter())
-                    .any(|s| strict_terms(s)))
-        {
+                || req.tags.iter().any(|tag| {
+                    matches!(
+                        tag.trim().to_ascii_lowercase().as_str(),
+                        "strict" | "strict-tier" | "tier:strict"
+                    )
+                })) {
             Err("the project default requires an approved small standard-tier spec".into())
         } else if !small_policy && !self.drain_types.contains(&req.req_type) {
             Err(format!(
@@ -372,48 +377,126 @@ fn sensitive_class(req: &Requirement) -> Option<String> {
 }
 
 // trace:STORY-3038 | ai:codex
-fn strict_terms(text: &str) -> bool {
-    text.to_ascii_lowercase()
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .any(|word| {
-            matches!(
-                word,
-                "strict"
-                    | "lease"
-                    | "leases"
-                    | "claim"
-                    | "claims"
-                    | "grant"
-                    | "grants"
-                    | "gate"
-                    | "gates"
-                    | "guard"
-                    | "guards"
-                    | "auth"
-                    | "identity"
-                    | "credentials"
-                    | "credential"
-                    | "contained"
-                    | "confinement"
-                    | "mandate"
-                    | "containment"
-                    | "shift"
-                    | "guardrail"
-                    | "guardrails"
-                    | "hook"
-                    | "hooks"
-                    | "githooks"
-                    | "watchdog"
-                    | "verdict"
-                    | "ship"
-                    | "hold"
-                    | "authority"
-                    | "sandbox"
-                    | "seat"
-                    | "seats"
-            )
-        })
+fn approved_for_publication(req: &Requirement) -> bool {
+    match req.status {
+        aida_core::RequirementStatus::Approved => true,
+        aida_core::RequirementStatus::Done => req
+            .history
+            .iter()
+            .rev()
+            .flat_map(|entry| {
+                entry
+                    .changes
+                    .iter()
+                    .rev()
+                    .map(move |change| (&entry.author, change))
+            })
+            .find(|(_, change)| change.field_name == "status")
+            .is_some_and(|(author, change)| {
+                author == aida_core::conflict::PUBLICATION_DONE_AUTHOR
+                    && change.old_value == "Approved"
+                    && change.new_value == "Done"
+            }),
+        _ => false,
+    }
 }
+
+// ADR-75/76 surfaces. Entries match a repository path or its descendants.
+// trace:STORY-3038.AC1 | ai:codex
+const STRICT_PATHS: &[&str] = &[
+    ".githooks",
+    ".github/workflows",
+    "aida-cli-lib/src/approvals_cmd.rs",
+    "aida-cli-lib/src/ci_gate.rs",
+    "aida-cli-lib/src/claim.rs",
+    "aida-cli-lib/src/claude_trust.rs",
+    "aida-cli-lib/src/codex_native_sandbox.rs",
+    "aida-cli-lib/src/contained_boundary.rs",
+    "aida-cli-lib/src/containment",
+    "aida-cli-lib/src/deputy_shell",
+    "aida-cli-lib/src/dispatch_flow.rs",
+    "aida-cli-lib/src/drain_gate.rs",
+    "aida-cli-lib/src/gate",
+    "aida-cli-lib/src/grant_keyring.rs",
+    "aida-cli-lib/src/identity_gate.rs",
+    "aida-cli-lib/src/identity_guard.rs",
+    "aida-cli-lib/src/landing_policy.rs",
+    "aida-cli-lib/src/lane_job.rs",
+    "aida-cli-lib/src/launch",
+    "aida-cli-lib/src/launch_permission_profile.rs",
+    "aida-cli-lib/src/leases.rs",
+    "aida-cli-lib/src/mandate.rs",
+    "aida-cli-lib/src/mandate_drive.rs",
+    "aida-cli-lib/src/mandate_gates.rs",
+    "aida-cli-lib/src/mandate_history_index.rs",
+    "aida-cli-lib/src/mcp_claim.rs",
+    "aida-cli-lib/src/merge_hold.rs",
+    "aida-cli-lib/src/merge_hold_cmd.rs",
+    "aida-cli-lib/src/merge_lock.rs",
+    "aida-cli-lib/src/mirror_guard.rs",
+    "aida-cli-lib/src/orchestrator_leases.rs",
+    "aida-cli-lib/src/pending_approval.rs",
+    "aida-cli-lib/src/permissions.rs",
+    "aida-cli-lib/src/pr_claim_surface.rs",
+    "aida-cli-lib/src/pr_cmd",
+    "aida-cli-lib/src/pr_emergency_land.rs",
+    "aida-cli-lib/src/pr_head_guard.rs",
+    "aida-cli-lib/src/pr_lease_takeover.rs",
+    "aida-cli-lib/src/pr_merge_gate.rs",
+    "aida-cli-lib/src/pr_service.rs",
+    "aida-cli-lib/src/pr_ship.rs",
+    "aida-cli-lib/src/pr_ship_batch.rs",
+    "aida-cli-lib/src/pr_train.rs",
+    "aida-cli-lib/src/pr_train_check.rs",
+    "aida-cli-lib/src/pr_train_verified.rs",
+    "aida-cli-lib/src/proc_broker",
+    "aida-cli-lib/src/publication_completion.rs",
+    "aida-cli-lib/src/queue_role_fallback.rs",
+    "aida-cli-lib/src/relay_grant.rs",
+    "aida-cli-lib/src/review_blocking.rs",
+    "aida-cli-lib/src/review_gates.rs",
+    "aida-cli-lib/src/review_implementer_gate.rs",
+    "aida-cli-lib/src/reviewer_preflight.rs",
+    "aida-cli-lib/src/role.rs",
+    "aida-cli-lib/src/role_cmd.rs",
+    "aida-cli-lib/src/role_file_helpers.rs",
+    "aida-cli-lib/src/role_renew_parent.rs",
+    "aida-cli-lib/src/runaway_seats.rs",
+    "aida-cli-lib/src/sandbox_cmd.rs",
+    "aida-cli-lib/src/sandbox_config_lock.rs",
+    "aida-cli-lib/src/scoped_lease.rs",
+    "aida-cli-lib/src/scratch_reclaim.rs",
+    "aida-cli-lib/src/seat_clone.rs",
+    "aida-cli-lib/src/seat_occupancy",
+    "aida-cli-lib/src/seat_rotation.rs",
+    "aida-cli-lib/src/seat_target_overlay.rs",
+    "aida-cli-lib/src/seats.rs",
+    "aida-cli-lib/src/session/containment.rs",
+    "aida-cli-lib/src/session/lease_lock.rs",
+    "aida-cli-lib/src/shift.rs",
+    "aida-cli-lib/src/ship.rs",
+    "aida-cli-lib/src/ship_from_seat.rs",
+    "aida-cli-lib/src/store_mutation_entry.rs",
+    "aida-cli-lib/src/supervisor.rs",
+    "aida-cli-lib/src/triage_lease.rs",
+    "aida-cli-lib/src/trusted_config.rs",
+    "aida-cli-lib/src/worktree_lease.rs",
+    "aida-cli-lib/src/worktree_reclaim.rs",
+    "aida-core/src/allocation_authority.rs",
+    "aida-core/src/git_ops/remote_credentials.rs",
+    "aida-core/src/liveness.rs",
+    "aida-core/src/mailbox_identity.rs",
+    "aida-core/src/mailbox_lifecycle",
+    "aida-core/src/proc_identity.rs",
+    "aida-core/src/seat_clone_detect.rs",
+    "aida-core/src/secret_screen.rs",
+    "aida-core/src/transport_policy.rs",
+    "aida-core/src/vendors",
+    "aida-core/src/worktree_pool.rs",
+    "aida-core/templates/hooks",
+    "aida-mcp/src",
+    "aida-server/src/web_auth.rs",
+];
 
 /// Where an effective gating mode came from.
 // trace:STORY-2884 | ai:claude
@@ -506,7 +589,9 @@ impl EffectiveMode {
         let strict_path = if *approved_small {
             paths.and_then(|paths| {
                 paths.iter().find(|p| {
-                    crate::gate::kernel_deps::review_blocking::sensitive_path(p) || strict_terms(p)
+                    STRICT_PATHS
+                        .iter()
+                        .any(|strict| Path::new(p).starts_with(strict))
                 })
             })
         } else {

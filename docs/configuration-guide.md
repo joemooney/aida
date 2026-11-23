@@ -72,7 +72,7 @@ default = "supervised"         # the default; or "drain"
 drain_types = ["bug", "task"]  # with "drain": the spec types it covers
 ```
 
-Set `default = "approved-small"` to apply drain only to specs currently Approved and tagged `small`. This option ignores `drain_types`. Explicit modes take precedence. Strict-tier spec metadata or changed paths (including leases, claims, grants, containment, gates, guards and authority) keep the spec supervised.
+Set `default = "approved-small"` to apply drain to Approved specs tagged `small`. A completing push preserves eligibility when its recorded status transition is Approved to Done and the spec still carries the tag. This option ignores `drain_types`. Explicit modes take precedence. Strict-tier spec metadata or changed paths (including leases, claims, grants, containment, gates, guards and authority) keep the spec supervised.
 
 With `default = "drain"`, a spec with no mode whose type is in `drain_types` merges as a `drain` spec would. All other merge checks still apply: an independent approval at the PR's head, green CI and no holds. The setting never applies to:
 
@@ -82,7 +82,7 @@ With `default = "drain"`, a spec with no mode whose type is in `drain_types` mer
 - a project whose protected gate paths cannot be read: AIDA reads `protected_paths` from the same default-branch commit as the setting and from `~/.aida/config.toml`, and if either does not parse, no spec takes the default
 - a PR whose head moves after its files were checked: `aida pr ship` stops, and a fresh run checks the new head
 
-AIDA reads the setting from the default branch only, so a branch cannot turn it on for itself. A value AIDA does not recognise, a missing `drain_types` list, or an unknown type name keeps the supervised behaviour. When a PR is held, the message names the effective mode and why, for example `BUG-12 is marked unset (supervised: not defaulted, the change touches ...)`. `aida show` prints the effective mode of a spec with no mode, for example `Effective mode: drain (project default for unset bug)`, whenever the project sets a drain default. For a spec merged into another spec's PR (superseded into a carrier), it prints the carrier's mode and names the carrier, as the merge does.
+AIDA reads the setting from the default branch only, so a branch cannot turn it on for itself. An unknown default keeps supervision. Only `default = "drain"` reads `drain_types`. Unknown entries are ignored, and a missing list or one with no recognised types leaves every type supervised. When a PR is held, the message names the effective mode and why, for example `BUG-12 is marked unset (supervised: not defaulted, the change touches ...)`. `aida show` prints the effective mode of a spec with no mode, for example `Effective mode: drain (project default for unset bug)`, whenever the project sets a drain default. For a spec merged into another spec's PR (superseded into a carrier), it prints the carrier's mode and names the carrier, as the merge does.
 
 The drain's own merge phase and the burndown wave merge still hold an unset spec. The merge seat lands those PRs with `aida pr train`, which applies the setting.
 
