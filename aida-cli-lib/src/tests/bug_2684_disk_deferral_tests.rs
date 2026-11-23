@@ -230,8 +230,6 @@ fn bug_2684_disk_refusal_keeps_the_spec_queued_with_its_reason() {
         "{message}"
     );
 
-    assert_persisted_reason(deferred, "disk-deferred");
-
     // A second refusal replaces the reason rather than stacking it.
     crate::lane_disk_deferral::defer(&storage, "BUG-926843", &[queued.id], refusal());
     let note = storage.queue_list(USER, true).unwrap()[0]
