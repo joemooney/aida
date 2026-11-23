@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-23T23:20:33.139658608Z
+modified_at: 2026-11-23T23:29:31.296693110Z
 req_type: Task
 tags:
 - doctor
@@ -37,6 +37,15 @@ comments:
   modified_at: 2026-11-23T23:15:45.431251077Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20abe-4615-7e22-bdbb-f240b05e916b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 13bcf6bd6715439e9fdb4769e36b0551f2d27921 plus native working tree. AC1: [evidence: behavioral-test] forge.rs:1922 passed with a fake cached response at zero, below threshold, exactly 20%, and full. doctor_cmd.rs:971 routes low readings to findings. land.rs:1800 prints before fallible discovery and preserves JSON stdout. AC2: [evidence: behavioral-test] same test verifies the unknown attribution marker. The upstream reading exposes account totals only. Reviewed the integration merge-base diff and all five edited files. Checked parsing, threshold arithmetic, missing data, empty change lists and diagnostic ordering. Fixed budget visibility on discovery failure. No authority changes. Residual limitation: command wiring inspected, no end-to-end GitHub call.
+  created_at: 2026-11-23T23:29:31.296693110Z
+  modified_at: 2026-11-23T23:29:31.296693110Z
+  session_id: 01a20ab558aa
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a79-1c6c-7522-9c98-d2c929e0aa8c
   author: joe
