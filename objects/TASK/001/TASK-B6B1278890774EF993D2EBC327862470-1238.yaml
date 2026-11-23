@@ -1,0 +1,31 @@
+id: 01a20731-ecee-7922-bacd-9d9888f90ff0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1238
+title: 'Review follow-up: The round-three brief asks for the accepted attribution limit in the PR body. The implemen'
+description: |-
+  From BUG-2721
+  Reviewed sha: 707d29be1157e87dba031c3422dbd451fec7e00b
+
+  The round-three brief asks for the accepted attribution limit in the PR body. The implementer self-review records it, but the PR body only contains the publication notice and FAST marker. Add the accepted limitation for a descendant that changes session, clears its environment, and runs outside the worktree.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T06:57:22.158602532Z
+modified_at: 2026-11-23T06:57:22.158602532Z
+req_type: Task
+tags:
+- carried-from:BUG-2721
+- finding-hash:abb65a68
+- from-review:BUG-2721
+relationships:
+- rel_type: References
+  target_id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
+  created_at: 2026-11-23T06:57:39.137607563Z
+filed_at:
+  code_sha: 707d29be1157e87dba031c3422dbd451fec7e00b
+  branch: pr-4402
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ca95624cadf
+  vendor: claude
+  session: 01a2072e890c
