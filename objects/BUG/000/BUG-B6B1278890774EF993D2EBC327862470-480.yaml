@@ -9,12 +9,12 @@ description: |
   - AC1: When a PR's new head differs from an approved head only by a clean merge of the protected base (no conflict resolution, no non-merge commits), review-watch does not launch a fresh full review. The approval carries, per the project's carry-over policy.
   - AC2: If policy requires a review of such a head, its scope is limited to the merge itself (conflict-resolution hunks and base-induced CI failures), and the prior round's scope and cap state are passed to the reviewer.
   - AC3: A regression test approves head A, update-branches to merge-only head B, and asserts no full review dispatch (or a merge-scoped one).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T22:23:06.366822385Z
-modified_at: 2026-11-23T03:49:46.163909246Z
+modified_at: 2026-11-23T03:56:00.383084052Z
 req_type: Bug
 tags:
 - carry-over
@@ -35,6 +35,15 @@ comments:
   modified_at: 2026-11-23T03:39:10.682500980Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2068b-ee1d-7750-9790-dd0e6a213319
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1. Both origin/main...HEAD and working tree were clean. AC1: [evidence: manual-inspection] Replayed both reported merges with merge-tree, matched both recorded trees, and reproduced divergent verbatim patch IDs using the gate's exact diff flags. Existing explicit refusal at gate/tests/task_1960_carryover_tests.rs:296 conflicts with carrying approval for this incident. AC2 and AC3 pending policy triage. No implementation or publication declaration.
+  created_at: 2026-11-23T03:56:00.383084052Z
+  modified_at: 2026-11-23T03:56:00.383084052Z
+  session_id: 01a20685db43
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20686-2c33-7f80-990c-8c96d428e03c
   author: aida-session-start
@@ -43,6 +52,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20689-598d-7120-bf99-d35bc9c15d03
+  author: dirtlab
+  timestamp: 2026-11-23T03:53:14.381242913Z
+  session_id: 01a20685db43
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a2068b-133a-70c3-b2db-d902357909c0
+  author: dirtlab
+  timestamp: 2026-11-23T03:55:07.450280601Z
+  session_id: 01a20685db43
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
@@ -50,3 +74,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6be38166be8
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'PR 4382 replay: both merges exactly match git merge-tree. The shared mandatory verbatim patch proof at review_carryover.rs:693 refuses: approved f95b34e6 vs merged 4c8758a7. A protected-base edit changed a context line in scripts/store-writers.toml. clean_merge_that_changes_the_pr_diff_refuses_on_patch_id explicitly requires this refusal. AC1-only watcher suppression would disagree with shipping. Decide whether the existing refusal requires an AC2 scoped review or whether to revise the shared proof and its cached refusals.'
+  lean: Keep the shared proof and implement AC2 for proven clean merges refused solely for patch-context drift; preserve explicit full-review policies.
+  raised_by: implementer
+  raised_at: 2026-11-23T03:55:06.765252806Z
