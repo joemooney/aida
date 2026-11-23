@@ -10,12 +10,12 @@ description: |
   - AC2: For a seat clone, the uncommitted-changes predicate matches `git status --porcelain` (untracked included, ignored excluded) run in that clone. A regression test covers a clone that is clean by porcelain but was refused before, reproducing the -658 shape.
   - AC3: Hygiene trip evidence carries the refusal text (dirty paths), not a bare "exit 1:".
   - AC4: Once fixed, seat 01a1abbf6456 ends through normal hygiene without --force.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-23T07:08:50.655078714Z
+modified_at: 2026-11-23T08:28:06.616245175Z
 req_type: Bug
 tags:
 - hygiene
@@ -75,6 +75,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20785-00d0-7ff2-8ce6-0b627231c66c
+  author: joe
+  timestamp: 2026-11-23T08:28:06.736620891Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
