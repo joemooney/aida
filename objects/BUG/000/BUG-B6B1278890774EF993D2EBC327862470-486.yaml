@@ -16,13 +16,28 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T03:33:35.663826229Z
+modified_at: 2026-11-23T03:38:25.761689076Z
 req_type: Bug
 tags:
 - knob
 - landing
 - p1
 - throughput
+comments:
+- id: 01a2067b-fb0f-7390-ad89-32ea085af4f1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:38):
+    # BUG-2725: SMALL pipeline fix (advisor-122 throughput plan 2026-11-22 20:40 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2725` and implement its acceptance criteria and nothing more. Default MUST stay "strict" (today's behaviour) with a test proving it; the knob is per-project config. Code: aida-cli-lib/src/land.rs, land_run.rs (STALE-CI-BASE), review_watch_ready.rs.
+    SMALL-PR RULE: target <=300 changed lines. If the ACs can't be met in that budget, implement AC1 only plus its test, and say in the PR body which ACs remain, so product splits them.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2725 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2725)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T03:38:25.761689076Z
+  modified_at: 2026-11-23T03:38:25.761689076Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
