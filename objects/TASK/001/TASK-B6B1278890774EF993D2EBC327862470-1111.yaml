@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T20:39:15.365076293Z
+modified_at: 2026-11-23T20:41:41.144909854Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -126,6 +126,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:39:15.219408516Z
   modified_at: 2026-11-23T20:39:15.219408516Z
+- id: 01a20a24-d0ea-74c3-90c2-f343f1563277
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:41):
+    # TASK-3151 / PR #4444 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: Test-only, small.
+
+    CR at ca3c1b9e. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [major] TASK-b6b1278890774ef993d2ebc327862470-1111.acc246d2 — aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:365–373. The new contained launch still depends on the invoking checkout. run_path_isolated_test preserves cwd, and agent_resume_launch_config calls claude_contained_flags_for_roots, which resolves trusted wrapper policy through headless_worktree_root. Running this fixture from a checkout whose trusted default branch sets Claude to the AIDA wrapper fails before transcript recovery, so the test can report an unrelated launch refusal. Pin the ambient project root to the temp repo or use the scratch-cwd isolation helper before exercising the contained path.
+
+    - [major] TASK-b6b1278890774ef993d2ebc327862470-1111.ac2584bd — aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:390–394. candidate.worktree_path is the original registry value, and resume_unavailable_reason discards the resolved cwd. A successful recovery that returned a different directory would still satisfy both assertions. Assert that the recovery result equals the recorded cwd, or observe the cwd at the contained launch boundary with a fake vendor. The existing uncontained launch receipt already checks the alternate worktree.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:41:41.144909854Z
+  modified_at: 2026-11-23T20:41:41.144909854Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe
