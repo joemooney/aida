@@ -16,13 +16,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T04:55:50.743318059Z
+modified_at: 2026-11-23T04:56:30.521805664Z
 req_type: Bug
 tags:
 - knob
 - landing
 - p1
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a206c2-fad2-7c70-818b-4928d9ed4aba
+  created_at: 2026-11-23T04:56:30.521789105Z
+  created_by: dirtlab
 comments:
 - id: 01a2067b-fb0f-7390-ad89-32ea085af4f1
   author: joe
@@ -85,6 +91,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a206c3-4dd8-7f10-bf0d-556af1472a0e
+  author: dirtlab
+  timestamp: 2026-11-23T04:56:32.472867298Z
+  session_id: 01a2067fd0d9
+  changes: []
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
