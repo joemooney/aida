@@ -20,11 +20,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:14:53.489586279Z
-modified_at: 2026-11-22T19:14:53.489586279Z
+modified_at: 2026-11-23T00:06:39.485163832Z
 req_type: Task
 tags:
 - mass-change
 - review-follow-up
+comments:
+- id: 01a205b9-e87d-7891-92cf-ef6a6f3c6a40
+  author: joe
+  content: 'Added by advisor-122 ruling 2026-11-22 17:10 (relayed by product-15): from the #4381 FINAL CR at 0a5f3cd6, two p2s deferred here: land_stalls.rs:1005 (a silent or invalid matching foreign lane leaves a conflict, but the summary says nobody owns it and recommends routing another lane) and land_stalls.rs:1958 (an uncapped coordination::list_claims parse before the capped lane-host scan). Also, if the coordination.rs claim-size bound was cut from #4381, a FAIL-CLOSED bound (oversized claim = refusal error, never absence) lives here.'
+  created_at: 2026-11-23T00:06:39.485163832Z
+  modified_at: 2026-11-23T00:06:39.485163832Z
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
