@@ -1,0 +1,31 @@
+id: 01a20a43-3577-77c2-9bea-3f9c09f2a4db
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1265
+title: 'Review follow-up: The comments on PromotionMeta (dev_build.rs:1739-1740) and live_status_notes (dev_build.rs'
+description: |-
+  From BUG-2728
+  Reviewed sha: ccb9ea51cc5064223378a2022840f02a89b4f561
+
+  The comments on PromotionMeta (dev_build.rs:1739-1740) and live_status_notes (dev_build.rs:2639-2641) still say the +dirty stamp includes untracked files. Update the rationale for preferring promotion metadata to reflect the new tracked-only stamp and the distinct meaning of an allow-dirty promotion.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T21:15:06.487885208Z
+modified_at: 2026-11-23T21:15:06.487885208Z
+req_type: Task
+tags:
+- carried-from:BUG-2728
+- finding-hash:2b636266
+- from-review:BUG-2728
+relationships:
+- rel_type: References
+  target_id: 01a2076d-6c65-73b0-afbc-67157b3446e2
+  created_at: 2026-11-23T21:15:20.112797336Z
+filed_at:
+  code_sha: ccb9ea51cc5064223378a2022840f02a89b4f561
+  branch: pr-4455
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
+  session: 01a20a4056c3
