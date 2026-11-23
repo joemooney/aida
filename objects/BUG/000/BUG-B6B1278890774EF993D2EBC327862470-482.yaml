@@ -9,12 +9,12 @@ description: |
   - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
   - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
   - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T05:14:02.714999180Z
+modified_at: 2026-11-23T05:16:54.414404092Z
 req_type: Bug
 tags:
 - recovery
@@ -142,6 +142,11 @@ comments:
   created_at: 2026-11-23T05:01:33.478913905Z
   modified_at: 2026-11-23T05:01:33.478913905Z
   session_id: 01a2067395e9
+- id: 01a206d5-f30e-7311-8e11-44e0b5f7f973
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2721 AC2 and AC3 pass source review: positive holder matches identify PID, command and reason, and a traced wrapped-recovery regression keeps the unrelated primary-checkout shell alive through release. AC1 removes cwd-only recovery, but the required descendant protection still fails on three release paths. Reviewed the landed tree on 5470336db358. The intervening forge change affects none of the findings. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-23T05:16:54.414402415Z
+  modified_at: 2026-11-23T05:16:54.414402415Z
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
@@ -207,6 +212,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a206d5-f30e-7311-8e11-44d1e5979299
+  author: joe
+  timestamp: 2026-11-23T05:16:54.414383237Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -214,11 +226,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2721 AC2 and AC3 pass source review: positive holder matches identify PID, command and reason, and a traced wrapped-recovery regression keeps the unrelated primary-checkout shell alive through release. AC1 removes cwd-only recovery, but the required descendant protection still fails on three release paths. Reviewed the landed tree on 5470336db358. The intervening forge change affects none of the findings. CI pending at review time.'
-  recovery_hint: address the review findings, move BUG-2721 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T05:14:02.714999180Z
