@@ -1528,6 +1528,21 @@ pub(crate) struct Live {
     pub call_timeout: std::time::Duration,
 }
 
+// trace:TASK-3209 | ai:codex
+fn git_timeout_error(
+    args: &[&str],
+    timeout: std::time::Duration,
+    deadline: Option<std::time::Instant>,
+    now: std::time::Instant,
+) -> anyhow::Error {
+    // The runner can shorten the timeout after Git's initial budget sample.
+    if deadline.is_some_and(|end| now >= end) {
+        PassDeadline.into()
+    } else {
+        anyhow::anyhow!("git {} timed out after {:?}", args.join(" "), timeout)
+    }
+}
+
 impl Live {
     fn git(&self, args: &[&str]) -> Result<String> {
         let mut cmd = std::process::Command::new("git");
@@ -1557,14 +1572,12 @@ impl Live {
                 out.status,
                 String::from_utf8_lossy(&out.stderr).trim()
             ),
-            crate::BoundedCommandOutput::TimedOut
-                if timeout < self.call_timeout && pass_budget_spent() =>
-            {
-                Err(PassDeadline.into())
-            }
-            crate::BoundedCommandOutput::TimedOut => {
-                anyhow::bail!("git {} timed out after {:?}", args.join(" "), timeout)
-            }
+            crate::BoundedCommandOutput::TimedOut => Err(git_timeout_error(
+                args,
+                timeout,
+                crate::forge_lookup::forge_lookup_deadline(),
+                std::time::Instant::now(),
+            )),
             crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("git could not start"),
         }
     }

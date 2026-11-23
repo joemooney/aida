@@ -1369,3 +1369,19 @@ fn closing_range_deadline_retries_same_green() {
     run(dir.path(), &mut fake);
     assert_eq!(outcomes(dir.path()), vec!["recovered"]);
 }
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn git_timeout_at_call_ceiling_observes_pass_deadline() {
+    let end = std::time::Instant::now() + CALL_TIMEOUT;
+    let tick = std::time::Duration::from_nanos(1);
+    for (deadline, observed, retry) in [
+        (Some(end), end - tick, false),
+        (Some(end), end, true),
+        (Some(end), end + tick, true),
+        (None, end, false),
+    ] {
+        let error = git_timeout_error(&["log"], CALL_TIMEOUT, deadline, observed);
+        assert_eq!(error.is::<PassDeadline>(), retry);
+    }
+}
