@@ -1,0 +1,32 @@
+id: 01a20973-d70e-7c80-a678-20f5beeb7dbc
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-234
+title: 'Review PR-4444: [AI:codex] fix(resume): cover contained transcript recovery refusal (TASK-3151)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20930`) for branch `task-b6b1278890774ef993d2ebc327862470-1111`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4444>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1111` → `main`
+
+  ## Covers
+
+  - TASK-3151
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4444` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T17:28:36.366096028Z
+modified_at: 2026-11-23T17:28:36.366096028Z
+req_type: Story
+filed_at:
+  code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6708d633cf
+  session: 01a209303cc3
