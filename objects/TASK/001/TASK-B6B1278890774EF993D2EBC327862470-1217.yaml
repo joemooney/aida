@@ -8,18 +8,26 @@ description: |
   ## Acceptance
   - AC1: The seat discipline docs, edited in the template master under aida-core/templates/ and mirrored with `make sync-templates` (`make check-templates` passes), state: "Claude seats: never run long-lived SANDBOXED commands or Monitor watches in the primary checkout; use unsandboxed background Bash for waits (one-shot, re-armed after each event)." They also include the symptom, and the safe cleanup: a 0-byte 0444 config.lock with no holder may be removed once its sandboxed owner has exited.
   - AC2: The guidance cites this spec and today's evidence in one short paragraph, not a narrative.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:38:36.398335378Z
-modified_at: 2026-11-23T05:27:27.615673413Z
+modified_at: 2026-11-23T06:34:45.068170393Z
 req_type: Task
 tags:
 - claude-seats
 - discipline
 - fasttrack
 - templates
+comments:
+- id: 01a2071d-37cc-7942-9268-217e8527ffe7
+  author: aida-publication-done
+  content: Implementer push e49ba38f4e0c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T06:34:45.068169054Z
+  modified_at: 2026-11-23T06:34:45.068169054Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a206df-9c7f-7752-91ec-11cc77f842be
   author: aida-session-start
@@ -30,6 +38,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2071d-37cc-7942-9268-21663f35ed09
+  author: aida-publication-done
+  timestamp: 2026-11-23T06:34:45.068165474Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
