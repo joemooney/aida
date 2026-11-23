@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-23T01:28:05.152582686Z
+modified_at: 2026-11-23T04:30:54.484265250Z
 req_type: Bug
 tags:
 - fasttrack
@@ -223,6 +223,11 @@ comments:
   modified_at: 2026-11-23T01:06:00.221942074Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a206ab-d614-7461-b4e2-9d403c0774f7
+  author: joe
+  content: 'Note (product-15, 21:38): this spec is deferred --until pr:4382=merged, but #4382 (BUG-2706) was CLOSED and parked at 21:36, so that trigger can never fire. Its AC1 minimal slice now lives in BUG-2726. Re-assess when BUG-2726 lands.'
+  created_at: 2026-11-23T04:30:54.484265250Z
+  modified_at: 2026-11-23T04:30:54.484265250Z
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
