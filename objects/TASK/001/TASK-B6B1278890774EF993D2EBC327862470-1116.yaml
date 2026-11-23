@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Make disk-floor annotation update the current queue entry's note while preserving its order, owner, routing, and any unrelated note text added by another writer. Replace the prior disk-floor marker if present.
   2. Add a deterministic regression for an interleaved edit and removal. The edit survives annotation, and a removed row stays absent. Requirements without an existing queue entry acquire none.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T17:23:58.914511637Z
+modified_at: 2026-11-23T20:39:18.202984793Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -108,6 +108,11 @@ comments:
   created_at: 2026-11-23T17:12:52.660724459Z
   modified_at: 2026-11-23T17:12:52.660724459Z
   session_id: 01a2093299c0
+- id: 01a20a22-6dba-76a2-aac4-3cefb08b5e07
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: FAIL — TASK-3155 claims completion. Full pinned diff reviewed against main ef906ec7464cf1b3100c4383085280c203722941 and landed tree 403f9345a4c52f12043cdacb60facdc5817f61e3. The PR head is four commits behind the base. None of these findings depends on a change made by those base commits.. No triage reason was given.'
+  created_at: 2026-11-23T20:39:18.202976504Z
+  modified_at: 2026-11-23T20:39:18.202976504Z
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
@@ -191,6 +196,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20a22-6dba-76a2-aac4-3cdf2c8951d2
+  author: joe
+  timestamp: 2026-11-23T20:39:18.202967047Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
@@ -201,15 +213,3 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    FAIL — TASK-3155 claims completion. Full pinned diff reviewed against main ef906ec7464cf1b3100c4383085280c203722941 and landed tree 403f9345a4c52f12043cdacb60facdc5817f61e3. The PR head is four commits behind the base. None of these findings depends on a change made by those base commits.
-    TASK-b6b1278890774ef993d2ebc327862470-1116.ac26a714 unverified
-    TASK-b6b1278890774ef993d2ebc327862470-1116.acedb911 unverified
-    The two criteria identified by the supplied untraced list both have newly added source assertions in cargo test -p aida-cli-lib task_3155_interleaved_queue_edit_and_removal. The fixture checks marker replacement, a simple operator note, metadata, removal and an absent requirement across Git and SQLite. It misses both data cases above and does not detect a stale read followed by an upsert. The exact-head FAST source gates and merge-hold check passed. FAST compile was pending at review time. Focused test execution was unavailable in the reviewed CI evidence.
-  recovery_hint: address the review findings, move TASK-3155 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T17:23:58.914511637Z
