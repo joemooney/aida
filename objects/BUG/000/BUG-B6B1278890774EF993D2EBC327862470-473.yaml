@@ -12,12 +12,12 @@ description: |
   - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
   - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
   - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-23T01:54:53.993288594Z
+modified_at: 2026-11-23T02:29:26.016431296Z
 req_type: Bug
 tags:
 - mass-change
@@ -184,6 +184,11 @@ comments:
   modified_at: 2026-11-22T23:53:21.483018295Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2063c-9f80-7a63-95e4-54ef5df05679
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: PR #4396 host merge has behavioral overlap in aida-cli-lib/src/gate/kernel_deps.rs. With mass-change active, a finding with class unmet-claimed-ac and absent blocking_tier is Unclassified and blocks under main, but defers under the PR. Preserving the ADR-76 sensitive-code floor does not decide that ordinary class-only case. Confirm the rule for submission and recording. Both kernel_deps.rs and aida-cli-lib/src/review_draft.rs remain unresolved.. No triage reason was given.'
+  created_at: 2026-11-23T02:29:26.016426573Z
+  modified_at: 2026-11-23T02:29:26.016426573Z
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
@@ -270,6 +275,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a2063c-9f80-7a63-95e4-54de08715274
+  author: joe
+  timestamp: 2026-11-23T02:29:26.016409018Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -280,8 +292,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
-attention_reason:
-  category: design-fork
-  detail: 'PR #4396 host merge has behavioral overlap in aida-cli-lib/src/gate/kernel_deps.rs. With mass-change active, a finding with class unmet-claimed-ac and absent blocking_tier is Unclassified and blocks under main, but defers under the PR. Preserving the ADR-76 sensitive-code floor does not decide that ordinary class-only case. Confirm the rule for submission and recording. Both kernel_deps.rs and aida-cli-lib/src/review_draft.rs remain unresolved.'
-  raised_by: implementer
-  raised_at: 2026-11-23T01:54:53.993288594Z
