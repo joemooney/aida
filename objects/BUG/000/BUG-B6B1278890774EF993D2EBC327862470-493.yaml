@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:48:18.423378315Z
-modified_at: 2026-11-23T20:38:45.346700298Z
+modified_at: 2026-11-23T20:40:50.957264679Z
 req_type: Bug
 tags:
 - admission
@@ -80,6 +80,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:38:45.197806896Z
   modified_at: 2026-11-23T20:38:45.197806896Z
+- id: 01a20a24-0d7f-7840-84f3-46655436ad81
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:40):
+    # BUG-2732 / PR #4449 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: Manual admission must prune ONLY stale receipts, never a live holder's. Small. STRICT review.
+
+    CR at 7a751a02. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [major] aida-cli-lib/src/admission_owner.rs:1277–1293 (PR head), BUG-2732.AC1 and AC2: the failing manual admission call prunes both stale receipts while a live auto-train remains. The only successful admission is after the stale receipts are already gone and the live claim is dropped. A regression that deletes a stale receipt but returns AdmissionBusy for that attempt would pass this test while refusing a stale-only admission at wait_secs = 0. Exercise a fresh stale-only fixture and assert success on the first call, retain a separate live-holder refusal, and add criterion-level traces for both ACs.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:40:50.957264679Z
+  modified_at: 2026-11-23T20:40:50.957264679Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2093e-d2c2-7a22-853a-170847668364
   author: aida-session-start
