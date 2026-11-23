@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The closeout-audit wording/template writes "AUDIT VERDICT (not a lane instruction): keep open; implementation still wanted" instead of a bare "No implementation or status change". A test or doc check pins the template text.
   - AC2: The lane brief generator explicitly ranks the CURRENT brief above older spec comments: generated briefs include a line saying older spec comments are context, not instructions, when they conflict with this brief. A test asserts the line is present in a generated brief.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T16:04:52.270967301Z
+modified_at: 2026-11-23T17:01:53.763623268Z
 req_type: Bug
 tags:
 - briefs
@@ -49,6 +49,13 @@ history:
   author: joe
   timestamp: 2026-11-23T16:04:52.365895412Z
   changes: []
+- id: 01a2095b-62e3-7741-b869-69c4a1a97ae8
+  author: aida-session-start
+  timestamp: 2026-11-23T17:01:53.763621675Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
