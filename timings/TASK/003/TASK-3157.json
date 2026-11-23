@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3157",
+  "publishes": [
+    {
+      "at": "2026-11-23T19:02:14.344501815Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-21T07:20:29.090651187Z",
+      "spec": "TASK-3157",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit",
+        "reason": "12 changes are open and the limit is 10 (`[land] wip_max`), so TASK-3157 is not started. `aida now` shows what is open; rework and review pickups are not limited. To start it anyway, re-run with `--over-wip` (the override is recorded).",
+        "actor": "codex-advisor-26"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:46:37.228229804Z",
+      "spec": "TASK-3157",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4447,
+        "verdict": "APPROVED",
+        "reviewed_sha": "516232fa3191c6ed502bd1b27d47146a094a2915"
+      }
+    },
+    {
+      "ts": "2026-11-23T18:57:35.369049446Z",
+      "spec": "TASK-3157",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4447
+      }
+    },
+    {
+      "ts": "2026-11-23T19:02:14.130209242Z",
+      "spec": "TASK-3157",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b38816e6d62371d2370b84bbbedfcb181ec2516a",
+        "pr": 4447,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
