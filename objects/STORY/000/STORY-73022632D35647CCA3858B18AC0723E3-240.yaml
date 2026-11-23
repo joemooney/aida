@@ -1,0 +1,32 @@
+id: 01a20a33-0f65-79e1-bb6a-b113adb22339
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-240
+title: 'Review PR-4454: [AI:codex] fix(tests): fail closed on unexpected Bubblewrap probe errors (BUG-2701)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a209ef`) for branch `bug-73022632d35647cca3858b18ac0723e3-002`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4454>
+  - Branch: `bug-73022632d35647cca3858b18ac0723e3-002` → `main`
+
+  ## Covers
+
+  - BUG-2701
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4454` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T20:57:28.165685653Z
+modified_at: 2026-11-23T20:57:28.165685653Z
+req_type: Story
+filed_at:
+  code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5
+  session: 01a209ef8404
