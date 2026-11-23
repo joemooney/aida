@@ -7,17 +7,27 @@ description: |
 
   ## Acceptance
   - AC1: The template master's product-role guidance and the rework/brief-craft discipline (aida-core/templates/, then `make sync-templates`; `make check-templates` passes) state the rule: <=300 changed lines and 1-2 ACs per lane brief or spec, split into vertical slices before launch otherwise, with the one-line rationale.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:34:36.347449263Z
-modified_at: 2026-11-23T03:34:36.347449263Z
+modified_at: 2026-11-23T05:27:32.085793121Z
 req_type: Task
 tags:
 - discipline
 - product
 - templates
+history:
+- id: 01a206df-adf5-7162-97d4-971e20146100
+  author: aida-session-start
+  timestamp: 2026-11-23T05:27:32.085791957Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
