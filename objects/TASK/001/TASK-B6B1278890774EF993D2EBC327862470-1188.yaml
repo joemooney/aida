@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T12:39:23.476532652Z
+modified_at: 2026-11-23T12:49:37.748175819Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -97,6 +97,17 @@ comments:
   modified_at: 2026-11-23T12:36:38.859889004Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20874-6f42-7df1-a6a3-05c4742e58fd
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 172190ec0ad692e76170619f98b545932a8f9adb plus the native working diff in aida-cli-lib/src/admission_drain.rs. Reviewed the merge-base diff, CLI documentation and untracked-file status.
+    AC1: [evidence: behavioral-test] bug2703_drain_and_resume_refuse_without_advisor_authority passed (1 executed). At admission_drain.rs:285 and :704, locked authority precedes replacement. For malformed JSON and invalid UTF-8, grantless resume refuses, valid advisor drain refuses and leaves bytes intact and active() in error, then valid advisor resume repairs the journal and active() reads inactive. The persisted event identifies recovery, actor and time.
+    Compatibility probe: compared the complete journal types, validation and load implementation with origin/main byte for byte. Version 1 accepts the one resume event. Existing expiry, lock and event retention paths remain in use. The recovery actor annotation must fit the existing 512-byte bound or recovery refuses before writing. rustfmt and git diff --check passed.
+  created_at: 2026-11-23T12:49:37.748175819Z
+  modified_at: 2026-11-23T12:49:37.748175819Z
+  session_id: 01a2086ad3a0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe

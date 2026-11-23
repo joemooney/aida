@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:51.461032121Z
-modified_at: 2026-11-23T12:46:20.026339116Z
+modified_at: 2026-11-23T12:52:24.127782936Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -40,6 +40,17 @@ comments:
   modified_at: 2026-11-23T12:41:09.019555393Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20876-fa8d-7c93-a676-376c72f32028
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22 plus the untracked test. Merge-base and tracked working-tree diffs were empty.
+    AC1: [evidence: documentation-inspection] Reproduced contradictory wording in STORY-2828 signoff 01a1dbc9-7b26-7073-9a89-8e504f26f462 and Wanted item 3. Verified both saved edits against their intended replacement text.
+    AC2: [evidence: configuration-validation] scripts/config-trust.toml:892 lists the two worktree policy entries. python3 tests/test_duration_cap_inventory.py passed. The test at line 10 uses an actual TOML parser, checks both exact section/key pairs independently, and fails on missing or misclassified entries. TOML quoting, comments and table order do not affect lookup. Existing refusal and lowering coverage is in aida-cli-lib/src/gate/tests/story_2828_hour_cap_tests.rs:63 and :119. No authority path or existing test changed. The store changes are queued for host commit.
+  created_at: 2026-11-23T12:52:24.127782936Z
+  modified_at: 2026-11-23T12:52:24.127782936Z
+  session_id: 01a208713720
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1dc01-cbb1-7fe1-b74b-32c1a4b5321f
   author: joe

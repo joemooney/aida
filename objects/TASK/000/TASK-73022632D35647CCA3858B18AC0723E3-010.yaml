@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T12:45:59.401327141Z
+modified_at: 2026-11-23T12:58:16.929884744Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -40,6 +40,18 @@ comments:
   modified_at: 2026-11-23T12:40:53.145518467Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2087c-5b4c-78b0-8dd7-507b3dd1d1e1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22 plus native worktree diff. Merge-base diff empty, no untracked additions.
+    AC1: [evidence: behavioral-test] tests/bug2406_train_tests.rs:1535 compares plain read-only, dry-run and live admission for held and unheld supervised members. Both failed before the change with the reported placeholder and passed afterward. Label-only hold still refuses.
+    AC2: [evidence: behavioral-test] pr_train.rs:2251 routes both report modes through the existing preview. gate/tests/story_1698_mandate_tests.rs:4144 covers absence of ledger writes and stale head refusal (inspected, not rerun).
+    Probes: same PR, branch, head and full ID slice passed without parsing. Optional actor diagnostics only capture refusals. Preview uses the existing ship decision and carries no release authority. No test weakened. Manual and remedy updated. Formatting and diff checks passed. Fast suite blocked in test-speed tooling because the lane runner refuses cargo metadata. Published-head CI pending.
+  created_at: 2026-11-23T12:58:16.929884744Z
+  modified_at: 2026-11-23T12:58:16.929884744Z
+  session_id: 01a20870e95b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
