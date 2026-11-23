@@ -15,12 +15,12 @@ description: |
   - Establish sufficient headroom before the scheduler kill ceiling for a pass to stop optional work, report partial progress and persist justified transitions. The same overall deadline must cover fetch, Git, forge calls and repeated scans.
   - Check a slow or repeatedly pending production-equivalent pass with a controlled clock and bounded child fixtures. It should return a diagnostic before the outer kill deadline and resume without advancing past unresolved evidence. Preserve time-based observational transitions when the scan uses the remaining budget.
   - Keep this follow-up observational. Spec filing, rerun initiation and store-mutating escalation retain their separate S3b gate.
-status: Approved
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T11:00:48.215003980Z
+modified_at: 2026-11-23T11:14:03.908618656Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -144,6 +144,12 @@ comments:
   modified_at: 2026-11-23T11:00:48.215003980Z
   session_id: 01a207fbd913
   harness_version: codex-cli 0.167.0
+- id: 01a2081c-f004-70b3-be87-c96dab5e5fa3
+  author: aida-publication-done
+  content: Implementer push 5b8dee179f67 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T11:14:03.908618118Z
+  modified_at: 2026-11-23T11:14:03.908618118Z
+  session_id: 01a207fbd913
 history:
 - id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
   author: joe
@@ -228,6 +234,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a2081c-f004-70b3-be87-c95ea9e21b07
+  author: aida-publication-done
+  timestamp: 2026-11-23T11:14:03.908616362Z
+  session_id: 01a207fbd913
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
