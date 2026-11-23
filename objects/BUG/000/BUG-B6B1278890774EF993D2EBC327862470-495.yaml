@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-23T21:03:56.571325541Z
+modified_at: 2026-11-23T21:03:58.967405100Z
 req_type: Bug
 tags:
 - ci
@@ -28,6 +28,11 @@ comments:
   modified_at: 2026-11-23T21:03:36.653550017Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a39-05f7-7fa1-a92d-50cc5cca5cf5
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 14:03 (p28 integration bundle, --mode drain). Slicing: AC1 discovery plus a wiring ratchet; AC2 known-failing files on an explicit dated list with follow-up IDs, not fixed here.'
+  created_at: 2026-11-23T21:03:58.967405100Z
+  modified_at: 2026-11-23T21:03:58.967405100Z
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
   author: joe
