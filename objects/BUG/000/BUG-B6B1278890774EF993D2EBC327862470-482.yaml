@@ -2,19 +2,24 @@ id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-482
 agreed_id: BUG-2721
 title: recover-launch treats any process in the primary checkout as proof a reviewer launch attempt is alive
-description: |
-  Found 2026-11-22 (advisor-122 19:20; filed by product-15). #4380 @864db73f is blocked by a stale reviewer launch attempt 346d4525 whose launcher is dead. `aida agent recover-launch` refuses because a process sits in /home/joe/ai/aida: PID 411725, the operator's interactive Terminator /bin/bash (started 2026-11-21 21:54, child `vi /tmp/ask_claude`). The attempt's "worktree" is the primary checkout itself, so ANY operator or deputy shell in the primary counts as proof the attempt is alive, and recovery is impossible without killing the human's terminal.
+description: 'Found 2026-11-22 (advisor-122 19:20; filed by product-15). #4380 @864db73f is blocked by a stale reviewer launch attempt 346d4525 whose launcher is dead. `aida agent recover-launch` refuses because a process sits in /home/joe/ai/aida: PID 411725, the operator''s interactive Terminator /bin/bash (started 2026-11-21 21:54, child `vi /tmp/ask_claude`). The attempt''s "worktree" is the primary checkout itself, so ANY operator or deputy shell in the primary counts as proof the attempt is alive, and recovery is impossible without killing the human''s terminal.
+
 
   ## Acceptance
-  - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
-  - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
-  - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
+
+  - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt''s path, and never from cwd alone when that path is the primary checkout.
+
+  - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt''s holder.
+
+  - AC3: A regression test: a dead launcher''s attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
+
+  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T07:50:41.187829939Z
+created_at: 2026-11-23 02:10:15.075061+00:00
+modified_at: 2026-11-23 07:50:41.187829+00:00
 req_type: Bug
 tags:
 - recovery
@@ -23,242 +28,308 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a20663-0bb2-74d2-be77-41c01c56b7d5
-  created_at: 2026-11-23T03:11:33.188754787Z
+  created_at: 2026-11-23 03:11:33.188754+00:00
   created_by: dirtlab
 comments:
 - id: 01a20636-afd4-7ff3-b3de-f13605b6e58f
   author: joe
   content: 'Data point (advisor-122 19:22, recorded by product-15): after the operator''s shell 411725 left, recover-launch for #4380''s attempt 346d4525 refused again, now on pid 511679 (another 5-day-old Terminator bash). About 30 live processes have cwd = /home/joe/ai/aida: every seat, deputy runner, product watcher, operator shell. The attempt''s recorded worktree IS the primary and its launcher pid is dead, so recover-launch can NEVER succeed for an attempt recorded against the primary. #4380''s final review waits on this fix. Priority: first lane when drain mode allows one.'
-  created_at: 2026-11-23T02:22:44.104953130Z
-  modified_at: 2026-11-23T02:22:44.104953130Z
+  created_at: 2026-11-23 02:22:44.104953+00:00
+  modified_at: 2026-11-23 02:22:44.104953+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20639-76cf-78f1-9986-94c4adbc5025
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:25):
-    # BUG-2721: small fix (advisor-122 ruling 2026-11-22 19:22/19:30 MST; relayed by product-15). Lane: CODEX. Drain-mode priority: it unblocks #4380's final review. New branch, new PR.
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:25):
 
-    Read `aida show BUG-2721` (ACs plus the 30-process data point). `aida agent recover-launch` treats ANY process whose cwd is the attempt's recorded worktree as proof the attempt is alive. When that worktree is the primary checkout (~30 seats, deputies and shells live there), recovery can never succeed, even though the launcher pid is dead.
-    Fix: judge liveness only from evidence bound to the attempt (its recorded launcher/worker pid plus start identity, or a process carrying the attempt token in its cmdline/env). Never use cwd alone, and never cwd when the path is the primary checkout. The refusal names the PID, command and reason. Regression test: a dead launcher's attempt recorded against the primary, with an unrelated live process in the primary, is recoverable.
+    # BUG-2721: small fix (advisor-122 ruling 2026-11-22 19:22/19:30 MST; relayed by product-15). Lane: CODEX. Drain-mode priority: it unblocks #4380''s final review. New branch, new PR.
+
+
+    Read `aida show BUG-2721` (ACs plus the 30-process data point). `aida agent recover-launch` treats ANY process whose cwd is the attempt''s recorded worktree as proof the attempt is alive. When that worktree is the primary checkout (~30 seats, deputies and shells live there), recovery can never succeed, even though the launcher pid is dead.
+
+    Fix: judge liveness only from evidence bound to the attempt (its recorded launcher/worker pid plus start identity, or a process carrying the attempt token in its cmdline/env). Never use cwd alone, and never cwd when the path is the primary checkout. The refusal names the PID, command and reason. Regression test: a dead launcher''s attempt recorded against the primary, with an unrelated live process in the primary, is recoverable.
+
     ADR-76 strict tier (lease/claim safety), so expect a STRICT review. Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    Add `// trace:BUG-2721 | ai:codex`. Commit `[AI:codex] fix(agent): ... (BUG-2721)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
-  created_at: 2026-11-23T02:25:46.538958793Z
-  modified_at: 2026-11-23T02:25:46.538958793Z
+
+    Add `// trace:BUG-2721 | ai:codex`. Commit `[AI:codex] fix(agent): ... (BUG-2721)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.'
+  created_at: 2026-11-23 02:25:46.538958+00:00
+  modified_at: 2026-11-23 02:25:46.538958+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20654-b0c0-7a73-9427-127f4e711b80
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1 plus the four uncommitted native-lane files. The merge-base diff is empty and there are no untracked additions.
+
     AC1: [evidence: behavioral-test] agent_codex_background.rs:2231 selects only exact tokens after recorded identities are checked. bug_2721_recover_launch_fresh_scan_fails_closed passed, including live launcher, argv and env holders, missing identity, unreadable environment and grant retention.
+
     AC2: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:802 and :905 check holder PID, command and matching reason.
+
     AC3: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:934 recovers with the unrelated shell still live in the recorded primary. The fixture enumerates real child proc entries through a controlled directory.
-    Probes covered exact NUL-delimited byte comparisons, argv option spelling, zero/one/multiple processes, non-holder cwd, and incomplete evidence. Self-review narrowed scan exclusion to the recovery command. Known-receipt recovery releases existing bookkeeping only after evidence checks. Supervisor exit and corrupt-receipt retirement retain their conservative scans. A newer same-user process denying environment access can still yield UNKNOWN, observed on the initial test with host gh. Fixed test nondeterminism and added explicit refusal coverage. Targeted lane job j20261123T023236608-2-0 executed 1 passing test. make check-ci-fast passed in j20261123T023111888-4-0. No published PR-head CI yet.
-  created_at: 2026-11-23T02:55:42.998199375Z
-  modified_at: 2026-11-23T02:55:42.998199375Z
+
+    Probes covered exact NUL-delimited byte comparisons, argv option spelling, zero/one/multiple processes, non-holder cwd, and incomplete evidence. Self-review narrowed scan exclusion to the recovery command. Known-receipt recovery releases existing bookkeeping only after evidence checks. Supervisor exit and corrupt-receipt retirement retain their conservative scans. A newer same-user process denying environment access can still yield UNKNOWN, observed on the initial test with host gh. Fixed test nondeterminism and added explicit refusal coverage. Targeted lane job j20261123T023236608-2-0 executed 1 passing test. make check-ci-fast passed in j20261123T023111888-4-0. No published PR-head CI yet.'
+  created_at: 2026-11-23 02:55:42.998199+00:00
+  modified_at: 2026-11-23 02:55:42.998199+00:00
   session_id: 01a2063bce96
   harness_version: codex-cli 0.167.0
 - id: 01a20662-b715-73f2-a55f-24599a66fd9b
   author: aida-publication-done
   content: Implementer push 81a84bab0748 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T03:11:02.421119299Z
-  modified_at: 2026-11-23T03:11:02.421119299Z
+  created_at: 2026-11-23 03:11:02.421119+00:00
+  modified_at: 2026-11-23 03:11:02.421119+00:00
   session_id: 01a2063bce96
 - id: 01a20664-19d2-75b2-b8b9-ee9e7e80b705
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-482` at head `unavailable`.'
-  created_at: 2026-11-23T03:12:33.234250719Z
-  modified_at: 2026-11-23T03:12:33.234250719Z
+  created_at: 2026-11-23 03:12:33.234250+00:00
+  modified_at: 2026-11-23 03:12:33.234250+00:00
   session_id: 01a2063bce96
 - id: 01a20670-af12-78a0-9883-ce62033f9f42
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2721 requires changes. Known-receipt recovery can release a scope with a live worker descendant, and an invocation wrapper can keep a dead attempt held. Unknown-receipt retirement still uses cwd and loses holder diagnostics. CI pending at review time. Reviewed the landed diff on protected base 215313b8d3a8. No local build or tests run.. No triage reason was given.'
-  created_at: 2026-11-23T03:26:17.874710643Z
-  modified_at: 2026-11-23T03:26:17.874710643Z
+  created_at: 2026-11-23 03:26:17.874710+00:00
+  modified_at: 2026-11-23 03:26:17.874710+00:00
 - id: 01a20670-c50e-7c30-97c4-4cdd76007247
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2721):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2721):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 81a84bab0748
+
     Recorded: 2026-11-23T03:19:22.983205194+00:00
+
     Findings:
+
     1. aida-cli-lib/src/agent_codex_background.rs:2231 — Recovery no longer detects ordinary surviving worker descendants. build_worker_exec clears the environment and receives the grant ID, but never receives the attempt UUID. Once the recorded worker and supervisor exit, a child inheriting the real worker environment can therefore be invisible to recovery even when supervisor exit retained the scope for that child. Recovery then revokes the grant and releases the scope for a second driver. Supply durable, attempt-bound evidence to production workers and account for already-issued receipts. Exercise recovery with a surviving child of the production worker environment. The modified group regression kills the child before calling recovery, and the new holder test injects its own TEST_ATTEMPT.
+
     2. aida-cli-lib/src/codex_bg_receipt.rs:818 — BUG-2721.AC1 and AC2 remain unfulfilled on recover-launch --retire-unknown. A partially readable receipt retaining worktree=primary still uses cwd alone in unknown_attempt_is_dead. Conversely, an environment-only holder outside the recorded tree and group is missed because recovery_token is None. The boolean result drops the PID, command and reason before retire_unknown reports the refusal. Evaluate attempt-bound evidence on this entry point, preserve Unknown when proof is insufficient, and propagate the specific holder diagnostic. Cover both cases with partially readable receipts.
+
     3. aida-cli-lib/src/agent_codex_background.rs:2237 — BUG-2721.AC1: only the current PID is excluded. When recovery is run under an ordinary waiting wrapper such as timeout, the wrapper also has the attempt UUID as a standalone argument and is reported as the holder on every invocation, even for a dead Prepared attempt. Distinguish recovery invocation ancestry from independent holder evidence and add a wrapped-command regression.
+
     4. aida-cli-lib/src/tests/story_2254_codex_bg_supervisor_tests.rs:793 — The regression retains the old STORY criterion trace and adds only a bug-level trace inside the body. The supplied untraced list and aida criteria BUG-2721 still show no linked tests for AC1, AC2 or AC3. Add criterion-specific test traces to the corresponding assertions or tests so future reviewers can find this coverage.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-23T03:26:23.502040772Z
-  modified_at: 2026-11-23T03:26:23.502040772Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-23 03:26:23.502040+00:00
+  modified_at: 2026-11-23 03:26:23.502040+00:00
 - id: 01a20671-9466-7281-b001-8f65a031c130
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:26):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:26):
+
     # BUG-2721 / PR #4402 r2 (advisor-122 ruling 2026-11-22 20:28 MST; relayed by product-15). Lane: CODEX. Launch-attempt ownership is lease-like, so ADR-76 strict.
 
+
     CR at 81a84bab (r1, 4 files). All four findings are valid. Fix all four. The reviewer scope is these four plus the r2 diff.
-    (a) Pass the attempt UUID into build_worker_exec's environment, so surviving worker DESCENDANTS are still detected. Recovery must NOT release a scope while any descendant lives.
+
+    (a) Pass the attempt UUID into build_worker_exec''s environment, so surviving worker DESCENDANTS are still detected. Recovery must NOT release a scope while any descendant lives.
+
     (b) --retire-unknown: a partial receipt with worktree=primary must NOT fall back to cwd alone. Detect env-only holders via the attempt token.
+
     (c) Exclude the whole INVOKING ANCESTRY (timeout and other wrappers) from "holder", not just the current PID.
+
     (d) Add per-AC test traces for AC1-3.
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
-  created_at: 2026-11-23T03:27:03.761997435Z
-  modified_at: 2026-11-23T03:27:03.761997435Z
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.'
+  created_at: 2026-11-23 03:27:03.761997+00:00
+  modified_at: 2026-11-23 03:27:03.761997+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20681-9bb3-7c40-87aa-0f1d3c07f58d
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 81a84bab07487f2f7fa1cc4d2dbdef380ab6b1db plus the native-lane working diff. Reviewed origin/main...HEAD, git diff HEAD and untracked additions.
+
     AC1: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:799 exercises a real surviving child of the production WorkerExec, legacy grant-only evidence, and timeout-wrapped recovery. The partial-receipt path checks recorded identities and exact process tokens.
+
     AC2: [evidence: behavioral-test] The same test checks PID, command and source on refusal for known and partial receipts, and that a refusal preserves the grant.
+
     AC3: [evidence: behavioral-test] A live shell remains in the primary checkout during successful recovery and partial-receipt retirement. All three criteria resolve to the regression in aida criteria.
-    Lane job j20261123T033312891-2-0 passed both filtered tests. Checked exact NUL-delimited fields, empty grants, independent holders, missing start identity and unreadable environ. Proc enumeration in the fixture is limited to selected kernel entries. The portability gate identified a missing Linux cfg on the wrapper entry and it was added. Full FAST rerun in progress. Host publication creates the round-two commit.
-  created_at: 2026-11-23T03:44:46.674138819Z
-  modified_at: 2026-11-23T03:44:46.674138819Z
+
+    Lane job j20261123T033312891-2-0 passed both filtered tests. Checked exact NUL-delimited fields, empty grants, independent holders, missing start identity and unreadable environ. Proc enumeration in the fixture is limited to selected kernel entries. The portability gate identified a missing Linux cfg on the wrapper entry and it was added. Full FAST rerun in progress. Host publication creates the round-two commit.'
+  created_at: 2026-11-23 03:44:46.674138+00:00
+  modified_at: 2026-11-23 03:44:46.674138+00:00
   session_id: 01a2067395e9
   harness_version: codex-cli 0.167.0
 - id: 01a206a1-5351-78e3-8766-026aa2326b36
   author: dirtlab
   content: Round-two validation update for working changes over 81a84bab0748. The final BUG-2721 lane run passed both tests (j20261123T041336209-14-0). The final structural guard run passed all 51 tests (j20261123T041421883-64-0). The fixture uses the repository executable writer, executable resolver and environment snapshot. The new UUID is classified as an operation-local environment input, and the writer inventory follows the actual receipt rename. The no-build guard in make check-ci-fast refuses the native launcher invocation during its Cargo step. Running the Rust ratchets through lane jobs separately.
-  created_at: 2026-11-23T04:19:25.064728413Z
-  modified_at: 2026-11-23T04:19:25.064728413Z
+  created_at: 2026-11-23 04:19:25.064728+00:00
+  modified_at: 2026-11-23 04:19:25.064728+00:00
   session_id: 01a2067395e9
   harness_version: codex-cli 0.167.0
 - id: 01a206aa-4ea9-7fe1-88dc-1d3ccc92f835
   author: dirtlab
   content: 'Final validation: all 143 selected Rust ratchet tests passed through the native lane runner. The complete manual verifier passed against the freshly built CLI in the lane overlay, covering 85 commands, 14 interface-change specifications, subcommands and flags. The aggregate make command itself exited nonzero at the no-build gate because the lane uses aida to launch Cargo. Its Rust structural checks and downstream ratchets were run separately. Native completion declaration recorded for host publication.'
-  created_at: 2026-11-23T04:29:13.952087270Z
-  modified_at: 2026-11-23T04:29:13.952087270Z
+  created_at: 2026-11-23 04:29:13.952087+00:00
+  modified_at: 2026-11-23 04:29:13.952087+00:00
   session_id: 01a2067395e9
   harness_version: codex-cli 0.167.0
 - id: 01a206c7-e5a6-7291-a638-bebd80b63b72
   author: aida-publication-done
   content: Implementer push 281f415ef3ad declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T05:01:33.478913905Z
-  modified_at: 2026-11-23T05:01:33.478913905Z
+  created_at: 2026-11-23 05:01:33.478913+00:00
+  modified_at: 2026-11-23 05:01:33.478913+00:00
   session_id: 01a2067395e9
 - id: 01a206d5-f30e-7311-8e11-44e0b5f7f973
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2721 AC2 and AC3 pass source review: positive holder matches identify PID, command and reason, and a traced wrapped-recovery regression keeps the unrelated primary-checkout shell alive through release. AC1 removes cwd-only recovery, but the required descendant protection still fails on three release paths. Reviewed the landed tree on 5470336db358. The intervening forge change affects none of the findings. CI pending at review time.. No triage reason was given.'
-  created_at: 2026-11-23T05:16:54.414402415Z
-  modified_at: 2026-11-23T05:16:54.414402415Z
+  created_at: 2026-11-23 05:16:54.414402+00:00
+  modified_at: 2026-11-23 05:16:54.414402+00:00
 - id: 01a206d6-0268-73b1-ab56-377118fce89b
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2721):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2721):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 281f415ef3ad
+
     Recorded: 2026-11-23T05:13:49.641926526+00:00
+
     Findings:
+
     1. [p1, security-authority-bypass] aida-cli-lib/src/agent_codex_background.rs:2234 — Known-receipt recovery can release a scope while a worker descendant is still in the recorded worker group or supervisor session. A helper launched with a clean environment carries neither UUID nor grant. If the supervisor dies while the helper is running and the worker exits, the old group/session checks would have retained the reservation. The new probe checks neither, treats the helper as unrelated, then revokes the grant and admits another driver. Preserve corroborating group/session evidence or equivalent durable descendant tracking while keeping cwd alone out of recovery. Cover a surviving helper with a clean environment.
+
     2. [p1, security-authority-bypass] aida-cli-lib/src/codex_bg_receipt.rs:854 — For a pre-token launch with a partially readable receipt, loss of grant_id silently disables the only legacy descendant check. Even when that receipt still identifies the dead worker and its group, a living ordinary child in that group only carries the old grant, so --retire-unknown can archive the receipt and free the scope. Retain usable legacy group/session evidence or return Unknown when required legacy attribution is missing. Exercise a partial pre-token receipt with a surviving grant-only child.
+
     3. [p1, security-authority-bypass] aida-cli-lib/src/agent_codex_background.rs:2146 — Normal supervisor exit never enables the new environment-token check. A surviving child that starts a new session and changes directory outside the worktree can retain the production worker UUID in its environment and still be invisible to exit_occupancy. The supervisor can mark the attempt Exited, after which recover-launch returns before checking the token. Include the attempt-bound environment evidence in the exit decision and cover that lifecycle path with an environment-only holder.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-23T05:16:58.344465461Z
-  modified_at: 2026-11-23T05:16:58.344465461Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-23 05:16:58.344465+00:00
+  modified_at: 2026-11-23 05:16:58.344465+00:00
 - id: 01a206d7-c72a-7351-af2f-0d48063f7956
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:18):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:18):
+
     # BUG-2721 / PR #4402 r3, round 3 of 4 (advisor-122 ruling 2026-11-22 22:20 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier.
 
+
     CR at 281f415e (r2). AC2 and AC3 pass, including the wrapped-recovery regression with the primary shell kept alive. Three p1 security findings remain, all of the form "a surviving descendant slips past the new check". RULING: a LAYERED liveness rule. An attempt is ALIVE if ANY of these holds:
+
     (a) any process in the recorded worker PGID or supervisor SID (scan /proc/<pid>/stat for pgrp and session);
+
     (b) any process carrying the attempt token in its ENVIRONMENT, checked on EVERY exit path, including normal supervisor exit (:2146);
-    (c) when the attempt's worktree is NOT the primary checkout, the old cwd-under-worktree check, kept AS IS;
+
+    (c) when the attempt''s worktree is NOT the primary checkout, the old cwd-under-worktree check, kept AS IS;
+
     (d) for legacy or partial receipts without a grant or token (:854), REFUSE with "not provably over" plus an inspection command, never silently skipping the check.
-    Only when the worktree IS the primary does (c) not apply (that's the BUG-2721 fix).
-    Residual (a child that both setsids AND clears its env, outside any worktree): document it as accepted in the PR body; it's deferred.
-    Tests: one per layer, plus the three findings' scenarios. The reviewer scope is the three findings plus the diff.
+
+    Only when the worktree IS the primary does (c) not apply (that''s the BUG-2721 fix).
+
+    Residual (a child that both setsids AND clears its env, outside any worktree): document it as accepted in the PR body; it''s deferred.
+
+    Tests: one per layer, plus the three findings'' scenarios. The reviewer scope is the three findings plus the diff.
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
-  created_at: 2026-11-23T05:18:31.301654730Z
-  modified_at: 2026-11-23T05:18:31.301654730Z
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.'
+  created_at: 2026-11-23 05:18:31.301654+00:00
+  modified_at: 2026-11-23 05:18:31.301654+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a206ff-f36c-7c42-902d-eccf890dbcf4
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 2cbc5186b168710d69bb252ad15d82466bcefc94 and the pending native-seat diff. Compared origin/main...HEAD and inspected all uncommitted files.
+
     AC1: [evidence: behavioral-test] bug_2721_recover_launch_fresh_scan_fails_closed verifies the shared exit/recovery probe, clean-environment group holder, supervisor session, dedicated cwd, detached environment-only holder, partial legacy receipt and missing-grant refusal. See agent_codex_background.rs:1934,2149 and codex_bg_receipt.rs:347,823.
+
     AC2: [evidence: behavioral-test] the same test checks the reported PID, command and source of attribution, and checks launch-status guidance on missing evidence.
+
     AC3: [evidence: behavioral-test] the wrapper subtest recovers the dead dispatcher while the unrelated primary-checkout shell remains alive. Both filtered tests passed on the final Rust sources in lane job j20261123T055652472-2-0.
-    All three P1s addressed. Checked exact NUL-delimited fields, malformed/missing evidence, multiple process candidates, wrapper ancestry, primary versus dedicated cwd, reservation retention and grant revocation. Partial reads now use the bounded no-follow handle reader. The first FAST run identified a missing inventory entry for that reader; classified it read-only and restarted FAST. Accepted residual: a child that creates a new session, clears its environment and runs outside the worktree can escape attribution.
-  created_at: 2026-11-23T06:02:46.345037137Z
-  modified_at: 2026-11-23T06:02:46.345037137Z
+
+    All three P1s addressed. Checked exact NUL-delimited fields, malformed/missing evidence, multiple process candidates, wrapper ancestry, primary versus dedicated cwd, reservation retention and grant revocation. Partial reads now use the bounded no-follow handle reader. The first FAST run identified a missing inventory entry for that reader; classified it read-only and restarted FAST. Accepted residual: a child that creates a new session, clears its environment and runs outside the worktree can escape attribution.'
+  created_at: 2026-11-23 06:02:46.345037+00:00
+  modified_at: 2026-11-23 06:02:46.345037+00:00
   session_id: 01a206ed9a53
   harness_version: codex-cli 0.167.0
 - id: 01a20713-660e-7ae1-991d-284d0b8ce0da
   author: dirtlab
   content: 'Round 3 validation addendum: the corrected store-writer inventory passed. All FAST source checks preceding the structural Cargo gate passed. The FAST wrapper stopped when it intercepted the native lane job client; the structural tests and remaining ratchet groups ran separately through the launcher (143 Rust tests passed). The full dynamic manual check passed against the executable from the lane build overlay: 85 commands, all 14 interface-change declarations, command paths and flags verified. Completion declaration recorded for host publication.'
-  created_at: 2026-11-23T06:24:01.142374068Z
-  modified_at: 2026-11-23T06:24:01.142374068Z
+  created_at: 2026-11-23 06:24:01.142374+00:00
+  modified_at: 2026-11-23 06:24:01.142374+00:00
   session_id: 01a206ed9a53
   harness_version: codex-cli 0.167.0
 - id: 01a20724-c6d4-7fa1-98da-f1d11efe68e2
   author: aida-publication-done
   content: Implementer push 707d29be1157 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T06:43:00.436135450Z
-  modified_at: 2026-11-23T06:43:00.436135450Z
+  created_at: 2026-11-23 06:43:00.436135+00:00
+  modified_at: 2026-11-23 06:43:00.436135+00:00
   session_id: 01a206ed9a53
 - id: 01a20737-fa40-7283-91c3-16814e8d8d7e
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2721 needs changes. AC3 passes source review: the traced timeout-wrapper regression recovers with an unrelated primary-checkout shell still alive. AC2 passes for detected holders: diagnostics report PID, command and the matching signal. The layered AC1 recovery rule still has two scope-release gaps: an invocation ancestor can evade independent holder checks, and a grant-only partial receipt can drop group/session evidence. Reviewed the landed tree 1a2ca92b6ffe5c1e4d1a9e92b5ed769bdebea879 on protected base a16f3592f015e06580a94c1f7879ea9c877c088e. The intervening base change adds separate writer inventory entries and does not affect these findings. FAST gates passed, and FAST compile was pending at review time. No local build or tests were run.. No triage reason was given.'
-  created_at: 2026-11-23T07:03:58.784077241Z
-  modified_at: 2026-11-23T07:03:58.784077241Z
+  created_at: 2026-11-23 07:03:58.784077+00:00
+  modified_at: 2026-11-23 07:03:58.784077+00:00
 - id: 01a20738-0fe8-76d3-97a4-0b7834c35f45
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2721):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2721):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 707d29be1157
+
     Recorded: 2026-11-23T06:57:14.002095124+00:00
+
     Findings:
+
     1. aida-cli-lib/src/codex_bg_receipt.rs:218 — The invocation ancestry exemption suppresses every liveness check. If recovery is invoked from a surviving descendant after the recorded worker and supervisor are gone, the scan skips that ancestor before reading its environment, group, session, or cwd. Both ordinary recovery and unknown-receipt retirement can therefore release the reservation while that process still holds the exact attempt token or another independent identity signal. Limit the ancestry exemption to token appearances in recovery-invocation argv and keep checking independent holder signals. Add a regression where an invocation ancestor carries the worker token and the reservation stays held.
-    2. aida-cli-lib/src/codex_bg_receipt.rs:841 — Unknown-receipt retirement treats missing worker, supervisor, and worktree fields as absent checks. With a surviving pre-token helper whose environment is clean but whose process group is still the worker's, a partial receipt that kept only grant_id cannot detect the holder. The nonempty grant satisfies the final guard, so retirement archives the receipt or the scopeless admission check passes. Require usable group and session evidence, or affirmative evidence that the launch never executed, before treating this partial receipt as clear. The grant-only success fixture in story_2254_codex_bg_receipt_tests.rs:161 currently codifies the unsafe default.
+
+    2. aida-cli-lib/src/codex_bg_receipt.rs:841 — Unknown-receipt retirement treats missing worker, supervisor, and worktree fields as absent checks. With a surviving pre-token helper whose environment is clean but whose process group is still the worker''s, a partial receipt that kept only grant_id cannot detect the holder. The nonempty grant satisfies the final guard, so retirement archives the receipt or the scopeless admission check passes. Require usable group and session evidence, or affirmative evidence that the launch never executed, before treating this partial receipt as clear. The grant-only success fixture in story_2254_codex_bg_receipt_tests.rs:161 currently codifies the unsafe default.
+
     3. The round-three brief asks for the accepted attribution limit in the PR body. The implementer self-review records it, but the PR body only contains the publication notice and FAST marker. Add the accepted limitation for a descendant that changes session, clears its environment, and runs outside the worktree.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-23T07:04:04.328220195Z
-  modified_at: 2026-11-23T07:04:04.328220195Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-23 07:04:04.328220+00:00
+  modified_at: 2026-11-23 07:04:04.328220+00:00
 - id: 01a2073a-59a6-7023-abbd-73960f21eeae
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:06):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:06):
+
     # BUG-2721 / PR #4402 r4 FINAL (advisor-122 ruling 2026-11-23 00:04 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier. SMALL.
 
+
     The counting CR at 707d29be (r3): AC2 and AC3 PASS (the primary-shell false positive is fixed). Two small AC1 gaps plus the PR body remain. Fix all three; the reviewer scope is these three plus the diff. A blocking CR after this parks the PR.
+
     1. codex_bg_receipt.rs:218: the invocation-ancestry exemption must exclude ONLY those ancestor PIDs from the holder list, never skip the scan, so a surviving descendant that runs recovery still finds its live siblings, group or session. Add a test.
+
     2. codex_bg_receipt.rs:841: unknown-receipt retirement with missing worker, supervisor or worktree fields = "not provably over": refuse with an inspection command (r3 rule d), never "absent check passes". Add a test.
-    3. Put the accepted residual in the PR BODY: a descendant that both setsids AND clears its env outside any worktree is not detected; it's accepted and deferred.
+
+    3. Put the accepted residual in the PR BODY: a descendant that both setsids AND clears its env outside any worktree is not detected; it''s accepted and deferred.
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
-  created_at: 2026-11-23T07:06:14.440697331Z
-  modified_at: 2026-11-23T07:06:14.440697331Z
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.'
+  created_at: 2026-11-23 07:06:14.440697+00:00
+  modified_at: 2026-11-23 07:06:14.440697+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20784-09d0-7c82-b3cc-6fb95c178967
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-482` at head `b9364510fb871268e5500e28afc5a3959e36cf5d`.'
+  created_at: 2026-11-23 08:27:03.504572+00:00
+  modified_at: 2026-11-23 08:27:03.504572+00:00
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
-  timestamp: 2026-11-23T02:28:44.784542064Z
+  timestamp: 2026-11-23 02:28:44.784542+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2063c-7d35-77d3-bf89-efe22bfb49f1
   author: dirtlab
-  timestamp: 2026-11-23T02:29:17.237112978Z
+  timestamp: 2026-11-23 02:29:17.237112+00:00
   session_id: 01a2063bce96
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a20662-b715-73f2-a55f-2448e7da11cb
   author: aida-publication-done
-  timestamp: 2026-11-23T03:11:02.421117513Z
+  timestamp: 2026-11-23 03:11:02.421117+00:00
   session_id: 01a2063bce96
   changes:
   - field_name: status
@@ -266,12 +337,12 @@ history:
     new_value: Done
 - id: 01a20663-36b0-7122-b9c8-69fd41bf931a
   author: dirtlab
-  timestamp: 2026-11-23T03:11:35.088173706Z
+  timestamp: 2026-11-23 03:11:35.088173+00:00
   session_id: 01a2063bce96
   changes: []
 - id: 01a2066a-d194-72c2-828d-45c7f8b59def
   author: aida-orchestrator
-  timestamp: 2026-11-23T03:19:53.492553189Z
+  timestamp: 2026-11-23 03:19:53.492553+00:00
   session_id: 01a20667ab59
   changes:
   - field_name: status
@@ -279,21 +350,21 @@ history:
     new_value: NeedsAttention
 - id: 01a20670-af12-78a0-9883-ce5f01387ba1
   author: joe
-  timestamp: 2026-11-23T03:26:17.874694637Z
+  timestamp: 2026-11-23 03:26:17.874694+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a20673-ea46-7462-87cd-e829188bc63c
   author: aida-session-start
-  timestamp: 2026-11-23T03:29:49.638145276Z
+  timestamp: 2026-11-23 03:29:49.638145+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a206c7-e5a6-7291-a638-bea572ac0f86
   author: aida-publication-done
-  timestamp: 2026-11-23T05:01:33.478912365Z
+  timestamp: 2026-11-23 05:01:33.478912+00:00
   session_id: 01a2067395e9
   changes:
   - field_name: status
@@ -301,7 +372,7 @@ history:
     new_value: Done
 - id: 01a206d3-545b-79c3-af08-1c90d5fae3e0
   author: aida-orchestrator
-  timestamp: 2026-11-23T05:14:02.715015364Z
+  timestamp: 2026-11-23 05:14:02.715015+00:00
   session_id: 01a206d06124
   changes:
   - field_name: status
@@ -309,21 +380,21 @@ history:
     new_value: NeedsAttention
 - id: 01a206d5-f30e-7311-8e11-44d1e5979299
   author: joe
-  timestamp: 2026-11-23T05:16:54.414383237Z
+  timestamp: 2026-11-23 05:16:54.414383+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a206ed-edd0-7183-8390-fb5668be13d2
   author: aida-session-start
-  timestamp: 2026-11-23T05:43:05.936803215Z
+  timestamp: 2026-11-23 05:43:05.936803+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a20715-e8cd-7b82-82a4-3cbf5e6d286b
   author: aida-orchestrator
-  timestamp: 2026-11-23T06:26:46.093559505Z
+  timestamp: 2026-11-23 06:26:46.093559+00:00
   session_id: 01a207129ce9
   changes:
   - field_name: status
@@ -331,7 +402,7 @@ history:
     new_value: NeedsAttention
 - id: 01a20724-c6d4-7fa1-98da-f1c70f7d25ec
   author: aida-publication-done
-  timestamp: 2026-11-23T06:43:00.436133048Z
+  timestamp: 2026-11-23 06:43:00.436133+00:00
   session_id: 01a206ed9a53
   changes:
   - field_name: status
@@ -339,7 +410,7 @@ history:
     new_value: Done
 - id: 01a20733-922b-77e2-bf05-dd0423795aa0
   author: aida-orchestrator
-  timestamp: 2026-11-23T06:59:09.995621115Z
+  timestamp: 2026-11-23 06:59:09.995621+00:00
   session_id: 01a2072e890c
   changes:
   - field_name: status
@@ -347,19 +418,27 @@ history:
     new_value: NeedsAttention
 - id: 01a20737-fa40-7283-91c3-167b343c8fe8
   author: joe
-  timestamp: 2026-11-23T07:03:58.784056345Z
+  timestamp: 2026-11-23 07:03:58.784056+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20743-5b03-7b82-b6b5-b3f7bf40c281
+  author: aida-session-start
+  timestamp: 2026-11-23 07:16:24.451492+00:00
+  session_id: 01a2073cf54a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a20761-c534-7093-a139-5d903e6c7a6a
   author: joe
-  timestamp: 2026-11-23T07:49:37.716221175Z
+  timestamp: 2026-11-23 07:49:37.716221+00:00
   session_id: 01a2075eb3b6
   changes: []
 - id: 01a20762-bd77-7f42-94b6-83459ea9419d
   author: joe
-  timestamp: 2026-11-23T07:50:41.271086285Z
+  timestamp: 2026-11-23 07:50:41.271086+00:00
   changes: []
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
@@ -375,4 +454,4 @@ failure_reason:
   detail: 'BUG-2721 AC1 fails: the recovery scanner suppresses independent holder checks for invocation ancestors, and partial receipts with a grant can still release a scope despite missing occupancy evidence. AC2 passes for detected holders, whose refusals identify PID, command and reason. AC3 passes source review: the traced regression recovers a dead attempt while the unrelated primary-checkout shell remains live. The prior launch-recovery findings remain after the base merge, and the PR body still omits the accepted attribution limit. Reviewed landed tree 1a2ca92b6ffe5c1e4d1a9e92b5ed769bdebea879 on protected base a16f3592f015e06580a94c1f7879ea9c877c088e. Exact-head FAST CI passed, and merge-hold-gate was awaiting clearance. No local build or tests were run.'
   recovery_hint: address the review findings, move BUG-2721 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-23T07:49:24.011774084Z
+  shelved_at: 2026-11-23 07:49:24.011774+00:00
