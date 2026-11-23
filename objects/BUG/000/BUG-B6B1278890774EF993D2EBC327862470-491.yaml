@@ -1,0 +1,29 @@
+id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-491
+agreed_id: BUG-2730
+title: throughput-guard (doctor check throughput-guard) times out at 300s on every run, so the guard is blind with 16 PRs open
+description: |
+  Found 2026-11-23 (advisor-122; filed by product-15). The scheduled throughput guard (`aida doctor check throughput-guard`) times out at its 300s ceiling on EVERY run (observed 04:05 and 05:00 MST on 2026-11-23), so the guard is blind exactly when 16 PRs are open and it matters most. Same family as the night-shift reap bug (BUG-...-471) and landing-health-guard: a scheduled check without a sub-budget.
+
+  ## Acceptance
+  - AC1: The guard's output includes per-phase timings, and its forge work has a bounded per-PR budget, so one slow PR or forge call can't consume the whole run.
+  - AC2: At the deadline the guard reports its PARTIAL results (which PRs it covered and which it skipped) and exits normally instead of being killed. A test drives a slow fake forge and asserts partial output before the ceiling.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T12:02:54.001310690Z
+modified_at: 2026-11-23T12:02:54.001310690Z
+req_type: Bug
+tags:
+- doctor
+- scheduler
+- small
+- throughput
+filed_at:
+  code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8018c42f8d5
+  vendor: claude
