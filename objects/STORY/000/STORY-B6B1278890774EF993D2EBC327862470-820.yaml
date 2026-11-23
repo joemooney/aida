@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T20:39:44.117234071Z
+modified_at: 2026-11-23T20:39:52.483731382Z
 req_type: Story
 tags:
 - autonomy
@@ -82,6 +82,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep. REQUEST CHANGES for completing STORY-3038 (origin STORY-b6b1278890774ef993d2ebc327862470-820).. No triage reason was given.'
   created_at: 2026-11-23T20:39:44.117225975Z
   modified_at: 2026-11-23T20:39:44.117225975Z
+- id: 01a20a22-f315-7ad0-be3c-96ba848bc5ef
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3038):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4646e44fe43a
+    Recorded: 2026-11-23T17:58:30.841571210+00:00
+    Findings:
+    1. STORY-3038.AC1 — The default disappears before the ordinary completing-PR landing path can use it. resolve at lines 275–286 requires the live enum to be Approved. publication_completion.rs:171–189 changes Approved/Planned/InProgress to Done on a successful completing push, and pr_service.rs:198–219 feeds that live record to the ship and train policy. The store records exactly that transition for this PR. Preserve or resolve trusted approval eligibility across publication while continuing to withhold it from ineligible or withdrawn specs. Add a publication-to-landing regression starting with an Approved small spec and an unset mode.
+    2. STORY-3038.AC1 — The strict-path exclusion at lines 506–520 admits authorization and grant code whose file names lack a matching word. For example, aida-cli-lib/src/role_cmd.rs:227–251 implements role entry and directly issues seat grants, but the path misses both sensitive_path and strict_terms and is outside the built-in protected floor. An otherwise eligible PR changing only that code can retain the default Drain, bypassing required supervision. Use a trusted classification that covers actual ADR-75/76 authority and gate surfaces and add an actual repository path as a regression.
+    3. STORY-3038.AC1 — Direct ship can rely on a stale Approved/small decision after CI waits. The unattended supervision decision at pr_cmd/mod.rs:1019–1049 reads the spec before CI. Under the merge lease (lines 1265–1309) the code rechecks review/CI/hold/head evidence but does not rerun the supervised-mode policy for a non-mandate ship. If the trusted store changes and the small tag is removed or status is withdrawn while CI is pending, the same PR SHA still passes the head check. Revalidate the approval and size eligibility against the current trusted store at the decisive merge boundary and cover a metadata change while CI is pending.
+    4. The strict_terms check at lines 282–284 and 375–412 treats common words as strict metadata without regard to what they modify. An Approved small change titled 'Fix Shift key handling' in ordinary UI code is held solely because 'shift' was intended to catch night-shift guards. Use explicit tier metadata and scoped path classification, and test an ordinary title containing a colliding word.
+    5. The new paragraph at line 75 says approved-small ignores drain_types, but line 85 says a missing list or an unknown type keeps supervision. The parser also processes drain_types for approved-small and can accumulate a warning saying no type gets the drain default even while approved-small is active (unset_mode.rs:154–184, 252–255). Scope both the documentation and drain_types validation to the legacy default = "drain" mode, and regenerate the showcase.
+    6. The supplied untraced list identifies STORY-3038.AC1 and AC2 (origin STORY-b6b1278890774ef993d2ebc327862470-820). The added test at lines 567–603 uses only a story-level trace and exercises an in-memory resolver with made-up path names. The train test change only initializes approved_small: false. Add criterion-level traces and gate regressions exercising the trusted opt-in through the real landing policy, including the publication status transition, actual strict paths and live eligibility revalidation. Keep the existing off/on and override assertions.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T20:39:52.341676742Z
+  modified_at: 2026-11-23T20:39:52.341676742Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
