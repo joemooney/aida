@@ -1664,6 +1664,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             worker: None,
                             reviewer_spawning: false,
                             setup_retry: false,
+                            pickup_retries: 0,
+                            pickup_retry_at: None,
                             retryable_fetch: false,
                             fetch_failures: 0,
                             no_verdict_attempts: 0,
@@ -3725,7 +3727,7 @@ pub(crate) fn bug2521_assert_peer_waiting_backoff(
             .unwrap()
         };
         let before = attempts(store.load().unwrap());
-        let action = select_with_coverage(&store, &c, None, 2, || None).unwrap();
+        let (action, _) = select_with_coverage(&store, &c, None, 2, || None).unwrap();
         assert!(
             matches!(action, Action::Skip(ref reason) if reason.contains(&format!("retry after {deadline}"))),
             "{action:?}"
@@ -5648,4 +5650,82 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
     leak("1c2d3e4f-1f3e-4c1d-9a7e-5d2f8c3b4a10");
     assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
     assert!(!leaked().is_empty());
+}
+
+// trace:BUG-2720 | ai:codex
+#[test]
+fn bug2720_exited_pickup_retries_after_worktree_release() {
+    let (temp, store) = fixture();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(temp.path())
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&[
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.org",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "base",
+    ]);
+    git(&["worktree", "add", "-qb", "pr-1", "held"]);
+    let c = change(1, 1, false);
+    for _ in 0..2 {
+        let a = dispatch(select(&store, &c, None, 1).unwrap());
+        execute_reservation(
+            &store,
+            "PR-1",
+            &a.token,
+            |_| Ok(()),
+            |_| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some("pr-1")),
+        )
+        .unwrap_err();
+    }
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dead = Identity::child(&child).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let receipt = |identity: &Identity, due: bool, retries: u8| {
+        store
+            .transaction("PR-1", |state| {
+                let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                assert_eq!(a.phase, Phase::Exited);
+                a.identity = Some(identity.clone());
+                a.pickup_retry_at = due.then(chrono::Utc::now);
+                a.pickup_retries = retries;
+                Ok(())
+            })
+            .unwrap();
+    };
+    let skip = |message: &str| {
+        let (action, outcome) = select_with_coverage(&store, &c, None, 1, || None).unwrap();
+        let Action::Skip(reason) = action else {
+            panic!("unexpected dispatch")
+        };
+        assert!(reason.contains(message), "{reason}");
+        assert_eq!(outcome, Admission::Skipped("held by exited attempts"));
+    };
+    skip("process exit unconfirmed");
+    receipt(&dead, false, 0);
+    skip("backoff");
+    receipt(&dead, true, 0);
+    skip("is held by worktree");
+    git(&["worktree", "remove", "held"]);
+    receipt(&dead, true, 3);
+    skip("retry cap");
+    receipt(&dead, true, 0);
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_eq!(retry.pickup_retries, 1);
+    assert_eq!(retry.head, c.head);
 }

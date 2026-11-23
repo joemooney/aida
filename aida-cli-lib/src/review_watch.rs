@@ -365,6 +365,11 @@ struct Attempt {
     // trace:BUG-2450 | ai:codex
     #[serde(default)]
     setup_retry: bool,
+    // trace:BUG-2720 | ai:codex
+    #[serde(default)]
+    pickup_retries: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pickup_retry_at: Option<chrono::DateTime<chrono::Utc>>,
     // trace:STORY-2401 | ai:codex
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     retryable_fetch: bool,
@@ -1568,6 +1573,64 @@ enum Action {
     Skip(String),
 }
 
+/// Recheck a transient terminal refusal before spending another pickup attempt.
+/// None leaves ordinary review, fetch and setup outcomes to their existing policies.
+// trace:BUG-2720 | ai:codex
+fn pickup_retry(
+    store: &Store,
+    key: &str,
+    attempt: &mut Attempt,
+    conclusive: bool,
+) -> Option<std::result::Result<(), String>> {
+    if attempt.phase != Phase::Exited
+        || attempt.reviewer_spawning
+        || attempt.identity.is_none()
+        || attempt.retryable_fetch
+        || conclusive
+    {
+        return None;
+    }
+    let diagnostic = attempt.diagnostic.as_deref()?;
+    let branch = key.to_ascii_lowercase();
+    let held_tree = diagnostic.contains(&format!("branch `{branch}` is held by worktree "))
+        || diagnostic.contains(&format!(
+            "branch `{branch}` is held by a contained seat's private clone "
+        ));
+    if !held_tree && !diagnostic.contains("lock busy") {
+        return None;
+    }
+    if attempt.unrecorded_descendant()
+        || attempt.reviewer.is_some()
+        || attempt
+            .recorded()
+            .iter()
+            .any(|p| !matches!(p.verdict(), aida_core::proc_identity::Verdict::Dead(_)))
+        || confirm(attempt).is_err()
+    {
+        return Some(Err(format!("process exit unconfirmed ({diagnostic}); inspect before `aida review watch --release {key}`")));
+    }
+    if attempt.pickup_retries >= 3 {
+        return Some(Err(format!(
+            "pickup retry cap reached; inspect before `aida review watch --release {key}`"
+        )));
+    }
+    let now = chrono::Utc::now();
+    let delay = chrono::Duration::seconds(60 << attempt.pickup_retries);
+    let deadline = *attempt.pickup_retry_at.get_or_insert(now + delay);
+    if now < deadline {
+        return Some(Err(format!("pickup backoff until {deadline}")));
+    }
+    if held_tree {
+        if let Err(error) =
+            crate::queue_cmd::preflight_queue_work_branch(&store.root, Some(&branch))
+        {
+            attempt.pickup_retry_at = Some(now + delay);
+            return Some(Err(error.to_string()));
+        }
+    }
+    Some(Ok(()))
+}
+
 // trace:BUG-2518 | ai:codex
 fn no_verdict_blocker(attempt: &Attempt) -> Option<String> {
     (attempt.no_verdict_attempts >= 3
@@ -1645,6 +1708,7 @@ fn stale_follow_up(
     update::follow_up(root, store, change, live, updater)
 }
 
+#[cfg(test)]
 fn select(
     store: &Store,
     change: &forge::Change,
@@ -1654,6 +1718,7 @@ fn select(
     select_with_coverage(store, change, vendor, max, || {
         dispatch_carried_approval(store, change)
     })
+    .map(|(action, _)| action)
 }
 
 // trace:STORY-2694 | ai:codex
@@ -1663,7 +1728,7 @@ fn select_with_coverage(
     vendor: Option<String>,
     max: u8,
     coverage: impl FnOnce() -> Option<String>,
-) -> Result<Action> {
+) -> Result<(Action, Admission)> {
     let key = change.key();
     // Resolve remote proof evidence before taking the shared runtime lock.
     // Suppression is review coverage only: readiness still checks CI at H2.
@@ -1675,7 +1740,8 @@ fn select_with_coverage(
     // admission transaction: it cannot block train reservations.
     // trace:BUG-2650 | ai:claude
     let paused = pause::current(store, chrono::Utc::now()).context(GlobalState)?;
-    store.transaction(&key, |state| {
+    let mut outcome = Admission::Settled;
+    let action = store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
         // The train takes these locks under this same admission lock.
@@ -1749,6 +1815,7 @@ fn select_with_coverage(
             .map(|a| a.fetch_failures.saturating_add(u8::from(a.retryable_fetch)))
             .max().unwrap_or(0);
         if fetch_failures >= 3 {
+            outcome = Admission::Skipped("capped");
             return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
         }
         // A terminal receipt proves process completion, not verdict publication.
@@ -1756,18 +1823,28 @@ fn select_with_coverage(
         // trace:BUG-2518 | ai:codex
         let mut no_verdict_attempts = 0;
         let mut no_verdict_ready = false;
+        let mut pickup_retries = 0;
         if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
             if history.conclusive(&change.head) {
                 attempt.no_verdict_retry_at = None;
             }
             no_verdict_attempts = attempt.no_verdict_attempts;
-            if matches!(attempt.phase, Phase::Completed | Phase::Exited)
+            pickup_retries = attempt.pickup_retries;
+            if let Some(result) = pickup_retry(store, &key, attempt, history.conclusive(&change.head)) {
+                if let Err(reason) = result {
+                    outcome = Admission::Skipped("held by exited attempts");
+                    return Ok(Action::Skip(format!("held by exited attempt: {reason}")));
+                }
+                pickup_retries += 1;
+                no_verdict_ready = true;
+            } else if matches!(attempt.phase, Phase::Completed | Phase::Exited)
                 && !attempt.retryable_fetch && !history.conclusive(&change.head)
                 && !(attempt.setup_retry && !attempt.reviewer_spawning)
             {
                 no_verdict_attempts = no_verdict_attempts.max(1);
                 attempt.no_verdict_attempts = no_verdict_attempts;
                 if !attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()) {
+                    outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(format!("unfinished review processes still hold this head; inspect before `aida review watch --release {key}`")));
                 }
                 // WAITING may depend on evidence other than CI; use a bounded backoff.
@@ -1777,14 +1854,17 @@ fn select_with_coverage(
                         if history.contains(&change.head) { review_publication::WAITING_RETRY_SECS }
                         else { 60 * i64::from(no_verdict_attempts) }));
                 if let Some(reason) = no_verdict_blocker(attempt) {
+                    outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(reason));
                 }
                 if chrono::Utc::now() < retry_at {
+                    outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
                 }
                 no_verdict_attempts += 1;
                 no_verdict_ready = true;
             } else if !attempt.retryable_fetch && (attempt.phase == Phase::Exited || (attempt.phase == Phase::Failed && attempt.setup_retry && attempt.diagnostic.is_some())) {
+                outcome = Admission::Skipped("held by exited attempts");
                 return Ok(Action::Skip(format!("review setup exited without completing ({}); retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
             }
         }
@@ -1808,7 +1888,10 @@ fn select_with_coverage(
                 }
             }
         }
-        if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
+        if history.blocking() >= store.max_rounds {
+            outcome = Admission::Skipped("capped");
+            return Ok(Action::Skip(store.round_cap_reason()));
+        }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Launch point: a pause skips only the new reservation; running
         // reviews, notices and reconciliation above are unaffected.
@@ -1819,14 +1902,15 @@ fn select_with_coverage(
         // Preflight and spawn failures preserve the inherited review budget.
         // trace:BUG-2518 | ai:codex
         // trace:TASK-3112 | ai:codex
-        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.identity.is_some() && a.diagnostic.is_some())));
-        let attempt = Attempt { no_verdict_attempts, no_verdict_retry_at: None, review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let setup_retry = pickup_retries > 0 || entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.identity.is_some() && a.diagnostic.is_some())));
+        let attempt = Attempt { pickup_retries, pickup_retry_at: None, no_verdict_attempts, no_verdict_retry_at: None, review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
         entry.attempts.push(attempt.clone());
         Ok(Action::Dispatch(attempt))
-    })
+    })?;
+    Ok((action, outcome))
 }
 
 /// The cheap, lock-held admission pre-check run before the forge probe (two
@@ -2988,7 +3072,17 @@ pub(crate) fn run_with_program(
                     });
                     Ok(())
                 }
-                Ok(Admission::Settled) => Ok(()),
+                Ok(outcome) => {
+                    let category = match outcome {
+                        Admission::Skipped(category) => category,
+                        _ => "skipped",
+                    };
+                    pass.skipped
+                        .entry(category.to_string())
+                        .or_default()
+                        .push(change.key());
+                    Ok(())
+                }
                 Err(error) => Err(error),
             };
             observe_dispatch_result(&root, result)
@@ -3423,6 +3517,7 @@ pub(crate) enum Admission {
     Settled,
     Admitted,
     Unadmitted(String),
+    Skipped(&'static str),
 }
 
 /// The skip reason `probe_unneeded` gives a head the admission hub refused
@@ -3435,9 +3530,11 @@ const HUB_HELD_CAUSE: &str =
 /// The admission outcome of a `probe_unneeded` skip: an unresolved remote
 /// hold is unadmitted work, not a settled head.
 // trace:BUG-2674 | ai:claude
-fn skipped_admission(reason: &str) -> Admission {
+fn skipped_admission(store: &Store, reason: &str) -> Admission {
     if reason == REMOTE_HELD_UNRESOLVED {
         Admission::Unadmitted(HUB_HELD_CAUSE.into())
+    } else if reason == store.round_cap_reason() {
+        Admission::Skipped("capped")
     } else {
         Admission::Settled
     }
@@ -3511,7 +3608,7 @@ fn admit_change(
             eprintln!("{key}: {reason}");
             record_skip(store, &change, Some(&reason))?;
             return report(root, store, &change, &ready::Live { root, repo })
-                .map(|_| skipped_admission(&reason));
+                .map(|_| skipped_admission(store, &reason));
         }
         if crate::gate::review_freshness::decision_exists(
             root,
@@ -3558,7 +3655,7 @@ fn admit_change(
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| skipped_admission(&reason));
+        return report(root, store, &change, &live).map(|_| skipped_admission(store, &reason));
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
@@ -3580,12 +3677,13 @@ fn admit_change(
         return report(root, store, &change, &live).map(|_| Admission::Settled);
     }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
-    let action = select(
+    let (action, outcome) = select_with_coverage(
         store,
         &change,
         args.vendor.clone(),
         args.max_concurrent
             .context("unresolved review concurrency")?,
+        || dispatch_carried_approval(store, &change),
     )?;
     record_skip(
         store,
@@ -3599,6 +3697,7 @@ fn admit_change(
         Action::Skip(reason) => {
             eprintln!("{key}: {reason}");
             report(root, store, &change, &live)?;
+            return Ok(outcome);
         }
         Action::Notify(notice) => {
             deliver(root, &notice)?;

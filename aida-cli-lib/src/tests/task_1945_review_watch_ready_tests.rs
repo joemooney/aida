@@ -1226,7 +1226,7 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
         Some(description.clone())
     );
     assert!(
-        matches!(select_with_coverage(&store, &c, None, 2, || Some(description.clone())).unwrap(), Action::Skip(why) if why == description)
+        matches!(select_with_coverage(&store, &c, None, 2, || Some(description.clone())).unwrap().0, Action::Skip(why) if why == description)
     );
     assert!(store
         .load()
@@ -1258,7 +1258,9 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
         None
     );
     assert!(matches!(
-        select_with_coverage(&other, &c, None, 2, || None).unwrap(),
+        select_with_coverage(&other, &c, None, 2, || None)
+            .unwrap()
+            .0,
         Action::Dispatch(_)
     ));
 }
@@ -1477,7 +1479,7 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
                 .is_some(),
             !strict
         );
-        let action = select_with_coverage(&store, &c, None, 2, coverage).unwrap();
+        let (action, _) = select_with_coverage(&store, &c, None, 2, coverage).unwrap();
         let verdict = fixture::approval(&approved);
         let policy = fixture::policy(&verdict);
         let site = carry::CarryOverSite::read_only(root, Some("main"));
