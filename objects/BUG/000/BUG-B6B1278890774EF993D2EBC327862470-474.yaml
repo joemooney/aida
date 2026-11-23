@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-23T08:28:06.616245175Z
+modified_at: 2026-11-23T08:28:09.656815646Z
 req_type: Bug
 tags:
 - hygiene
@@ -67,6 +67,19 @@ comments:
   modified_at: 2026-11-23T07:00:58.553961963Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20785-0b8a-7221-8991-e0f188388dfb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4416):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 071f6ade5ee0
+    Recorded: 2026-11-23T08:27:17.237760675+00:00
+    Findings:
+    1. BUG-2713 AC1. Actual seat-clone status failures bypass the new formatter. In session_end.rs:1189, Probe::Unknown is formatted directly into an error. seat_clone.rs:1504 and :2110 retain embedded newlines from Git stderr, so agent_error_summary_help in agent_errors.rs:29 still drops all diagnostic lines after the first, including a fatal explanation if a warning comes first. The clone case in the added unit test feeds a synthetic failed check into session_dirty_summary, which the production clone failure never calls. Fold the actual Unknown reason onto the first rendered line and cover that refusal path.
+    2. BUG-2713 AC1. The ordinary worktree refusal can still omit individual dirty paths. session_end.rs:1584-1587 forwards worktree_dirty_entries to the formatter. Both Git status paths in aida-core/src/git_ops.rs:4826-4829 and :5046-5051 use default untracked reporting, so a new directory with two untracked files can be reported as a single '?? dir/' entry. The only directory expanded by session end is .aida/. Supply per-file porcelain for refusal evidence while preserving the existing status safety checks, and cover nested untracked files through session end.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T08:28:09.482165774Z
+  modified_at: 2026-11-23T08:28:09.482165774Z
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
