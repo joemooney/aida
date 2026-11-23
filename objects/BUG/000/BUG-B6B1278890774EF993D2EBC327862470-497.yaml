@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Lane-recovery treats an OPEN PR from the lane's branch into ANY base (including `integration` / promote branches) as the lane's PR: no "no open PR" needs-attention while it's open. Test with an integration-base PR fixture.
   - AC2: When a landing's completion trailer names a spec in needs-attention whose PR is landed, it completes the spec (or reports clearly why not). Test.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-23T23:15:29.763344542Z
+modified_at: 2026-11-23T23:18:27.617999887Z
 req_type: Bug
 tags:
 - integration
@@ -64,6 +64,13 @@ history:
   author: joe
   timestamp: 2026-11-23T23:13:42.944297841Z
   changes: []
+- id: 01a20ab4-2421-75b2-bbf6-51e198a209c0
+  author: aida-session-start
+  timestamp: 2026-11-23T23:18:27.617998363Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
