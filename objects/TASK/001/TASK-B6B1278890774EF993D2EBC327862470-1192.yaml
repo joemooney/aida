@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   Cleanups in aida-cli-lib/src/admission_owner.rs. (a) `train` and `cooperative_train` (lines 514-523) have no production caller after this change; only tests call them, and the STORY-2857 and BUG-2650 tests exercise these zero-bound entry points instead of ship_admission and manual_train_admission. Mark them test-only or move the tests to the production entry points. (b) flock_holders (line 133) decodes the minor number as `(dev >> 12) & !0xff`, which keeps high major bits for device majors of 4096 and above; the mask should be 0xffffff00. Diagnostic text only. (c) The opening section of the PR body still says the drain accepts an 'unseated operator' and that status shows 'the controller's claim'; the code and docs/cli/06-roles-sessions.md now require an operator at an interactive terminal outside any agent session and show both workers' claims.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:05.182124737Z
-modified_at: 2026-11-23T11:21:48.582213186Z
+modified_at: 2026-11-23T11:25:41.835847218Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -49,6 +49,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.669652234Z
   changes: []
+- id: 01a20827-964b-7490-8d2e-d29be62d3251
+  author: aida-session-start
+  timestamp: 2026-11-23T11:25:41.835846246Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
