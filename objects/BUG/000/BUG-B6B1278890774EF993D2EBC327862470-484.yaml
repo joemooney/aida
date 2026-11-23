@@ -10,12 +10,12 @@ description: |
   - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
   - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
   - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T04:11:01.536742030Z
+modified_at: 2026-11-23T05:03:35.840533303Z
 req_type: Bug
 tags:
 - ci
@@ -51,6 +51,12 @@ comments:
   modified_at: 2026-11-23T04:11:01.536742030Z
   session_id: 01a206837516
   harness_version: codex-cli 0.167.0
+- id: 01a206c9-c3a0-7890-94ba-06009b2e1f20
+  author: aida-publication-done
+  content: Implementer push dac2ffda63a2 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T05:03:35.840532644Z
+  modified_at: 2026-11-23T05:03:35.840532644Z
+  session_id: 01a206837516
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
@@ -65,6 +71,14 @@ history:
   session_id: 01a206837516
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a206c9-c3a0-7890-94ba-05f331d3cdbc
+  author: aida-publication-done
+  timestamp: 2026-11-23T05:03:35.840531012Z
+  session_id: 01a206837516
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
