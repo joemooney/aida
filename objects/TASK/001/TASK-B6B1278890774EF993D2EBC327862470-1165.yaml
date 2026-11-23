@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T11:23:56.291162876Z
+modified_at: 2026-11-23T11:24:02.515889421Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -173,6 +173,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T11:23:56.120543879Z
   modified_at: 2026-11-23T11:23:56.120543879Z
+- id: 01a20826-4480-7d82-a5df-566d79d4dd61
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:24):
+    # TASK-3209 / PR #4422 r3 (advisor-122 ruling 2026-11-23 04:26 MST; relayed by product-15). Lane: CODEX. TINY. Targets MAIN.
+
+    CR at 5b8dee17 (r2). ONE finding left: main_watch.rs:1539-1566. Live::git classifies TimedOut as PassDeadline only when its initial timeout was SHORTER than the 30s per-call ceiling, so a git call that hits the ceiling exactly as the pass budget runs out is treated as a plain failure (and drops the checkpoint).
+    Fix: classify TimedOut as PassDeadline whenever the PASS deadline has ELAPSED at the time of the timeout, regardless of which bound fired. Add a test for the equal-bounds case.
+    The reviewer scope is that plus the diff. Keep out of review_draft.rs and land readiness.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T11:24:02.515889421Z
+  modified_at: 2026-11-23T11:24:02.515889421Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
   author: joe
