@@ -1421,15 +1421,21 @@ Review decision fixtures (same current head, no actionable defects):
 <!-- trace:TASK-3814 | ai:codex -->
 <!-- trace:STORY-2913 | ai:claude -->
 `[review] blocking_tiers` names the finding classes that block. The project
-policy section of `aida review prompt` quotes the active list. Apply that
-quoted list; never read the list from the branch under review. When the
-prompt says every finding blocks because the list is unset, keep the existing
-review behaviour. When it says the list cannot be honoured (invalid or
-unreadable), every finding blocks, including one you mark deferred: record
-request-changes while any finding remains. Otherwise, findings whose `blocking_tier` or `class` is listed
-block, and the rest approve with follow-ups.
-Record every finding, including mixed reviews, using structured `--finding`
-JSON with a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,
+policy section of `aida review prompt` quotes the active list. Use that
+list from the trusted default branch.
+<!-- trace:TASK-3257 | ai:codex -->
+
+- **Unset list.** Unresolved findings block approval. To defer a finding,
+  supply structured `--finding` JSON with `text`, `severity`,
+  `"disposition":"deferred"` and a nonempty one-line `rationale`.
+  The example below is complete without a `blocking_tier`.
+- **Invalid or unreadable policy.** Every finding blocks, including an
+  explicit deferral. Record request-changes while any finding remains.
+- **Configured list.** Findings whose `blocking_tier` or `class` is listed
+  block. Eligible findings outside the list become follow-ups.
+
+Under a configured list, record every finding, including mixed reviews, using
+structured `--finding` JSON with text, severity and a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,
 `security-authority-bypass`, `unmet-claimed-ac`, `test-gap`, `style`), plus a
 `class` when a second class applies. Use `security-authority-bypass` for
 security and authority-bypass findings at any priority; it always blocks.
@@ -1445,8 +1451,7 @@ approval. Name the source spec when recording. Do not drop any finding.
 Nonblocking observations do not downgrade passing acceptance rows; record them
 as follow-ups and derive the overall verdict from the remaining blockers.
 This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
-the general severity/disposition guidance below only when a list is in force; when every finding blocks, retain the existing review behavior and
-add no policy guidance to the review response. Delegated aggregate severity counts
+the general severity/disposition guidance below only when a list is in force. Delegated aggregate severity counts
 cannot establish these classifications: obtain individual findings or use a
 local review before applying this policy.
 

@@ -42,6 +42,14 @@ A rework brief preserves a review finding across a cold session. It is not
    ignores the variable and background mode is the only protection. See "Cargo time budgets" in
    `implementer-discipline.md`. <!-- trace:STORY-1854 | ai:claude -->
 
+8. Size the brief: at most 300 changed lines and one or two acceptance
+   criteria. If the required change is larger, split it into vertical slices
+   (`aida-decompose`) before launch and brief only the first. Large PRs do not
+   converge under strict review, while small ones approve in one or two rounds
+   (2026-11-22: four large PRs parked; #4399 and #4391 approved in one or two
+   rounds). See the product rule in `two-seat-protocol.md`.
+   <!-- trace:TASK-3841 | ai:claude -->
+
 A sufficient brief lets a fresh implementer answer: what failed, where, how to
 reproduce it, what outcome is required, and which evidence will prove it fixed.
 After writing it, verify the brief appears in `aida brief list --for-agent
