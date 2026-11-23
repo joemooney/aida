@@ -633,6 +633,18 @@ fn notify(state: &mut State, key: String, title: String, body: String) {
     state.outbox.push(Notice { key, title, body });
 }
 
+// trace:TASK-3209 | ai:codex
+#[derive(Debug)]
+struct PassDeadline;
+
+impl std::fmt::Display for PassDeadline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("pass deadline reached")
+    }
+}
+
+impl std::error::Error for PassDeadline {}
+
 fn pass_budget_spent() -> bool {
     crate::forge_lookup::forge_lookup_deadline().is_some_and(|d| std::time::Instant::now() >= d)
 }
@@ -724,6 +736,28 @@ pub(crate) fn pass(
     let mut notes = Vec::new();
     flush(&land, &mut state)?;
     deliver(&land, &mut state, ports, &mut notes)?;
+    let scan = scan_history(&land, &mut state, required, window, ports, &mut notes);
+    let deadline = scan.as_ref().is_err_and(|error| error.is::<PassDeadline>());
+    if deadline {
+        write_state(&land, &state)?;
+    } else {
+        scan?;
+    }
+    if deadline || pass_budget_spent() {
+        notes.push("red-main watch: pass deadline reached; resuming next pass".into());
+    }
+    deliver(&land, &mut state, ports, &mut notes)?;
+    Ok(notes)
+}
+
+fn scan_history(
+    land: &Path,
+    state: &mut State,
+    required: &[String],
+    window: std::time::Duration,
+    ports: &mut dyn Ports,
+    notes: &mut Vec<String>,
+) -> Result<()> {
     let now = ports.now();
     let recent = ports.recent(BATCH)?;
     let mut verdicts: BTreeMap<String, Verdict> = BTreeMap::new();
@@ -752,7 +786,7 @@ pub(crate) fn pass(
             state.first_candidate = recent.last().cloned();
         }
         if !recent.is_empty() {
-            write_state(&land, &state)?;
+            write_state(land, state)?;
         }
     }
 
@@ -778,11 +812,11 @@ pub(crate) fn pass(
         if let Some(episode) = state.episode.take() {
             let mut end = event(now, "red_end", &episode.red_sha);
             end.outcome = Some("unattributed".into());
-            record(&land, &mut state, end)?;
+            record(land, state, end)?;
         } else {
-            write_state(&land, &state)?;
+            write_state(land, state)?;
         }
-        return Ok(notes);
+        return Ok(());
     };
     // The open episode's red commit first: a green re-run closes it as a
     // flake, and the scan resumes from it so the commits after it are
@@ -798,7 +832,7 @@ pub(crate) fn pass(
             Verdict::Green => {
                 state.cursor = Some(red.sha.clone());
                 state.last_green = Some(red.sha.clone());
-                close(&land, &mut state, &red, true, now, ports, &mut notes)?;
+                close(land, state, &red, true, now, ports, notes)?;
                 batch = ports
                     .after(&red.sha, BATCH)?
                     .context("verified red left the pinned first-parent history")?;
@@ -816,7 +850,7 @@ pub(crate) fn pass(
                     episode.contributing = contributing;
                     episode.diagnostics = diagnostics;
                     state.episode = Some(episode);
-                    write_state(&land, &state)?;
+                    write_state(land, state)?;
                 }
             }
             _ => {}
@@ -842,7 +876,7 @@ pub(crate) fn pass(
 
     for commit in batch {
         let verdict = judged(ports, &commit);
-        if !matches!(verdict, Verdict::Pending(_)) {
+        if !matches!(verdict, Verdict::Pending(_) | Verdict::Green) {
             state.first_candidate = None;
             state.cursor = Some(commit.sha.clone());
         }
@@ -855,10 +889,13 @@ pub(crate) fn pass(
                 break;
             }
             Verdict::Green => {
-                state.last_green = Some(commit.sha.clone());
                 if state.episode.is_some() {
-                    close(&land, &mut state, &commit, false, now, ports, &mut notes)?;
+                    close(land, state, &commit, false, now, ports, notes)?;
+                } else {
+                    state.last_green = Some(commit.sha.clone());
                 }
+                state.cursor = Some(commit.sha.clone());
+                state.first_candidate = None;
             }
             Verdict::Red {
                 required: failed,
@@ -867,32 +904,32 @@ pub(crate) fn pass(
             } => {
                 if state.episode.is_none() {
                     open(
-                        &land,
-                        &mut state,
+                        land,
+                        state,
                         &commit,
                         (failed, contributing, diagnostics),
                         now,
                         ports,
-                        &mut notes,
+                        notes,
                     )?;
                 } else {
-                    joined(&land, &mut state, &commit)?;
+                    joined(land, state, &commit)?;
                 }
             }
             Verdict::Skipped(_) => {
                 if state.episode.is_some() {
-                    joined(&land, &mut state, &commit)?;
+                    joined(land, state, &commit)?;
                 }
             }
         }
-        write_state(&land, &state)?;
+        write_state(land, state)?;
     }
     // The tip, reported apart from the last green commit.
     if let Some(tip) = recent.first().filter(|_| !pass_budget_spent()) {
         let text = verdict_text(&judged(ports, tip));
         if state.tip.as_ref() != Some(&(tip.sha.clone(), text.clone())) {
             state.tip = Some((tip.sha.clone(), text));
-            write_state(&land, &state)?;
+            write_state(land, state)?;
         }
     }
 
@@ -901,13 +938,9 @@ pub(crate) fn pass(
         .as_ref()
         .is_some_and(|ep| matches!(verdicts.get(&ep.red_sha), Some(Verdict::Red { .. })))
     {
-        advance(&land, &mut state, window, now, ports, &mut notes)?;
+        advance(land, state, window, now, ports, notes)?;
     }
-    if pass_budget_spent() {
-        notes.push("red-main watch: pass deadline reached; resuming next pass".into());
-    }
-    deliver(&land, &mut state, ports, &mut notes)?;
-    Ok(notes)
+    Ok(())
 }
 
 /// A commit that landed while the episode was open.
@@ -1303,6 +1336,7 @@ fn close(
                     "cleared"
                 }
             }
+            Err(e) if e.is::<PassDeadline>() => return Err(e),
             Err(e) => {
                 notes.push(format!(
                     "red-main watch: the closing commits could not be read: {e:#}"
@@ -1324,6 +1358,8 @@ fn close(
         body.clone(),
     );
     state.episode = None;
+    state.cursor = Some(green.sha.clone());
+    state.first_candidate = None;
     state.last_green = Some(green.sha.clone());
     let mut e = event(
         if rerun_green { now } else { green.at },
@@ -1504,7 +1540,9 @@ impl Live {
             self.call_timeout
                 .min(d.saturating_duration_since(std::time::Instant::now()))
         });
-        anyhow::ensure!(!timeout.is_zero(), "pass deadline reached");
+        if timeout.is_zero() && pass_budget_spent() {
+            return Err(PassDeadline.into());
+        }
         match crate::command_output_with_timeout_capped(cmd, timeout, 16 * 1024 * 1024) {
             crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
                 anyhow::ensure!(
@@ -1519,6 +1557,11 @@ impl Live {
                 out.status,
                 String::from_utf8_lossy(&out.stderr).trim()
             ),
+            crate::BoundedCommandOutput::TimedOut
+                if timeout < self.call_timeout && pass_budget_spent() =>
+            {
+                Err(PassDeadline.into())
+            }
             crate::BoundedCommandOutput::TimedOut => {
                 anyhow::bail!("git {} timed out after {:?}", args.join(" "), timeout)
             }

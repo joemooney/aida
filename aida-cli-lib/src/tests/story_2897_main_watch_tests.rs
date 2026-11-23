@@ -62,6 +62,9 @@ struct Fake {
     mails: Vec<(String, String, String)>,
     fail_mail: bool,
     fail_range: bool,
+    deadline_recent: bool,
+    deadline_range: bool,
+    after_until_deadline: Option<usize>,
     stall_check: Option<String>,
 }
 
@@ -91,9 +94,18 @@ impl Ports for Fake {
         self.now.unwrap_or_else(t0)
     }
     fn recent(&mut self, max: usize) -> Result<Vec<Commit>> {
+        if self.deadline_recent {
+            return Err(PassDeadline.into());
+        }
         Ok(self.commits.iter().rev().take(max).cloned().collect())
     }
     fn after(&mut self, cursor: &str, max: usize) -> Result<Option<Vec<Commit>>> {
+        if let Some(left) = self.after_until_deadline.as_mut() {
+            if *left == 0 {
+                return Err(PassDeadline.into());
+            }
+            *left -= 1;
+        }
         let Some(i) = self.commits.iter().position(|c| c.sha == cursor) else {
             return Ok(None);
         };
@@ -102,6 +114,9 @@ impl Ports for Fake {
         ))
     }
     fn range(&mut self, from: &str, to: &str) -> Result<Vec<Commit>> {
+        if self.deadline_range {
+            return Err(PassDeadline.into());
+        }
         anyhow::ensure!(!self.fail_range, "git log failed");
         let a = self.commits.iter().position(|c| c.sha == from).unwrap();
         let b = self.commits.iter().position(|c| c.sha == to).unwrap();
@@ -1312,4 +1327,45 @@ fn exhausted_pass_confirms_verified_red_and_retries_unresolved_commit() {
     run(dir.path(), &mut fake);
     assert_eq!(state(dir.path()).cursor, Some(sha(3)));
     assert!(state(dir.path()).episode.is_none());
+}
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn history_deadlines_checkpoint_and_resume() {
+    for stage in 0..3 {
+        let (dir, mut fake) = confirmed();
+        fake.checks.insert(sha(2), green("200"));
+        fake.push(3, "next", green("300"));
+        fake.deadline_recent = stage == 0;
+        fake.after_until_deadline = match stage {
+            1 => Some(0),
+            2 => Some(1),
+            _ => None,
+        };
+        let notes = run(dir.path(), &mut fake);
+        assert!(notes.iter().any(|n| n.contains("resuming next pass")));
+        assert_eq!(state(dir.path()).episode.is_none(), stage == 2);
+        fake.deadline_recent = false;
+        fake.after_until_deadline = None;
+        run(dir.path(), &mut fake);
+        assert_eq!(state(dir.path()).cursor, Some(sha(3)));
+        assert_eq!(count(dir.path(), "red_end"), 1);
+    }
+}
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn closing_range_deadline_retries_same_green() {
+    let (dir, mut fake) = confirmed();
+    fake.push(3, "repair", green("300"));
+    fake.deadline_range = true;
+    run(dir.path(), &mut fake);
+    let held = state(dir.path());
+    assert!(held.episode.is_some());
+    assert_eq!(held.cursor, Some(sha(2)));
+    assert_eq!(held.last_green, Some(sha(1)));
+    assert_eq!(count(dir.path(), "red_end"), 0);
+    fake.deadline_range = false;
+    run(dir.path(), &mut fake);
+    assert_eq!(outcomes(dir.path()), vec!["recovered"]);
 }
