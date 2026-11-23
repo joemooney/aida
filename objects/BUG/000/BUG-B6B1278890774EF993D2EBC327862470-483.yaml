@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-483
 agreed_id: BUG-2722
 title: 'doctor: release a repair-journal conflict reservation whose lane is provably over'
 description: 'Minimal slice split from BUG-2688 (#4388 parked 2026-11-22). Today a stale entry in dell1 .aida/repair-journal.json (entry 48: PR-4376 @660c0e87, lane 01a2053df3e6, tree …-433) blocks every conflict-repair relaunch with ''retained conflicts require their host journal evidence before a resume'', even though the lane''s lease is ended and its tree has been salvaged and moved aside. There is no doctor heal for it, and hand-editing the journal is forbidden. AC1: an `aida doctor heal` category (for example repair-reservations) lists journal reservations whose lease is ended AND whose tree is absent or salvaged, with evidence. With --id it releases exactly one, recording who released it and why. AC2: it refuses when the lease is live, the tree exists with unmerged files, or evidence is missing, naming the reason and the evidence command. AC3: a regression test for the dell1 shape (ended lease, moved tree, reservation for the current PR head), after which a conflict lane can reserve. Keep it small. Everything else from #4388 stays in deferred BUG-2688.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T06:59:57.539619423Z
+modified_at: 2026-11-23T07:04:38.887161253Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -209,6 +209,11 @@ comments:
   created_at: 2026-11-23T06:41:46.708622473Z
   modified_at: 2026-11-23T06:41:46.708622473Z
   session_id: 01a206dc9122
+- id: 01a20738-96e7-7073-9b01-e2b9c7e66e36
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 round-three scope reviewed against protected main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 00dbdcd668bf3bcd7b88be6a3c127dd2ec8c8326. The published head implements the interactive preview, typed confirmation and audited single-entry release. The moved-tree fixture demonstrates release without a historical receipt, refusal for a non-TTY input and a live recorded worker, and successful successor reservation. Changes are required because a successor reservation can erase the old merge''s host-validation evidence, and the CLI authority checks lack a command-level regression. The intervening base changes to help and writer inventory do not affect these findings. Fast gates passed and fast compile was pending at review time. No local builds or tests were run.. No triage reason was given.'
+  created_at: 2026-11-23T07:04:38.887157074Z
+  modified_at: 2026-11-23T07:04:38.887157074Z
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
@@ -326,6 +331,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20738-96e7-7073-9b01-e2af0b3e14f7
+  author: joe
+  timestamp: 2026-11-23T07:04:38.887142348Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -335,11 +347,3 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2722 round-three scope reviewed against protected main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 00dbdcd668bf3bcd7b88be6a3c127dd2ec8c8326. The published head implements the interactive preview, typed confirmation and audited single-entry release. The moved-tree fixture demonstrates release without a historical receipt, refusal for a non-TTY input and a live recorded worker, and successful successor reservation. Changes are required because a successor reservation can erase the old merge's host-validation evidence, and the CLI authority checks lack a command-level regression. The intervening base changes to help and writer inventory do not affect these findings. Fast gates passed and fast compile was pending at review time. No local builds or tests were run.
-  recovery_hint: address the review findings, move BUG-2722 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T06:59:57.539619423Z
