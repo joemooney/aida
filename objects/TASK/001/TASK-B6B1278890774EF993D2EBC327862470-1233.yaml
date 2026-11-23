@@ -1,0 +1,31 @@
+id: 01a206ff-ad3e-77a3-86f4-acb04f82eb39
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1233
+title: 'Review follow-up: aida-cli-lib/src/review_watch_ready.rs:140: The exception applies to GitLab MRs targeting '
+description: |-
+  From BUG-2725
+  Reviewed sha: c7354092b2ad3ec5567007143150cf75bf8036d4
+
+  aida-cli-lib/src/review_watch_ready.rs:140: The exception applies to GitLab MRs targeting main. GitLab commit status rows carry no Actions run IDs, so a clean behind MR can never satisfy full_ci_run and loses its existing update-branch readiness notice. Scope the exception to GitHub train support and cover GitLab's prior behavior.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T06:02:29.054775913Z
+modified_at: 2026-11-23T06:02:29.054775913Z
+req_type: Task
+tags:
+- carried-from:BUG-2725
+- finding-hash:c66a2b16
+- from-review:BUG-2725
+relationships:
+- rel_type: References
+  target_id: 01a20677-5d2f-7d72-a29f-a485e55633df
+  created_at: 2026-11-23T06:03:05.017336686Z
+filed_at:
+  code_sha: c7354092b2ad3ec5567007143150cf75bf8036d4
+  branch: pr-4407
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5470336db35
+  vendor: claude
+  session: 01a206fc1e70
