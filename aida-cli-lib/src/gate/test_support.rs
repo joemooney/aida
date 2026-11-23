@@ -170,11 +170,16 @@ impl AmbientGuard {
     /// human-at-a-terminal check. Hermetic contexts start without one.
     // trace:BUG-2703 | ai:claude
     pub(crate) fn set_terminal(&mut self, terminal: bool) {
+        self.set_terminals(terminal, terminal, terminal);
+    }
+
+    // trace:TASK-3210 | ai:codex
+    pub(crate) fn set_terminals(&mut self, stdin: bool, stdout: bool, stderr: bool) {
         let mut ambient =
             crate::test_ambient::replace(None).expect("the guard pinned an ambient context");
-        ambient.stdin_is_terminal = terminal;
-        ambient.stdout_is_terminal = terminal;
-        ambient.stderr_is_terminal = terminal;
+        ambient.stdin_is_terminal = stdin;
+        ambient.stdout_is_terminal = stdout;
+        ambient.stderr_is_terminal = stderr;
         crate::test_ambient::replace(Some(ambient));
     }
 }
