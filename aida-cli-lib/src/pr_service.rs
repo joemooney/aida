@@ -419,33 +419,6 @@ pub(crate) fn pr_gate_subject(
     known_ids: &[String],
     head_branch: Option<&str>,
 ) -> (Vec<String>, Option<String>, bool, Vec<String>) {
-    let (ids, branch, forge_resolved, mut refs_ids) =
-        pr_gate_inputs(main_worktree, pr, known_ids, head_branch);
-    // BUG-HOME-048: the commit-subject trailers pass the PR's coverage, so a
-    // verdict is never looked up under a foreign bare id.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    let ids = crate::gate::trailer_coverage::covered_gate_ids(
-        main_worktree,
-        branch.as_deref().unwrap_or(""),
-        Some(pr),
-        ids,
-    );
-    refs_ids.extend(ids.iter().cloned());
-    (
-        normalized_spec_ids(&ids),
-        branch,
-        forge_resolved,
-        normalized_spec_ids(&refs_ids),
-    )
-}
-
-// trace:BUG-2727 | ai:codex
-pub(crate) fn pr_gate_inputs(
-    main_worktree: &std::path::Path,
-    pr: u64,
-    known_ids: &[String],
-    head_branch: Option<&str>,
-) -> (Vec<String>, Option<String>, bool, Vec<String>) {
     let mut ids = known_ids.to_vec();
     // `(Refs X)` subjects name the work's spec for authorship only, never
     // for verdict lookup or completion. trace:BUG-2199 | ai:claude
@@ -478,7 +451,22 @@ pub(crate) fn pr_gate_inputs(
              every recorded author is treated as one of its authors"
         ),
     }
-    (normalized_spec_ids(&ids), branch, forge_resolved, refs_ids)
+    // BUG-HOME-048: the commit-subject trailers pass the PR's coverage, so a
+    // verdict is never looked up under a foreign bare id.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let ids = crate::gate::trailer_coverage::covered_gate_ids(
+        main_worktree,
+        branch.as_deref().unwrap_or(""),
+        Some(pr),
+        ids,
+    );
+    refs_ids.extend(ids.iter().cloned());
+    (
+        normalized_spec_ids(&ids),
+        branch,
+        forge_resolved,
+        normalized_spec_ids(&refs_ids),
+    )
 }
 
 /// The spec IDs the ship approval gate looks verdicts up under: the gate
@@ -497,16 +485,6 @@ pub(crate) fn ship_gate_known_ids(
     title: Option<&str>,
     pr: Option<u64>,
 ) -> Vec<String> {
-    let ids = ship_gate_input_ids(project_root, branch, title);
-    crate::gate::trailer_coverage::covered_gate_ids(project_root, branch, pr, ids)
-}
-
-// trace:BUG-2727 | ai:codex
-pub(crate) fn ship_gate_input_ids(
-    project_root: &std::path::Path,
-    branch: &str,
-    title: Option<&str>,
-) -> Vec<String> {
     let mut ids: Vec<String> = ship_gate_spec_records(project_root)
         .into_iter()
         .map(|(id, _, _)| id)
@@ -514,7 +492,7 @@ pub(crate) fn ship_gate_input_ids(
     // BUG-2702: the branch by convention only; the title as written.
     // trace:BUG-2702 | ai:claude
     ids.extend(pr_ship::extract_pr_spec_ids(branch, title.unwrap_or("")));
-    ids
+    crate::gate::trailer_coverage::covered_gate_ids(project_root, branch, pr, ids)
 }
 
 /// BUG-2184: what is left of `--wait SECS` for the CI wait: the time since the

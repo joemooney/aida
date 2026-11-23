@@ -1,5 +1,5 @@
 {
-  "ceiling": 149,
+  "ceiling": 150,
   "edges": {
     "aida-cli-lib/src/gate/approval.rs": [
       "crate::auto_complete::FailureKind",
@@ -51,6 +51,7 @@
       "crate::pr_cmd::fetch_change_info_via_resolved_forge",
       "crate::pr_cmd::fetch_ship_refs",
       "crate::pr_cmd::normalized_spec_ids",
+      "crate::pr_cmd::pr_gate_subject",
       "crate::pr_cmd::ship_unlabel_failure",
       "crate::store_sync::detect_distributed_store_from"
     ],

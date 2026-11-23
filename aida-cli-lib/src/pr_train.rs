@@ -5009,6 +5009,36 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);
     }
+    // Refresh before recovery or member coverage reads the store. Reporting
+    // paths use local evidence only. trace:BUG-2727 | ai:codex
+    if !opts.dry_run {
+        let refresh = || -> Result<()> {
+            let mut child = crate::launch::control_child()?;
+            child
+                .current_dir(&main_worktree)
+                .args(["pull", "--store-only"]);
+            match crate::command_output_with_timeout_detail(
+                child,
+                std::time::Duration::from_secs(60),
+            ) {
+                crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+                crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+                    "{}: {}",
+                    out.status,
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ),
+                crate::BoundedCommandOutput::TimedOut => anyhow::bail!("timed out after 60s"),
+                crate::BoundedCommandOutput::SpawnFailed => {
+                    anyhow::bail!("could not start store pull")
+                }
+            }
+        };
+        if let Err(error) = refresh() {
+            eprintln!(
+                "warning: train store refresh failed ({error:#}); continuing with the local store"
+            );
+        }
+    }
     let forge = crate::forge::forge_for(&project_root);
     let base = crate::gate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;

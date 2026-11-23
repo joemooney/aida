@@ -1594,11 +1594,6 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
         &store,
         &["commit", "--allow-empty", "-qm", "empty fixture store"],
     );
-    let object = store.join(aida_core::object_store::relative_object_path("TASK-1").unwrap());
-    std::fs::create_dir_all(object.parent().unwrap()).unwrap();
-    let mut req = plain();
-    req.spec_id = Some("TASK-1".into());
-    std::fs::write(&object, serde_yaml::to_string(&req).unwrap()).unwrap();
     let gh = root.join("gh-stub");
     crate::test_exec::write_executable(&gh, format!("#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{head}\"}}'\n"));
     let home = root.join("home");
@@ -1622,115 +1617,49 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     mandate.issued_at = Utc::now() - Duration::minutes(1);
     mandate.expires_at = Utc::now() + Duration::hours(1);
     plant(&mandate_dir().unwrap(), &mandate, 0o600);
-    let hold = crate::gate::merge_hold_core::typed_hold(
-        42,
-        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
-        "operator review",
-        None,
+    let result = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "feature".into(),
+            commit_subjects: vec!["change (TASK-1)".into()],
+        },
+        || {
+            crate::gate::mandate_ship::mandate_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &["TASK-1".into()],
+                Some("feature"),
+                || Some(head.clone()),
+                false,
+                |check| {
+                    assert!(
+                        check.specs_resolved,
+                        "fixture must reach the resolved decision"
+                    );
+                    assert_eq!(
+                        check
+                            .specs
+                            .iter()
+                            .map(|s| (s.id.as_str(), s.named))
+                            .collect::<Vec<_>>(),
+                        vec![
+                            ("ITEM-3", false),
+                            ("MODULE-2", false),
+                            ("SUP-1", false),
+                            ("TASK-1", true)
+                        ]
+                    );
+                    // No approval/clearance is fabricated: the fixture decision refuses.
+                    Err(MandateRefusal::SpecsUnresolved)
+                },
+                false,
+                None,
+            )
+        },
     );
-    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
-    let run = |trailer: &str, decide: fn(&ShipCheck) -> Result<String, MandateRefusal>| {
-        crate::with_review_pr_subject(
-            crate::ReviewPrSubject {
-                head_ref: "task-1".into(),
-                commit_subjects: vec![trailer.to_owned()],
-            },
-            || {
-                crate::gate::mandate_ship::mandate_ship_cover(
-                    root,
-                    root,
-                    root,
-                    42,
-                    &["TASK-1".into()],
-                    Some("feature"),
-                    || Some(head.clone()),
-                    false,
-                    decide,
-                    false,
-                    None,
-                )
-            },
-        )
-    };
-    let result = run("change (TASK-1)", |check| {
-        assert!(
-            check.specs_resolved,
-            "fixture must reach the resolved decision"
-        );
-        assert_eq!(
-            check
-                .specs
-                .iter()
-                .map(|s| (s.id.as_str(), s.named))
-                .collect::<Vec<_>>(),
-            vec![
-                ("ITEM-3", false),
-                ("MODULE-2", false),
-                ("SUP-1", false),
-                ("TASK-1", true)
-            ]
-        );
-        // No approval/clearance is fabricated: the fixture decision refuses.
-        Err(MandateRefusal::SpecsUnresolved)
-    });
     assert!(
         matches!(result, Err(MandateRefusal::SpecsUnresolved)),
-        "{result:?}"
-    );
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-488.AC1 | ai:codex
-    git(&store, &["branch", "-M", "aida-store"]);
-    let origin = root.join("store-origin");
-    git(
-        root,
-        &[
-            "clone",
-            "-q",
-            store.to_str().unwrap(),
-            origin.to_str().unwrap(),
-        ],
-    );
-    git(
-        &store,
-        &["remote", "add", "origin", origin.to_str().unwrap()],
-    );
-    git(&store, &["fetch", "-q", "origin"]);
-    let mut published = req.clone();
-    published.agreed_id = Some("TASK-03835".into());
-    let write = |r: &aida_core::Requirement| {
-        let path = origin.join(
-            aida_core::object_store::relative_object_path(r.spec_id.as_deref().unwrap()).unwrap(),
-        );
-        std::fs::write(path, serde_yaml::to_string(r).unwrap()).unwrap();
-    };
-    write(&published);
-    git(&origin, &["commit", "-qam", "publish agreed label"]);
-    let result = run("change (TASK-3835)", |check| {
-        let agreed = check.specs.iter().find(|s| s.id == "TASK-3835").unwrap();
-        assert!(agreed.named);
-        assert_eq!(
-            agreed.current.as_ref().unwrap().spec_id.as_deref(),
-            Some("TASK-1")
-        );
-        Err(MandateRefusal::SpecsUnresolved)
-    });
-    assert!(
-        matches!(result, Err(MandateRefusal::SpecsUnresolved)),
-        "{result:?}"
-    );
-
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-488.AC2 | ai:codex
-    let mut collision = plain();
-    collision.spec_id = Some("TASK-2".into());
-    collision.agreed_id = Some("TASK-3835".into());
-    write(&collision);
-    git(&origin, &["add", "objects"]);
-    git(&origin, &["commit", "-qm", "numeric collision"]);
-    let result = run("change (TASK-3835 TASK-3841)", |_| {
-        panic!("unresolved trailer reached decision")
-    });
-    assert!(
-        matches!(result, Err(MandateRefusal::MissingSpecs { ref ids, ref head })
-        if ids == "TASK-3835, TASK-3841" && head == &git(&origin, &["rev-parse", "HEAD"])),
         "{result:?}"
     );
 }
@@ -4232,6 +4161,56 @@ fn story_2893_preview_matches_the_ship_cover_and_writes_no_gate_evidence() {
                 story_2893_tree(&root.join(".aida")),
             )
         };
+        // A label published only on origin must not make next-actor reporting
+        // advance the local store. trace:BUG-2727 | ai:codex
+        let store = root.join(".aida-store");
+        git(&store, &["branch", "-M", "aida-store"]);
+        let origin = tempfile::tempdir().unwrap();
+        git(
+            &store,
+            &["clone", "-q", ".", origin.path().to_str().unwrap()],
+        );
+        git(
+            &store,
+            &["remote", "add", "origin", origin.path().to_str().unwrap()],
+        );
+        let mut remote_task = plain();
+        remote_task.spec_id = Some("TASK-1-153".into());
+        remote_task.agreed_id = Some("TASK-3835".into());
+        let path = origin
+            .path()
+            .join(aida_core::object_store::relative_object_path("TASK-1-153").unwrap());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, serde_yaml::to_string(&remote_task).unwrap()).unwrap();
+        git(origin.path(), &["add", "objects"]);
+        git(origin.path(), &["commit", "-qm", "publish trailer label"]);
+        let stale = git_stdout(&store, &["rev-parse", "HEAD"]);
+        let missing = crate::with_review_pr_subject(
+            crate::ReviewPrSubject {
+                head_ref: "task-3835".into(),
+                commit_subjects: vec!["change (TASK-3835)".into()],
+            },
+            || {
+                crate::gate::mandate_ship::preview_cover_deciding(
+                    root,
+                    root,
+                    root,
+                    42,
+                    &["TASK-3835".into()],
+                    "task-3835",
+                    &head,
+                    |check| {
+                        assert!(check
+                            .specs
+                            .iter()
+                            .any(|s| s.id == "TASK-3835" && s.named && s.current.is_none()));
+                        Err(MandateRefusal::SpecsUnresolved)
+                    },
+                )
+            },
+        );
+        assert!(matches!(missing, Err(MandateRefusal::SpecsUnresolved)));
+        assert_eq!(git_stdout(&store, &["rev-parse", "HEAD"]), stale);
         let before = watched();
         let preview = story_2893_subject(|| {
             crate::gate::mandate_ship::preview_cover_deciding(

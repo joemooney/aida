@@ -618,3 +618,53 @@ fn bug_2420_refused_delegated_save_returns_the_id_to_the_block() {
     let ledger = aida_core::BlockRegistry::load(&blocks).unwrap();
     assert_eq!(ledger.blocks[0].next, 102, "next did not run ahead: {said}");
 }
+
+// trace:BUG-2727 | ai:codex
+#[test]
+fn bug_2727_train_refreshes_remote_only_trailer_label_on_live_pass() {
+    let f = Fixture::new();
+    fs::write(
+        f.root.join(".aida/config.toml"),
+        "store_path='.aida-store'\n[forge]\nprovider=\"github\"\n",
+    )
+    .unwrap();
+    f.git(&["-C", ".aida-store", "add", "."]);
+    f.git(&["-C", ".aida-store", "commit", "-qm", "base store"]);
+    let stale = f.git(&["rev-parse", "aida-store"]);
+    let mut task = aida_core::Requirement::new("remote trailer spec".into(), String::new());
+    task.spec_id = Some("TASK-1-152".into());
+    task.agreed_id = Some("TASK-3835".into());
+    let path = f
+        .store
+        .join(aida_core::object_store::relative_object_path("TASK-1-152").unwrap());
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, serde_json::to_string(&task).unwrap()).unwrap();
+    f.git(&["-C", ".aida-store", "add", "."]);
+    f.git(&["-C", ".aida-store", "commit", "-qm", "label"]);
+    let remote = f._dir.path().join("origin.git");
+    f.git(&["clone", "--bare", ".", remote.to_str().unwrap()]);
+    f.git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+    f.git(&["-C", ".aida-store", "reset", "--hard", &stale]);
+    for args in [vec!["--check", "42"], vec!["--dry-run", "42"], vec!["42"]] {
+        let out = f
+            .command(false, &["pr", "train"])
+            .args(&args)
+            .env("AIDA_TEST_GH_BINARY", "/bin/false")
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "fixture has no forge PR");
+        if args.len() > 1 {
+            assert_eq!(f.git(&["rev-parse", "aida-store"]), stale);
+        } else {
+            assert_ne!(
+                f.git(&["rev-parse", "aida-store"]),
+                stale,
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert!(f
+                .aida_ok(&["show", "TASK-3835"])
+                .contains("remote trailer spec"));
+        }
+    }
+}

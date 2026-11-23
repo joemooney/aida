@@ -1570,8 +1570,6 @@ pub(crate) enum MandateRefusal {
     PrincipalMismatch { mandate: String, grant: String },
     OverrideStale,
     SpecsUnresolved,
-    // trace:BUG-2727 | ai:codex
-    MissingSpecs { ids: String, head: String },
     // trace:TASK-1790 | ai:codex
     TraceEvidenceUnreadable(String),
     AlwaysHuman { spec: String, class: String },
@@ -1612,7 +1610,6 @@ impl MandateRefusal {
             Self::OverrideStale => {
                 "`--override-stale-approval` is never honoured under a mandate".to_string()
             }
-            Self::MissingSpecs { ids, head } => format!("unresolved PR spec IDs {ids} at store HEAD {head}"),
             Self::SpecsUnresolved => {
                 "what the PR ships could not be resolved to specs in the store".to_string()
             }

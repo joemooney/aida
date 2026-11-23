@@ -111,6 +111,7 @@ pub(crate) fn collect_pr(
 /// (TASK-2019). Every snapshot git call is config-independent: no system
 /// config, no replace objects, no path quoting, explicit status options.
 // trace:TASK-2067 | ai:antigravity
+#[cfg(test)]
 pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
     let snapshot = store_snapshot_for_collection(store)?;
     ensure!(snapshot.dirt.as_deref() == Some(""), StoreDirty);
@@ -322,7 +323,7 @@ fn dirt_is_relevant(snapshot: &StoreSnapshot, scope: &EvidenceScope) -> bool {
 // trace:TASK-2067 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StoreSnapshot {
-    pub(super) head: String,
+    head: String,
     // None means dirt could not safely be scoped.
     dirt: Option<String>,
     refs: std::collections::BTreeMap<String, String>,
