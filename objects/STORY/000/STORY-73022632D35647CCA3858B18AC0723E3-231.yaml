@@ -1,5 +1,6 @@
 id: 01a20946-33e1-74c2-9f88-08806652efb6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-231
+agreed_id: STORY-3043
 title: 'Review PR-4440: [AI:codex] fix(tests): cover interactive resume mailbox isolation (BUG-2700)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a208ec`) for branch `int26-bug-2700`.
@@ -33,6 +34,12 @@ history:
 - id: 01a2094a-726f-74f2-b522-cf1a2992766a
   author: dirtlab
   timestamp: 2026-11-23T16:43:23.631927837Z
+  changes: []
+- id: 01a2094f-c5a9-7f13-9aa9-78f6fa7d4a6d
+  author: joe
+  timestamp: 2026-11-23T16:49:12.617325774Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c

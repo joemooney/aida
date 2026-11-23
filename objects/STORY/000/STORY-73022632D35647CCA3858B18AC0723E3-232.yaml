@@ -1,5 +1,6 @@
 id: 01a2094b-39a9-7853-883c-e868fbb35078
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-232
+agreed_id: STORY-3042
 title: 'Review PR-4441: [AI:codex] fix(resume): exercise private clone registration in Claude fallback (TASK-3149)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20909`) for branch `task-b6b1278890774ef993d2ebc327862470-1112`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T16:44:33.970442608Z
   session_id: 01a209092577
+  changes: []
+- id: 01a2094f-8eae-7692-8570-65b1a4e6923c
+  author: joe
+  timestamp: 2026-11-23T16:48:58.542081363Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
