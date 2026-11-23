@@ -9,12 +9,12 @@ description: |
   - AC1: When the preflight listener has hung up, preflight refuses within 10 s and the model process never starts. A test asserts the bound.
   - AC2: An open listener still completes preflight normally (positive control).
   - AC3: The refusal names the hangup as the reason.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-22T23:42:45.602317688Z
+modified_at: 2026-11-23T03:58:44.694177447Z
 req_type: Bug
 tags:
 - containment
@@ -65,6 +65,11 @@ comments:
   created_at: 2026-11-22T23:36:48.300607165Z
   modified_at: 2026-11-22T23:36:48.300607165Z
   session_id: 01a2057c2f43
+- id: 01a2068e-63d6-7ac0-8b0d-699766dae2f2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2717 bug protocol met. The PR changes tests/test_store_mutation.py and traces BUG-2717 in the test and production guard.. No triage reason was given.'
+  created_at: 2026-11-23T03:58:44.694174767Z
+  modified_at: 2026-11-23T03:58:44.694174767Z
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
@@ -107,6 +112,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a2068e-63d6-7ac0-8b0d-6980b02f7957
+  author: joe
+  timestamp: 2026-11-23T03:58:44.694162278Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -114,16 +126,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    BUG-2717 bug protocol met. The PR changes tests/test_store_mutation.py and traces BUG-2717 in the test and production guard.
-    AC1 — unverified. The 10-second subprocess watchdog and absent exec-v1 cover a hangup already observable at dispatch. A hangup between poll and blocking receive can still strand preflight.
-    AC2 — verified by the open mode of python3 -m unittest tests.test_store_mutation.ContainedHostPreflightTests. The fixture checks the notification reply and the shim's exec-v1 release.
-    AC3 — unverified. The hangup fixture checks the explicit diagnostic with a live wrapper. A concurrent wrapper exit takes the generic refusal first.
-    Reviewed the landed diff against the pinned base. CI pending at review time. Evidence comes from source inspection and the implementer's recorded targeted run.
-  recovery_hint: address the review findings, move BUG-2717 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-22T23:42:45.602317688Z
