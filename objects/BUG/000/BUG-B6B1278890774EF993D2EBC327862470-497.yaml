@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-23T23:13:42.818489702Z
+modified_at: 2026-11-23T23:15:29.763344542Z
 req_type: Bug
 tags:
 - integration
@@ -27,6 +27,24 @@ comments:
   content: 'Draft to Approved: advisor-122 disposition 2026-11-23 16:13 (p29 bundle, drain). Scope AC1 ONLY (any-base PR counts as the lane''s PR); AC2 dropped (aida pull already completes it). Punt if lease/claim logic is needed.'
   created_at: 2026-11-23T23:13:38.723447013Z
   modified_at: 2026-11-23T23:13:38.723447013Z
+- id: 01a20ab1-a256-7732-8ed5-f1319a7f6698
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:15):
+    # BUG-2736: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2736` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2736 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2736)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE p29 (product-15 16:15): branch `int29-bug-2736`, cut from origin/integration 13bcf6bd671. PR base MUST be `integration`. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.
+
+    ADVISOR SCOPE (16:13): AC1 ONLY: a PR from the lane's branch into ANY base (integration and promote branches included) counts as the lane's PR, so lane-recovery does not set needs-attention while it is open. DROP AC2 (aida pull already completes it). Change only the PR lookup in the lane-recovery wrapper; if it needs lease/claim logic, PUNT.
+  created_at: 2026-11-23T23:15:29.763344542Z
+  modified_at: 2026-11-23T23:15:29.763344542Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
