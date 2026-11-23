@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: tests/test_cache_refresh_outputs.py passes under CI discovery (fix the test or the code it covers; if the test is obsolete, delete it with a reason).
   - AC2: Remove its entry from the BUG-2734 known-failing list in the same PR.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:18:34.370466098Z
-modified_at: 2026-11-23T23:23:58.708528853Z
+modified_at: 2026-11-23T23:28:43.584716777Z
 req_type: Task
 tags:
 - ci
@@ -64,6 +64,13 @@ history:
   - field_name: tags
     old_value: ci, from-bug-2734, tests
     new_value: ci, from-bug-2734, tests, track:integration
+- id: 01a20abd-8a40-7c91-811b-2edac99434fd
+  author: aida-session-start
+  timestamp: 2026-11-23T23:28:43.584715194Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
