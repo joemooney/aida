@@ -1,0 +1,31 @@
+id: 01a2081f-555e-7821-93bd-21634d13730b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1249
+title: 'Review follow-up: aida-cli-lib/src/queue_cmd/work.rs:7968–7973 and aida-cli-lib/src/full_tier.rs:292–300: Th'
+description: |-
+  From BUG-2729
+  Reviewed sha: f2f2903d70c9294046921dee86a86c3c35299176
+
+  aida-cli-lib/src/queue_cmd/work.rs:7968–7973 and aida-cli-lib/src/full_tier.rs:292–300: The new approval hook runs synchronously before standalone handoff completion and calls an unbounded gh pr edit through merge_hold::run_forge_cli. A stalled forge edit can leave the queue-work owner alive and hold review-watch capacity even though the verdict is durable. Give label edits a deadline or move the best-effort request off the handoff's critical path.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T11:16:40.926639105Z
+modified_at: 2026-11-23T11:16:40.926639105Z
+req_type: Task
+tags:
+- carried-from:BUG-2729
+- finding-hash:e8870a88
+- from-review:BUG-2729
+relationships:
+- rel_type: References
+  target_id: 01a207dd-4395-70a2-8265-932cc529c679
+  created_at: 2026-11-23T11:16:54.029812262Z
+filed_at:
+  code_sha: f2f2903d70c9294046921dee86a86c3c35299176
+  branch: pr-4425
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f38008
+  vendor: claude
+  session: 01a2081bec8b
