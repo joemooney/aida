@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T09:24:01.045732600Z
+modified_at: 2026-11-23T09:36:30.066388205Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -66,6 +66,19 @@ comments:
   modified_at: 2026-11-23T08:43:11.298813131Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207c3-9edb-7512-8ca1-5262eb4f0473
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55f63f3800861fee8b80ae3046c104290baf7fbf plus the native working diff. The merge-base diff is empty. Both modified files reviewed, no untracked additions.
+    AC1: [evidence: behavioral-test] main_watch.rs:59 reserves 30 seconds. Live Git and forge calls use the existing scoped deadline. Exhaustion skips optional work and retains queued mail.
+    AC2: [evidence: behavioral-test] story_2897_main_watch_tests.rs:1293 exercises the production pass with a controlled clock and bounded child, confirmation, diagnostic, unchanged cursor and successful retry. Lane job j20261123T092520473-2-0 executed one test, passed in 1.02 seconds.
+    AC3: [evidence: manual-inspection] Inspected the pass and advance paths. Only existing observational state, journal and mail effects are reachable. No new spec, rerun, escalation or permission path.
+    Deep pass checked deadline units and comparisons, empty and multi-commit batches, retry state and undelivered notices. During review preserved first-candidate checkpointing and avoided probing a newly opened episode twice. Residual limit: local filesystem writes have no hard I/O deadline. Rustfmt, diff checks and 48 FAST source gates passed.
+  created_at: 2026-11-23T09:36:30.066388205Z
+  modified_at: 2026-11-23T09:36:30.066388205Z
+  session_id: 01a207b71108
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
   author: joe
