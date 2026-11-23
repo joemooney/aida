@@ -1,0 +1,32 @@
+id: 01a205d1-b1d1-7db3-9424-b8cfc9121016
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-204
+title: 'Review PR-4399: [AI:codex] fix(store-mutation): close only valid sender pidfds (BUG-2716)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a205b6`) for branch `bug-b6b1278890774ef993d2ebc327862470-477`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4399>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-477` → `main`
+
+  ## Covers
+
+  - BUG-2716
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4399` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T00:32:38.353147616Z
+modified_at: 2026-11-23T00:32:38.353147616Z
+req_type: Story
+filed_at:
+  code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6be38166be
+  session: 01a205b6876e
