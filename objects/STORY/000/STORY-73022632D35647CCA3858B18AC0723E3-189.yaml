@@ -52,6 +52,11 @@ comments:
   content: 'Auto-rejected: PR #4373 closed on the forge without merging.'
   created_at: 2026-11-23T00:00:26.849737088Z
   modified_at: 2026-11-23T00:00:26.849737088Z
+- id: 01a205b5-44f0-7361-8abf-0aa5e5c403f5
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #4373 closed on the forge without merging.'
+  created_at: 2026-11-23T00:01:35.472044009Z
+  modified_at: 2026-11-23T00:01:35.472044009Z
 history:
 - id: 01a1fa75-cc2b-75f0-a38e-2f47b3463b77
   author: dirtlab
@@ -66,6 +71,13 @@ history:
 - id: 01a205b4-38e1-78f1-a755-263b7da77bcb
   author: aida-auto-bump
   timestamp: 2026-11-23T00:00:26.849740679Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a205b5-44f0-7361-8abf-0ab592656016
+  author: aida-auto-bump
+  timestamp: 2026-11-23T00:01:35.472049888Z
   changes:
   - field_name: status
     old_value: Draft
