@@ -1,0 +1,31 @@
+id: 01a20733-df4d-7442-87da-582ef2d996b9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1240
+title: 'Review follow-up: aida-cli-lib/src/doctor_cmd.rs:329–350: The repair-reservations branch accepts the documen'
+description: |-
+  From BUG-2722
+  Reviewed sha: d038ab6e1f80f7cbd7dfc8e1cb30cfb661485261
+
+  aida-cli-lib/src/doctor_cmd.rs:329–350: The repair-reservations branch accepts the documented --json flag but always emits a plain-text success line to stdout. Return a machine-readable release result when --json is requested or explicitly refuse the flag before changing the journal.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T06:59:29.741619349Z
+modified_at: 2026-11-23T06:59:29.741619349Z
+req_type: Task
+tags:
+- carried-from:BUG-2722
+- finding-hash:0dfd0be4
+- from-review:BUG-2722
+relationships:
+- rel_type: References
+  target_id: 01a20637-3865-75e2-add6-0c87270d0c56
+  created_at: 2026-11-23T06:59:43.421525788Z
+filed_at:
+  code_sha: d038ab6e1f80f7cbd7dfc8e1cb30cfb661485261
+  branch: pr-4403
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ca95624cadf
+  vendor: claude
+  session: 01a2072e8da3
