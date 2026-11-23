@@ -429,7 +429,7 @@ pub(crate) fn run_id_from_check_link(link: &str) -> Option<String> {
     (!id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())).then(|| id.to_string())
 }
 
-fn job_id_from_check_link(link: &str) -> Option<u64> {
+pub(crate) fn job_id_from_check_link(link: &str) -> Option<u64> {
     let (_, suffix) = link.split_once("/actions/runs/")?;
     let (run, job) = suffix.split_once("/job/")?;
     if run_id_from_check_link(link)?.as_str() != run || !job.bytes().all(|b| b.is_ascii_digit()) {
