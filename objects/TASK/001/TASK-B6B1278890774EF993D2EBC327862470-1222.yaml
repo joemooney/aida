@@ -7,17 +7,16 @@ description: |
 
   ## Acceptance
   - AC1: Each item is fixed or closed with evidence that main already handles it; warnings for these are gone in a normal build or test run.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:26.874188951Z
-modified_at: 2026-11-23T21:05:53.727714408Z
+modified_at: 2026-11-23T23:11:25.805150775Z
 req_type: Task
 tags:
 - from-work-ci
 - hygiene
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -174,6 +173,22 @@ history:
   timestamp: 2026-11-23T21:05:18.937995416Z
   session_id: 01a209fd02d1
   changes: []
+- id: 01a20aad-b428-7063-818f-ab6578993d28
+  author: aida-auto-bump
+  timestamp: 2026-11-23T23:11:25.736268467Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20aad-b46d-73c1-b2fa-c918476d7195
+  timestamp: 2026-11-23T23:11:25.805146903Z
+  agent: aida
+  commit_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
+  summary: 'Advisor review of promotion 27 (linear): ecdc44f4 is exactly 3 cherry-picks on main f1a50179e5a, and its diff from that base has the same stable patch-id (f8412dba154b) as the three integration squashes the advisor reviewed and approved individually (#4455 BUG-2728, #4456 TASK-3840, #4450 BUG-2731; 54e9220e1db..7e5580069c0). Landing via the auto-train requires green full CI.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
@@ -182,3 +197,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T23:11:25.736260777Z
+  completion_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
