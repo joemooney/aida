@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:18:34.370466098Z
-modified_at: 2026-11-23T23:22:31.180135669Z
+modified_at: 2026-11-23T23:22:32.949048766Z
 req_type: Task
 tags:
 - ci
 - from-bug-2734
 - tests
 - track:integration
+comments:
+- id: 01a20ab7-e275-75b1-8836-c67dc2b7f495
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 16:21 (drain, p29 bundle). Guard: fix the test or fixture; a strict-path production fix punts to main.'
+  created_at: 2026-11-23T23:22:32.949048766Z
+  modified_at: 2026-11-23T23:22:32.949048766Z
 history:
 - id: 01a20ab7-9583-7983-9b8f-0454fad3a798
   author: joe
