@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: Each item is fixed or closed with evidence that main already handles it; warnings for these are gone in a normal build or test run.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:26.874188951Z
-modified_at: 2026-11-23T16:51:07.672091435Z
+modified_at: 2026-11-23T16:52:44.112053571Z
 req_type: Task
 tags:
 - from-work-ci
@@ -76,6 +76,15 @@ history:
   session_id: 01a2094eb3bb
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20953-02a4-71b1-bcf8-429dffbe7839
+  author: dirtlab
+  timestamp: 2026-11-23T16:52:44.836299302Z
+  session_id: 01a2094eb3bb
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
@@ -84,3 +93,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: The CI-tier fixture copies and executes scripts/check-ci-gates.py and scripts/check-exec-context.py. Both unconditionally import tomllib. With tomllib unavailable the gate runner stops at line 36 before reading scripts/ci-gate-tiers.toml. Making that path run with tomli changes the parser dependency used by the FAST gate runner and the exec-context guard. The integration brief explicitly stops this standard-tier lane at gate/guard paths. The two manual handle warnings were also reproduced at docs/cli/verify-manual.py:848 and :867.
+  lean: Route the CI parser change for gate/guard review or split it from the manual and aida-term hygiene.
+  raised_by: implementer
+  raised_at: 2026-11-23T16:52:44.112053571Z
