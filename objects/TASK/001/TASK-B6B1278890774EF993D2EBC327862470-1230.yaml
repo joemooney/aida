@@ -1,0 +1,28 @@
+id: 01a206da-6c7a-7290-8adf-bee79c100282
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1230
+agreed_id: TASK-3842
+title: Find a Codex :workspace config that honours extra writable roots, or replace the TASK-2712 live control
+description: |
+  From TASK-3133 / PR #4387 evidence (product-15, 2026-11-22; advisor-122 ruling 21:52 "fails on main" branch). The live control in `task_2712_codex_sandbox_live_seat_commit_and_denials` (aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs) FAILS under AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 at EVERY extra-writable-root location tried: main 5470336db35 on imac (root under target/worktrees), #4387 f41a18b0 on imac and dell1 (/var/tmp), and #4387 58cb2188 on imac and dell1 ($HOME/.cache). Each time: "Codex :workspace denied a configured extra writable root: ... Read-only file system". Codex versions are codex-cli 0.171.0 (imac) and 0.167.0 (dell1). The installed Codex :workspace sandbox ignores the configured extra writable root (--add-dir), so the live control can't pass on any host we have.
+
+  ## Acceptance
+  - AC1: Either find a Codex :workspace configuration (flag or config key for the installed versions) that honours an extra writable root, and make the live control pass under REQUIRE on imac and dell1; OR replace the live control with an equivalent check this Codex can satisfy, and document why. Evidence: the required-live command passing on both hosts.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T05:21:47.642119244Z
+modified_at: 2026-11-23T05:21:47.642119244Z
+req_type: Task
+tags:
+- codex
+- containment
+- needs-host-repro
+- tests
+filed_at:
+  code_sha: 5470336db35805f5b13a85d8a2fff124ec69f557
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5470336db35
+  vendor: claude
