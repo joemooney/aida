@@ -8,8 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T07:51:17.240362338Z
-modified_at: 2026-11-23T13:12:43.337814013Z
+modified_at: 2026-11-23T13:28:09.127793265Z
 req_type: Bug
+tags:
+- track:integration
 comments:
 - id: 01a20887-d70e-7c51-b6fd-6df8d1ced137
   author: joe
@@ -46,6 +48,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20897-b2a7-7d91-9a3e-72824b70497a
+  author: joe
+  timestamp: 2026-11-23T13:28:09.127792720Z
+  changes:
+  - field_name: tags
+    old_value: ''
+    new_value: track:integration
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: cfbc140e9ee
