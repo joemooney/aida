@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T16:02:42.756186530Z
+modified_at: 2026-11-23T16:02:49.820455230Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -176,6 +176,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3246 — PARTIAL. The pinned landed diff preserves authority checks under the drain lock and exercises malformed JSON and invalid UTF-8, including refusal and byte preservation for unauthorized resume and authorized drain. The new reader round-trips a 512-byte actor, but the replacement exceeds the protected-base version-1 reader''s actor limit and can leave both loops drained despite a successful resume. This regresses the previous review''s compatibility requirement. Fast gates passed and CI was pending at review time. Review used source and existing CI evidence.. No triage reason was given.'
   created_at: 2026-11-23T16:02:42.756179639Z
   modified_at: 2026-11-23T16:02:42.756179639Z
+- id: 01a20925-4ec2-7c40-af7a-6e8c4963be5f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3246):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: df02796d1243
+    Recorded: 2026-11-23T15:58:34.264292664+00:00
+    Findings:
+    1. TASK-3246, aida-cli-lib/src/admission_drain.rs:123 and :290. The writer still emits a version-1 Resume event with a 32-byte prefix. For a valid 481–512-byte actor, that field is 513–544 bytes. The pinned base reader validates every Resume actor against the original 512-byte limit, so an already-running deputy on that build rejects the replacement and refuses to respawn either loop (aida-cli-lib/src/advisor_loop_service.rs:1047). The upgraded CLI reports success, but the older reader stays fail-closed indefinitely. Subsequent drain events still leave the incompatible record in the history until it is evicted. Keep the full actor and a recovery audit in a representation the protected-base reader accepts, and cover the 512-byte case against its validation rules. The new-reader round trip alone misses this regression.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T16:02:49.666794058Z
+  modified_at: 2026-11-23T16:02:49.666794058Z
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe
