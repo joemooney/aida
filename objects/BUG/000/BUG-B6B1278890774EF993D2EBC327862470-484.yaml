@@ -1,0 +1,31 @@
+id: 01a20665-c8ff-7311-969e-f9d8ec1451a1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-484
+agreed_id: BUG-2723
+title: The train counts a cancelled, superseded run's failed Build aggregate even after a newer full-tier run on the same head passes
+description: |
+  Found 2026-11-22 (product-15; advisor-122 ruled it a BUG at 20:20). PR #4391 (BUG-2711) was approved, READY per `aida land stalls`, and its full-tier run 45099774496 at head e324ae3e was ALL GREEN (lib-0/1, cli-0/1, Build (ubuntu-latest) success at 02:44:38Z). Yet it sat STUCK-MERGE for 60+ min because the same commit also carried a FAILED "Build (ubuntu-latest)" check-run from run 45098448471. That was the update-branch FAST run, CANCELLED when ci:full was removed and re-added mid-run. Its aggregate step failed only because GATES and COMPILE were cancelled. The same ghost hit #4391 earlier at 61166eef (run 45076004195). A manual `gh run rerun` of the cancelled run cleared it.
+
+  ## Acceptance
+  - AC1: The train/landing readiness check ignores a failed aggregate from a run that was cancelled or superseded, when a newer run of the same workflow on the same head (full tier) completed successfully. It judges the latest completed run per workflow and tier.
+  - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
+  - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
+  - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T03:14:23.615774253Z
+modified_at: 2026-11-23T03:14:23.615774253Z
+req_type: Bug
+tags:
+- ci
+- landing
+- throughput
+- train
+filed_at:
+  code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3a
+  vendor: claude
