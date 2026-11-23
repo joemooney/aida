@@ -15,12 +15,12 @@ description: |
   - AC2: If any process lives in the seat, or the holder isn't provably dead, admission refuses exactly as today and names the evidence.
   - AC3: A stale seat pin whose clone is already gone and which is an ancestor of origin/<branch> is removed at admission (the TASK-3133/-027 and BUG-2688/-452 shapes).
   - AC4: Regression tests: a punted predecessor with an in-progress merge and unmerged paths (the -433/-473 shape) is auto-salvaged and the new lane starts; a live process in the seat refuses.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:29:16.458092613Z
-modified_at: 2026-11-23T03:30:52.083949613Z
+modified_at: 2026-11-23T03:34:16.248398579Z
 req_type: Bug
 tags:
 - admission
@@ -72,6 +72,14 @@ comments:
   modified_at: 2026-11-23T03:30:52.083949613Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a20677-fbb8-72e1-a002-0f940a0ace7c
+  author: aida-session-start
+  timestamp: 2026-11-23T03:34:16.248397694Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
