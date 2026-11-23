@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 // directory, which every admission reads as a holder.
 const FILE: &str = "loops-drain.journal";
 const LOCK: &str = "drain.lock";
+const MAX_TEXT_BYTES: usize = 512;
 const RECOVERY_PREFIX: &str = "recovered unreadable journal by ";
 const MAX_EVENTS: usize = 256;
 const LIMIT: u64 = 256 * 1024;
@@ -91,7 +92,9 @@ fn directory(root: &Path) -> PathBuf {
 }
 
 fn valid_text(value: &str) -> bool {
-    !value.trim().is_empty() && value.len() <= 512 && !value.chars().any(char::is_control)
+    !value.trim().is_empty()
+        && value.len() <= MAX_TEXT_BYTES
+        && !value.chars().any(char::is_control)
 }
 
 fn load(root: &Path) -> Result<Journal> {
@@ -120,9 +123,7 @@ fn load(root: &Path) -> Result<Journal> {
                         && receipt.expires_at > receipt.issued_at
                         && receipt.expires_at - receipt.issued_at
                             <= Duration::seconds(MAX_SECONDS as i64),
-                Event::Resume { actor, .. } => {
-                    valid_text(actor) || actor.strip_prefix(RECOVERY_PREFIX).is_some_and(valid_text)
-                }
+                Event::Resume { actor, .. } => valid_text(actor),
                 Event::Expired { .. } => true,
             }),
         "invalid advisor loops drain journal"
@@ -290,7 +291,13 @@ fn change(
         Err(error) if drain.is_none() => {
             // Version 1 rejects extra event kinds and fields. Qualify the
             // already validated actor in the existing resume audit.
-            let actor = format!("{RECOVERY_PREFIX}{actor}");
+            let budget = MAX_TEXT_BYTES - RECOVERY_PREFIX.len();
+            let actor = if actor.len() > budget {
+                let end = actor.floor_char_boundary(budget - '…'.len_utf8());
+                format!("{RECOVERY_PREFIX}{}…", &actor[..end])
+            } else {
+                format!("{RECOVERY_PREFIX}{actor}")
+            };
             let mut replacement = Journal {
                 version: 1,
                 events: vec![Event::Resume { actor, at: now }],
@@ -398,7 +405,7 @@ mod tests {
 
     // trace:TASK-3246 | ai:codex
     #[test]
-    fn recovery_preserves_a_maximum_length_actor() {
+    fn recovery_with_maximum_length_actor_fits_v1_resume_limit() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
         let actor = "é".repeat(256);
@@ -415,7 +422,8 @@ mod tests {
         assert!(matches!(
             load(root).unwrap().events.as_slice(),
             [Event::Resume { actor: audit, .. }]
-                if audit == &format!("recovered unreadable journal by {actor}")
+                if audit.len() <= 512
+                    && audit == &format!("recovered unreadable journal by {}…", "é".repeat(238))
         ));
     }
 
