@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Exercise the normal pickup deferral path with a structured LaneSpaceRefused. Assert that the returned error still exposes the original typed refusal and that the persisted launch outcome identifies disk-floor deferral.
   2. Keep exit code 36, setup rollback, and queue-note behavior. An unrelated launch or measurement error retains its own classification.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:19:49.568395128Z
-modified_at: 2026-11-23T16:18:56.164325785Z
+modified_at: 2026-11-23T16:53:52.750726318Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -127,6 +127,13 @@ history:
   author: joe
   timestamp: 2026-11-23T16:18:56.253578017Z
   changes: []
+- id: 01a20954-0bee-7dc0-bffb-8b55c7ec21eb
+  author: aida-session-start
+  timestamp: 2026-11-23T16:53:52.750721960Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
