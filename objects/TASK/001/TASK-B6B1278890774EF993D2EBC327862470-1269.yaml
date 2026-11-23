@@ -1,0 +1,31 @@
+id: 01a20a87-c411-7670-9703-076c0b3a4292
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1269
+title: 'Review follow-up: Some mandate read errors still become settled refusals in --check --json. An existing huma'
+description: |-
+  From TASK-3115
+  Reviewed sha: 4848978e584a8a68c3ba90a2760c2b471629f5e4
+
+  Some mandate read errors still become settled refusals in --check --json. An existing human-attested clearance whose pinned label read fails falls through cleared_by_human_facts (aida-cli-lib/src/gate/mandate_ship.rs:251–266) to MarkerMissing for a supervised member at :835–841. Unreadable human-gate config also becomes HumanGated via aida-cli-lib/src/gate/mandate_gates.rs:256–266 and the default mapping in pr_train.rs. Preserve unavailable evidence in both cases so a report does not direct the operator to resolve a policy refusal without the corresponding evidence.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T22:29:59.441148307Z
+modified_at: 2026-11-23T22:29:59.441148307Z
+req_type: Task
+tags:
+- carried-from:TASK-3115
+- finding-hash:3626acd1
+- from-review:TASK-3115
+relationships:
+- rel_type: References
+  target_id: 01a1db6f-92aa-7252-a56e-51eb4f30ba07
+  created_at: 2026-11-23T22:30:13.177723262Z
+filed_at:
+  code_sha: 4848978e584a8a68c3ba90a2760c2b471629f5e4
+  branch: pr-4432
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
+  session: 01a20a847ae6
