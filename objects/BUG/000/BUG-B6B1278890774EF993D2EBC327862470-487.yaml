@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T04:29:42.519542146Z
-modified_at: 2026-11-23T04:38:28.060362241Z
+modified_at: 2026-11-23T05:02:15.354911426Z
 req_type: Bug
 comments:
 - id: 01a206ae-0371-77e0-abb9-4616ad889e91
@@ -25,6 +25,19 @@ comments:
   modified_at: 2026-11-23T04:32:32.621917507Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206c8-8a8f-7310-bc8c-242cea883090
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5470336db35805f5b13a85d8a2fff124ec69f557 plus the seven native-lane working-tree edits (89 changed lines). The merge-base diff was empty. There were no untracked additions.
+    AC1: [evidence: behavioral-test] seat_clone.rs:4014 keeps the clean merge local. Queue regression at tests/queue_work_tests.rs:4708 passed in job j20261123T044255976-2-0 (1 executed).
+    AC2: [evidence: behavioral-test] tests/bug_home_038_seat_publish_tests.rs:2528 checks the fix parent and origin tip through the existing ship entry point. Inspected and compiled; this bwrap-dependent test was outside the targeted run.
+    AC3: [evidence: behavioral-test] tests/queue_work_tests.rs:4843 compares the complete ls-remote result against the original head and exact ref across clean/conflict and interactive/headless pickups.
+    Deep pass covered branch spelling, Git ref and SHA output, missing/multiple matches, concurrent origin advance, planted hooks and conflict-route refusal. Pickup no longer takes a publication callback. Host ship still checks branch policy and ownership before pushing (ship_from_seat.rs:2291). No strict-tier fail-open, race or data-loss defect found. Fixed stale test expectations, orphan fixture signatures, formatting, the test-only Git constructor and the CLI guide. Git maintenance ratchet passed. Residual scope: ship-time merge-only detection remains parked under BUG-2714.
+  created_at: 2026-11-23T05:02:15.354911426Z
+  modified_at: 2026-11-23T05:02:15.354911426Z
+  session_id: 01a206b1e725
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a206ab-8e4a-7eb0-8d7c-26f25738765c
   author: joe
