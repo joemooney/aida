@@ -1,5 +1,6 @@
 id: 01a20a3f-5cf7-7521-9f9c-c64404eecd3c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-243
+agreed_id: STORY-3056
 title: 'Review PR-4457: [AI:codex] fix(throughput-guard): bound approval reads and report skipped PRs (Refs BUG-2730)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a209f8`) for branch `bug-b6b1278890774ef993d2ebc327862470-491`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T21:11:02.860610027Z
   session_id: 01a209f813f6
+  changes: []
+- id: 01a20a72-745e-7713-9f2e-e9abfb49b16c
+  author: joe
+  timestamp: 2026-11-23T22:06:42.782791564Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5

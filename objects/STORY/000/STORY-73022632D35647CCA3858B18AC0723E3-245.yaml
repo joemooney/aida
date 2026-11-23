@@ -1,5 +1,6 @@
 id: 01a20a5b-8f97-7753-9864-a8e61d8e3bed
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-245
+agreed_id: STORY-3051
 title: 'Review PR-4460: [AI:codex] fix(mailbox): preserve seat delivery ownership after retirement (Refs STORY-2767)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20a05`) for branch `int28-story-2767`.
@@ -49,6 +50,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20a71-6ade-7ce1-aed6-490bcc141a5a
+  author: joe
+  timestamp: 2026-11-23T22:05:34.814957419Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
   branch: main

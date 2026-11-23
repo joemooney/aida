@@ -1,5 +1,6 @@
 id: 01a20a36-41e4-73a3-a60a-a891e191aa40
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-241
+agreed_id: STORY-3055
 title: 'Review PR-4455: [AI:codex] fix(build): stamp tracked changes and show dirty paths (BUG-2728)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a209eb`) for branch `int27-bug-2728`.
@@ -60,6 +61,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20a72-3f8d-7201-9455-72b8abef9e05
+  author: joe
+  timestamp: 2026-11-23T22:06:29.261119145Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
   branch: main
