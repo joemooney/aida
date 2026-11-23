@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.729374870Z
-modified_at: 2026-11-23T09:43:21.040494860Z
+modified_at: 2026-11-23T09:44:09.300345091Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -109,6 +109,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T09:43:20.889932641Z
   modified_at: 2026-11-23T09:43:20.889932641Z
+- id: 01a207ca-d57a-7cb2-8a66-4117ec121dcc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:44):
+    # TASK-3195 / PR #4418 r2 (advisor-122 ruling 2026-11-23 02:46 MST; relayed by product-15). Lane: CODEX. SMALL. Targets MAIN.
+
+    CR at bf941b37 (r1, +30 lines, test-only). Fix all three; the reviewer scope is the three plus the diff.
+    1. main_watch.rs:719-721 / :595-607: if the rename succeeded but its DIRECTORY fsync failed, startup must NOT treat the new cursor/episode/pending event as durable. Either re-fsync the directory at startup before trusting it, or treat the state as unconfirmed and replay idempotently. Add a test.
+    2. story_2897_main_watch_tests.rs:665-668: count RAW journal lines, not read_journal's UUID-deduplicated view, so a double append fails the test.
+    3. PR body: state that main already fsyncs, and what this PR adds on top.
+    Keep out of review_draft.rs and land readiness (S1b #4401's files).
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T09:44:09.300345091Z
+  modified_at: 2026-11-23T09:44:09.300345091Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fb7e-3363-7680-855c-25ffe7cdf61a
   author: joe
