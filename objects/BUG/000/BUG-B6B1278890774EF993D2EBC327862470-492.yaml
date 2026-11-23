@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The closeout-audit wording/template writes "AUDIT VERDICT (not a lane instruction): keep open; implementation still wanted" instead of a bare "No implementation or status change". A test or doc check pins the template text.
   - AC2: The lane brief generator explicitly ranks the CURRENT brief above older spec comments: generated briefs include a line saying older spec comments are context, not instructions, when they conflict with this brief. A test asserts the line is present in a generated brief.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T18:09:29.393272123Z
+modified_at: 2026-11-23T19:52:46.066170520Z
 req_type: Bug
 tags:
 - briefs
@@ -86,6 +86,11 @@ comments:
   modified_at: 2026-11-23T17:57:01.932891758Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a209f7-d2f2-7510-a617-f2d3e3862594
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2731 (origin BUG-b6b1278890774ef993d2ebc327862470-492) — FAIL. Reviewed all five changed files against the generated worksheet.. No triage reason was given.'
+  created_at: 2026-11-23T19:52:46.066163539Z
+  modified_at: 2026-11-23T19:52:46.066163539Z
 history:
 - id: 01a20912-4d56-73a3-bac7-f684e0f78f51
   author: joe
@@ -139,6 +144,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a209f7-d2f2-7510-a617-f2c98cc28251
+  author: joe
+  timestamp: 2026-11-23T19:52:46.066157551Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
@@ -147,16 +159,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f091434bfd1
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    BUG-2731 (origin BUG-b6b1278890774ef993d2ebc327862470-492) — FAIL. Reviewed all five changed files against the generated worksheet.
-    BUG-b6b1278890774ef993d2ebc327862470-492.AC1: verified by source inspection of the exact standalone verdict in both advisor-role.md copies and the exact-line assertion in `python3 -m unittest tests/test_closeout_audit_wording.py`. The implementer reported a pass for both copies. The check has no CI invocation.
-    BUG-b6b1278890774ef993d2ebc327862470-492.AC2: unverified
-    The diff's generated-file assertion (`cargo test -p aida-cli-lib create_brief_writes_frontmatter_sections_and_relationships`) covers `aida brief create`. Source inspection confirms that fresh lanes launched with an explicit handwritten pickup brief still receive no precedence rule. Both criteria were listed as untraced in the launch prompt.
-    The head is three commits behind integration at 4c64d9e19a40e2661ab8b3f7cf96ec1bb1b53432. Those commits leave the paths implicated in these findings unchanged. Exact-head FAST source gates and the merge-hold check passed, and FAST compilation was pending. No local tests or builds were run.
-  recovery_hint: address the review findings, move BUG-2731 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T18:09:29.393272123Z
