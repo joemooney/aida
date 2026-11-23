@@ -1142,12 +1142,12 @@ fn escaped_nul_spawn_failure_leaves_pending_and_dismiss_available() {
 // trace:TASK-3096 | ai:codex
 #[test]
 fn https_userinfo_refuses_before_persistence_and_ssh_is_supported() {
-    for remote in [
-        "https://token@example.org/intake.git",
-        "https://user:token@example.org/intake.git",
-    ] {
+    // trace:TASK-3839 | ai:codex
+    let credential_remote = |userinfo: &str| format!("https://{userinfo}@example.org/intake.git");
+    for userinfo in ["token", "user:token"] {
+        let remote = credential_remote(userinfo);
         let f = Fixture::new();
-        let out = f.run(&["intent", "enroll", "--remote", remote, "--reviewed"]);
+        let out = f.run(&["intent", "enroll", "--remote", &remote, "--reviewed"]);
         bad(&out, "HTTPS userinfo is refused");
         assert!(!f.root.join(".git/aida-intake/profile.json").exists());
         assert!(!String::from_utf8_lossy(&out.stderr).contains("token@"));
@@ -1165,7 +1165,7 @@ fn https_userinfo_refuses_before_persistence_and_ssh_is_supported() {
     f.enroll(&remote(&temp));
     let private =
         aida_core::transport_policy::Private::open(&f.root.join(".git/aida-intake")).unwrap();
-    private.write("profile.json", &serde_json::to_vec(&json!({"version":1,"remote":"https://token@example.org/intake.git","deny_patterns":[]})).unwrap()).unwrap();
+    private.write("profile.json", &serde_json::to_vec(&json!({"version":1,"remote":credential_remote("token"),"deny_patterns":[]})).unwrap()).unwrap();
     bad(&f.run(&["intent", "list"]), "HTTPS userinfo is refused");
 }
 
