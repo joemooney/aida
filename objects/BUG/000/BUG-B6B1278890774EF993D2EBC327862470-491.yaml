@@ -20,7 +20,6 @@ tags:
 - scheduler
 - small
 - throughput
-- track:integration
 comments:
 - id: 01a2084b-6601-7601-87a1-9e667d151685
   author: joe
@@ -113,6 +112,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a209ef-f87c-7ce2-8d0c-a524517b287c
+  author: joe
+  timestamp: 2026-11-23T19:44:11.388470069Z
+  changes:
+  - field_name: tags
+    old_value: doctor, scheduler, small, throughput, track:integration
+    new_value: doctor, scheduler, small, throughput
 execution_mode: drain
 filed_at:
   code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
