@@ -1,0 +1,28 @@
+id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-482
+agreed_id: BUG-2721
+title: recover-launch treats any process in the primary checkout as proof a reviewer launch attempt is alive
+description: |
+  Found 2026-11-22 (advisor-122 19:20; filed by product-15). #4380 @864db73f is blocked by a stale reviewer launch attempt 346d4525 whose launcher is dead. `aida agent recover-launch` refuses because a process sits in /home/joe/ai/aida: PID 411725, the operator's interactive Terminator /bin/bash (started 2026-11-21 21:54, child `vi /tmp/ask_claude`). The attempt's "worktree" is the primary checkout itself, so ANY operator or deputy shell in the primary counts as proof the attempt is alive, and recovery is impossible without killing the human's terminal.
+
+  ## Acceptance
+  - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
+  - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
+  - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T02:10:15.075061734Z
+modified_at: 2026-11-23T02:10:15.075061734Z
+req_type: Bug
+tags:
+- recovery
+- review-watch
+filed_at:
+  code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3a
+  vendor: claude
