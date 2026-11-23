@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T03:58:47.545727722Z
+modified_at: 2026-11-23T03:58:52.026812651Z
 req_type: Bug
 tags:
 - containment
@@ -83,6 +83,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T03:58:47.372614934Z
   modified_at: 2026-11-23T03:58:47.372614934Z
+- id: 01a2068e-b23a-7e50-935e-9d73ef636330
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:58):
+    # BUG-2717 / PR #4398 r2 (advisor-122 ruling 2026-11-22 21:02 MST; relayed by product-15). Lane: CODEX. Containment, so ADR-76 strict. SMALL (<=300 lines).
+
+    CR at 557a8da6 (r1, +79 lines, 2 files). Fix both findings. The reviewer scope is these two plus the diff.
+    1. contained_host.py:733: the zero-time poll and the blocking seccomp RECV ioctl RACE, so a hangup between them strands preflight. Make the receive itself bounded: poll(POLLIN|POLLHUP|POLLERR) WITH a timeout on the listener fd immediately before EVERY recv, OR a non-blocking recv with ENOENT/EAGAIN handling, so no blocking ioctl ever runs without a fresh readiness check. Add a test that closes the last filtered task BETWEEN poll and recv (a stub listener is fine).
+    2. contained_host.py:725: if bwrap and the tasks have already exited, report the LISTENER HANGUP cause, not the generic "requested-…" diagnostic. Check the listener before process.poll() decides the message.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted pytest run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T03:58:52.026812651Z
+  modified_at: 2026-11-23T03:58:52.026812651Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
