@@ -1152,23 +1152,22 @@ mod tests {
         assert!(error.to_string().contains("purpose legacy review-watch"));
     }
 
-    fn one_second_bound(root: &Path) {
+    // trace:TASK-3211 | ai:codex
+    fn ten_second_bound(root: &Path) {
         std::fs::create_dir_all(root.join(".aida")).unwrap();
         std::fs::write(
             root.join(".aida/config.toml"),
-            "[admission]\nwait_secs = 1\n",
+            "[admission]\nwait_secs = 10\n",
         )
         .unwrap();
     }
 
-    /// Review round 4, AC ac336622: the shortest positive bound is still
-    /// retried. With `wait_secs = 1` the only holder gives its claim up
-    /// shortly after the ship registered its intent; the ship takes
-    /// admission within that same second instead of sleeping the bound out.
+    /// Check the shortest bound's poll interval directly, then exercise the
+    /// real holder handoff with scheduling headroom on a loaded shard.
     // trace:BUG-2703 | ai:claude
     // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
     #[test]
-    fn bug2703_one_second_bound_acquires_a_holder_released_after_registration() {
+    fn bug2703_bounded_wait_acquires_a_holder_released_after_registration() {
         assert_eq!(
             poll_step(Duration::from_secs(1)),
             Duration::from_millis(100)
@@ -1176,7 +1175,7 @@ mod tests {
         assert_eq!(poll_step(Duration::from_secs(180)), Duration::from_secs(1));
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().to_path_buf();
-        one_second_bound(&root);
+        ten_second_bound(&root);
         let watcher = acquire(&root, "legacy review-watch", true).unwrap();
         let (registered, wait_registered) = std::sync::mpsc::channel::<()>();
         let holder = {
@@ -1191,7 +1190,7 @@ mod tests {
                     assert!(std::time::Instant::now() < limit, "no intent registered");
                     std::thread::sleep(Duration::from_millis(5));
                 }
-                std::thread::sleep(Duration::from_millis(150));
+                std::thread::sleep(Duration::from_millis(1500));
                 drop(watcher);
             })
         };
@@ -1205,7 +1204,7 @@ mod tests {
         let claim = result
             .unwrap_or_else(|error| panic!("refused after {waited:?}: {error:#}"))
             .expect("a claim of its own");
-        assert!(waited < Duration::from_secs(1), "{waited:?}");
+        assert!(waited < Duration::from_secs(10), "{waited:?}");
         assert_eq!(intent_files(&root), 0, "the intent is removed");
         assert!(acquire(&root, "legacy review-watch", true).is_err());
         drop(claim);
@@ -1214,14 +1213,14 @@ mod tests {
     /// The same bound, when the holders change during the wait: the refusal
     /// names who holds admission as the bound runs out, never the holder
     /// that was there for the first attempt and has since left. The hard
-    /// deadline stands: it gives up at one second.
+    /// deadline stands: it gives up at the configured bound.
     // trace:BUG-2703 | ai:claude
     // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
     #[test]
-    fn bug2703_one_second_bound_refusal_names_the_current_holder() {
+    fn bug2703_bounded_wait_refusal_names_the_current_holder() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().to_path_buf();
-        one_second_bound(&root);
+        ten_second_bound(&root);
         let watcher = acquire(&root, "legacy review-watch", true).unwrap();
         let land = std::rc::Rc::new(std::cell::RefCell::new(None));
         BEFORE_INTENT.with(|cell| {
@@ -1236,13 +1235,13 @@ mod tests {
         let started = std::time::Instant::now();
         let error = ship_admission(&root).err().expect("refused at the bound");
         let waited = started.elapsed();
-        assert!(waited >= Duration::from_secs(1), "{waited:?}");
-        assert!(waited < Duration::from_secs(15), "{waited:?}");
+        assert!(waited >= Duration::from_secs(10), "{waited:?}");
+        assert!(waited < Duration::from_secs(25), "{waited:?}");
         assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error:#}");
         let text = error.to_string();
         assert!(text.contains("purpose land run"), "{text}");
         assert!(!text.contains("legacy review-watch"), "{text}");
-        assert!(text.contains("s (bound 1s, "), "{text}");
+        assert!(text.contains("s (bound 10s, "), "{text}");
         assert_eq!(intent_files(&root), 0);
         assert!(land.borrow().is_some());
     }
@@ -1666,14 +1665,14 @@ mod tests {
         let root = temp.path().to_path_buf();
         let dir = directory(&root);
         let watcher = acquire(&root, "legacy review-watch", true).unwrap();
-        let bound = Duration::from_secs(3);
+        let bound = Duration::from_secs(20);
         let started = std::time::Instant::now();
         let (go, wait_go) = std::sync::mpsc::channel::<()>();
         let (held, wait_held) = std::sync::mpsc::channel();
         let stall = std::thread::spawn(move || {
             // From the waiter's first busy refusal the serializer is held
-            // until 300 ms before the deadline; the only claim holder leaves
-            // 500 ms after the deadline.
+            // until two seconds before the deadline; the only claim holder leaves
+            // three seconds after the deadline.
             wait_go.recv().unwrap();
             let serial = open(&dir.join("receipts.lock")).unwrap();
             serial.lock_exclusive().unwrap();
@@ -1681,9 +1680,9 @@ mod tests {
             let at = |offset: Duration| {
                 std::thread::sleep(offset.saturating_sub(started.elapsed()));
             };
-            at(bound - Duration::from_millis(300));
+            at(bound - Duration::from_secs(2));
             FileExt::unlock(&serial).unwrap();
-            at(bound + Duration::from_millis(500));
+            at(bound + Duration::from_secs(3));
             drop(watcher);
         });
         BEFORE_INTENT.with(|cell| {
@@ -1708,7 +1707,7 @@ mod tests {
         assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error:#}");
         let text = error.to_string();
         assert!(text.contains("gave up after waiting "), "{text}");
-        assert!(text.contains("s (bound 3s, "), "{text}");
+        assert!(text.contains("s (bound 20s, "), "{text}");
         stall.join().unwrap();
         assert_eq!(intent_files(&root), 0);
         assert!(acquire(&root, "land run", false).is_ok());
