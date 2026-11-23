@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T06:54:03.250138704Z
+modified_at: 2026-11-23T06:54:17.972874410Z
 req_type: Bug
 tags:
 - knob
@@ -150,6 +150,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete diff as it would land on protected main a16f3592f015e06580a94c1f7879ea9c877c088e. BUG-2725 AC1 is partial: strict stays the default and the pinned merge-tree proof retains conflict refusal, but clean-behind landing can strand FULL requests or approval-releasable holds and accepts ambiguous workflow identity. AC2 is partial: the watcher has GitHub-main scoping, conflict refusal and a train wake, but readiness can disagree with review-gated landing or use prior-attempt results. The last finding depends on run-attempt evidence added by the protected base. The other findings reproduce by source inspection on the PR branch as well. The 525-line landed diff exceeds the advisory 300-line target. Exact-head FAST compile was pending at review time and no CI failure had been reported. Reviewed source and existing CI evidence.. No triage reason was given.'
   created_at: 2026-11-23T06:54:03.250137317Z
   modified_at: 2026-11-23T06:54:03.250137317Z
+- id: 01a2072e-ef65-76f2-af40-a4db427532ab
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2725):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b56b658167b6
+    Recorded: 2026-11-23T06:52:51.352164718+00:00
+    Findings:
+    1. BUG-2725 AC1, land_ci_base.rs:157–172 and land.rs:543–552. A pending merge-hold-gate status makes the rollup Ci::Pending even after the project FULL run succeeds. The clean-merge verifier changes that to NeedsFull, and derive returns Wait before checking whether the approval satisfies the hold. This strands a releasable Rework hold in land run and reports the wrong dependency. Keep same-run FULL proof separate from the overall rollup and let the existing hold-release decision run with passing FULL plus a pending hold status.
+    2. BUG-2725 AC1, land.rs:543–550. An approved clean-behind head with only FAST CI returns a passive Wait. The standalone approval recorder in review_commands.rs:2810 calls the inner recording path, while the FULL request runs only in the outer interactive recorder at :2572. land_run.rs:579 ignores Wait, so this path skips both the request on approval and land run's train-admission fallback. The same loss of fallback applies when the initial best-effort request fails. Route an approved head missing FULL to a guarded request and retry path and test the standalone approval-to-FULL transition.
+    3. BUG-2725 AC1, land_ci_base.rs:157–183. Landing treats the display name CI and a repository-bound URL as project FULL authority. An independent workflow in the same repository can share that display name, and the checkout-parent check only attests the PR head and tested base. Such rows can make the clean-merge exception return Green without a successful run of the project's actual CI workflow. Resolve the canonical workflow ID, verify the candidate run against it and the exact head, and reject another workflow with the same display name.
+    4. BUG-2725 AC1 and AC2, review_watch_ready.rs:147 and :230–233. Clean-merge ignores landing.mode. With review-gated and clean-merge enabled, the watcher advises the train while land_run.rs:675 routes the same Ready/Train decision to direct ship. Review-gated ship still refuses a behind head with overlapping paths even when merge-tree is clean (gate/landing_merge.rs:187–210). Preserve the mode's existing behavior or explicitly restrict the train exception to CI-gated mode on both surfaces. Cover the combined settings with a clean overlapping head.
+    5. BUG-2725 AC2, review_watch_ready.rs:187–211. The FULL predicate uses stored Passed outcomes without checking run_in_progress. The pinned base a16f3592f01 adds that field and sets it for an active rerun or when a row predates the current attempt (forge_commit_ci.rs:366–384). judge_commit_checks also reads only outcomes, so a check listing with the previous attempt's successful marker and aggregate can produce ReadyForTrain after run metadata has reported a new attempt in progress. Require settled attempt evidence and add a regression with prior success rows and a live rerun. This finding depends on the run-attempt evidence added by the protected base.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T06:54:06.181280670Z
+  modified_at: 2026-11-23T06:54:06.181280670Z
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
