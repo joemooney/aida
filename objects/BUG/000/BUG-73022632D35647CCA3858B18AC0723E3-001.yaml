@@ -3,15 +3,13 @@ spec_id: BUG-73022632d35647cca3858b18ac0723e3-001
 agreed_id: BUG-2592
 title: CI startup monitoring can skip items when a paginated forge collection shrinks
 description: Follow-up from BUG-2694 self-review. GitHub page numbers index a live collection. If an item on a previously read page is closed or deleted before the next page is fetched, an unseen boundary item can shift onto the already-read page. PR-number deduplication handles overlap but cannot detect such a gap. The same issue can skip a started run in historical job mapping after a run deletion. Evaluate stable cursor-based or bounded overlap discovery and add a regression that removes an item between budget-limited passes.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:51:17.240362338Z
-modified_at: 2026-11-23T17:33:51.042990539Z
+modified_at: 2026-11-23T19:32:16.433695512Z
 req_type: Bug
-tags:
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -135,6 +133,22 @@ history:
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a209e5-0f69-75c0-b249-914c77886660
+  author: aida-auto-bump
+  timestamp: 2026-11-23T19:32:16.361321690Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a209e5-0fb1-70d0-be57-4afb662372f9
+  timestamp: 2026-11-23T19:32:16.433690722Z
+  agent: aida
+  commit_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  summary: 'Advisor re-approval of promotion 26 after the linear rebuild: 2dbaac35 is exactly 3 cherry-picked commits (079b7da8cc4 TASK-3122, 1a99806b290 BUG-2592, 2dbaac350dd BUG-2700) on main ef906ec7464, with no integration history. The diff from that base has the same stable patch-id 5237a1c0 as the e65378fe content the advisor approved (and as the three individually reviewed integration squashes). Main has since advanced by one unrelated commit (88d5e179851); the train merges it.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
@@ -142,3 +156,7 @@ filed_at:
   vendor: codex
   session: 01a1f2c1e596
   harness_version: codex-cli 0.167.0
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T19:32:16.361312467Z
+  completion_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
