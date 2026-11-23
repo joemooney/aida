@@ -16,7 +16,7 @@ import threading
 import time
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'aida-cli-lib/src'
@@ -660,6 +660,38 @@ while True:
         replies, installed = self.broker_connect(self.service.address, service=False)
         self.assertNotEqual(replies, [0])
         self.assertFalse(installed)
+
+    # trace:BUG-2716 | ai:codex
+    def test_negative_sender_pidfd_cleanup_keeps_channel_serviceable(self):
+        channel = Mock(spec=socket.socket)
+        self.service.channels[1] = (channel, time.monotonic() + 5)
+        identity = ns['MutationIdentity'](os.getpid())
+        self.addCleanup(identity.close)
+        credentials = (socket.SOL_SOCKET, socket.SCM_CREDENTIALS,
+                       struct.pack('3i', *self.credentials))
+
+        def poll_packet(fd):
+            request = self.request()
+            pidfd = (socket.SOL_SOCKET, ns['SCM_PIDFD'], struct.pack('i', fd))
+            channel.recvmsg.return_value = (self.wire(request), [credentials, pidfd], 0, None)
+            channel.send.reset_mock()
+            self.service.poll()
+            channel.send.assert_called_once()
+            reply = json.loads(channel.send.call_args.args[0])
+            self.assertEqual(reply['request_id'], request['request_id'])
+            return reply
+
+        with patch.object(os, 'close', wraps=os.close) as close:
+            with patch.object(self.service, 'identity', identity):
+                for fd in (-1, -2, -(2 ** 31)):
+                    with self.subTest(fd=fd):
+                        self.assertEqual(poll_packet(fd)['error'], 'Unauthorized')
+                        close.assert_not_called()
+            self.assertFalse(self.service.accepted)
+            # Use the fixture identity for success outside a contained UID map.
+            sender_fd = os.pidfd_open(os.getpid())
+            self.assertEqual(poll_packet(sender_fd)['outcome'], 'success')
+            close.assert_called_once_with(sender_fd)
 
     def test_queued_dead_sender_pidfd_refuses_even_if_numeric_pid_is_reused(self):
         child = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(5)'])
