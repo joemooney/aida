@@ -1,5 +1,6 @@
 id: 01a2066a-719b-76a3-a5fe-608a8b78205b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1225
+agreed_id: TASK-3263
 title: 'Review follow-up: aida-cli-lib/src/tests/story_2254_codex_bg_supervisor_tests.rs:793 — The regression retain'
 description: |-
   From BUG-2721
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
   created_at: 2026-11-23T03:19:41.583786187Z
+history:
+- id: 01a20688-b2a1-7c70-b0a6-4c59a567caf0
+  author: joe
+  timestamp: 2026-11-23T03:52:31.649126784Z
+  changes: []
 filed_at:
   code_sha: 81a84bab07487f2f7fa1cc4d2dbdef380ab6b1db
   branch: pr-4402

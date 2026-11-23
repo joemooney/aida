@@ -1,5 +1,6 @@
 id: 01a20676-e69b-72b0-86b3-aac9750c675b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1227
+agreed_id: TASK-3259
 title: 'Review follow-up: repair_findings drops every release_evidence error via .ok()?, including corrupt or unread'
 description: |-
   From BUG-2722
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20637-3865-75e2-add6-0c87270d0c56
   created_at: 2026-11-23T03:33:18.195678570Z
+history:
+- id: 01a20688-b238-7a22-a196-6291fd841767
+  author: joe
+  timestamp: 2026-11-23T03:52:31.544726192Z
+  changes: []
 filed_at:
   code_sha: 9c8f6309535ec40c19802d775203a3396f578960
   branch: pr-4403

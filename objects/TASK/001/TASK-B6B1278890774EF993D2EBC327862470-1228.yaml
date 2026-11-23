@@ -1,5 +1,6 @@
 id: 01a20677-1a8b-7da0-b889-141391479c06
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1228
+agreed_id: TASK-3261
 title: 'Review follow-up: An unfiltered doctor now propagates RepairGuard::lock errors before printing the rest of i'
 description: |-
   From BUG-2722
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20637-3865-75e2-add6-0c87270d0c56
   created_at: 2026-11-23T03:33:31.643930586Z
+history:
+- id: 01a20688-b265-7bb1-a00f-dc62aa9a3316
+  author: joe
+  timestamp: 2026-11-23T03:52:31.589920527Z
+  changes: []
 filed_at:
   code_sha: 9c8f6309535ec40c19802d775203a3396f578960
   branch: pr-4403

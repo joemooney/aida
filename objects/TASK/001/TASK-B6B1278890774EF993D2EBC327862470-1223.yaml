@@ -1,5 +1,6 @@
 id: 01a20636-b878-7480-88ed-f745b6659a75
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1223
+agreed_id: TASK-3258
 title: 'Review follow-up: The ignored-path protection collapses directories with ls-files --directory and treats any'
 description: |-
   From BUG-2688
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-23T02:22:59.192971041Z
+history:
+- id: 01a20688-b1f0-7310-add0-b62f1691e75e
+  author: joe
+  timestamp: 2026-11-23T03:52:31.472470512Z
+  changes: []
 filed_at:
   code_sha: 10c94367b4bae34c5d7ac728eee380af20f34869
   branch: pr-4388

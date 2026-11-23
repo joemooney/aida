@@ -1,5 +1,6 @@
 id: 01a20663-0bb2-74d2-be77-41c01c56b7d5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-206
+agreed_id: STORY-3013
 title: 'Review PR-4402: [AI:codex] fix(agent): bind launch recovery to attempt identity (BUG-2721)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2063b`) for branch `bug-b6b1278890774ef993d2ebc327862470-482`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T03:11:31.768995010Z
   session_id: 01a2063bce96
+  changes: []
+- id: 01a20688-b5af-7752-a200-e0826bdd22e8
+  author: joe
+  timestamp: 2026-11-23T03:52:32.431716333Z
   changes: []
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
