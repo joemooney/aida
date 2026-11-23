@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T05:42:07.196152849Z
+modified_at: 2026-11-23T05:43:36.404969875Z
 req_type: Bug
 tags:
 - containment
@@ -151,6 +151,15 @@ comments:
   modified_at: 2026-11-23T05:23:25.781372426Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206ee-6804-7bb3-9738-a22419cb726b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 96d4a9b9e45390f58ddfdcce8c25b0c577ba2714 plus the native working diff in tests/test_store_mutation.py. AC1: [evidence: behavioral-test] test_notification_listener_before_exec (line 59) passed all four modes under unittest, enforcing a 10 s subprocess watchdog and checking no exec release on refusal. AC2: [evidence: behavioral-test] listener_ioctl (line 799) observed one receive and the real broker's denial for the supplied ID, followed by exec release. An in-memory unconditional second receive failed immediately on the new assertion. AC3: [evidence: behavioral-test] line 840 checked the hangup reason. Reviewed the merge-base and working diffs and untracked inventory. Checked request/response fields, zero and repeated receives, hangup versus exit, and release ordering. The receive worker only dequeues; the supervisor retains service and release authority. Round 3 changes only the test. Kernel seccomp ioctls are simulated; pytest is unavailable in the seat.
+  created_at: 2026-11-23T05:43:36.404969875Z
+  modified_at: 2026-11-23T05:43:36.404969875Z
+  session_id: 01a206ecd14b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
