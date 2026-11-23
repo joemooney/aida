@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T10:37:00.307171406Z
+modified_at: 2026-11-23T11:00:48.215003980Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -132,6 +132,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T10:37:00.170791941Z
   modified_at: 2026-11-23T10:37:00.170791941Z
+- id: 01a20810-cdac-7be3-87ff-5d1108e90a93
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bb5f778f679f84d7e19ebd52b6986d597cd43aea plus the native working diff. Reviewed origin/main...HEAD, both modified files and the untracked inventory (empty).
+    AC1: [evidence: behavioral-test] main_watch.rs:740 checkpoints the typed deadline across recent/fetch and both enumeration calls. story_2897_main_watch_tests.rs:1334 exercises all three read stages and resumes to exactly one close.
+    AC2: [evidence: behavioral-test] main_watch.rs:1339 preserves the episode and cursor until attribution completes. story_2897_main_watch_tests.rs:1358 retries the same green and recovers. Existing ordinary unreadable-range test still passes.
+    Probed error classification, range boundaries, empty and multi-commit scans and reruns after a persisted close. No additional actionable finding. Targeted main_watch tests: 46 passed. make check-ci-fast passed. Scheduler startup and per-notice mailbox read costs are deferred by advisor ruling.
+  created_at: 2026-11-23T11:00:48.215003980Z
+  modified_at: 2026-11-23T11:00:48.215003980Z
+  session_id: 01a207fbd913
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
   author: joe
