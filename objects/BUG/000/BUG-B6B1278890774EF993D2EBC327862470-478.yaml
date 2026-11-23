@@ -9,12 +9,12 @@ description: |
   - AC1: When the preflight listener has hung up, preflight refuses within 10 s and the model process never starts. A test asserts the bound.
   - AC2: An open listener still completes preflight normally (positive control).
   - AC3: The refusal names the hangup as the reason.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T04:11:25.809046294Z
+modified_at: 2026-11-23T04:44:34.298186806Z
 req_type: Bug
 tags:
 - containment
@@ -176,6 +176,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a206b8-587a-7be1-979f-26c4b7f00cc6
+  author: aida-orchestrator
+  timestamp: 2026-11-23T04:44:34.298201213Z
+  session_id: 01a206b60cb2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -183,3 +191,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2717 AC2 passes. The open-listener control checks the service reply and exec release. AC1 and AC3 remain unmet on the pinned head. The rework described in the implementer's worktree notes is absent from the landing diff. Fast CI passed.
+  recovery_hint: address the review findings, move BUG-2717 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T04:44:34.298186806Z
