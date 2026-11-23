@@ -5017,21 +5017,17 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             child
                 .current_dir(&main_worktree)
                 .args(["pull", "--store-only"]);
-            match crate::command_output_with_timeout_detail(
-                child,
-                std::time::Duration::from_secs(60),
-            ) {
-                crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
-                crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
-                    "{}: {}",
-                    out.status,
-                    String::from_utf8_lossy(&out.stderr).trim()
-                ),
-                crate::BoundedCommandOutput::TimedOut => anyhow::bail!("timed out after 60s"),
-                crate::BoundedCommandOutput::SpawnFailed => {
-                    anyhow::bail!("could not start store pull")
-                }
-            }
+            // Once started, the pull owns a store transaction. Git may have
+            // detached HEAD to replay local commits. Let the writer finish or
+            // abort under its lock before the train reads local evidence.
+            let out = child.output().context("could not run store pull")?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}: {}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            Ok(())
         };
         if let Err(error) = refresh() {
             eprintln!(

@@ -622,6 +622,13 @@ fn bug_2420_refused_delegated_save_returns_the_id_to_the_block() {
 // trace:BUG-2727 | ai:codex
 #[test]
 fn bug_2727_train_refreshes_remote_only_trailer_label_on_live_pass() {
+    use serde_json::json;
+    use std::os::unix::fs::PermissionsExt;
+
+    let executable = |path: PathBuf, body: &str| {
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    };
     let f = Fixture::new();
     fs::write(
         f.root.join(".aida/config.toml"),
@@ -634,6 +641,7 @@ fn bug_2727_train_refreshes_remote_only_trailer_label_on_live_pass() {
     let mut task = aida_core::Requirement::new("remote trailer spec".into(), String::new());
     task.spec_id = Some("TASK-1-152".into());
     task.agreed_id = Some("TASK-3835".into());
+    task.execution_mode = Some(aida_core::ExecutionMode::Operator);
     let path = f
         .store
         .join(aida_core::object_store::relative_object_path("TASK-1-152").unwrap());
@@ -641,30 +649,142 @@ fn bug_2727_train_refreshes_remote_only_trailer_label_on_live_pass() {
     fs::write(path, serde_json::to_string(&task).unwrap()).unwrap();
     f.git(&["-C", ".aida-store", "add", "."]);
     f.git(&["-C", ".aida-store", "commit", "-qm", "label"]);
+    let title = "fix: fixture member (TASK-3835)";
+    f.git(&["checkout", "-qb", "member"]);
+    fs::write(f.root.join("member.txt"), "reviewed change").unwrap();
+    f.git(&["add", "member.txt"]);
+    f.git(&["commit", "-qm", title]);
+    let head = f.git(&["rev-parse", "HEAD"]);
+    f.git(&["checkout", "-q", "main"]);
     let remote = f._dir.path().join("origin.git");
     f.git(&["clone", "--bare", ".", remote.to_str().unwrap()]);
     f.git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+    f.git(&["fetch", "-q", "origin", "main"]);
     f.git(&["-C", ".aida-store", "reset", "--hard", &stale]);
-    for args in [vec!["--check", "42"], vec!["--dry-run", "42"], vec!["42"]] {
+    fs::write(f.store.join("local.txt"), "retain through rebase").unwrap();
+    f.git(&["-C", ".aida-store", "add", "local.txt"]);
+    f.git(&["-C", ".aida-store", "commit", "-qm", "local work"]);
+    let local = f.git(&["rev-parse", "aida-store"]);
+
+    let bin = f._dir.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    // Report the fixture's forge identity while Git transports use the bare remote.
+    executable(
+        bin.join("git"),
+        r#"#!/bin/sh
+case " $* " in
+  *" remote get-url origin "*) echo https://github.com/fixture/train.git; exit 0 ;;
+  *" fetch "*"refs/heads/aida-store:"*) touch "$HOME/store-fetch" ;;
+  *" rebase --end-of-options "*)
+    # A real replay step after the local commit, while Git still owns detached HEAD.
+    exec /usr/bin/git -c "rebase.instructionFormat=%s%nexec touch '$HOME/rebase-started' && sleep 61" "$@" ;;
+esac
+exec /usr/bin/git "$@"
+"#,
+    );
+    let pr = json!({"number":42,"url":"https://github.com/fixture/train/pull/42",
+        "state":"OPEN","baseRefName":"main","headRefName":"member","headRefOid":head,
+        "title":title,"body":"","labels":[],"isDraft":false,"isCrossRepository":false});
+    fs::write(f.root.join("member.json"), pr.to_string()).unwrap();
+    executable(
+        bin.join("gh"),
+        r#"#!/bin/sh
+case "$*" in
+  --version) echo 'gh fixture' ;;
+  'pr list '*) echo '[]' ;;
+  'pr view 42 '*) cat member.json ;;
+  *'/check-runs?'*) printf '{"total_count":1,"check_runs":[{"name":"Build","head_sha":"%s","status":"completed","conclusion":"success"}]}\n' "$(git rev-parse member)" ;;
+  *'/status'*) printf '{"sha":"%s","total_count":0,"statuses":[]}\n' "$(git rev-parse member)" ;;
+  *) echo "unexpected forge read: $*" >&2; exit 1 ;;
+esac
+"#,
+    );
+    let train = |args: &[&str]| {
         let out = f
             .command(false, &["pr", "train"])
-            .args(&args)
-            .env("AIDA_TEST_GH_BINARY", "/bin/false")
+            .args(args)
+            .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+            .env("USER", "fixture")
+            .env("AIDA_TEST_GH_BINARY", bin.join("gh"))
             .output()
             .unwrap();
-        assert!(!out.status.success(), "fixture has no forge PR");
-        if args.len() > 1 {
-            assert_eq!(f.git(&["rev-parse", "aida-store"]), stale);
-        } else {
-            assert_ne!(
-                f.git(&["rev-parse", "aida-store"]),
-                stale,
-                "{}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-            assert!(f
-                .aida_ok(&["show", "TASK-3835"])
-                .contains("remote trailer spec"));
-        }
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    };
+    // Before approval, each reporting command must actually judge this member.
+    for flag in ["--check", "--dry-run"] {
+        let said = train(&[flag, "42"]);
+        assert!(
+            said.contains("PR-42 has no approval recorded at its head"),
+            "{flag}: {said}"
+        );
+        assert!(
+            !f.home.join("store-fetch").exists(),
+            "{flag} fetched the store"
+        );
+        assert_eq!(f.git(&["rev-parse", "aida-store"]), local);
+        assert!(f
+            .git(&["-C", ".aida-store", "status", "--porcelain"])
+            .is_empty());
     }
+
+    let now = chrono::Utc::now();
+    let receipt = uuid::Uuid::new_v4().to_string();
+    let identity = ["session:independent-reviewer"];
+    let receipts = f.home.join(".aida/review-receipts");
+    fs::create_dir_all(&receipts).unwrap();
+    fs::write(
+        receipts.join(format!("{receipt}.json")),
+        json!({
+            "id":receipt,"subject":"PR-42","sha":head,"recorded_at":now,"identity":identity
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let verdicts = f.root.join(".aida/review-verdicts");
+    fs::create_dir_all(&verdicts).unwrap();
+    fs::write(verdicts.join("PR-42.json"), json!({
+        "verdict":"approved","reviewed_sha":head,"reviewed_branch":"member","recorded_at":now,
+        "recorder_attestation":{"sha":head,"human_at_tty":true,"receipt_id":receipt,"identity":identity}
+    }).to_string()).unwrap();
+    let mandates = f.home.join(".aida/mandates");
+    fs::create_dir_all(&mandates).unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let mandate = mandates.join(format!("{id}.json"));
+    fs::write(
+        &mandate,
+        json!({"id":id,"principal":"fixture","seat":"advisor","scope":"ship-held",
+        "issued_at":now,"expires_at":now + chrono::Duration::hours(1)})
+        .to_string(),
+    )
+    .unwrap();
+    fs::set_permissions(mandate, fs::Permissions::from_mode(0o600)).unwrap();
+
+    let said = train(&["42"]);
+    assert!(f.home.join("store-fetch").is_file(), "{said}");
+    assert!(f.home.join("rebase-started").is_file(), "{said}");
+    assert!(
+        said.contains("TASK-3835 is operator-only; it always needs a human merge"),
+        "{said}"
+    );
+    assert_eq!(
+        f.git(&["-C", ".aida-store", "symbolic-ref", "--short", "HEAD"]),
+        "aida-store"
+    );
+    assert_eq!(
+        fs::read_to_string(f.store.join("local.txt")).unwrap(),
+        "retain through rebase"
+    );
+    f.aida_ok(&[
+        "add",
+        "--type",
+        "story",
+        "--title",
+        "writable after train refresh",
+        "--description",
+        "fixture",
+    ]);
 }

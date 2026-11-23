@@ -396,6 +396,9 @@ untouched_factor = 3
 "aida-cli::queue_work_dry_run task_1337_post_setup_launch_error_rolls_back_the_owned_setup" = 15  # max 5.265s, median 4.945s over 9 runs
 "aida-cli::story_078_node_aliases node_alias_input_through_flags_relationships_and_mcp_writes_canonical" = 15  # max 5.979s, median 5.502s over 9 runs
 "aida-cli::story_078_node_aliases node_alias_spec_scope_commands_act_on_the_canonical_id" = 15  # max 7.311s, median 6.975s over 9 runs
+# A 61s replay crosses the former train kill deadline. Measured 64.81s in the lane.
+# trace:BUG-2727 | ai:codex
+"aida-cli::story_105_agreed_and_local_ids bug_2727_train_refreshes_remote_only_trailer_label_on_live_pass" = 130
 "aida-cli::story_105_agreed_and_local_ids story_105_root_writes_agreed_and_local_ids_in_one_object" = 20  # max 9.273s, median 7.124s over 9 runs
 "aida-cli::story_1649_show_linkage completed_with_commit_on_origin_only_does_not_warn" = 15  # max 5.198s, median 4.514s over 9 runs
 "aida-cli::story_164_single_hub a_claim_the_hub_rejected_is_never_spendable" = 15  # max 6.088s, median 5.598s over 9 runs
