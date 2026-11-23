@@ -111,7 +111,7 @@ sites = 1
 # names them in prose, and routes edits through the registered writers.
 [readers."aida-cli-lib/src/config_cmd.rs"]
 channels = ["worktree", "home", "write", "other-file", "prose"]
-sites = 33
+sites = 34 # Includes the approved-small menu guidance. trace:STORY-3038 | ai:codex
 
 # Settles a config edit by staging and committing exactly `.aida/config.toml`;
 # it reads no keys from the file. trace:BUG-1938 | ai:claude

@@ -40,6 +40,9 @@ pub(crate) enum UnsetDefault {
     Supervised,
     /// An unset mode on a listed, non-sensitive spec type gates as `drain`.
     Drain,
+    /// Only approved, small changes outside strict-tier code.
+    // trace:STORY-3038 | ai:codex
+    ApprovedSmall,
 }
 
 impl UnsetDefault {
@@ -47,6 +50,7 @@ impl UnsetDefault {
         match self {
             Self::Supervised => "supervised",
             Self::Drain => "drain",
+            Self::ApprovedSmall => "approved-small",
         }
     }
 }
@@ -56,6 +60,7 @@ impl UnsetDefault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnsetModePolicy {
     pub(crate) default: UnsetDefault,
+    pub(crate) configured_default: bool,
     /// The spec types the drain default applies to. Empty: none.
     pub(crate) drain_types: Vec<RequirementType>,
     /// Values that were ignored, each with its reason.
@@ -70,6 +75,7 @@ impl Default for UnsetModePolicy {
     fn default() -> Self {
         Self {
             default: UnsetDefault::default(),
+            configured_default: false,
             drain_types: Vec::new(),
             warnings: Vec::new(),
             protected: Ok(ProtectedPaths::floor()),
@@ -126,10 +132,11 @@ impl UnsetModePolicy {
             Some(v) => match v.as_str().map(str::trim) {
                 Some("supervised") => UnsetDefault::Supervised,
                 Some("drain") => UnsetDefault::Drain,
+                Some("approved-small") => UnsetDefault::ApprovedSmall,
                 Some(other) => {
                     policy.warnings.push(format!(
                         "`[gate.unset_mode] default` is set to `{other}`, which is not a known \
-                         value (allowed: supervised, drain); an unset execution mode stays \
+                         value (allowed: supervised, drain, approved-small); an unset execution mode stays \
                          supervised"
                     ));
                     return policy;
@@ -172,6 +179,7 @@ impl UnsetModePolicy {
                     .into(),
             );
         }
+        policy.configured_default = section.get("default").is_some();
         policy.default = default;
         policy.drain_types = types;
         policy
@@ -242,7 +250,8 @@ impl UnsetModePolicy {
 
     /// Whether the project sets the drain default at all (any listed type).
     pub(crate) fn drains_any(&self) -> bool {
-        self.default == UnsetDefault::Drain && !self.drain_types.is_empty()
+        self.default == UnsetDefault::ApprovedSmall
+            || (self.default == UnsetDefault::Drain && !self.drain_types.is_empty())
     }
 
     /// The effective gating mode of `req`, given `gating` — the mode the
@@ -262,7 +271,20 @@ impl UnsetModePolicy {
             return EffectiveMode::from(None);
         }
         let word = type_word(&req.req_type);
-        let withheld = if !self.drain_types.contains(&req.req_type) {
+        // trace:STORY-3038 | ai:codex
+        let small_policy = self.default == UnsetDefault::ApprovedSmall;
+        let withheld = if small_policy
+            && (req.status != aida_core::RequirementStatus::Approved
+                || !req
+                    .tags
+                    .iter()
+                    .any(|t| t.trim().eq_ignore_ascii_case("small"))
+                || std::iter::once(&req.title)
+                    .chain(req.tags.iter())
+                    .any(|s| strict_terms(s)))
+        {
+            Err("the project default requires an approved small standard-tier spec".into())
+        } else if !small_policy && !self.drain_types.contains(&req.req_type) {
             Err(format!(
                 "the project's drain default does not cover type {word}"
             ))
@@ -284,6 +306,7 @@ impl UnsetModePolicy {
                 mode: Some(ExecutionMode::Drain),
                 source: ModeSource::ProjectDefault {
                     req_type: word,
+                    approved_small: small_policy,
                     protected: protected.clone(),
                 },
             },
@@ -348,6 +371,50 @@ fn sensitive_class(req: &Requirement) -> Option<String> {
         .or_else(|| crate::gate::mandate::excluded_class(req))
 }
 
+// trace:STORY-3038 | ai:codex
+fn strict_terms(text: &str) -> bool {
+    text.to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| {
+            matches!(
+                word,
+                "strict"
+                    | "lease"
+                    | "leases"
+                    | "claim"
+                    | "claims"
+                    | "grant"
+                    | "grants"
+                    | "gate"
+                    | "gates"
+                    | "guard"
+                    | "guards"
+                    | "auth"
+                    | "identity"
+                    | "credentials"
+                    | "credential"
+                    | "contained"
+                    | "confinement"
+                    | "mandate"
+                    | "containment"
+                    | "shift"
+                    | "guardrail"
+                    | "guardrails"
+                    | "hook"
+                    | "hooks"
+                    | "githooks"
+                    | "watchdog"
+                    | "verdict"
+                    | "ship"
+                    | "hold"
+                    | "authority"
+                    | "sandbox"
+                    | "seat"
+                    | "seats"
+            )
+        })
+}
+
 /// Where an effective gating mode came from.
 // trace:STORY-2884 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -359,6 +426,7 @@ pub(crate) enum ModeSource {
     /// change must not touch for the default to stand.
     ProjectDefault {
         req_type: String,
+        approved_small: bool,
         protected: ProtectedPaths,
     },
     /// No mode set and no default applies. `withheld` says why when the
@@ -427,10 +495,28 @@ impl EffectiveMode {
     /// `None` when unknown) touch a protected gate path read with the setting.
     // trace:STORY-2884 | ai:claude
     pub(crate) fn withdraw_for_change(&mut self, paths: Option<&[String]>) {
-        let ModeSource::ProjectDefault { protected, .. } = &self.source else {
+        let ModeSource::ProjectDefault {
+            protected,
+            approved_small,
+            ..
+        } = &self.source
+        else {
             return;
         };
-        if let Some(why) = protected_path_reason(paths, protected) {
+        let strict_path = if *approved_small {
+            paths.and_then(|paths| {
+                paths.iter().find(|p| {
+                    crate::gate::kernel_deps::review_blocking::sensitive_path(p) || strict_terms(p)
+                })
+            })
+        } else {
+            None
+        };
+        if let Some(path) = strict_path {
+            self.withdraw(format!(
+                "not defaulted, the change touches strict-tier path {path}"
+            ));
+        } else if let Some(why) = protected_path_reason(paths, protected) {
             self.withdraw(why);
         }
     }

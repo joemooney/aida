@@ -72,6 +72,8 @@ default = "supervised"         # the default; or "drain"
 drain_types = ["bug", "task"]  # with "drain": the spec types it covers
 ```
 
+Set `default = "approved-small"` to apply drain only to specs currently Approved and tagged `small`. This option ignores `drain_types`. Explicit modes take precedence. Strict-tier spec metadata or changed paths (including leases, claims, grants, containment, gates, guards and authority) keep the spec supervised.
+
 With `default = "drain"`, a spec with no mode whose type is in `drain_types` merges as a `drain` spec would. All other merge checks still apply: an independent approval at the PR's head, green CI and no holds. The setting never applies to:
 
 - a spec that sets its own mode (`drive`, `guided`, `operator` and `decide` stay as set)

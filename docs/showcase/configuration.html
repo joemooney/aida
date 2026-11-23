@@ -53,6 +53,7 @@ aida history --help</code></pre>
 <pre><code>[gate.unset_mode]
 default = &quot;supervised&quot;         # the default; or &quot;drain&quot;
 drain_types = [&quot;bug&quot;, &quot;task&quot;]  # with &quot;drain&quot;: the spec types it covers</code></pre>
+<p>Set <code>default = &quot;approved-small&quot;</code> to apply drain only to specs currently Approved and tagged <code>small</code>. This option ignores <code>drain_types</code>. Explicit modes take precedence. Strict-tier spec metadata or changed paths (including leases, claims, grants, containment, gates, guards and authority) keep the spec supervised.</p>
 <p>With <code>default = &quot;drain&quot;</code>, a spec with no mode whose type is in <code>drain_types</code> merges as a <code>drain</code> spec would. All other merge checks still apply: an independent approval at the PR&#x27;s head, green CI and no holds. The setting never applies to:</p>
 <ul>
 <li>a spec that sets its own mode (<code>drive</code>, <code>guided</code>, <code>operator</code> and <code>decide</code> stay as set)</li>

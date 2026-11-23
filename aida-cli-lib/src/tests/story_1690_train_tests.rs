@@ -1373,6 +1373,7 @@ fn live_gate_lands_a_project_default_drain_spec_only_off_protected_paths() {
         mode: Some(aida_core::ExecutionMode::Drain),
         source: ModeSource::ProjectDefault {
             req_type: "bug".into(),
+            approved_small: false,
             protected: crate::gate::mandate_gates::ProtectedPaths::floor(),
         },
     };

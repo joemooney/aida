@@ -563,3 +563,41 @@ fn show_label_follows_the_superseding_carrier() {
     let label = show_label(dir.path(), &child, || Some(vec![c])).unwrap();
     assert_eq!(label, "drain (project default for unset bug)");
 }
+
+// trace:STORY-3038 | ai:codex
+#[test]
+fn approved_small_default_requires_approval_size_and_standard_tier() {
+    let enabled = policy("[gate.unset_mode]\ndefault = 'approved-small' # opt in");
+    let mut req = spec(RequirementType::Story, "fix list order", &["Small"]);
+    assert!(enabled.resolve(None, &req).requires_supervision());
+    req.status = aida_core::RequirementStatus::Approved;
+    assert!(policy("").resolve(None, &req).requires_supervision());
+    let mode = enabled.resolve(None, &req);
+    assert_eq!(
+        at_change(mode.clone(), paths(&["src/list.rs"])).mode,
+        Some(ExecutionMode::Drain)
+    );
+    for path in [
+        "src/claims.rs",
+        "src/grant_check.rs",
+        "src/lease.rs",
+        "src/guard.rs",
+        "src/seat.rs",
+        "src/credentials.rs",
+        ".githooks/pre-commit",
+    ] {
+        assert!(
+            at_change(mode.clone(), paths(&["src/list.rs", path])).requires_supervision(),
+            "{path}"
+        );
+    }
+    assert!(at_change(mode, None).requires_supervision());
+    assert_eq!(
+        enabled.resolve(Some(ExecutionMode::Guided), &req).mode,
+        Some(ExecutionMode::Guided)
+    );
+    req.tags.insert("strict-tier".into());
+    assert!(enabled.resolve(None, &req).requires_supervision());
+    req.tags.clear();
+    assert!(enabled.resolve(None, &req).requires_supervision());
+}

@@ -902,6 +902,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             max_secs: 7 * 24 * 3600,
         },
     },
+    // trace:STORY-3038 | ai:codex
+    KnobSpec {
+        section: "gate.unset_mode",
+        key: "default",
+        doc: "An unset mode stays supervised by default. Use approved-small for Approved specs tagged small outside strict-tier paths, or drain with a drain_types list.",
+        default: "supervised",
+        edit: EditSafety::ReadOnly {
+            reason: "change the default in a reviewed PR to .aida/config.toml",
+        },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -3387,6 +3397,28 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     crate::landing_policy::duration_text(policy.red_main_fix_window),
                 ),
             ],
+        }
+    });
+
+    // trace:STORY-3038 | ai:codex
+    sections.push({
+        use crate::gate::unset_mode::UnsetModePolicy;
+        let policy = UnsetModePolicy::load(project_root);
+        PolicySection {
+            section: "gate.unset_mode",
+            header: "[gate.unset_mode]".to_string(),
+            rows: vec![PolicyRow {
+                key: "default",
+                value: format!(
+                    "{} (approved-small opts approved small standard-tier specs into drain)",
+                    policy.default.as_str()
+                ),
+                source: if policy.configured_default {
+                    PolicySource::DefaultBranchConfig
+                } else {
+                    PolicySource::Default
+                },
+            }],
         }
     });
 

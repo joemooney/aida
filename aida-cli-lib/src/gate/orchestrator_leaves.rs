@@ -372,6 +372,8 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "aida_core::ExecutionMode::Drain",
             "aida_core::RelationshipType::SupersededBy",
             "aida_core::Requirement",
+            // trace:STORY-3038 | ai:codex
+            "aida_core::RequirementStatus::Approved",
             "aida_core::RequirementType",
             "aida_core::RequirementType::ALL",
             "aida_core::git_ops::host_git_command",
