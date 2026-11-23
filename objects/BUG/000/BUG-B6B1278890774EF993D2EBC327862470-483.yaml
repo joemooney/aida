@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-483
 agreed_id: BUG-2722
 title: 'doctor: release a repair-journal conflict reservation whose lane is provably over'
 description: 'Minimal slice split from BUG-2688 (#4388 parked 2026-11-22). Today a stale entry in dell1 .aida/repair-journal.json (entry 48: PR-4376 @660c0e87, lane 01a2053df3e6, tree …-433) blocks every conflict-repair relaunch with ''retained conflicts require their host journal evidence before a resume'', even though the lane''s lease is ended and its tree has been salvaged and moved aside. There is no doctor heal for it, and hand-editing the journal is forbidden. AC1: an `aida doctor heal` category (for example repair-reservations) lists journal reservations whose lease is ended AND whose tree is absent or salvaged, with evidence. With --id it releases exactly one, recording who released it and why. AC2: it refuses when the lease is live, the tree exists with unmerged files, or evidence is missing, naming the reason and the evidence command. AC3: a regression test for the dell1 shape (ended lease, moved tree, reservation for the current PR head), after which a conflict lane can reserve. Keep it small. Everything else from #4388 stays in deferred BUG-2688.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T03:07:24.472530087Z
+modified_at: 2026-11-23T03:21:29.883072601Z
 req_type: Bug
 comments:
 - id: 01a20639-b01d-7f20-bca0-6cd50f5e0501
@@ -45,6 +45,12 @@ comments:
   modified_at: 2026-11-23T03:07:24.472530087Z
   session_id: 01a2063cc951
   harness_version: codex-cli 0.167.0
+- id: 01a2066c-4a1b-7302-b037-62fb1325cf58
+  author: aida-publication-done
+  content: Implementer push 9c8f6309535e declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T03:21:29.883072053Z
+  modified_at: 2026-11-23T03:21:29.883072053Z
+  session_id: 01a2063cc951
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
@@ -66,6 +72,14 @@ history:
   session_id: 01a2063cc951
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a2066c-4a1b-7302-b037-62e37a401b4e
+  author: aida-publication-done
+  timestamp: 2026-11-23T03:21:29.883070178Z
+  session_id: 01a2063cc951
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
