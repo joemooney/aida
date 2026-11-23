@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-23T22:12:29.731523861Z
+modified_at: 2026-11-23T22:13:34.205768416Z
 req_type: Bug
 tags:
 - forge
@@ -26,6 +26,12 @@ comments:
   content: Filed Approved per advisor-122 request 2026-11-23 ~15:10 (rate-limit outage, trains failed closed until the 15:06 reset).
   created_at: 2026-11-23T22:12:29.731523861Z
   modified_at: 2026-11-23T22:12:29.731523861Z
+history:
+- id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
+  author: joe
+  timestamp: 2026-11-23T22:13:34.327724735Z
+  changes: []
+execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
   branch: main
