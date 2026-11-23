@@ -711,16 +711,12 @@ pub(crate) fn publish(
             "ordinary local approval validation refused publication"
         );
     }
-    let mut authenticated_identity = verified
+    let authenticated_identity = verified
         .get(
             &att.authority_key(verdict.recorded_at.as_deref())
                 .context("missing authority key")?,
         )
-        .context("missing authenticated reviewer identity")?
-        .clone();
-    authenticated_identity.extend(att.identity.iter().cloned());
-    authenticated_identity.sort();
-    authenticated_identity.dedup();
+        .context("missing authenticated reviewer identity")?;
     let mut origins = Vec::new();
     if let Some(ids) = record.get("blocking_finding_origin_ids") {
         for id in ids.as_array().context("finding origins must be an array")? {
@@ -770,7 +766,7 @@ pub(crate) fn publish(
             .recorded_by
             .clone()
             .context("missing reviewer actor")?,
-        reviewer_identity: qualify(&config.node, &authenticated_identity),
+        reviewer_identity: exported_identity(&config.node, authenticated_identity, att),
         decision: record
             .get("verdict")
             .and_then(|v| v.as_str())
@@ -881,6 +877,47 @@ fn parse_reference(id: &str) -> Option<(String, String, Uuid)> {
     let id = Uuid::parse_str(parts.next()?).ok()?;
     Some((change, node, id))
 }
+fn exported_identity(
+    node: &str,
+    verified: &[String],
+    att: &rv::RecorderAttestation,
+) -> Vec<String> {
+    let mut identity = verified.to_vec();
+    identity.extend(att.identity.iter().cloned());
+    identity.sort();
+    identity.dedup();
+    qualify(node, &identity)
+}
+
+/// Match the local recorder to the identity exported by this node for this change.
+pub(crate) fn matches_local_recorder(
+    root: &Path,
+    change: ChangeKey,
+    selected: &rv::RecordedVerdict,
+    origin: &rv::RecordedVerdict,
+) -> Result<bool> {
+    let (Some(remote), Some(local)) = (&selected.attestation, &origin.attestation) else {
+        return Ok(false);
+    };
+    let Some((key, node, _)) = remote.receipt_id.as_deref().and_then(parse_reference) else {
+        return Ok(false);
+    };
+    if key != change.as_key()
+        || !publisher(root)?.is_some_and(|config| config.node == node)
+        || local.carry_eligible != remote.carry_eligible
+    {
+        return Ok(false);
+    }
+    let verified = authority::verified_authority_keys(root, std::slice::from_ref(origin));
+    let Some(identity) = local
+        .authority_key(origin.recorded_at.as_deref())
+        .and_then(|key| verified.get(&key))
+    else {
+        return Ok(false);
+    };
+    Ok(exported_identity(&node, identity, local) == remote.identity)
+}
+
 fn body(r: &Receipt) -> Result<String> {
     let att = rv::RecorderAttestation {
         carry_eligible: r.carry_eligible,

@@ -387,6 +387,24 @@ pub(crate) fn approval_attested(
         .map_err(|failure| anyhow::anyhow!("{}", failure.reason))
 }
 
+// trace:BUG-2718 | ai:codex
+fn selected_approval_attested(
+    candidates: &[rv::RecordedVerdict],
+    selected: Option<&rv::RecordedVerdict>,
+    policy: &crate::gate::ship::ShipApprovalPolicy,
+    head: &str,
+    pr: u64,
+) -> Result<()> {
+    if let Some(selected) = selected {
+        ensure!(
+            candidates.contains(selected),
+            "change approval is absent from the effective approval evidence"
+        );
+        approval_attested(std::slice::from_ref(selected), policy, head, pr)?;
+    }
+    approval_attested(candidates, policy, head, pr)
+}
+
 /// I/O seam shared by automatic recording and explicit retries. A failed audit
 /// or mirror write leaves the active marker in place; repeated successful calls
 /// are no-ops. The audit flag prevents duplicate comments on a mirror retry.
@@ -735,26 +753,41 @@ fn retained_rounds(body: &Value) -> Result<&[Value]> {
     }
 }
 
+#[derive(Debug)]
+struct ChangeLedgerRead;
+impl std::fmt::Display for ChangeLedgerRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("cannot read change ledger")
+    }
+}
+
 /// Match a change-only ledger approval to the effective change verdict and the
 /// pinned head. A verdict indexed for a sibling spec cannot answer this refusal.
 // trace:BUG-2718 | ai:codex
-fn change_approval(
+pub(super) fn change_approval(
     root: &Path,
     change: crate::gate::ledger::ChangeKey,
     head: &str,
+    allowed_specs: &[String],
 ) -> Result<Option<(Value, rv::RecordedVerdict)>> {
     use crate::gate::ledger::{checked, store_root};
-    let events = checked::read_change_events(&store_root(root)?, change, &mut Default::default())
-        .map_err(|why| anyhow::anyhow!(why.to_string()))?;
-    let Some(event) = events
-        .iter()
-        .rev()
-        .find(|e| e.verdict_record().is_some() && !e.is_spec_only())
-    else {
+    let events = checked::read_change_events(
+        &store_root(root).context(ChangeLedgerRead)?,
+        change,
+        &mut Default::default(),
+    )
+    .map_err(|why| anyhow::anyhow!(why.to_string()))
+    .context(ChangeLedgerRead)?;
+    let key = change.as_key();
+    let events = crate::gate::ledger::project::change_verdict_events(events, &key);
+    let Some(event) = crate::gate::ledger::project::newest_of(events) else {
         return Ok(None);
     };
     let record = event.verdict_record().expect("selected a verdict");
-    if event.spec.is_some()
+    if event
+        .spec
+        .as_ref()
+        .is_some_and(|spec| !allowed_specs.iter().any(|id| id.eq_ignore_ascii_case(spec)))
         || event.head.as_deref() != Some(head)
         || record.get("reviewed_sha").and_then(Value::as_str) != Some(head)
         || record
@@ -765,16 +798,42 @@ fn change_approval(
     {
         return Ok(None);
     }
-    let key = change.as_key();
     let current = rv::current_verdict(root, &key)
         .with_context(|| format!("cannot read approval under {key}"))?;
     let body: Value = serde_json::from_str(&current.body)?;
     let selected = rv::parse_recorded_verdict(&current.body).context("invalid change approval")?;
+    let local = Value::Object(record.clone());
+    let origin = rv::parse_ledger_record(record).context("invalid local approval")?;
     ensure!(
-        body.as_object() == Some(record) && !rv::delivery_pending(&body) && !selected.is_closed(),
-        "approval under {key} is no longer current or deliverable"
+        !rv::delivery_pending(&local)
+            && !origin.is_closed()
+            && !rv::delivery_pending(&body)
+            && !selected.is_closed(),
+        "approval under {key} is closed or pending"
     );
-    Ok(Some((body, selected)))
+    if body != local {
+        ensure!(
+            crate::gate::review_publication::matches_local_recorder(
+                root, change, &selected, &origin
+            )? && selected.raw == origin.raw
+                && selected.reviewed_sha == origin.reviewed_sha
+                && selected.recorded_at.is_some()
+                && selected.recorded_at == origin.recorded_at
+                && selected.recorded_by == origin.recorded_by
+                && selected.reviewed_branch == origin.reviewed_branch
+                && selected.summary == origin.summary
+                && selected.findings == origin.findings
+                && body.get("finding_dispositions") == local.get("finding_dispositions")
+                && crate::gate::review_approval::independent_approval_authorized(
+                    root,
+                    &[],
+                    origin.reviewed_branch.as_deref(),
+                    &origin
+                ),
+            "effective approval under {key} does not match its authorized local origin"
+        );
+    }
+    Ok(Some((local, selected)))
 }
 
 /// The retained round history of every label in [`arming_labels`], so each
@@ -862,7 +921,9 @@ fn condition_of(judged: Result<Option<Judged>>, unread: bool) -> ReleaseConditio
         Ok(Some(Judged::Done(_))) => {
             ReleaseCondition::Unknown("the read-only check ran a release step".into())
         }
-        Err(error) if unread => ReleaseCondition::Unknown(format!("{error:#}")),
+        Err(error) if unread || error.is::<ChangeLedgerRead>() => {
+            ReleaseCondition::Unknown(format!("{error:#}"))
+        }
         Err(error) => ReleaseCondition::Unmet(format!("{error:#}")),
     }
 }
@@ -913,23 +974,19 @@ fn with_live_io<T>(
             .map_err(anyhow::Error::msg)
             .map_err(noted)
     };
-    let mut known_ids: Vec<String> = hold
+    let known_ids: Vec<String> = hold
         .spec
         .iter()
         .filter(|spec| crate::gate::ledger::ChangeKey::parse(spec).is_none())
         .cloned()
         .collect();
-    // Shared corpus readers add PR-N implicitly. Include the pinned MR key
-    // explicitly for GitLab without treating it as a covered requirement.
-    // trace:BUG-2718 | ai:codex
-    let change_key = crate::gate::ledger::ChangeKey::parse(&format!("{}-{pr}", kind.change_noun()));
-    let mr_key = (kind == crate::forge::ForgeKind::GitLab).then(|| format!("MR-{pr}"));
-    known_ids.extend(mr_key.iter().cloned());
+    let change = crate::gate::ledger::ChangeKey::parse(&format!("{}-{pr}", kind.change_noun()))
+        .context("unsupported change forge")?;
     f(
         &root,
         &hold,
         AutoReleaseIo {
-            change_key,
+            change_key: Some(change),
             live_head: &live_head,
             read_hold: &|| mh::read_hold_record(&root, pr),
             covered_specs: &|| {
@@ -970,9 +1027,7 @@ fn with_live_io<T>(
             read_body: &|key| read_arming_body(&root, project, key),
             read_history: &|key| read_arming_history(&root, key),
             read_corpus: &|ids| {
-                let mut keys = ids.to_vec();
-                keys.extend(mr_key.iter().cloned());
-                mh::corpus_gate_bodies(&[project, &root], pr, &keys).map_err(anyhow::Error::msg)
+                mh::corpus_gate_bodies(&[project, &root], change, ids).map_err(anyhow::Error::msg)
             },
             grant_check: &|id, subject| sa::grant_check_for(&root, id, subject),
             // trace:STORY-1697 | ai:claude
@@ -980,25 +1035,18 @@ fn with_live_io<T>(
                 let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
                     &[project, root.as_path()],
                     &root,
-                    pr,
+                    change,
                     &known_ids,
                     None,
                     Some(head),
                 );
-                if let Some(selected) = selected {
-                    ensure!(
-                        candidates.contains(selected),
-                        "change approval is absent from the effective approval evidence"
-                    );
-                    approval_attested(std::slice::from_ref(selected), &policy, head, pr)?;
-                }
-                approval_attested(&candidates, &policy, head, pr)
+                selected_approval_attested(&candidates, selected, &policy, head, pr)
             },
             coverage: &|head| {
                 let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
                     &[project, root.as_path()],
                     &root,
-                    pr,
+                    change,
                     &known_ids,
                     None,
                     Some(head),
@@ -1009,7 +1057,7 @@ fn with_live_io<T>(
                 mh::live_carried_approval(
                     &[project, root.as_path()],
                     &root,
-                    pr,
+                    change,
                     head,
                     None,
                     &known_ids,
@@ -1271,18 +1319,64 @@ fn auto_release_steps(
                 let judged = (|| -> Result<Release> {
                     let body = (io.read_body)(&r.key)?;
                     let mut history = (io.read_history)(&r.key)?;
-                    if body
-                        .get("verdict")
+                    let arming_round = |round: &Value| {
+                        !rv::delivery_pending(round)
+                            && round
+                                .get("verdict")
+                                .and_then(Value::as_str)
+                                .is_some_and(|v| rv::VerdictKind::parse(v).requires_changes())
+                            && r.reviewed_sha
+                                .as_deref()
+                                .is_none_or(|sha| round["reviewed_sha"].as_str() == Some(sha))
+                            && r.recorded_by
+                                .as_deref()
+                                .is_none_or(|by| round["recorded_by"].as_str() == Some(by))
+                    };
+                    let published = body
+                        .pointer("/recorder_attestation/receipt_id")
                         .and_then(Value::as_str)
-                        .is_some_and(|raw| rv::VerdictKind::parse(raw).requires_changes())
-                        && !rv::delivery_pending(&body)
+                        .is_some_and(|id| id.starts_with("publication:"));
+                    let kind = body["verdict"].as_str().map(rv::VerdictKind::parse);
+                    let stale_approval = kind == Some(rv::VerdictKind::Approved)
+                        && body["reviewed_sha"].as_str() != Some(head.as_str());
+                    let retained_refusal = || -> Result<bool> {
+                        Ok(retained_rounds(&body)?
+                            .iter()
+                            .chain(&history.archived)
+                            .any(arming_round))
+                    };
+                    if !rv::delivery_pending(&body)
                         && r.pr == Some(hold.pr)
-                        && crate::gate::ledger::ChangeKey::parse(&r.key).is_none()
+                        && crate::gate::ledger::ChangeKey::parse(&r.key)
+                            .is_none_or(|key| published && Some(key) == io.change_key)
+                        && (arming_round(&body)
+                            || (stale_approval && retained_refusal()?)
+                            || (published && kind == Some(rv::VerdictKind::Approved)))
                     {
                         if let Some(change) = io.change_key {
+                            // A signed projection may represent the very same spec-bound act.
+                            // In the cross-key case only a change-only event may answer.
+                            let allowed_specs = if published {
+                                if crate::gate::ledger::ChangeKey::parse(&r.key).is_some() {
+                                    ids.to_vec()
+                                } else {
+                                    arming_labels(root, &r.key)
+                                }
+                            } else {
+                                Vec::new()
+                            };
                             if let Some((approval, selected)) =
-                                change_approval(root, change, &head)?
+                                change_approval(root, change, &head, &allowed_specs)?
                             {
+                                if published && body["reviewed_sha"].as_str() == Some(head.as_str())
+                                {
+                                    ensure!(
+                                        rv::parse_recorded_verdict(&body.to_string()).as_ref()
+                                            == Some(&selected),
+                                        "conflicting published review under {}",
+                                        r.key
+                                    );
+                                }
                                 let key = change.as_key();
                                 history.archived.extend_from_slice(retained_rounds(&body)?);
                                 history.archived.push(body);
@@ -1300,13 +1394,13 @@ fn auto_release_steps(
                 })();
                 match judged {
                     Ok(release) => Ok(release),
-                    Err(e) if refs.len() > 1 => Err(anyhow::anyhow!(
-                        "the refusal on {} at {} is not answered: {e:#}",
+                    Err(e) if refs.len() > 1 => Err(e.context(format!(
+                        "the refusal on {} at {} is not answered",
                         r.key,
                         r.reviewed_sha
                             .as_deref()
                             .map_or("an unknown head", |s| &s[..s.len().min(8)])
-                    )),
+                    ))),
                     Err(e) => Err(e),
                 }
             })

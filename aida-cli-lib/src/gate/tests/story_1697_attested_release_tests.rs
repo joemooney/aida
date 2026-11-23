@@ -647,3 +647,24 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
     assert!(mh::hold_is_open(root, PR));
     assert!(mh::recorded_clearance(root, PR).is_none());
 }
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_selected_approval_needs_membership_and_own_authority() {
+    let case = Case::ok();
+    let valid = case.candidates[0].clone();
+    let mut absent = valid.clone();
+    absent.summary = Some("different review".into());
+    assert!(
+        selected_approval_attested(&case.candidates, Some(&absent), &case.policy, HEAD, PR)
+            .is_err()
+    );
+    let mut unattested = valid.clone();
+    unattested.attestation = None;
+    unattested.recorded_at = Some("2026-10-14T01:00:01Z".into());
+    let candidates = vec![valid.clone(), unattested.clone()];
+    assert!(selected_approval_attested(&candidates, Some(&valid), &case.policy, HEAD, PR).is_ok());
+    assert!(
+        selected_approval_attested(&candidates, Some(&unattested), &case.policy, HEAD, PR).is_err()
+    );
+}

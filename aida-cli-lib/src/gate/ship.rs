@@ -1117,12 +1117,14 @@ pub(crate) fn approval_head_refusal_message(pr: u64, refusal: &ApprovalHeadRefus
 // trace:TASK-1460 | ai:claude
 pub(crate) fn merge_gate_verdict_candidates(
     roots: &[&std::path::Path],
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     spec_ids: &[String],
     head: Option<&str>,
 ) -> Vec<crate::gate::review_verdict::RecordedVerdict> {
+    let change = change.into();
+    let pr = change.number;
     // trace:STORY-2492 | ai:codex — a synced refusal excludes local/archive approval fallback.
-    let change_key = format!("PR-{pr}");
+    let change_key = change.as_key();
     let remote_keys: Vec<&str> = std::iter::once(change_key.as_str())
         .chain(spec_ids.iter().map(String::as_str))
         .collect();
@@ -1141,7 +1143,7 @@ pub(crate) fn merge_gate_verdict_candidates(
         }
     }
     let head = head.map(str::trim).filter(|h| !h.is_empty());
-    let mut keys: Vec<String> = vec![format!("PR-{pr}")];
+    let mut keys: Vec<String> = vec![change_key.clone()];
     for id in spec_ids {
         let id = id.trim().to_ascii_uppercase();
         if !id.is_empty() && !keys.contains(&id) {
@@ -1153,9 +1155,9 @@ pub(crate) fn merge_gate_verdict_candidates(
     // the ledger, a spec key answers from the ledger alone, with this
     // change's events (and another change's only at this head).
     // trace:BUG-2570 | ai:claude
-    let own_verdict = roots
-        .iter()
-        .any(|root| crate::gate::ledger::project::change_has_verdict(root, pr));
+    let own_verdict = roots.iter().any(|root| {
+        pr > 0 && crate::gate::ledger::project::newest_verdict_event(root, &change_key).is_some()
+    });
     let mut seen: Vec<std::path::PathBuf> = Vec::new();
     let mut out = Vec::new();
     for root in roots {
@@ -1195,7 +1197,7 @@ pub(crate) fn merge_gate_verdict_candidates(
             let ledger = ledger_applies.then_some(()).and_then(|()| {
                 let store = crate::gate::ledger::store_root(root).ok()?;
                 let event = crate::gate::ledger::project::newest_verdict_event_for_change(
-                    &store, key, pr, head,
+                    &store, key, change, head,
                 )?;
                 Some((store.join(".aida").join("gate-ledger").join(key), event))
             });

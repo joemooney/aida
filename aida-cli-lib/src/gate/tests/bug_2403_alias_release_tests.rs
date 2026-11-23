@@ -30,7 +30,7 @@ fn record(root: &Path, key: &str, verdict: &str, sha: &str) {
     let path = rv::verdict_path(root, key);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let findings = if verdict == "approved" {
-        Vec::new()
+        vec![String::new()]
     } else {
         vec!["the fix is untested".to_string()]
     };
@@ -398,6 +398,7 @@ fn bug_2718_change_only_approval_releases_spec_hold() {
     let _env = AmbientGuard::hermetic_with_seat(&root, "reviewer", &[]);
     commit_snapshot(&root);
     arm(&root);
+    record(&root, FRIENDLY, "approved", OLD);
     let change = ChangeKey::pr(PR);
     let key = change.as_key();
     let mut record = rv::build_verdict_object(
@@ -415,6 +416,16 @@ fn bug_2718_change_only_approval_releases_spec_hold() {
     let mut event = GateEvent::new(change, EventBody::Verdict { record });
     event.head = Some(HEAD.into());
     assert!(event.spec.is_none());
+    ledger::store::append(&ledger::store_root(&root).unwrap(), change, vec![event]).unwrap();
+
+    let annotation = serde_json::json!({"terminal_wait_key":"TASK-301", "terminal_wait_source":{}, "verdict":"request-changes"});
+    let mut event = GateEvent::new(
+        change,
+        EventBody::Verdict {
+            record: annotation.as_object().unwrap().clone(),
+        },
+    );
+    event.spec = Some("TASK-301".into());
     ledger::store::append(&ledger::store_root(&root).unwrap(), change, vec![event]).unwrap();
 
     assert!(release(&root, lawful(&[MOVED])).0.is_err());
@@ -463,4 +474,42 @@ fn bug_2718_spec_bound_approval_releases_change_hold() {
         Outcome::Released { mandate: None }
     );
     assert!(has_clearance(&root));
+}
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_gitlab_corpus_and_candidates_exclude_same_number_pr() {
+    use crate::gate::ledger::ChangeKey;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let _env = AmbientGuard::hermetic_with_seat(&root, "reviewer", &[]);
+    record(&root, &format!("PR-{PR}"), "rejected", HEAD);
+    let key = format!("MR-{PR}");
+    record(&root, &key, "approved", HEAD);
+    let change = ChangeKey::parse(&key).unwrap();
+    let bodies = mh::corpus_gate_bodies(&[&root], change, &[]).unwrap();
+    assert_eq!(bodies.len(), 1);
+    assert_eq!(bodies[0].0, key);
+    let candidates =
+        crate::gate::ship::merge_gate_verdict_candidates(&[&root], change, &[], Some(HEAD));
+    assert_eq!(candidates.len(), 1);
+    assert!(candidates[0].kind.approves());
+}
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_unreadable_change_ledger_yields_unknown() {
+    use crate::gate::ledger::{self, ChangeKey};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let _env = AmbientGuard::hermetic_with_seat(&root, "reviewer", &[]);
+    let change = ChangeKey::pr(PR);
+    let path = ledger::store::ledger_file(&root, change);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink("/dev/null", path).unwrap();
+    let error = change_approval(&root, change, HEAD, &[]).unwrap_err();
+    assert!(matches!(
+        condition_of(Err(error), false),
+        ReleaseCondition::Unknown(_)
+    ));
 }

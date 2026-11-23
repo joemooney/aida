@@ -224,10 +224,7 @@ pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
 /// index (only events recorded for that spec) — newest last.
 fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     if let Some(change) = ChangeKey::parse(key) {
-        return events(root, change)
-            .into_iter()
-            .filter(|e| e.verdict_record().is_some() && terminal_annotation_matches(e, key))
-            .collect();
+        return change_verdict_events(events(root, change), key);
     }
     let Some(spec) = spec_key(key) else {
         return Vec::new();
@@ -289,6 +286,16 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     out
 }
 
+// Use the same lifecycle scope when the caller has already checked the ledger.
+pub(crate) fn change_verdict_events(events: Vec<GateEvent>, key: &str) -> Vec<GateEvent> {
+    events
+        .into_iter()
+        .filter(|e| {
+            !e.is_spec_only() && e.verdict_record().is_some() && terminal_annotation_matches(e, key)
+        })
+        .collect()
+}
+
 // A spec-scoped closure cannot replace the PR review or another spec review.
 // trace:BUG-2525 | ai:codex
 fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
@@ -319,13 +326,14 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
 pub(crate) fn newest_verdict_event_for_change(
     start: &Path,
     key: &str,
-    pr: u64,
+    change: impl Into<ChangeKey>,
     head: Option<&str>,
 ) -> Option<GateEvent> {
+    let change = change.into();
     let root = store_root(start).ok()?;
     let mut events = verdict_events(&root, key);
     if ChangeKey::parse(key).is_none() {
-        events.retain(|event| speaks_for_change(event, pr, head));
+        events.retain(|event| speaks_for_change(event, change, head));
     }
     newest_of(events)
 }
@@ -333,13 +341,13 @@ pub(crate) fn newest_verdict_event_for_change(
 /// Whether `event`, read under a spec key, is evidence about change `pr` at
 /// `head` ([`newest_verdict_event_for_change`]).
 // trace:BUG-2570 | ai:claude
-fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
+fn speaks_for_change(event: &GateEvent, change: ChangeKey, head: Option<&str>) -> bool {
     let head = head.map(str::trim).filter(|head| !head.is_empty());
     let (Some(bound), Some(head)) = (ChangeKey::parse(&event.change), head) else {
         return true;
     };
-    pr == 0
-        || bound.number == pr
+    change.number == 0
+        || bound == change
         || event
             .head
             .as_deref()
@@ -356,15 +364,16 @@ fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
 pub(crate) fn newest_verdict_event_for_merge(
     start: &Path,
     key: &str,
-    pr: u64,
+    change: impl Into<ChangeKey>,
     head: Option<&str>,
     in_head: &dyn Fn(&str) -> bool,
 ) -> Option<GateEvent> {
+    let change = change.into();
     let root = store_root(start).ok()?;
     let mut events = verdict_events(&root, key);
     if ChangeKey::parse(key).is_none() {
         events.retain(|event| {
-            speaks_for_change(event, pr, head)
+            speaks_for_change(event, change, head)
                 || has_round_at(event, head)
                 || standing_refusal_in_head(&root, event, in_head)
         });
