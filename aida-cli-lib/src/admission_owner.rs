@@ -1249,50 +1249,54 @@ mod tests {
         assert!(land.borrow().is_some());
     }
 
-    // trace:BUG-2732 | ai:codex
-    #[test]
-    fn bug2732_manual_train_releases_stale_legacy_receipts() {
+    fn zero_wait_train_fixture() -> tempfile::TempDir {
         let temp = tempfile::tempdir().unwrap();
-        let root = temp.path();
-        let dir = directory(root);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(temp.path().join(".aida")).unwrap();
         std::fs::write(
-            root.join(".aida/config.toml"),
+            temp.path().join(".aida/config.toml"),
             "[admission]\nwait_secs = 0\n",
         )
         .unwrap();
+        temp
+    }
 
-        let live = acquire(root, "legacy auto-train", true).unwrap();
-        let template: Receipt =
-            serde_json::from_slice(&std::fs::read(&live.receipt).unwrap()).unwrap();
-        for purpose in ["legacy review-watch", "legacy auto-train"] {
-            let mut stale = template.clone();
-            stale.token = uuid::Uuid::new_v4().to_string();
-            stale.purpose = purpose.into();
-            stale.identity.starttime += 1; // Same PID, different process lifetime.
-            write_atomic(
-                &dir.join(format!("{}.json", stale.token)),
-                &serde_json::to_vec(&stale).unwrap(),
-            )
-            .unwrap();
+    fn stale_legacy_receipts(root: &Path) -> [PathBuf; 2] {
+        let mut reused = ProcIdentity::capture(std::process::id()).unwrap();
+        reused.starttime += 1;
+        ["legacy review-watch", "legacy auto-train"]
+            .map(|purpose| write_test_receipt(root, reused.clone(), purpose))
+    }
+
+    // trace:BUG-2732.AC1 | ai:codex
+    // trace:BUG-2732.AC2 | ai:codex
+    #[test]
+    fn bug2732_manual_train_releases_stale_legacy_receipts() {
+        let temp = zero_wait_train_fixture();
+        let stale = stale_legacy_receipts(temp.path());
+        let _claim = manual_train_admission(temp.path(), false)
+            .unwrap()
+            .expect("first attempt should acquire its own claim");
+        for receipt in stale {
+            assert!(!receipt.try_exists().unwrap());
         }
-        let error = manual_train_admission(root, false).err().unwrap();
+    }
+
+    // trace:BUG-2732.AC2 | ai:codex
+    #[test]
+    fn bug2732_manual_train_preserves_live_auto_train() {
+        let temp = zero_wait_train_fixture();
+        let live = acquire(temp.path(), "legacy auto-train", true).unwrap();
+        let stale = stale_legacy_receipts(temp.path());
+        let error = manual_train_admission(temp.path(), false).err().unwrap();
         assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error}");
-        assert!(live.receipt.exists());
-        assert_eq!(
-            std::fs::read_dir(&dir)
-                .unwrap()
-                .filter(|e| e
-                    .as_ref()
-                    .unwrap()
-                    .path()
-                    .extension()
-                    .is_some_and(|x| x == "json"))
-                .count(),
-            1
-        );
+        assert!(live.receipt.is_file());
+        for receipt in stale {
+            assert!(!receipt.try_exists().unwrap());
+        }
         drop(live);
-        assert!(manual_train_admission(root, false).unwrap().is_some());
+        assert!(manual_train_admission(temp.path(), false)
+            .unwrap()
+            .is_some());
     }
 
     /// A waiting manual train asks only the auto-train to yield; review
