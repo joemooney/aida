@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T13:34:47.802882143Z
+modified_at: 2026-11-23T13:34:55.549579471Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -75,6 +75,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full-sweep review of TASK-3115 (TASK-73022632d35647cca3858b18ac0723e3-010). The generated worksheet has no formal Acceptance or Verify block. The two criteria below come from its cited requirement description, corroborated by the implementer self-review. The PR claims completion.. No triage reason was given.'
   created_at: 2026-11-23T13:34:47.802874563Z
   modified_at: 2026-11-23T13:34:47.802874563Z
+- id: 01a2089d-e593-79c0-9551-c8fb7d25133d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3115):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5d32993516df
+    Recorded: 2026-11-23T13:33:28.761025071+00:00
+    Findings:
+    1. TASK-3115 AC2 — Plain train check can rewrite .aida/config.toml. The new call at aida-cli-lib/src/pr_train.rs:2251 reaches the unheld-supervised label lookup at aida-cli-lib/src/gate/mandate_ship.rs:814-829. With a supported origin and a stale [forge] provider = "pure-git", resolve_forge_kind repairs the provider via write_forge_config_provider (aida-cli-lib/src/forge.rs:1844-1865), despite the check entry point deliberately using peek_forge_kind. Carry-over's forge lookup also uses forge_for through aida-cli-lib/src/gate/approval.rs:675-680. Use non-repairing forge resolution throughout the preview and verify that an active-mandate check with stale config leaves the file byte-for-byte unchanged.
+    2. The new plain-check mandate path can overrun --timeout. aida-cli-lib/src/pr_train.rs:2251 reaches have_ship_refs_locally's raw Git status/output calls and the fallback fetch in aida-cli-lib/src/gate/mandate_ship.rs:667-670,1121-1145 and aida-cli-lib/src/pr_service.rs:545-565. Mandate trace and snapshot Git calls also bypass the scoped deadline (aida-cli-lib/src/gate/mandate_traces.rs:51-58,652-674), and store retries have their own independent query budget and backoff. check_all only discards a late result after the call returns. A stalled Git child therefore holds the report past the documented deadline. Apply the remaining deadline to preview Git commands and retries, and cover a stalled mandate-only subprocess through the report entry point.
+    3. Plain --check --json labels unavailable mandate evidence as read. At aida-cli-lib/src/pr_train.rs:2260-2266 every preview refusal becomes a string, so trace-collection errors and unreadable exclusion history or ledger evidence become MemberGateError::Refused and check_one emits evidence="read" (aida-cli-lib/src/pr_train_check.rs:147-160). The command guide promises evidence="unavailable" when an evidence read fails. Preserve the refusal classification across both supervised and hold paths, and assert JSON output for unreadable evidence and a settled policy refusal.
+    4. The new train fixtures at aida-cli-lib/src/tests/bug2406_train_tests.rs:1535-1553 verify member equality and a label-only refusal, but do not detect gate evidence writes by the train-check caller. The successful path does not force a write-producing condition, and the label-only refusal happens before mandate collection. Existing preview-helper no-write tests do not exercise this caller. Extend a plain train-check fixture to reach a real mandate refusal that the recording path would audit, and assert that the exclusion ledger, gate ledger, hold and event state are unchanged before running the recording path as a positive control.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T13:34:55.379979689Z
+  modified_at: 2026-11-23T13:34:55.379979689Z
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
