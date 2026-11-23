@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T13:32:46.758633722Z
+modified_at: 2026-11-23T13:33:21.127160484Z
 req_type: Bug
 tags:
 - agreed-id
@@ -198,6 +198,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T13:32:31.558083962Z
   modified_at: 2026-11-23T13:32:31.558083962Z
+- id: 01a2089c-abef-7be2-ac23-b7fcf1fd91b2
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:33):
+    # BUG-2727 / PR #4419 rework (advisor-122 priority ruling 2026-11-23 06:33; product-15). Lane: CODEX. SMALL; fix only these.
+
+    CR at 3aa52f85. Fix every BLOCKING finding below, each with a test that fails if the fix is removed. Deferred findings: leave alone.
+
+    1. [p1/blocking] aida-cli-lib/src/pr_train.rs:5020-5039 — The 60-second deadline SIGKILLs the entire mutating pull, including Git, then proceeds as though the local store were usable. If it expires while a diverged store is being rebased, the kill bypasses rebase_auto_merge_onto’s abort path and can leave the shared store detached or mid-rebase. Subsequent canonical store writes refuse that state until an operator repairs it. Apply the deadline at a boundary that can stop safely before mutation or let the started store transaction finish or clean up under its writer lock. Test a timeout during a mutating refresh and verify the store remains writable.
+
+    2. [p2/blocking] BUG-2727 AC1, aida-cli/tests/story_105_agreed_and_local_ids.rs:624-667 — The train fixture sets the forge to /bin/false, expects every invocation to fail, and resolves TASK-3835 only with a separate aida show. There is no PR trailer and no live member mandate decision. This passes if the live train still fails to resolve the origin-only label at the gate, and the check and dry-run cases can exit before member evaluation. Use a fixture PR with the origin-only agreed ID in its trailer and assert that the live train resolves that record in the mandate path. Drive the read-only train cases through member evaluation and verify the store stays unchanged.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T13:33:21.127160484Z
+  modified_at: 2026-11-23T13:33:21.127160484Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
