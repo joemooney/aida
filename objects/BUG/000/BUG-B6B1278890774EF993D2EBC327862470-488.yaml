@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T09:52:15.709830114Z
+modified_at: 2026-11-23T09:52:23.064219841Z
 req_type: Bug
 tags:
 - agreed-id
@@ -69,6 +69,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-b6b1278890774ef993d2ebc327862470-488.AC1 unverified. No triage reason was given.'
   created_at: 2026-11-23T09:52:15.709819552Z
   modified_at: 2026-11-23T09:52:15.709819552Z
+- id: 01a207d2-2780-7202-b2a4-17be2fa7f796
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2727):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1adec8504629
+    Recorded: 2026-11-23T09:49:21.089448841+00:00
+    Findings:
+    1. AC1, mandate_traces.rs:340-353. The selected revision can still miss a label published on origin. With both local HEAD and its tracking ref at an older commit, resolution returns that commit without checking origin. When local HEAD is ahead, the function explicitly takes the unpublished tree, which can differ from the published label map. Establish the intended origin revision at the host boundary, pin that revision for resolution, and exercise a stale tracking ref and a local-ahead checkout.
+    2. AC1, mandate_ship.rs:133-144. Current-record resolution compares literal label text, while trailer coverage uses the store’s unambiguous resolver and treats leading zeros as immaterial. This falsely reports an otherwise valid padded agreed ID as missing, and can accept one literal match even when the shared resolver finds a numeric collision. Use the shared identity and ambiguity rules for both steps and cover padded labels and collisions in the regression.
+    3. AC1, pr_service.rs:485-497 and pr_cmd/mod.rs:876-895. The production mandate receives IDs already filtered by ship_gate_known_ids against the live checkout. A title-only label can be removed by stale trailer coverage, for example when its review-story Covers relationship is present only on the pinned store. pr_gate_subject can re-add commit and branch IDs, but it never reads the PR title, so its second filter cannot recover the dropped ID. Pass the original subject inputs to the mandate and apply coverage once with the pinned store.
+    4. mandate_ship.rs:712-751. The stable-store check scopes evidence to post-filter ShipSpecs, even though the new pinned collection also relies on trailer coverage. A local store commit that changes a PR review story’s implements relationship can change whether a trailer is named without touching any path or ID line in that scope. An attempt can therefore accept stale membership and skip an applicable exclusion. Bind subject selection to a stable revision or revalidate every coverage input, including candidates the filter drops.
+    5. AC2, mandate_ship.rs:743-747 and 831. MissingSpecs lists named misses only after the entire store loads. A blob read or parse error at a selected SHA aborts before subject collection, so the refusal identifies the SHA and failing object but omits the known PR IDs it could not resolve. Preserve the subject IDs and selected revision on that failure path so an operator can distinguish unreadable evidence from absent IDs.
+    6. story_1698_mandate_tests.rs:1532, 1818, 2007 and 3992. Existing production-path tests initialize fixture stores without refs/remotes/origin/aida-store. The new mandatory-ref lookup refuses before the decision callback, alias-history assertions or preview/ship parity checks. The trace-wiring fixture at line 1532 also needs a committed TASK-1 object or the new named-resolution check will short-circuit it after the ref is seeded. Update the fixtures so the existing assertions still reach the production checks they protect.
+    7. AC1 and AC2 production wiring, task_2067_trace_resolution_tests.rs:248-317. The new fixture directly calls the loader, subject helper and diagnostic helper with an unscoped docs branch. It would still pass if production used its old store, omitted the named-resolution check, or passed the wrong store to active coverage. The supplied untraced list covers both criteria and the new test carries only a spec-level trace. Add criterion-traced production-path cases that reach the mandate decision for a covered agreed label and check the actual multi-ID refusal.
+    8. mandate_traces.rs:360-415 and 740-768. The new reader buffers the full tree listing and every object body, then deserializes the full graph on each mandate collection and retry, with no output ceiling or deadline. The observed tracking tree already contains 8,369 object blobs totaling about 50 MB. Use a bounded reader or a revision-keyed lookup to keep repeated gate collections within a controlled resource budget.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T09:52:22.912194429Z
+  modified_at: 2026-11-23T09:52:22.912194429Z
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
