@@ -1,0 +1,29 @@
+id: 01a20929-0c83-76f1-9a54-2d96d1a5a92c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-820
+agreed_id: STORY-3038
+title: Approved small standard-tier specs default to execution mode drain (project knob, default off)
+description: |
+  Found 2026-11-23 (advisor-122; filed by product-15). Every spec defaults to execution mode "unset", which means supervised. So every approved PR needs mandate cover (currently broken: BUG-2718, BUG-2727) or the operator naming the PR at a terminal (`aida pr train --all-ready` does not count as naming). Approved, green, small standard-tier PRs (#4418, #4422, #4429, #4431, #4414) sat unlanded for hours. Today seats set `--mode drain` by hand on each small standard-tier spec they approve.
+
+  ## Acceptance
+  - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
+  - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T16:06:54.851399517Z
+modified_at: 2026-11-23T16:06:54.851399517Z
+req_type: Story
+tags:
+- autonomy
+- config
+- landing
+- small
+filed_at:
+  code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6708d633cf3
+  vendor: claude
