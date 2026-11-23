@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T01:31:12.731078927Z
+modified_at: 2026-11-23T01:31:16.804136719Z
 req_type: Bug
 tags:
 - authority
@@ -158,6 +158,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T01:31:12.582980439Z
   modified_at: 2026-11-23T01:31:12.582980439Z
+- id: 01a20607-92d8-7350-9712-e550c173c516
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:31):
+    # BUG-2715 / PR #4397 r3 (advisor-122 ruling 2026-11-22 18:35 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier (lease authority). Small.
+
+    CR at 38557051 (r2). The reviewer confirms all four r1 cases are fixed, plus the AC2 death control. Two findings remain in the clone-reclaim scan in aida-cli-lib/src/leases.rs, and both block. Fix both. The reviewer scope is these two plus the r3 diff.
+    1. leases.rs:2370: a record that parses as BOTH LockOnlyEntry and a session lease must NOT be skipped as lock-only. Make LockOnlyEntry reject unknown or session fields (serde deny_unknown_fields, or check for session identity fields first), so an ambiguous record is treated as a session lease or refused, never skipped. Test the dual-shape record.
+    2. leases.rs:2384: open candidates NON-BLOCKING (O_NONBLOCK, no-follow) and require a regular file (fstat) before reading. A FIFO or non-regular file classifies as Unknown, with the path and an inspection command, never Dead or absent. Test a FIFO named *.toml.
+    CONSTRAINT (on the spec): size-bounded or unreadable records fail closed, so they're a refusal, never absence.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T01:31:16.804136719Z
+  modified_at: 2026-11-23T01:31:16.804136719Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
