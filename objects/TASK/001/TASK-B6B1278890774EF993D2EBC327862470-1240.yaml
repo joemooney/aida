@@ -1,5 +1,6 @@
 id: 01a20733-df4d-7442-87da-582ef2d996b9
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1240
+agreed_id: TASK-3272
 title: 'Review follow-up: aida-cli-lib/src/doctor_cmd.rs:329–350: The repair-reservations branch accepts the documen'
 description: |-
   From BUG-2722
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20637-3865-75e2-add6-0c87270d0c56
   created_at: 2026-11-23T06:59:43.421525788Z
+history:
+- id: 01a2077f-d12e-7560-8382-c352d69cdd71
+  author: joe
+  timestamp: 2026-11-23T08:22:26.862205159Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d038ab6e1f80f7cbd7dfc8e1cb30cfb661485261
   branch: pr-4403

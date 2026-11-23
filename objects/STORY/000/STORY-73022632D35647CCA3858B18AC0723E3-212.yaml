@@ -1,5 +1,6 @@
 id: 01a2071c-a906-75b1-a587-9ad00534fb5d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-212
+agreed_id: STORY-3021
 title: 'Review PR-4413: [AI:codex] fix(review-watch): retry blocked pickups and report skipped heads (BUG-2720)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a206d3`) for branch `bug-b6b1278890774ef993d2ebc327862470-481`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T06:34:37.329153551Z
   session_id: 01a206d328f6
+  changes: []
+- id: 01a20780-a096-7740-b4e8-95e2d2254646
+  author: joe
+  timestamp: 2026-11-23T08:23:19.958274347Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ca95624cadfe896abf34e36cde0e98ad40c847e8

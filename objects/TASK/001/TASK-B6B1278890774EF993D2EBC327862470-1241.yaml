@@ -1,5 +1,6 @@
 id: 01a20761-2cc2-79a3-95ac-f55e4c674c75
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1241
+agreed_id: TASK-3273
 title: 'Review follow-up: PR body — The advisor''s final rework brief requires the accepted attribution limit in the '
 description: |-
   From BUG-2721
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
   created_at: 2026-11-23T07:49:11.976855596Z
+history:
+- id: 01a20780-0496-7f73-853c-4d8b277cd9e7
+  author: joe
+  timestamp: 2026-11-23T08:22:40.022242821Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b9364510fb871268e5500e28afc5a3959e36cf5d
   branch: pr-4402

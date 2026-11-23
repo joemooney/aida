@@ -1,5 +1,6 @@
 id: 01a2072e-9ec0-7011-aa40-1c5b9d43ac33
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1237
+agreed_id: TASK-3275
 title: 'Review follow-up: Attempt denies unknown fields and the state remains version 1. pickup_retries is serialize'
 description: |-
   From BUG-2720
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a205a9-7715-7ce3-a532-cf8c3ffde338
   created_at: 2026-11-23T06:53:59.412062155Z
+history:
+- id: 01a20780-6aeb-7292-bf29-979a3eb09315
+  author: joe
+  timestamp: 2026-11-23T08:23:06.219390581Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2fcffa9987591527cab7610b758675e6fe3844a7
   branch: pr-4413
