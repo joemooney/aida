@@ -14,12 +14,12 @@ description: |
   - AC2: The two fake-gh fixtures (bug_2690_land_update_branch_tests.rs, story_2768_land_tests.rs) accept both argv shapes. A test covers the without-flag path.
   - AC3: A test checks the composed argv against the real `gh api --help` on the test host and skips with a clear message when gh is absent, so a flag the installed gh lacks fails CI.
   - AC4: On imac (gh 2.81.0), `aida land stalls` reads at least one open PR's CI state as something other than UNKNOWN-for-evidence.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-23T03:56:50.845631065Z
+modified_at: 2026-11-23T03:56:54.272635877Z
 req_type: Bug
 tags:
 - fasttrack
@@ -222,6 +222,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a2068c-b480-7a40-ac8e-0c6416d05626
+  author: joe
+  timestamp: 2026-11-23T03:56:54.272629106Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -229,3 +236,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T03:56:54.272560383Z
