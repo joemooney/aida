@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-23T19:35:21.699449733Z
+modified_at: 2026-11-23T19:36:39.514217735Z
 req_type: Bug
 tags:
 - doctor
@@ -34,6 +34,22 @@ comments:
     Add `// trace:BUG-2730 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2730)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
   created_at: 2026-11-23T12:04:35.857664697Z
   modified_at: 2026-11-23T12:04:35.857664697Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a209e9-48e7-7f43-b824-d725a51a8c8e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:36):
+    # BUG-2730: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2730` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2730 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2730)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE p27 (product-15 12:38, integration-30 request): branch `int27-bug-2730`, cut from origin/integration 54e9220e1db. Your PR MUST target base `integration`. Standard tier only: if the fix needs an ADR-76 strict path (leases, claims, grants, containment, gate/guard), STOP and punt naming it.
+  created_at: 2026-11-23T19:36:39.514217735Z
+  modified_at: 2026-11-23T19:36:39.514217735Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
