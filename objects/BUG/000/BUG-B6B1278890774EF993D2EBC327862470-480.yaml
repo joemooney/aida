@@ -9,12 +9,12 @@ description: |
   - AC1: When a PR's new head differs from an approved head only by a clean merge of the protected base (no conflict resolution, no non-merge commits), review-watch does not launch a fresh full review. The approval carries, per the project's carry-over policy.
   - AC2: If policy requires a review of such a head, its scope is limited to the merge itself (conflict-resolution hunks and base-induced CI failures), and the prior round's scope and cap state are passed to the reviewer.
   - AC3: A regression test approves head A, update-branches to merge-only head B, and asserts no full review dispatch (or a merge-scoped one).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T22:23:06.366822385Z
-modified_at: 2026-11-23T03:39:10.682500980Z
+modified_at: 2026-11-23T03:49:46.163909246Z
 req_type: Bug
 tags:
 - carry-over
@@ -35,6 +35,14 @@ comments:
   modified_at: 2026-11-23T03:39:10.682500980Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a20686-2c33-7f80-990c-8c96d428e03c
+  author: aida-session-start
+  timestamp: 2026-11-23T03:49:46.163907797Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
