@@ -60,18 +60,16 @@ pub(crate) fn refusal(error: &anyhow::Error) -> Option<&LaneSpaceRefused> {
 /// `prior` with its deferral replaced by `reason`. Any other note text the
 /// row carried is kept after it.
 pub(crate) fn deferral_note(prior: Option<&str>, reason: &str) -> String {
+    let Some(prior) = prior.filter(|text| !text.trim().is_empty()) else {
+        return reason.to_owned();
+    };
     let mut note = reason.to_owned();
-    for part in prior
-        .unwrap_or_default()
-        .split(NOTE_SEPARATOR)
-        .filter(|part| {
-            let text = part.trim();
-            !text.is_empty()
-                && !text
-                    .strip_prefix(NOTE_PREFIX)
-                    .is_some_and(|at| chrono::DateTime::parse_from_rfc3339(at).is_ok())
-        })
-    {
+    for part in prior.split(NOTE_SEPARATOR).filter(|part| {
+        let text = part.trim();
+        !text
+            .strip_prefix(NOTE_PREFIX)
+            .is_some_and(|at| chrono::DateTime::parse_from_rfc3339(at).is_ok())
+    }) {
         note.push_str(NOTE_SEPARATOR);
         note.push_str(part);
     }
@@ -89,7 +87,9 @@ pub(crate) fn annotate_queue_rows(
     if requirement_ids.is_empty() {
         return Ok(0);
     }
-    annotate_selected(storage, storage.queue_users()?, requirement_ids, reason)
+    annotate_selected(storage, storage.queue_users()?, requirement_ids, &|prior| {
+        deferral_note(prior, reason)
+    })
 }
 
 // Discover queue owners only. The backend reads and transforms the current
@@ -99,14 +99,12 @@ fn annotate_selected(
     storage: &aida_core::Storage,
     users: Vec<String>,
     requirement_ids: &[uuid::Uuid],
-    reason: &str,
+    update: &dyn Fn(Option<&str>) -> String,
 ) -> Result<usize> {
     let requirement_ids = requirement_ids.iter().copied().collect();
     let mut annotated = 0;
     for user in users {
-        annotated += storage.queue_update_notes(&user, &requirement_ids, &|prior| {
-            deferral_note(prior, reason)
-        })?;
+        annotated += storage.queue_update_notes(&user, &requirement_ids, update)?;
     }
     Ok(annotated)
 }
@@ -134,7 +132,7 @@ pub(crate) fn defer(
              admits it once the disk guard or `aida worktree gc --apply` frees space"
         ),
         Err(why) => {
-            format!("{scope} stays queued, but its queue row could not record the reason: {why:#}")
+            format!("could not record the queue deferral for {scope}: {why:#}")
         }
     };
     anyhow::Error::new(crate::standalone_implementer::StandaloneImplementerExit {
@@ -176,6 +174,7 @@ mod tests {
         removed.user_id = "bob".into();
         storage.queue_add(removed).unwrap();
         let users = storage.queue_users().unwrap();
+        let stale_rows = storage.queue_entries_for_requirement(&id).unwrap();
 
         let mut edited = entry;
         edited.position = 42;
@@ -189,7 +188,29 @@ mod tests {
 
         let reason = &format!("{NOTE_PREFIX}2026-11-19T06:00:00Z");
         assert_eq!(
-            annotate_selected(&storage, users, &[id], reason).unwrap(),
+            annotate_selected(&storage, users, &[id], &|prior| {
+                // At the read/modify/write boundary, a second writer must be excluded.
+                // The old list + queue_add implementation renders the note unlocked.
+                if storage.is_sqlite() {
+                    let competitor = rusqlite::Connection::open(storage.path()).unwrap();
+                    competitor.busy_timeout(std::time::Duration::ZERO).unwrap();
+                    let err = competitor.execute_batch("BEGIN IMMEDIATE").unwrap_err();
+                    assert_eq!(
+                        err.sqlite_error_code(),
+                        Some(rusqlite::ErrorCode::DatabaseBusy)
+                    );
+                } else {
+                    let file =
+                        std::fs::File::open(aida_core::db::store_write_lock_path(storage.path()))
+                            .unwrap();
+                    assert_eq!(
+                        fs2::FileExt::try_lock_exclusive(&file).unwrap_err().kind(),
+                        std::io::ErrorKind::WouldBlock
+                    );
+                }
+                deferral_note(prior, reason)
+            })
+            .unwrap(),
             1
         );
         edited.note = Some(format!("{reason} ·  keep me  "));
@@ -202,6 +223,42 @@ mod tests {
             .queue_entries_for_requirement(&absent)
             .unwrap()
             .is_empty());
+
+        // Negative control: replay the same interleaving through the former
+        // snapshot/upsert path and observe both the lost edit and resurrection.
+        for (_, mut stale) in stale_rows {
+            stale.note = Some(deferral_note(stale.note.as_deref(), reason));
+            storage.queue_add(stale).unwrap();
+        }
+        assert_eq!(storage.queue_list("alice", true).unwrap()[0].position, 1000);
+        assert_eq!(storage.queue_list("bob", true).unwrap().len(), 1);
+        if !storage.is_sqlite() {
+            storage.queue_add(edited.clone()).unwrap();
+            let mut sibling = edited.clone();
+            sibling.user_id = "bob".into();
+            storage.queue_add(sibling).unwrap();
+            std::fs::write(
+                storage.path().join("registry/aliases.toml"),
+                "[aliases]\nbob = 'alice'\n",
+            )
+            .unwrap();
+            assert_eq!(annotate_queue_rows(&storage, &[id], "fresh").unwrap(), 2);
+            for owner in ["alice", "bob"] {
+                let bytes =
+                    std::fs::read(storage.path().join(format!("registry/queues/{owner}.yaml")))
+                        .unwrap();
+                let rows: Vec<aida_core::models::QueueEntry> =
+                    serde_yaml::from_slice(&bytes).unwrap();
+                assert_eq!(rows[0].note.as_deref(), Some("fresh ·  keep me  "));
+            }
+            // Matching rows require this lock. An unrelated requirement can
+            // still report zero when a writer cannot open it.
+            let lock = aida_core::db::store_write_lock_path(storage.path());
+            std::fs::remove_file(&lock).unwrap();
+            std::fs::create_dir(lock).unwrap();
+            assert!(annotate_queue_rows(&storage, &[id], reason).is_err());
+            assert_eq!(annotate_queue_rows(&storage, &[absent], reason).unwrap(), 0);
+        }
     }
 
     fn refused() -> anyhow::Error {
@@ -233,6 +290,11 @@ mod tests {
         assert_eq!(
             deferral_note(Some("operator note"), reason),
             format!("{reason} · operator note")
+        );
+        let consecutive = format!("ops ·  · {NOTE_PREFIX}2026-11-19T05:00:00Z · later");
+        assert_eq!(
+            deferral_note(Some(&consecutive), reason),
+            format!("{reason} · ops ·  · later")
         );
         let earlier = "deferred: disk below floor at 2026-11-19T05:00:00Z · operator note";
         assert_eq!(

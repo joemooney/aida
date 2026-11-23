@@ -1881,6 +1881,13 @@ impl DatabaseBackend for SqliteBackend {
         requirement_ids: &std::collections::HashSet<uuid::Uuid>,
         update: &dyn Fn(Option<&str>) -> String,
     ) -> Result<usize> {
+        if !self
+            .queue_list(user_id, true)?
+            .iter()
+            .any(|row| requirement_ids.contains(&row.requirement_id))
+        {
+            return Ok(0);
+        }
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let mut matched = 0;

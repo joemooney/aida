@@ -3361,9 +3361,16 @@ impl DatabaseBackend for GitBackend {
         requirement_ids: &std::collections::HashSet<uuid::Uuid>,
         update: &dyn Fn(Option<&str>) -> String,
     ) -> Result<usize> {
+        // user_id came from persisted queue discovery. Alias lookup here
+        // could redirect a sibling file to the same canonical person.
+        let path = queue_file_path(&self.root, user_id);
+        if !Self::read_queue_file(&path)?
+            .iter()
+            .any(|row| requirement_ids.contains(&row.requirement_id))
+        {
+            return Ok(0);
+        }
         let _lock = self.lock_queue_write()?;
-        let user_id = self.resolve_queue_user(user_id);
-        let path = queue_file_path(&self.root, &user_id);
         let mut entries = Self::read_queue_file(&path)?;
         let mut matched = 0;
         let mut changed = false;
@@ -3382,7 +3389,7 @@ impl DatabaseBackend for GitBackend {
             crate::fs_atomic::write_atomic(&path, serde_yaml::to_string(&entries)?)?;
             self.auto_commit_paths(
                 "update queue note",
-                &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
+                &[&queue_relative_path_for_file(&self.root, &path, user_id)],
             );
         }
         Ok(matched)
