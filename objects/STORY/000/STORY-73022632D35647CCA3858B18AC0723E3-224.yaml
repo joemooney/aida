@@ -1,0 +1,32 @@
+id: 01a2085e-e8a8-78b1-be01-3ab245e254a9
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-224
+title: 'Review PR-4430: [AI:codex] fix(admission): recover unreadable drain journals on resume (TASK-3246)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20828`) for branch `task-b6b1278890774ef993d2ebc327862470-1188`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4430>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1188` → `main`
+
+  ## Covers
+
+  - TASK-3246
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4430` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T12:26:07.400239836Z
+modified_at: 2026-11-23T12:26:07.400239836Z
+req_type: Story
+filed_at:
+  code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1960d246c4
+  session: 01a208282bb5
