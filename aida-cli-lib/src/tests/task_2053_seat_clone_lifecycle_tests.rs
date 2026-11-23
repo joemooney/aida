@@ -3214,9 +3214,16 @@ fn bug_2713_session_end_keeps_multiline_clone_status_failure() {
         &bin.join("bwrap"),
         "#!/bin/sh\ncase \" $* \" in *' --porcelain=v2 '*) echo 'warning: index' >&2; echo 'fatal: unreadable index' >&2; exit 1;; esac\n",
     );
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    let _ambient =
-        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = std::env::join_paths(
+        std::iter::once(bin).chain(std::env::split_paths(environment.get("PATH").unwrap())),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("PATH", Some(path.to_str().unwrap()))],
+    );
     let err = end_session(id, false).unwrap_err();
     let rendered = crate::agent_error_block(&err, &format!("{err:#}"));
     for expected in [
