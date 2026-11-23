@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T17:59:22.363575541Z
+modified_at: 2026-11-23T20:39:44.117234071Z
 req_type: Story
 tags:
 - autonomy
@@ -77,6 +77,11 @@ comments:
   created_at: 2026-11-23T17:47:50.436308569Z
   modified_at: 2026-11-23T17:47:50.436308569Z
   session_id: 01a20932bb10
+- id: 01a20a22-d2f5-7a11-9fee-6b2fbb32fe6d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep. REQUEST CHANGES for completing STORY-3038 (origin STORY-b6b1278890774ef993d2ebc327862470-820).. No triage reason was given.'
+  created_at: 2026-11-23T20:39:44.117225975Z
+  modified_at: 2026-11-23T20:39:44.117225975Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
@@ -123,6 +128,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20a22-d2f5-7a11-9fee-6b12bd6baa88
+  author: joe
+  timestamp: 2026-11-23T20:39:44.117216825Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
@@ -131,15 +143,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1 full sweep. REQUEST CHANGES for completing STORY-3038 (origin STORY-b6b1278890774ef993d2ebc327862470-820).
-    STORY-b6b1278890774ef993d2ebc327862470-820.AC1 — unverified
-    STORY-b6b1278890774ef993d2ebc327862470-820.AC2 — verified by source inspection of `cargo test -p aida-cli-lib approved_small_default_requires_approval_size_and_standard_tier` (off/on and strict-path assertions) and the `aida config` knob registration and display at config_cmd.rs:905 and :3403. The implementer reports the focused test passed on the native working tree. The FAST workflow skipped test execution, and no local tests or builds were run in review.
-    Reviewed all nine files in the landed diff against protected main ef906ec7464cf1b3100c4383085280c203722941, landed tree db6a06f068e45011f5739509c83106a42b495cc9. The attested PR head is 4646e44fe43a97107e04d5f6b0b22c7601d7f397, four commits behind main. No finding depends on an intervening base change. CI pending at review time (fast gates and merge-hold gate passed, fast compile pending).
-  recovery_hint: address the review findings, move STORY-3038 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T17:59:22.363575541Z
