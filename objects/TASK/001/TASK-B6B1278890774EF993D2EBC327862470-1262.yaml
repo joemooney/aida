@@ -1,5 +1,6 @@
 id: 01a20998-c50a-7ac1-9396-2eeaf6531d65
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1262
+agreed_id: TASK-3293
 title: 'Review follow-up: The standalone wording check in `tests/test_closeout_audit_wording.py:9` is not selected b'
 description: |-
   From BUG-2731
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a208f5-2928-7921-9dff-50aa746498fb
   created_at: 2026-11-23T18:09:14.377736864Z
+history:
+- id: 01a209c6-0d51-7323-9cbb-309bc7673de9
+  author: joe
+  timestamp: 2026-11-23T18:58:24.209268328Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
   branch: pr-4450
