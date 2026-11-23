@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T02:32:07.382829753Z
+modified_at: 2026-11-23T02:32:10.206855201Z
 req_type: Bug
 tags:
 - authority
@@ -194,6 +194,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2715 AC2 passes by source inspection. The exited-worker controls are present, and the mixed lock/session case now counts both claimants. AC1 and AC3 remain incomplete at initial clone discovery. Reviewed against protected base 215313b8d3a8. The intervening base commit changes unrelated files. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-23T02:32:07.382824056Z
   modified_at: 2026-11-23T02:32:07.382824056Z
+- id: 01a2063f-2031-7f62-b4b2-d208b5259745
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2715):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e1dd1ce40121
+    Recorded: 2026-11-23T02:28:47.267842565+00:00
+    Findings:
+    1. [unmet-claimed-ac, P1] BUG-2715 AC1/AC3, aida-cli-lib/src/queue_cmd/work.rs:4110. Before invoking check_exited_branch_clone, inspect_queue_work_branch obtains its clone list from clone_seat_trees. That function calls list_leases, which uses blocking read_to_string and silently drops parse failures. A session FIFO with no writer therefore hangs force-claim before the new nonblocking scan. If a truncated lease is the only record for a clone, the initial list omits the clone entirely and the strict check never runs. Both regression tests call the inner helper directly. Use the fallible nonblocking scan for initial force-claim discovery, propagate its refusal before branch filtering, and cover the FIFO and lone truncated lease via the branch preflight. Verify both refusals name the path and inspection command.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T02:32:10.033341087Z
+  modified_at: 2026-11-23T02:32:10.033341087Z
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
