@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1fb83-8cef-7180-be40-a310b4a3ecd5
+  position: -1054000
+  added_by: role:implementer
+  added_at: 2026-11-23T11:20:52.563307411Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1fb75-7597-74d1-a709-c1b05ad5e105
   position: -1053000
   added_by: role:implementer
@@ -379,14 +385,6 @@
   added_by: role:implementer
   note: Contained refusal, contained recorded-cwd control, and uncontained recovery through the same entry point. Reuse the TASK-3149 fixture where applicable. Test-only.
   added_at: 2026-11-21T07:06:33.098468646Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1fb83-8cef-7180-be40-a310b4a3ecd5
-  position: 630000
-  added_by: role:implementer
-  note: Test stdin-only and stderr-only TTY cases for the existing operator conjunction, with both-stream control. Test-only; no authority changes.
-  added_at: 2026-11-21T07:07:19.913806465Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
