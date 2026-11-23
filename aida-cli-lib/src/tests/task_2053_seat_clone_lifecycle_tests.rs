@@ -3198,3 +3198,61 @@ fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
         "cleanup reached salvage"
     );
 }
+
+// trace:BUG-2713 | ai:codex
+#[test]
+fn bug_2713_session_end_keeps_multiline_clone_status_failure() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let id = "b27130000658";
+    let clone = seat(&fx, "658", id);
+    let bin = fx.root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("bwrap"),
+        "#!/bin/sh\ncase \" $* \" in *' --porcelain=v2 '*) echo 'warning: index' >&2; echo 'fatal: unreadable index' >&2; exit 1;; esac\n",
+    );
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let err = end_session(id, false).unwrap_err();
+    let rendered = crate::agent_error_block(&err, &format!("{err:#}"));
+    for expected in [
+        "working tree status",
+        "warning: index",
+        "fatal: unreadable index",
+    ] {
+        assert!(rendered.contains(expected), "{rendered}");
+    }
+    assert!(clone.exists() && crate::lease_path(&fx.main, id).exists());
+}
+
+// trace:BUG-2713 | ai:codex
+#[test]
+fn bug_2713_session_end_names_each_nested_untracked_file() {
+    let fx = fixture();
+    let tree = fx.root.join("worktree-658");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-b", "feat", tree.to_str().unwrap()],
+    );
+    let id = "b27130000659";
+    write_clone_lease(&fx.main, &tree, id);
+    let lease = crate::lease_path(&fx.main, id);
+    let mut record = crate::list_leases(&fx.main).remove(0);
+    record.tree_kind = TreeKind::Worktree;
+    std::fs::write(&lease, toml::to_string(&record).unwrap()).unwrap();
+    std::fs::create_dir(tree.join("notes")).unwrap();
+    for file in ["notes/DU.txt", "notes/other file"] {
+        std::fs::write(tree.join(file), "local work").unwrap();
+    }
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let err = end_session(id, false).unwrap_err();
+    let rendered = crate::agent_error_block(&err, &format!("{err:#}"));
+    for path in ["?? notes/DU.txt", "?? notes/other file"] {
+        assert!(rendered.contains(path), "{rendered}");
+    }
+    assert!(tree.exists() && lease.exists());
+}

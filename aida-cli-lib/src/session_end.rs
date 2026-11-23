@@ -1187,12 +1187,13 @@ pub(crate) fn session_end_with_discard_unpushed(
                 None
             }
             crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
-                "session {} works in the seat clone {}, whose state could not be read ({why}). \
+                "session {} works in the seat clone {}, whose state could not be read ({}). \
                  The session was NOT ended: its lease, clone and base pin are unchanged. \
                  Retry with --force --discard-unpushed to release the lease while keeping \
                  the unreadable clone for recovery.",
                 &target.id[..target.id.len().min(8)],
-                target.worktree_path.display(),
+                target.worktree_path.to_string_lossy().escape_debug(),
+                session_evidence(std::slice::from_ref(&why)),
             ),
             crate::seat_clone::Probe::HasSubmodules(reason) => anyhow::bail!(
                 "session {} works in the seat clone {}: {reason}. The session was NOT ended: its \
@@ -2559,16 +2560,20 @@ pub(crate) fn session_dirty_summary(
     entries: &[String],
 ) -> String {
     let location = worktree.to_string_lossy().escape_debug().to_string();
-    let evidence = entries
-        .iter()
-        .flat_map(|entry| entry.lines())
-        .collect::<Vec<_>>()
-        .join("; ");
+    let evidence = session_evidence(entries);
     if is_clone {
         format!("seat clone {location} holds work origin does not have: {evidence}\n")
     } else {
         format!("worktree {location} could not be confirmed clean: {evidence}\n")
     }
+}
+
+fn session_evidence(entries: &[String]) -> String {
+    entries
+        .iter()
+        .flat_map(|entry| entry.lines())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// Every untracked file under `dir` in `worktree`, one porcelain entry each.

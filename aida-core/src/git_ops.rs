@@ -4820,21 +4820,7 @@ const MAX_SUBMODULE_DEPTH: usize = 8;
 // trace:BUG-1985 | ai:claude
 fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
     let (top, links) = contained_top_gitlinks(tree)?;
-    // TASK-2146: pin the quoting `porcelain_quote` assumes, so the added
-    // submodule line matches git's whatever the user's `core.quotePath`.
-    // trace:TASK-1952 | trace:TASK-2146 | ai:claude
-    let out = host_git_command(&top)
-        .args(["-c", "core.quotePath=true"])
-        .args(["status", "--porcelain", "--ignore-submodules=dirty"])
-        .output()
-        .context("run git status")?;
-    anyhow::ensure!(
-        out.status.success(),
-        "git status failed in {}: {}",
-        top.display(),
-        String::from_utf8_lossy(&out.stderr).trim()
-    );
-    let mut porcelain = String::from_utf8_lossy(&out.stdout).into_owned();
+    let mut porcelain = per_file_porcelain(&top, "--ignore-submodules=dirty")?;
     let mut edited = Vec::new();
     for link in links {
         let Some(git_dir) = &link.git_dir else {
@@ -4919,12 +4905,16 @@ fn porcelain_unquote(field: &str) -> String {
 /// a non-ASCII byte.
 // trace:TASK-1952 | trace:TASK-1943 | ai:claude
 fn porcelain_quote(path: &str) -> String {
+    porcelain_quote_bytes(path.as_bytes())
+}
+
+fn porcelain_quote_bytes(path: &[u8]) -> String {
     let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
-    if !path.bytes().any(needs) {
-        return path.to_string();
+    if !path.iter().copied().any(needs) {
+        return String::from_utf8_lossy(path).into_owned();
     }
     let mut out = String::from("\"");
-    for b in path.bytes() {
+    for &b in path {
         match b {
             7 => out.push_str("\\a"),
             8 => out.push_str("\\b"),
@@ -5039,6 +5029,53 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
     Ok(r.stdout)
 }
 
+/// Convert NUL-delimited status to the quoted porcelain lines used by lifecycle callers.
+/// In -z mode rename/copy records list the destination first and the source second.
+// trace:BUG-2713 | ai:codex
+fn per_file_porcelain(tree: &Path, submodules: &str) -> Result<String> {
+    let out = host_git_command(tree)
+        .args([
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            submodules,
+        ])
+        .output()
+        .context("run git status")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git status failed in {}: {}",
+        tree.display(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    let mut lines = String::new();
+    let mut fields = out.stdout.split_inclusive(|&b| b == 0);
+    let path = |field: &[u8]| -> Result<String> {
+        let bytes = field
+            .strip_suffix(&[0])
+            .context("unterminated git status path")?;
+        anyhow::ensure!(!bytes.is_empty(), "empty git status path");
+        Ok(porcelain_quote_bytes(bytes))
+    };
+    while let Some(record) = fields.next() {
+        anyhow::ensure!(record.get(2) == Some(&b' '), "invalid git status entry");
+        let xy = std::str::from_utf8(&record[..2])?;
+        let destination = path(&record[3..])?;
+        lines.push_str(xy);
+        lines.push(' ');
+        if xy.contains(['R', 'C']) {
+            lines.push_str(&path(
+                fields.next().context("missing git status rename source")?,
+            )?);
+            lines.push_str(" -> ");
+        }
+        lines.push_str(&destination);
+        lines.push('\n');
+    }
+    Ok(lines)
+}
+
 /// [`worktree_status_porcelain`] as untrimmed porcelain v1 lines (each keeps
 /// its two status columns), for callers that parse or show them. Errors
 /// exactly when [`worktree_status_porcelain`] does.
@@ -5047,17 +5084,7 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
     let raw = if contained_code_tree(worktree_path) {
         contained_safety_scan(worktree_path)?.0
     } else {
-        let out = host_git_command(worktree_path)
-            .args(["status", "--porcelain", "--ignore-submodules=none"])
-            .output()
-            .context("run git status")?;
-        anyhow::ensure!(
-            out.status.success(),
-            "git status failed in {}: {}",
-            worktree_path.display(),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-        String::from_utf8_lossy(&out.stdout).into_owned()
+        per_file_porcelain(worktree_path, "--ignore-submodules=none")?
     };
     Ok(raw
         .lines()
