@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:19:49.568395128Z
-modified_at: 2026-11-23T20:39:05.649049135Z
+modified_at: 2026-11-23T20:41:24.909189845Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -118,6 +118,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:39:05.510820666Z
   modified_at: 2026-11-23T20:39:05.510820666Z
+- id: 01a20a24-91c8-7571-b034-f3bdbf1f744a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:41):
+    # TASK-3154 / PR #4451 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: Drive the REAL path in the regression (not lane_disk_deferral directly).
+
+    CR at 07b93fab. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [p2] TASK-b6b1278890774ef993d2ebc327862470-1115.ac88451d — aida-cli-lib/src/tests/bug_2684_disk_deferral_tests.rs:168–177, 203–233. The regression calls lane_disk_deferral::defer directly and manually finalizes a separate Attempt in another temporary directory. It would still pass if the normal pickup dropped the typed cause between rollback and return, or skipped persisting its own receipt. Drive the production headless implementer pickup deferral path with a structured LaneSpaceRefused, assert the returned error retains that refusal, and read disk-deferred from the receipt created by the same pickup.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:41:24.909189845Z
+  modified_at: 2026-11-23T20:41:24.909189845Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f2f1-eaea-7102-a425-f572a21135ad
   author: joe
