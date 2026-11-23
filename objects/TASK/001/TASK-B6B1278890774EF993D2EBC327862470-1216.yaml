@@ -21,12 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:01:12.445755266Z
-modified_at: 2026-11-22T20:01:12.445755266Z
+modified_at: 2026-11-23T00:01:38.551916413Z
 req_type: Task
 tags:
 - main-watch
 - mass-change
 - review-follow-up
+comments:
+- id: 01a205b5-8485-7800-b013-5a7bb51208fe
+  author: joe
+  content: 'Added (product-15, 2026-11-22 17:03): the S3a FINAL-round finding at 78d0e918, a p2 unmet-claimed-ac on observational metrics, deferred under mass-change: [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:824,1107,1413. If a tip was merged and observed green on Monday and an independent rerun first turns it red on Friday, the new reconciliation passes the original commit to open(), which timestamps red_start on Monday. Even a report restricted to Tuesday then counts known-green time as red, and the original green merge can count as a red merge. This occurs with just one episode. Preserve the commit date for attribution, record the rerun failure or observation time as the start of this episode, and distinguish this opening from a merge in the metrics. Extend the unchanged-tip test with a delayed rerun and assert zero red minutes before it and zero intervening merges.'
+  created_at: 2026-11-23T00:01:38.551916413Z
+  modified_at: 2026-11-23T00:01:38.551916413Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
