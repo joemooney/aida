@@ -11,12 +11,12 @@ description: |
   - AC1: New setting `[landing] ci_base_freshness = "strict" | "clean-merge"`, default "strict" (today's behaviour, unchanged, with a test). With "clean-merge", a PR whose update from main would be a CLEAN merge (`git merge-tree --write-tree` reports no conflict) is NOT held STALE-CI-BASE and NOT sent to update-branch. It may board the train, whose own main+squash CI is the gate. Head-exact full-tier CI on the PR is still required. A PR whose update would CONFLICT is still held.
   - AC2: review_watch_ready's "ready to ship after its branch is updated" follows the same setting. Tests cover strict (unchanged), clean-merge with a clean merge (ready, no update-branch), and clean-merge with a conflict (held).
   Size: target <=300 changed lines (small-PR rule). Strict tier? No: it's landing policy, standard tier.
-status: Approved
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T06:04:18.537831355Z
+modified_at: 2026-11-23T06:36:28.818574325Z
 req_type: Bug
 tags:
 - knob
@@ -133,6 +133,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landing diff against protected main ca95624cadfe896abf34e36cde0e98ad40c847e8. BUG-2725 AC1 and AC2 are partial. The default remains strict, and clean-merge has a conflict refusal, but missing FULL evidence stalls review and rework, and the watcher can misclassify CI, recommend direct ship, or update a clean branch. All six prior findings still apply to the published tree. The implementer’s reported working-tree corrections are absent from the reviewed head. Exact-head FAST passed and merge-hold-gate was pending clearance.. No triage reason was given.'
   created_at: 2026-11-23T06:04:18.537820323Z
   modified_at: 2026-11-23T06:04:18.537820323Z
+- id: 01a2071e-cd12-7ab3-b4b2-fb3ad47ea52f
+  author: aida-publication-done
+  content: Implementer push b56b658167b6 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T06:36:28.818573729Z
+  modified_at: 2026-11-23T06:36:28.818573729Z
+  session_id: 01a206d62de5
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
@@ -197,6 +203,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a2071e-cd12-7ab3-b4b2-fb26d382faea
+  author: aida-publication-done
+  timestamp: 2026-11-23T06:36:28.818570353Z
+  session_id: 01a206d62de5
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
