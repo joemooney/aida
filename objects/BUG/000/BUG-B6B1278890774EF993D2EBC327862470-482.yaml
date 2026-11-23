@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T06:02:46.345037137Z
+modified_at: 2026-11-23T06:24:01.142374068Z
 req_type: Bug
 tags:
 - recovery
@@ -192,6 +192,13 @@ comments:
     All three P1s addressed. Checked exact NUL-delimited fields, malformed/missing evidence, multiple process candidates, wrapper ancestry, primary versus dedicated cwd, reservation retention and grant revocation. Partial reads now use the bounded no-follow handle reader. The first FAST run identified a missing inventory entry for that reader; classified it read-only and restarted FAST. Accepted residual: a child that creates a new session, clears its environment and runs outside the worktree can escape attribution.
   created_at: 2026-11-23T06:02:46.345037137Z
   modified_at: 2026-11-23T06:02:46.345037137Z
+  session_id: 01a206ed9a53
+  harness_version: codex-cli 0.167.0
+- id: 01a20713-660e-7ae1-991d-284d0b8ce0da
+  author: dirtlab
+  content: 'Round 3 validation addendum: the corrected store-writer inventory passed. All FAST source checks preceding the structural Cargo gate passed. The FAST wrapper stopped when it intercepted the native lane job client; the structural tests and remaining ratchet groups ran separately through the launcher (143 Rust tests passed). The full dynamic manual check passed against the executable from the lane build overlay: 85 commands, all 14 interface-change declarations, command paths and flags verified. Completion declaration recorded for host publication.'
+  created_at: 2026-11-23T06:24:01.142374068Z
+  modified_at: 2026-11-23T06:24:01.142374068Z
   session_id: 01a206ed9a53
   harness_version: codex-cli 0.167.0
 history:
