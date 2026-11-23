@@ -1,5 +1,6 @@
 id: 01a207eb-2fe7-7970-a2dc-571a16d21e74
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1246
+agreed_id: TASK-3276
 title: 'Review follow-up: aida-cli-lib/src/main_watch.rs:1292-1310,1326-1335. When a verified green commit arrives j'
 description: |-
   From TASK-3209
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1faf1-fab2-7931-b4ce-9cfff8712da3
   created_at: 2026-11-23T10:19:56.894046060Z
+history:
+- id: 01a2080f-d6a5-7552-94f3-1c4e4ea23d90
+  author: joe
+  timestamp: 2026-11-23T10:59:45.445598440Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: bb5f778f679f84d7e19ebd52b6986d597cd43aea
   branch: pr-4422

@@ -1,5 +1,6 @@
 id: 01a207bc-7b56-7803-ba61-5065b3b2542e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-214
+agreed_id: STORY-3022
 title: 'Review PR-4417: [AI:codex] fix(tests): construct dummy credentials at runtime (TASK-3839)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20790`) for branch `task-b6b1278890774ef993d2ebc327862470-1221`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T09:28:57.518068841Z
   session_id: 01a207900d04
+  changes: []
+- id: 01a20810-b459-7b13-ae70-cd811fff8b88
+  author: joe
+  timestamp: 2026-11-23T11:00:42.201518014Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf

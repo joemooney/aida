@@ -1,5 +1,6 @@
 id: 01a207c4-b5d7-79b3-9346-310d6e157fdf
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-216
+agreed_id: STORY-3028
 title: 'Review PR-4419: [AI:codex] fix(mandate): resolve PR trailer labels against the pinned store (BUG-2727)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2078c`) for branch `bug-b6b1278890774ef993d2ebc327862470-488`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T09:37:53.808050355Z
   session_id: 01a2078c2fd0
+  changes: []
+- id: 01a20812-0587-7bf3-834e-4ee700651288
+  author: joe
+  timestamp: 2026-11-23T11:02:08.519385109Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf

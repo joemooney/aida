@@ -1,5 +1,6 @@
 id: 01a207de-45a4-7d12-8588-45c8a7008a8a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-219
+agreed_id: STORY-3023
 title: 'Review PR-4422: [AI:codex] fix(main-watch): reserve time to checkpoint slow passes (TASK-3209)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a207b7`) for branch `task-b6b1278890774ef993d2ebc327862470-1165`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T10:06:11.582190611Z
   session_id: 01a207b71108
+  changes: []
+- id: 01a20810-ecc5-79f1-b3a7-e9493d285dd2
+  author: joe
+  timestamp: 2026-11-23T11:00:56.645453192Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf

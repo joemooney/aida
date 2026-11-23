@@ -1,5 +1,6 @@
 id: 01a207c8-9874-77c3-bca2-9b7b8929ba31
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1243
+agreed_id: TASK-3279
 title: 'Review follow-up: TASK-3195 — aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:665–668. The replay asse'
 description: |-
   From TASK-3195
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1faf2-0249-74f3-8855-d051a75e6344
   created_at: 2026-11-23T09:42:09.714493945Z
+history:
+- id: 01a20810-7ceb-7500-9e9e-2f1479c3e85f
+  author: joe
+  timestamp: 2026-11-23T11:00:28.011823408Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
   branch: pr-4418

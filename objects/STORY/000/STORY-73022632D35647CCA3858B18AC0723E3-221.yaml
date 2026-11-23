@@ -1,5 +1,6 @@
 id: 01a2080a-3bda-7913-8e33-e552d50af8ef
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-221
+agreed_id: STORY-3029
 title: 'Review PR-4425: [AI:codex] fix(review-watch): request full CI after verified approval (BUG-2729)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a207e7`) for branch `bug-b6b1278890774ef993d2ebc327862470-490`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T10:53:47.587014246Z
   session_id: 01a207e7f7cd
+  changes: []
+- id: 01a20812-3eb5-77a1-ab58-b0347900bbc5
+  author: joe
+  timestamp: 2026-11-23T11:02:23.157618460Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf

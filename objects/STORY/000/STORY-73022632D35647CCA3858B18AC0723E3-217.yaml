@@ -1,5 +1,6 @@
 id: 01a207c5-1e63-7ca1-bc39-db542a46bceb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-217
+agreed_id: STORY-3027
 title: 'Review PR-4420: [AI:codex] fix(admission): widen scheduling margins in bounded-wait tests (TASK-3211)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2078e`) for branch `task-b6b1278890774ef993d2ebc327862470-1190`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T09:38:18.748217417Z
   session_id: 01a2078e7236
+  changes: []
+- id: 01a20811-cf6e-7960-bf87-d3487c8d235c
+  author: joe
+  timestamp: 2026-11-23T11:01:54.670683607Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf

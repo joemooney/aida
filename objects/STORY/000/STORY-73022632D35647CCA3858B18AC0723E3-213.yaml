@@ -1,5 +1,6 @@
 id: 01a207b0-57a0-77c0-bcdf-ee0800e4f404
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-213
+agreed_id: STORY-3026
 title: 'Review PR-4416: [AI:codex] fix(session): keep dirty paths in agent refusal summaries (Refs BUG-2713)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20787`) for branch `bug-b6b1278890774ef993d2ebc327862470-474`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T09:15:41.278347642Z
   session_id: 01a207870c47
+  changes: []
+- id: 01a20811-9821-7e21-8278-179054099dd0
+  author: joe
+  timestamp: 2026-11-23T11:01:40.513379330Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
