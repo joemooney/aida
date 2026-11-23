@@ -274,7 +274,7 @@ fn ended_agent(root: &std::path::Path, agent_type: &str, name: &str) {
 // trace:BUG-2619 | ai:codex
 #[test]
 fn bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript() {
-    if crate::test_env::run_path_isolated_test() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
@@ -377,21 +377,14 @@ printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
     let recorded = recorded_dir.join("018f-session.jsonl");
     let alternate = transcript_dir.join("018f-session.jsonl");
     std::fs::rename(&alternate, &recorded).unwrap();
-    let candidates = crate::agent_launch::matching_ended_resume_candidates(
+    let launch_cwd = crate::agent_launch::verify_agent_native_session_available(
         &root,
         "claude",
-        Some("implementer"),
-        None,
-        1,
-    );
-    let [candidate] = candidates.as_slice() else {
-        panic!("expected the recorded Claude session");
-    };
-    assert_eq!(candidate.worktree_path, root);
-    assert_eq!(
-        crate::agent_launch::resume_unavailable_reason(&root, candidate),
-        None
-    );
+        &root,
+        "018f-session",
+    )
+    .unwrap();
+    assert_eq!(launch_cwd, root);
     std::fs::rename(&recorded, &alternate).unwrap();
     env.unset_key("AIDA_CONTAINED");
 
