@@ -109,6 +109,13 @@ comments:
   created_at: 2026-11-23T21:12:07.710697480Z
   modified_at: 2026-11-23T21:12:07.710697480Z
   session_id: 01a209fb40a7
+- id: 01a20a41-5963-7a11-8baa-f16164d6c8dd
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 14:15): PR-4450 @ 34ad3353 PASSES. The rework commit 34ad335365c (+7/-1) moves the sentence into a single BRIEF_PRECEDENCE const, keeps it in render_agent_brief, and now also emits it in append_pickup_briefs right after PICKUP_BRIEF_HEADING. That''s the path `queue work --brief` uses (read_explicit -> append_pickup_briefs). A line-exact assertion was added to the session/inline_tests explicit-pickup-brief test. AC1 is unchanged and AC2 is now met on the lane path. The PR totals +39 vs integration (it merged integration 54e9220e1db in). Fast CI pending.'
+  created_at: 2026-11-23T21:12:50.139409567Z
+  modified_at: 2026-11-23T21:12:50.139409567Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20a41-ba7b-7960-afce-9bac33b9118a
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int26-bug-2731` at head `34ad335365c88b34e52ca6f62ef383ed9004a6a2`.'
