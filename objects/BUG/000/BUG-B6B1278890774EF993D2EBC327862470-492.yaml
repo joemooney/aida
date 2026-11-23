@@ -13,13 +13,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T17:55:21.640391565Z
+modified_at: 2026-11-23T17:56:00.631038869Z
 req_type: Bug
 tags:
 - briefs
 - lanes
 - small
 - track:integration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2098c-a606-7281-beb8-01392f68295a
+  created_at: 2026-11-23T17:56:00.631023051Z
+  created_by: dirtlab
 comments:
 - id: 01a20913-d0da-72b0-accc-9ccf07616516
   author: joe
@@ -88,6 +94,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2098c-f55c-7130-a6ed-dbcc7710543b
+  author: dirtlab
+  timestamp: 2026-11-23T17:56:02.524663586Z
+  session_id: 01a2095b139f
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
