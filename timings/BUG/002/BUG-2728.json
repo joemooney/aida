@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2728",
+  "publishes": [
+    {
+      "at": "2026-11-23T23:11:41.224203877Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T21:15:23.514152561Z",
+      "spec": "BUG-2728",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4455,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ccb9ea51cc5064223378a2022840f02a89b4f561"
+      }
+    },
+    {
+      "ts": "2026-11-23T21:15:34.470371687Z",
+      "spec": "BUG-2728",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all five changed files against the generated worksheet and the integration base 54e9220e1db9175dbb2c284241aed674328067f6. BUG-2728 is a completing spec.\n\nBUG-b6b1278890774ef993d2ebc327862470-489.AC1 — unverified\nThe user-supplied untraced-criteria list identifies AC1. The new `python3 -m unittest tests/test_build_git_stamp.py` probe covers a fresh helper invocation with an untracked-only checkout and then with tracked edits. The implementer reported it passing. The probe bypasses Cargo's cached build-script output, which can be stale across same-HEAD unstaged changes.\nBUG-b6b1278890774ef993d2ebc327862470-489.AC2 — unverified\nThe user-supplied untraced-criteria list identifies AC2. The probe verifies the embedded path payload, and the implementer reported seeing the paths when invoking the rebuilt binary. The diff has no command-level regression for the usual clean live binary reporting a separate dirty latest build, and that status path omits the dirty paths.\n\nFAST source gates passed and FAST compilation was pending at review time. Review used source inspection and existing evidence. The review claim command refused; the standalone draft handoff is used.",
+        "recovery_hint": "address the review findings, move BUG-2728 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T21:15:35.630074294Z",
+      "spec": "BUG-2728",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4455,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ccb9ea51cc5064223378a2022840f02a89b4f561"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:01:03.138731266Z",
+      "spec": "BUG-2728",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4461,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ecdc44f41c5c0ae7940895132be36c1346d7daf8"
+      }
+    },
+    {
+      "ts": "2026-11-23T23:04:09.588053399Z",
+      "spec": "BUG-2728",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4461
+      }
+    },
+    {
+      "ts": "2026-11-23T23:11:29.517885957Z",
+      "spec": "BUG-2728",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5db0b2b1b17127b5b06d80dfc5f697f832b64e43",
+        "pr": 4461,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
