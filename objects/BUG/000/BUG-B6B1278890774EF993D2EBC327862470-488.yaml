@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T11:13:27.483089255Z
+modified_at: 2026-11-23T11:13:34.391985546Z
 req_type: Bug
 tags:
 - agreed-id
@@ -136,6 +136,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2727 AC1 PARTIAL: the direct mandate fixture resolves the origin-only padded agreed label after a refresh, but the train can discard an applicable title ID before that refresh. AC2 PASS in source review: the fixture checks the remaining ambiguous and missing IDs together with the refreshed store SHA. A refresh can also write from the read-only preview, and an unresolved ID can prevent sticky exclusion recording for other evidence. Reviewed all of the pinned landing diff against main 8018c42f8d5f and attested the original head. The head is one commit behind and none of the findings depends on code changed by that base commit. FAST build and source gates passed on the PR head. The merge-hold gate was awaiting clearance. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-23T11:13:27.483079542Z
   modified_at: 2026-11-23T11:13:27.483079542Z
+- id: 01a2081c-7c1a-7601-9bdf-90103df0bfa0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2727):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f27ab17356dd
+    Recorded: 2026-11-23T11:12:27.185314676+00:00
+    Findings:
+    1. aida-cli-lib/src/gate/mandate_ship.rs:803-819, called by aida-cli-lib/src/pr_train.rs:2255-2266. The read-only next-actor preview now enters the same missing-label pull/rebase as a live ship. A missing label can rewrite the canonical store checkout and advance its local branch from a reporting command, even before ship_decision checks whether the caller holds the mandate's advisor grant. Keep preview on read-only evidence, and put any canonical refresh behind the authorized action boundary. Add a missing-label preview fixture that checks the store HEAD stays fixed. The existing preview parity test supplies only a locally resolved label.
+    2. BUG-2727 AC1, aida-cli-lib/src/pr_train.rs:1875-1894,1913-1933 and aida-cli-lib/src/gate/mandate_ship.rs:696-697,731-740. The train still applies coverage before making the mandate call. If the stale local graph drops a title-only ID as uncovered and a second, missing label triggers the refresh, the mandate never sees the dropped title ID even when the refreshed review story covers it. pr_gate_inputs reconstructs branch and commit IDs but does not read the title. The resulting exclusion and authorship subjects can omit a covered spec, including one with an always-human exclusion. Pass the original member inputs to the mandate and verify that a refreshed Covers relationship restores a title-only ID through the train entry point.
+    3. aida-cli-lib/src/gate/mandate_ship.rs:738-755. Returning MissingSpecs before recording exclusions drops sticky evidence already observed for other named and traced specs in the same attempt. If the excluded version later leaves the reachable store history, a subsequent collection has no ledger entry for it even though the mandate collector previously saw it. Preserve recording for resolved evidence when another ID fails resolution, including before the refresh, and cover a mixed missing-plus-excluded attempt.
+    4. aida-cli-lib/src/gate/mandate_ship.rs:689-709. The production collector now rejects every dirty object and any HEAD advance before the scoped stability rule can accept unrelated activity. This reintroduces BUG-2647's fleet-write refusal at the final train gate and discards the existing allowance for unrelated committed changes. Keep the full coverage inputs stable while excluding unrelated evidence from the retry condition, or hold a coherent store read across the collection. Exercise unrelated object writes through the collector instead of only testing the isolated snapshot predicate.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T11:13:34.234451881Z
+  modified_at: 2026-11-23T11:13:34.234451881Z
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
