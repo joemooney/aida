@@ -1,0 +1,32 @@
+id: 01a2080a-3bda-7913-8e33-e552d50af8ef
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-221
+title: 'Review PR-4425: [AI:codex] fix(review-watch): request full CI after verified approval (BUG-2729)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a207e7`) for branch `bug-b6b1278890774ef993d2ebc327862470-490`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4425>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-490` → `main`
+
+  ## Covers
+
+  - BUG-2729
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4425` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T10:53:38.138108666Z
+modified_at: 2026-11-23T10:53:38.138108666Z
+req_type: Story
+filed_at:
+  code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f3800
+  session: 01a207e7f7cd
