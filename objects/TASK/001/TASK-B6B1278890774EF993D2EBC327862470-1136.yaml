@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-23T00:06:47.651122964Z
+modified_at: 2026-11-23T00:07:59.092471655Z
 req_type: Task
 tags:
 - landing
@@ -526,6 +526,26 @@ comments:
   modified_at: 2026-11-23T00:06:47.651122964Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a205bb-51e3-7d32-b79c-2a546da33f3f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:07):
+    # TASK-3827 / PR #4381: ONE SCOPE-CUT round (advisor-122 ruling 2026-11-22 17:10 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier (lock/claim path).
+
+    The FINAL CR at 0a5f3cd6 found two [p1, security-authority-bypass] defects, both CAUSED by this PR's new 64 KiB bounded reader in coordination.rs. It turns a VALID oversized claim into None, and then:
+    (1) coordination.rs:859 release_lock_claim/release_claim deletes a successor's drain/solo lock during cleanup;
+    (2) coordination.rs:1145 reviewer admission treats a live foreign claim as absent and overwrites it.
+    RULING, the same scope-cut precedent as #4364: REVERT the coordination.rs bounded-read change, and its callers' new None handling, to main's behaviour. If a size bound is still wanted, it must FAIL CLOSED (an oversized claim is a refusal error, never absence), and only if that's a few lines. Otherwise leave it out (it's tracked in TASK-3829).
+    KEEP the drain/solo lock protection and the configured-store / GitLab reviewer-key fixes the reviewer verified, with their tests.
+    The two p2s (land_stalls.rs:1005 and :1958) are DEFERRED to TASK-3829. Don't touch them.
+    The reviewer scope is coordination.rs plus the diff. Any blocking CR after this closes #4381, with no more rounds.
+    Add a regression test: an oversized but valid claim is never treated as absent by release or reviewer admission.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T00:07:59.092471655Z
+  modified_at: 2026-11-23T00:07:59.092471655Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
