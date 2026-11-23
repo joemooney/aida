@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-23T19:38:37.311498813Z
+modified_at: 2026-11-23T19:40:17.242416880Z
 req_type: Bug
 tags:
 - bwrap
@@ -21,6 +21,19 @@ comments:
   content: 'Draft to Approved: advisor-122 disposition 2026-11-23 12:40. MAIN track, supervised (mode unset), STRICT review: containment-test adjacent. Adapt fixtures (no skip); any remaining skip must be an explicit host-capability SKIP that live-required gates still count as failure.'
   created_at: 2026-11-23T19:38:37.311498813Z
   modified_at: 2026-11-23T19:38:37.311498813Z
+- id: 01a209ec-9bd6-7330-beda-cfe43074865b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:40):
+    # BUG-2701: nested Bubblewrap Git fixtures under the dell1 lane job wrapper (advisor-122 disposition 2026-11-23 12:40; product-15). Lane: CODEX. Track: MAIN. STRICT review (containment-test adjacent). New branch, new PR.
+
+    Read `aida show BUG-2701`. ADAPT the fixtures so they run under the lane job wrapper. Do NOT skip them: "skip" can silently drop live containment coverage (ADR-76 strict for containment tests; the TASK-3133/#4387 lesson).
+    Any remaining skip MUST be an explicit host-capability SKIP (naming the missing capability), and live-required gates MUST still count it as a FAILURE. Add a test that asserts that.
+    SMALL-PR RULE: <=300 changed lines. Add `// trace:BUG-2701 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2701)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T19:40:17.242416880Z
+  modified_at: 2026-11-23T19:40:17.242416880Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
