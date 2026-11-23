@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T03:15:35.660655187Z
+modified_at: 2026-11-23T03:17:26.716353005Z
 req_type: Story
 tags:
 - landing
@@ -1295,6 +1295,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full integration-relative sweep at the exact requested SHA: REQUEST CHANGES for a journal replay/append boundary mismatch that permanently loses transitions after a short final-line write (data-loss/unmet-claimed-ac). Complete actionable list also includes lost failed rerun retries, discarded busy-lock smoke failures, missing jobs pagination, and false fixed attribution. STORY-2897 criterion status: AC1 verified by inherited ship/recheck source fixtures; AC2 verified by inherited forge-reconcile/authority fixtures; AC3 unverified due to recovery/remediation defects (using advisor-amended flake damping and scheduled-only scope); AC4 verified by inherited promotion-guard source fixtures; Docs verified in both protocol copies and landing docs; Tests unverified for the missing recovery regressions. No local tests/builds run per policy. Existing aggregate CI failure had GATES=cancelled and COMPILE=cancelled; other CI was pending, which does not drive this verdict. Per-criterion statuses for all 133 worksheet entries and detailed evidence are in .aida/review-assessment-pr-4362.md; unrelated integration-history criteria are explicitly N/A to this PR delta.. It was punted on: other: PR #4401 host merge has a behavioral overlap in aida-cli-lib/src/review_draft.rs. Both parents change LaunchDraft::prompt. S1b instructs reviewers to exit after writing and adds structured WAITING needs, while integration requires submit-draft acceptance before exit. Conflict-only pickup requires punting overlapping behavior.. No triage reason was given.'
   created_at: 2026-11-23T03:15:35.660643543Z
   modified_at: 2026-11-23T03:15:35.660643543Z
+- id: 01a20668-c644-7a32-8192-30437d25bd6a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:17):
+    # STORY-2897 S1b / PR #4401: CONFLICT REPAIR with a DESIGN RULING (advisor-122 2026-11-22 20:20 MST; relayed by product-15). Lane: CODEX. Integration track.
+
+    The previous lane punted correctly: a semantic overlap in aida-cli-lib/src/review_draft.rs LaunchDraft::prompt. RULING: integration's BUG-2707 contract WINS. The reviewer exits ONLY after `submit-draft` accepts.
+    S1b adds its structured WAITING guidance (`aida review record --needs kind:detail`, a closed set: test, artifact, check, actor) to the SAME prompt, as an alternative outcome the reviewer ALSO submits through submit-draft (a WAITING draft is validated too). There is ONE exit rule, so S1b's "exit after writing" text is removed.
+    Merge origin/integration into story-2897-s1b (no rebase, no force-push), resolve review_draft.rs per this ruling, and keep both sides' other behaviour. Add or adjust a test: a WAITING draft with valid --needs goes through submit-draft and the reviewer exits only after acceptance; a generic check-only WAITING in review-gated mode is still refused per S1b.
+    The integration seat checks the merged head against the S1b brief before review.
+    cargo fmt; one targeted cargo run of the touched tests; `make check-ci-fast`; push. COMMIT your work. The PR keeps "(Refs STORY-2897)" last.
+  created_at: 2026-11-23T03:17:26.716353005Z
+  modified_at: 2026-11-23T03:17:26.716353005Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
