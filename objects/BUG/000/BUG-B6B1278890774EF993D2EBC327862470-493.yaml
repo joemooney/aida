@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A legacy review-watch/auto-train admission claim whose recorded pid+start-time is not live is treated as RELEASED immediately (the same liveness proof leases use: pid exists AND start time matches), so manual train admission proceeds without waiting out the bound.
   - AC2: Test: a claim recorded for a dead pid (or a reused pid with a different start time) does not block admission; a claim for a live pid+start-time still does.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:48:18.423378315Z
-modified_at: 2026-11-23T17:48:19.144865056Z
+modified_at: 2026-11-23T17:58:47.740281515Z
 req_type: Bug
 tags:
 - admission
@@ -89,6 +89,14 @@ history:
   timestamp: 2026-11-23T17:47:17.759411176Z
   session_id: 01a2093e9403
   changes: []
+- id: 01a2098f-7abc-7901-89ad-1aa5ba4c5f24
+  author: aida-orchestrator
+  timestamp: 2026-11-23T17:58:47.740421641Z
+  session_id: 01a2098be4de
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
   branch: main
@@ -96,3 +104,15 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    BUG-2732 (BUG-b6b1278890774ef993d2ebc327862470-493) — PARTIAL. The test covers pruning and the live-holder refusal. It leaves immediate admission with stale receipts present unverified.
+    BUG-b6b1278890774ef993d2ebc327862470-493.AC1 — unverified. Pinned landed source inspection confirms receipts() prunes confirmed dead or reused PID identities before the busy decision. The test never attempts admission with stale receipts as the only holders.
+    BUG-b6b1278890774ef993d2ebc327862470-493.AC2 — unverified. The implementer reported a passing lane run of `cargo test -p aida-cli-lib bug2732_manual_train_releases_stale_legacy_receipts`. The test observes a live auto-train refusal and reused-PID pruning, then succeeds only after both stale entries are gone. The supplied untraced-criteria list names AC1 and AC2, and the diff adds only the spec-level trace.
+    Reviewed the whole landed diff on protected base ef906ec7464cf1b3100c4383085280c203722941 (landed tree 003fd914bc3a12da06f2798b3623a383fe002212) while attesting the original head. Main is four commits ahead. Its changes in admission_owner.rs leave the tested stale-receipt path intact, and neither finding depends on those changes. At review time, exact-head fast gates and the merge-hold gate passed, fast compile was pending, and the full test shards were skipped. No local tests or builds were run.
+  recovery_hint: address the review findings, move BUG-2732 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T17:58:47.740281515Z
