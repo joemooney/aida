@@ -8,8 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T04:29:42.519542146Z
-modified_at: 2026-11-23T04:30:36.106272737Z
+modified_at: 2026-11-23T04:32:32.621917507Z
 req_type: Bug
+comments:
+- id: 01a206ae-0371-77e0-abb9-4616ad889e91
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:32):
+    # BUG-2726: MINIMAL slice of BUG-2714 AC1 (advisor-122 ruling 2026-11-22 21:36 MST; relayed by product-15). Lane: CODEX. FIRST in the filler. Budget <=100 changed lines. New branch, new PR.
+
+    Read `aida show BUG-2726`. Rework pickup prepares the base merge LOCALLY only: the remote branch on origin is UNCHANGED after pickup. Take the AC1 diff from the closed PR #4395 (branch kept; its reviewers verified AC1 in r1/r2): `gh pr diff 4395` or the branch history, restricted to the AC1 change (keep the merge local at pickup). Nothing else: none of #4395's merge-only inference, tree rule, NoChange receipt or sidecar.
+    Test: after a rework pickup that needs a base merge, `git ls-remote origin <branch>` still equals the pre-pickup head.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2726 | ai:codex`. Commit `[AI:codex] fix(rework): ... (BUG-2726)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T04:32:32.621917507Z
+  modified_at: 2026-11-23T04:32:32.621917507Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a206ab-8e4a-7eb0-8d7c-26f25738765c
   author: joe
