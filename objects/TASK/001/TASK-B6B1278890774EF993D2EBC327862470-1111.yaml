@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. In an isolated fixture, set contained mode, omit the transcript at the recorded cwd, and place the sole matching transcript at another eligible worktree. Assert that recovery reports that contained resume requires the recorded worktree and starts no vendor process.
   2. With the same transcript layout in uncontained mode, recover the eligible worktree. With the transcript at the recorded cwd in contained mode, accept the recorded cwd.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T16:26:24.300146274Z
+modified_at: 2026-11-23T17:28:13.215860901Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -91,6 +91,12 @@ comments:
   modified_at: 2026-11-23T16:26:24.300146274Z
   session_id: 01a209303cc3
   harness_version: codex-cli 0.167.0
+- id: 01a20973-7c9f-7041-8b40-3b1f0a833404
+  author: aida-publication-done
+  content: Implementer push ca3c1b9e4f1f declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T17:28:13.215860231Z
+  modified_at: 2026-11-23T17:28:13.215860231Z
+  session_id: 01a209303cc3
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe
@@ -153,6 +159,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20973-7c9f-7041-8b40-3b02277ae982
+  author: aida-publication-done
+  timestamp: 2026-11-23T17:28:13.215857126Z
+  session_id: 01a209303cc3
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
