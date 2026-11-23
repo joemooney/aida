@@ -2591,9 +2591,22 @@ pub(crate) fn request_full_ci_after_approval(
     request: impl FnOnce(&std::path::Path, u64) -> std::result::Result<bool, String>,
 ) {
     let Some(n) = pr else { return };
-    if crate::gate::review_verdict::incoming_disposition(verdict, findings)
-        != crate::gate::review_verdict::VerdictKind::Approved
-    {
+    request_full_ci_for_disposition(
+        project_root,
+        crate::gate::review_verdict::incoming_disposition(verdict, findings),
+        n,
+        request,
+    );
+}
+
+// trace:BUG-2729 | ai:codex
+pub(crate) fn request_full_ci_for_disposition(
+    project_root: &std::path::Path,
+    disposition: crate::gate::review_verdict::VerdictKind,
+    n: u64,
+    request: impl FnOnce(&std::path::Path, u64) -> std::result::Result<bool, String>,
+) {
+    if disposition != crate::gate::review_verdict::VerdictKind::Approved {
         return;
     }
     match request(project_root, n) {

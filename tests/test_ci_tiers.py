@@ -115,10 +115,14 @@ class CiTiers(unittest.TestCase):
     # trace:BUG-2578 | ai:claude
     def test_only_tier_changing_events_join_the_cancelling_pr_group(self):
         concurrency = WORKFLOW['concurrency']
-        self.assertEqual(concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}")
+        # trace:BUG-2729 | ai:codex
+        cancel = concurrency['cancel-in-progress']
+        for action, label in TIER_EVENTS:
+            self.assertEqual(render(cancel, action=action, label=label), str(action != 'labeled'))
+        self.assertEqual(render(cancel, event='push'), 'False')
         group = concurrency['group']
         # Pushes and ci:full label changes share the PR's group, so they
-        # cancel the run they supersede.
+        # serialize with the active run.
         for action, label in TIER_EVENTS:
             self.assertEqual(render(group, action=action, label=label), 'CI-7', (action, label))
         # Every other label event is alone in its group: it can neither

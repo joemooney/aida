@@ -30,7 +30,9 @@ on:
 # trace:BUG-2578 | ai:claude
 concurrency:
   group: ${{ github.workflow }}-${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && format('label-{0}', github.run_id) || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Queue approval-triggered FULL behind the active FAST run.
+  # trace:BUG-2729 | ai:codex
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' }}
 
 env:
   CARGO_TERM_COLOR: always

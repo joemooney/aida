@@ -1590,14 +1590,21 @@ mod standalone_review_verdict_parent_tests {
         };
         let sidecar = f.root.join(".aida/review-verdicts/STORY-77.json");
         std::fs::write(&sidecar, serde_json::json!({"verdict":"approved","reviewed_sha":f.head,"summary":"unstamped sidecar"}).to_string()).unwrap();
-        let collected = rv::verify_recorded_draft(
-            &f.root,
-            &rv::verdict_path(&f.root, "PR-59"),
-            &["STORY-77".into()],
-            f.since,
-            &checks,
-        )
-        .unwrap();
+        // trace:BUG-2729 | ai:codex
+        let mut requested = None;
+        let collected = checks
+            .finish_recorded_draft(
+                &rv::verdict_path(&f.root, "PR-59"),
+                &["STORY-77".into()],
+                f.since,
+                |root, pr| {
+                    assert_eq!(root, f.root);
+                    requested = Some(pr);
+                    Ok(true)
+                },
+            )
+            .unwrap();
+        assert_eq!(requested, Some(59));
         assert_eq!(
             collected.verdict.summary.as_deref(),
             Some("complete child rationale")

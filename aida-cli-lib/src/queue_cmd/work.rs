@@ -7965,12 +7965,11 @@ pub(crate) fn run_standalone_reviewer(
                             &reviewer,
                         )?;
                     }
-                    crate::gate::review_verdict::verify_recorded_draft(
-                        project_root,
+                    checks.finish_recorded_draft(
                         verdict_path,
                         &pr_spec_ids,
                         launched_at,
-                        &checks,
+                        crate::full_tier::request_full_ci,
                     )
                     .map_err(anyhow::Error::msg)
                 })();
@@ -8392,6 +8391,32 @@ pub(crate) struct StandaloneVerdictChecks<'a> {
     /// The grant this launch issued to its reviewer child — the ONLY grant a
     /// collected verdict may be recorded under.
     pub(crate) child_grant: Option<String>,
+}
+
+// trace:BUG-2729 | ai:codex
+impl StandaloneVerdictChecks<'_> {
+    pub(crate) fn finish_recorded_draft(
+        &self,
+        canonical: &std::path::Path,
+        specs: &[String],
+        since: std::time::SystemTime,
+        request: impl FnOnce(&std::path::Path, u64) -> Result<bool, String>,
+    ) -> Result<crate::gate::review_verdict::CollectedVerdict, String> {
+        let collected = crate::gate::review_verdict::verify_recorded_draft(
+            self.project_root,
+            canonical,
+            specs,
+            since,
+            self,
+        )?;
+        crate::request_full_ci_for_disposition(
+            self.project_root,
+            collected.verdict.kind,
+            self.pr,
+            request,
+        );
+        Ok(collected)
+    }
 }
 
 impl crate::gate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<'_> {
