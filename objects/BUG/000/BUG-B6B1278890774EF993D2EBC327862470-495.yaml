@@ -1,0 +1,31 @@
+id: 01a20a37-7237-7e20-8191-fded1935b7ad
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-495
+agreed_id: BUG-2734
+title: '28 of 67 tests/test_*.py never run in CI: Python tests are wired by explicit filename with no discovery, so new regression tests silently don''t run'
+description: |
+  Found 2026-11-23 (integration-30, pre-checking #4455 BUG-2728 and #4450 BUG-2731). CI runs Python tests by explicit filename (.github/workflows/ci.yml has ~67 'python3 -m unittest tests/test_X.py' lines) and has no discovery step for tests/. So 28 of 67 tests/test_*.py files never run in CI (as of integration 54e9220e1db): test_aida_terminator_plugin.py test_analyze_code_growth.py test_bug_1929_hook_templates.py test_bug2017_bootstrap.py test_cache_refresh_outputs.py test_command_inventory.py test_dell1_controller.py test_duration_cap_inventory.py test_gitlab_review_handoff.py test_history_templates.py test_lane_autobuild.py test_lane_run.py test_mcp_doc_consistency.py test_mcp_stdio.py test_measure_shift_tick.py test_merge_hold_status_rollup.py test_monitor_contract.py test_open_pr_flags.py test_porcelain_flow_parity.py test_porcelain_install.py test_port_split_hunks.py test_pr_ship_preflight.py test_ratchet_set.py test_relocate_paths.py test_repair_generated.py test_seat_takeover_lifecycle.py test_skill_discovery.py test_story_1843_pr3.py . New regressions shipped as Python tests (BUG-2728's test_build_git_stamp.py, BUG-2731's test_closeout_audit_wording.py) silently never run, so an AC that says "a test pins X" is not actually enforced.
+
+  ## Acceptance
+  - AC1: CI runs every tests/test_*.py, either via one discovery step ('python3 -m unittest discover -s tests -p "test_*.py"') or a ratchet that fails when a tests/test_*.py file is not referenced by a CI step. Tests that need tools CI lacks are skipped explicitly with a reason, not left unwired.
+  - AC2: Any currently-unwired test that fails when wired is fixed, or skipped with a linked follow-up spec, in the same PR (the small-PR rule applies; split the fix-ups if over 300 lines).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T21:02:15.607282278Z
+modified_at: 2026-11-23T21:02:15.607282278Z
+req_type: Bug
+tags:
+- ci
+- small
+- tests
+- track:integration
+filed_at:
+  code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
