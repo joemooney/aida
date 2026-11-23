@@ -13,13 +13,30 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T15:42:04.118668094Z
+modified_at: 2026-11-23T15:43:29.721052239Z
 req_type: Bug
 tags:
 - briefs
 - lanes
 - small
 - track:integration
+comments:
+- id: 01a20913-d0da-72b0-accc-9ccf07616516
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:43):
+    # BUG-2731: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2731` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2731 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2731)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE p26 (swap-in for BUG-2698, product-15 08:45): this lane works on branch `int26-bug-2731`, cut from origin/integration 06b95f8a1e5. Your PR MUST target base `integration`. Standard tier only: if the fix needs an ADR-76 strict path (leases, claims, grants, containment, gate/guard), STOP and punt naming it. Scope: audit-comment wording/template + the brief generator precedence line, with tests.
+  created_at: 2026-11-23T15:43:29.721052239Z
+  modified_at: 2026-11-23T15:43:29.721052239Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20912-4d56-73a3-bac7-f684e0f78f51
   author: joe
