@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T17:02:28.354682157Z
+modified_at: 2026-11-23T17:18:33.626115261Z
 req_type: Bug
 tags:
 - briefs
@@ -37,6 +37,18 @@ comments:
   modified_at: 2026-11-23T15:43:29.721052239Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2096a-a77f-74d0-ab10-f5d43695bba3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 06b95f8a1e5d57a1f8210a2da787874292aeaf5e plus native working tree and new tests/test_closeout_audit_wording.py. The origin/main merge-base diff is empty.
+    AC1: [evidence: documentation-inspection] Both advisor-role.md copies line 109 give the requested standalone keep-open verdict. Confirmed the historical wording in TASK-3149. Python wording regression passed for both copies.
+    AC2: [evidence: behavioral-test] brief.rs:205 emits the conflict rule in Routing outside frontmatter and before optional notes. task_492_brief_tests.rs:694 checks the actual generated file. Launcher reported one test passed, followed by timeout during teardown (124).
+    Deep pass: checked consistency of both guide copies, exact generated line, Markdown and YAML boundaries, absent and multiline notes, and multiple older comments. The guidance applies only to conflicting comments. No authority paths or actionable findings. Existing briefs and historical comments retain their text. All 48 fast source gates passed.
+  created_at: 2026-11-23T17:18:33.626115261Z
+  modified_at: 2026-11-23T17:18:33.626115261Z
+  session_id: 01a2095b139f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20912-4d56-73a3-bac7-f684e0f78f51
   author: joe

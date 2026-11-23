@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:19:49.568395128Z
-modified_at: 2026-11-23T16:53:52.750726318Z
+modified_at: 2026-11-23T17:17:26.432520178Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -72,6 +72,18 @@ comments:
   modified_at: 2026-11-23T15:12:40.304284810Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20969-a251-7e93-aa58-eb95218d3bb5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 79989f9a27da2d3f372332c04927ca08ae0ed377 plus native working-tree edits. The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/bug_2684_disk_deferral_tests.rs:206 reproduced a missing typed cause before the fix. After aida-cli-lib/src/lane_disk_deferral.rs:126 attached the exit as context, the same test recovered the refusal timestamp and read disk-deferred from the persisted receipt at line 233.
+    AC2: [evidence: behavioral-test] The two seat_clone::disk_deferral_tests passed in launcher job j20261123T170451088-2-0, covering exit 36, routing, retained operator notes, repeated refusal, zero rows, rollback for both launch shapes and later admission. Line 196 verifies that an unrelated measurement error persists admission-refused.
+    Probe findings: Classification and exit mapping consume the preserved types. Receipt JSON is decoded from an isolated directory. The existing annotation logic handles zero and repeated rows. Wrapping and measurement-error controls exercise distinct cause chains. No authority path or rollback rule changed. Full error formatting now prints queue guidance before the underlying cause. Fast checks in progress; no PR-head CI yet.
+  created_at: 2026-11-23T17:17:26.432520178Z
+  modified_at: 2026-11-23T17:17:26.432520178Z
+  session_id: 01a20953a0aa
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2f1-eaea-7102-a425-f572a21135ad
   author: joe
