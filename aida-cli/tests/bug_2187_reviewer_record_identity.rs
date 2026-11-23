@@ -83,6 +83,16 @@ impl Fixture {
 // trace:BUG-2187.ac63597b | ai:claude
 #[test]
 fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
+    exercise_reviewer_pickup(false);
+}
+
+// trace:BUG-2706 | ai:codex
+#[test]
+fn unavailable_published_claims_defer_pickup_until_grace_expires() {
+    exercise_reviewer_pickup(true);
+}
+
+fn exercise_reviewer_pickup(unavailable: bool) {
     let temp = tempfile::tempdir().unwrap();
     let fixture = Fixture {
         repo: temp.path().join("repo"),
@@ -187,6 +197,36 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
         &["update-ref", "refs/remotes/origin/main", &head],
     );
 
+    let store = fixture.repo.join(".aida-store");
+    let published = fixture._temp.path().join("published.git");
+    if !unavailable {
+        git(
+            &store,
+            &["clone", "--bare", ".", published.to_str().unwrap()],
+        );
+    }
+    // Store and code share Git config. Rewrite origin only on the store
+    // branch so the code checkout still has a GitHub-shaped forge URL.
+    let branch = String::from_utf8(git(&store, &["branch", "--show-current"]).stdout).unwrap();
+    let store_config = fixture._temp.path().join("store.gitconfig");
+    git(
+        &store,
+        &[
+            "config",
+            "--file",
+            store_config.to_str().unwrap(),
+            &format!("url.{}.insteadOf", published.display()),
+            "https://github.com/fixture/repo.git",
+        ],
+    );
+    git(
+        &store,
+        &[
+            "config",
+            &format!("includeIf.onbranch:{}.path", branch.trim()),
+            store_config.to_str().unwrap(),
+        ],
+    );
     // Redirect only fetches, keeping origin discovery pinned to GitHub.
     // Every other command delegates to the real local Git unchanged.
     executable(&fixture.bin.join("git"), &format!("#!/bin/sh\nif [ \"$1\" = -C ]; then repo=$2; shift 2; else repo=$PWD; fi\nif [ \"$1\" = fetch ]; then\n shift\n if [ \"$1\" = origin ]; then shift; exec /usr/bin/git -C \"$repo\" -c maintenance.auto=false -c gc.auto=0 fetch '{}' \"$@\"; fi\n echo 'unexpected fixture fetch; network refused' >&2; exit 97\nfi\nexec /usr/bin/git -C \"$repo\" \"$@\"\n", fixture.repo.display()));
@@ -198,24 +238,42 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
     assert_eq!(checked(version).stdout, b"claude 9.9.9\n");
     assert!(!fixture.repo.join(".aida/gate-ledger/PR-59.jsonl").exists());
     let worktree = fixture._temp.path().join("reviewer");
-    let output = checked(fixture.command(
-        &[
-            "queue",
-            "work",
-            "PR-59",
-            "--role",
-            "reviewer",
-            "--no-human",
-            "--vendor",
-            "claude",
-            "--no-pull",
-            "--base",
-            "main",
-            "--path",
-            worktree.to_str().unwrap(),
-        ],
-        Some(&grant),
-    ));
+    let pickup = || {
+        fixture.command(
+            &[
+                "queue",
+                "work",
+                "PR-59",
+                "--role",
+                "reviewer",
+                "--no-human",
+                "--vendor",
+                "claude",
+                "--no-pull",
+                "--base",
+                "main",
+                "--path",
+                worktree.to_str().unwrap(),
+            ],
+            Some(&grant),
+        )
+    };
+    if unavailable {
+        let deferred = checked(pickup());
+        assert!(String::from_utf8_lossy(&deferred.stderr).contains("claim snapshot unavailable"));
+        assert!(!worktree.exists());
+        assert!(!fixture.repo.join(".aida/gate-ledger/PR-59.jsonl").exists());
+        let episode = fixture.repo.join(".aida/review-lane-episodes/PR-59");
+        let mut state: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&episode).unwrap()).unwrap();
+        assert_eq!(state["held"], true);
+        state["unreadable_since"] = "2000-01-01T00:00:00Z".into();
+        std::fs::write(episode, serde_json::to_vec(&state).unwrap()).unwrap();
+    }
+    let output = checked(pickup());
+    if unavailable {
+        assert!(String::from_utf8_lossy(&output.stderr).contains("past the 20-minute bound"));
+    }
     // M1 slice 2: the verdict lives on the PR's gate ledger, not a
     // `review-verdicts/PR-59.json` file. trace:STORY-b6b1278890774ef993d2ebc327862470-080
     let path = fixture.repo.join(".aida/gate-ledger/PR-59.jsonl");

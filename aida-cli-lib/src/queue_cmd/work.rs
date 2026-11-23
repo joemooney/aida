@@ -5238,7 +5238,8 @@ pub(crate) fn handle_queue_work(
                             n,
                             forge == ReviewForge::GitLab,
                         )? {
-                            anyhow::bail!("{reason}");
+                            eprintln!("{reason}");
+                            return Ok(());
                         }
                     }
                 }
