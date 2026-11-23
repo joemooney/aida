@@ -13,11 +13,12 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-23T00:07:59.092471655Z
+modified_at: 2026-11-23T00:09:35.633744033Z
 req_type: Task
 tags:
 - landing
 - linked:STORY-2906
+- operator-held
 - throughput
 relationships:
 - rel_type:
@@ -670,6 +671,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a205bc-98e5-7d23-b437-3def9936afbd
+  author: joe
+  timestamp: 2026-11-23T00:09:35.717965825Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-23T00:09:35.633744033Z
+deferred_until: date:2026-12-15
+deferred_reason: '#4381 closed under the round cap; rebase after BUG-2715; any claim size bound must fail closed'
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
