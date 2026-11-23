@@ -75,6 +75,13 @@ comments:
   created_at: 2026-11-23T21:00:32.656464753Z
   modified_at: 2026-11-23T21:00:32.656464753Z
   session_id: 01a209eb5f84
+- id: 01a20a37-699c-7e22-81de-93a26901dcd0
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 14:05): PR-4455 @ ccb9ea51cc PASSES the p27 brief. Base integration; one commit ''[AI:codex] fix(build): ... (BUG-2728)''; +98/-6 across 5 files; traces present. AC1: build_git_stamp.rs uses ''status --porcelain=v1 --untracked-files=no --ignore-submodules=untracked'', so untracked files no longer dirty a build; tests/test_build_git_stamp.py compiles the helper and asserts an untracked DU.txt gives DIRTY=0, while a tracked modification or a staged add gives DIRTY=1 (quoted unusual paths included). AC2: a new AIDA_BUILD_GIT_STATUS (capped at 32 KiB) is printed by ''aida dev status'' when dirty. emit_git_stamps emits it unconditionally (CLI and server build.rs both call it), so env!() is safe. It''s also added to DROPPED_AIDA_KEYS and the env docs. Nit (pre-existing, not blocking): CI runs Python tests by explicit filename, and tests/test_build_git_stamp.py is not wired in, so CI never runs it. 28 of 67 tests/test_*.py are unwired; filed as a separate spec.'
+  created_at: 2026-11-23T21:01:59.727813101Z
+  modified_at: 2026-11-23T21:01:59.727813101Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20a37-5d4f-7651-8498-0cdb3138e144
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int27-bug-2728` at head `ccb9ea51cc5064223378a2022840f02a89b4f561`.'
