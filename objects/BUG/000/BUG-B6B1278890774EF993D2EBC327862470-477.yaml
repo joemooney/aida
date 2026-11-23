@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-23T00:03:19.094500455Z
+modified_at: 2026-11-23T00:05:07.768889054Z
 req_type: Bug
 tags:
 - authority
@@ -71,6 +71,15 @@ comments:
   modified_at: 2026-11-22T23:59:26.815922635Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a205b8-8460-7ed2-a287-4f532c1d4c59
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6be38166be85fb474a3c5ba8036c4b2eb853db5f plus native working diff. AC2: [evidence: behavioral-test] tests/test_store_mutation.py:654 passed with unittest. Production identity refused -1, -2 and INT_MIN, with no accepted request or close call. The same mock channel served a probe using a real pidfd and fixture identity, closing it once. service.py:374 handles each signed cmsg value individually and preserves FD 0. No parser, grant, authorization or concurrency changes. AC1 and AC3 were previously settled by product. No weakened tests, untracked additions or actionable probe findings. Hosted CI awaits publication.
+  created_at: 2026-11-23T00:05:07.768889054Z
+  modified_at: 2026-11-23T00:05:07.768889054Z
+  session_id: 01a205b6876e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2052b-d43c-7761-9620-191b4708745f
   author: joe
@@ -116,6 +125,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a205b7-5f8f-7ef0-b6f5-4ffe7ca10ef9
+  author: dirtlab
+  timestamp: 2026-11-23T00:03:53.359925308Z
+  session_id: 01a205b6876e
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
