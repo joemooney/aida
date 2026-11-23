@@ -116,6 +116,8 @@ pub(crate) struct OccupancyProbe<'a> {
     pub session: Option<u32>,
     /// Every process whose command line names this attempt id.
     pub attempt: Option<&'a str>,
+    /// Exact argv token or environment value identifying a known attempt.
+    pub recovery_token: Option<&'a str>,
     /// Kernel start tick of the attempt's FIRST recorded process. A process
     /// of this user whose details are unreadable (a PAM helper, a process
     /// holding capabilities) and that started strictly before it cannot be
@@ -251,6 +253,42 @@ pub(crate) fn scan_occupancy_in_with_owner(
         }
         if probe.session == Some(sid) {
             return Occupancy::Occupied(format!("pid {pid} is in the supervisor's session {sid}"));
+        }
+        // trace:BUG-2721 | ai:codex
+        if let Some(token) = probe.recovery_token {
+            let command = stat
+                .split_once('(')
+                .and_then(|(_, rest)| rest.rsplit_once(')'))
+                .map(|(comm, _)| comm)
+                .unwrap_or("unavailable");
+            for source in ["cmdline", "environ"] {
+                match std::fs::read(base.join(source)) {
+                    Ok(raw) => {
+                        let matches = raw.split(|b| *b == 0).any(|field| {
+                            if source == "environ" {
+                                field
+                                    .iter()
+                                    .position(|b| *b == b'=')
+                                    .is_some_and(|i| &field[i + 1..] == token.as_bytes())
+                            } else {
+                                field == token.as_bytes()
+                                    || field.strip_prefix(b"--attempt=") == Some(token.as_bytes())
+                            }
+                        });
+                        if matches {
+                            return Occupancy::Occupied(format!(
+                                "pid {pid} command {command:?} carries attempt {token} in {source}"
+                            ));
+                        }
+                    }
+                    Err(e) if gone(&e) || !ours || predates => {}
+                    Err(e) => {
+                        return Occupancy::Unknown(format!(
+                            "pid {pid} command {command:?} has unreadable {source}: {e}"
+                        ))
+                    }
+                }
+            }
         }
         if let Some(attempt) = probe.attempt {
             match std::fs::read(base.join("cmdline")) {
@@ -778,6 +816,7 @@ pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
     };
     let field = |name: &str| lenient.as_ref().and_then(|v| v.get(name));
     let probe = OccupancyProbe {
+        recovery_token: None,
         worktree: worktree.as_deref(),
         group: field_pid("worker"),
         session: field_pid("supervisor"),

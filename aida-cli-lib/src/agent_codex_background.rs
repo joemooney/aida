@@ -1827,8 +1827,8 @@ pub(crate) fn supervise_until_exit(
             }
         }
     }
-    // The scope is released only once the same occupancy scan
-    // `recover-launch` runs proves the attempt over; anything left (or an
+    // The scope is released only once the exit occupancy scan
+    // proves the attempt over; anything left (or an
     // unreadable process) keeps the scope held for recovery.
     // trace:STORY-2254 | ai:claude
     if let Some(why) = exit_occupancy(dir, &init.project_root, attempt) {
@@ -2119,7 +2119,6 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
     let root = main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
     let dir = receipt::existing_runtime_dir(&root)
         .context("no detached launch receipts exist for this project")?;
-    let own = own_process_chain();
     if retire_unknown {
         let kept = receipt::retire_unknown(&dir, &root, attempt)?;
         println!(
@@ -2128,12 +2127,12 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
         );
         return Ok(());
     }
-    let message = recover_launch_at(&dir, &root, attempt, &own)?;
+    let message = recover_launch_at(&dir, &root, attempt, std::path::Path::new("/proc"))?;
     println!("{message}");
     Ok(())
 }
 
-/// The ONE occupancy scan both the normal exit and `recover-launch` run
+/// The occupancy scan that the normal supervisor exit runs
 /// before releasing an attempt's scope: every process in the worktree, in
 /// the worker's group or the supervisor's session, or naming the attempt.
 // trace:STORY-2254 | ai:claude
@@ -2141,10 +2140,6 @@ pub(crate) fn attempt_occupancy(
     r: &LaunchReceipt,
     own: &std::collections::HashSet<u32>,
 ) -> receipt::Occupancy {
-    let launcher = match &r.owner {
-        Owner::Dispatcher(p) => Some(p),
-        _ => None,
-    };
     let probe = receipt::OccupancyProbe {
         worktree: Some(&r.worktree),
         group: r.worker.as_ref().map(|w| w.pid),
@@ -2152,13 +2147,23 @@ pub(crate) fn attempt_occupancy(
         attempt: Some(&r.attempt),
         // The launcher, supervisor and worker are the attempt's first
         // processes; nothing started before all of them is its work.
-        not_before: [launcher, r.supervisor.as_ref(), r.worker.as_ref()]
-            .into_iter()
-            .flatten()
-            .filter_map(ProcId::start_tick)
-            .min(),
+        not_before: first_process_tick(r),
+        ..Default::default()
     };
     receipt::scan_occupancy(&probe, own)
+}
+
+// trace:BUG-2721 | ai:codex
+fn first_process_tick(r: &LaunchReceipt) -> Option<u64> {
+    let launcher = match &r.owner {
+        Owner::Dispatcher(p) => Some(p),
+        _ => None,
+    };
+    [launcher, r.supervisor.as_ref(), r.worker.as_ref()]
+        .into_iter()
+        .flatten()
+        .filter_map(ProcId::start_tick)
+        .min()
 }
 
 /// This process and its ancestors: the recovering shell is not an occupant.
@@ -2173,17 +2178,15 @@ pub(crate) fn own_process_chain() -> std::collections::HashSet<u32> {
 
 /// Reconcile exactly `attempt`. Never spawns, resumes, mints, binds or
 /// kills; repairs only exact owned bookkeeping, and only once a FRESH scan
-/// corroborates that the worker, the supervisor, the launcher, every
-/// process in the worktree and every process left in the worker's group or
-/// the supervisor's session are gone. Fails CLOSED: an unreadable `/proc`,
-/// cwd or start identity, a missing recorded start, or a possibly escaped
-/// descendant means UNKNOWN: nothing is changed and nothing is revoked.
+/// corroborates that the recorded processes are gone and no process carries
+/// the attempt token. Unreadable evidence keeps the scope held.
+// trace:BUG-2721 | ai:codex
 // trace:STORY-2254 | ai:claude
 pub(crate) fn recover_launch_at(
     dir: &std::path::Path,
     root: &std::path::Path,
     attempt: &str,
-    own: &std::collections::HashSet<u32>,
+    proc_root: &std::path::Path,
 ) -> Result<String> {
     let r = match receipt::read_receipt(dir, root, attempt) {
         ReceiptRead::Known(r) => *r,
@@ -2216,15 +2219,23 @@ pub(crate) fn recover_launch_at(
         match p.state() {
             receipt::ProcState::Gone => {}
             receipt::ProcState::Live => anyhow::bail!(
-                "attempt {attempt} still has its live {what} (pid {}); nothing was changed",
-                p.pid
+                "attempt {attempt} still has its live {what} (pid {}, command {:?}, recorded start identity matches); nothing was changed",
+                p.pid,
+                std::fs::read_to_string(format!("/proc/{}/comm", p.pid)).unwrap_or_else(|_| "unavailable".into()).trim_end()
             ),
             receipt::ProcState::Unknown(why) => anyhow::bail!(
                 "attempt {attempt}'s {what} cannot be proven gone ({why}); its state is UNKNOWN and nothing was changed"
             ),
         }
     }
-    match attempt_occupancy(&r, own) {
+    let probe = receipt::OccupancyProbe {
+        recovery_token: Some(attempt),
+        not_before: first_process_tick(&r),
+        ..Default::default()
+    };
+    // The recovery command itself necessarily carries the token in argv.
+    let invoking_pid = std::collections::HashSet::from([std::process::id()]);
+    match receipt::scan_occupancy_in(proc_root, &probe, &invoking_pid) {
         receipt::Occupancy::Clear => {}
         receipt::Occupancy::Occupied(what) => anyhow::bail!(
             "attempt {attempt} is not provably over: {what}; nothing was changed"

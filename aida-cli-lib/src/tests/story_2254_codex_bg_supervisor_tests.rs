@@ -601,7 +601,8 @@ fn story_2254_bg_lost_or_corrupt_receipt_is_unknown_not_acceptance() {
     assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2259").is_some());
     let status = launch_status_at(&h.dir, h.root(), &h.attempt);
     assert!(status.contains("UNKNOWN"), "{status}");
-    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, &own_process_chain()).unwrap_err();
+    let err =
+        recover_launch_at(&h.dir, h.root(), &h.attempt, std::path::Path::new("/proc")).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
     assert!(wait_gone(&worker));
     receipt::retire_unknown(&h.dir, h.root(), &h.attempt).unwrap();
@@ -785,15 +786,25 @@ fn story_2254_bg_pre_acceptance_hook_cannot_arm_wake() {
     );
 }
 
-/// `recover-launch` fails CLOSED on a FRESH scan: a process still in the
-/// worktree, or one left in the dead worker's process group, blocks it; an
+/// Supervisor exit detects a descendant in the dead worker group. Recovery
+/// checks a fresh attempt token and recorded process identities; an
 /// unrecorded start identity is unknown; nothing is revoked on refusal; once
 /// everything is provably gone, the very next call reconciles.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 #[cfg(target_os = "linux")]
-fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
+fn bug_2721_recover_launch_fresh_scan_fails_closed() {
     let h = harness("TASK-2265");
+    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, std::path::Path::new("/proc"))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("live launcher")
+            && err.contains(&format!("pid {}, command", h.me.pid))
+            && err.contains("recorded start identity matches"),
+        "{err}"
+    );
+    assert!(h.grant().revoked_at.is_none());
     let own = own_process_chain();
     // A dead worker that left a descendant in its process group.
     let mut leader = std::process::Command::new("sh")
@@ -828,8 +839,9 @@ fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
         .unwrap();
     };
     set_worker(leader_id.clone());
-    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, &own).unwrap_err();
-    assert!(format!("{err:#}").contains("process group"), "{err:#}");
+    assert!(
+        matches!(attempt_occupancy(&h.receipt(), &own), receipt::Occupancy::Occupied(reason) if reason.contains("process group"))
+    );
     // SAFETY: SIGKILL to the escaped descendant this test spawned.
     unsafe {
         libc::kill(escaped as libc::pid_t, libc::SIGKILL);
@@ -849,22 +861,80 @@ fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
         pid: leader_id.pid,
         start: String::new(),
     });
-    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, &own).unwrap_err();
+    // Enumerate only the fixture processes. Each entry exposes the live kernel
+    // files for that PID; unrelated host credential helpers may deny environ.
+    let processes = tempfile::tempdir().unwrap();
+    let expose = |pid: u32| {
+        std::os::unix::fs::symlink(
+            format!("/proc/{pid}"),
+            processes.path().join(pid.to_string()),
+        )
+        .unwrap();
+    };
+    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
     set_worker(leader_id);
-    // A process still running in the worktree.
-    let mut occupant = std::process::Command::new("sleep")
-        .arg("30")
-        .current_dir(&h.worktree)
+    // trace:BUG-2721 | ai:codex
+    // The dispatcher died after recording the primary checkout as its worktree.
+    receipt::compare_update(
+        &h.dir,
+        h.root(),
+        &h.attempt,
+        |_| Ok(()),
+        |r| {
+            r.owner = Owner::Dispatcher(r.worker.take().unwrap());
+            r.phase = Phase::Prepared;
+            r.worktree = h.root().to_owned();
+        },
+    )
+    .unwrap();
+    let mut shell = std::process::Command::new("sh")
+        .args(["-c", "read line"])
+        .stdin(std::process::Stdio::piped())
+        .current_dir(h.root())
         .spawn()
         .unwrap();
-    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, &own).unwrap_err();
-    assert!(format!("{err:#}").contains("running in"), "{err:#}");
-    assert!(h.grant().revoked_at.is_none(), "nothing revoked on refusal");
-    let _ = occupant.kill();
-    let _ = occupant.wait();
-    // Fresh scan: the very next call sees it gone and reconciles.
-    let done = recover_launch_at(&h.dir, h.root(), &h.attempt, &own).unwrap();
+    expose(shell.id());
+    for source in ["cmdline", "environ"] {
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args(["-c", "read line"])
+            .stdin(std::process::Stdio::piped());
+        if source == "cmdline" {
+            cmd.arg(&h.attempt);
+        } else {
+            cmd.env("TEST_ATTEMPT", &h.attempt);
+        }
+        let mut holder = cmd.spawn().unwrap();
+        expose(holder.id());
+        let result = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path());
+        let pid = holder.id();
+        drop(holder.stdin.take());
+        holder.wait().unwrap();
+        let why = result.unwrap_err().to_string();
+        assert!(
+            why.contains(&format!("pid {pid} command \"sh\"")) && why.contains(source),
+            "{why}"
+        );
+        assert!(h.grant().revoked_at.is_none(), "nothing revoked on refusal");
+    }
+    // A same-user process that could carry the token keeps the grant held
+    // when its environment cannot be read.
+    let unreadable = processes.path().join("4294967295");
+    std::fs::create_dir_all(unreadable.join("environ")).unwrap();
+    std::fs::write(
+        unreadable.join("stat"),
+        std::fs::read(format!("/proc/{}/stat", shell.id())).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(unreadable.join("cmdline"), b"sh\0").unwrap();
+    let err = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap_err();
+    assert!(err.to_string().contains("unreadable environ"), "{err}");
+    assert!(h.grant().revoked_at.is_none());
+    std::fs::remove_dir_all(unreadable).unwrap();
+    let done = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap();
+    assert!(shell.try_wait().unwrap().is_none());
+    drop(shell.stdin.take());
+    shell.wait().unwrap();
     assert!(done.contains("recovered"), "{done}");
     assert!(h.grant().revoked_at.is_some());
     assert_eq!(h.receipt().phase, Phase::Exited);
@@ -1080,8 +1150,7 @@ fn story_2254_bg_until_exit_signals_group_before_reaping_leader() {
     drop(h.env);
 }
 
-/// The normal exit runs the same occupancy scan as `recover-launch` before
-/// it releases the scope: a process left running in the worktree (outside
+/// The normal exit checks occupancy before it releases the scope: a process left running in the worktree (outside
 /// the worker's group, so the exit signal never reaches it) keeps the scope
 /// held as recovery-required instead of a clean exit.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
