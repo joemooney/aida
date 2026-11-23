@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T07:04:04.549122131Z
+modified_at: 2026-11-23T07:06:14.440697331Z
 req_type: Bug
 tags:
 - recovery
@@ -226,6 +226,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T07:04:04.328220195Z
   modified_at: 2026-11-23T07:04:04.328220195Z
+- id: 01a2073a-59a6-7023-abbd-73960f21eeae
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:06):
+    # BUG-2721 / PR #4402 r4 FINAL (advisor-122 ruling 2026-11-23 00:04 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier. SMALL.
+
+    The counting CR at 707d29be (r3): AC2 and AC3 PASS (the primary-shell false positive is fixed). Two small AC1 gaps plus the PR body remain. Fix all three; the reviewer scope is these three plus the diff. A blocking CR after this parks the PR.
+    1. codex_bg_receipt.rs:218: the invocation-ancestry exemption must exclude ONLY those ancestor PIDs from the holder list, never skip the scan, so a surviving descendant that runs recovery still finds its live siblings, group or session. Add a test.
+    2. codex_bg_receipt.rs:841: unknown-receipt retirement with missing worker, supervisor or worktree fields = "not provably over": refuse with an inspection command (r3 rule d), never "absent check passes". Add a test.
+    3. Put the accepted residual in the PR BODY: a descendant that both setsids AND clears its env outside any worktree is not detected; it's accepted and deferred.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T07:06:14.440697331Z
+  modified_at: 2026-11-23T07:06:14.440697331Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
