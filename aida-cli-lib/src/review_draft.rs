@@ -921,7 +921,7 @@ mod standalone_review_verdict_draft_tests {
     // trace:BUG-2707 | ai:claude
     #[test]
     fn bug_2707_default_policy_remedy_matches_the_recorder_rule() {
-        let (_tmp, launch) = launch_under("");
+        let (tmp, launch) = launch_under("");
         let err = refusal(
             &launch,
             &approved(serde_json::json!(["P3: rename the helper"])),
@@ -946,6 +946,23 @@ mod standalone_review_verdict_draft_tests {
             .submit(&approved(serde_json::json!([example])).to_string())
             .unwrap();
         assert_eq!(accepted.verdict, "approved");
+        // trace:TASK-3257 | ai:codex
+        let recorded = rv::build_verdict_object(
+            tmp.path(),
+            &rv::verdict_path(tmp.path(), "TASK-3257"),
+            Some("approved"),
+            None,
+            None,
+            None,
+            &accepted.record_findings(),
+            "reviewer",
+        )
+        .unwrap();
+        assert!(rv::disposition_verdict(&recorded).approves());
+        assert_eq!(
+            recorded["finding_dispositions"][0]["disposition"],
+            "deferred"
+        );
         // A multi-line rationale is not a deferral, exactly as the recorder rules.
         let multi = serde_json::json!({"text":"t","severity":"minor","disposition":"deferred","rationale":"a\nb"}).to_string();
         assert!(launch

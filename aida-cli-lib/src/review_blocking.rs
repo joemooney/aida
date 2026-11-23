@@ -18,6 +18,10 @@ pub(crate) const DEFAULT_BRANCH_CONFIG: &str = "default-branch .aida/config.toml
 // trace:STORY-2913 | ai:claude
 pub(crate) fn describe(effective: &Effective) -> String {
     let list = match &effective.policy {
+        // trace:TASK-3257 | ai:codex
+        Policy::AllBlock if !effective.fails_closed() => {
+            "default — unresolved findings block".to_string()
+        }
         Policy::AllBlock => "default — every finding blocks".to_string(),
         Policy::Tiers(set) => set.iter().copied().collect::<Vec<_>>().join(", "),
     };
@@ -44,6 +48,11 @@ pub(crate) fn prompt(root: &Path) -> Result<String> {
         out.push_str(
             "\nThe list cannot be honoured, so every finding blocks, including a finding \
 you mark deferred: record request-changes whenever any finding remains.\n",
+        );
+    } else if matches!(effective.policy, Policy::AllBlock) {
+        out.push_str(
+            "\nTo defer a finding, supply structured --finding JSON with text, severity, \
+disposition set to deferred, and a nonempty one-line rationale. No blocking_tier is required.\n",
         );
     }
     if let Policy::Tiers(set) = &effective.policy {
@@ -294,7 +303,7 @@ pub(crate) mod tests {
             rv::VerdictKind::RequestChanges
         );
         let text = prompt(tmp.path()).unwrap();
-        assert!(text.contains("every finding blocks"), "{text}");
+        assert!(text.contains("unresolved findings block"), "{text}");
         assert!(!text.contains("ADR-76"), "{text}");
         let path = rv::verdict_path(tmp.path(), "TASK-9821");
         let record = rv::build_verdict_object(
@@ -1072,10 +1081,11 @@ pub(crate) mod tests {
         assert!(launched.starts_with("/aida-review --pr 42\n## Project review blocking policy"));
         assert!(
             launched.contains(
-                "Active blocking classes: default — every finding blocks (not set on the default branch)."
+                "Active blocking classes: default — unresolved findings block (not set on the default branch)."
             ),
             "{launched}"
         );
+        assert!(launched.contains("No blocking_tier is required."));
         set_policy(root, "[\"p1\", \"typo\"]");
         let launched =
             crate::review_launch::review_prompt(root, 42, false, "/aida-review --pr 42").unwrap();
