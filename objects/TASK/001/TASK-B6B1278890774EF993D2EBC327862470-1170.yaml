@@ -13,12 +13,12 @@ description: |
   Recheck the persistence protocol after STORY-2897 lands. The S3a head 964a98c30ed already syncs the temporary state data before rename. The watch state replacement there returns after rename without syncing the directory entry. A directory sync after publication is needed for that rename's durability.
 
   If the shipped rework still has this gap, complete the atomic state replacement under the trusted watch directory using the existing persistence helper where it fits. Propagate failures and preserve restart consistency between the cursor, episode and pending journal transitions. Cover failures at the publication boundary with the existing watch failpoint/restart pattern. Keep this limited to the residual durability requirement.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.729374870Z
-modified_at: 2026-11-23T09:53:41.925456980Z
+modified_at: 2026-11-23T10:23:01.012026244Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -139,6 +139,12 @@ comments:
   modified_at: 2026-11-23T09:53:41.925456980Z
   session_id: 01a207ccd7ca
   harness_version: codex-cli 0.167.0
+- id: 01a207ee-3394-7b61-85f8-92d4b8059d90
+  author: aida-publication-done
+  content: Implementer push 19347c2961e7 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T10:23:01.012025614Z
+  modified_at: 2026-11-23T10:23:01.012025614Z
+  session_id: 01a207ccd7ca
 history:
 - id: 01a1fb7e-3363-7680-855c-25ffe7cdf61a
   author: joe
@@ -230,6 +236,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a207ee-3394-7b61-85f8-92cd788c03f5
+  author: aida-publication-done
+  timestamp: 2026-11-23T10:23:01.012023789Z
+  session_id: 01a207ccd7ca
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
