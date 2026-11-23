@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-23T08:30:34.307223948Z
+modified_at: 2026-11-23T08:38:38.478908685Z
 req_type: Bug
 tags:
 - hygiene
@@ -94,6 +94,15 @@ comments:
   modified_at: 2026-11-23T08:28:15.606953688Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2078e-a5c2-7531-bc33-22198b6edc33
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1aeb11bc70dc72c92cbc7377a3dd90c78f91a3ce plus native working diff. AC1: [evidence: behavioral-test] Both bug_2713_session_end tests passed in lane job j20261123T083319049-2-0. Actual clone status failure preserves warning and fatal text and the lease. An untracked-only worktree reports both nested paths and retains its lease. Reviewed merge-base diff, working diff and untracked inventory. Checked status column preservation, byte quoting, NUL boundaries, rename source order, empty and multiple records, clone isolation and submodule fail-closed checks. Formatting and diff checks passed. FAST stopped at test-speed tooling because cargo metadata cannot run through the lane runner. Scope remains AC1. No live hygiene run or exact future publication-head CI evidence.
+  created_at: 2026-11-23T08:38:38.478908685Z
+  modified_at: 2026-11-23T08:38:38.478908685Z
+  session_id: 01a207870c47
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
