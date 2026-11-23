@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Those files contain no complete secret-shaped literals; a gitleaks run over the tree reports none from them.
   - AC2: The rejection assertions are unchanged and still pass.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:17.965996587Z
-modified_at: 2026-11-23T08:54:20.758024707Z
+modified_at: 2026-11-23T09:28:14.338510340Z
 req_type: Task
 tags:
 - from-work-ci
@@ -45,6 +45,12 @@ comments:
   modified_at: 2026-11-23T08:54:20.758024707Z
   session_id: 01a207900d04
   harness_version: codex-cli 0.167.0
+- id: 01a207bc-0d02-79b2-8a7d-abea002bcdb0
+  author: aida-publication-done
+  content: Implementer push 5109ea61e7b9 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T09:28:14.338509784Z
+  modified_at: 2026-11-23T09:28:14.338509784Z
+  session_id: 01a207900d04
 history:
 - id: 01a20790-63ce-77b3-9e87-e55899df8cc2
   author: aida-session-start
@@ -59,6 +65,14 @@ history:
   session_id: 01a207900d04
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a207bc-0d02-79b2-8a7d-abdb64564901
+  author: aida-publication-done
+  timestamp: 2026-11-23T09:28:14.338507978Z
+  session_id: 01a207900d04
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
