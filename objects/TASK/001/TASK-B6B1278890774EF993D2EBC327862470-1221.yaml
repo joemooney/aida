@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Those files contain no complete secret-shaped literals; a gitleaks run over the tree reports none from them.
   - AC2: The rejection assertions are unchanged and still pass.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:17.965996587Z
-modified_at: 2026-11-23T08:33:09.938025728Z
+modified_at: 2026-11-23T08:40:32.974362399Z
 req_type: Task
 tags:
 - from-work-ci
@@ -34,6 +34,14 @@ comments:
   modified_at: 2026-11-23T08:33:09.938025728Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a20790-63ce-77b3-9e87-e55899df8cc2
+  author: aida-session-start
+  timestamp: 2026-11-23T08:40:32.974360950Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
