@@ -9,12 +9,12 @@ description: |
   - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
   - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
   - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T06:59:09.995610196Z
+modified_at: 2026-11-23T07:03:58.784083708Z
 req_type: Bug
 tags:
 - recovery
@@ -207,6 +207,11 @@ comments:
   created_at: 2026-11-23T06:43:00.436135450Z
   modified_at: 2026-11-23T06:43:00.436135450Z
   session_id: 01a206ed9a53
+- id: 01a20737-fa40-7283-91c3-16814e8d8d7e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2721 needs changes. AC3 passes source review: the traced timeout-wrapper regression recovers with an unrelated primary-checkout shell still alive. AC2 passes for detected holders: diagnostics report PID, command and the matching signal. The layered AC1 recovery rule still has two scope-release gaps: an invocation ancestor can evade independent holder checks, and a grant-only partial receipt can drop group/session evidence. Reviewed the landed tree 1a2ca92b6ffe5c1e4d1a9e92b5ed769bdebea879 on protected base a16f3592f015e06580a94c1f7879ea9c877c088e. The intervening base change adds separate writer inventory entries and does not affect these findings. FAST gates passed, and FAST compile was pending at review time. No local build or tests were run.. No triage reason was given.'
+  created_at: 2026-11-23T07:03:58.784077241Z
+  modified_at: 2026-11-23T07:03:58.784077241Z
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
@@ -310,6 +315,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20737-fa40-7283-91c3-167b343c8fe8
+  author: joe
+  timestamp: 2026-11-23T07:03:58.784056345Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -317,11 +329,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2721 needs changes. AC3 passes source review: the traced timeout-wrapper regression recovers with an unrelated primary-checkout shell still alive. AC2 passes for detected holders: diagnostics report PID, command and the matching signal. The layered AC1 recovery rule still has two scope-release gaps: an invocation ancestor can evade independent holder checks, and a grant-only partial receipt can drop group/session evidence. Reviewed the landed tree 1a2ca92b6ffe5c1e4d1a9e92b5ed769bdebea879 on protected base a16f3592f015e06580a94c1f7879ea9c877c088e. The intervening base change adds separate writer inventory entries and does not affect these findings. FAST gates passed, and FAST compile was pending at review time. No local build or tests were run.'
-  recovery_hint: address the review findings, move BUG-2721 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T06:59:09.995610196Z
