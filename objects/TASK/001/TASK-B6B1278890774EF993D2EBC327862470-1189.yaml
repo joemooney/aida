@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   scripts/config-trust.toml: the new branch-local key `[admission] wait_secs` (read in aida-cli-lib/src/admission_owner.rs wait_bound/parse_wait_bound through review_helpers::project_config_text) is not listed. The inventory header says every key parsed from the branch-local copy is enumerated under [keys.worktree.<section>]; the guard test only counts quoted `config.toml` sites, so it does not catch the omission. Add `[keys.worktree.admission] wait_secs = "policy"`.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.459882548Z
-modified_at: 2026-11-23T08:07:26.186657698Z
+modified_at: 2026-11-23T09:54:13.497302561Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -49,6 +49,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.653366459Z
   changes: []
+- id: 01a207d3-d779-77b1-b9e9-b2c852762778
+  author: aida-session-start
+  timestamp: 2026-11-23T09:54:13.497301632Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
