@@ -1,0 +1,32 @@
+id: 01a207bc-7b56-7803-ba61-5065b3b2542e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-214
+title: 'Review PR-4417: [AI:codex] fix(tests): construct dummy credentials at runtime (TASK-3839)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20790`) for branch `task-b6b1278890774ef993d2ebc327862470-1221`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4417>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1221` → `main`
+
+  ## Covers
+
+  - TASK-3839
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4417` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T09:28:42.582920066Z
+modified_at: 2026-11-23T09:28:42.582920066Z
+req_type: Story
+filed_at:
+  code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f3800
+  session: 01a207900d04
