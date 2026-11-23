@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T10:36:35.101549593Z
+modified_at: 2026-11-23T10:37:00.307171406Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -117,6 +117,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing TASK-3209 (TASK-b6b1278890774ef993d2ebc327862470-1165). Reviewed the entire pinned diff from protected main 55f63f3800861fee8b80ae3046c104290baf7fbf to landed tree 629aa4ccb616be2c1dce882bdbea152122c316c1 and confirmed that tree matches the original head. The generated worksheet linked the completing task and directed review to its description because the acceptance bullets lack a standard section heading. Reviewed all three bullets in the canonical description.. No triage reason was given.'
   created_at: 2026-11-23T10:36:35.101542637Z
   modified_at: 2026-11-23T10:36:35.101542637Z
+- id: 01a207fb-018a-7983-9e10-7392aae5997a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3209):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bb5f778f679f
+    Recorded: 2026-11-23T10:19:33.131340765+00:00
+    Findings:
+    1. TASK-3209 AC1 — aida-cli-lib/src/land.rs:1838-1839 and aida-cli-lib/src/review_watch_forge.rs:115-123. The scheduler's 120-second timer already runs while watch_root resolves the main checkout using two independently bounded 30-second Git calls. The 90-second deadline starts only inside live_pass (main_watch.rs:1675). The root probes can succeed after consuming more than 30 seconds, at which point a scan taking the remaining 90 seconds still gets killed before its checkpoint and diagnostic. Start one deadline at the command entry before root resolution and carry it through the live pass. Exercise this path with bounded Git fixtures.
+    2. TASK-3209 AC1/AC2 — aida-cli-lib/src/main_watch.rs:728,759-763,801-804. Deadline exhaustion in Live::recent (including fetch), initial candidate enumeration, or the second after() following a green rerun goes through ?, dropping the accumulated notes and skipping the resumable pass epilogue. A first-pass CI scan that exhausts the deadline checkpoints first_candidate, then immediately calls after() and fails with an expired deadline. Likewise a verified green rerun can be durably closed and still lose the partial-progress report if its optional rescan runs out of time. Distinguish deadline exhaustion from ordinary Git failures, return through a partial-result path with the existing checkpoint intact, and test cold start, a slow Git phase, and retry after a green rerun. The added fixture times out only Fake::checks after fake Git calls have succeeded.
+    3. TASK-3209 AC1 — aida-cli-lib/src/main_watch.rs:652-659,725-728,1632-1635. The new deadline check is between notices, but each Live::mail call reads and parses the entire local mailbox before it can send one notice (aida-core/src/mailbox.rs:1294-1314). That optional scan has no work or time bound. A single delivery started just before the deadline can use the scheduler's checkpoint reserve, and the initial outbox drain runs before fetching current evidence. Use bounded, message-keyed delivery work or defer it with a checkpointed outbox so scanning unrelated mailbox entries does not consume the reserve.
+    4. aida-cli-lib/src/main_watch.rs:1292-1310,1326-1335. When a verified green commit arrives just before the shorter deadline, the closing Git range can time out solely because this pass has no time left. close() permanently records the outcome as unattributed, clears the episode, and never retries the range, leaving revert/recovery metrics wrong even if Git is healthy next pass. Retain the verified green observation and retry the unresolved attribution on the next pass, or preserve an explicit pending attribution. Add a fixture where the closing range exhausts this pass and is available on retry.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T10:37:00.170791941Z
+  modified_at: 2026-11-23T10:37:00.170791941Z
 history:
 - id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
   author: joe
