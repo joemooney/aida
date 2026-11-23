@@ -150,6 +150,9 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
 /// This conservative inventory also includes production writes/prefix literals.
 // trace:STORY-2326 | ai:codex
 pub const DROPPED_AIDA_KEYS: &[&str] = &[
+    // Detached launch supplies its own attempt UUID after clearing the environment.
+    // trace:BUG-2721 | ai:codex
+    "AIDA_LAUNCH_ATTEMPT",
     // Cron passes this only to its build process, together with the held fd.
     // trace:TASK-3812 | ai:codex
     "AIDA_AUTOBUILD_LOCK_FD",

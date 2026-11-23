@@ -868,6 +868,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         launch_context.as_ref(),
         &plan_role,
         &grant.id,
+        &attempt,
         mail_wake,
     )?;
     let context_path = launch_context.as_ref().map(|c| c.path.clone());
@@ -1224,6 +1225,7 @@ fn build_worker_exec(
     launch_context: Option<&AgentLaunchContext>,
     role: &str,
     grant_id: &str,
+    attempt: &str,
     mail_wake: agent_registry::MailWake,
 ) -> Result<WorkerExec> {
     let vendor = "codex";
@@ -1237,6 +1239,7 @@ fn build_worker_exec(
         .env_clear()
         .envs(worker_ambient_env(std::env::vars_os(), &passthrough))
         .env("AIDA_HEADLESS", "1")
+        .env("AIDA_LAUNCH_ATTEMPT", attempt)
         .envs(crate::burndown_run::headless_wait_envs(
             ceiling_key,
             &ceiling_value,
@@ -2170,7 +2173,7 @@ fn first_process_tick(r: &LaunchReceipt) -> Option<u64> {
 pub(crate) fn own_process_chain() -> std::collections::HashSet<u32> {
     let mut own = std::collections::HashSet::new();
     let mut pid = Some(std::process::id());
-    while let Some(p) = pid.filter(|p| *p > 1 && own.insert(*p)) {
+    while let Some(p) = pid.filter(|p| *p > 0 && own.insert(*p)) {
         pid = agent_registry::parent_pid_of(p);
     }
     own
@@ -2230,12 +2233,12 @@ pub(crate) fn recover_launch_at(
     }
     let probe = receipt::OccupancyProbe {
         recovery_token: Some(attempt),
+        recovery_grant: r.grant_id.as_deref(),
         not_before: first_process_tick(&r),
         ..Default::default()
     };
-    // The recovery command itself necessarily carries the token in argv.
-    let invoking_pid = std::collections::HashSet::from([std::process::id()]);
-    match receipt::scan_occupancy_in(proc_root, &probe, &invoking_pid) {
+    // Waiting wrappers also carry the recovery command and attempt in argv.
+    match receipt::scan_occupancy_in(proc_root, &probe, &own_process_chain()) {
         receipt::Occupancy::Clear => {}
         receipt::Occupancy::Occupied(what) => anyhow::bail!(
             "attempt {attempt} is not provably over: {what}; nothing was changed"
@@ -2307,6 +2310,7 @@ pub(crate) fn test_worker_env(
         "implementer",
         // A baseline seat's explicit empty grant: no grant probe runs.
         "",
+        "test-attempt",
         agent_registry::MailWake::Off,
     )
     .map(|worker| worker.env)
@@ -2328,6 +2332,7 @@ pub(crate) fn publication_test_worker_exec(
         None,
         "implementer",
         "test",
+        "test-attempt",
         agent_registry::MailWake::Off,
     )
     .map(|_| ())

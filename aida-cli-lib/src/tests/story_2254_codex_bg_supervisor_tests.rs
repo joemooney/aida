@@ -791,6 +791,9 @@ fn story_2254_bg_pre_acceptance_hook_cannot_arm_wake() {
 /// unrecorded start identity is unknown; nothing is revoked on refusal; once
 /// everything is provably gone, the very next call reconciles.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-482.AC1 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-482.AC2 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-482.AC3 | ai:codex
 #[test]
 #[cfg(target_os = "linux")]
 fn bug_2721_recover_launch_fresh_scan_fails_closed() {
@@ -807,8 +810,64 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
     assert!(h.grant().revoked_at.is_none());
     let own = own_process_chain();
     // A dead worker that left a descendant in its process group.
-    let mut leader = std::process::Command::new("sh")
-        .args(["-c", "sleep 30 & echo $!"])
+    // Enumerate only the fixture processes. Each entry exposes the live kernel
+    // files for that PID; unrelated host credential helpers may deny environ.
+    let processes = tempfile::tempdir().unwrap();
+    let expose = |pid: u32| {
+        std::os::unix::fs::symlink(
+            format!("/proc/{pid}"),
+            processes.path().join(pid.to_string()),
+        )
+        .unwrap();
+    };
+    let plan = AgentLaunchPlan {
+        project_root: h.root().into(),
+        launch_cwd: h.worktree.clone(),
+        role: None,
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        seat: None,
+        current_spec: None,
+        name: AGENT.into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let config = AgentLaunchConfig {
+        delegate_seats: vec![],
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![],
+        prompt_style: super::super::AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let vendor = h.worktree.join("codex");
+    crate::test_exec::write_executable(
+        &vendor,
+        r#"#!/bin/sh
+case " $* " in
+    *" --version "*) echo 'codex-cli fixture' ;;
+    *" --probe-seat "*) echo 'seat_grant_valid=true expected_seat=true' ;;
+    *) sleep 30 & echo $! ;;
+esac
+"#,
+    );
+    let worker = build_worker_exec(
+        &vendor,
+        &config,
+        &plan,
+        &[],
+        None,
+        "implementer",
+        &h.grant_id,
+        &h.attempt,
+        agent_registry::MailWake::Off,
+    )
+    .unwrap();
+    let mut leader = std::process::Command::new(worker.program)
+        .current_dir(worker.cwd)
+        .env_clear()
+        .envs(worker.env)
+        .args(worker.args)
         .stdout(std::process::Stdio::piped())
         .process_group(0)
         .spawn()
@@ -842,6 +901,16 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
     assert!(
         matches!(attempt_occupancy(&h.receipt(), &own), receipt::Occupancy::Occupied(reason) if reason.contains("process group"))
     );
+    expose(escaped);
+    let why = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        why.contains(&format!("pid {escaped}"))
+            && why.contains(&format!("attempt {} in environ", h.attempt)),
+        "{why}"
+    );
+    assert!(h.grant().revoked_at.is_none());
     // SAFETY: SIGKILL to the escaped descendant this test spawned.
     unsafe {
         libc::kill(escaped as libc::pid_t, libc::SIGKILL);
@@ -861,16 +930,6 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
         pid: leader_id.pid,
         start: String::new(),
     });
-    // Enumerate only the fixture processes. Each entry exposes the live kernel
-    // files for that PID; unrelated host credential helpers may deny environ.
-    let processes = tempfile::tempdir().unwrap();
-    let expose = |pid: u32| {
-        std::os::unix::fs::symlink(
-            format!("/proc/{pid}"),
-            processes.path().join(pid.to_string()),
-        )
-        .unwrap();
-    };
     let err = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
     set_worker(leader_id);
@@ -902,7 +961,7 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
         if source == "cmdline" {
             cmd.arg(&h.attempt);
         } else {
-            cmd.env("TEST_ATTEMPT", &h.attempt);
+            cmd.env(GRANT_ENV, &h.grant_id);
         }
         let mut holder = cmd.spawn().unwrap();
         expose(holder.id());
@@ -931,13 +990,74 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
     assert!(err.to_string().contains("unreadable environ"), "{err}");
     assert!(h.grant().revoked_at.is_none());
     std::fs::remove_dir_all(unreadable).unwrap();
-    let done = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap();
+    let helper = barrier_test_name().replace(
+        "story_2254_barrier_entry",
+        "bug_2721_wrapped_recovery_entry",
+    );
+    let wrapped = std::process::Command::new("timeout")
+        .args(["30", "sh", "-c", r#"exec "$1" --exact "$2""#, "sh"])
+        .arg(crate::aida_bin::current_executable_path().unwrap())
+        .arg(helper)
+        .arg(&h.attempt)
+        .env("BUG_2721_ATTEMPT", &h.attempt)
+        .env("BUG_2721_PROJECT", h.root())
+        .env("BUG_2721_PROC", processes.path())
+        .output()
+        .unwrap();
+    assert!(
+        wrapped.status.success(),
+        "{}",
+        String::from_utf8_lossy(&wrapped.stdout)
+    );
     assert!(shell.try_wait().unwrap().is_none());
+    assert_eq!(h.receipt().phase, Phase::Exited);
+    let path = h.dir.join("attempts").join(format!("{}.json", h.attempt));
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&serde_json::json!({"version":99,"worktree":h.root()})).unwrap(),
+    )
+    .unwrap();
+    let mut holder = std::process::Command::new("sleep")
+        .arg("30")
+        .env("AIDA_LAUNCH_ATTEMPT", &h.attempt)
+        .spawn()
+        .unwrap();
+    expose(holder.id());
+    let why = receipt::retire_unknown_at(&h.dir, h.root(), &h.attempt, processes.path())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        why.contains(&format!("pid {} command \"sleep\"", holder.id())) && why.contains("environ"),
+        "{why}"
+    );
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+    receipt::retire_unknown_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap();
     drop(shell.stdin.take());
     shell.wait().unwrap();
-    assert!(done.contains("recovered"), "{done}");
+
     assert!(h.grant().revoked_at.is_some());
-    assert_eq!(h.receipt().phase, Phase::Exited);
+}
+
+// Entry point for the timeout-wrapped recovery subprocess.
+#[test]
+#[cfg(target_os = "linux")]
+fn bug_2721_wrapped_recovery_entry() {
+    let inputs = aida_core::exec_context::Environment::capture();
+    let Ok(attempt) = inputs.var("BUG_2721_ATTEMPT") else {
+        return;
+    };
+    let root = std::path::PathBuf::from(inputs.get("BUG_2721_PROJECT").unwrap());
+    let processes = std::path::PathBuf::from(inputs.get("BUG_2721_PROC").unwrap());
+    let parent = agent_registry::parent_pid_of(std::process::id()).unwrap();
+    std::os::unix::fs::symlink(
+        format!("/proc/{parent}"),
+        processes.join(parent.to_string()),
+    )
+    .unwrap();
+    let dir = receipt::runtime_dir(&root).unwrap();
+    let done = recover_launch_at(&dir, &root, attempt, &processes).unwrap();
+    assert!(done.contains("recovered"), "{done}");
 }
 
 /// The occupancy scan itself fails closed on an unreadable process table or

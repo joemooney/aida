@@ -118,6 +118,8 @@ pub(crate) struct OccupancyProbe<'a> {
     pub attempt: Option<&'a str>,
     /// Exact argv token or environment value identifying a known attempt.
     pub recovery_token: Option<&'a str>,
+    /// The grant inherited by descendants of pre-token workers.
+    pub recovery_grant: Option<&'a str>,
     /// Kernel start tick of the attempt's FIRST recorded process. A process
     /// of this user whose details are unreadable (a PAM helper, a process
     /// holding capabilities) and that started strictly before it cannot be
@@ -279,6 +281,23 @@ pub(crate) fn scan_occupancy_in_with_owner(
                             return Occupancy::Occupied(format!(
                                 "pid {pid} command {command:?} carries attempt {token} in {source}"
                             ));
+                        }
+                        let legacy_grant = source == "environ"
+                            && probe
+                                .recovery_grant
+                                .filter(|grant| !grant.is_empty())
+                                .is_some_and(|grant| {
+                                    raw.split(|b| *b == 0).any(|field| {
+                                        field
+                                            .strip_prefix(
+                                                crate::gate::seat_authority::GRANT_ENV.as_bytes(),
+                                            )
+                                            .and_then(|suffix| suffix.strip_prefix(b"="))
+                                            == Some(grant.as_bytes())
+                                    })
+                                });
+                        if legacy_grant {
+                            return Occupancy::Occupied(format!("pid {pid} command {command:?} carries the recorded attempt grant in environ"));
                         }
                     }
                     Err(e) if gone(&e) || !ours || predates => {}
@@ -737,7 +756,10 @@ fn scope_blocker_except(
                 // every scope only while something may still run for it.
                 let blocks = match unknown_receipt_scope(dir, &attempt) {
                     Some(owned) => owned == *scope,
-                    None => !unknown_attempt_is_dead(dir, &attempt),
+                    None => {
+                        unknown_attempt_occupancy(dir, &attempt, Path::new("/proc"))
+                            != Occupancy::Clear
+                    }
                 };
                 if blocks {
                     return Some(format!(
@@ -789,24 +811,14 @@ fn log_birth_tick(dir: &Path, attempt: &str) -> Option<u64> {
     Some(born.checked_sub(boot)?.saturating_sub(2) * hz)
 }
 
-/// Whether a FRESH scan proves nothing runs for an unknown attempt: no
-/// process names it, and none occupies the worker group, supervisor session
-/// or worktree its receipt names (read leniently). Unreadable means NO.
+/// Recover the usable identities from a partial receipt and check them before
+/// scanning for the attempt token or the grant inherited by older workers.
 // trace:STORY-2254 | ai:claude
-pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
+fn unknown_attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
     let lenient = receipt_path(dir, attempt)
         .ok()
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok());
-    let field_pid = |name: &str| {
-        lenient
-            .as_ref()
-            .and_then(|v| v.get(name)?.get("pid")?.as_u64())
-            .and_then(|p| u32::try_from(p).ok())
-    };
-    let worktree = lenient
-        .as_ref()
-        .and_then(|v| v.get("worktree")?.as_str().map(PathBuf::from));
     let tick = |v: Option<&serde_json::Value>| {
         v?.get("start")?
             .as_str()?
@@ -815,12 +827,33 @@ pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
             .ok()
     };
     let field = |name: &str| lenient.as_ref().and_then(|v| v.get(name));
+    for name in ["owner", "worker", "supervisor"] {
+        let Some(value) = field(name).filter(|v| !v.is_null()) else {
+            continue;
+        };
+        if name == "owner" && value.get("kind").and_then(|v| v.as_str()) == Some("released") {
+            continue;
+        }
+        let Ok(id) = serde_json::from_value::<ProcId>(value.clone()) else {
+            return Occupancy::Unknown(format!("incomplete {name} identity"));
+        };
+        match id.state() {
+            ProcState::Gone => {}
+            ProcState::Live => {
+                let command = std::fs::read_to_string(format!("/proc/{}/comm", id.pid))
+                    .unwrap_or_else(|_| "unavailable".into());
+                return Occupancy::Occupied(format!(
+                    "pid {} command {:?} matches recorded {name} start identity",
+                    id.pid,
+                    command.trim_end()
+                ));
+            }
+            ProcState::Unknown(why) => return Occupancy::Unknown(why),
+        }
+    }
     let probe = OccupancyProbe {
-        recovery_token: None,
-        worktree: worktree.as_deref(),
-        group: field_pid("worker"),
-        session: field_pid("supervisor"),
-        attempt: Some(attempt),
+        recovery_token: Some(attempt),
+        recovery_grant: field("grant_id").and_then(|v| v.as_str()),
         not_before: [
             tick(field("owner")),
             tick(field("supervisor")),
@@ -830,10 +863,13 @@ pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
         .flatten()
         .min()
         .or_else(|| log_birth_tick(dir, attempt)),
+        ..Default::default()
     };
-    let mut own = std::collections::HashSet::new();
-    own.insert(std::process::id());
-    scan_occupancy(&probe, &own) == Occupancy::Clear
+    scan_occupancy_in(
+        proc_root,
+        &probe,
+        &super::agent_codex_background::own_process_chain(),
+    )
 }
 
 /// Admit `receipt` (phase Prepared) for its scope, or refuse while any
@@ -902,6 +938,15 @@ pub(crate) fn prune_terminal_receipts(
 /// (recover it instead) and any attempt a fresh scan cannot prove dead.
 // trace:STORY-2254 | ai:claude
 pub(crate) fn retire_unknown(dir: &Path, project_root: &Path, attempt: &str) -> Result<PathBuf> {
+    retire_unknown_at(dir, project_root, attempt, Path::new("/proc"))
+}
+
+pub(super) fn retire_unknown_at(
+    dir: &Path,
+    project_root: &Path,
+    attempt: &str,
+    proc_root: &Path,
+) -> Result<PathBuf> {
     with_admission_lock(dir, || {
         let why = match read_receipt(dir, project_root, attempt) {
             ReceiptRead::Known(r) => anyhow::bail!(
@@ -915,10 +960,12 @@ pub(crate) fn retire_unknown(dir: &Path, project_root: &Path, attempt: &str) -> 
             std::fs::symlink_metadata(&path).is_ok(),
             "attempt {attempt} has no receipt to retire"
         );
-        anyhow::ensure!(
-            unknown_attempt_is_dead(dir, attempt),
-            "attempt {attempt} ({why}) cannot be proven dead: a process may still run for it, or the process table could not be fully read; nothing was changed"
-        );
+        match unknown_attempt_occupancy(dir, attempt, proc_root) {
+            Occupancy::Clear => {}
+            Occupancy::Occupied(reason) | Occupancy::Unknown(reason) => anyhow::bail!(
+                "attempt {attempt} ({why}) cannot be proven dead: {reason}; nothing was changed"
+            ),
+        }
         let retired = dir.join(RETIRED_DIR);
         ensure_private_dir(&retired)?;
         let target = retired.join(format!("{attempt}.{}.json", chrono::Utc::now().timestamp()));
