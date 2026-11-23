@@ -1,5 +1,6 @@
 id: 01a20584-d7d2-78d2-a5a7-b06a214f59b1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-202
+agreed_id: STORY-3009
 title: 'Review PR-4397: [AI:codex] fix(ownership): retain clone leases with invalid holder evidence (BUG-2715)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2054a`) for branch `bug-b6b1278890774ef993d2ebc327862470-476`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-22T23:08:52.881105116Z
   session_id: 01a2054a64d4
+  changes: []
+- id: 01a2060c-8d6c-7b51-acaf-9a3e30aa3f5c
+  author: joe
+  timestamp: 2026-11-23T01:36:55.660997522Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f

@@ -1,5 +1,6 @@
 id: 01a2059d-89ba-7d92-817f-972b0cb9fc86
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-203
+agreed_id: STORY-3010
 title: 'Review PR-4398: [AI:codex] fix(containment): refuse preflight on notification listener hangup (BUG-2717)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2057c`) for branch `bug-b6b1278890774ef993d2ebc327862470-478`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-22T23:35:47.374235145Z
   session_id: 01a2057c2f43
+  changes: []
+- id: 01a2060c-c02a-71d3-b733-b8d1c7c5316f
+  author: joe
+  timestamp: 2026-11-23T01:37:08.650195438Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f

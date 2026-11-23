@@ -1,5 +1,6 @@
 id: 01a205ff-dba9-72b0-aa8a-70d0b86549f3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-205
+agreed_id: STORY-3008
 title: 'Review PR-4401: [AI:codex] feat(land): readiness and WAITING follow the landing mode (S1b) (Refs STORY-2897)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a205d7`) for branch `story-2897-s1b`.
@@ -633,6 +634,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T01:29:02.861181344Z
   session_id: 01a205d752af
+  changes: []
+- id: 01a2060c-5b7c-7370-b52b-327431200947
+  author: joe
+  timestamp: 2026-11-23T01:36:42.876751761Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f

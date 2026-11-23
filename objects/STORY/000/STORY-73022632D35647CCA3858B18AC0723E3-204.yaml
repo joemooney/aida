@@ -1,5 +1,6 @@
 id: 01a205d1-b1d1-7db3-9424-b8cfc9121016
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-204
+agreed_id: STORY-3012
 title: 'Review PR-4399: [AI:codex] fix(store-mutation): close only valid sender pidfds (BUG-2716)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a205b6`) for branch `bug-b6b1278890774ef993d2ebc327862470-477`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T00:32:47.896276921Z
   session_id: 01a205b6876e
+  changes: []
+- id: 01a2060d-27d3-7862-9f55-f60e1e5848f5
+  author: joe
+  timestamp: 2026-11-23T01:37:35.187941990Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
