@@ -38,6 +38,16 @@ mod commit_ci;
 mod throughput;
 pub(crate) use commit_ci::*;
 
+/// One CI job as [`Forge::run_job_report`] reads it; the log is an error
+/// string when it could not be read.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct RunJobReport {
+    pub link: String,
+    pub failed_steps: Vec<String>,
+    pub log: std::result::Result<String, String>,
+}
+
 /// A supervised merge-hold deliberately refused a merge.
 ///
 /// Keep this as a typed error so orchestrator callers can distinguish a human
@@ -1042,6 +1052,10 @@ pub trait Forge {
         anyhow::bail!("this forge has no commit-keyed CI to read for {sha}")
     }
 
+    fn watch_commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        self.commit_checks(sha)
+    }
+
     /// Download artifact `name` of CI run `run_id` into `dest`. Forges
     /// without run artifacts always err, so a caller never reads a missing
     /// report as an empty one.
@@ -1056,6 +1070,21 @@ pub trait Forge {
     // trace:STORY-2912 | ai:claude
     fn run_job_failed_steps(&self, run_id: &str, job: &str) -> Result<Vec<String>> {
         anyhow::bail!("this forge cannot list the steps of job `{job}` in CI run {run_id}")
+    }
+
+    /// Job `job` of CI run `run_id` (its latest attempt): its link, its
+    /// failed steps and its log. Forges without job logs always err.
+    // trace:STORY-2897 | ai:claude
+    fn run_job_report(
+        &self,
+        run_id: &str,
+        job: &str,
+        job_id: u64,
+        attempt: u64,
+    ) -> Result<RunJobReport> {
+        anyhow::bail!(
+            "this forge cannot report job `{job}` ({job_id}) of CI run {run_id} attempt {attempt}"
+        )
     }
 
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
@@ -2454,6 +2483,22 @@ pub(crate) fn github_open_changes_detailed(
     serde_json::from_slice(&out.stdout).context("invalid forge listing")
 }
 
+impl GitHubForge {
+    fn commit_checks_for(&self, sha: &str, verify_jobs: bool) -> Result<CommitChecks> {
+        // trace:STORY-1689 | ai:claude
+        anyhow::ensure!(
+            is_full_commit_sha(sha),
+            "invalid commit `{sha}` for a CI read: a full 40- or 64-character SHA is required"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        // `gh api` fills `{owner}/{repo}` from this checkout's repository.
+        github_checks_with_attempts("{owner}/{repo}", sha, &mut api, verify_jobs)
+    }
+}
+
 impl Forge for GitHubForge {
     // trace:STORY-2849 | ai:codex
     fn landing_tip(&self, branch: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
@@ -3185,17 +3230,11 @@ impl Forge for GitHubForge {
     }
 
     fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
-        // trace:STORY-1689 | ai:claude
-        anyhow::ensure!(
-            is_full_commit_sha(sha),
-            "invalid commit `{sha}` for a CI read: a full 40- or 64-character SHA is required"
-        );
-        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
-            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
-        })?;
-        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
-        // `gh api` fills `{owner}/{repo}` from this checkout's repository.
-        github_commit_checks("{owner}/{repo}", sha, &mut api)
+        self.commit_checks_for(sha, false)
+    }
+
+    fn watch_commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        self.commit_checks_for(sha, true)
     }
 
     // trace:STORY-2912 | ai:claude
@@ -3206,6 +3245,43 @@ impl Forge for GitHubForge {
         })?;
         let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
         github_run_job_failed_steps("{owner}/{repo}", run_id, job, &mut api)
+    }
+
+    // trace:STORY-2897 | ai:claude
+    fn run_job_report(
+        &self,
+        run_id: &str,
+        job: &str,
+        job_id: u64,
+        attempt: u64,
+    ) -> Result<RunJobReport> {
+        anyhow::ensure!(
+            !run_id.is_empty() && run_id.bytes().all(|b| b.is_ascii_digit()),
+            "invalid CI run id `{run_id}`"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        // Every page, with the listing's completeness checked: the failed job
+        // can be past the first hundred.
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        let (link, failed_steps) =
+            github_watch_job("{owner}/{repo}", run_id, attempt, job_id, job, &mut api)?;
+        // Only the tail is kept while the log streams: the errors are at
+        // its end, and a large log never fills this process.
+        let log = commit_ci_api_tail(
+            &gh,
+            &self.project_root,
+            &format!("repos/{{owner}}/{{repo}}/actions/jobs/{job_id}/logs"),
+            JOB_LOG_TAIL,
+        )
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .map_err(|e| format!("{e:#}"));
+        Ok(RunJobReport {
+            link,
+            failed_steps,
+            log,
+        })
     }
 
     // trace:STORY-2912 | ai:claude
@@ -5630,6 +5706,96 @@ const ARTIFACT_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from
 // mutation commands so command-trust audits can identify these call sites.
 fn forge_read_command(cli: &Path) -> Command {
     Command::new(cli)
+}
+
+/// How much of a job log's end [`Forge::run_job_report`] keeps.
+// trace:STORY-2897 | ai:claude
+pub(crate) const JOB_LOG_TAIL: usize = 1024 * 1024;
+
+/// `<cli> api -X GET <endpoint>` keeping only the last `keep` bytes of its
+/// output as it streams, bounded by the same timeout (and scoped deadline)
+/// as [`commit_ci_api`]. A timeout kills the child and is an `Err`.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn commit_ci_api_tail(
+    cli: &Path,
+    root: &Path,
+    endpoint: &str,
+    keep: usize,
+) -> Result<Vec<u8>> {
+    use std::io::Read;
+    crate::pr_train::before_train_forge_call("commit CI API read")?;
+    let mut command = forge_read_command(cli);
+    command
+        .args(["api", "-X", "GET", endpoint])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let timeout = match crate::forge_lookup::forge_lookup_deadline() {
+        Some(deadline) => {
+            COMMIT_CI_API_TIMEOUT.min(deadline.saturating_duration_since(std::time::Instant::now()))
+        }
+        None => COMMIT_CI_API_TIMEOUT,
+    };
+    anyhow::ensure!(
+        !timeout.is_zero(),
+        "the read deadline passed before `{endpoint}`"
+    );
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+    let deadline = std::time::Instant::now() + timeout;
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("`{} api {endpoint}` failed to spawn", cli.display()))?;
+    let mut stdout = child.stdout.take().context("no stdout pipe")?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut tail: std::collections::VecDeque<u8> = std::collections::VecDeque::new();
+        let mut chunk = [0u8; 64 * 1024];
+        loop {
+            match stdout.read(&mut chunk) {
+                Ok(0) => break,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    let _ = tx.send(Err(e));
+                    return;
+                }
+                Ok(n) => {
+                    tail.extend(&chunk[..n]);
+                    let excess = tail.len().saturating_sub(keep);
+                    tail.drain(..excess);
+                }
+            }
+        }
+        let _ = tx.send(Ok(Vec::from(tail)));
+    });
+    let tail = match rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+    {
+        Ok(tail) => tail,
+        Err(_) => {
+            crate::bounded_process::kill_process_group(child.id());
+            let _ = child.wait();
+            anyhow::bail!("`{} api {endpoint}` timed out", cli.display());
+        }
+    };
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if std::time::Instant::now() >= deadline {
+            crate::bounded_process::kill_process_group(child.id());
+            let _ = child.wait();
+            anyhow::bail!("child exceeded deadline for {endpoint}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    };
+    let tail = tail.context("incomplete job log")?;
+    anyhow::ensure!(
+        status.success(),
+        "`{} api {endpoint}` failed ({status})",
+        cli.display()
+    );
+    Ok(tail)
 }
 
 /// Run `<cli> api -X GET <endpoint>` in `root` for the commit-keyed reader;
