@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. In an isolated fixture, set contained mode, omit the transcript at the recorded cwd, and place the sole matching transcript at another eligible worktree. Assert that recovery reports that contained resume requires the recorded worktree and starts no vendor process.
   2. With the same transcript layout in uncontained mode, recover the eligible worktree. With the transcript at the recorded cwd in contained mode, accept the recorded cwd.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T16:04:38.834304174Z
+modified_at: 2026-11-23T16:15:08.340542700Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -134,6 +134,13 @@ history:
   author: joe
   timestamp: 2026-11-23T16:04:38.963549866Z
   changes: []
+- id: 01a20930-9434-7082-a775-52596c9f394f
+  author: aida-session-start
+  timestamp: 2026-11-23T16:15:08.340539005Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
