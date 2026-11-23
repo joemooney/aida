@@ -9,12 +9,12 @@ description: |
   - AC1: When the preflight listener has hung up, preflight refuses within 10 s and the model process never starts. A test asserts the bound.
   - AC2: An open listener still completes preflight normally (positive control).
   - AC3: The refusal names the hangup as the reason.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T05:43:36.404969875Z
+modified_at: 2026-11-23T06:26:22.698668409Z
 req_type: Bug
 tags:
 - containment
@@ -160,6 +160,12 @@ comments:
   modified_at: 2026-11-23T05:43:36.404969875Z
   session_id: 01a206ecd14b
   harness_version: codex-cli 0.167.0
+- id: 01a20715-8d6a-7bd0-960d-cb6f62de1b06
+  author: aida-publication-done
+  content: Implementer push 817d99e97e63 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T06:26:22.698667897Z
+  modified_at: 2026-11-23T06:26:22.698667897Z
+  session_id: 01a206ecd14b
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
@@ -243,6 +249,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20715-8d6a-7bd0-960d-cb57ed33dabf
+  author: aida-publication-done
+  timestamp: 2026-11-23T06:26:22.698666131Z
+  session_id: 01a206ecd14b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
