@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T05:13:18.524076838Z
+modified_at: 2026-11-23T05:13:33.934361783Z
 req_type: Bug
 tags:
 - knob
@@ -97,6 +97,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T05:13:18.388990542Z
   modified_at: 2026-11-23T05:13:18.388990542Z
+- id: 01a206d3-3662-7ad2-ab0b-b789beead998
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:13):
+    # BUG-2725 / PR #4407 r2 (advisor-122 ruling 2026-11-22 22:16 MST; relayed by product-15). Lane: CODEX. Landing-gate code, so ADR-76 strict. Use the SIMPLEST form of each fix; keep the diff small.
+
+    CR at a3a9e446 (r1, +225 lines, 8 files). Fix all six. The reviewer scope is the six plus the diff. The default stays "strict", so nothing changes until the setting is flipped.
+    1. [P1] land_ci_base.rs:162: a clean-behind head that has only FAST must NOT dead-end in UNKNOWN/Wait. A missing FULL on a clean-behind head means "needs FULL" (request or route it like today's approval path), never an error before derive. Add a test of the state machine reaching approval or dispatch.
+    2. review_watch_ready.rs:177: match FULL evidence by the project CI workflow identity (name or path), not just job names.
+    3. review_watch_ready.rs:215: under clean-merge, the wake recommends the train (`aida pr train N`), not `aida pr ship`.
+    4. review_watch.rs:3543 / review_watch_forge.rs:463: the stale_follow_up path reads the SAME effective freshness decision (ci_base_freshness), via ONE helper used by both.
+    5. review_watch_ready.rs:141: DISABLE the clean-merge exception for GitLab (GitHub only), keeping today's update-branch notice there. Say so in the PR body.
+    6. Add a landing regression that runs observe() with clean-merge end to end (merge-tree proof plus ancestry).
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T05:13:33.934361783Z
+  modified_at: 2026-11-23T05:13:33.934361783Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
