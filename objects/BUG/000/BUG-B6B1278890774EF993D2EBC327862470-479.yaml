@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-22T23:49:46.215756792Z
+modified_at: 2026-11-23T03:26:27.465699095Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -26,6 +26,11 @@ comments:
   content: 'Addendum (advisor-122 16:55, recorded by product-15): even after the advisor mirrored the approval and the hold auto-released, PR #4391 stays STUCK-MERGE: the auto-release left no recorded clearance, and clearing needs the human-only integrity floor `aida merge-hold clear 4391`. AC4: an auto-release records its clearance so a human-only clear is not needed for an approval-backed release.'
   created_at: 2026-11-22T23:49:46.215756792Z
   modified_at: 2026-11-22T23:49:46.215756792Z
+- id: 01a20670-d489-7d22-909c-e16125d4a6ed
+  author: joe
+  content: 'DEADLOCK (advisor-122 20:28, recorded by product-15): #4391 is still refused by the train: ''merge-hold marker missing without a recorded clearance (tampering suspected); a human must run aida merge-hold clear''. But the operator''s `aida merge-hold clear 4391` answered ''No merge-hold on PR #4391: no marker, and the forge carries no aida:merge-hold label'' and recorded NOTHING. So the mandate''s requirement can never be satisfied. AC5: `merge-hold clear` on a PR with no label and no marker, whose ledger shows a past hold, RECORDS a clearance. AC6: the train''s ''tampering suspected'' path names the exact command that records the missing clearance. Workaround: the operator runs `aida pr train 4391` at a terminal.'
+  created_at: 2026-11-23T03:26:27.465699095Z
+  modified_at: 2026-11-23T03:26:27.465699095Z
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
