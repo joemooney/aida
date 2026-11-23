@@ -2,274 +2,363 @@ id: 01a20637-3865-75e2-add6-0c87270d0c56
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-483
 agreed_id: BUG-2722
 title: 'doctor: release a repair-journal conflict reservation whose lane is provably over'
-description: 'Minimal slice split from BUG-2688 (#4388 parked 2026-11-22). Today a stale entry in dell1 .aida/repair-journal.json (entry 48: PR-4376 @660c0e87, lane 01a2053df3e6, tree …-433) blocks every conflict-repair relaunch with ''retained conflicts require their host journal evidence before a resume'', even though the lane''s lease is ended and its tree has been salvaged and moved aside. There is no doctor heal for it, and hand-editing the journal is forbidden. AC1: an `aida doctor heal` category (for example repair-reservations) lists journal reservations whose lease is ended AND whose tree is absent or salvaged, with evidence. With --id it releases exactly one, recording who released it and why. AC2: it refuses when the lease is live, the tree exists with unmerged files, or evidence is missing, naming the reason and the evidence command. AC3: a regression test for the dell1 shape (ended lease, moved tree, reservation for the current PR head), after which a conflict lane can reserve. Keep it small. Everything else from #4388 stays in deferred BUG-2688.'
+description: 'Minimal slice split from BUG-2688 (#4388 parked 2026-11-22). Today a stale entry in dell1 .aida/repair-journal.json (entry 48: PR-4376 @660c0e87, lane 01a2053df3e6, tree …-433) blocks every conflict-repair relaunch with ''retained conflicts require their host journal evidence before a resume'', even though the lane''s lease is ended and its tree has been salvaged and moved aside. There is no doctor heal for it, and hand-editing the journal is forbidden. AC1: an `aida doctor heal` category (for example repair-reservations) lists journal reservations whose lease is ended AND whose tree is absent or salvaged, with evidence. With --id it releases exactly one, recording who released it and why. AC2: it refuses when the lease is live, the tree exists with unmerged files, or evidence is missing, naming the reason and the evidence command. AC3: a regression test for the dell1 shape (ended lease, moved tree, reservation for the current PR head), after which a conflict lane can reserve.
+  Keep it small. Everything else from #4388 stays in deferred BUG-2688.'
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T07:49:32.108773422Z
+created_at: 2026-11-23 02:23:31.941728+00:00
+modified_at: 2026-11-23 07:49:32.108773+00:00
 req_type: Bug
 relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a2066c-a424-7bb2-b043-eb5c58c56277
-  created_at: 2026-11-23T03:22:32.720311713Z
+  created_at: 2026-11-23 03:22:32.720311+00:00
   created_by: dirtlab
 comments:
 - id: 01a20639-b01d-7f20-bca0-6cd50f5e0501
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:26):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:26):
+
     # BUG-2722: minimal slice split from BUG-2688 (advisor-122 ruling 2026-11-22 19:30 MST; relayed by product-15). Lane: CODEX. Drain-mode priority: it unblocks #4376 (BUG-2669). New branch, new PR.
 
-    Read `aida show BUG-2722`. Add an `aida doctor heal` action that releases ONE repair-journal (.aida/repair-journal.json) conflict reservation, and only when its lane's lease is ended AND its recorded tree is absent or salvaged. Otherwise it refuses with evidence: the lease state, tree state, and the inspection command. Keep the doctor finding plus heal shape consistent with the existing stale-leases category (dry-run and --yes, one id at a time).
+
+    Read `aida show BUG-2722`. Add an `aida doctor heal` action that releases ONE repair-journal (.aida/repair-journal.json) conflict reservation, and only when its lane''s lease is ended AND its recorded tree is absent or salvaged. Otherwise it refuses with evidence: the lease state, tree state, and the inspection command. Keep the doctor finding plus heal shape consistent with the existing stale-leases category (dry-run and --yes, one id at a time).
+
     Regression test for the dell1 entry-48 shape: PR #4376 reserved at 660c0e87 for lane 01a2053df3e6 (lease ended), tree .../aida-seat-...-433 moved away (absent). The heal releases it, and a following conflict rework is no longer refused with "retained conflicts require their host journal evidence".
-    Do NOT pull in BUG-2688's wider redesign. ADR-76 strict tier (lease/claim safety), so expect a STRICT review. Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    Add `// trace:BUG-2722 | ai:codex`. Commit `[AI:codex] feat(doctor): ... (BUG-2722)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
-  created_at: 2026-11-23T02:26:01.252602664Z
-  modified_at: 2026-11-23T02:26:01.252602664Z
+
+    Do NOT pull in BUG-2688''s wider redesign. ADR-76 strict tier (lease/claim safety), so expect a STRICT review. Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+
+    Add `// trace:BUG-2722 | ai:codex`. Commit `[AI:codex] feat(doctor): ... (BUG-2722)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.'
+  created_at: 2026-11-23 02:26:01.252602+00:00
+  modified_at: 2026-11-23 02:26:01.252602+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2064e-ebe6-7513-a616-74b9f44224f2
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1 plus native working tree. Compared origin/main...HEAD, inspected git diff HEAD and checked untracked additions (none).
+
     AC1: [evidence: behavioral-test] repair_journal.rs:702 verifies listing, preview, one persisted audited release and preservation of a sibling. doctor_cmd.rs:331 binds application to one --id and --yes.
+
     AC2: [evidence: behavioral-test] The same test exercises a missing exit receipt, malformed and present leases, and a retained tree. repair_journal.rs:122 requires an accessible canonical parent and positive absence. lane_liveness.rs:837 matches the host exit record to lane and path. Existing trees, including trees with an unverified salvage patch, retain the reservation.
+
     AC3: [evidence: behavioral-test] Job j20261123T024212576-2-0 executed the PR-4376 moved-tree regression: 1 passed. It reopens the journal and reserves the same PR/head, using the normal conflict reservation API.
-    Deep-pass: checked ID construction and lookup, timestamp parsing and JSON/TOML compatibility, zero/one/multiple reservations, missing evidence, symlinks, dry-run and lock scope. The explicit heal is the only release route. It uses the permanent repair lock shared by reservation and adoption. Added a pre-write size check to prevent an unreadable oversized audit. Fixed two fixture portability findings and reran the test. No tests weakened. Fast gate rerun j20261123T024722358-2-0 in progress. No published head CI yet.
-  created_at: 2026-11-23T02:49:24.887784887Z
-  modified_at: 2026-11-23T02:49:24.887784887Z
+
+    Deep-pass: checked ID construction and lookup, timestamp parsing and JSON/TOML compatibility, zero/one/multiple reservations, missing evidence, symlinks, dry-run and lock scope. The explicit heal is the only release route. It uses the permanent repair lock shared by reservation and adoption. Added a pre-write size check to prevent an unreadable oversized audit. Fixed two fixture portability findings and reran the test. No tests weakened. Fast gate rerun j20261123T024722358-2-0 in progress. No published head CI yet.'
+  created_at: 2026-11-23 02:49:24.887784+00:00
+  modified_at: 2026-11-23 02:49:24.887784+00:00
   session_id: 01a2063cc951
   harness_version: codex-cli 0.167.0
 - id: 01a2065f-64f1-71c2-a2e9-24456e19fc03
   author: dirtlab
   content: Implementer self-review validation update for HEAD 215313b8d3a8089240cc87b0210136d9d5831fb1 plus native working tree. Regenerated and reviewed scripts/store-writers.toml after the inventory gate identified six new sink/caller sites and the cli:doctor mapping. Final make check-ci-fast job j20261123T025252858-2-0 passed (exit 0). Final focused regression job j20261123T024212576-2-0 executed one passing test.
-  created_at: 2026-11-23T03:07:24.472530087Z
-  modified_at: 2026-11-23T03:07:24.472530087Z
+  created_at: 2026-11-23 03:07:24.472530+00:00
+  modified_at: 2026-11-23 03:07:24.472530+00:00
   session_id: 01a2063cc951
   harness_version: codex-cli 0.167.0
 - id: 01a2066c-4a1b-7302-b037-62fb1325cf58
   author: aida-publication-done
   content: Implementer push 9c8f6309535e declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T03:21:29.883072053Z
-  modified_at: 2026-11-23T03:21:29.883072053Z
+  created_at: 2026-11-23 03:21:29.883072+00:00
+  modified_at: 2026-11-23 03:21:29.883072+00:00
   session_id: 01a2063cc951
 - id: 01a2066e-943b-7b51-add9-2e3182494d86
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-483` at head `9c8f6309535ec40c19802d775203a3396f578960`.'
-  created_at: 2026-11-23T03:23:59.931880848Z
-  modified_at: 2026-11-23T03:23:59.931880848Z
+  created_at: 2026-11-23 03:23:59.931880+00:00
+  modified_at: 2026-11-23 03:23:59.931880+00:00
   session_id: 01a2063cc951
 - id: 01a20679-fe32-7543-94b2-39cfd614bbf1
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 reviewed as landed on protected base 215313b8.. No triage reason was given.'
-  created_at: 2026-11-23T03:36:27.954491582Z
-  modified_at: 2026-11-23T03:36:27.954491582Z
+  created_at: 2026-11-23 03:36:27.954491+00:00
+  modified_at: 2026-11-23 03:36:27.954491+00:00
 - id: 01a2067a-08b8-7e10-a5b3-162a031958ae
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2722):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2722):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 9c8f6309535e
+
     Recorded: 2026-11-23T03:32:45.445082874+00:00
+
     Findings:
+
     1. AC1: release_evidence requires a headless child receipt for every ended lease. queue_cmd/work.rs prepares and reserves before vendor launch, so a preparation failure can leave a reservation without ever creating that receipt. finish_headless_lane_for_child also deletes the receipt after some normal lease releases. Even with positive host lease-release evidence and a moved tree these cases stay wedged. Accept corroborated terminal evidence for the exact lease generation through these paths and test the producer-to-doctor flow. Continue refusing unknown state.
+
     2. AC1: release_evidence accepts only an absent leaf under an existing canonical parent. A verified salvaged tree still at its path (with no unmerged files), or a removed parent directory, can never qualify. Handle verified salvage and safely establish absence when a parent was removed. Preserve the refusal for unresolved work and ambiguous or redirected paths.
+
     3. AC2: repair_lane_exit accepts any exit_status beginning with “exited with ”, even the prefix alone, and ignores conflicting process identity evidence. A parseable record for the lane/path can therefore authorize release with a malformed status or a still-live recorded worker once the lease file and tree disappear. Validate positive termination evidence and reject contradictory live or indeterminate process identity, consistent with claim_worker_has_exited. Exercise those refusals.
+
     4. The explicit repair-reservations --id path calls heal_reservation(..., true) solely on --yes. Its own findings are safe_heal=false, but this early return skips the unattended/orchestrated refusal that doctor_heal_disposition applies to that classification. Enforce the applicable operator sign-off at the explicit mutation boundary and cover an unattended invocation and an authorized release.
+
     5. release_evidence calls read_exact_lease, which reads the entire TOML into a String while holding the shared repair lock. This also runs in unfiltered doctor. A large malformed lease can exhaust memory or stall other repair operations even though any existing file disqualifies the reservation. Check presence fail-closed without consuming the file, or bound any diagnostic read.
+
     6. repair_findings drops every release_evidence error via .ok()?, including corrupt or unreadable evidence. The advertised check can report zero findings and success while an outstanding reservation remains blocked on a missing receipt. Surface indeterminate reservations as non-actionable diagnostics with their ID, failed evidence source and inspection command so the operator can diagnose them without reconstructing an ID from the journal.
+
     7. An unfiltered doctor now propagates RepairGuard::lock errors before printing the rest of its findings. A malformed journal or busy sidecar thus suppresses unrelated diagnostics and safe heals. Report the journal as unavailable in a general run while preserving the other categories and keeping release fail-closed.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-23T03:36:30.648077414Z
-  modified_at: 2026-11-23T03:36:30.648077414Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-23 03:36:30.648077+00:00
+  modified_at: 2026-11-23 03:36:30.648077+00:00
 - id: 01a2067c-3726-7f80-95a1-a0a702a0a7ef
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:38):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:38):
+
     # BUG-2722 / PR #4403 r2: ONE round, all seven findings, kept SMALL (advisor-122 ruling 2026-11-22 20:45 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier (repair journal = lease code).
 
+
     CR at 9c8f6309 (r1, +236 lines, 6 files). ABOVE ALL, the heal must actually release the REAL dell1 entry-48 shape: PR #4376 reserved at 660c0e87 by lane 01a2053df3e6 (lease ENDED), tree /home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-433 MOVED to ~/salvage, conflict paths queue_cmd/work.rs, review_draft.rs, and a bug_2149 test. FIRST check whether findings 1 and 2 exclude exactly that case.
-    1. Don't require a headless child receipt when the lease is ended and the reservation predates vendor launch. Use the ended lease plus the journal record as the evidence.
+
+    1. Don''t require a headless child receipt when the lease is ended and the reservation predates vendor launch. Use the ended lease plus the journal record as the evidence.
+
     2. Accept a verified-salvaged tree (no unmerged files) or a removed parent as "absent".
+
     3. Parse exit_status strictly, and reject conflicting live process identity.
+
     4. `--id ... --yes` must still apply the unattended/orchestrated refusal for safe_heal=false.
+
     5. Read the lease bounded and non-blocking.
+
     6. Surface indeterminate reservations as non-actionable findings. Never drop errors with `.ok()?`.
+
     7. An unfiltered `aida doctor` reports the journal as unavailable and keeps the other categories.
-    REQUIRED TEST: reproduce entry 48's exact shape end to end. The heal releases it, then a conflict rework lane for the PR can reserve.
+
+    REQUIRED TEST: reproduce entry 48''s exact shape end to end. The heal releases it, then a conflict rework lane for the PR can reserve.
+
     The reviewer scope is the seven plus the diff. Keep the r2 diff small (<=300 lines target).
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
-  created_at: 2026-11-23T03:38:41.362420876Z
-  modified_at: 2026-11-23T03:38:41.362420876Z
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.'
+  created_at: 2026-11-23 03:38:41.362420+00:00
+  modified_at: 2026-11-23 03:38:41.362420+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20695-3847-7161-8832-4bfec283347e
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 9c8f6309535ec40c19802d775203a3396f578960 plus the uncommitted native-seat round-2 diff. Compared origin/main...HEAD, git diff HEAD and untracked additions (none).
+
     AC1: [evidence: behavioral-test] repair_journal.rs:815 exercises the PR 4376, head 660c0e87, lane 01a2053df3e6 and moved -433 checkout, successful host unlink before spawn and supervisor completion after unlink. task_2053_seat_clone_lifecycle_tests.rs:62 verifies current salvage, stale contents and unmerged index refusals.
+
     AC2: [evidence: behavioral-test] repair_journal.rs:815 covers an extant lease, missing receipt, redirected parent, malformed termination, live/indeterminate PID and unattended --force --yes. doctor_cmd.rs:2061 covers unavailable journal isolation. Exact-generation release and the audit run under the permanent lock. Cleanup preserves receipts for outstanding repairs. Existing lease presence is checked by metadata only.
-    AC3: [evidence: behavioral-test] the selected release admits a successor reservation at the original PR head and preserves sibling ownership. All three BUG-2722 tests passed, including the live sandbox salvage fixture. Rustfmt, diff checks and store-writer inventory passed. Probed PID namespace conflicts, 0/1/multiple entries, JSON/TOML failures, symlinks, noncanonical exit strings and multiple release producers. Historical receipt-free leases need a recorded successful unlink. No live host reservation was mutated. The diff exceeds the 300-line target. Host publication and exact-head CI follow exit.
-  created_at: 2026-11-23T04:06:11.678704244Z
-  modified_at: 2026-11-23T04:06:11.678704244Z
+
+    AC3: [evidence: behavioral-test] the selected release admits a successor reservation at the original PR head and preserves sibling ownership. All three BUG-2722 tests passed, including the live sandbox salvage fixture. Rustfmt, diff checks and store-writer inventory passed. Probed PID namespace conflicts, 0/1/multiple entries, JSON/TOML failures, symlinks, noncanonical exit strings and multiple release producers. Historical receipt-free leases need a recorded successful unlink. No live host reservation was mutated. The diff exceeds the 300-line target. Host publication and exact-head CI follow exit.'
+  created_at: 2026-11-23 04:06:11.678704+00:00
+  modified_at: 2026-11-23 04:06:11.678704+00:00
   session_id: 01a206801db5
   harness_version: codex-cli 0.167.0
 - id: 01a206c2-e306-7482-a6bc-514c1b6bc136
   author: aida-publication-done
   content: Implementer push 939d3ee50d12 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T04:56:05.126914193Z
-  modified_at: 2026-11-23T04:56:05.126914193Z
+  created_at: 2026-11-23 04:56:05.126914+00:00
+  modified_at: 2026-11-23 04:56:05.126914+00:00
   session_id: 01a206801db5
 - id: 01a206c3-f5cf-7a81-b50e-053762055c77
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-483` at head `939d3ee50d12463c10e8db66b3e36ea09123f07c`.'
-  created_at: 2026-11-23T04:57:15.471182871Z
-  modified_at: 2026-11-23T04:57:15.471182871Z
+  created_at: 2026-11-23 04:57:15.471182+00:00
+  modified_at: 2026-11-23 04:57:15.471182+00:00
   session_id: 01a206801db5
 - id: 01a206d6-2e0f-79f3-b87e-c335c6787112
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 requires changes. The explicit operator gate, existing-lease check and selected release audit are present. Salvage verification can omit unpushed history, the unlink fallback can release a live worker, and termination evidence can be unavailable for historical or interrupted cleanup. All findings apply to the landed tree on pinned main 5470336d and are independent of its intervening forge changes. CI fast compile pending at review time.. No triage reason was given.'
-  created_at: 2026-11-23T05:17:09.519868930Z
-  modified_at: 2026-11-23T05:17:09.519868930Z
+  created_at: 2026-11-23 05:17:09.519868+00:00
+  modified_at: 2026-11-23 05:17:09.519868+00:00
 - id: 01a206d6-3edb-7d30-8992-6c0e6b15785c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2722):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2722):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 939d3ee50d12
+
     Recorded: 2026-11-23T05:14:42.539689808+00:00
+
     Findings:
-    1. verified_repair_salvage passes the literal complete as a second argument to UNPUSHED_COUNT_SCRIPT at line 3147. That script treats arguments after the base as commits to exclude. If a local ref named complete holds the only unpushed history, the verifier counts zero and skips checking the bundle. A patch with a missing or stale bundle then qualifies even though it cannot restore the ref. Match salvage_capped's argument list for each script and cover an unpushed side branch named complete with the bundle removed.
-    2. The host-unlink fallback at line 182 can mark a still-running worker ProvenDead. Headless launch stamps the child PID into the lease before best-effort lane registration. If registration is skipped or its write fails, unlink_session_lease ignores the lease's active_pid and holder identity and stamps termination anyway. Once the tree is moved, the absent receipt plus that timestamp suffices for release. Distinguish positively pre-spawn cleanup from a process-backed lease, and require corroborated termination for the latter. Cover a live stamped PID with no lane receipt.
+
+    1. verified_repair_salvage passes the literal complete as a second argument to UNPUSHED_COUNT_SCRIPT at line 3147. That script treats arguments after the base as commits to exclude. If a local ref named complete holds the only unpushed history, the verifier counts zero and skips checking the bundle. A patch with a missing or stale bundle then qualifies even though it cannot restore the ref. Match salvage_capped''s argument list for each script and cover an unpushed side branch named complete with the bundle removed.
+
+    2. The host-unlink fallback at line 182 can mark a still-running worker ProvenDead. Headless launch stamps the child PID into the lease before best-effort lane registration. If registration is skipped or its write fails, unlink_session_lease ignores the lease''s active_pid and holder identity and stamps termination anyway. Once the tree is moved, the absent receipt plus that timestamp suffices for release. Distinguish positively pre-spawn cleanup from a process-backed lease, and require corroborated termination for the latter. Cover a live stamped PID with no lane receipt.
+
     3. AC1/AC3: an already-ended pre-upgrade lease cannot acquire the new lease_ended_at stamp. With a moved tree and a pre-launch failure or a receipt pruned by the old supervisor, release_evidence refuses even if historical host release evidence exists for that generation. The entry-48 test manufactures a worker exit receipt, and its receipt-free case performs a new unlink with the upgraded writer. Neither exercises recovery of the historical receipt-free shape. Verify the actual historical evidence and support an exact-generation terminal record from that path, while continuing to reject absence alone.
+
     4. AC1: unlink_session_lease deletes the lease before acquiring RepairGuard, then logs a lock or save error and returns success. A concurrent doctor salvage check can hold the guard longer than the 10-second lock timeout. For a pre-launch reservation there is no worker receipt, so the sole evidence of release is permanently lost and retry cannot recreate it. Make removal recoverable across journal contention, failed persistence and interruption, and exercise a retry without a worker receipt.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-23T05:17:13.819075241Z
-  modified_at: 2026-11-23T05:17:13.819075241Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-23 05:17:13.819075+00:00
+  modified_at: 2026-11-23 05:17:13.819075+00:00
 - id: 01a206d7-57e3-7183-a7e7-b9879f177844
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:18):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:18):
+
     # BUG-2722 / PR #4403 r3 = SCOPE CUT, round 3 of 4 (advisor-122 ruling 2026-11-22 22:24 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier.
 
-    CR at 939d3ee5 (r2). Killer finding 3: a pre-upgrade ended lease (exactly dell1's entry 48, and #4401's -797) has no lease_ended_at stamp, so release_evidence REFUSES the very cases we need, and automatic "provably over" evidence keeps growing. RULING: replace automatic release with an OPERATOR-ATTESTED release, the same integrity model as `aida merge-hold clear`:
+
+    CR at 939d3ee5 (r2). Killer finding 3: a pre-upgrade ended lease (exactly dell1''s entry 48, and #4401''s -797) has no lease_ended_at stamp, so release_evidence REFUSES the very cases we need, and automatic "provably over" evidence keeps growing. RULING: replace automatic release with an OPERATOR-ATTESTED release, the same integrity model as `aida merge-hold clear`:
+
     - `aida doctor heal repair-reservations --id <entry> --attest "<reason>"` runs ONLY for a human at an interactive terminal: no --yes, no orchestrated or unattended path.
+
     - It shows the entry, lease state, tree path and status, and the unpushed count (informational only: `git rev-list --count <tree-head> --not --remotes` with NO extra args, which fixes finding 1).
+
     - It requires TYPED confirmation, then releases exactly that one entry, with an audit record of who, when and why.
+
     - REMOVE the unlink-fallback ProvenDead path and the lease_ended_at requirement (findings 2, 3, 4 become moot).
+
     - KEEP: refuse if the recorded lease file still exists AND its pid is alive.
+
     Tests: the entry-48 shape releases WITH an attestation at a TTY, and refuses without a TTY.
+
     The reviewer scope is the scope cut plus the diff. Keep it small.
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
-  created_at: 2026-11-23T05:18:02.394370493Z
-  modified_at: 2026-11-23T05:18:02.394370493Z
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.'
+  created_at: 2026-11-23 05:18:02.394370+00:00
+  modified_at: 2026-11-23 05:18:02.394370+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a206e5-0ec9-7881-84ad-255fdc854d56
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 6ddf368bc30d2de62c6f025816880b1d0ba219c5 plus native worktree changes. Reviewed the merge-base diff, working diff and untracked listing under the round-3 operator-attestation ruling.
+
     AC1: [evidence: behavioral-test] repair_journal.rs::bug_2722_ended_lane_moved_tree_releases_only_selected_head covers typed PTY release, single selection, persisted UID/time/reason and successor reservation.
+
     AC2: [evidence: behavioral-test] the same fixture exercises a live stamped PID without a receipt, non-TTY and wrong confirmation. doctor_cmd.rs requires a direct human, rejects headless/orchestrated contexts and --yes, and enforces the merge-hold integrity floor.
+
     AC3: [evidence: behavioral-test] the moved-tree fixture has neither a lease stamp nor a worker receipt. Under the authorized scope cut the operator attests historical release. Automatic salvage qualification and unlink-time journaling are removed.
-    Deep-pass: audited composed IDs, malformed lease reads, absent observations, duplicate selectors, successor identity and post-confirmation recheck. Count is informational and bounded to HEAD; a side branch named complete has no argument role. Journal writes audit and state together. File-change review found no untracked additions. Validation so far: diff --check and writer inventory pass; launcher jobs for focused tests and fast gate pending.
-  created_at: 2026-11-23T05:33:23.661945874Z
-  modified_at: 2026-11-23T05:33:23.661945874Z
+
+    Deep-pass: audited composed IDs, malformed lease reads, absent observations, duplicate selectors, successor identity and post-confirmation recheck. Count is informational and bounded to HEAD; a side branch named complete has no argument role. Journal writes audit and state together. File-change review found no untracked additions. Validation so far: diff --check and writer inventory pass; launcher jobs for focused tests and fast gate pending.'
+  created_at: 2026-11-23 05:33:23.661945+00:00
+  modified_at: 2026-11-23 05:33:23.661945+00:00
   session_id: 01a206dc9122
   harness_version: codex-cli 0.167.0
 - id: 01a20709-1dbd-7981-ad45-8a7aa973138d
   author: dirtlab
   content: 'Implementer self-review validation update for 6ddf368bc3 plus the native worktree: all three BUG-2722 tests passed, including the live bubblewrap count on complete with its bundle removed, entry-48 PTY release, and invalid-journal diagnostic isolation. The first fast gate caught a direct environment read; changed the handler to reuse the drive-seat predicate and reran validation. make check-ci-fast passed (launcher job j20261123T054346370-14-0), including the CLI help snapshot, writer inventory and manual. Native completion declaration recorded for host publication.'
-  created_at: 2026-11-23T06:12:46.724391677Z
-  modified_at: 2026-11-23T06:12:46.724391677Z
+  created_at: 2026-11-23 06:12:46.724391+00:00
+  modified_at: 2026-11-23 06:12:46.724391+00:00
   session_id: 01a206dc9122
   harness_version: codex-cli 0.167.0
 - id: 01a2070d-d505-7062-9010-752f5ff93a41
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 fails review on the landed tree 3ba03480cdd8 against protected main ca95624cadfe. The published head still has the round-two automatic release implementation. AC1 lacks the required direct-human attestation, preview and typed confirmation. AC2 refuses an extant lease but the unlink fallback can misclassify an active worker as ended. AC3 does not release the historical moved-tree reservation without a newly supplied receipt or stamp. Salvage can also omit unpushed history, and lease cleanup can lose the only terminal evidence. Exact-head fast CI passed and merge-hold clearance was pending. The judgment follows from source and the current BUG-2722 acceptance criteria.. No triage reason was given.'
-  created_at: 2026-11-23T06:17:56.741529416Z
-  modified_at: 2026-11-23T06:17:56.741529416Z
+  created_at: 2026-11-23 06:17:56.741529+00:00
+  modified_at: 2026-11-23 06:17:56.741529+00:00
 - id: 01a20722-9719-74f3-9558-4935a1dd897d
   author: aida-publication-done
   content: Implementer push d038ab6e1f80 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T06:40:37.145841597Z
-  modified_at: 2026-11-23T06:40:37.145841597Z
+  created_at: 2026-11-23 06:40:37.145841+00:00
+  modified_at: 2026-11-23 06:40:37.145841+00:00
   session_id: 01a206dc9122
 - id: 01a20723-a6d4-7400-8f1c-399f9488a13f
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-483` at head `d038ab6e1f80f7cbd7dfc8e1cb30cfb661485261`.'
-  created_at: 2026-11-23T06:41:46.708622473Z
-  modified_at: 2026-11-23T06:41:46.708622473Z
+  created_at: 2026-11-23 06:41:46.708622+00:00
+  modified_at: 2026-11-23 06:41:46.708622+00:00
   session_id: 01a206dc9122
 - id: 01a20738-96e7-7073-9b01-e2b9c7e66e36
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 round-three scope reviewed against protected main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 00dbdcd668bf3bcd7b88be6a3c127dd2ec8c8326. The published head implements the interactive preview, typed confirmation and audited single-entry release. The moved-tree fixture demonstrates release without a historical receipt, refusal for a non-TTY input and a live recorded worker, and successful successor reservation. Changes are required because a successor reservation can erase the old merge''s host-validation evidence, and the CLI authority checks lack a command-level regression. The intervening base changes to help and writer inventory do not affect these findings. Fast gates passed and fast compile was pending at review time. No local builds or tests were run.. No triage reason was given.'
-  created_at: 2026-11-23T07:04:38.887157074Z
-  modified_at: 2026-11-23T07:04:38.887157074Z
+  created_at: 2026-11-23 07:04:38.887157+00:00
+  modified_at: 2026-11-23 07:04:38.887157+00:00
 - id: 01a20738-ad9a-7f42-83e1-f61581ea736e
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2722):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2722):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: d038ab6e1f80
+
     Recorded: 2026-11-23T06:58:54.438333014+00:00
+
     Findings:
+
     1. aida-cli-lib/src/repair_journal.rs:312, :330–338 and :362–377: Attestation allows reserve() to replace the old entry by repository, PR and original head. The replacement can use a different base while the old unvalidated merge can still exist in retained history on the same branch. require_validated_merges() only checks merges whose branch and both parents match a current journal entry. As soon as the replacement drops the old base, the ordinary committed-merge publication route can admit that old tree without the TASK-3804 exact-tree host compile validation. Preserve the prior branch and parent-pair validation requirement across release and re-reservation. Add a regression that the old unvalidated merge still refuses after a successor reserves the same head against a newer base.
+
     2. aida-cli-lib/src/doctor_cmd.rs:332–349: The BUG-2722 PTY regression invokes RepairGuard::attest_reservation directly. It would still pass if the CLI removed its managed-agent, headless/orchestrated or integrity-floor checks, since the helper only checks stdin for a TTY and a nonempty reason. Cover the actual doctor heal dispatch with a valid ID, reason and typed confirmation at a PTY. Assert the journal remains unchanged for unattended or managed callers even with a TTY, and that the authorized terminal path persists the release.
+
     3. aida-cli-lib/src/doctor_cmd.rs:348–349 and aida-cli-lib/src/repair_journal.rs:295–319, :546–553: The project-wide exclusive repair journal lock is held across the Git count probe and the unbounded wait for human input. Leaving the prompt open causes unrelated conflict reservations, adoption and publication checks to time out after ten seconds. Take the preview from a snapshot, release the lock before prompting, then reacquire it and revalidate the selected reservation generation and lease before saving.
+
     4. aida-cli-lib/src/doctor_cmd.rs:329–350: The repair-reservations branch accepts the documented --json flag but always emits a plain-text success line to stdout. Return a machine-readable release result when --json is requested or explicitly refuse the flag before changing the journal.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-23T07:04:44.698975698Z
-  modified_at: 2026-11-23T07:04:44.698975698Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-23 07:04:44.698975+00:00
+  modified_at: 2026-11-23 07:04:44.698975+00:00
 - id: 01a20739-f80d-7b72-bcf2-dbd0210f25d1
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:05):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:05):
+
     # BUG-2722 / PR #4403 r4 FINAL (advisor-122 ruling 2026-11-23 00:08 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier. Critical path for #4376 and #4401. SMALL.
 
+
     The counting CR at d038ab6e (r3): the core WORKS (interactive preview, typed confirmation, audited single-entry release, the moved-tree release without a historical receipt, i.e. the entry-48 shape). Four small fixes remain; the reviewer scope is these four plus the diff. A blocking CR after this parks the PR, and the operator hand-releases the journal entries.
-    1. repair_journal.rs:312/330-377: after an attested release, a new reserve() for the same repo+PR must NOT reuse the old entry's merge state. Bind the replacement to the CURRENT base and PR head, and treat any retained old merge as unvalidated (refuse to resume it). Test: release, then reserve on a different base.
+
+    1. repair_journal.rs:312/330-377: after an attested release, a new reserve() for the same repo+PR must NOT reuse the old entry''s merge state. Bind the replacement to the CURRENT base and PR head, and treat any retained old merge as unvalidated (refuse to resume it). Test: release, then reserve on a different base.
+
     2. doctor_cmd.rs:332-349: the PTY regression must drive the REAL CLI path (`aida doctor heal repair-reservations --id ... --attest ...`), so that removing the managed-agent, orchestrated or integrity-floor checks makes it fail.
+
     3. doctor_cmd.rs:348 + repair_journal.rs:295-319/546-553: do NOT hold the project-wide repair lock across the git probe and the human prompt. Read and preview UNLOCKED, then take the lock, RE-VALIDATE that the entry is unchanged, and release.
+
     4. --json: refuse it explicitly for this interactive command (simplest).
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
-  created_at: 2026-11-23T07:05:49.589363359Z
-  modified_at: 2026-11-23T07:05:49.589363359Z
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.'
+  created_at: 2026-11-23 07:05:49.589363+00:00
+  modified_at: 2026-11-23 07:05:49.589363+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20743-3a7b-7382-bddb-81d482d47e50
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: af6fc8cd28e2459f27c88c01c42d121eac078fdb plus native working diff and both new PTY test files. Reviewed origin/main...HEAD and git diff HEAD.
+
+    AC1: [evidence: behavioral-test] repair_journal.rs:311 previews unlocked, then rechecks the unique full entry, lease and tree under the repair lock. The binary-driven repair_attestation.py checks that another writer can acquire the lock at the prompt and that a changed entry refuses confirmation without a release.
+
+    AC2: [evidence: behavioral-test] doctor_cmd.rs:333 and repair_attestation.py exercise managed agent, drive context, missing deputy floor and JSON refusals at a PTY. The journal fixture exercises non-terminal input, mistyped confirmation and live PID without a receipt. Round 3 removed all automatic salvage and unlink release decisions.
+
+    AC3: [evidence: behavioral-test] repair_journal.rs:839 exercises receipt-free moved-tree release and replacement on another base. The old parent pair remains unvalidated at publication and the successor requires fresh preparation. seat_clone.rs:3928 checks fetched PR head/base and PR/lane identity before resuming.
+
+    Adversarial review covered ambiguous selectors, stale generations during confirmation, absent/corrupt evidence, old audit JSON without merge fields, zero/one/multiple reservations and stale merge publication. No live journal mutated. Source inventory and diff checks pass. Launcher validation pending.'
+  created_at: 2026-11-23 07:16:15.478687+00:00
+  modified_at: 2026-11-23 07:16:15.478687+00:00
+  session_id: 01a2073bf4a4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
-  timestamp: 2026-11-23T02:24:26.292488019Z
+  timestamp: 2026-11-23 02:24:26.292488+00:00
   changes:
   - field_name: status
     old_value: Draft
     new_value: Approved
 - id: 01a2063c-f8fc-7fb2-8817-9905e3b8fc72
   author: aida-session-start
-  timestamp: 2026-11-23T02:29:48.924650900Z
+  timestamp: 2026-11-23 02:29:48.924650+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2063d-a0e6-7901-8d30-5ffc006e4153
   author: dirtlab
-  timestamp: 2026-11-23T02:30:31.910955377Z
+  timestamp: 2026-11-23 02:30:31.910955+00:00
   session_id: 01a2063cc951
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a2066c-4a1b-7302-b037-62e37a401b4e
   author: aida-publication-done
-  timestamp: 2026-11-23T03:21:29.883070178Z
+  timestamp: 2026-11-23 03:21:29.883070+00:00
   session_id: 01a2063cc951
   changes:
   - field_name: status
@@ -277,12 +366,12 @@ history:
     new_value: Done
 - id: 01a2066d-6506-79b2-b5fb-d6b64360857f
   author: dirtlab
-  timestamp: 2026-11-23T03:22:42.310043521Z
+  timestamp: 2026-11-23 03:22:42.310043+00:00
   session_id: 01a2063cc951
   changes: []
 - id: 01a20677-cc87-71d2-b749-82a4fdfea4d4
   author: aida-orchestrator
-  timestamp: 2026-11-23T03:34:04.167831336Z
+  timestamp: 2026-11-23 03:34:04.167831+00:00
   session_id: 01a20672c7ed
   changes:
   - field_name: status
@@ -290,21 +379,21 @@ history:
     new_value: NeedsAttention
 - id: 01a20679-fe32-7543-94b2-39b4ce39be23
   author: joe
-  timestamp: 2026-11-23T03:36:27.954475105Z
+  timestamp: 2026-11-23 03:36:27.954475+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a20680-6a00-7502-9120-282e72cd7b72
   author: aida-session-start
-  timestamp: 2026-11-23T03:43:28.768243393Z
+  timestamp: 2026-11-23 03:43:28.768243+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a206c2-e306-7482-a6bc-51321510c5d4
   author: aida-publication-done
-  timestamp: 2026-11-23T04:56:05.126911131Z
+  timestamp: 2026-11-23 04:56:05.126911+00:00
   session_id: 01a206801db5
   changes:
   - field_name: status
@@ -312,7 +401,7 @@ history:
     new_value: Done
 - id: 01a206d4-1fce-7db1-978c-64093b88de85
   author: aida-orchestrator
-  timestamp: 2026-11-23T05:14:54.798823231Z
+  timestamp: 2026-11-23 05:14:54.798823+00:00
   session_id: 01a206d061d4
   changes:
   - field_name: status
@@ -320,21 +409,21 @@ history:
     new_value: NeedsAttention
 - id: 01a206d6-2e0f-79f3-b87e-c32584d40f35
   author: joe
-  timestamp: 2026-11-23T05:17:09.519845531Z
+  timestamp: 2026-11-23 05:17:09.519845+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a206dc-ecb3-7622-801f-8e2e7df9dedc
   author: aida-session-start
-  timestamp: 2026-11-23T05:24:31.539162752Z
+  timestamp: 2026-11-23 05:24:31.539162+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2070d-4c66-74b2-98ff-76f99a772ebc
   author: aida-orchestrator
-  timestamp: 2026-11-23T06:17:21.766625891Z
+  timestamp: 2026-11-23 06:17:21.766625+00:00
   session_id: 01a207081c7f
   changes:
   - field_name: status
@@ -342,14 +431,14 @@ history:
     new_value: NeedsAttention
 - id: 01a2070d-d505-7062-9010-751ccd2df465
   author: joe
-  timestamp: 2026-11-23T06:17:56.741516318Z
+  timestamp: 2026-11-23 06:17:56.741516+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a20722-9719-74f3-9558-4925e5439c5c
   author: aida-publication-done
-  timestamp: 2026-11-23T06:40:37.145839783Z
+  timestamp: 2026-11-23 06:40:37.145839+00:00
   session_id: 01a206dc9122
   changes:
   - field_name: status
@@ -357,7 +446,7 @@ history:
     new_value: Done
 - id: 01a20734-4be3-7862-bbf4-4e2c680dcddd
   author: aida-orchestrator
-  timestamp: 2026-11-23T06:59:57.539629030Z
+  timestamp: 2026-11-23 06:59:57.539629+00:00
   session_id: 01a2072e8da3
   changes:
   - field_name: status
@@ -365,19 +454,19 @@ history:
     new_value: NeedsAttention
 - id: 01a20738-96e7-7073-9b01-e2af0b3e14f7
   author: joe
-  timestamp: 2026-11-23T07:04:38.887142348Z
+  timestamp: 2026-11-23 07:04:38.887142+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a20761-0317-7981-b556-ffa4136cefc5
   author: joe
-  timestamp: 2026-11-23T07:48:48.023873661Z
+  timestamp: 2026-11-23 07:48:48.023873+00:00
   session_id: 01a2075eab0f
   changes: []
 - id: 01a20761-ca97-77d3-a562-8736dc5e7397
   author: joe
-  timestamp: 2026-11-23T07:49:39.095651291Z
+  timestamp: 2026-11-23 07:49:39.095651+00:00
   changes: []
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
@@ -395,4 +484,4 @@ failure_reason:
   detail: 'BUG-2722 PARTIAL. Reviewed the original head against protected main a16f3592f015e06580a94c1f7879ea9c877c088e and verified it has landed tree 00dbdcd668bf3bcd7b88be6a3c127dd2ec8c8326, identical to the previous review''s landed tree. The attestation, typed confirmation, audit and historical moved-tree recovery are present. All four final-round requirements remain unresolved: retaining host validation requirements after replacement, exercising the actual CLI authority boundary, releasing the shared lock before Git and operator input, and refusing --json. Exact-head FAST gates and compilation passed. The merge-hold status was pending. No local builds or tests were run.'
   recovery_hint: address the review findings, move BUG-2722 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-23T07:48:34.701611230Z
+  shelved_at: 2026-11-23 07:48:34.701611+00:00
