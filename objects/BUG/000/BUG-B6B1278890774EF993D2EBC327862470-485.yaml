@@ -1,0 +1,36 @@
+id: 01a20673-68aa-7112-9745-7abbba3559a9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-485
+agreed_id: BUG-2724
+title: 'A dead predecessor lane''s retained seat clone and pin block the next lane on the same branch: auto-salvage at admission'
+description: |
+  Filed 2026-11-22 (advisor-122 ruling 20:28; product-15). Today, 6+ times (dell1 seat clones -452 BUG-2688, -393 BUG-2629, -433 BUG-2669, -473 BUG-2712, -797 STORY-2897 S1b, -027 TASK-3133), a punted, refused or crashed lane left its private seat clone and lease, and the NEXT lane on the same branch was refused ("cannot force-claim branch X: retained lease ... and private clone ...", "its tree has N uncommitted change(s)", or a stale refs/aida/seats pin: "cannot lock ref ... reference already exists"). Each time a seat salvaged it by hand under the advisor's BUG-2688 precedent. The reference behaviour is product's dell1 script, saved at .aida/tmp/ref/salvage-seat.sh. STORY-2904 (Draft) covers RESUMING inside a retained clone. This bug covers the admission path NOT being blocked by a DEAD predecessor's clone.
+
+  ## Acceptance
+  - AC1: When a new rework lane's admission finds the branch held by a predecessor seat whose holder is provably dead (no live process in the seat, the lease's worker gone, and the published claim stale), admission auto-salvages it instead of refusing:
+    (a) save staged, unstaged, HEAD/MERGE_HEAD and status under a per-host salvage directory;
+    (b) move the clone aside (never delete it);
+    (c) end the dead lease;
+    (d) remove the refs/aida/seats pin ONLY if it is an ancestor of origin/<branch>, keeping it otherwise and saying so.
+    Then the new lane proceeds. The salvage path is reported in the lane log and on the spec.
+  - AC2: If any process lives in the seat, or the holder isn't provably dead, admission refuses exactly as today and names the evidence.
+  - AC3: A stale seat pin whose clone is already gone and which is an ancestor of origin/<branch> is removed at admission (the TASK-3133/-027 and BUG-2688/-452 shapes).
+  - AC4: Regression tests: a punted predecessor with an in-progress merge and unmerged paths (the -433/-473 shape) is auto-salvaged and the new lane starts; a live process in the seat refuses.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T03:29:16.458092613Z
+modified_at: 2026-11-23T03:29:16.458092613Z
+req_type: Bug
+tags:
+- admission
+- lanes
+- seat-clone
+- throughput
+filed_at:
+  code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3a
+  vendor: claude
