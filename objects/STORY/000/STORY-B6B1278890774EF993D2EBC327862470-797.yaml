@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T00:39:03.381975613Z
+modified_at: 2026-11-23T00:55:14.742664219Z
 req_type: Story
 tags:
 - landing
@@ -1249,6 +1249,19 @@ comments:
   modified_at: 2026-11-23T00:04:22.108116025Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a205e6-69e2-70b0-861f-904c7c2e3f80
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a5a6edc3c75af47fcdaa8941097b60bffcdbd97e plus the uncommitted S1b diff. The integration commit contains replacement #4389. S3b and the 15 inventory drafts remain open.
+    AC1: [evidence: behavioral-test] review_watch_ready.rs:217 and tests/task_1945_review_watch_ready_tests.rs:1720 cover both modes, exact-name coverage, the required gate, and wake text. main_watch.rs:487 and tests/story_2897_main_watch_tests.rs:1276 cover invalid and missing state through the read-only accessor.
+    AC2: [evidence: behavioral-test] review_commands.rs:2980, review_commands.rs:4803 and review_draft.rs:1171 cover validated dependencies, all-aggregate refusal, mixed and specific needs, old records, PR and spec verdict projections. The launcher ran 35 tests successfully including the CLI help golden.
+    AC3: [evidence: documentation-inspection] Both aida-review masters describe the dependency syntax and review-gated refusal. make check-templates passed. The protected .agents path stopped lane sync; production portable-pack generation and drift check passed in scratch.
+    Deep pass: inspected case-sensitive forge names across the producer and consumer, split-on-first-colon details, duplicate check outcomes, partial episode coverage, missing and malformed state, pinned file reads, replay matching, and both record paths. Fixed missing fixture fields and CLI golden ordering. The read-only query grants no merge or recording authority. Existing head, hold, review-grant and self-review guards remain in force. No untracked additions. The host publication head needs fresh independent STRICT review and ci:full.
+  created_at: 2026-11-23T00:55:14.742664219Z
+  modified_at: 2026-11-23T00:55:14.742664219Z
+  session_id: 01a205d752af
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
