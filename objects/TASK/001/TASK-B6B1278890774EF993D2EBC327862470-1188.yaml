@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   aida-cli-lib/src/admission_drain.rs:102-134, 208-217, 282-290: an unreadable or invalid drain journal has no supported recovery. `drain` and `resume` both call observe_locked -> load, which fails on the same journal, so neither command can replace it. Meanwhile yield_reason and acquire_mode treat it as drained and the supervisor tick refuses to respawn, and unlike a real drain this state never expires: review-watch and auto-train stay off admission until someone deletes .aida/admission-owner/loops-drain.journal by hand. docs/cli/06-roles-sessions.md only says an unreadable journal counts as drained. Let an authorised `resume` (or `drain`) replace a journal that cannot be read, recording that it did so, or document the manual recovery. Add a test that an unreadable journal can be recovered through the command.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T12:49:37.748175819Z
+modified_at: 2026-11-23T13:31:06.276794291Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -108,6 +108,12 @@ comments:
   modified_at: 2026-11-23T12:49:37.748175819Z
   session_id: 01a2086ad3a0
   harness_version: codex-cli 0.167.0
+- id: 01a2089a-66a4-7eb3-aa8a-454d487ee151
+  author: aida-publication-done
+  content: Implementer push 12f0e85c1e3f declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T13:31:06.276790914Z
+  modified_at: 2026-11-23T13:31:06.276790914Z
+  session_id: 01a2086ad3a0
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe
@@ -168,6 +174,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2089a-66a4-7eb3-aa8a-45385ba91a4e
+  author: aida-publication-done
+  timestamp: 2026-11-23T13:31:06.276788424Z
+  session_id: 01a2086ad3a0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
