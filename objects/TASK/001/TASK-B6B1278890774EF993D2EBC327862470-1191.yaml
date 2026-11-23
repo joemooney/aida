@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   aida-cli-lib/src/review_watch_pause.rs:247-251 with aida-cli-lib/src/gate/test_support.rs:171-179: human_operator requires both stdin and stderr to be terminals, but AmbientGuard::set_terminal switches stdin, stdout and stderr together, so no test distinguishes the two checks (removing either one leaves every test passing). The documented refusals are tested for drain, resume and pause: no terminal at all, an agent identity or session id or headless marker, and a seated session without a grant. Add a case with only one of the two streams a terminal so the conjunction is pinned.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.943423106Z
-modified_at: 2026-11-23T12:19:03.052014514Z
+modified_at: 2026-11-23T14:21:01.185621408Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -104,6 +104,22 @@ history:
   timestamp: 2026-11-23T12:17:54.637849354Z
   session_id: 01a2082a6900
   changes: []
+- id: 01a208c8-193c-7092-8f55-16549358bb1b
+  author: aida-auto-bump
+  timestamp: 2026-11-23T14:21:01.116819805Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a208c8-1981-7003-8c8c-0c353467e8da
+  timestamp: 2026-11-23T14:21:01.185618783Z
+  agent: aida
+  commit_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
+  summary: 'TASK-3210 PASS. The generated worksheet has no explicit Acceptance or Verify section. Its description supplies one criterion. AC1 — Independently cover both terminal requirements for the grantless operator path: verified by landed-source inspection of the two mixed-terminal refusal cases in `cargo test -p aida-cli-lib bug2703_pause_control_refuses_a_managed_process_without_a_grant`. Each case keeps stdout and the other required stream terminal, so omitting either stdin or stderr from the authority decision would make the matching case fail. The helper checks the authority error and active pause state for both pause and resume from both initial states. The existing all-terminal operator success control remains. The implementer reported one targeted pass in its self-review. Reviewed the full landed diff against protected main ff524ebd21fa22d5744dedb7f4dff6c3c37fad22 (tree c816ac4ee05a293b5739664a29a4c62338045cd7). Both changed sites carry TASK-3210 traces. The two base-only commits leave the touched files and reviewed terminal authority paths unchanged. No actionable defects. CI pending at review time: FAST gates passed and FAST compilation was in progress on the reviewed head. No local tests were run.'
+  review_verdict: approved
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
@@ -112,3 +128,7 @@ filed_at:
   aida_build_sha: 29e77b85236
   vendor: claude
   session: 01a1fb77a5cf
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T14:21:01.116812384Z
+  completion_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
