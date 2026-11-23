@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1f2c0-2153-7dc2-a3ac-00f5bb6caeb7
+  position: -1060000
+  added_by: role:implementer
+  added_at: 2026-11-23T12:39:30.638539842Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1dbde-c245-7ed1-b86b-daaa48159ead
   position: -1059000
   added_by: role:implementer
@@ -388,14 +394,6 @@
   position: 625000
   added_by: role:implementer
   added_at: 2026-11-14T20:39:44.990127764Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1f2c0-2153-7dc2-a3ac-00f5bb6caeb7
-  position: 626000
-  added_by: role:implementer
-  note: Private-clone registration control pair through the normal Claude transcript recovery entry point. Coordinate the fixture with TASK-3151. Test-only; retain the production containment boundary.
-  added_at: 2026-11-21T07:06:18.387349195Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
