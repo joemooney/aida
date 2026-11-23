@@ -1,0 +1,31 @@
+id: 01a207cf-7a48-7132-b490-9b49a83aff84
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1245
+title: 'Review follow-up: mandate_traces.rs:360-415 and 740-768. The new reader buffers the full tree listing and ev'
+description: |-
+  From BUG-2727
+  Reviewed sha: 1adec85046293952fdaa59229a70a5f61095a514
+
+  mandate_traces.rs:360-415 and 740-768. The new reader buffers the full tree listing and every object body, then deserializes the full graph on each mandate collection and retry, with no output ceiling or deadline. The observed tracking tree already contains 8,369 object blobs totaling about 50 MB. Use a bounded reader or a revision-keyed lookup to keep repeated gate collections within a controlled resource budget.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T09:49:27.496183254Z
+modified_at: 2026-11-23T09:49:27.496183254Z
+req_type: Task
+tags:
+- carried-from:BUG-2727
+- finding-hash:4afafe9c
+- from-review:BUG-2727
+relationships:
+- rel_type: References
+  target_id: 01a20737-9b05-7ee3-a52c-b8319d3e0e34
+  created_at: 2026-11-23T09:49:40.879447096Z
+filed_at:
+  code_sha: 1adec85046293952fdaa59229a70a5f61095a514
+  branch: pr-4419
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f38008
+  vendor: claude
+  session: 01a207cb0cd4
