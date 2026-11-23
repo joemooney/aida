@@ -20,13 +20,58 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T03:29:16.458092613Z
-modified_at: 2026-11-23T03:29:16.458092613Z
+modified_at: 2026-11-23T03:30:52.083949613Z
 req_type: Bug
 tags:
 - admission
 - lanes
 - seat-clone
 - throughput
+comments:
+- id: 01a20675-0f9e-7710-8272-88bfdd03b21e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:30):
+    # BUG-2724: auto-salvage a dead predecessor's seat clone at admission (advisor-122 ruling 2026-11-22 20:28 MST; relayed by product-15). Lane: CODEX. Drain-mode priority, right after BUG-2722. New branch, new PR.
+
+    Read `aida show BUG-2724` for the ACs and today's six cases. The REFERENCE behaviour is product's dell1 script at .aida/tmp/ref/salvage-seat.sh in the primary checkout (copied into the spec's context). Implement exactly its rules inside rework admission:
+    - refuse if any process lives in the seat;
+    - save staged, unstaged, heads and status;
+    - move the clone aside, never delete it;
+    - end the dead lease;
+    - remove the seat pin only if it's an ancestor of origin/<branch>.
+    Do NOT implement STORY-2904's resume verb. Lease/claim safety is ADR-76 strict tier, so expect a STRICT review.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2724 | ai:codex`. Commit `[AI:codex] fix(rework): ... (BUG-2724)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    ## Reference script (verbatim)
+    ```bash
+    #!/bin/bash
+    # dell1 product-15 (2026-11-22): salvage a punted lane's retained seat clone per the advisor's BUG-2688 precedent.
+    # Usage: salvage-seat.sh <seat-dir> <lease-id> <branch> <label>
+    # Refuses if any process lives in the seat. Saves staged/unstaged/heads to ~/salvage, moves the clone, ends the lease,
+    # and removes the seat pin only when it is an ancestor of origin/<branch>.
+    set -u; export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH
+    d=$1 lease=$2 br=$3 lab=$4; ts=$(date +%Y%m%dT%H%M); mkdir -p ~/salvage
+    [ -d "$d" ] || { echo "no seat dir $d"; }
+    if [ -d "$d" ]; then
+      for c in /proc/[0-9]*/cwd; do case "$(readlink $c 2>/dev/null)" in "$d"|"$d"/*) echo "REFUSE: live pid ${c//[^0-9]/} in $d"; exit 1;; esac; done
+      git -C "$d" diff --cached > ~/salvage/$lab-staged-$ts.patch 2>/dev/null
+      git -C "$d" diff > ~/salvage/$lab-unstaged-$ts.patch 2>/dev/null
+      git -C "$d" rev-parse HEAD MERGE_HEAD > ~/salvage/$lab-heads-$ts.txt 2>&1
+      git -C "$d" status -sb > ~/salvage/$lab-status-$ts.txt 2>&1
+      cd ~ && mv "$d" ~/salvage/$lab-clone-$ts && echo "moved -> ~/salvage/$lab-clone-$ts"
+    fi
+    cd ~/ai/aida
+    aida session end "$lease" --force --discard-unpushed --yes 2>&1 | grep -E "deleted|error" | head -1 | cut -c1-160
+    r=refs/aida/seats/$(basename "$d"); v=$(git rev-parse -q --verify "$r")
+    if [ -n "$v" ]; then git fetch -q origin "$br"; if git merge-base --is-ancestor "$v" FETCH_HEAD; then echo "$r $v $ts" >> ~/salvage/$lab-removed-pin.txt; git update-ref -d "$r" "$v" && echo "pin removed"; else echo "KEEP pin $r ($v not an ancestor of origin/$br)"; fi; fi
+    aida db sync --push 2>&1 | tail -1
+    ```
+  created_at: 2026-11-23T03:30:52.083949613Z
+  modified_at: 2026-11-23T03:30:52.083949613Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
