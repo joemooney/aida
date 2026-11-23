@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-23T23:26:48.090033535Z
+modified_at: 2026-11-23T23:29:48.774618395Z
 req_type: Task
 tags:
 - doctor
@@ -105,6 +105,22 @@ comments:
   created_at: 2026-11-23T23:26:48.090033535Z
   modified_at: 2026-11-23T23:26:48.090033535Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20abe-bce8-7ed0-b91f-5eded04c3591
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:29):
+    # TASK-3846 / PR #4463 r2 (advisor-122 ruling 2026-11-23 ~16:26, relayed by integration-30; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int29-task-3846). <=150 lines.
+
+    ONE round. Fix exactly these:
+    - F2: ANY per-ID retained sidecar lookup error, or a LOST completeness bit (including when an unrelated live reader exists, mail_backlog.rs:346), must report "N seat messages hidden or UNVERIFIED", never silence. TEST: a failing lookup for an UNSTAFFED seat PLUS an unrelated live reader.
+    - F4: a BOUNDED per-ID lookup budget inside doctor's deadline that also COUNTS MISSES (mailbox_logical.rs:2277 / :2427); report the remaining candidates as UNEXAMINED. TEST: a slow or exhausted lookup.
+    - F1 (cheap part only): the hint becomes `aida mailbox read <id>` plus the observed source path.
+    DO NOT fix F3 (registry load error); it's deferred to a follow-up spec.
+    Commit `[AI:codex] fix(mailbox): ... (TASK-3846)`. One targeted cargo run, then `make check-ci-fast`, then push to #4463's branch. COMMIT your work. Reviewer scope: F2, F4, F1-hint plus the diff.
+  created_at: 2026-11-23T23:29:48.774618395Z
+  modified_at: 2026-11-23T23:29:48.774618395Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a5f-1ffd-7a60-89c4-efc8c7468411
