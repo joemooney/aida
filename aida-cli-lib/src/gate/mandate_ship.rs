@@ -8,7 +8,6 @@
 // mandate-gate
 
 use crate::gate::approval::ship_approval_policy;
-use crate::gate::dispatch_deps::load_store_for_lookup;
 use crate::pr_cmd::{fetch_change_info_via_resolved_forge, normalized_spec_ids, pr_gate_subject};
 use crate::pr_ship;
 
@@ -97,6 +96,25 @@ pub(crate) fn mandate_exclusion_specs(
         .collect()
 }
 
+// trace:BUG-2727 | ai:codex
+fn check_named_resolution(
+    specs: &[crate::gate::mandate::ShipSpec],
+    head: &str,
+) -> Result<(), crate::gate::mandate::MandateRefusal> {
+    let missing: Vec<_> = specs
+        .iter()
+        .filter(|s| s.named && s.current.is_none())
+        .map(|s| s.id.as_str())
+        .collect();
+    if !missing.is_empty() {
+        return Err(crate::gate::mandate::MandateRefusal::MissingSpecs {
+            ids: missing.join(", "),
+            head: head.to_owned(),
+        });
+    }
+    Ok(())
+}
+
 /// TASK-2067: resolve every exclusion subject — the named IDs and the
 /// trace-derived ones — to its current record, its recorded aliases and every
 /// stored version, exactly as the mandate cover judges them. Shared by the
@@ -111,20 +129,19 @@ pub(crate) fn resolve_exclusion_specs(
 ) -> Vec<crate::gate::mandate::ShipSpec> {
     let mut history_keys_of: Vec<Vec<String>> = Vec::new();
     let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
-        let req = store.and_then(|store| {
-            store
-                .requirements
-                .iter()
-                .find(|r| {
-                    r.spec_id
-                        .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                        || r.agreed_id
-                            .as_deref()
-                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                })
-                .cloned()
+        // A colliding label cannot select whichever object Git listed first.
+        // trace:BUG-2727 | ai:codex
+        let mut matches = store.into_iter().flat_map(|s| &s.requirements).filter(|r| {
+            [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|label| label.trim().eq_ignore_ascii_case(id))
         });
+        let mut req = matches.next().cloned();
+        let ambiguous = matches.next().is_some();
+        if ambiguous {
+            req = None;
+        }
         // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
         // so that an agreed_id resolves to its stored spec_id object path for
         // history, and the ledger check / note_exclusions cover both keys.
@@ -161,7 +178,11 @@ pub(crate) fn resolve_exclusion_specs(
             named: is_named,
             shipped: false,
             current: req,
-            history: Ok(Vec::new()),
+            history: if ambiguous {
+                Err(format!("ambiguous store ID {id}"))
+            } else {
+                Ok(Vec::new())
+            },
         }
     });
     // trace:TASK-1800 | ai:claude
@@ -207,6 +228,9 @@ pub(crate) fn resolve_exclusion_specs(
     for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
         // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
         // across the ID and any resolved alias object path.
+        if spec.history.is_err() {
+            continue;
+        }
         spec.history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
             if spec.current.is_none() {
                 alias_search.as_ref().map_err(String::clone)?;
@@ -318,7 +342,7 @@ const MANDATE_COLLECT_BACKOFF: std::time::Duration = std::time::Duration::from_m
 fn collect_on_stable_store<S, T>(
     mut snapshot: impl FnMut() -> std::result::Result<Option<S>, crate::gate::mandate::MandateRefusal>,
     mut stable: impl FnMut(&S, &S, &T) -> bool,
-    mut collect: impl FnMut() -> T,
+    mut collect: impl FnMut(&S) -> T,
     backoff: std::time::Duration,
 ) -> std::result::Result<T, crate::gate::mandate::MandateRefusal> {
     let mut attempt = 0;
@@ -327,7 +351,7 @@ fn collect_on_stable_store<S, T>(
         let dirty = match snapshot()? {
             None => true,
             Some(before) => {
-                let collected = collect();
+                let collected = collect(&before);
                 match snapshot()? {
                     Some(after) if stable(&before, &after, &collected) => return Ok(collected),
                     Some(_) => false,
@@ -634,25 +658,6 @@ fn collect_mandate_cover(
         )
     });
     let head = head();
-    let (ids, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
-    let candidates = crate::gate::ship::merge_gate_verdict_candidates(
-        &[project_root, main_worktree],
-        pr,
-        &ids,
-        head.as_deref(),
-    );
-    // trace:BUG-2199 | ai:claude
-    let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
-    let policy = crate::gate::approval::ship_approval_policy(
-        main_worktree,
-        author_ids,
-        branch.as_deref(),
-        &candidates,
-    );
-    // trace:TASK-1790 | ai:codex
-    // Trace-derived IDs can only ADD exclusions. Build verdict/author inputs
-    // above from named IDs first; never pass the union to those authority paths.
     let unreadable = |e: anyhow::Error| MandateRefusal::TraceEvidenceUnreadable(format!("{e:#}"));
     let info = fetch_change_info_via_resolved_forge(
         main_worktree,
@@ -704,14 +709,23 @@ fn collect_mandate_cover(
     // A store that did not load is judged by the strict rule.
     // trace:BUG-2647 | ai:codex
     // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
-    let stable =
-        |before: &crate::gate::mandate_traces::StoreSnapshot,
-         after: &crate::gate::mandate_traces::StoreSnapshot,
-         collected: &(bool, Vec<crate::gate::mandate::ShipSpec>, _, _, bool)| {
-            let (loaded, specs, _, _, reads_carrier) = collected;
-            let scope = collection_evidence_scope(*loaded && !reads_carrier, specs);
-            crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
+    let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
+                  after: &crate::gate::mandate_traces::StoreSnapshot,
+                  collected: &Result<
+        (String, Vec<crate::gate::mandate::ShipSpec>, _, _, bool, _),
+        MandateRefusal,
+    >| {
+        let Ok((_, specs, _, _, reads_carrier, _)) = collected else {
+            return true;
         };
+        if before.origin_head() != after.origin_head()
+            || after.resolution_head(&store_root).is_err()
+        {
+            return false;
+        }
+        let scope = collection_evidence_scope(!reads_carrier, specs);
+        crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
+    };
     // STORY-2884: the effective mode decides whether a spec needs the
     // mandate's supervised cover: the project's unset-mode drain default,
     // withdrawn for a diff that touches a protected gate path.
@@ -721,15 +735,20 @@ fn collect_mandate_cover(
         Some(changed_paths.as_slice()),
         &crate::gate::mandate_gates::ProtectedPaths::of(&gates),
     );
-    let (_, specs, ledger, supervised, _) = collect_on_stable_store(
+    let (store_head, specs, ledger, supervised, _, subject) = collect_on_stable_store(
         snapshot,
         stable,
-        || {
-            let store = load_store_for_lookup(project_root);
+        |before| {
+            // trace:BUG-2727 | ai:codex
+            let store_head = before.resolution_head(&store_root).map_err(&unreadable)?;
+            let store = crate::gate::mandate_traces::resolution_store(&store_root, store_head)
+                .map_err(|e| unreadable(e.context(format!("store {store_head}"))))?;
+
+            let subject = pr_gate_subject(main_worktree, pr, known_ids, head_branch, Some(&store));
             let specs = resolve_exclusion_specs(
-                store.as_ref(),
+                Some(&store),
                 &store_root,
-                &ids,
+                &subject.0,
                 trace_evidence.ids.clone(),
             );
             // STORY-1698: every excluded class seen in any version goes into the
@@ -764,7 +783,7 @@ fn collect_mandate_cover(
                 Err(e) => Err(format!("{e:#}")),
             };
             let mut reads_carrier = false;
-            let supervised = store.as_ref().map_or(Ok(false), |store| {
+            let supervised = {
                 use aida_core::ExecutionMode;
                 specs
                     .iter()
@@ -797,11 +816,37 @@ fn collect_mandate_cover(
                         }
                         Ok(found || effective.requires_supervision())
                     })
-            });
-            (store.is_some(), specs, ledger, supervised, reads_carrier)
+            };
+            Ok((
+                store_head.to_owned(),
+                specs,
+                ledger,
+                supervised,
+                reads_carrier,
+                subject,
+            ))
         },
         MANDATE_COLLECT_BACKOFF,
-    )?;
+    )??;
+    check_named_resolution(&specs, &store_head)?;
+    let (ids, branch, forge_resolved, authorship_ids) = subject;
+    let candidates = crate::gate::ship::merge_gate_verdict_candidates(
+        &[project_root, main_worktree],
+        pr,
+        &ids,
+        head.as_deref(),
+    );
+    // trace:BUG-2199 | ai:claude
+    let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
+    let policy = crate::gate::approval::ship_approval_policy(
+        main_worktree,
+        author_ids,
+        branch.as_deref(),
+        &candidates,
+    );
+    // trace:TASK-1790 | ai:codex
+    // Trace-derived IDs can only ADD exclusions. Build verdict/author inputs
+    // from named IDs; never pass the union to those authority paths.
     let hold_record = crate::gate::merge_hold_core::read_hold_record(hold_root, pr);
     let hold_reason = crate::gate::merge_hold_core::read_hold(hold_root, pr);
     // trace:BUG-2663 BUG-2666 | ai:codex

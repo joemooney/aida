@@ -34,7 +34,7 @@ fn a_store_that_changes_once_is_recollected_and_the_ship_proceeds() {
     let out = collect_on_stable_store(
         snapshots(vec![Some(1), Some(2), Some(2), Some(2)]),
         equal,
-        || {
+        |_| {
             collections.set(collections.get() + 1);
             collections.get()
         },
@@ -54,7 +54,7 @@ fn a_store_that_changes_on_every_attempt_is_refused_after_the_bound() {
             Ok(Some(version))
         },
         equal,
-        || collections.set(collections.get() + 1),
+        |_| collections.set(collections.get() + 1),
         Duration::ZERO,
     );
     assert_eq!(collections.get(), MANDATE_COLLECT_ATTEMPTS);
@@ -78,7 +78,7 @@ fn an_unreadable_snapshot_refuses_without_collecting() {
             Err(MandateRefusal::TraceEvidenceUnreadable("no store".into()))
         },
         equal,
-        || collections.set(collections.get() + 1),
+        |_| collections.set(collections.get() + 1),
         Duration::ZERO,
     );
     assert!(matches!(
@@ -97,7 +97,7 @@ fn snapshots_the_rule_calls_stable_keep_the_first_collection() {
     let out = collect_on_stable_store(
         snapshots(vec![Some(1), Some(2)]),
         |_, _, _| true,
-        || {
+        |_| {
             collections.set(collections.get() + 1);
             collections.get()
         },
@@ -116,7 +116,7 @@ fn a_dirty_store_is_retried_within_the_bound() {
     let out = collect_on_stable_store(
         snapshots(vec![None, Some(7), Some(7)]),
         equal,
-        || {
+        |_| {
             collections.set(collections.get() + 1);
             collections.get()
         },
@@ -135,7 +135,7 @@ fn a_store_dirtied_mid_collection_is_recollected() {
     let out = collect_on_stable_store(
         snapshots(vec![Some(1), None, Some(2), Some(2)]),
         equal,
-        || {
+        |_| {
             collections.set(collections.get() + 1);
             collections.get()
         },
@@ -158,7 +158,7 @@ fn a_store_dirty_on_every_attempt_refuses_after_the_bound() {
             Ok(None)
         },
         equal,
-        || collections.set(collections.get() + 1),
+        |_| collections.set(collections.get() + 1),
         Duration::ZERO,
     );
     assert_eq!(snapshots_taken.get(), MANDATE_COLLECT_ATTEMPTS);
@@ -187,7 +187,7 @@ fn bug_056_stability_is_judged_against_the_collected_evidence() {
     let out = collect_on_stable_store(
         snapshots(vec![Some(1), Some(2), Some(2), Some(3)]),
         |_, _, collected: &u32| collected % 2 == 0,
-        || {
+        |_| {
             collections.set(collections.get() + 1);
             collections.get()
         },

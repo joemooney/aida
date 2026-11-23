@@ -237,10 +237,21 @@ pub(crate) fn covered_gate_ids(
     let Some(store) = crate::load_store_for_lookup(project_root) else {
         return ids;
     };
-    match pr_trailer_coverage(project_root, &store, branch, pr) {
+    covered_gate_ids_with_store(project_root, branch, pr, ids, &store)
+}
+
+// trace:BUG-2727 | ai:codex
+pub(crate) fn covered_gate_ids_with_store(
+    project_root: &Path,
+    branch: &str,
+    pr: Option<u64>,
+    ids: Vec<String>,
+    store: &RequirementsStore,
+) -> Vec<String> {
+    match pr_trailer_coverage(project_root, store, branch, pr) {
         Some(coverage) => ids
             .into_iter()
-            .filter(|id| coverage.uncovered(&store, id).is_none())
+            .filter(|id| coverage.uncovered(store, id).is_none())
             .collect(),
         None => ids,
     }

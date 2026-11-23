@@ -418,6 +418,7 @@ pub(crate) fn pr_gate_subject(
     pr: u64,
     known_ids: &[String],
     head_branch: Option<&str>,
+    pinned_store: Option<&aida_core::RequirementsStore>,
 ) -> (Vec<String>, Option<String>, bool, Vec<String>) {
     let mut ids = known_ids.to_vec();
     // `(Refs X)` subjects name the work's spec for authorship only, never
@@ -454,12 +455,14 @@ pub(crate) fn pr_gate_subject(
     // BUG-HOME-048: the commit-subject trailers pass the PR's coverage, so a
     // verdict is never looked up under a foreign bare id.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    let ids = crate::gate::trailer_coverage::covered_gate_ids(
-        main_worktree,
-        branch.as_deref().unwrap_or(""),
-        Some(pr),
-        ids,
-    );
+    let branch_name = branch.as_deref().unwrap_or("");
+    use crate::gate::trailer_coverage::{covered_gate_ids, covered_gate_ids_with_store};
+    let ids = match pinned_store {
+        Some(store) => {
+            covered_gate_ids_with_store(main_worktree, branch_name, Some(pr), ids, store)
+        }
+        None => covered_gate_ids(main_worktree, branch_name, Some(pr), ids),
+    };
     refs_ids.extend(ids.iter().cloned());
     (
         normalized_spec_ids(&ids),

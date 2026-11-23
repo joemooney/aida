@@ -982,7 +982,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
         commit_subjects: vec!["[AI:claude] fix(x): y (BUG-91801)".into()],
     };
     let (ids, branch, resolved, _) = crate::with_review_pr_subject(subject, || {
-        crate::pr_cmd::pr_gate_subject(root.path(), 2485, &[], Some("renamed-local"))
+        crate::pr_cmd::pr_gate_subject(root.path(), 2485, &[], Some("renamed-local"), None)
     });
     assert!(resolved);
     assert_eq!(branch.as_deref(), Some("renamed-branch"));
@@ -999,7 +999,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
     // claim is not trusted for authorship — every recorded author counts.
     let claimed = vec!["TASK-99901".to_string()];
     let (ids, _, resolved, _) =
-        crate::pr_cmd::pr_gate_subject(root.path(), 2485, &claimed, Some("task-99901-work"));
+        crate::pr_cmd::pr_gate_subject(root.path(), 2485, &claimed, Some("task-99901-work"), None);
     assert!(!resolved);
     assert_eq!(ids, claimed);
     let (_, policy) = crate::gate::approval::merge_approval_inputs(
