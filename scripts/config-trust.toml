@@ -570,6 +570,10 @@ send_token = "grandfathered"
 [keys.worktree.locking]
 posture = "policy"
 
+# trace:TASK-3241 | ai:codex
+[keys.worktree.admission]
+wait_secs = "policy"
+
 [keys.worktree.role]
 resume_prompt = "policy"
 restore_prompt = "policy"
