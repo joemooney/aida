@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor` (a check) and `aida land status` show the remaining GitHub core REST budget (remaining/limit, reset time), using the cached rate_limit reading, and warn below 20%.
   - AC2: They name the top consumers since the last reset when known (review-watch, auto-train, main-watch, seat watchers), or say "unknown". Test with a fake rate_limit response below the threshold.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-23T23:15:45.431251077Z
+modified_at: 2026-11-23T23:19:59.954291652Z
 req_type: Task
 tags:
 - doctor
@@ -42,6 +42,13 @@ history:
   author: joe
   timestamp: 2026-11-23T22:13:59.020646288Z
   changes: []
+- id: 01a20ab5-8cd2-7843-bddc-30464e738a43
+  author: aida-session-start
+  timestamp: 2026-11-23T23:19:59.954290331Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
