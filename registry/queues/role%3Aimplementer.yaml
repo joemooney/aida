@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1fb83-8574-7782-9809-fc86b22eb521
+  position: -1052000
+  added_by: role:implementer
+  added_at: 2026-11-23T11:20:25.352208641Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1fb83-8dde-7c00-bf7d-8e0469b620fc
   position: -1051000
   added_by: role:implementer
@@ -375,14 +381,6 @@
   added_by: role:implementer
   note: Test stdin-only and stderr-only TTY cases for the existing operator conjunction, with both-stream control. Test-only; no authority changes.
   added_at: 2026-11-21T07:07:19.913806465Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1fb83-8574-7782-9809-fc86b22eb521
-  position: 635000
-  added_by: role:implementer
-  note: Use the documented manual recovery option. Describe how an authorized operator retains the unreadable journal for audit and restores a valid journal using the existing commands. Keep automatic observation fail-closed until recovery. Add an isolated regression exercising the documented recovery and valid-journal status. Any new command authority or automatic recovery needs a separate sketch.
-  added_at: 2026-11-21T07:39:48.282171020Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
