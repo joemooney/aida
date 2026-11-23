@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: Each item is fixed or closed with evidence that main already handles it; warnings for these are gone in a normal build or test run.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:26.874188951Z
-modified_at: 2026-11-23T20:19:40.987637353Z
+modified_at: 2026-11-23T21:04:20.085655258Z
 req_type: Task
 tags:
 - from-work-ci
@@ -71,6 +71,12 @@ comments:
   modified_at: 2026-11-23T20:19:40.987637353Z
   session_id: 01a209fd02d1
   harness_version: codex-cli 0.167.0
+- id: 01a20a39-5875-7bd2-8961-f768551c90a1
+  author: aida-publication-done
+  content: Implementer push 85f7d9ecc40c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T21:04:20.085654344Z
+  modified_at: 2026-11-23T21:04:20.085654344Z
+  session_id: 01a209fd02d1
 history:
 - id: 01a20885-6c4b-7c10-9c86-3824c13d73d1
   author: joe
@@ -136,6 +142,14 @@ history:
   session_id: 01a209fd02d1
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20a39-5875-7bd2-8961-f754149ec205
+  author: aida-publication-done
+  timestamp: 2026-11-23T21:04:20.085651662Z
+  session_id: 01a209fd02d1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
