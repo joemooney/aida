@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-471
 agreed_id: BUG-2710
 title: night-shift tick hangs in the reap phase and is killed at the 120 s budget on every run
 description: 'Since 2026-11-22 ~17:30 UTC, every night-shift tick is killed at 120 s (exit 124). All earlier phases finish within ~2 s (events 68ms, wave-progress ~1s, mailbox ~0.8s); last-phase=reap@~1990ms, then nothing for 118 s. Context: after a ~40h token outage there are 17 orphaned and 35 stale sessions (aida ps), plus a dead seat clone holding a staged, uncommitted merge (session-hygiene also fails on it). Probable cause: reap blocks on (or walks without a bound) one of these sessions or its worktree. Fix: give reap its own sub-budget, report which item it was on when the budget ran out, and skip or yield it rather than starving the whole tick. Evidence: scheduled job night-shift failures 2026-11-22 17:31 and 17:46 UTC (phases=[...] last-phase=reap).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T19:59:02.668797786Z
+modified_at: 2026-11-23T20:03:54.792300153Z
 req_type: Bug
 comments:
 - id: 01a209ea-ce0b-7581-b40a-6fbcbb2f8e9e
@@ -128,6 +128,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20a02-0728-7263-a70a-14c207c30816
+  author: aida-session-start
+  timestamp: 2026-11-23T20:03:54.792295615Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
