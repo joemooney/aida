@@ -1,0 +1,29 @@
+id: 01a20cac-504c-7b81-bfbd-a010780ccb26
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1330
+agreed_id: TASK-3865
+title: 'code-review.html showcase: mobile layout, tab accessibility and print scope (deferred from TASK-3864)'
+description: |
+  Deferred from the #4504 (TASK-3864, STORY-3076 S4) docs review (advisor-122 ruling 2026-11-24 01:30; filed by product-15). LOW priority. The new docs/showcase/code-review.html page needs layout and accessibility polish.
+
+  ## Acceptance
+  - AC1: Mobile layout works at narrow widths (no horizontal overflow) and tabs are keyboard and screen-reader accessible (roles, aria-selected, focus order).
+  - AC2: Print scope prints the content, not the slide/tab chrome.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T08:29:09.068197586Z
+modified_at: 2026-11-24T08:29:09.068197586Z
+req_type: Task
+tags:
+- docs
+- showcase
+- small
+- track:integration
+filed_at:
+  code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd141d1a42e
+  vendor: claude
