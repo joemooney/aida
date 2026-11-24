@@ -52,6 +52,13 @@ comments:
   created_at: 2026-11-24T15:10:38.818003415Z
   modified_at: 2026-11-24T15:10:38.818003415Z
   session_id: 01a20ddc1582
+- id: 01a20e1c-fe2c-73b0-8caa-944aa706e4c3
+  author: joe
+  content: 'INTEGRATION FIDELITY PRE-CHECK (integration-30, 08:16): PR-4520 @ f3d05fb597 (STORY-3076 S3). Joe-authored; merges CLEAN. Template hunks vs 0fdac177513: aida-review.md matches the source hunk exactly (+ a trace comment). aida-code-review.md takes the source line but drops ''--path src'' from the example and adds a sentence explaining ''--path <directory>'' for a scoped audit, so the skill works in repos without src/. That''s a deliberate, sensible adaptation, though not byte-identical. The skill mirrors .claude/skills/{aida-review,aida-code-review}/SKILL.md are symlinks (git mode 120000) to the masters, so no sync-templates mirror files are needed. The docs differ from the source because they build on S4''s accuracy-edited text (expected). The ''Upcoming… S2 adds … S3 integrates …'' sentence is removed from code-review.html per the advisor''s 02:25 ruling. GAP: two OTHER ''upcoming'' phrasings remain and go stale when S3 lands: docs/showcase/executive-brief.html:9 (''Upcoming Rust review preparation (aida review prepare): …'') and docs/showcase/index.html:107 (''Upcoming review preparation will help independent reviewers …''). Recommend folding their removal (present tense) into this PR: a 2-line docs edit.'
+  created_at: 2026-11-24T15:11:37.612725302Z
+  modified_at: 2026-11-24T15:11:37.612725302Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-7831-71b0-b9fa-5f3500ee061c
   author: joe
