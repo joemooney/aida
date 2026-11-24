@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S2 is the CLI. BLOCKING tests: an option-injection attempt (a ref starting with -), a --write path escaping the repo, fail-closed handling of git errors.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T07:22:04.670461844Z
+modified_at: 2026-11-24T09:24:03.329568159Z
 req_type: Task
 tags:
 - review
@@ -27,6 +27,13 @@ history:
   author: joe
   timestamp: 2026-11-24T07:22:04.787583237Z
   changes: []
+- id: 01a20cde-9481-7702-af08-2b314e325edc
+  author: aida-session-start
+  timestamp: 2026-11-24T09:24:03.329566450Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
