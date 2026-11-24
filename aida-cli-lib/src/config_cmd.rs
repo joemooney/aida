@@ -418,6 +418,10 @@ enum EditSafety {
     Enum { allowed: &'static [&'static str] },
     /// An integer knob over an inclusive `[min, max]` range — the menu prompts.
     Integer { min: i64, max: i64 },
+    /// A duration (`2h`, `90m`) within `[min_secs, max_secs]`; a dotted key
+    /// (`red_main.fix_window`) is written to its nested table.
+    // trace:STORY-2897 | ai:claude
+    Duration { min_secs: u64, max_secs: u64 },
     /// Not live-editable from the menu. `reason` is the short why shown on Enter
     /// (env-shadowed knobs are detected at resolve time and override this).
     ReadOnly { reason: &'static str },
@@ -887,6 +891,17 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
         },
     },
+    // trace:STORY-2897 | ai:claude
+    KnobSpec {
+        section: "landing",
+        key: "red_main.fix_window",
+        doc: "How long a confirmed red main may wait for a fix before the red-main watch recommends a revert (a duration such as `2h` or `90m`).",
+        default: "2h",
+        edit: EditSafety::Duration {
+            min_secs: 60,
+            max_secs: 7 * 24 * 3600,
+        },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -1115,11 +1130,53 @@ fn render_effective_policy(project_root: &std::path::Path) {
         section.print();
     }
 
+    let environment = aida_core::exec_context::Environment::capture();
+    let tuning_root = crate::session::headless_worktree_root();
+    for profile in &aida_core::vendors::PROFILES {
+        println!(
+            "{}",
+            agent_tuning_section(&tuning_root, profile, &environment)
+        );
+    }
+
     println!();
     println!(
         "  {}",
         "Override any AIDA_* env var per docs/environment-variables.md.".dimmed()
     );
+}
+
+// trace:TASK-3171 | ai:codex
+fn agent_tuning_section(
+    project_root: &std::path::Path,
+    profile: &aida_core::vendors::VendorProfile,
+    environment: &aida_core::exec_context::Environment,
+) -> String {
+    use aida_core::agents_config::AgentSeat::*;
+    let vendor = profile.session_name;
+    let tiers = aida_core::agents_config::resolve_agent_model_tiers(project_root, vendor);
+    let mut lines = vec![
+        format!("\n[agents.{vendor}]"),
+        format!("  tiers: {:?}", tiers.tiers),
+    ];
+    for seat in [Implementer, Reviewer, Advisor, Integrator, Product, Trivial] {
+        let (tuning, model_source, effort_source) =
+            crate::session::effective_agent_tuning(project_root, vendor, seat, environment);
+        let model = if profile.manages_headless_model() {
+            format!(
+                "{} ({model_source})",
+                tuning.model.as_deref().unwrap_or("default").escape_debug()
+            )
+        } else {
+            "unmanaged by headless launch".to_string()
+        };
+        lines.push(format!(
+            "  {}: model={model}, effort={} ({effort_source})",
+            seat.as_str(),
+            tuning.effort.as_deref().unwrap_or("default").escape_debug()
+        ));
+    }
+    lines.join("\n")
 }
 
 // trace:STORY-1127 | ai:codex
@@ -3364,7 +3421,14 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         PolicySection {
             section: "landing",
             header: "[landing]".to_string(),
-            rows: vec![row("mode", policy.mode.as_str().to_string())],
+            rows: vec![
+                row("mode", policy.mode.as_str().to_string()),
+                // trace:STORY-2897 | ai:claude
+                row(
+                    "red_main.fix_window",
+                    crate::landing_policy::duration_text(policy.red_main_fix_window),
+                ),
+            ],
         }
     });
 
@@ -3948,9 +4012,10 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
 #[cfg(feature = "tui")]
 fn config_knob_meta(section: &str, key: &str) -> Option<EditSafety> {
     match config_knob_spec(section, key)?.edit {
-        edit @ (EditSafety::Bool { .. } | EditSafety::Enum { .. } | EditSafety::Integer { .. }) => {
-            Some(edit)
-        }
+        edit @ (EditSafety::Bool { .. }
+        | EditSafety::Enum { .. }
+        | EditSafety::Integer { .. }
+        | EditSafety::Duration { .. }) => Some(edit),
         EditSafety::ReadOnly { .. } => None,
     }
 }
@@ -3959,13 +4024,14 @@ fn config_knob_meta(section: &str, key: &str) -> Option<EditSafety> {
 /// A `ReadOnly` declaration or an undeclared knob → `ReadOnly`.
 // trace:STORY-671 trace:STORY-677 | ai:claude
 #[cfg(feature = "tui")]
-fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
+pub(crate) fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
     match config_knob_spec(section, key).map(|s| s.edit) {
         Some(EditSafety::Bool { .. }) => aida_tui::EditKind::Bool,
         Some(EditSafety::Enum { allowed }) => {
             aida_tui::EditKind::Enum(allowed.iter().map(|s| s.to_string()).collect())
         }
         Some(EditSafety::Integer { min, max }) => aida_tui::EditKind::Integer { min, max },
+        Some(EditSafety::Duration { .. }) => aida_tui::EditKind::Duration,
         Some(EditSafety::ReadOnly { .. }) | None => aida_tui::EditKind::ReadOnly,
     }
 }
@@ -3978,7 +4044,10 @@ fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
 fn config_knob_readonly_reason(section: &str, key: &str) -> Option<String> {
     match config_knob_spec(section, key)?.edit {
         EditSafety::ReadOnly { reason } => Some(reason.to_string()),
-        EditSafety::Bool { .. } | EditSafety::Enum { .. } | EditSafety::Integer { .. } => None,
+        EditSafety::Bool { .. }
+        | EditSafety::Enum { .. }
+        | EditSafety::Integer { .. }
+        | EditSafety::Duration { .. } => None,
     }
 }
 
@@ -4017,7 +4086,7 @@ fn resolve_config_menu_row(
 /// knobs are refused (the var still wins).
 // trace:STORY-669 trace:STORY-677
 #[cfg(feature = "tui")]
-fn cli_edit_config_knob(
+pub(crate) fn cli_edit_config_knob(
     project_root: &std::path::Path,
     item: &aida_tui::ConfigMenuItem,
     requested: Option<&str>,
@@ -4048,6 +4117,9 @@ fn cli_edit_config_knob(
     let Some(meta) = config_knob_meta(&item.section, &item.name) else {
         return EditOutcome::Blocked(format!("{} is not editable here", item.name));
     };
+    if let EditSafety::Duration { min_secs, max_secs } = meta {
+        return cli_edit_duration_knob(project_root, item, requested, min_secs, max_secs);
+    }
 
     // Write to the file the value currently lives in: user-scoped → the global
     // config; project or unset → the project config.
@@ -4101,6 +4173,9 @@ fn cli_edit_config_knob(
             }
             toml_edit::Value::from(n)
         }
+        EditSafety::Duration { .. } => {
+            return EditOutcome::Blocked(format!("{} is a duration knob", item.name));
+        }
         // `config_knob_meta` filters ReadOnly out above, so this is unreachable —
         // but matched explicitly so a new EditSafety variant trips the compiler.
         EditSafety::ReadOnly { reason } => {
@@ -4119,6 +4194,55 @@ fn cli_edit_config_knob(
             value: rendered_toml_value(&new_value),
             scope: path.display().to_string(),
         },
+    }
+}
+
+/// Write a validated duration knob to the project config. A dotted key
+/// (`red_main.fix_window`) goes to its nested table (`[landing.red_main]`).
+/// Landing policy is read from the default branch, so the new value takes
+/// effect once the edit lands there.
+// trace:STORY-2897 | ai:claude
+#[cfg(feature = "tui")]
+fn cli_edit_duration_knob(
+    project_root: &std::path::Path,
+    item: &aida_tui::ConfigMenuItem,
+    requested: Option<&str>,
+    min_secs: u64,
+    max_secs: u64,
+) -> aida_tui::EditOutcome {
+    use aida_tui::EditOutcome;
+    let Some(value) = requested.map(str::trim).filter(|v| !v.is_empty()) else {
+        return EditOutcome::Blocked(format!("no value supplied for {}", item.name));
+    };
+    let Some(secs) = crate::presence::parse_duration_secs(value) else {
+        return EditOutcome::Blocked(format!(
+            "{value:?} is not a duration such as 2h or 90m — {} unchanged",
+            item.name
+        ));
+    };
+    if !(min_secs..=max_secs).contains(&secs) {
+        return EditOutcome::Blocked(format!(
+            "{value} is outside {}m..{}m — {} unchanged",
+            min_secs / 60,
+            max_secs / 60,
+            item.name
+        ));
+    }
+    let parts: Vec<&str> = item.name.split('.').collect();
+    let Some((key, nested)) = parts.split_last() else {
+        return EditOutcome::Blocked(format!("{} has no key", item.name));
+    };
+    let mut tables = vec![item.section.as_str()];
+    tables.extend(nested.iter().copied());
+    let path = crate::config_init::config_path_for_project(project_root);
+    if let Err(e) =
+        crate::config_edit::set_nested(&path, &tables, key, toml_edit::Value::from(value))
+    {
+        return EditOutcome::Blocked(format!("write failed: {e}"));
+    }
+    EditOutcome::Updated {
+        value: format!("{value} (in effect once it is on the default branch)"),
+        scope: path.display().to_string(),
     }
 }
 
@@ -5033,6 +5157,25 @@ mod bug_533_config_show_tests {
              by policy_registry — the SPIKE-67 knob regressed back to invisible \
              (STORY-671 acceptance #3)"
         );
+    }
+
+    // trace:TASK-3171 | ai:codex
+    #[test]
+    fn agent_tuning_section_reports_seat_and_independent_env_override() {
+        let env = aida_core::exec_context::Environment::from_pairs([
+            ("AIDA_AGENT_MODEL".into(), " ".into()),
+            ("AIDA_AGENT_EFFORT".into(), "high".into()),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        std::fs::write(dir.path().join(".aida/config.toml"),
+            "[agents.claude]\nmodel = 'base'\ntiers = ['base', 'review']\n[agents.claude.seats.reviewer]\nmodel = 'review'\neffort = 'low'").unwrap();
+        let section = agent_tuning_section(dir.path(), &aida_core::vendors::PROFILES[0], &env);
+        assert!(section.contains(
+            "reviewer: model=review (.aida/config.toml), effort=high (AIDA_AGENT_EFFORT)"
+        ));
+        assert!(section.contains("implementer: model=base (.aida/config.toml)"));
+        assert!(section.contains(r#"tiers: ["base", "review"]"#));
     }
 
     #[test]

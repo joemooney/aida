@@ -2525,7 +2525,25 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
         } else {
             assert!(files.is_empty());
             assert_ne!(head, before);
-            assert_eq!(remote, head);
+            // trace:BUG-2726 | ai:codex
+            assert_eq!(remote, before);
+            std::fs::write(clone.join("fix"), "round fix").unwrap();
+            let fixed = commit_pending(&fx.main, &clone, "feat", "fix: round (BUG-1)")
+                .unwrap()
+                .unwrap();
+            assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^"]), head);
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                opts(&clone, false, true),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| panic!("--no-pr must not open a PR"),
+                    after_open: &|_, _| {},
+                },
+            )
+            .unwrap();
+            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), fixed);
             assert!(import_refs(&fx.main).is_empty());
             // Tip mismatch must clean up the imported ref before refusing.
             let why = publish_rework_merge(&fx.main, &clone, "feat", &before)
@@ -2536,7 +2554,7 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
 
             // A concurrent origin update rejects the actual host push. The
             // clone import must be removed on this failure too.
-            git_ok(&fx.main, &["checkout", "-qb", "racer", &head]);
+            git_ok(&fx.main, &["checkout", "-qb", "racer", &fixed]);
             git_ok(
                 &fx.main,
                 &["commit", "--allow-empty", "-qm", "remote advances"],
@@ -2544,7 +2562,7 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             let raced = git_ok(&fx.main, &["rev-parse", "HEAD"]);
             git_ok(&fx.main, &["push", "-q", "origin", "racer:refs/heads/feat"]);
             git_ok(&fx.main, &["checkout", "main"]);
-            let why = publish_rework_merge(&fx.main, &clone, "feat", &head)
+            let why = publish_rework_merge(&fx.main, &clone, "feat", &fixed)
                 .unwrap_err()
                 .to_string();
             assert!(why.contains("rejected"), "{why}");

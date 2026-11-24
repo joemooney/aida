@@ -56,6 +56,14 @@ pub(crate) enum PromoteFrom {
     NoNewFailures,
 }
 
+// trace:BUG-2725 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum CiBaseFreshness {
+    #[default]
+    Strict,
+    CleanMerge,
+}
+
 macro_rules! setting_enum {
     ($ty:ident, $key:literal, [$($variant:ident => $word:literal),+ $(,)?]) => {
         impl $ty {
@@ -85,6 +93,7 @@ macro_rules! setting_enum {
 }
 
 setting_enum!(LandingMode, "mode", [CiGated => "ci-gated", ReviewGated => "review-gated"]);
+setting_enum!(CiBaseFreshness, "ci_base_freshness", [Strict => "strict", CleanMerge => "clean-merge"]);
 setting_enum!(Merger, "merger", [AnyNonAuthor => "any-non-author", Advisor => "advisor"]);
 setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main", NoNewFailures => "no-new-failures"]);
 
@@ -93,11 +102,16 @@ pub(crate) const DEFAULT_CI_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE, "Build (u
 /// The default required checks of a review-gated default branch.
 pub(crate) const DEFAULT_REVIEW_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE];
 
+/// The default `red_main.fix_window`: two hours.
+pub(crate) const DEFAULT_RED_MAIN_FIX_WINDOW: std::time::Duration =
+    std::time::Duration::from_secs(2 * 3600);
+
 /// The resolved `[landing]` policy.
 // trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LandingPolicy {
     pub(crate) mode: LandingMode,
+    pub(crate) ci_base_freshness: CiBaseFreshness,
     pub(crate) merger: Merger,
     pub(crate) promote_from: PromoteFrom,
     /// `required_checks.ci_gated`: the forge's required checks in CI-gated
@@ -105,6 +119,10 @@ pub(crate) struct LandingPolicy {
     pub(crate) ci_gated_checks: Vec<String>,
     /// `required_checks.review_gated`.
     pub(crate) review_gated_checks: Vec<String>,
+    /// `red_main.fix_window`: how long a confirmed red main may wait for a
+    /// fix before the red-main watch recommends a revert.
+    // trace:STORY-2897 | ai:claude
+    pub(crate) red_main_fix_window: std::time::Duration,
     /// Values that fell back to their default, each with its reason.
     pub(crate) warnings: Vec<String>,
     /// Keys the config sets validly (`required_checks.<mode>` for lists).
@@ -126,10 +144,12 @@ impl Default for LandingPolicy {
     fn default() -> Self {
         Self {
             mode: LandingMode::default(),
+            ci_base_freshness: Default::default(),
             merger: Merger::default(),
             promote_from: PromoteFrom::default(),
             ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
             review_gated_checks: owned(DEFAULT_REVIEW_GATED_CHECKS),
+            red_main_fix_window: DEFAULT_RED_MAIN_FIX_WINDOW,
             warnings: Vec::new(),
             explicit: Vec::new(),
             invalid: Vec::new(),
@@ -142,6 +162,10 @@ fn owned(names: &[&str]) -> Vec<String> {
 }
 
 impl LandingPolicy {
+    pub(crate) fn clean_merge_train(&self) -> bool {
+        self.mode == LandingMode::CiGated && self.ci_base_freshness == CiBaseFreshness::CleanMerge
+    }
+
     /// Parse the `[landing]` section of a config body. Never fails: a bad
     /// value keeps its default and records a warning.
     // trace:STORY-2897 | ai:claude
@@ -192,8 +216,32 @@ impl LandingPolicy {
                     .to_string(),
             );
         }
+        read!(ci_base_freshness, CiBaseFreshness, "ci_base_freshness");
         read!(merger, Merger, "merger");
         read!(promote_from, PromoteFrom, "promote_live_binary_from");
+        // trace:STORY-2897 | ai:claude
+        if let Some(red_main) = section.get("red_main") {
+            match red_main.get("fix_window").map(fix_window) {
+                None if red_main.is_table() => {}
+                Some(Ok(window)) => {
+                    policy.red_main_fix_window = window;
+                    policy.explicit.push("red_main.fix_window");
+                }
+                Some(Err(why)) => {
+                    policy.invalid.push("red_main.fix_window");
+                    policy
+                        .warnings
+                        .push(format!("`[landing] red_main.fix_window` {why}; using `2h`"));
+                }
+                None => {
+                    policy.invalid.push("red_main.fix_window");
+                    policy.warnings.push(
+                        "`[landing] red_main` must be a table; using `fix_window = \"2h\"`"
+                            .to_string(),
+                    );
+                }
+            }
+        }
         if let Some(checks) = section.get("required_checks") {
             if !checks.is_table() {
                 policy.invalid.push("required_checks");
@@ -277,6 +325,38 @@ impl LandingPolicy {
     pub(crate) fn advisor_merges(&self) -> bool {
         self.merger == Merger::Advisor || self.mode == LandingMode::ReviewGated
     }
+}
+
+/// A `red_main.fix_window` duration (`"2h"`, `"90m"`, `"1h30m"`): at least
+/// one minute and at most a week.
+// trace:STORY-2897 | ai:claude
+fn fix_window(value: &toml::Value) -> Result<std::time::Duration, String> {
+    let text = value.as_str().ok_or("must be a duration such as \"2h\"")?;
+    let secs = crate::presence::parse_duration_secs(text)
+        .ok_or_else(|| format!("is `{text}`, which is not a duration such as \"2h\" or \"90m\""))?;
+    if !(60..=7 * 24 * 3600).contains(&secs) {
+        return Err(format!("is `{text}`, outside one minute to one week"));
+    }
+    Ok(std::time::Duration::from_secs(secs))
+}
+
+/// PURE: a duration as the settings write it, without losing any part:
+/// `2h`, `1h30m`, `1m30s`, `45s`.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn duration_text(duration: std::time::Duration) -> String {
+    let secs = duration.as_secs();
+    let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
+    let mut out = String::new();
+    if h > 0 {
+        out.push_str(&format!("{h}h"));
+    }
+    if m > 0 {
+        out.push_str(&format!("{m}m"));
+    }
+    if s > 0 || out.is_empty() {
+        out.push_str(&format!("{s}s"));
+    }
+    out
 }
 
 /// A required-check list: non-empty strings, no duplicates, and always

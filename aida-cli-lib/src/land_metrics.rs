@@ -582,7 +582,16 @@ pub(super) fn run(start: &Path, since: &str, until: Option<&str>, json_format: b
             reviews.push(review);
         }
     }
-    let report = calculate(&events, &merges, &reviews, since, until);
+    let mut report = calculate(&events, &merges, &reviews, since, until);
+    // trace:STORY-2897 | ai:claude
+    // trace:TASK-3228 | ai:codex
+    report["red_main"] = match crate::main_watch::read_journal(&root) {
+        Ok(events) => crate::main_watch::metrics(&events, since, until.min(Utc::now())),
+        Err(_) => json!({
+            "available": false,
+            "diagnostic": "watch journal is unreadable or contains an invalid committed event"
+        }),
+    };
     if json_format {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -610,6 +619,23 @@ pub(super) fn run(start: &Path, since: &str, until: Option<&str>, json_format: b
         println!(
             "PRs without an approval record: {}",
             report["review_rounds_unavailable_prs"]
+        );
+        let red = &report["red_main"];
+        if let Some(reason) = red["diagnostic"].as_str() {
+            println!("Red main (watch journal): unavailable ({reason})");
+            return Ok(());
+        }
+        println!(
+            "Red main (watch journal): {} episodes ({} flakes), {} min red, {} red merges, \
+             fix latency median {}s max {}s, {} of {} resolved by revert",
+            red["episodes"],
+            red["flakes"],
+            red["red_minutes"],
+            red["red_merges"],
+            red["fix_latency_seconds_median"],
+            red["fix_latency_seconds_max"],
+            red["reverted"],
+            red["resolved"]
         );
     }
     Ok(())

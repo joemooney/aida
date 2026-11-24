@@ -1729,7 +1729,7 @@ pub(crate) fn agent_resume_launch_config(
 }
 
 // trace:STORY-790 | ai:codex
-fn verify_agent_native_session_available(
+pub(crate) fn verify_agent_native_session_available(
     project_root: &std::path::Path,
     agent_type: &str,
     worktree: &std::path::Path,

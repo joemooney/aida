@@ -11,6 +11,26 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 
 
+class ProductGlossaryTests(unittest.TestCase):
+    # trace:STORY-2839 | ai:codex
+    def test_delivery_terms_have_searchable_definitions(self):
+        site = REPO / 'docs/showcase'
+        index = (site / 'search-data.js').read_text().split('window.AIDA_DOCS = ', 1)[1]
+        terms = [row for row in json.loads(index.strip().removesuffix(';'))
+                 if row.get('kind') == 'term']
+        page = (site / 'glossary.html').read_text()
+        for title in ('Autoland (aida land)', 'Bisect', 'ci:full', 'Delta review',
+                      'Deputy shell', 'Include gate paths (--include-gate-paths)',
+                      'Merge train', 'Post-train pull', 'Ratchet', 'Rider'):
+            with self.subTest(term=title):
+                matches = [term for term in terms if term['title'] == title]
+                self.assertEqual(len(matches), 1)
+                path, anchor = matches[0]['url'].split('#')
+                self.assertEqual(path, 'glossary.html')
+                self.assertEqual(page.count(f'<h3 id="{anchor}">{title}</h3>'), 1)
+                self.assertTrue(matches[0]['text'].strip())
+
+
 class ShowcaseBuildTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
