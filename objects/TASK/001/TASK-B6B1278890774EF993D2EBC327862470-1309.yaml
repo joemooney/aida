@@ -104,6 +104,13 @@ history:
   timestamp: 2026-11-24T08:06:18.811613523Z
   session_id: 01a20c7a4e51
   changes: []
+- id: 01a20c9b-4073-7751-a92f-0456627f0f22
+  author: joe
+  timestamp: 2026-11-24T08:10:30.899355362Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
