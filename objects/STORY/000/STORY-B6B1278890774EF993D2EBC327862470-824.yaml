@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: ONE function, called in the FINAL before_spawn hook, reloads the anchor and members FRESH and re-applies the hold gate, the track/headless policy and the WIP limit, refusing BEFORE spawn on any violation. No other site re-checks authority piecemeal.
   - AC2: Tests: (a) a hold placed during the wait refuses the spawn; (b) track:operator set after admission refuses the spawn; (c) a pull that flips the track refuses the spawn.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T08:20:43.557466647Z
+modified_at: 2026-11-24T08:43:51.618062414Z
 req_type: Story
 tags:
 - admission
@@ -132,6 +132,12 @@ comments:
   modified_at: 2026-11-24T08:20:43.557466647Z
   session_id: 01a20c9942b6
   harness_version: codex-cli 0.167.0
+- id: 01a20cb9-c7c2-7770-93f8-6dde35efa53b
+  author: aida-publication-done
+  content: Implementer push a45d28c70da8 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T08:43:51.618061910Z
+  modified_at: 2026-11-24T08:43:51.618061910Z
+  session_id: 01a20c9942b6
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
@@ -185,6 +191,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20cb9-c7c2-7770-93f8-6dccc34a0129
+  author: aida-publication-done
+  timestamp: 2026-11-24T08:43:51.618059181Z
+  session_id: 01a20c9942b6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
