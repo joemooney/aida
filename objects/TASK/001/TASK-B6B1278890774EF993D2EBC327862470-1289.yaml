@@ -1,6 +1,5 @@
 id: 01a20bbc-4973-7dc1-861b-0bd3abb9df04
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1289
-agreed_id: TASK-3315
 title: 'Review follow-up: aida-cli-lib/src/lane_admission.rs:405 and aida-cli-lib/src/queue_cmd/work.rs:5153. Early '
 description: |-
   From BUG-2740
