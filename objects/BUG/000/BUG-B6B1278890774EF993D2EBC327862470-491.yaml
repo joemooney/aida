@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T14:30:55.833240578Z
+modified_at: 2026-11-24T14:45:32.673818017Z
 req_type: Bug
 tags:
 - doctor
@@ -162,6 +162,18 @@ comments:
   modified_at: 2026-11-24T14:14:52.726191512Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e04-f0b6-76d1-b418-0cd29f15f150
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fbf0c04013601ce3872463706209d6db936c6dfa plus the native working-tree changes. Reviewed the merge-base diff and working tree. No untracked additions.
+    AC1: [evidence: behavioral-test] land_stalls.rs observe and Gh::text, forge.rs github_stall_read and land.rs origin_git consume the remaining deadline across executable and Git reads. The regression covers both run-limited and per-PR-limited scans.
+    AC2: [evidence: behavioral-test] scan_with_budgets feeds doctor findings and a persisted scheduled snapshot. write_local_bounded commits under five-second writer admission for later store sync. The regression asserts emitted covered/skipped IDs, routed memory, and absence of a push to the store remote. Lane execution pending.
+    Probes checked ref parsing, zero/multiple rows, exhausted budgets, slow executable resolution, failed lock admission and local publication. F1–F3 addressed. Per pickup ruling F4 unknown inventory/detail coverage, F5 skipped red cache, F6 partial dedup cleanup, F7 scan fairness and F8 fetch-lock contention are deferred.
+  created_at: 2026-11-24T14:45:32.673818017Z
+  modified_at: 2026-11-24T14:45:32.673818017Z
+  session_id: 01a20df74a50
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
