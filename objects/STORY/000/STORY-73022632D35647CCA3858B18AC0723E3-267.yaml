@@ -1,0 +1,32 @@
+id: 01a20c49-7c38-71a1-b720-e7c1b6234432
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-267
+title: 'Review PR-4495: [AI:codex] fix(deputy-shell): wait for a parseable runner PID in signal test (BUG-2743)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c19`) for branch `int31-bug-2743`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4495>
+  - Branch: `int31-bug-2743` → `integration`
+
+  ## Covers
+
+  - BUG-2743
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4495` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T06:41:12.248012161Z
+modified_at: 2026-11-24T06:41:12.248012161Z
+req_type: Story
+filed_at:
+  code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0d3a0ae22
+  session: 01a20c196274
