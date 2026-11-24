@@ -1,0 +1,18 @@
+{
+  "id": "38449bf5-2d14-4d13-8fdd-95be7a9534b8",
+  "thread_id": "38449bf5-2d14-4d13-8fdd-95be7a9534b8",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795536611490,
+  "body": "- [STUCK-REVIEW] #4482 at 98871305 has had no verdict and no reviewer for 62 min\n  -> launch a reviewer for #4482 at 98871305\n- [STUCK-REVIEW] #4502 at af86ff2f has had no verdict and no reviewer for 38 min\n  -> launch a reviewer for #4502 at af86ff2f\n- [STUCK-REWORK] #4425 has changes requested at f2f2903d (round 1) and no lane or session on it for 1733 min\n  -> route rework of #4425 to a lane\n- [STUCK-CONFLICT] #4464 at 1bfff1d0 conflicts with its base and nobody owns it, for 59 min\n  -> route a lane to resolve the conflict on #4464\n\n23 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 4 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
