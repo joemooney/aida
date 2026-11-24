@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T18:11:46.261802264Z
+modified_at: 2026-11-24T18:12:22.507498715Z
 req_type: Story
 tags:
 - admission
@@ -287,6 +287,12 @@ comments:
   modified_at: 2026-11-24T18:11:39.890008624Z
   session_id: 01a20ebdfd5b
   harness_version: codex-cli 0.167.0
+- id: 01a20ec2-456b-7123-95ee-dddde289afee
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-824` at head `af86ff2ff9c85e82891712b8a9ea0ad44b233dc7`.'
+  created_at: 2026-11-24T18:12:22.507492220Z
+  modified_at: 2026-11-24T18:12:22.507492220Z
+  session_id: 01a20ebdfd5b
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
