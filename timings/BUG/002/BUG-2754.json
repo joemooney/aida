@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2754",
+  "publishes": [
+    {
+      "at": "2026-11-24T22:56:02.954028885Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T20:57:50.990582641Z",
+      "spec": "BUG-2754",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4535,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "946efda42a07e5ba289693d20e1e3f1dd259a218"
+      }
+    },
+    {
+      "ts": "2026-11-24T20:57:54.819792506Z",
+      "spec": "BUG-2754",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "FAIL — BUG-2754 (completing).\nBUG-b6b1278890774ef993d2ebc327862470-515.AC1 — unverified\nThe exact seat fast-gate request now drops ambient overrides and the existing Cargo subcommand and profile rules remain intact. The changed regression verifies request construction and stub dispatch. The implementer reported a successful real sandbox job, and the PR carries a host publication fast-gate pass. Neither supplies the required regression test of a seat-originated run of the real target. Reviewed the full landed diff on pinned main 95eaccf328557402d176c0b41983afe1b677965f. The PR head is two commits behind that base. The base adds ratchet entries, and the finding applies with those entries in place. CI was pending at review time. No local tests were run.",
+        "recovery_hint": "address the review findings, move BUG-2754 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:14:32.708284727Z",
+      "spec": "BUG-2754",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4535,
+        "verdict": "APPROVED",
+        "reviewed_sha": "946efda42a07e5ba289693d20e1e3f1dd259a218"
+      }
+    },
+    {
+      "ts": "2026-11-24T22:47:32.142885684Z",
+      "spec": "BUG-2754",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4535
+      }
+    },
+    {
+      "ts": "2026-11-24T22:56:02.764625539Z",
+      "spec": "BUG-2754",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e74e19b7c0fa4b54ddcc5532cefc63a8d80c41c9",
+        "pr": 4535,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
