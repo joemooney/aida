@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-24T14:29:46.408386354Z
+modified_at: 2026-11-24T14:45:13.228744404Z
 req_type: Bug
 tags:
 - ci
@@ -256,6 +256,11 @@ comments:
   modified_at: 2026-11-24T14:29:46.408386354Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e04-9d8d-7a40-aac7-22609fedcfa7
+  author: joe
+  content: 'FOLLOW-UP ITEMS, more (advisor-122 07:47, from the #4407 BUG-2725 re-review at 8ec2fcc8; the override stands): (F2) auto-train admission (advisor_train_eligible) must consume the SAME ReadyForTrain predicate as readiness, not a separate one; (F4) the readiness path must use load_checked so an invalid landing.mode FAILS CLOSED instead of defaulting to CiGated.'
+  created_at: 2026-11-24T14:45:13.228744404Z
+  modified_at: 2026-11-24T14:45:13.228744404Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
