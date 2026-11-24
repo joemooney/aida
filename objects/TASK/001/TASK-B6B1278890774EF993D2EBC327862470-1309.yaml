@@ -151,6 +151,13 @@ comments:
   created_at: 2026-11-24T09:21:05.013620607Z
   modified_at: 2026-11-24T09:21:05.013620607Z
   session_id: 01a20cc5fa3b
+- id: 01a20cdc-bf41-7ac0-81f8-5b8b95be3e09
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r3 (integration-30, 02:26): PR-4504 @ 3612b0b0a3c. The net PR vs integration is DOCS ONLY: the same 13 files as S4''s scope (the non-docs files in the commit range come from its integration merge 9435f22c422). r2 (f2f8274f6ff) restores Joe''s showcase README line for code-review.html minus the pptx clause, closing my 01:15 gap. r3 (3612b0b0a3c, +98/-113 across 12 docs files) applies the advisor''s F2-F12 accuracy edits, so S4 now INTENTIONALLY departs from 0fdac177513''s wording (e.g. ''100% Coverage Gate'' -> ''Optional file ledger'', ''6 Real Bugs Caught'' -> ''Six example defects'', ''Batch Token Cap'' -> ''Estimated batch target'', and the ''Extra API Keys Needed: Zero'' KPI removed). That''s fine per the ruling. NIT, user-facing: code-review.html now says ''Upcoming (lands with the CLI/skills slices): S2 adds aida review prepare and S3 integrates it into /aida-review and /aida-code-review''. ''S2''/''S3'' are internal slice labels in end-user showcase prose (CLAUDE.md: keep internal IDs out of end-user text), and the ''Upcoming'' sentence goes stale when S2/S3 land. Suggest neutral wording (''coming in a later release'') and a reminder for S3 to remove it. Merges CLEAN.'
+  created_at: 2026-11-24T09:21:50.064647786Z
+  modified_at: 2026-11-24T09:21:50.064647786Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
