@@ -101,7 +101,11 @@ def expected_mirrors(masters):
     return result
 
 
-def run_generator(argv, timeout):
+class GeneratorLaunchError(OSError):
+    pass
+
+
+def run_generator(argv, timeout, quiet=False):
     """Reap recipe descendants before inspecting or restoring any output.
 
     Linux subreaping retains orphaned recipes even when make exits first.
@@ -112,7 +116,11 @@ def run_generator(argv, timeout):
     libc = ctypes.CDLL(None, use_errno=True)
     if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
         raise OSError(ctypes.get_errno(), "could not enable generator subreaping")
-    child = subprocess.Popen(argv, start_new_session=True)
+    output = subprocess.DEVNULL if quiet else None
+    try:
+        child = subprocess.Popen(argv, start_new_session=True, stdout=output, stderr=output)
+    except OSError as error:
+        raise GeneratorLaunchError(str(error)) from error
     try:
         child.wait(timeout=timeout)
         if child.returncode:
@@ -318,8 +326,8 @@ def main(base, phase, pack_outputs=(), budget=100.0):
                 try:
                     # Leave time for the final exec-context ledger check.
                     reserve = min(30.0, budget / 4) if EXEC_CONTEXT_LEDGER in outputs else 0
-                    run_generator(argv, max(0.01, deadline - time.monotonic() - reserve))
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                    run_generator(argv, max(0.01, deadline - time.monotonic() - reserve), quiet=True)
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GeneratorLaunchError) as error:
                     current = snapshot()
                     changed = {p for p in current.keys() | previous.keys()
                                if current.get(p) != previous.get(p)}

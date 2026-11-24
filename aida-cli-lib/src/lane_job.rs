@@ -2318,6 +2318,16 @@ pub(crate) fn check_repair_tree(
 }
 
 // trace:TASK-3804 | ai:claude
+#[derive(Debug)]
+pub(crate) struct RepairCompileFailure;
+
+impl std::fmt::Display for RepairCompileFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("repair compile check failed")
+    }
+}
+impl std::error::Error for RepairCompileFailure {}
+
 fn check_repair_tree_on(lane: &LaneJobs, command: &str, snapshot: &Path) -> Result<()> {
     lane.prepare()?;
     check_fast_gate_results(lane)?;
@@ -2328,11 +2338,12 @@ fn check_repair_tree_on(lane: &LaneJobs, command: &str, snapshot: &Path) -> Resu
     };
     run_seeded_host_job(lane, &id, job, Some(snapshot));
     let rc = read_rc(&lane.results, &id).context("repair compile check produced no result")?;
-    anyhow::ensure!(
-        rc == 0,
-        "repair compile check `{command}` failed (exit {rc}); nothing committed or published:\n{}",
-        fast_gate_output_tail(&out_path(&lane.results, &id))?
-    );
+    if rc != 0 {
+        return Err(anyhow::Error::new(RepairCompileFailure).context(format!(
+            "repair compile check `{command}` failed (exit {rc}):\n{}",
+            fast_gate_output_tail(&out_path(&lane.results, &id))?
+        )));
+    }
     Ok(())
 }
 

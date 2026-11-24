@@ -337,6 +337,7 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             // Adoption must preserve this stronger requirement for a full retry.
             preparation_success: Some(true),
             regeneration_success: Some(false),
+            snapshot_deferred: None,
             regenerated_tree: None,
             validation: None,
             refusal_notice: None,

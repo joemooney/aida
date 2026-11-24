@@ -3406,7 +3406,7 @@ fn prepare_rework_merge_with_base(
                 pr,
                 original_head: head,
             });
-            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only, None)
+            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only, None).map(|_| ())
         },
         || {
             // trace:BUG-2603 | ai:codex
@@ -3591,7 +3591,7 @@ fn regenerate_repair_outputs(
     parent: &aida_core::exec_context::Environment,
     restore_only: bool,
     publication_lane: Option<&str>,
-) -> Result<()> {
+) -> Result<Option<String>> {
     use std::ffi::OsStr;
     // Repositories without registered outputs need no generator (including
     // minimal worktree fixtures). Inspect the pinned host object, not the seat.
@@ -3612,7 +3612,7 @@ fn regenerate_repair_outputs(
         "aida-core/templates/skills",
     ]);
     if run(inventory, "inspect pinned regeneration outputs")?.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     let pack_outputs = serde_json::to_string(
         &aida_core::scaffolding::agent_pack::rendered_portable_pack(
@@ -3678,7 +3678,7 @@ fn regenerate_repair_outputs(
     let execute_driver = |sandbox: &[std::ffi::OsString],
                           args: &[&OsStr],
                           timeout: std::time::Duration|
-     -> Result<()> {
+     -> Result<Option<String>> {
         let mut cmd = std::process::Command::new("bwrap");
         cmd.args(sandbox)
             .arg("--")
@@ -3686,13 +3686,13 @@ fn regenerate_repair_outputs(
             .args(args)
             .stdin(std::process::Stdio::null());
         match crate::command_output_with_timeout_capped(cmd, timeout, PROBE_OUTPUT_CAP) {
-            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(None),
             // Only the embedded publication driver returns 75 after restoring the
             // golden and passing the remaining output checks. trace:BUG-2756 | ai:codex
             crate::BoundedCommandOutput::Completed(out)
                 if publication_lane.is_some() && out.status.code() == Some(75) =>
             {
-                record_snapshot_warning(main, publication_lane.unwrap(), &out.stderr)
+                record_snapshot_warning(main, publication_lane.unwrap(), &out.stderr).map(Some)
             }
             crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
                 "repair regeneration refused: {}",
@@ -3822,7 +3822,7 @@ fn regenerate_repair_outputs(
 }
 
 // trace:BUG-2756 | ai:codex
-fn record_snapshot_warning(main: &Path, lane: &str, stderr: &[u8]) -> Result<()> {
+fn record_snapshot_warning(main: &Path, lane: &str, stderr: &[u8]) -> Result<String> {
     let stderr = String::from_utf8_lossy(stderr);
     let warning = stderr
         .lines()
@@ -3834,17 +3834,28 @@ fn record_snapshot_warning(main: &Path, lane: &str, stderr: &[u8]) -> Result<()>
         "invalid snapshot diagnostic"
     );
     eprintln!("{warning}");
-    let lease = crate::list_leases(main)
-        .into_iter()
-        .find(|lease| lease.id == lane)
-        .context("missing publication lease for snapshot comment")?;
-    crate::comment_cmd::add_comment_cli(
-        &crate::lane_recovery::storage_for(main)?,
-        &lease.scope,
-        warning,
-        Some("host repair"),
-        None,
-    )
+    let deliver = || -> Result<()> {
+        let lease = crate::list_leases(main)
+            .into_iter()
+            .find(|lease| lease.id == lane)
+            .context("missing publication lease for snapshot comment")?;
+        let mut appended = false;
+        crate::lane_recovery::storage_for(main)?.update_atomically(|store| {
+            if let Some(req) = store.get_requirement_by_spec_id_mut(&lease.scope) {
+                req.comments.push(aida_core::Comment::new(
+                    "host repair".into(),
+                    warning.into(),
+                ));
+                appended = true;
+            }
+        })?;
+        anyhow::ensure!(appended, "missing leased spec {}", lease.scope);
+        Ok(())
+    };
+    if let Err(error) = deliver() {
+        eprintln!("could not append snapshot warning for lane {lane}: {error:#}");
+    }
+    Ok(warning.into())
 }
 
 /// The host kill bound for publication-time regeneration. Unlike a Git probe,
@@ -4015,6 +4026,7 @@ fn prepare_host_repair_with(
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: observed_paths,
             regeneration_success: None,
+            snapshot_deferred: None,
             regenerated_tree: None,
             preparation_success: None,
             validation: None,
@@ -5605,7 +5617,7 @@ fn commit_pending_with(
             // Invalidate prior success before any generator can write. Every
             // publication attempt regenerates; stale success never grants credit.
             crate::repair_journal::RepairGuard::lock(main)?.record_regeneration(&key, false)?;
-            regenerate_repair_outputs(
+            let warning = regenerate_repair_outputs(
                 clone,
                 main,
                 base,
@@ -5633,8 +5645,11 @@ fn commit_pending_with(
             )?
             .trim()
             .to_owned();
-            crate::repair_journal::RepairGuard::lock(main)?
-                .record_regenerated_tree(&key, &generated_tree)?;
+            crate::repair_journal::RepairGuard::lock(main)?.record_regenerated_tree(
+                &key,
+                &generated_tree,
+                warning,
+            )?;
         }
         if merge_base.is_none() {
             unstage_marker()?;
@@ -5649,21 +5664,32 @@ fn commit_pending_with(
                 .to_owned())
             };
             let staged_tree = write_tree()?;
-            crate::repair_journal::RepairGuard::lock(main)?
-                .for_tree(
+            let deferred = {
+                let journal = crate::repair_journal::RepairGuard::lock(main)?;
+                let entry = journal.for_tree(
                     clone,
                     branch,
                     &key.original_head,
                     merge_base.as_deref().unwrap(),
-                )?
-                .require_regenerated_tree(&staged_tree)?;
+                )?;
+                entry.require_regenerated_tree(&staged_tree)?;
+                entry.snapshot_deferred.is_some()
+            };
             let snapshot = tempfile::tempdir()?;
             let mut command = Vec::new();
+            let mut compile_ok = false;
             let checked = snapshot_repair_tree(main, clone, &staged_tree, snapshot.path())
                 .and_then(|()| {
                     let (ran, result) = compile(main, clone, lane, snapshot.path());
                     command = ran;
-                    result
+                    compile_ok = result.is_ok();
+                    match result {
+                        Err(error) if deferred && error.is::<crate::lane_job::RepairCompileFailure>() => {
+                            eprintln!("advisory repair compile failed: {error:#}");
+                            Ok(())
+                        }
+                        result => result,
+                    }
                 })
                 .and_then(|()| {
                     anyhow::ensure!(
@@ -5677,7 +5703,13 @@ fn commit_pending_with(
                 });
             let recorded =
                 crate::repair_journal::RepairGuard::lock(main).and_then(|mut journal| {
-                    journal.record_validation(key, &staged_tree, &command, checked.is_ok())
+                    journal.record_validation(
+                        key,
+                        &staged_tree,
+                        &command,
+                        compile_ok && checked.is_ok(),
+                        deferred && checked.is_ok(),
+                    )
                 });
             match (checked, recorded) {
                 (Err(error), Err(record_error)) => {

@@ -5469,17 +5469,23 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
     }
     let fx = fixture();
     let id = "c0ffee265701";
-    let clone = leased_clone(&fx, "repair-retry", id);
+    let clone = seat_with_publication_pending(&fx, "repair-retry", id, "feat");
     std::fs::write(clone.join("README.md"), "seat change\n").unwrap();
     let before = commit_pending(&fx.main, &clone, "feat", "fix: seat (BUG-1)")
         .unwrap()
         .unwrap();
     publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
     std::fs::write(fx.main.join("README.md"), "main change\n").unwrap();
+    // trace:BUG-2756 | ai:codex — real snapshot command fails without a Cargo manifest.
+    let golden = "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt";
+    std::fs::create_dir_all(fx.main.join(golden).parent().unwrap()).unwrap();
+    std::fs::write(fx.main.join(golden), "main help\n").unwrap();
+    git_ok(&fx.main, &["add", golden]);
     git_ok(&fx.main, &["commit", "-qam", "main change"]);
     git_ok(&fx.main, &["push", "-q", "origin", "main"]);
-    prepare_rework_merge_fixture(&fx.main, &clone, "feat", false, 2657, "retry-lane").unwrap();
+    prepare_rework_merge_fixture(&fx.main, &clone, "feat", false, 2657, id).unwrap();
     std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    git_ok(&clone, &["add", "README.md"]);
     let lease_path = crate::lease_path(&fx.main, id);
     let lease_before = std::fs::read(&lease_path).unwrap();
     let forge = crate::forge::fake::RecordingForge {
@@ -5490,7 +5496,10 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
         bundle: &test_bundle,
         commit: &|main, tree, branch, message| {
             commit_pending_with(main, tree, branch, message, &|_, _, _, _| {
-                (vec!["true".into()], Ok(()))
+                (
+                    vec!["cargo".into(), "check".into()],
+                    Err(anyhow::Error::new(crate::lane_job::RepairCompileFailure)),
+                )
             })
         },
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
@@ -5518,6 +5527,27 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
         2
     );
     assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), tip);
+    assert_eq!(
+        git_ok(&fx.origin, &["show", &format!("feat:{golden}")]),
+        "main help"
+    );
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "feat^1"]), before);
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "feat^2"]),
+        git_ok(&fx.origin, &["rev-parse", "main"])
+    );
+    let store = crate::lane_recovery::storage_for(&fx.main)
+        .unwrap()
+        .load()
+        .unwrap();
+    assert!(store
+        .get_requirement_by_spec_id("BUG-1")
+        .unwrap()
+        .comments
+        .iter()
+        .any(|c| c.content.starts_with("snapshot regeneration failed: ")
+            && c.content.contains("cargo")
+            && c.content.ends_with("; CI will verify")));
     assert_eq!(forge.opened.lock().unwrap().len(), 1);
 }
 

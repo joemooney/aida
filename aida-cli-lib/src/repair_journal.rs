@@ -26,6 +26,8 @@ pub(crate) enum SpawnOutcome {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Validation {
+    #[serde(default)]
+    pub advisory: bool,
     pub tree: String,
     pub command: Vec<String>,
     pub success: bool,
@@ -60,6 +62,8 @@ pub(crate) struct RepairEntry {
     // Older boolean-only records cannot supply this evidence.
     #[serde(default)]
     pub regenerated_tree: Option<String>,
+    #[serde(default)]
+    pub snapshot_deferred: Option<String>,
     // Preparation restores outputs from this entry's immutable base/head inputs.
     // Missing evidence (including journals from older hosts) fails closed.
     #[serde(default)]
@@ -84,7 +88,7 @@ impl RepairEntry {
     pub fn require_regenerated_tree(&self, tree: &str) -> Result<()> {
         self.require_prepared()?;
         anyhow::ensure!(
-            self.regeneration_success == Some(true)
+            (self.regeneration_success == Some(true) || self.snapshot_deferred.is_some())
                 && self.regenerated_tree.as_deref() == Some(tree),
             "staged repair tree changed or lacks successful regeneration; retry publication"
         );
@@ -178,10 +182,12 @@ impl RepairGuard {
         tree: &str,
         command: &[String],
         success: bool,
+        advisory: bool,
     ) -> Result<()> {
         let entry = self.entry_mut(key)?;
         entry.require_regenerated_tree(tree)?;
         entry.validation = Some(Validation {
+            advisory,
             tree: tree.into(),
             command: command.to_vec(),
             success,
@@ -197,10 +203,13 @@ impl RepairGuard {
             for entry in self.journal.entries.iter().filter(|entry| {
                 entry.branch == branch && &entry.key.original_head == first && &entry.base == second
             }) {
-                let validated = entry
-                    .validation
-                    .as_ref()
-                    .is_some_and(|validation| validation.success && &validation.tree == tree);
+                let validated = entry.validation.as_ref().is_some_and(|validation| {
+                    &validation.tree == tree
+                        && (validation.success
+                            || (validation.advisory
+                                && entry.snapshot_deferred.is_some()
+                                && entry.require_regenerated_tree(tree).is_ok()))
+                });
                 if !validated {
                     return Err(UnvalidatedRepairPublication {
                         pr: entry.key.pr,
@@ -272,6 +281,7 @@ impl RepairGuard {
             .context("missing repair reservation")?;
         entry.preparation_success = Some(success);
         if !success {
+            entry.snapshot_deferred = None;
             entry.regenerated_tree = None;
             entry.validation = None;
         }
@@ -285,11 +295,17 @@ impl RepairGuard {
             .find(|e| &e.key == key)
             .context("missing repair reservation")?;
         entry.regeneration_success = Some(success);
+        entry.snapshot_deferred = None;
         entry.regenerated_tree = None;
         entry.validation = None;
         self.save()
     }
-    pub fn record_regenerated_tree(&mut self, key: &RepairKey, tree: &str) -> Result<()> {
+    pub fn record_regenerated_tree(
+        &mut self,
+        key: &RepairKey,
+        tree: &str,
+        warning: Option<String>,
+    ) -> Result<()> {
         anyhow::ensure!(
             tree.len() >= 40 && tree.bytes().all(|b| b.is_ascii_hexdigit()),
             "invalid regenerated tree id"
@@ -304,7 +320,8 @@ impl RepairGuard {
             entry.preparation_success == Some(true),
             "repair preparation did not succeed"
         );
-        entry.regeneration_success = Some(true);
+        entry.regeneration_success = warning.is_none().then_some(true);
+        entry.snapshot_deferred = warning;
         entry.regenerated_tree = Some(tree.to_owned());
         self.save()
     }
@@ -557,6 +574,7 @@ mod tests {
                     spawn: SpawnOutcome::ProvenDead,
                     original_conflict_paths: vec!["src/lib.rs".into()],
                     regeneration_success: None,
+                    snapshot_deferred: None,
                     regenerated_tree: None,
                     preparation_success: None,
                     validation: None,
@@ -608,6 +626,7 @@ mod tests {
                 spawn: SpawnOutcome::Started,
                 original_conflict_paths: vec!["src/lib.rs".into()],
                 regeneration_success: None,
+                snapshot_deferred: None,
                 regenerated_tree: None,
                 preparation_success: None,
                 validation: None,
@@ -819,6 +838,7 @@ mod tests {
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
             regeneration_success: None,
+            snapshot_deferred: None,
             regenerated_tree: None,
             preparation_success: None,
             validation: None,
@@ -875,7 +895,7 @@ mod tests {
             .transfer_adopted_lane(&entry.tree_path, "pr", "lease-1", "new")
             .unwrap();
         guard
-            .record_regenerated_tree(&key, &"c".repeat(40))
+            .record_regenerated_tree(&key, &"c".repeat(40), None)
             .unwrap();
         drop(guard);
         let mut guard = RepairGuard::lock(main).unwrap();
