@@ -6229,6 +6229,7 @@ fn run_refused_launch(
         attempt,
         None,
         None,
+        &|| Ok(()),
     )
     .unwrap_err()
 }

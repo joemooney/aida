@@ -172,6 +172,31 @@ pub(crate) fn admit(
             return Ok(());
         }
     };
+    apply_count(root, spec, pickup, over_wip, preview, open)
+}
+
+// trace:STORY-3080 | ai:codex
+pub(crate) fn admit_before_spawn(
+    root: &Path,
+    spec: &str,
+    pickup: Pickup,
+    over_wip: bool,
+) -> Result<()> {
+    if pickup == Pickup::Continues {
+        return Ok(());
+    }
+    let open = open_changes(root)?;
+    apply_count(root, spec, pickup, over_wip, false, open)
+}
+
+fn apply_count(
+    root: &Path,
+    spec: &str,
+    pickup: Pickup,
+    over_wip: bool,
+    preview: bool,
+    open: usize,
+) -> Result<()> {
     let max = crate::now::wip_max(root);
     if pickup == Pickup::Branch {
         if let Some(line) = branch_note(spec, open, max) {
@@ -340,6 +365,19 @@ mod tests {
             "attention": []
         }))
         .expect("a snapshot this build reads")
+    }
+
+    // trace:STORY-3080 | ai:codex
+    #[test]
+    fn story_3080_reapplies_wip_to_originally_new_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let now = chrono::Utc::now().to_rfc3339();
+        crate::now::write(root, &snapshot(&now, 0)).unwrap();
+        admit(root, "TASK-3080", Pickup::New, false, false).unwrap();
+        crate::now::write(root, &snapshot(&now, 10)).unwrap();
+        let refusal = admit_before_spawn(root, "TASK-3080", Pickup::New, false).unwrap_err();
+        assert!(refusal.to_string().contains("10 changes are open"));
     }
 
     #[test]

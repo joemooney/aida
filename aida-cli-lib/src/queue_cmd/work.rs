@@ -4708,6 +4708,7 @@ pub(crate) fn handle_queue_work(
             return Err(refusal);
         }
 
+        let admitted_anchor = anchor.map(|req| req.id);
         drop(current_store);
 
         // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
@@ -5046,6 +5047,11 @@ pub(crate) fn handle_queue_work(
         // trace:STORY-1662 | ai:claude
         let standalone_implementer =
             !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
+        // Setup enters the seat checkout. Bind relative store paths on the host.
+        // trace:STORY-3080 | ai:codex
+        let launch_store = standalone_implementer
+            .then(|| storage.path().canonicalize().map(Storage::new))
+            .transpose()?;
         // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
         // view so we can detect whether the pull below reveals that another
         // machine claimed the spec under us. Best-effort + read-only — a load
@@ -6746,7 +6752,7 @@ pub(crate) fn handle_queue_work(
             // STORY-1662: spawn the standalone implementer, wait, and report its
             // outcome instead of exec'ing the vendor.
             // trace:STORY-1662 | ai:claude
-            if standalone_implementer {
+            if let Some(launch_store) = &launch_store {
                 if let (QueueWorkLaunch::Fresh(id), Some(child_grant)) =
                     (&launch, headless_child_grant.as_ref())
                 {
@@ -6775,6 +6781,16 @@ pub(crate) fn handle_queue_work(
                         attempt.as_ref(),
                         Some(&|| agent.starting()),
                         on_brief_delivery,
+                        &|| {
+                            crate::standalone_implementer::revalidate_before_spawn(
+                                launch_store,
+                                &project_root,
+                                admitted_anchor.context("missing admitted launch anchor")?,
+                                plan.entries.iter().map(|entry| entry.queue.requirement_id),
+                                pickup,
+                                over_wip,
+                            )
+                        },
                     );
                 }
             }
