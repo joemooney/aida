@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-24T22:09:02.110338068Z
+modified_at: 2026-11-24T22:11:35.040919209Z
 req_type: Task
 tags:
 - launch
@@ -65,6 +65,19 @@ comments:
   created_at: 2026-11-24T22:02:11.764662755Z
   modified_at: 2026-11-24T22:02:11.764662755Z
   session_id: 01a20f356c20
+- id: 01a20f9d-7a9d-7cc1-a03e-006144c8b204
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:11):
+    # TASK-3884 / PR #4538 CI-FIX ROUND (product-15 2026-11-24 15:12; NOT a review round). Lane: CODEX. MAIN, existing branch. <=40 lines. NO SCOPE CHANGE.
+    Your head fails the gate-paths ratchet story_1888 `gate_kernels_reach_outside_only_through_listed_leaves` (story_1888_gate_paths_tests.rs:3662): "gate/seat_authority.rs: aida_core::file_lock::lock_exclusive_until" reaches outside gate/ past the listed leaves.
+    FIX (prefer, per the ratchet's own guidance): route the deadline lock through the gate floor, i.e. add a thin wrapper in gate/kernel_deps.rs (where gate's other external deps live) and call that from seat_authority.rs. Only if it genuinely must stay outside, add it to FACADE_EXTERNAL_LEAVES WITH a one-line reason, but prefer the kernel_deps route.
+    Run that exact test on the lane, then make check-ci-fast, then push to #4538. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T22:11:35.040919209Z
+  modified_at: 2026-11-24T22:11:35.040919209Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
