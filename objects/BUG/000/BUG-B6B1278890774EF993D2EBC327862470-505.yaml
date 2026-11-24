@@ -1,0 +1,28 @@
+id: 01a20c54-6d4a-7413-a677-c2e357c87c0e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-505
+agreed_id: BUG-2744
+title: CI "Install compile dependencies" step times out at 5 minutes (3x on 2026-11-23); set timeout-minutes 15 and cache apt packages
+description: |
+  Found 2026-11-23 (advisor-122 ruling 23:54; relayed by integration-30; filed by product-15). CI's "Install compile dependencies" step in .github/workflows/ci.yml timed out at 5 minutes on the current runner three times on 2026-11-23 (#4470, #4492, #4496). Each hit cost about 25 minutes via rerun. The step installs APT_PACKAGES (protobuf-compiler, libxcb-*, libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep).
+
+  ## Acceptance
+  - AC1: Set `timeout-minutes: 15` on the "Install compile dependencies" step.
+  - AC2: Cache the apt packages (actions/cache over the apt archive, or a preinstalled-deps step if that's cheap), so a warm run skips most downloads. Show a warm-run timing in the PR body. Keep the diff minimal: the advisor reviews the ci.yml hunk line by line.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T06:53:09.322660749Z
+modified_at: 2026-11-24T06:53:09.322660749Z
+req_type: Bug
+tags:
+- ci
+- small
+- track:integration
+filed_at:
+  code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
