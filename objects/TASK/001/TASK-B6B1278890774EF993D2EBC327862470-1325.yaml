@@ -1,0 +1,31 @@
+id: 01a20ca8-3090-73f0-b95e-28ac7938b48d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1325
+title: 'Review follow-up: docs/internal/presentation/aida-code-review-engine.md:16 still tells readers to generate t'
+description: |-
+  From TASK-3864
+  Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
+
+  docs/internal/presentation/aida-code-review-engine.md:16 still tells readers to generate the excluded PowerPoint directly into docs/showcase. Remove that render example or direct the output to an external build path to keep the docs-only checkout free of the excluded artifact.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T08:24:38.800931023Z
+modified_at: 2026-11-24T08:24:38.800931023Z
+req_type: Task
+tags:
+- carried-from:TASK-3864
+- finding-hash:c9190233
+- from-review:TASK-3864
+relationships:
+- rel_type: References
+  target_id: 01a20c6f-7d40-73c3-acac-3692587839bc
+  created_at: 2026-11-24T08:24:51.632717737Z
+filed_at:
+  code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
+  branch: pr-4504
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd141d1a42e
+  vendor: claude
+  session: 01a20ca288f6

@@ -1,0 +1,31 @@
+id: 01a20ca8-95e2-70e3-ae84-af6e6caeacc1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1327
+title: 'Review follow-up: docs/showcase/code-review.html:523–532 and 843–849 mark the facet picker as a tablist but '
+description: |-
+  From TASK-3864
+  Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
+
+  docs/showcase/code-review.html:523–532 and 843–849 mark the facet picker as a tablist but supply no tab or tabpanel roles, selected state, or focus relationship. Implement the tab keyboard and accessibility semantics, or use ordinary labeled buttons with programmatic expanded or pressed state.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T08:25:04.738383659Z
+modified_at: 2026-11-24T08:25:04.738383659Z
+req_type: Task
+tags:
+- carried-from:TASK-3864
+- finding-hash:c3e44402
+- from-review:TASK-3864
+relationships:
+- rel_type: References
+  target_id: 01a20c6f-7d40-73c3-acac-3692587839bc
+  created_at: 2026-11-24T08:25:17.635936520Z
+filed_at:
+  code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
+  branch: pr-4504
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd141d1a42e
+  vendor: claude
+  session: 01a20ca288f6
