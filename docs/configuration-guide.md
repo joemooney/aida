@@ -72,7 +72,7 @@ default = "supervised"         # the default; or "drain"
 drain_types = ["bug", "task"]  # with "drain": the spec types it covers
 ```
 
-Set `default = "approved-small"` to apply drain to Approved specs tagged `small`. A completing push preserves eligibility when its recorded status transition is Approved to Done and the spec still carries the tag. This option ignores `drain_types`. Explicit modes take precedence. Strict-tier spec metadata or changed paths (including leases, claims, grants, containment, gates, guards and authority) keep the spec supervised.
+Set `default = "approved-small"` to apply drain to Approved specs tagged `small`. A completing push preserves eligibility when it records Done directly from Approved or immediately after automatic implementer pickup moved the spec from Approved to In Progress. The spec must still carry the tag. This option ignores `drain_types`. Explicit modes take precedence. Strict-tier spec metadata or changed paths (including leases, claims, grants, containment, gates, guards and authority) keep the spec supervised.
 
 With `default = "drain"`, a spec with no mode whose type is in `drain_types` merges as a `drain` spec would. All other merge checks still apply: an independent approval at the PR's head, green CI and no holds. The setting never applies to:
 

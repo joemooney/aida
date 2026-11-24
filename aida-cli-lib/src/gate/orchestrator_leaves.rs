@@ -378,6 +378,7 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "aida_core::RequirementType",
             "aida_core::RequirementType::ALL",
             "aida_core::conflict::PUBLICATION_DONE_AUTHOR",
+            "aida_core::conflict::SESSION_START_AUTHOR",
             "aida_core::git_ops::host_git_command",
             "aida_core::node_alias::display_spec_id",
             "crate::forge_lookup::deadline_output",

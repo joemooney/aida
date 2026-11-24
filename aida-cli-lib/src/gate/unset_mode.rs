@@ -378,25 +378,33 @@ fn sensitive_class(req: &Requirement) -> Option<String> {
 
 // trace:STORY-3038 | ai:codex
 fn approved_for_publication(req: &Requirement) -> bool {
-    match req.status {
-        aida_core::RequirementStatus::Approved => true,
-        aida_core::RequirementStatus::Done => req
-            .history
+    if req.status != aida_core::RequirementStatus::Done {
+        return req.status == aida_core::RequirementStatus::Approved;
+    }
+    let mut transitions = req.history.iter().rev().flat_map(|entry| {
+        entry
+            .changes
             .iter()
             .rev()
-            .flat_map(|entry| {
-                entry
-                    .changes
-                    .iter()
-                    .rev()
-                    .map(move |change| (&entry.author, change))
+            .filter(|change| change.field_name == "status")
+            .map(move |change| {
+                (
+                    entry.author.as_str(),
+                    change.old_value.as_str(),
+                    change.new_value.as_str(),
+                )
             })
-            .find(|(_, change)| change.field_name == "status")
-            .is_some_and(|(author, change)| {
-                author == aida_core::conflict::PUBLICATION_DONE_AUTHOR
-                    && change.old_value == "Approved"
-                    && change.new_value == "Done"
-            }),
+    });
+    match transitions.next() {
+        Some((aida_core::conflict::PUBLICATION_DONE_AUTHOR, "Approved", "Done")) => true,
+        Some((aida_core::conflict::PUBLICATION_DONE_AUTHOR, "InProgress", "Done")) => matches!(
+            transitions.next(),
+            Some((
+                aida_core::conflict::SESSION_START_AUTHOR,
+                "Approved",
+                "InProgress"
+            ))
+        ),
         _ => false,
     }
 }
@@ -425,6 +433,7 @@ const STRICT_PATHS: &[&str] = &[
     "aida-cli-lib/src/launch",
     "aida-cli-lib/src/launch_permission_profile.rs",
     "aida-cli-lib/src/leases.rs",
+    "aida-cli-lib/src/locking_gate.rs",
     "aida-cli-lib/src/mandate.rs",
     "aida-cli-lib/src/mandate_drive.rs",
     "aida-cli-lib/src/mandate_gates.rs",
@@ -485,6 +494,7 @@ const STRICT_PATHS: &[&str] = &[
     "aida-core/src/allocation_authority.rs",
     "aida-core/src/git_ops/remote_credentials.rs",
     "aida-core/src/liveness.rs",
+    "aida-core/src/lock.rs",
     "aida-core/src/mailbox_identity.rs",
     "aida-core/src/mailbox_lifecycle",
     "aida-core/src/proc_identity.rs",

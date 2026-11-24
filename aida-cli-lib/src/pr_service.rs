@@ -239,6 +239,51 @@ pub(crate) fn draft_only_specs_in(records: &[ShipGateSpecRecord]) -> Vec<String>
         .collect()
 }
 
+/// Carries the initial ship decision across CI to the merge boundary.
+// trace:STORY-3038.AC1 | ai:codex
+#[derive(Default)]
+pub(crate) struct ShipDefaultAdmission(Vec<String>);
+
+impl ShipDefaultAdmission {
+    pub(crate) fn classify(
+        mut records: Vec<ShipGateSpecRecord>,
+        allowed: bool,
+        paths: impl FnOnce() -> Option<Vec<String>>,
+    ) -> (Vec<(String, String)>, Self) {
+        let mut ids = Vec::new();
+        if !allowed {
+            withdraw_unset_defaults(&mut records, paths);
+            for (id, _, mode) in &records {
+                if matches!(
+                    mode.source,
+                    crate::gate::unset_mode::ModeSource::ProjectDefault {
+                        approved_small: true,
+                        ..
+                    }
+                ) {
+                    ids.push(id.clone());
+                }
+            }
+            ids.sort();
+            ids.dedup();
+        }
+        let mut holds = supervised_specs_in(records, allowed);
+        holds.sort();
+        holds.dedup();
+        (holds, Self(ids))
+    }
+
+    pub(crate) fn merge<T>(
+        &self,
+        root: &std::path::Path,
+        paths: impl FnOnce() -> Option<Vec<String>>,
+        merge: impl FnOnce() -> T,
+    ) -> anyhow::Result<T> {
+        recheck_defaulted_specs(root, &self.0, paths)?;
+        Ok(merge())
+    }
+}
+
 /// Re-read the specs admitted by default before CI, including their current path policy.
 // trace:STORY-3038.AC1 | ai:codex
 pub(crate) fn recheck_defaulted_specs(

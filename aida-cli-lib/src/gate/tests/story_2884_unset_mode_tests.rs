@@ -583,6 +583,8 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
         "aida-cli-lib/src/launch/grant.rs",
         "aida-cli-lib/src/worktree_lease.rs",
         "aida-cli-lib/src/claim.rs",
+        "aida-cli-lib/src/locking_gate.rs",
+        "aida-core/src/lock.rs",
         "aida-cli-lib/src/seat_occupancy/runtime.rs",
         "aida-core/src/git_ops/remote_credentials.rs",
         ".githooks/pre-commit",

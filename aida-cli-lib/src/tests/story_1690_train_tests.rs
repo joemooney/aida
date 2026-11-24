@@ -6522,6 +6522,10 @@ fn approved_small_publication_and_live_landing_checks() {
     let ids = vec!["BUG-123".to_string()];
     req.spec_id = Some(ids[0].clone());
     req.status = RequirementStatus::Approved;
+    assert!(crate::leases::approved_to_in_progress_bump(
+        &mut req,
+        aida_core::conflict::SESSION_START_AUTHOR
+    ));
     assert!(crate::publication_completion::done_after_push_flip(
         &mut req, &ui_head
     ));
@@ -6537,18 +6541,42 @@ fn approved_small_publication_and_live_landing_checks() {
     assert!(train(ordinary()).is_none());
     assert!(train(changed_paths(repo.path(), "main", &role_head)).is_some());
     assert!(recheck_defaulted_specs(repo.path(), &ids, ordinary).is_ok());
+    let (holds, admission) = crate::pr_service::ShipDefaultAdmission::classify(
+        ship_gate_spec_records_for_ids(repo.path(), ids.clone()),
+        false,
+        ordinary,
+    );
+    assert!(holds.is_empty());
     // CI settles on the same SHA, but the store may have changed.
     store.requirements[0].tags.clear();
     storage.save(&store).unwrap();
-    assert!(recheck_defaulted_specs(repo.path(), &ids, ordinary).is_err());
+    assert!(admission
+        .merge(repo.path(), ordinary, || panic!(
+            "forge merge after withdrawal"
+        ))
+        .is_err());
     store.requirements[0].tags.insert("small".into());
-    store.requirements[0].status = RequirementStatus::Planned;
+    for status in [RequirementStatus::Planned, RequirementStatus::InProgress] {
+        aida_core::conflict::set_status_recorded(&mut store.requirements[0], status, "operator");
+    }
     assert!(crate::publication_completion::done_after_push_flip(
         &mut store.requirements[0],
         &ui_head
     ));
     storage.save(&store).unwrap();
     assert!(train(ordinary()).is_some());
+    for (status, supervised) in [
+        (RequirementStatus::Approved, false),
+        (RequirementStatus::Planned, true),
+    ] {
+        aida_core::conflict::set_status_recorded(&mut store.requirements[0], status, "operator");
+        assert!(crate::publication_completion::done_after_push_flip(
+            &mut store.requirements[0],
+            &ui_head
+        ));
+        storage.save(&store).unwrap();
+        assert_eq!(train(ordinary()).is_some(), supervised);
+    }
     store.requirements.clear();
     storage.save(&store).unwrap();
     assert!(recheck_defaulted_specs(repo.path(), &ids, ordinary).is_err());

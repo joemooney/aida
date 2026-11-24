@@ -2294,7 +2294,7 @@ fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
     assert!(pre_merge < body.find("landing_merge::merge(").unwrap());
     // The live spec-store check must follow the last wait, inside the merge lease.
     // trace:STORY-3038.AC1 | ai:codex
-    let recheck = body.find("recheck_defaulted_specs(").unwrap();
+    let recheck = body.find("admission.merge(").unwrap();
     assert!(pre_merge < recheck && recheck < body.find("landing_merge::merge(").unwrap());
     // Unheld PRs are never told to re-place a hold they never had.
     let window = &body[pre_merge..body.find("landing_merge::merge(").unwrap()];
