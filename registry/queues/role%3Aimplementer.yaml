@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a20929-0c83-76f1-9a54-2d96d1a5a92c
+  position: -1171000
+  added_by: role:implementer
+  added_at: 2026-11-24T20:49:10.014889257Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a2081f-bc99-7322-8d2d-bfa87a4ee02f
   position: -1170000
   added_by: role:implementer
@@ -58,12 +64,6 @@
   added_by: role:implementer
   note: 'deferred: disk below floor at 2026-11-24T18:51:57Z'
   added_at: 2026-11-24T18:24:45.135340354Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a20929-0c83-76f1-9a54-2d96d1a5a92c
-  position: -1158000
-  added_by: role:implementer
-  added_at: 2026-11-24T18:24:28.417996467Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a20665-c8ff-7311-969e-f9d8ec1451a1
