@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T08:09:20.317457201Z
+modified_at: 2026-11-24T08:16:48.782527242Z
 req_type: Task
 tags:
 - small
@@ -93,6 +93,15 @@ comments:
   modified_at: 2026-11-24T07:41:27.027276330Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ca1-078c-7ce1-a459-05e482a03ee7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 592fefc4f324a94b6f884b6caa282e024fa70dfb plus native working diff. F1 scope per advisor ruling. AC1: [evidence: behavioral-test] status_prs.rs:2505 resolves the longest known hyphen-delimited prefix before heuristic fallback. AC2: [evidence: behavioral-test] status_prs.rs:3606 exercises a lease-less task-42-2026-fix with only active TASK-42 and no commit ID; targeted lane test passed (1 executed). Checked shared normalization, whole/delimited matches, overlapping prefixes, UTF-8 slice boundaries and unknown-ID fallback. No authority changes. git diff --check passed. make check-ci-fast stopped in STORY-1853 test-speed tooling because cargo metadata is outside the native lane runner command set. Full FAST validation remains pending on host.
+  created_at: 2026-11-24T08:16:48.782527242Z
+  modified_at: 2026-11-24T08:16:48.782527242Z
+  session_id: 01a20c99443c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe

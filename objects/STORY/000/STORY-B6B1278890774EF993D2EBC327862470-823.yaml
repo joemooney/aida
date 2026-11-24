@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T08:09:39.801984952Z
+modified_at: 2026-11-24T08:17:51.700450221Z
 req_type: Story
 tags:
 - track:integration
@@ -95,6 +95,48 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: All eight S1 reference tests pass, but make check-ci-fast fails the checked structural cover for all eight. The explicit two-file S1 scope excludes the CI inventory needed to satisfy the gate. Both source files match Joe’s reference. Host publication needs an approved scope adjustment or a prerequisite inventory change.. No triage reason was given.'
   created_at: 2026-11-24T07:51:29.169084273Z
   modified_at: 2026-11-24T07:51:29.169084273Z
+- id: 01a20ca0-2b11-7df0-8a47-e9e44768674d
+  author: dirtlab
+  content: |-
+    ## S1 architecture sketch
+    aida-core::review_engine classifies caller-supplied diffs, resolves playbooks, groups files, and verifies coverage, anchors and citations. The core accepts data and reader callbacks. S2 owns review_prepare in the CLI, including Git and working-tree reads and writes only to requested --write output paths. A Rust source search found the engine only in its module and lib.rs. Nothing in gate/, the gate ledger, review verdict recording or train admission consumes it. This is advisory reviewer tooling only.
+  created_at: 2026-11-24T08:15:52.579969288Z
+  modified_at: 2026-11-24T08:15:52.579969288Z
+  session_id: 01a20c9a45fd
+  harness_version: codex-cli 0.167.0
+- id: 01a20ca1-fbd3-7951-9af0-3ac8aab2de66
+  author: dirtlab
+  content: |-
+    ## S1 publication handoff
+    Base: integration. Preserve author Joe Mooney <joe.mooney@gmail.com> when squashing fc7d7a89be with the inventory edit.
+
+    Explicit addition beyond 0fdac177513 for the PR body: scripts/ratchet-set.json, all added lines below.
+
+    ```json
+        {
+          "package": "aida-core",
+          "target": [
+            "--lib"
+          ],
+          "filter": "review_engine::tests::",
+          "scope": "module",
+          "source": "aida-core/src/review_engine.rs",
+          "tests": [
+            "test_anchor_snippet_lines_exact_and_whitespace_tolerant",
+            "test_bundle_review_batches_pairs_tests_and_respects_budget",
+            "test_classify_diff_inventory_and_exclusions",
+            "test_custom_playbook_merge_and_override",
+            "test_diff_triggered_rust_content_facets_zero_overhead_when_absent",
+            "test_glob_matches_with_braces_and_doublestar",
+            "test_verify_coverage_ledger_enforces_100_percent_accountability",
+            "test_verify_observation_citations"
+          ]
+        },
+    ```
+  created_at: 2026-11-24T08:17:51.700450221Z
+  modified_at: 2026-11-24T08:17:51.700450221Z
+  session_id: 01a20c9a45fd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
@@ -143,6 +185,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20c9f-e28b-7762-b03c-ecd8b6fa77be
+  author: dirtlab
+  timestamp: 2026-11-24T08:15:34.539809128Z
+  session_id: 01a20c9a45fd
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
