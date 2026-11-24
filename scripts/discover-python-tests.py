@@ -24,11 +24,11 @@ OTHER_HARNESSES = {
 # Dated failures from the initial discovery run. Product owns follow-up IDs.
 KNOWN_FAILING = {
     # Expected one canonical object under the displayed spec ID.
-    "test_cache_refresh_outputs.py": ("2026-11-23", None),
+    "test_cache_refresh_outputs.py": ("2026-11-23", "TASK-3848"),
     # Definition scenario refused on missing current-head approval (exit 23).
-    "test_pr_ship_preflight.py": ("2026-11-23", None),
+    "test_pr_ship_preflight.py": ("2026-11-23", "TASK-3849"),
     # Fixture role current did not report orchestrator.
-    "test_seat_takeover_lifecycle.py": ("2026-11-23", None),
+    "test_seat_takeover_lifecycle.py": ("2026-11-23", "TASK-3850"),
 }
 
 # Only simple standalone invocations qualify. Comments, command arguments to
@@ -53,7 +53,7 @@ def dedicated_invocations():
             line = line.strip()
             match = UNIT.fullmatch(line)
             if match:
-                dedicated.update(Path(p).name for p in match["paths"].split())
+                dedicated.update({Path(p).name for p in match["paths"].split()} - CLI)
             args = line.split()
             if len(args) >= 2 and args[0] == "python3" and re.fullmatch(PATH, args[1]):
                 name = Path(args[1]).name
@@ -78,7 +78,12 @@ def main():
                 print(f"{path}: missing follow-up spec ID", file=sys.stderr)
                 ok = False
             continue
-        if path.name in OTHER_HARNESSES or (path.name in CLI and path.name in dedicated):
+        if path.name in CLI:
+            if path.name not in dedicated:
+                print(f"{path}: missing standalone CI invocation", file=sys.stderr)
+                ok = False
+            continue
+        if path.name in OTHER_HARNESSES:
             continue
         print(f"Discovering {path}", flush=True)
         loader = unittest.TestLoader()

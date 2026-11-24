@@ -45,3 +45,11 @@ class Discovery(unittest.TestCase):
             failed = run()
             self.assertNotEqual(failed.returncode, 0)
             self.assertIn("AssertionError: regression ran", failed.stderr)
+
+            (tests / "test_fails.py").unlink()
+            (tests / "test_show_latency.py").touch()
+            workflow.write_text("jobs: {build: {steps: "
+                                "[{run: 'python3 -m unittest tests/test_show_latency.py'}]}}")
+            unwired = run()
+            self.assertNotEqual(unwired.returncode, 0)
+            self.assertIn("test_show_latency.py: missing standalone CI invocation", unwired.stderr)
