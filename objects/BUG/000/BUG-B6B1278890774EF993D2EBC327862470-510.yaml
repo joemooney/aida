@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Before clearing a missing-checkout worktree registration, inspect its registered index against the pinned tip; RETAIN the registration on any difference or unreadable evidence.
   - AC2: Test: a missing checkout with a staged-only file is retained, not cleared.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T20:35:05.204695272Z
+modified_at: 2026-11-24T21:34:26.195553674Z
 req_type: Bug
 tags:
 - data-loss
@@ -92,6 +92,12 @@ comments:
   modified_at: 2026-11-24T20:35:05.204695272Z
   session_id: 01a20f34dcec
   harness_version: codex-cli 0.167.0
+- id: 01a20f7b-4393-78b3-8167-90a55dbdf565
+  author: aida-publication-done
+  content: Implementer push 5203d57dcf27 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T21:34:26.195550826Z
+  modified_at: 2026-11-24T21:34:26.195550826Z
+  session_id: 01a20f34dcec
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
@@ -114,6 +120,14 @@ history:
   session_id: 01a20f34dcec
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20f7b-4393-78b3-8167-909350f62fe9
+  author: aida-publication-done
+  timestamp: 2026-11-24T21:34:26.195543456Z
+  session_id: 01a20f34dcec
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
