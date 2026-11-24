@@ -1,0 +1,31 @@
+id: 01a20ba2-39ec-7f73-bb6f-11b2008e9350
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1283
+title: 'Review follow-up: aida-cli-lib/src/forge.rs:1903 — The five-second reporting deadline starts after main_root'
+description: |-
+  From TASK-3852
+  Reviewed sha: a2f048d7d0cdfb74977229c352068cb6c35339d8
+
+  aida-cli-lib/src/forge.rs:1903 — The five-second reporting deadline starts after main_root and Repository::load. Those calls perform up to three Git subprocesses with independent 30-second ceilings through review_watch_forge.rs:64. A stalled worktree or origin lookup can now hold up doctor and the initial land status report for 30 seconds before the gh budget begins. Start the scoped deadline before repository discovery so the existing bounded runner applies the same budget to Git and gh.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T03:38:30.764547327Z
+modified_at: 2026-11-24T03:38:30.764547327Z
+req_type: Task
+tags:
+- carried-from:TASK-3852
+- finding-hash:76cf7db5
+- from-review:TASK-3852
+relationships:
+- rel_type: References
+  target_id: 01a20af8-20fa-7e32-9eaf-838b3b1af49c
+  created_at: 2026-11-24T03:38:43.162823021Z
+filed_at:
+  code_sha: a2f048d7d0cdfb74977229c352068cb6c35339d8
+  branch: pr-4478
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
+  session: 01a20b9f6b9e
