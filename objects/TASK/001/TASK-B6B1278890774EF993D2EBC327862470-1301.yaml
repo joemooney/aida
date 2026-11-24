@@ -8,16 +8,15 @@ description: |
   ## Acceptance
   - AC1: The status_prs unshipped-work detector uses aida_core::id_identity for ALL status keys and lookups, including zero-padding equivalence (TASK-1-097 == TASK-1-97) and consistent branch-identity resolution across the detector's other checks.
   - AC2: Tests: padded vs unpadded IDs and alias forms resolve to the same spec in every detector check.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T08:40:50.287315410Z
+modified_at: 2026-11-24T11:15:11.287039929Z
 req_type: Task
 tags:
 - small
-- track:integration
 - watcher
 relationships:
 - rel_type:
@@ -188,6 +187,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20d44-52f1-7ac0-ab8a-5811e687db09
+  author: aida-auto-bump
+  timestamp: 2026-11-24T11:15:11.217863082Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20d44-5337-7662-be87-b33e747af502
+  timestamp: 2026-11-24T11:15:11.287037422Z
+  agent: aida
+  commit_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
+  summary: 'Advisor (delegated authority): promotion 33, linear on main 91c070eb012 + 3 cherry-picks; per-commit patch-ids match approved integration squashes (8c9b82bd, 80b7c019, 3ecf8d43); combined 941d080723d1; ci.yml change is timeout-only (verified); STORY-3076 S1 Refs-only; fast CI green.'
+  punted:
+  - 'punted: FAIL — completing spec TASK-b6b1278890774ef993d2ebc327862470-1301 (TASK-3860). Both worksheet criteria remain unmet. TASK-b6b1278890774ef993d2ebc327862470-1301.AC1 — unverified — numeric keys cover the primary map and joins, but branch parsing, node aliases, authoritative summary precedence, and verdict resolution have counterexamples detailed in the findings. TASK-b6b1278890774ef993d2ebc327862470-1301.AC2 — unverified — source review of cargo test -p aida-cli-lib task_3860_detector_joins_branch_lease_and_forge_aliases and the changed TASK-3857 fixtures shows partial coverage of candidate admission, live leases, commit fallback, clone deferral, and one verdict lookup. Forge suppression and merged/carrier decisions lack end-to-end identity coverage. Reviewed the complete pinned diff. The head is eight commits behind origin/integration. The intervening base changes do not affect the source paths these findings depend on. Exact-head FAST gates and merge-hold checks passed, FAST compilation was pending, and full test shards were skipped. No local tests were run under reviewer policy.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -196,3 +213,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T11:15:11.217855989Z
+  completion_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
