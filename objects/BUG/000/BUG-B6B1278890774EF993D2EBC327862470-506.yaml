@@ -1,0 +1,21 @@
+id: 01a20c70-d40b-7e80-a1f6-af4a723406d2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-506
+agreed_id: BUG-2745
+title: Train refuses PR-4487 with 'hold marker missing without a recorded clearance (tampering suspected)' although the gate ledger records release-authorized + hold-release
+description: '2026-11-24 00:23 MST: `aida pr train 4487 --dry-run` (advisor seat, primary checkout) refuses: ''the PR''s merge-hold marker is missing without a recorded clearance (hold marker missing without a recorded clearance (tampering suspected)); a human must run aida merge-hold clear''. But .aida/gate-ledger/PR-4487.jsonl ends with release-authorized 06:35:01Z, hold-release 06:35:18Z and an approved verdict 06:35:20Z at head 05a17b1e, and the PR carries labels aida:merge-hold-recorded + aida:merge-hold-cleared. The hold had been auto-released by the recorded reviewer verdict (.aida/review-verdicts/BUG-2742.json). Likely the train''s clearance check reads a different source (marker file in the reviewer worktree vs primary, cf. BUG-2176) than the ledger. AC1: a ledger-recorded hold-release counts as a recorded clearance for the train; regression with a reviewer-worktree auto-release. Impact: a false tampering alarm forces a human merge-hold clear at night.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T07:24:10.635879426Z
+modified_at: 2026-11-24T07:24:10.635879426Z
+req_type: Bug
+filed_at:
+  code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0d3a0ae222
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
