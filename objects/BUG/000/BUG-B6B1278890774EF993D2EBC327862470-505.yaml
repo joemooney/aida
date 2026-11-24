@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T08:04:14.882650298Z
+modified_at: 2026-11-24T08:22:09.394160684Z
 req_type: Bug
 tags:
 - ci
@@ -144,6 +144,11 @@ history:
   timestamp: 2026-11-24T08:03:15.545665571Z
   session_id: 01a20c6ec678
   changes: []
+- id: 01a20ca6-1e68-7f71-bc76-78d1108cfc99
+  author: joe
+  timestamp: 2026-11-24T08:22:23.080253614Z
+  session_id: 01a20ca28b2a
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -158,3 +163,17 @@ attention_reason:
   lean: Add the one named exception and retain the existing bounds for every other step.
   raised_by: implementer
   raised_at: 2026-11-24T07:06:21.225095361Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the full two-file diff for PR-4503 at ea821ddd34be72fe4f36d7ad25ca50577df3ff66 against the generated worksheet. The PR claims completion of BUG-2744 (BUG-b6b1278890774ef993d2ebc327862470-505).
+
+    BUG-b6b1278890774ef993d2ebc327862470-505.AC1 — verified by .github/workflows/ci.yml:164-165 setting the install timeout to 15 and the new exact-value AptBounds assertion at tests/test_self_hosted_runner.py:653-655 (covered by python3 -m unittest tests/test_self_hosted_runner.py). This addresses the supplied untraced criterion in the diff. The implementer reported a focused pass, and the hosted install finished in 32 seconds.
+    BUG-b6b1278890774ef993d2ebc327862470-505.AC2 — unverified. The workflow diff is limited to the requested cache and timeout, with the separately authorized timeout fixture change. GitHub Actions run 45352759793, attempt 1, saved a 19,020,560-byte archive under refs/pull/4503/merge. The 32-second install used a cold cache. No warm-run evidence was available, the diff has no test of warm reuse, and the PR body omits the required timing.
+
+    CI was pending at review time. The exact-head fast source gates and workspace check passed, and the fast compile job's ratchet set was still running. Reviewed source and existing CI evidence only. The head is seven commits behind origin/integration at 9435f22c422. Base history touched ci.yml outside the reviewed logic, and the current base workflow blob matches the merge-base blob. All findings apply to the pinned head independently of base movement.
+  recovery_hint: address the review findings, move BUG-2744 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T08:22:09.394160684Z
