@@ -12,12 +12,13 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T13:46:58.715415909Z
-modified_at: 2026-11-24T12:30:07.841569838Z
+modified_at: 2026-11-24T12:30:11.392648773Z
 req_type: Task
 tags:
 - carried-from:TASK-3126
 - finding-hash:7dd307bb
 - from-review:TASK-3126
+- track:integration
 relationships:
 - rel_type: References
   target_id: 01a1dbde-c245-7ed1-b86b-daaa48159ead
@@ -40,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-24T12:30:07.967585948Z
   changes: []
+- id: 01a20d88-fdc0-7030-9d4f-fd74afd13f58
+  author: joe
+  timestamp: 2026-11-24T12:30:11.392648101Z
+  changes:
+  - field_name: tags
+    old_value: carried-from:TASK-3126, finding-hash:7dd307bb, from-review:TASK-3126
+    new_value: carried-from:TASK-3126, finding-hash:7dd307bb, from-review:TASK-3126, track:integration
 execution_mode: drain
 filed_at:
   code_sha: 9af5afb76bd7628acba2280bba7f642a33952305
