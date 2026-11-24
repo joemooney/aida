@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T22:40:30.833745489Z
+modified_at: 2026-11-24T22:46:57.005785209Z
 req_type: Story
 tags:
 - doctor
@@ -221,6 +221,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: The ownership and ExecContext ratchets pass. The fast gate now refuses the existing stalled_reviews scan episode lock and atomic state writes and the cli:doctor operation mapping. May product authorize an inventory update for these runtime writes after the host merges origin/integration, or specify an existing episode-state API to use? This lane is instructed to leave ratchet ledgers unchanged and cannot merge with read-only Git metadata.. No triage reason was given.'
   created_at: 2026-11-24T22:30:41.349999158Z
   modified_at: 2026-11-24T22:30:41.349999158Z
+- id: 01a20fbd-aa61-73b0-be97-3cb89ad377c8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 920b2b307e80b0d77141a6ea8a676ff7e9a32e8a plus native working diff and untracked test module, integration slice 1.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/stalled_reviews_tests.rs covers current-head match, replaced head, retained rework, train, stale and fresh ledger events, observed directory contents and green timestamps. Lane execution pending.
+    AC2: [evidence: configuration-validation] .aida/config.toml:253 configures the enabled 20m check. Parsed the two jobs with tomllib, verified unique names, command, interval, CronJobFailed source and advisor destination. Live scheduler delivery is outside this slice.
+    Deep pass covered timestamp parsing, zero and multiple checks, unavailable completion times, stale heads, missing canonical store, and ownership lookup. Removed episode and mailbox writes, disabled HTTP cache for this probe, reused the open store for ownership checks. Store writer inventory passed, 3871 sites, no mappings added. No authority granted. Published-head CI is unavailable in the native worktree.
+  created_at: 2026-11-24T22:46:57.005785209Z
+  modified_at: 2026-11-24T22:46:57.005785209Z
+  session_id: 01a20fb6f4b3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
