@@ -475,9 +475,11 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# Includes the display-only source label for resolved tuning.
+# trace:TASK-3171 | ai:codex
 [readers."aida-core/src/agents_config.rs"]
 channels = ["worktree"]
-sites = 4
+sites = 5
 
 [readers."aida-core/src/git_ops.rs"]
 channels = ["home"]
