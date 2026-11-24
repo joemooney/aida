@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3857",
+  "publishes": [
+    {
+      "at": "2026-11-24T08:16:55.244787994Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T06:05:16.778140476Z",
+      "spec": "TASK-3857",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4490,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "929103959163eb27f0a485945b944ea813863e7a"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:05:37.064742430Z",
+      "spec": "TASK-3857",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep of the completing TASK-3857 change at 929103959163eb27f0a485945b944ea813863e7a. The worksheet scope contains both acceptance criteria.\nTASK-b6b1278890774ef993d2ebc327862470-1293.AC1 — verified by source inspection of the legacy tag and private-clone filters and the distinct regression cases `cargo test -p aida-cli-lib task_3857_legacy_tag_quiets_branch_until_removed` and `cargo test -p aida-cli-lib task_3857_private_clone_respects_deferral`. Both fixtures check that the row returns when deferral is removed. The implementer reported failing-before and passing-after runs.\nTASK-b6b1278890774ef993d2ebc327862470-1293.AC2 — unverified. The distinct regression `cargo test -p aida-cli-lib task_3857_resolves_commit_origin_id_on_candidate_branch` covers the stored origin spelling and case normalization. Source inspection shows that numerically equivalent spellings still miss the deferral check.\nRequest changes for the uncovered alias behavior. Retain the reporting regression as a p2 follow-up. Reviewed the complete one-file diff. The pinned head is two commits behind origin/integration. Neither finding depends on a path changed by those two commits. CI pending at review time. FAST gates and merge-hold checks passed, FAST compile was running, and the full test shards were skipped. Review used source, implementer test reports and existing CI evidence.",
+        "recovery_hint": "address the review findings, move TASK-3857 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:11:24.464107577Z",
+      "spec": "TASK-3857",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4490,
+        "verdict": "APPROVED",
+        "reviewed_sha": "929103959163eb27f0a485945b944ea813863e7a"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:40:54.158515905Z",
+      "spec": "TASK-3857",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4493,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0e5e72b9bdd091e036bf1977b2ee3c0df4e20838"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:12:17.721876880Z",
+      "spec": "TASK-3857",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4493
+      }
+    },
+    {
+      "ts": "2026-11-24T08:16:55.032271089Z",
+      "spec": "TASK-3857",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e",
+        "pr": 4493,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
