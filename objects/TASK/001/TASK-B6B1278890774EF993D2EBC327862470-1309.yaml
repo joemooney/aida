@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980293Z
-modified_at: 2026-11-24T08:07:19.474998973Z
+modified_at: 2026-11-24T08:11:53.619127704Z
 req_type: Task
 tags:
 - review
@@ -72,6 +72,20 @@ comments:
   created_at: 2026-11-24T08:10:00.651561104Z
   modified_at: 2026-11-24T08:10:00.651561104Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20c9c-b569-76a3-98fc-9ffe66e3e678
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:11):
+    # TASK-3864 / PR #4504 r2: in-PR ONE-LINE docs fix (advisor-122 ruling 2026-11-24 01:12; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3864). Docs only, NO other change.
+
+    Restore Joe's docs/showcase/README.md line that indexes code-review.html (from 0fdac177513), MINUS the .pptx clause. Joe's original line was:
+    - Open [code-review.html](code-review.html) for the interactive presentation and technical deep-dive on AIDA's deterministic Rust code review engine (`aida review prepare`), or download the companion [aida-deterministic-code-review.pptx](aida-deterministic-code-review.pptx) PowerPoint slide deck.
+    Keep the sentence up to the code-review.html description, and drop the "or download the companion ... .pptx" part (the .pptx is not shipped). Keep Joe as --author if amending his commit; otherwise a normal commit `[AI:codex] docs(review): index code-review.html in the showcase README (TASK-3864)`.
+    Run `python3 docs/showcase/build.py --check`, then push to #4504's branch. COMMIT your work.
+  created_at: 2026-11-24T08:11:53.619127704Z
+  modified_at: 2026-11-24T08:11:53.619127704Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
