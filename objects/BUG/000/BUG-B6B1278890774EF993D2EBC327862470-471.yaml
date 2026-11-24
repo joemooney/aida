@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-24T17:25:31.306239627Z
+modified_at: 2026-11-24T17:27:21.267191972Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -197,6 +197,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T17:25:31.149102576Z
   modified_at: 2026-11-24T17:25:31.149102576Z
+- id: 01a20e99-48af-7bf0-8ab1-af654455b070
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:27):
+    # BUG-2710 / PR #4458 MICRO-ROUND (advisor-122 ruling 2026-11-24 10:44 at ea6abb90; strict session_reap, NOT overridable; product-15). Lane: CODEX. MAIN, existing branch. <=40 lines.
+    F1 (blocking): decision-equivalence regression at aida-cli-lib/src/session_reap.rs:2620-2640.
+    FIXTURE: a clean, unlocked, already-merged worktree with TWO dead leases, a session for a COMPLETED spec, and a later-sorting claim on the SAME tree.
+    FIX: restore decision equivalence with origin/main for that exact fixture, and add it as a regression test asserting the SAME decision main makes. If your new decision is MORE CONSERVATIVE (keep instead of reap), keeping it is acceptable, but STATE that explicitly in the PR body.
+    Do NOT touch F2-F4 (deferred). One targeted cargo run, then make check-ci-fast, then push to #4458. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T17:27:21.267191972Z
+  modified_at: 2026-11-24T17:27:21.267191972Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
