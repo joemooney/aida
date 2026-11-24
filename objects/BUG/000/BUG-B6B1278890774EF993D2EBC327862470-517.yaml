@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-24T20:54:13.810544615Z
+modified_at: 2026-11-24T20:54:20.937103831Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -54,6 +54,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing spec BUG-2756. Reviewed all four changed files in landed tree d3a6121194927271bacf8c06c2c36555d4b933cd against pinned main 95eaccf328557402d176c0b41983afe1b677965f. No finding depends on code changed by the one intervening base commit.. No triage reason was given.'
   created_at: 2026-11-24T20:54:13.810533177Z
   modified_at: 2026-11-24T20:54:13.810533177Z
+- id: 01a20f56-8f6b-7660-b4b7-8728133d0851
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2756):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8bf4bbc5a501
+    Recorded: 2026-11-24T20:52:39.839479675+00:00
+    Findings:
+    1. aida-cli-lib/src/seat_clone.rs:3695 — AC1 and AC2. The warning branch returns the comment write's Result directly. A concurrent edit to the same spec between load and save makes the canonical store return StoreConflictError, and a transient store failure has the same effect. The host has already journaled regeneration as failed, so this leaves the merge uncommitted and direct retry refuses before reaching the generator. Use an atomic comment append and persist a retryable warning bound to the repair when comment delivery fails, so a recoverable logging failure cannot strand the merge or lose the required comment.
+    2. aida-cli-lib/src/seat_clone.rs:5664 — AC1. The warning branch still reaches the mandatory host cargo check with --workspace --tests. It can fail on the same locked dependency or Rust test-target compilation error that stopped snapshot regeneration, leaving the merge uncommitted after the host printed that CI will verify. Resolve the overlap between AC1 and the trusted compile policy explicitly. Demonstrate which snapshot failures can defer to CI while preserving the independent compile gate, and reconcile the claimed criterion with any remaining refusals.
+    3. scripts/repair-generated.py:322 — AC1. The fallback covers subprocess nonzero exits and inner timeouts only. A launch OSError from the snapshot invocation takes the hard rollback/refusal path even with an intact golden and no generator writes. Also, snapshot stdout and stderr share the outer driver's caps, so sufficiently large snapshot output can kill the driver before it restores the golden or emits status 75. Handle snapshot launch failure and bound snapshot output inside the driver so the host can distinguish a safely deferred snapshot failure from a failed repair driver.
+    4. scripts/repair-generated.py:330 — AC2. For a failing Cargo command, the warning stores the argv and exit status from CalledProcessError. The actual compiler or Cargo diagnostic was sent to the subprocess stderr and the Rust warning handler discards it by taking only the final line. The test emits 'failed' to stderr but never checks that the cause reaches the spec. Preserve a bounded, single-line error detail in the host warning and assert that the same detail appears in the persisted comment.
+    5. aida-cli-lib/src/seat_clone.rs:5637 — Repair journal evidence. The status-75 path reaches record_regenerated_tree, which persists regeneration_success=true even though the CLI help snapshot generator failed. Consumers cannot tell a fully regenerated tree from one whose snapshot was restored for CI. Keep an explicit deferred snapshot outcome bound to the staged tree and keep compile validation independently recorded.
+    6. tests/test_repair_generated.py:126 — AC1 test coverage. The supplied untraced criterion is still uncovered at the host boundary. The Python test invokes git commit and git push itself, so it passes even if the host rejects status 75, refuses before commit, or never publishes. Drive a fully resolved repair with a failing snapshot command through the host post-exit publication path and verify the remote merge parents, preserved golden, and warning.
+    7. aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:787 — AC2 test coverage. The supplied criterion requires a test with a failing regeneration command. This fixture passes a fabricated warning straight to the helper and cannot detect failure to route the real driver diagnostic to the spec, or a wrong publication lease. Inject the failing generator into the host publication test and assert the actual diagnostic is appended to the leased spec.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T20:54:20.779885344Z
+  modified_at: 2026-11-24T20:54:20.779885344Z
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
