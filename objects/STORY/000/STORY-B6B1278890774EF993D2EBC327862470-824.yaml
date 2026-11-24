@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T09:14:28.236562541Z
+modified_at: 2026-11-24T09:46:58.444396102Z
 req_type: Story
 tags:
 - admission
@@ -180,6 +180,15 @@ comments:
   modified_at: 2026-11-24T09:10:53.307171998Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20cf3-918c-79f0-b768-88c41ef2214e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: af6429bf058b2bd817da5a5a1ef1c2bf7a347420 plus the round 3 native working diff. AC1: [evidence: behavioral-test] standalone_implementer.rs:1774 runs WIP and spec revalidation before consuming host and seat signals. AC2: [evidence: behavioral-test] bug_2451_pickup_entry_tests.rs:1944 drives handle_queue_work with an explicit retry branch, sets a reasoned hold through Storage before invoking the production hook, and checks the refusal, untouched sentinel and byte-identical host veto. The fake launcher is test-only and thread-local. Reviewed the merge-base and working diffs for identity matching, missing members, resume behavior, marker spelling, and concurrent writers. The targeted lane test passed (1 executed), make check-ci-fast passed, and git diff --check passed. F1 contained exec-barrier locking and F2 file-store writer exclusion remain deferred by the scope cut. This test covers the late hold without a timed wait or production pull. No PR-head CI evidence for these unpublished edits.
+  created_at: 2026-11-24T09:46:58.444396102Z
+  modified_at: 2026-11-24T09:46:58.444396102Z
+  session_id: 01a20cd5940f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
