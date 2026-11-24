@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a20a77-76c1-7890-aba9-3ea04973958e
+  position: -1146000
+  added_by: role:implementer
+  added_at: 2026-11-24T16:39:15.999188389Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a20b98-35f8-7b01-9f98-bc1e520d84bb
   position: -1145000
   added_by: role:implementer
@@ -27,13 +33,6 @@
   position: -1141000
   added_by: role:implementer
   added_at: 2026-11-24T15:41:01.072274676Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a20a77-76c1-7890-aba9-3ea04973958e
-  position: -1140000
-  added_by: role:implementer
-  note: PR-4464 at 1bfff1d02c2761fc37d2ae76e544f4d2136e5ec3 conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-24T15:36:53.867555767Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a20df2-eabd-75c0-b007-ef8378a02015
