@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Set `timeout-minutes: 15` on the "Install compile dependencies" step.
   - AC2: Cache the apt packages (actions/cache over the apt archive, or a preinstalled-deps step if that's cheap), so a warm run skips most downloads. Show a warm-run timing in the PR body. Keep the diff minimal: the advisor reviews the ci.yml hunk line by line.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T08:27:29.334416587Z
+modified_at: 2026-11-24T08:31:32.381929571Z
 req_type: Bug
 tags:
 - ci
@@ -175,6 +175,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20cae-801d-73d1-9fac-f0c31c522004
+  author: aida-session-start
+  timestamp: 2026-11-24T08:31:32.381928838Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
