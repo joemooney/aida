@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The refusal names WHICH stash entries or WHICH other branches (with their unique commit counts) hold the work, and gives a correct command to inspect or publish each one.
   - AC2: Tests: a stash-only clone and an other-branch-only clone each produce the specific guidance.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T07:04:35.415535345Z
+modified_at: 2026-11-24T07:08:19.111839079Z
 req_type: Task
 tags:
 - hygiene
@@ -174,6 +174,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20c62-4f27-7060-97f2-292c9db86786
+  author: aida-session-start
+  timestamp: 2026-11-24T07:08:19.111837886Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
