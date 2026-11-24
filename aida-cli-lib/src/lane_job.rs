@@ -2628,13 +2628,17 @@ mod fast_gate_job_tests {
             sandbox: Sandbox::TestUnwrapped,
         };
         lane.prepare().unwrap();
-        run_seeded_fast_gate(
+        // trace:BUG-2754 | ai:codex — submit as a seat with ambient Cargo options.
+        let job = crate::lane_cmd::job_from(vec!["make".into(), "check-ci-fast".into()], |_| {
+            Some("1".into())
+        });
+        run_one(
             &lane,
             "seeded",
-            JobRequest {
-                argv: vec!["make".into(), "check-ci-fast".into()],
-                env: BTreeMap::new(),
-            },
+            Ok(job),
+            &AtomicBool::new(false),
+            &Tally::default(),
+            &seed_lane_target(&lane),
         );
         assert_eq!(read_rc(&lane.results, "seeded"), Some(0));
         let out = std::fs::read_to_string(out_path(&lane.results, "seeded")).unwrap();
