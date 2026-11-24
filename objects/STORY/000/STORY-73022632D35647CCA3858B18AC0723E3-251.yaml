@@ -1,0 +1,32 @@
+id: 01a20aec-a10f-7b30-9d01-1fa4617f2e3e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-251
+title: 'Review PR-4470: [AI:codex] fix(forge): report GitHub core budget in doctor and land status (TASK-3847)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ab5`) for branch `int29-task-3847`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4470>
+  - Branch: `int29-task-3847` → `integration`
+
+  ## Covers
+
+  - TASK-3847
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4470` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T00:20:09.615144442Z
+modified_at: 2026-11-24T00:20:09.615144442Z
+req_type: Story
+filed_at:
+  code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c78b5f8acd
+  session: 01a20ab558aa
