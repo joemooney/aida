@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-24T19:48:03.930858501Z
+modified_at: 2026-11-24T19:48:15.528702846Z
 req_type: Bug
 tags:
 - hygiene
@@ -159,6 +159,19 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-474` at head `unavailable`.'
   created_at: 2026-11-24T19:29:37.538276605Z
   modified_at: 2026-11-24T19:29:37.538276605Z
+- id: 01a20f1a-0d83-7122-90e5-04650f1cdce8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4416):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5a7866852210
+    Recorded: 2026-11-24T19:45:33.911268725+00:00
+    Findings:
+    1. The shared status collector now uses --untracked-files=all (aida-core/src/git_ops.rs:5041), so the existing a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty test fails at aida-cli-lib/src/tests/bug_1986_teardown_recheck_tests.rs:179-183. The fixture contains symlinks under .aida/, so Git returns individual entries such as ?? .aida/sessions and the assertion requiring ?? .aida/ fails before the test reaches either runtime-link safety assertion. Update the regression to expect individual entries while keeping both checks: links alone are clean, and a real .aida/notes.txt is retained. Verify with cargo test -p aida-cli-lib a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty.
+    2. BUG-2713 AC1: a dirty path ending in an ASCII space is still misreported when it is the final evidence item. For example, a worktree whose sole change is an untracked file named 'notes/todo ' produces an unquoted path from aida-core/src/git_ops.rs:4911-4915. The new summary puts the filename at the end of its first line (aida-cli-lib/src/session_end.rs:2563-2567), and the agent formatter trims that line (aida-cli-lib/src/agent_errors.rs:27-28), producing the distinct path 'notes/todo'. Preserve or explicitly quote trailing whitespace in the agent refusal and add a session-end regression covering the exact filename.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T19:48:15.363648454Z
+  modified_at: 2026-11-24T19:48:15.363648454Z
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
