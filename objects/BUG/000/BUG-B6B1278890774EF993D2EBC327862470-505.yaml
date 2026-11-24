@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T08:31:32.381929571Z
+modified_at: 2026-11-24T08:35:03.879585382Z
 req_type: Bug
 tags:
 - ci
@@ -124,6 +124,15 @@ comments:
   modified_at: 2026-11-24T08:27:29.334416587Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20cb1-bd4d-7601-b679-acf752f7a350
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6efdcd0cbbe88c24a365e12e6e49e7a715617655 plus native working diff. AC1: [evidence: behavioral-test] tests/test_self_hosted_runner.py:647 checks exactly one named fast-compile step before checking 15 minutes. Both AptBounds tests passed. Missing, duplicate (even without apt-get), and five-minute mutations all failed as expected. AC2: [evidence: configuration-validation] superseded by the r2 pickup ruling. .github/workflows/ci.yml:154 retains the bounded install and removes all fast-compile archive steps and options. Reviewed integration-base diff, exact job and step names, YAML integer type and zero/one/many matches. No untracked additions. git diff --check passed. make check-ci-fast stopped at the shard-tooling fixtures because the native lane job runner refuses cargo metadata. Remaining FAST checks and published-head CI unverified.
+  created_at: 2026-11-24T08:35:03.879585382Z
+  modified_at: 2026-11-24T08:35:03.879585382Z
+  session_id: 01a20cae2559
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
@@ -182,6 +191,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20caf-8818-7081-b9a4-02a35abc684a
+  author: dirtlab
+  timestamp: 2026-11-24T08:32:39.960289240Z
+  session_id: 01a20cae2559
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
