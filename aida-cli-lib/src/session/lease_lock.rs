@@ -50,7 +50,7 @@ pub(crate) fn with_lease_write_lock_until<T>(
         .open(&lock_path)
         .with_context(|| format!("opening {}", lock_path.display()))?;
     if let Some(end) = deadline {
-        aida_core::file_lock::lock_exclusive_until(&lock, end)
+        crate::gate::kernel_deps::lock_exclusive_until(&lock, end)
             .with_context(|| format!("locking {}", lock_path.display()))?;
         return write();
     }

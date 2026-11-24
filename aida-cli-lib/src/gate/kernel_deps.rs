@@ -8,7 +8,26 @@
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 
-use std::io::IsTerminal;
+use std::io::{ErrorKind, IsTerminal};
+use std::time::{Duration, Instant};
+
+/// Acquire an exclusive lock before the caller's absolute deadline.
+// trace:TASK-3884 | ai:codex
+pub(crate) fn lock_exclusive_until(file: &std::fs::File, deadline: Instant) -> std::io::Result<()> {
+    use fs2::FileExt;
+    loop {
+        if Instant::now() >= deadline {
+            return Err(ErrorKind::TimedOut.into());
+        }
+        match file.try_lock_exclusive() {
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                std::thread::sleep(remaining.min(Duration::from_millis(2)));
+            }
+            result => return result,
+        }
+    }
+}
 
 // ── Identity and home ───────────────────────────────────────────────────────
 

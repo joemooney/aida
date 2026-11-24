@@ -197,7 +197,7 @@ fn update_grant_until(
             .open(locks.join(format!("{id}.lock")))
             .context("cannot open the session grant lock")?;
         match deadline {
-            Some(end) => aida_core::file_lock::lock_exclusive_until(&lock, end),
+            Some(end) => crate::gate::kernel_deps::lock_exclusive_until(&lock, end),
             None => lock.lock_exclusive(),
         }
         .context("cannot lock the session grant record")?;
