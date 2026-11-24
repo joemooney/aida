@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980Z
-modified_at: 2026-11-24T08:57:55.013372047Z
+modified_at: 2026-11-24T09:00:16.971281622Z
 req_type: Task
 tags:
 - review
@@ -130,6 +130,15 @@ comments:
   modified_at: 2026-11-24T08:54:57.578268869Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20cc8-d243-7e32-a539-e1d583dbb3e4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f2f8274f6ff2dee540feb1cb9dd4da249465150c plus native working diff. AC1: [evidence: manual-inspection] PR 4504 targets integration from int32-task-3864; git history credits Joe Mooney on 417ba689. AC2: [evidence: documentation-inspection] integration merge-base diff is docs-only, retaining docs/showcase/code-review.html:311 and docs/internal/presentation/aida-code-review-engine.md:13 with no PPTX artifact, link or publish.py change. F2–F12 checked against reference 0fdac177513 and the pickup brief. docs/review-process.md:287–304 covers availability, five modes, optional ledger, oversized singleton, substring and marker semantics and library-only citations. Showcase lines 598 and 684 scope examples and comparisons. PR dependency note confirmed. Reviewed origin/main and integration merge-base diffs, native changes and empty untracked inventory. Probes covered generated/source agreement, Marp comment format, skipped files and oversize batches, and matches in comments or unchanged lines. Corrected HTML tag imbalance during editing and verified the structural tag sequence against HEAD. No change to authority paths or tests. Showcase build --check, bash -n and git diff --check passed. Prior HEAD fast gates passed, fast compile pending at observation; host publication and CI for the new text remain outstanding.
+  created_at: 2026-11-24T09:00:16.971281622Z
+  modified_at: 2026-11-24T09:00:16.971281622Z
+  session_id: 01a20cc5fa3b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
