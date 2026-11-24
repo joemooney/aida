@@ -257,7 +257,7 @@ impl ShipDefaultAdmission {
                 if matches!(
                     mode.source,
                     crate::gate::unset_mode::ModeSource::ProjectDefault {
-                        approved_small: true,
+                        safe_paths: Some(_),
                         ..
                     }
                 ) {
@@ -301,8 +301,14 @@ pub(crate) fn recheck_defaulted_specs(
             .iter()
             .any(|(found, _, mode)| found == id && !mode.requires_supervision());
         if !allowed {
-            return Err(crate::gate::ship::ShipRefusal::Review
-                .error(format!("{id} no longer qualifies for unattended landing")));
+            let reason = records
+                .iter()
+                .find(|(found, _, _)| found == id)
+                .map(|(_, _, mode)| mode.label())
+                .unwrap_or_else(|| "spec unavailable".into());
+            return Err(crate::gate::ship::ShipRefusal::Review.error(format!(
+                "{id} no longer qualifies for unattended landing ({reason})"
+            )));
         }
     }
     Ok(())

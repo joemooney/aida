@@ -979,19 +979,24 @@ fn the_ship_cover_decision_is_bound_in_the_gate() {
 
 // ── dispatch authority on the floor (STORY-1889 final slice) ───────────────
 
-/// The cooperative admission owner is the one named production file outside
-/// the gate directory. Keep both the exception and the directory protected.
+/// Keep all three external enforcement files and the gate directory protected.
 // trace:STORY-3038 | ai:codex
 // trace:STORY-1889 | ai:claude
 #[test]
 fn the_floor_is_the_gate_prefix_config_and_protected_tests() {
-    const ADMISSION_OWNER: &str = "aida-cli-lib/src/admission_owner.rs";
-    assert!(GATE_PROTECTED_PATHS.contains(&ADMISSION_OWNER));
+    let enforcement = [
+        "aida-cli-lib/src/admission_owner.rs",
+        "aida-cli-lib/src/advisor_code_gate.rs",
+        "aida-cli-lib/src/team_cmd.rs",
+    ];
+    assert!(enforcement
+        .iter()
+        .all(|path| GATE_PROTECTED_PATHS.contains(path)));
     assert!(GATE_PROTECTED_PATHS.contains(&"aida-cli-lib/src/gate/"));
     for entry in GATE_PROTECTED_PATHS {
         assert!(
             *entry == ".aida/config.toml"
-                || *entry == ADMISSION_OWNER
+                || enforcement.contains(entry)
                 || entry.starts_with("aida-cli-lib/src/gate/")
                 || entry.ends_with("_tests.rs"),
             "{entry} is a production path outside aida-cli-lib/src/gate/; move its \

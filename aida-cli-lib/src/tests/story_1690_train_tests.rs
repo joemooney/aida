@@ -1373,7 +1373,7 @@ fn live_gate_lands_a_project_default_drain_spec_only_off_protected_paths() {
         mode: Some(aida_core::ExecutionMode::Drain),
         source: ModeSource::ProjectDefault {
             req_type: "bug".into(),
-            approved_small: false,
+            safe_paths: None,
             protected: crate::gate::mandate_gates::ProtectedPaths::floor(),
         },
     };
@@ -6504,12 +6504,11 @@ fn approved_small_publication_and_live_landing_checks() {
     write(repo.path(), ".aida/config.toml", config);
     commit(repo.path(), "opt in to approved-small");
     let ui_head = pr_branch(repo.path(), "ui", |root| {
-        write(
-            root,
-            "aida-web-react/src/hooks/useGlobalHotkeys.ts",
-            "// UI",
-        )
+        write(root, "docs/cli/02-specs.md", "manual")
     });
+    git(repo.path(), &["checkout", "ui"]);
+    write(repo.path(), "src/new.rs", "// new code");
+    let moved = commit(repo.path(), "update during CI");
     let role_head = pr_branch(repo.path(), "role", |root| {
         write(root, "aida-cli-lib/src/role_cmd.rs", "// grant")
     });
@@ -6547,6 +6546,13 @@ fn approved_small_publication_and_live_landing_checks() {
         ordinary,
     );
     assert!(holds.is_empty());
+    assert!(admission
+        .merge(
+            repo.path(),
+            || changed_paths(repo.path(), "main", &moved),
+            || panic!("merge of unlisted file")
+        )
+        .is_err());
     // CI settles on the same SHA, but the store may have changed.
     store.requirements[0].tags.clear();
     storage.save(&store).unwrap();

@@ -3293,6 +3293,8 @@ sys.exit(1)
                     "aida-cli-lib/src/gate/relaxed.rs",
                     "// trace:BUG-100\nfn relaxed() {}\n",
                 )
+            } else if default == "approved-small" {
+                commit_file(&f, "docs/cli/02-specs.md", "manual")
             } else {
                 commit_file(&f, "code.rs", "// trace:BUG-100\nfn x() {}\n")
             };

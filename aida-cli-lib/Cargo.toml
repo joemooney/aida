@@ -46,6 +46,7 @@ serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+glob = "0.3"
 regex = { workspace = true }
 sha2 = "0.10"
 # Decode bounded JWT expiry claims from pinned host credentials. trace:STORY-2593 | ai:codex

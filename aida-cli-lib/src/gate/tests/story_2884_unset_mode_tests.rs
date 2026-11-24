@@ -575,10 +575,26 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
     assert!(policy("").resolve(None, &req).requires_supervision());
     let mode = enabled.resolve(None, &req);
     assert_eq!(
-        at_change(mode.clone(), paths(&["src/list.rs"])).mode,
+        at_change(mode.clone(), paths(&["docs/cli/02-specs.md"])).mode,
         Some(ExecutionMode::Drain)
     );
+    for excluded in [vec![], vec!["src/new.rs"], vec!["docs/cli/nested/page.md"]] {
+        assert!(at_change(mode.clone(), paths(&excluded)).requires_supervision());
+    }
+    for invalid in ["[]", "42", "['docs/cli/*.md', '[']"] {
+        let policy = policy(&format!(
+            "[gate.unset_mode]\ndefault='approved-small'\ndrain_safe_paths={invalid}"
+        ));
+        assert!(
+            at_change(policy.resolve(None, &req), paths(&["docs/cli/02-specs.md"]))
+                .requires_supervision()
+        );
+    }
+    let broad = policy("[gate.unset_mode]\ndefault='approved-small'\ndrain_safe_paths=['**']");
+    assert!(!at_change(broad.resolve(None, &req), paths(&["src/new.rs"])).requires_supervision());
     for path in [
+        "aida-cli-lib/src/advisor_code_gate.rs",
+        "aida-cli-lib/src/team_cmd.rs",
         "aida-cli-lib/src/admission_owner.rs",
         "aida-cli-lib/src/role_cmd.rs",
         "aida-cli-lib/src/launch/grant.rs",
@@ -591,7 +607,11 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
         ".githooks/pre-commit",
     ] {
         assert!(
-            at_change(mode.clone(), paths(&["src/list.rs", path])).requires_supervision(),
+            at_change(
+                broad.resolve(None, &req),
+                paths(&["docs/cli/02-specs.md", path])
+            )
+            .requires_supervision(),
             "{path}"
         );
     }

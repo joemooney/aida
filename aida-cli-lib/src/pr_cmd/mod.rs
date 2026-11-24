@@ -1355,6 +1355,14 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         );
         let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
         merged_head_sha = head_sha.clone();
+        let live_paths = || {
+            let change = open_change_by_number(&project_root, pr_number)?;
+            if change.branch != ship_branch || change.base != retarget_base {
+                return None;
+            }
+            let base = remote_head_sha(&project_root, &change.base)?;
+            crate::gate::unset_mode::changed_paths(&project_root, &base, head_sha.as_deref()?)
+        };
         // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
         // before touching holds or merging.
         // trace:STORY-1663 | ai:antigravity
@@ -1363,6 +1371,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             preflight_head_sha.as_deref(),
             head_sha.as_deref(),
         ) {
+            admission.merge(&project_root, live_paths, || ())?;
             log_ship_activity(
                 &main_worktree,
                 Some(pr_number),
@@ -2012,13 +2021,8 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let mut merge_sink = crate::network_retry::StderrSink;
         let merge_attempt = admission.merge(
             &project_root,
-            || {
-                crate::gate::unset_mode::changed_paths(
-                    &project_root,
-                    &format!("origin/{retarget_base}"),
-                    merged_head_sha.as_deref()?,
-                )
-            },
+            // Re-read the base after any hold-release wait.
+            live_paths,
             || {
                 // The landing re-checks, after every wait and immediately before the
                 // merge: merger authority, and the no-train stacked proof against the

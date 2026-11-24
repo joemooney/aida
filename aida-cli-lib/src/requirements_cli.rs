@@ -9341,6 +9341,17 @@ fn run_edit(
                             }
                         }
 
+                        if new_status_for_manifest.as_deref() == Some("Approved") {
+                            if let Ok(root) = find_project_root() {
+                                if let Some(label) =
+                                    crate::gate::unset_mode::show_label(&root, &req, || {
+                                        backend.load().ok().map(|s| s.requirements)
+                                    })
+                                {
+                                    eprintln!("  Effective mode: {label}");
+                                }
+                            }
+                        }
                         // STORY-106: workflow hint when a status flip to Completed
                         // emptied the queue for the active role+scope. Mirrors the
                         // queue-done hint so direct `aida edit --status completed`

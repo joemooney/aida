@@ -60,6 +60,7 @@ impl UnsetDefault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnsetModePolicy {
     pub(crate) default: UnsetDefault,
+    safe_paths: Vec<glob::Pattern>,
     pub(crate) configured_default: bool,
     /// The spec types the drain default applies to. Empty: none.
     pub(crate) drain_types: Vec<RequirementType>,
@@ -75,6 +76,7 @@ impl Default for UnsetModePolicy {
     fn default() -> Self {
         Self {
             default: UnsetDefault::default(),
+            safe_paths: vec![glob::Pattern::new("docs/cli/*.md").unwrap()],
             configured_default: false,
             drain_types: Vec::new(),
             warnings: Vec::new(),
@@ -153,6 +155,28 @@ impl UnsetModePolicy {
         };
         policy.configured_default = section.get("default").is_some();
         policy.default = default;
+        if default == UnsetDefault::ApprovedSmall {
+            if let Some(value) = section.get("drain_safe_paths") {
+                let patterns = value.as_array().and_then(|items| {
+                    items
+                        .iter()
+                        .map(|item| {
+                            let path = item.as_str()?;
+                            if path.contains('\0')
+                                || path.split('/').any(|part| matches!(part, "" | "." | ".."))
+                            {
+                                return None;
+                            }
+                            glob::Pattern::new(path).ok()
+                        })
+                        .collect::<Option<Vec<_>>>()
+                });
+                policy.safe_paths = patterns.unwrap_or_else(|| {
+                    policy.warnings.push("invalid drain_safe_paths".into());
+                    Vec::new()
+                });
+            }
+        }
         if default != UnsetDefault::Drain {
             return policy;
         }
@@ -311,7 +335,7 @@ impl UnsetModePolicy {
                 mode: Some(ExecutionMode::Drain),
                 source: ModeSource::ProjectDefault {
                     req_type: word,
-                    approved_small: small_policy,
+                    safe_paths: small_policy.then(|| self.safe_paths.clone()),
                     protected: protected.clone(),
                 },
             },
@@ -343,8 +367,25 @@ pub(crate) fn show_label(
         .relationships
         .iter()
         .any(|r| r.rel_type == aida_core::RelationshipType::SupersededBy);
+    let unset_label = || {
+        let mut mode = policy.resolve(None, req);
+        if policy.default == UnsetDefault::ApprovedSmall && mode.is_project_default() {
+            // Only the spec's own remote work branch supplies approval-time evidence.
+            let paths = req.spec_id.as_ref().and_then(|id| {
+                if !aida_core::object_store::valid_spec_id_format(id) {
+                    return None;
+                }
+                let base = crate::trusted_config::local_trusted_default_branch_sha(root)?;
+                let branch = format!("refs/remotes/origin/{}", id.to_ascii_lowercase());
+                let head = crate::trusted_config::rev_parse_commit(root, &branch)?;
+                changed_paths(root, &base, &head)
+            });
+            mode.withdraw_for_change(paths.as_deref());
+        }
+        mode.label()
+    };
     if !superseded {
-        return Some(policy.resolve(None, req).label());
+        return Some(unset_label());
     }
     let Some(requirements) = store() else {
         return Some("unset (supervised: its superseding carrier could not be read)".into());
@@ -361,7 +402,7 @@ pub(crate) fn show_label(
                 aida_core::node_alias::display_spec_id(&carrier_id)
             ))
         }
-        None => Some(policy.resolve(None, req).label()),
+        None => Some(unset_label()),
     }
 }
 
@@ -415,6 +456,8 @@ const STRICT_PATHS: &[&str] = &[
     ".githooks",
     ".github/workflows",
     "aida-cli-lib/src/admission_owner.rs",
+    "aida-cli-lib/src/advisor_code_gate.rs",
+    "aida-cli-lib/src/team_cmd.rs",
     "aida-cli-lib/src/approvals_cmd.rs",
     "aida-cli-lib/src/ci_gate.rs",
     "aida-cli-lib/src/claim.rs",
@@ -520,7 +563,7 @@ pub(crate) enum ModeSource {
     /// change must not touch for the default to stand.
     ProjectDefault {
         req_type: String,
-        approved_small: bool,
+        safe_paths: Option<Vec<glob::Pattern>>,
         protected: ProtectedPaths,
     },
     /// No mode set and no default applies. `withheld` says why when the
@@ -591,13 +634,13 @@ impl EffectiveMode {
     pub(crate) fn withdraw_for_change(&mut self, paths: Option<&[String]>) {
         let ModeSource::ProjectDefault {
             protected,
-            approved_small,
+            safe_paths,
             ..
         } = &self.source
         else {
             return;
         };
-        let strict_path = if *approved_small {
+        let strict_path = if safe_paths.is_some() {
             paths.and_then(|paths| {
                 paths.iter().find(|p| {
                     STRICT_PATHS
@@ -614,6 +657,19 @@ impl EffectiveMode {
             ));
         } else if let Some(why) = protected_path_reason(paths, protected) {
             self.withdraw(why);
+        } else if let (Some(patterns), Some(paths)) = (safe_paths, paths) {
+            let options = glob::MatchOptions {
+                require_literal_separator: true,
+                ..glob::MatchOptions::new()
+            };
+            if paths.is_empty() {
+                self.withdraw("not defaulted, the change is empty".into());
+            } else if let Some(path) = paths
+                .iter()
+                .find(|p| !patterns.iter().any(|g| g.matches_with(p, options)))
+            {
+                self.withdraw(format!("not defaulted, {path} is outside drain_safe_paths"));
+            }
         }
     }
 
@@ -728,13 +784,14 @@ pub(crate) fn changed_paths(root: &Path, base: &str, head: &str) -> Option<Vec<S
     if !out.status.success() {
         return None;
     }
-    Some(
-        out.stdout
-            .split(|b| *b == 0)
-            .filter(|p| !p.is_empty())
-            .map(|p| String::from_utf8_lossy(p).into_owned())
-            .collect(),
-    )
+    let names = std::str::from_utf8(&out.stdout).ok()?;
+    if !names.is_empty() && !names.ends_with('\0') {
+        return None;
+    }
+    names
+        .split_terminator('\0')
+        .map(|path| (!path.is_empty()).then(|| path.to_owned()))
+        .collect()
 }
 
 #[cfg(test)]
