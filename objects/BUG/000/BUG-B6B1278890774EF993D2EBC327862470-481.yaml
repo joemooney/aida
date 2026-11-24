@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-24T18:55:09.748068127Z
+modified_at: 2026-11-24T19:06:00.638979750Z
 req_type: Bug
 tags:
 - review-watch
@@ -159,6 +159,19 @@ comments:
   modified_at: 2026-11-24T15:37:33.578077274Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ef3-622e-7e43-8cc7-de9abd54fbc4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2fcffa9987591527cab7610b758675e6fe3844a7 plus host-staged merge and working-tree changes for PR #4413. Checked merge-base diff, working tree, untracked files and both marker paths.
+    AC1: [evidence: behavioral-test] review_watch.rs:1697 and task_1993_review_watch_tests.rs:5789. Four successive due passes under a real allocation lock preserve the budget, release dispatches the original head once. Unknown lock names cannot select arbitrary paths. Existing process-exit, cap, capacity and train checks still apply.
+    AC2: [evidence: behavioral-test] advisor_loop_service.rs:1523 checks grouped PR/MR names and counts.
+    AC3: [evidence: behavioral-test] task_1993_review_watch_tests.rs:5711 checks held worktree, release and same-head dispatch.
+    Targeted bug2720_ job ran four tests, all passed. FAST source checks exposed one missing store-writer inventory entry, added and verified with check-store-writers.py. Full FAST suite outstanding. F2 worktree preflight under lock, F3 capped pickup PR facts, and F4 mixed-version receipts deferred per pickup brief.
+  created_at: 2026-11-24T19:06:00.638979750Z
+  modified_at: 2026-11-24T19:06:00.638979750Z
+  session_id: 01a20ee92bc6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a206d3-578e-7762-a596-c22bf46a234d
   author: aida-session-start
