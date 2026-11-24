@@ -1,5 +1,6 @@
 id: 01a20aeb-633b-7273-be61-04f813a07749
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-249
+agreed_id: STORY-3060
 title: 'Review PR-4468: [AI:codex] fix(lane-recovery): cover open integration-base PRs (Refs BUG-2736)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ab3`) for branch `int29-bug-2736`.
@@ -50,6 +51,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20b5d-2fbc-7b51-9aeb-b0050d491147
+  author: joe
+  timestamp: 2026-11-24T02:23:06.172469848Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
   branch: main

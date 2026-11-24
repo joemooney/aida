@@ -1,5 +1,6 @@
 id: 01a20b02-be67-7261-8d4d-3f432d847e39
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1281
+agreed_id: TASK-3305
 title: 'Review follow-up: forge.rs:1901 bypasses the shared gh probe binary resolution in kernel.rs:500. The standar'
 description: |-
   From TASK-3847
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20a78-c995-7b21-9027-9613acbeb45d
   created_at: 2026-11-24T00:44:32.850159179Z
+history:
+- id: 01a20b5c-fd12-7dd1-9688-afccd09eb960
+  author: joe
+  timestamp: 2026-11-24T02:22:53.202797284Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: eacfd4b52870557151340a24d44b1b772be6c929
   branch: pr-4470

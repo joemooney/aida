@@ -1,5 +1,6 @@
 id: 01a20afc-8f5d-7c72-8c9f-b96cca873c13
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-252
+agreed_id: STORY-3064
 title: 'Review PR-4471: [AI:codex] fix(tests): bind takeover fixture grants in the current PID namespace (Refs TASK-3850)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20abf`) for branch `int29-task-3850`.
@@ -50,6 +51,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20b5d-f1b5-7002-a126-818499e18995
+  author: joe
+  timestamp: 2026-11-24T02:23:55.829085377Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
   branch: main

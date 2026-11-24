@@ -1,5 +1,6 @@
 id: 01a20aea-0f7e-7100-a31b-1f1cff2c7fc7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-248
+agreed_id: STORY-3066
 title: 'Review PR-4467: [AI:codex] fix(docs): define delivery and authority terms in the product glossary (Refs STORY-2839)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ab9`) for branch `int28-story-2839`.
@@ -68,6 +69,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20b5e-5320-7f20-adcc-547789ea3a6e
+  author: joe
+  timestamp: 2026-11-24T02:24:20.768874345Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
   branch: main

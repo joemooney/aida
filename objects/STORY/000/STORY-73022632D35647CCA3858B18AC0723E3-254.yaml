@@ -1,5 +1,6 @@
 id: 01a20b20-d8de-7e93-bc27-3e04b33c6284
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-254
+agreed_id: STORY-3065
 title: 'Review PR-4474: [AI:codex] fix(cache): cover detached JSON and TOON refresh at a TTY (TASK-3853)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b00`) for branch `int30-task-3853`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T01:17:30.333526430Z
   session_id: 01a20b00bd28
+  changes: []
+- id: 01a20b5e-2229-78c3-88e5-98dbfa9cce34
+  author: joe
+  timestamp: 2026-11-24T02:24:08.233336639Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81

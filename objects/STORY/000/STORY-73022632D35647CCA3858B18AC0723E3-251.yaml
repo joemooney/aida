@@ -1,5 +1,6 @@
 id: 01a20aec-a10f-7b30-9d01-1fa4617f2e3e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-251
+agreed_id: STORY-3061
 title: 'Review PR-4470: [AI:codex] fix(forge): report GitHub core budget in doctor and land status (TASK-3847)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ab5`) for branch `int29-task-3847`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20b5d-6024-7882-bfc1-de1a1dc24610
+  author: joe
+  timestamp: 2026-11-24T02:23:18.564544134Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
   branch: main

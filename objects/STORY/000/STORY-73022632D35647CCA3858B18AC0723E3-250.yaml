@@ -1,5 +1,6 @@
 id: 01a20aeb-f24a-7fb2-a8e6-72fd1abbc0ce
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-250
+agreed_id: STORY-3063
 title: 'Review PR-4469: [AI:codex] fix(cache): exercise current CLI refresh behavior (Refs TASK-3848)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20abd`) for branch `int29-task-3848`.
@@ -62,6 +63,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20b5d-c0ed-7be2-98ec-0364d1929f12
+  author: joe
+  timestamp: 2026-11-24T02:23:43.341840187Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
   branch: main
