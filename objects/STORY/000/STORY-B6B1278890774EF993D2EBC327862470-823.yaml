@@ -18,12 +18,12 @@ description: |-
     - Exact and whitespace-normalized snippet-to-line-range resolution (`anchor_snippet_lines`) and `[obs-N]` evidence citation verification (`verify_observation_citations`).
   - `aida review prepare` subcommand in `aida-cli-lib` resolves a target (`--pr <N>`, `--from <base> [--to <head>]`, `--commit <sha>`, or workspace changes), links AIDA spec `## Acceptance` criteria, and outputs the structured preparation manifest (JSON, TOON, or human markdown) plus optional `--verify-coverage <ledger.json>` and `--anchor-findings <findings.json>` verification modes.
   - Comprehensive unit tests in `aida-core` verify all four subsystems cleanly via `cargo test -p aida-core` and `cargo check -p aida-cli-lib`.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:51:29.169096190Z
+modified_at: 2026-11-24T08:09:39.801984952Z
 req_type: Story
 tags:
 - track:integration
@@ -136,6 +136,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20c9a-78d9-77d2-97f1-5fd6a9579b08
+  author: aida-session-start
+  timestamp: 2026-11-24T08:09:39.801982962Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
