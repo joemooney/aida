@@ -644,12 +644,20 @@ class AptBounds(unittest.TestCase):
 
     def test_every_apt_step_has_its_expected_timeout_bound(self):
         steps = list(self.steps())
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        compile_steps = [step for step in workflow['jobs']['fast-compile']['steps']
+                         if step.get('name') == 'Install compile dependencies']
+        self.assertEqual(len(compile_steps), 1)
+        self.assertEqual(compile_steps[0].get('timeout-minutes'), 15)
         self.assertTrue(steps, 'expected apt steps in ci.yml')
         for job_name, step in steps:
             limit = step.get('timeout-minutes')
             self.assertIsNotNone(limit, f'{job_name}: {step["name"]} has no step timeout')
             if (job_name, step['name']) == ('build', 'Install Linux dependencies'):
                 self.assertEqual(int(limit), 12)
+            elif (job_name, step['name']) == ('fast-compile', 'Install compile dependencies'):
+                # trace:BUG-2744 | ai:codex
+                self.assertEqual(limit, 15)
             else:
                 self.assertLessEqual(int(limit), 5, f'{job_name}: {step["name"]}')
 

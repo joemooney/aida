@@ -14,6 +14,7 @@ use crate::{
     CiProbe, LeaseState, OpenPrInfo, PatchCountProbe, RequirementStatus, Result, ReviewForge,
     SessionLease, FORGE_CLI_CALL_TIMEOUT,
 };
+use aida_core::id_identity::id_key;
 use colored::Colorize;
 
 /// TASK-234: the three in-flight buckets, split out of
@@ -1746,6 +1747,7 @@ pub(crate) fn collect_pr_head_state_snapshot_bounded(
     project_root: &std::path::Path,
     candidate_branches: &[String],
     deadline: Option<std::time::Instant>,
+    specs: &DetectorSpecs,
 ) -> Option<PrHeadStateSnapshot> {
     let gh_bin = resolve_gh_binary()?;
     let query = |args: &[&str]| -> Option<PrHeadStateSnapshot> {
@@ -1756,7 +1758,7 @@ pub(crate) fn collect_pr_head_state_snapshot_bounded(
         let out = command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)?;
         out.status
             .success()
-            .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout)))?
+            .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout), specs))?
     };
     let mut snapshot = query(&[
         "pr",
@@ -1777,7 +1779,7 @@ pub(crate) fn collect_pr_head_state_snapshot_bounded(
         // branch (it always attempted every one); only a deadline-skipped
         // branch is now excluded from this set.
         snapshot.queried_heads.insert(branch.clone());
-        if let Some(found) = query_pr_head_history(project_root, branch) {
+        if let Some(found) = query_pr_head_history(project_root, branch, specs) {
             snapshot.merge(found);
         }
     }
@@ -1794,6 +1796,7 @@ pub(crate) fn collect_pr_head_state_snapshot_bounded(
 pub(crate) fn query_pr_head_history(
     project_root: &std::path::Path,
     branch: &str,
+    specs: &DetectorSpecs,
 ) -> Option<PrHeadStateSnapshot> {
     let gh_bin = resolve_gh_binary()?;
     let mut cmd = std::process::Command::new(&gh_bin);
@@ -1814,7 +1817,7 @@ pub(crate) fn query_pr_head_history(
     let out = command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)?;
     out.status
         .success()
-        .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout)))?
+        .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout), specs))?
 }
 
 impl PrHeadStateSnapshot {
@@ -1851,7 +1854,10 @@ impl PrHeadStateSnapshot {
     }
 }
 
-pub(crate) fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnapshot> {
+pub(crate) fn parse_pr_head_state_snapshot(
+    json: &str,
+    specs: &DetectorSpecs,
+) -> Option<PrHeadStateSnapshot> {
     let rows: Vec<serde_json::Value> = serde_json::from_str(json).ok()?;
     let mut snapshot = PrHeadStateSnapshot::default();
     for row in rows {
@@ -1866,17 +1872,19 @@ pub(crate) fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnap
             continue;
         }
         let title = row.get("title").and_then(|v| v.as_str()).unwrap_or("");
-        let mut spec_ids = work_spec_id_from_branch(branch)
-            .into_iter()
-            .collect::<Vec<_>>();
+        let mut spec_ids = specs.branch_id(branch).into_iter().collect::<Vec<_>>();
         spec_ids.extend(extract_spec_ids_from_commit(title));
+        let mut spec_ids: Vec<_> = spec_ids
+            .iter()
+            .map(|id| id_key(&specs.display(id)))
+            .collect();
         spec_ids.sort();
         spec_ids.dedup();
         if state == "open" {
             for spec in &spec_ids {
                 snapshot
                     .open_heads_by_spec
-                    .entry(spec.to_ascii_uppercase())
+                    .entry(spec.clone())
                     .or_default()
                     .push(branch.to_string());
             }
@@ -1891,7 +1899,7 @@ pub(crate) fn parse_pr_head_state_snapshot(json: &str) -> Option<PrHeadStateSnap
                 for spec in &spec_ids {
                     snapshot
                         .merged_heads_by_spec
-                        .entry(spec.to_ascii_uppercase())
+                        .entry(spec.clone())
                         .or_default()
                         .push(sha.clone());
                 }
@@ -2395,6 +2403,7 @@ pub(crate) struct UnshippedBranchCandidate {
     pub(crate) branch: String,
     pub(crate) refname: String,
     pub(crate) local_branch: String,
+    branch_spec_id: String,
     pub(crate) spec_id: String,
     pub(crate) commits_ahead: u32,
     pub(crate) age: String,
@@ -2439,13 +2448,79 @@ pub(crate) struct UnshippedSurvivor {
 // BUG-1288: a bounded candidate gate for the unshipped-work detector. Kept
 // pure so a large stale-ref population can be pinned without timing-sensitive
 // process tests. trace:BUG-1288 | ai:codex
-pub(crate) fn branch_belongs_to_active_work(branch: &str, active_prefixes: &[String]) -> bool {
-    active_prefixes.iter().any(|prefix| {
-        branch == prefix
-            || branch
-                .strip_prefix(prefix)
-                .is_some_and(|suffix| suffix.starts_with('-'))
-    })
+// trace:TASK-3860 | ai:codex
+#[derive(Default)]
+pub(crate) struct DetectorSpecs {
+    // Both origin and display keys map directly to the stored display spelling and status.
+    by_id: std::collections::HashMap<String, (String, String)>,
+    origin_by_display: std::collections::HashMap<String, String>,
+}
+
+impl DetectorSpecs {
+    fn extend(&mut self, summaries: &[aida_core::RequirementSummary]) {
+        let mut displays = Vec::new();
+        for summary in summaries {
+            let origin = summary
+                .spec_id
+                .as_deref()
+                .filter(|id| !id.trim().is_empty());
+            let display = summary
+                .agreed_id
+                .as_deref()
+                .filter(|id| !id.trim().is_empty());
+            let Some(id) = display.or(origin) else {
+                continue;
+            };
+            let status = if summary.deferred
+                || summary
+                    .tags
+                    .iter()
+                    .any(|tag| tag.trim().to_ascii_lowercase().starts_with("deferred:"))
+            {
+                "deferred".to_owned()
+            } else {
+                summary.status.to_ascii_lowercase()
+            };
+            self.origin_by_display
+                .insert(id_key(id), origin.unwrap_or(id).trim().to_owned());
+            let entry = (id.trim().to_owned(), status);
+            if let Some(alias) = origin {
+                self.by_id.insert(id_key(alias), entry.clone());
+            }
+            displays.push((id_key(id), entry));
+        }
+        self.by_id.extend(displays);
+    }
+
+    fn display(&self, id: &str) -> String {
+        self.by_id
+            .get(&id_key(id))
+            .map_or_else(|| id.to_owned(), |e| e.0.clone())
+    }
+
+    fn status(&self, id: &str) -> Option<&str> {
+        self.by_id.get(&id_key(id)).map(|e| e.1.as_str())
+    }
+
+    fn branch_id(&self, branch: &str) -> Option<String> {
+        // A numeric suffix can be branch prose. Prefer the longest known ID.
+        for end in std::iter::once(branch.len()).chain(branch.rmatch_indices('-').map(|(i, _)| i)) {
+            if self.by_id.contains_key(&id_key(&branch[..end])) {
+                return Some(branch[..end].to_ascii_uppercase());
+            }
+        }
+        work_spec_id_from_branch(branch)
+    }
+
+    fn active_branch(&self, branch: &str) -> bool {
+        self.branch_id(branch)
+            .and_then(|id| self.status(&id))
+            .is_some_and(|status| !excluded_unshipped_status(status))
+    }
+}
+
+fn excluded_unshipped_status(status: &str) -> bool {
+    matches!(status, "deferred" | "completed" | "rejected" | "superseded")
 }
 
 // trace:BUG-1187 | ai:codex
@@ -2554,34 +2629,9 @@ pub(crate) fn collect_unshipped_work_items_bounded(
 
     // The full store snapshot includes parked work and takes precedence over
     // caller summaries when both identify the same spec. trace:BUG-2741 | ai:codex
-    let mut status_by_spec = std::collections::HashMap::new();
-    // Resolve origin IDs (spec_id) as well as display IDs. Within a
-    // snapshot an explicit display ID wins an alias collision.
-    // trace:TASK-3857 | ai:codex
-    for snapshot in [summaries, &all_requirement_summaries(project_root)] {
-        let mut display_statuses = Vec::new();
-        for summary in snapshot {
-            let status = if summary.deferred
-                || summary
-                    .tags
-                    .iter()
-                    .any(|tag| tag.trim().to_ascii_lowercase().starts_with("deferred:"))
-            {
-                "deferred".to_owned()
-            } else {
-                summary.status.to_ascii_lowercase()
-            };
-            if let Some(id) = summary.spec_id.as_deref().filter(|id| !id.is_empty()) {
-                status_by_spec.insert(id.to_ascii_uppercase(), status.clone());
-            }
-            if let Some(id) = summary.agreed_id.as_deref().filter(|id| !id.is_empty()) {
-                display_statuses.push((id.to_ascii_uppercase(), status));
-            }
-        }
-        status_by_spec.extend(display_statuses);
-    }
-    let excluded =
-        |status: &str| matches!(status, "deferred" | "completed" | "rejected" | "superseded");
+    let mut specs = DetectorSpecs::default();
+    specs.extend(summaries);
+    specs.extend(&all_requirement_summaries(project_root));
 
     let live = process_probe::probe_live_claude_sessions();
     let now = chrono::Utc::now();
@@ -2598,7 +2648,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         .collect();
     let live_scopes: std::collections::HashSet<String> = live_leases
         .iter()
-        .map(|l| l.scope.to_ascii_uppercase())
+        .map(|l| id_key(&specs.display(&l.scope)))
         .collect();
     let live_branches: std::collections::HashSet<String> =
         live_leases.iter().map(|l| l.branch.clone()).collect();
@@ -2624,16 +2674,10 @@ pub(crate) fn collect_unshipped_work_items_bounded(
     // an EXCLUDE-list. Parked (deferred) specs are also quiet until resumed.
     // Recheck the resolved spec below for candidates admitted by a recorded lease.
     // trace:BUG-1288 | ai:claude
-    let active_prefixes: Vec<String> = status_by_spec
-        .iter()
-        .filter(|(_, status)| !excluded(status))
-        .map(|(spec, _)| spec.to_ascii_lowercase())
-        .collect();
     let lease_branches: std::collections::HashSet<&str> =
         leases.iter().map(|lease| lease.branch.as_str()).collect();
-    let is_candidate = |branch: &str| {
-        lease_branches.contains(branch) || branch_belongs_to_active_work(branch, &active_prefixes)
-    };
+    let is_candidate =
+        |branch: &str| lease_branches.contains(branch) || specs.active_branch(branch);
     let mut branches: Vec<(String, String, bool)> = local
         .iter()
         .filter(|branch| is_candidate(branch))
@@ -2676,7 +2720,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
     let mut pr_head_states = if no_forge {
         None
     } else {
-        collect_pr_head_state_snapshot_bounded(project_root, &[], deadline)
+        collect_pr_head_state_snapshot_bounded(project_root, &[], deadline, &specs)
     };
 
     // BUG-1288: the total candidate-branch population identified above,
@@ -2749,12 +2793,14 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         if pr_evidence.is_some_and(|pr| pr.state == "open") {
             continue;
         }
-        let Some(spec_id) = work_spec_id_from_branch(&short_branch)
+        let Some(branch_spec_id) = specs
+            .branch_id(&short_branch)
             .or_else(|| first_spec_id_in_branch_commits(project_root, &default_ref, &refname))
         else {
             continue;
         };
-        let spec_key = spec_id.to_ascii_uppercase();
+        let spec_id = specs.display(&branch_spec_id);
+        let spec_key = id_key(&spec_id);
         // A unique open PR's headRefName is authoritative for its spec. Never
         // suggest shipping an abandoned local branch as a duplicate PR.
         if pr_head_states
@@ -2767,7 +2813,10 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         if live_scopes.contains(&spec_key) || live_branches.contains(&short_branch) {
             continue;
         }
-        if status_by_spec.get(&spec_key).is_some_and(|s| excluded(s)) {
+        if specs
+            .status(&spec_key)
+            .is_some_and(excluded_unshipped_status)
+        {
             continue;
         }
         // BUG-1756: one candidate gets at most UNSHIPPED_PROBE_SLICE (and
@@ -2817,6 +2866,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
                 branch: display_branch,
                 refname,
                 local_branch: short_branch,
+                branch_spec_id,
                 spec_id,
                 commits_ahead,
                 age,
@@ -2863,7 +2913,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
                     .queried_heads
                     .insert(survivor.cand.local_branch.clone());
                 if let Some(found) =
-                    query_pr_head_history(project_root, &survivor.cand.local_branch)
+                    query_pr_head_history(project_root, &survivor.cand.local_branch, &specs)
                 {
                     states.merge(found);
                 }
@@ -2897,10 +2947,8 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         // proof for the ancestor branch case. If the deadline prevents a
         // needed carrier query, suppress that spec's survivors rather than
         // report on incomplete representation evidence. trace:TASK-1575 | ai:codex
-        let survivor_specs: std::collections::HashSet<String> = survivors
-            .iter()
-            .map(|s| s.cand.spec_id.to_ascii_uppercase())
-            .collect();
+        let survivor_specs: std::collections::HashSet<String> =
+            survivors.iter().map(|s| id_key(&s.cand.spec_id)).collect();
         let mut incomplete_carrier_specs = std::collections::HashSet::new();
         for (spec_key, carrier) in shipped_evidence_carriers {
             if !survivor_specs.contains(&spec_key) {
@@ -2913,7 +2961,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
             }
             if let Some(states) = pr_head_states.as_mut() {
                 states.queried_heads.insert(carrier.clone());
-                if let Some(found) = query_pr_head_history(project_root, &carrier) {
+                if let Some(found) = query_pr_head_history(project_root, &carrier, &specs) {
                     states.merge(found);
                 } else {
                     truncated = true;
@@ -2926,9 +2974,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         }
         if !incomplete_carrier_specs.is_empty() {
             let before = survivors.len();
-            survivors.retain(|s| {
-                !incomplete_carrier_specs.contains(&s.cand.spec_id.to_ascii_uppercase())
-            });
+            survivors.retain(|s| !incomplete_carrier_specs.contains(&id_key(&s.cand.spec_id)));
             let removed = before - survivors.len();
             scanned = scanned.saturating_sub(removed);
         }
@@ -2960,7 +3006,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         if pr_evidence.is_some_and(|pr| pr.state == "open") {
             continue;
         }
-        let spec_key = c.spec_id.to_ascii_uppercase();
+        let spec_key = id_key(&c.spec_id);
         if pr_head_states
             .as_ref()
             .and_then(|s| s.open_heads_by_spec.get(&spec_key))
@@ -3065,19 +3111,27 @@ pub(crate) fn collect_unshipped_work_items_bounded(
             // it — regardless of which ref happens to reach that commit.
             // trace:BUG-1531 | ai:claude
             let outstanding_verdict = c.tip_sha.as_deref().and_then(|sha| {
-                let verdict = crate::gate::review_verdict::read_recorded_verdict(project_root, &c.spec_id)?;
+                let mut labels = vec![c.spec_id.as_str(), c.branch_spec_id.as_str()];
+                if let Some(origin) = specs.origin_by_display.get(&id_key(&c.spec_id)) {
+                    if specs.display(origin) == c.spec_id {
+                        labels.push(origin);
+                    }
+                }
+                labels.sort_unstable();
+                labels.dedup();
+                labels.into_iter().filter_map(|label|
+                    crate::gate::review_verdict::read_recorded_verdict(project_root, label)
+                ).find(|verdict| {
                 let sha_matches = verdict
                     .reviewed_sha
                     .as_deref()
                     .is_some_and(|reviewed| crate::gate::review_verdict::same_reviewed_sha(reviewed, sha));
-                let spec_completed = status_by_spec
-                    .get(&c.spec_id.to_ascii_uppercase())
-                    .is_some_and(|status| status.as_str() == "completed");
+                let spec_completed = specs.status(&c.spec_id) == Some("completed");
                 // trace:BUG-2500 | ai:codex — reporting must retain external waits.
-                (sha_matches && (crate::gate::review_verdict::is_outstanding_refusal(&verdict, spec_completed)
+                sha_matches && (crate::gate::review_verdict::is_outstanding_refusal(verdict, spec_completed)
                     || (!spec_completed && !verdict.is_closed()
-                        && verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting)))
-                    .then_some(verdict)
+                        && verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting))
+                })
             });
             let recovery = if let Some(verdict) = &outstanding_verdict {
                 if verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting {
@@ -3129,11 +3183,12 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         .collect();
     let mut items = items;
     let (clones, clone_scan) = scan_unshipped_clones(project_root, &leases, deadline, |scope| {
-        status_by_spec
-            .get(&scope.to_ascii_uppercase())
-            .is_some_and(|status| status == "deferred")
+        specs.status(scope) == Some("deferred")
     });
-    items.extend(clones);
+    items.extend(clones.into_iter().map(|mut row| {
+        row.spec_id = specs.display(&row.spec_id);
+        row
+    }));
     (
         items,
         awaiting_you::UnshippedScanStatus {
@@ -3501,7 +3556,7 @@ mod story_1043_unshipped_work_tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_repo(root);
-        write_live_lease(root, "TASK-3857", "private-work");
+        write_live_lease(root, "TASK-1-97", "private-work");
         let path = lease_path(root, "live1043");
         let mut lease: SessionLease =
             toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -3510,6 +3565,7 @@ mod story_1043_unshipped_work_tests {
         std::fs::create_dir(&lease.worktree_path).unwrap();
         std::fs::write(path, toml::to_string(&lease).unwrap()).unwrap();
         let mut spec = summary("TASK-3857", "Approved");
+        spec.spec_id = Some("TASK-1-097".into());
         spec.deferred = true;
         assert!(collect_unshipped_work_items(root, &[spec.clone()], true, false).is_empty());
         spec.deferred = false;
@@ -3525,7 +3581,7 @@ mod story_1043_unshipped_work_tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_repo(root);
-        branch_with_commit(root, "wip", "TASK-1-097");
+        branch_with_commit(root, "wip", "TASK-1-97");
         write_live_lease(root, "other", "wip");
         let path = lease_path(root, "live1043");
         let mut lease: SessionLease =
@@ -3545,12 +3601,75 @@ mod story_1043_unshipped_work_tests {
         assert_eq!(rows[0].branch, "wip");
     }
 
+    // trace:TASK-3860 | ai:codex
+    #[test]
+    fn task_3860_admits_leaseless_branch_with_numeric_suffix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        let branch = "task-42-2026-fix";
+        branch_with_commit(root, branch, "fix");
+        let rows =
+            collect_unshipped_work_items(root, &[summary("TASK-42", "Approved")], true, false);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch, branch);
+        assert_eq!(rows[0].spec_id, "TASK-42");
+    }
+
+    // trace:TASK-3860 | ai:codex
+    #[test]
+    fn task_3860_detector_joins_branch_lease_and_forge_aliases() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "TaSk-1-97-work", "TASK-1-097");
+        let mut spec = summary("TASK-0042", "Approved");
+        spec.spec_id = Some("TASK-1-097".into());
+        let scan = |spec| collect_unshipped_work_items(root, &[spec], true, false);
+        let rows = scan(spec.clone());
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id, "TASK-0042");
+        let tip = git_output_checked(root, &["rev-parse", "TaSk-1-97-work"]).unwrap();
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("TASK-1-097.json"),
+            serde_json::json!({
+                "verdict": "request-changes", "reviewed_sha": tip.trim(),
+                "recorded_at": "2026-09-21T05:00:00Z"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(scan(spec.clone())[0].recovery.contains("do not ship"));
+        write_live_lease(root, "task-42", "different-branch");
+        assert!(scan(spec.clone()).is_empty());
+
+        let mut specs = DetectorSpecs::default();
+        specs.extend(&[spec]);
+        let snapshot = parse_pr_head_state_snapshot(
+            r#"[
+            {"state":"open","headRefName":"Task-1-0097-new","title":"ship (TASK-42)"},
+            {"state":"merged","headRefName":"topic","title":"land (TASK-1-97)","headRefOid":"abc"}
+        ]"#,
+            &specs,
+        )
+        .unwrap();
+        assert_eq!(snapshot.open_heads_by_spec["TASK-42"], ["Task-1-0097-new"]);
+        assert_eq!(snapshot.merged_heads_by_spec["TASK-42"], ["abc"]);
+        assert!(!specs.active_branch("task-1-970-work"));
+    }
+
     // BUG-1288: stale refs must not enlarge the expensive probe set. This is
     // a deterministic operation-count regression test rather than a flaky
     // wall-clock assertion. trace:BUG-1288 | ai:codex
     #[test]
     fn unshipped_candidate_gate_is_constant_with_stale_branch_count() {
-        let active = vec!["bug-1288".to_string(), "story-42".to_string()];
+        let mut active = DetectorSpecs::default();
+        active.extend(&[
+            summary("BUG-1288", "Approved"),
+            summary("STORY-42", "Approved"),
+        ]);
         let mut refs: Vec<String> = (0..10_000).map(|n| format!("old-feature-{n}")).collect();
         refs.extend([
             "bug-1288".to_string(),
@@ -3561,7 +3680,7 @@ mod story_1043_unshipped_work_tests {
 
         let candidates: Vec<_> = refs
             .iter()
-            .filter(|branch| branch_belongs_to_active_work(branch, &active))
+            .filter(|branch| active.active_branch(branch))
             .cloned()
             .collect();
         assert_eq!(
@@ -4680,6 +4799,7 @@ printf '[{"state":"OPEN","title":"fix (BUG-1578)","headRefName":"bug-1578-real-h
           {"state":"OPEN","title":"one (BUG-1580)","headRefName":"bug-1580-one","headRefOid":"1"},
           {"state":"OPEN","title":"two (BUG-1580)","headRefName":"bug-1580-two","headRefOid":"2"}
         ]"#,
+            &DetectorSpecs::default(),
         )
         .unwrap();
         assert_eq!(

@@ -329,25 +329,37 @@ fn inspect_backlog(
     use aida_core::mailbox_logical::{inspect_mail, InspectionState, MailboxContext};
     let home = crate::mailbox_store::mailbox_home(project_root);
     let root = home.root();
-    let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
-        Ok(directory) => directory,
-        Err(_) => return (Vec::new(), Unknown::whole()),
-    };
     let store = std::fs::symlink_metadata(store_root)
         .is_ok()
         .then_some(store_root);
     let ctx = match MailboxContext::resolve_or_local(root, store) {
         Ok(ctx) => ctx,
-        Err(_) => return (Vec::new(), Unknown::whole()),
+        Err(_) => {
+            return (
+                Vec::new(),
+                Unknown {
+                    seat_inventory_incomplete: true,
+                    ..Unknown::whole()
+                },
+            )
+        }
     };
     // A skipped (unreadable/invalid) registry row is not a reader, exactly as
     // for send and the own inbox; it does not make other recipients unknown.
     let mut unknown = Unknown::default();
     let mut grouped: BTreeMap<String, (Backlog, Vec<&AgentRegistryEntry>)> = BTreeMap::new();
-    let readers = directory.inspection_readers();
+    // trace:TASK-3851 | ai:codex
     let (complete, missing) = aida_core::mailbox_logical::inspect_seat_sidecars(&ctx, limits);
     unknown.missing_seat_sidecars = missing;
     unknown.seat_inventory_incomplete = !complete;
+    let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
+        Ok(directory) => directory,
+        Err(_) => {
+            unknown.all = true;
+            return (Vec::new(), unknown);
+        }
+    };
+    let readers = directory.inspection_readers();
     if readers.is_empty() {
         unknown.all = !complete;
     }
