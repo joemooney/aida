@@ -1,5 +1,6 @@
 id: 01a20e58-2615-7100-ae62-610fb675543c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-282
+agreed_id: STORY-3098
 title: 'Review PR-4523: [AI:codex] fix(review): harden inventory, citations and batch budgets (Refs TASK-3867)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20e2c`) for branch `int36-task-3867`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T16:17:00.941700934Z
   session_id: 01a20e2cff8a
+  changes: []
+- id: 01a20e5f-0f62-7b61-950e-104979344124
+  author: joe
+  timestamp: 2026-11-24T16:24:00.610902871Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
