@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T12:55:30.210666256Z
+modified_at: 2026-11-24T13:05:32.684215294Z
 req_type: Task
 tags:
 - review
@@ -183,6 +183,18 @@ comments:
   modified_at: 2026-11-24T12:51:34.306902102Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20da9-5f54-7ef0-bbb2-8b1f7edef711
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2aa8e116bbff08b1235079236743a7d676595713 plus native working tree. Reviewed origin/main...HEAD, git diff HEAD and untracked listing.
+    AC1: [evidence: manual-inspection] The integration branch carries 657d344388 with the same Joe Mooney author/email as reference 0fdac177513. Host publication pending.
+    AC2: [evidence: behavioral-test] aida-cli-lib/src/review_prepare.rs:820, :852, :889, :961, :1043. Lane job j20261124T130310526-2-0 executed all 7 module tests successfully, including invalid endpoints, Git failures, metadata write refusal, replace-ref immunity and explicit GitHub origin with conflicting GH_REPO.
+    Probes checked path-component containment, canonical Git directory names, gitfiles, both protected roots, symlink refusals, unusual path bytes, object selection across diff/content/log, and GitHub/GitLab routing. GitHub metadata pin and environment removal at aida-cli-lib/src/forge.rs:3162 apply only to review prepare. Extended registered tests. Formatting and diff checks passed. Synthetic forge responses exercise argv and environment. Exact published-head CI awaits host publication.
+  created_at: 2026-11-24T13:05:32.684215294Z
+  modified_at: 2026-11-24T13:05:32.684215294Z
+  session_id: 01a20d9f542d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
   author: joe
