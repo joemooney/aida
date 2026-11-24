@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: AIDA's own forge pollers (review-watch, auto-train, main-watch, and any seat watcher AIDA ships) check the remaining core budget (`gh api rate_limit` or the response headers) and BACK OFF when below 20% remaining. Landing-critical calls (train CI reads) get priority over watchers. The back-off is reported, not silent.
   - AC2: `aida doctor` (or `aida land status`) shows the remaining core budget and which pollers consumed it, so a seat can see when its own polling is starving the train. Test with a fake rate_limit response below the threshold.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T21:06:28.563648022Z
+modified_at: 2026-11-24T23:03:39.148921783Z
 req_type: Bug
 tags:
 - forge
@@ -321,6 +321,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20fcc-f18c-76a0-8969-678b4ea86ceb
+  author: aida-session-start
+  timestamp: 2026-11-24T23:03:39.148920870Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
