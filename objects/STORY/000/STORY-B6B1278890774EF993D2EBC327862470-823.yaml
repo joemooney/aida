@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:29:36.170636830Z
+modified_at: 2026-11-24T07:30:05.174372940Z
 req_type: Story
 tags:
 - track:integration
@@ -53,6 +53,13 @@ comments:
   modified_at: 2026-11-24T07:24:49.946560186Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c76-3e88-73f0-b665-7af9564fafb4
+  author: dirtlab
+  content: S1 design sketch. aida-core::review_engine accepts caller-supplied diff entries, rules, coverage rows, observations and source text. It returns inventory, playbooks, batches, coverage reports and anchors in memory. The CLI review_prepare adapter belongs to S2. That adapter reads Git and working-tree inputs and writes files only at requested --write output paths. Nothing in gate/, the gate ledger, review verdict recording or train admission consumes this engine. It is advisory reviewer tooling only.
+  created_at: 2026-11-24T07:30:05.174372940Z
+  modified_at: 2026-11-24T07:30:05.174372940Z
+  session_id: 01a20c74cb2f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe

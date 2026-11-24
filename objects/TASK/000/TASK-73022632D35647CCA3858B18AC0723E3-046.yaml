@@ -1,0 +1,22 @@
+id: 01a20c77-940e-7fa3-9093-474680d048d9
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-046
+title: Clarify advisory batch and citation contracts before CLI integration
+description: review_engine.rs:795 emits an oversized file alone even when it exceeds the token cap. At line 1058 only double-bracket observation markers are validated, while the story uses single brackets. Cover these cases and document or resolve the intended behavior.
+status: Draft
+priority: Medium
+owner: dirtlab
+feature: Uncategorized
+created_at: 2026-11-24T07:31:33.006248291Z
+modified_at: 2026-11-24T07:31:33.006248291Z
+req_type: Task
+tags:
+- from-advisor:STORY-3076
+- kind:observation
+- linked:STORY-3076
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: f0d3a0ae22
+  vendor: codex
+  session: 01a20c74cb2f
+  harness_version: codex-cli 0.167.0
