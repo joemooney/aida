@@ -1,0 +1,28 @@
+id: 01a20bd3-bad1-70e2-90f2-267562371b64
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1293
+agreed_id: TASK-3857
+title: Unshipped-work alerts also skip deferred specs reached via legacy deferred:<date> tags, private-clone rows and alternate-ID aliases (follow-up to BUG-2741)
+description: |
+  Follow-up to BUG-2741 / #4483 (advisor-122 ruling 2026-11-23 21:35, overridden to APPROVE; relayed by integration-30; filed by product-15). #4483 makes unshipped-work alerts skip status/flag-deferred specs (covers BUG-2688). Three remaining ways a deferred spec is reached are still alerted.
+
+  ## Acceptance
+  - AC1: Unshipped-work alerts also skip deferred specs reached through (a) legacy `deferred:<date>` TAGS and (b) private-clone rows.
+  - AC2: ...and (c) alternate-ID aliases (agreed_id vs spec_id vs origin ID). Each of (a), (b), (c) gets its own regression case.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T04:32:35.025155532Z
+modified_at: 2026-11-24T04:32:35.025155532Z
+req_type: Task
+tags:
+- small
+- track:integration
+- watcher
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
