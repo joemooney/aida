@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T20:18:25.452842730Z
+modified_at: 2026-11-24T20:35:05.204695272Z
 req_type: Bug
 tags:
 - data-loss
@@ -83,6 +83,15 @@ comments:
   modified_at: 2026-11-24T15:38:04.924380268Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f44-f0d6-75a3-be56-f6f777f73de8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0; reviewed the merge-base diff, native working diff, and untracked inventory. AC1: [evidence: behavioral-test] session_reap.rs:1905 and :1921 guard deletion using the named registration's regular index and the pinned commit. A disposable mailbox prune reproduced baseline loss. A standalone build of the final clear function retained the staged index, then cleared the clean index. AC2: [evidence: behavioral-test] bug_1694_registration_clear_claim_tests.rs:207 checks staged-only, corrupt and absent indexes. Targeted cargo job timed out during compilation after 900s without executing the test. Probes covered explicit Git context, clean and dirty registrations, intent-to-add, and alternate index environment. Corrected force-removal advice and removed a direct PATH read caught by the fast gate. The separate post-inventory lock race remains outside this slice. No PR-head CI is available before publication.
+  created_at: 2026-11-24T20:35:05.204695272Z
+  modified_at: 2026-11-24T20:35:05.204695272Z
+  session_id: 01a20f34dcec
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
