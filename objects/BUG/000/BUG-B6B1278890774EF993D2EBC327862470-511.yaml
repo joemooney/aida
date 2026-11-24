@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T21:59:23.796940873Z
+modified_at: 2026-11-24T22:40:11.056853363Z
 req_type: Bug
 tags:
 - store
@@ -165,6 +165,18 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-511` at head `unavailable`.'
   created_at: 2026-11-24T18:34:47.326126503Z
   modified_at: 2026-11-24T18:34:47.326126503Z
+- id: 01a20fb7-76f1-7be1-9543-310292756860
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6ebcbd8653d14ba4cc503e64431ce8250e78ecb4 plus native working diff, 124 added lines, no untracked files.
+    AC1: [evidence: behavioral-test] pr_train.rs:5040 and pr_train_store_refresh.rs:83. Real Git refresh updates the origin tracking ref with FETCH_HEAD absent. The pre-pass follows the existing train entry checks, skips dry runs and logs failures before continuing. BUG-2753 owns fetched-evidence admission.
+    AC2: [evidence: behavioral-test] pr_train_store_refresh.rs:98. Stalled upload acquired the actual writer lock and timed out within the asserted bound. Lane job j20261124T220021639-2-0 executed one test, passed in 2.05s.
+    Probes: checked branch namespace and argv handling, detached HEAD, missing store, multiple remote refs, timeout and concurrent lock ownership. The explicit refspec disables pruning, tag following and configured ref mappings. The fetched ref supplies no gate decision. No existing test weakened. make check-ci-fast job j20261124T221332468-2-0 exited 0 with an overlay-stale seed advisory. Host PR CI pending publication.
+  created_at: 2026-11-24T22:40:11.056853363Z
+  modified_at: 2026-11-24T22:40:11.056853363Z
+  session_id: 01a20f8ffc5d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
