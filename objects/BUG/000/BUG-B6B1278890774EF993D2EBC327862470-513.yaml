@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T19:17:42.241834648Z
+modified_at: 2026-11-24T19:17:49.699412904Z
 req_type: Bug
 tags:
 - codex
@@ -69,6 +69,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed all six files of the pinned landed diff (protected base ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358, landed tree 2b22e48c1221eae047a36c8db5909e17a2c2c8b0) against the generated worksheet for the completing BUG-2752. The PR head is one commit behind main. The base advance, BUG-2729, changes CI and review scheduling. No finding depends on code it changed.. No triage reason was given.'
   created_at: 2026-11-24T19:17:42.241828184Z
   modified_at: 2026-11-24T19:17:42.241828184Z
+- id: 01a20efe-316b-7783-9fc2-046280fafbd2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2752):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d4a4583e95c8
+    Recorded: 2026-11-24T19:14:23.016144980+00:00
+    Findings:
+    1. BUG-2752.AC1, task_2631_containment_tests.rs:513–547. The new test calls offer_init_codex_native directly, sets mark_init_scaffold_committed itself, uses a prebuilt main-branch policy and calls the policy resolver directly. It can pass if run_init never offers or commits the opt-in, emits no explanation, or agent new still refuses. Add the worksheet regression through the real Codex-only init with affirmative consent, assert the one-line native sandbox explanation and the policy in the committed default-branch config, and drive agent new codex --role advisor through its containment check using a controlled launcher.
+    2. BUG-2752.AC1, init_cmd.rs:3193–3201 and 5326–5333. The refusal advertises aida init --agent codex to users already initialized without native policy. Ordinary distributed re-init returns without a scaffold commit. The new opt-in writes the key, but config_commit::init_refresh_mode is Never and leaves it dirty. The next init skips the offer because the worktree key already exists, and the trusted reader keeps refusing. Decouple an explicitly accepted clean-config native-policy commit from whether this invocation created a scaffold commit, preserve dirty-file and clone safeguards, and test recovery on an already initialized default-branch checkout.
+    3. BUG-2752.AC1, config_cmd.rs:1783–1785. The finish_init_refresh helper commits on the checked-out branch. For fresh init on a topic branch when main already exists, accepting and committing the scaffold and native opt-in records both only on the topic branch. The launch guard still reads main or origin/main. The generic git push hint likewise does not deliver the policy to the trusted branch. Detect this before promising the opt-in and route the operator through an explicit default-branch update under the existing trust rules. Add coverage with a distinct checked-out branch and trusted default tip.
+    4. bug_2144_2146_containment_refusal_tests.rs:19–32. contained_request_on_codex_or_agy_is_refused_and_claude_passes still requires --vendor claude in both vendors’ errors. The Codex missing-policy branch now intentionally omits it at session/containment.rs:363–366, and the enclosing child error carries that same Codex-only guidance. On the Codex iteration the old assertion fails. Update it to assert vendor-specific recovery, keeping Agy’s existing assertion.
+    5. init_cmd.rs:5326–5333. Propagating the optional native prompt error with ? converts an existing warning into a partial-init failure after storage and scaffolding have already succeeded. For example, an initialized project with a valid inline root contained table is readable by the policy loader but rejected by offer_init_codex_native before consent. Interactive init now exits before role setup, registry registration and other remaining setup. Preserve a clear opt-in error and continue the independent init steps as the previous caller did.
+    6. config_cmd.rs:1746–1747 and 1783–1785. The new auto-commit can absorb unrelated edits made after the clean check and before the initial read, or after save_edit_doc and before Git reads the working file. The prompt-time string comparison does not cover either interval, and finish_config_change checks only whether the path is dirty before committing its live contents. Bind auto-commit to the verified starting config and the intended output, or leave the change for deliberate commit when concurrent edits prevent that proof.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T19:17:49.547871139Z
+  modified_at: 2026-11-24T19:17:49.547871139Z
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
