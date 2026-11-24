@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Before clearing a missing-checkout worktree registration, inspect its registered index against the pinned tip; RETAIN the registration on any difference or unreadable evidence.
   - AC2: Test: a missing checkout with a staged-only file is retained, not cleared.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T22:28:56.456699210Z
+modified_at: 2026-11-24T22:44:28.045620302Z
 req_type: Bug
 tags:
 - data-loss
@@ -208,6 +208,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20fbb-6569-7612-bef7-50b85c06a4ed
+  author: dirtlab
+  timestamp: 2026-11-24T22:44:29.161588862Z
+  session_id: 01a20facea54
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -219,6 +228,12 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 5665f7c661c7b100b06434132c000715144387e7
+attention_reason:
+  category: design-fork
+  detail: 'Round 2 CI instruction conflicts with the exact-count TASK-2143 ratchet. The guarded fixes for findings 1 and 2 remove raw Git builders: session_reap.rs now 6 (ledger 7), worktree_gc.rs now 12 (ledger 13). The executed guard requires lowering both counts, but the brief forbids any ratchet ledger edit. I dispute the CI requirement that the ledger can remain unchanged with these removals. No data-loss finding is disputed.'
+  lean: Authorize the two downward ratchet adjustments and rerun FAST validation.
+  raised_by: implementer
+  raised_at: 2026-11-24T22:44:28.045620302Z
 failure_reason:
   phase: reviewer
   phase_index: 3
