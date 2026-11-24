@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A reviewer-launch reservation holds admission.lock ONLY for the reservation write, not across the launch. Test: while a reviewer launch is blocked or slow, train admission still succeeds.
   - AC2: The auto-train's "admission.lock busy" alert names the holder's ACTIVITY (e.g. "review-watch launching reviewer for PR-4502") and its AGE. Test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T11:12:33.294106996Z
+modified_at: 2026-11-24T11:48:37.525517062Z
 req_type: Bug
 tags:
 - admission
@@ -72,6 +72,12 @@ comments:
   modified_at: 2026-11-24T11:12:33.294106996Z
   session_id: 01a20d3383bf
   harness_version: codex-cli 0.167.0
+- id: 01a20d62-f015-7cc0-ab84-479c75c51813
+  author: aida-publication-done
+  content: Implementer push 372c046ed782 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T11:48:37.525516496Z
+  modified_at: 2026-11-24T11:48:37.525516496Z
+  session_id: 01a20d3383bf
 history:
 - id: 01a20d25-45d0-7f43-9465-17218e2f731c
   author: joe
@@ -112,6 +118,14 @@ history:
   session_id: 01a20d3383bf
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20d62-f015-7cc0-ab84-47873a7d36aa
+  author: aida-publication-done
+  timestamp: 2026-11-24T11:48:37.525514984Z
+  session_id: 01a20d3383bf
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
