@@ -882,7 +882,9 @@ pub struct LogicalSnapshot {
     /// The receipt anchor could not be read for some key: acknowledgements
     /// recorded there may be missing, so the view is partial.
     pub anchor_error: Option<SourceErrorCode>,
-    retained_inventory_incomplete: bool,
+    pub retained_inventory_incomplete: bool,
+    /// Failure to open the shared retained inventory, before any per-ID lookup.
+    pub retained_open_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
     /// Observed seat messages with missing or unverified sidecars.
@@ -978,6 +980,7 @@ impl LogicalSnapshot {
         let local_only = self.inventory_error == Some(SourceErrorCode::NotAGitCheckout);
         (self.inventory_error.is_none() || local_only)
             && self.anchor_error.is_none()
+            && self.retained_open_error.is_none()
             && match self.canonical {
                 CanonicalCoverage::Refused(SourceErrorCode::NotAGitCheckout) => local_only,
                 CanonicalCoverage::Refused(_) => false,
@@ -1124,6 +1127,7 @@ fn snapshot_for_policy(
         mut unknown_ids,
         missing_seat_sidecars,
         retained_inventory_incomplete,
+        retained_open_error,
     ) = delivery_gates(ctx, &observed, salvaged, unsighted, audience, &mut budget);
     let (mut records, mut conflicts) = reconcile(
         &observed,
@@ -1225,6 +1229,7 @@ fn snapshot_for_policy(
         exact_found: None,
         anchor_error: anchor.error,
         retained_inventory_incomplete,
+        retained_open_error,
         missing_seat_sidecars,
         inspection_unknown_ids: unknown_ids.clone(),
         pending_deliveries: pending_deliveries
@@ -2251,6 +2256,7 @@ fn delivery_gates(
     Vec<String>,
     Vec<SeatSidecarIssue>,
     bool,
+    Option<SourceErrorCode>,
 ) {
     let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
@@ -2320,6 +2326,7 @@ fn delivery_gates(
         .collect();
     // trace:TASK-3851 | ai:codex
     let mut retained_inventory_incomplete = false;
+    let mut retained_open_error = None;
     let mut unexamined = HashSet::new();
     if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
         match RetainedDeliveries::open(common.path(), budget) {
@@ -2342,6 +2349,7 @@ fn delivery_gates(
                 }
             }
             Err(code) => {
+                retained_open_error = Some(code);
                 retained_inventory_incomplete = true;
                 for &id in &wanted {
                     if code == SourceErrorCode::OverBudget {
@@ -2436,6 +2444,7 @@ fn delivery_gates(
         unknown_ids.into_iter().collect(),
         missing_seat_sidecars,
         retained_inventory_incomplete,
+        retained_open_error,
     )
 }
 

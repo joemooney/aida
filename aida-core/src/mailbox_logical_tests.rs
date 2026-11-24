@@ -1150,4 +1150,17 @@ fn task3851_oversized_retained_sidecar_isolates_ack_and_relay_evidence() {
     assert!(!relay.receipts_unknown);
     assert_eq!(relay.unread.len(), 1);
     assert_eq!(relay.unread[0].message_id, "good");
+
+    // A failed inventory open vetoes explicit ACK even for the live sidecar.
+    use crate::mailbox_lifecycle::ack::{AckError, AckPlan};
+    let common = r.main.join(".git");
+    std::fs::File::create(common.join("aida/mail-lifecycle/retained/k2")).unwrap();
+    let audience = relay_run_audience(label, &run).unwrap();
+    let failed = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    assert!(failed.retained_open_error.is_some());
+    assert_eq!(ids(&failed), ["good"]);
+    assert!(matches!(
+        AckPlan::prepare(&failed, Some(&common), &audience, &[&failed.records[0]]),
+        Err(AckError::Partial)
+    ));
 }

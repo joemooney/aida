@@ -412,7 +412,11 @@ fn snapshot_view(
                 _ => None,
             })
             .collect();
-        if snapshot.history_truncated {
+        // trace:TASK-3851 | ai:codex
+        codes.extend(snapshot.retained_open_error);
+        if snapshot.history_truncated
+            || (snapshot.retained_inventory_incomplete && snapshot.retained_open_error.is_none())
+        {
             codes.push(SourceErrorCode::OverBudget);
         }
         codes.extend(snapshot.inventory_error);
