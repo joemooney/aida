@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T16:34:29.720532944Z
+modified_at: 2026-11-24T16:36:49.773555308Z
 req_type: Bug
 tags:
 - hygiene
@@ -149,6 +149,17 @@ comments:
   created_at: 2026-11-24T06:17:23.178471571Z
   modified_at: 2026-11-24T06:17:23.178471571Z
   session_id: 01a20bef5b01
+- id: 01a20e6b-0664-7602-bd99-1c47ba64cd09
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:36):
+    # BUG-2742 / PR #4487 CONFLICT REPAIR (advisor-122 ruling 2026-11-24 09:36; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4487 now CONFLICTS with main (train #4524 dropped it). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4487. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:36:49.773555308Z
+  modified_at: 2026-11-24T16:36:49.773555308Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
