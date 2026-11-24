@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T22:46:57.005785209Z
+modified_at: 2026-11-24T23:22:28.733294268Z
 req_type: Story
 tags:
 - doctor
@@ -231,6 +231,18 @@ comments:
     Deep pass covered timestamp parsing, zero and multiple checks, unavailable completion times, stale heads, missing canonical store, and ownership lookup. Removed episode and mailbox writes, disabled HTTP cache for this probe, reused the open store for ownership checks. Store writer inventory passed, 3871 sites, no mappings added. No authority granted. Published-head CI is unavailable in the native worktree.
   created_at: 2026-11-24T22:46:57.005785209Z
   modified_at: 2026-11-24T22:46:57.005785209Z
+  session_id: 01a20fb6f4b3
+  harness_version: codex-cli 0.167.0
+- id: 01a20fde-313b-7ba1-8f33-42deda0700f7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 920b2b307e80b0d77141a6ea8a676ff7e9a32e8a plus final native edits and the untracked test module.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/stalled_reviews_tests.rs:5, :22, :98. Launcher job j20261124T225559070-2-0 executed all three tests successfully. The scan fixture uses a bootstrapped ledger, 59/61-minute current-head verdicts and a retained implementer lease. Read-only assertions cover ledger contents and directory entries. Additional cases cover a changed head, suppressed rework, green timestamps and train exclusion.
+    AC2: [evidence: configuration-validation] .aida/config.toml:253. The TOML route check passed for a single enabled 20-minute failing-findings command and matching advisor failure route. No live advisor delivery exercised.
+    Fixed fixture completeness, ownership fixture types and local-only threshold disposition at aida-core/src/launch_env_keys.rs:364. make check-ci-fast exited 0 including 51 structural tests and dynamic manual verification. No store writer entries or doctor write mappings. Launcher reported stale overlay seed during later gate jobs. No published-head CI exists yet. Refs-only integration slice.
+  created_at: 2026-11-24T23:22:28.733294268Z
+  modified_at: 2026-11-24T23:22:28.733294268Z
   session_id: 01a20fb6f4b3
   harness_version: codex-cli 0.167.0
 history:
