@@ -13,13 +13,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T08:29:09.068197586Z
-modified_at: 2026-11-24T08:29:09.068197586Z
+modified_at: 2026-11-24T08:29:37.246624950Z
 req_type: Task
 tags:
 - docs
 - showcase
 - small
 - track:integration
+history:
+- id: 01a20cac-beb1-73d3-87d2-0d67549a7354
+  author: joe
+  timestamp: 2026-11-24T08:29:37.329871317Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
   branch: main
