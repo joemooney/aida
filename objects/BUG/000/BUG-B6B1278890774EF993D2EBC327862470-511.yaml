@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T14:53:47.097712580Z
+modified_at: 2026-11-24T15:11:35.787180683Z
 req_type: Bug
 tags:
 - store
@@ -62,6 +62,11 @@ comments:
   created_at: 2026-11-24T14:53:47.097706546Z
   modified_at: 2026-11-24T14:53:47.097706546Z
   session_id: 01a20e0977b7
+- id: 01a20e1c-c36b-7400-b3d2-597605090f85
+  author: joe
+  content: 'DESIGN RULING (advisor-122 2026-11-24 08:15): evaluate admission against BOTH the local canonical store and the fetched ref; REFUSALS are the union and always win; PERMITS (approval/mandate evidence) are the union, but only when no refusal applies in either; a refusal lifted upstream but still local keeps blocking; on fetch timeout/failure use local only and log store refresh unavailable. Tests: (a) fetched-only approval admits; (b) fetched-only hold blocks; (c) local-only hold blocks; (d) timeout -> local only.'
+  created_at: 2026-11-24T15:11:35.787180683Z
+  modified_at: 2026-11-24T15:11:35.787180683Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
