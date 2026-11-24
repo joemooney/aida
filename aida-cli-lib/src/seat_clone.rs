@@ -1589,7 +1589,7 @@ fi
 printf '\0'
 ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || git rev-list --count main..HEAD 2>/dev/null || printf '0')
 printf '%s\0' "$ahead"
-git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
+git status --porcelain=v1 -z --ignored=no --untracked-files=all --ignore-submodules=all
 "#;
     run_sandboxed_until(
         clone,
@@ -2096,6 +2096,7 @@ pub(crate) fn probe_until(
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
             "--branch".as_ref(),
+            "--ignored=no".as_ref(), // trace:BUG-2742 | ai:codex
             "--untracked-files=all".as_ref(),
             "--ignore-submodules=none".as_ref(),
             // Match commit_pending: the host marker is never seat work.

@@ -20,7 +20,7 @@
 //! proves the harness detects the bypass at all.
 //!
 //! Gating: the `bug_2169_bwrap_` tests need bubblewrap and an unprivileged
-//! user namespace. Without them each prints `SKIP (bwrap unavailable)` and
+//! user namespace. Without them each reports the missing capability and
 //! passes, unless `AIDA_REQUIRE_BWRAP_LIVE=1` is set (the CI gate), where a
 //! skip fails the test.
 //! trace:BUG-2169 | ai:claude
@@ -29,6 +29,7 @@
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
+    use aida_core::exec_context::Environment;
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -52,21 +53,113 @@ mod linux {
     /// Whether the live bubblewrap tests can run here. Fails the test instead of
     /// skipping when `AIDA_REQUIRE_BWRAP_LIVE` is set.
     fn bwrap_live() -> bool {
-        let ok = Command::new("bwrap")
+        let probe = Command::new("bwrap")
             .args(["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"])
             .arg("true")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        if !ok {
-            assert!(
-                std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
-                "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot create an unprivileged user namespace \
-             here, so the BUG-2169 sandbox gate could not run. Install bubblewrap and/or \
-             `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`."
-            );
-            eprintln!("SKIP (bwrap unavailable)");
+            .env("LC_ALL", "C")
+            .output();
+        let reason = match probe {
+            Ok(out) if out.status.success() => return true,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let env = Environment::capture();
+                let absent = env.get("PATH").is_some_and(|path| {
+                    std::env::split_paths(path).all(|dir| {
+                        dir.join("bwrap")
+                            .symlink_metadata()
+                            .is_err_and(|e| e.kind() == err.kind())
+                    })
+                });
+                assert!(absent, "failed to start bwrap capability probe: {err}");
+                "bwrap executable missing from PATH".to_owned()
+            }
+            Err(err) => panic!("failed to start bwrap capability probe: {err}"),
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                let diagnostic = stderr.trim_end();
+                let headline = diagnostic
+                    .split_once(", likely because ")
+                    .map_or(diagnostic, |(msg, _)| msg);
+                let denied = diagnostic
+                    == "bwrap: Creating new namespace failed: Operation not permitted"
+                    || matches!(
+                        headline,
+                        "bwrap: No permissions to create new namespace"
+                            | "bwrap: No permissions to creating new namespace"
+                    );
+                assert!(
+                    out.status.code() == Some(1) && !diagnostic.contains('\n') && denied,
+                    "unexpected bwrap probe failure ({}): {stderr}",
+                    out.status
+                );
+                format!(
+                    "unprivileged namespace creation unavailable: {}",
+                    stderr.trim()
+                )
+            }
+        };
+        missing_bwrap_capability(
+            &reason,
+            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_some(),
+        )
+    }
+
+    // trace:BUG-2701 | ai:codex
+    fn missing_bwrap_capability(reason: &str, required: bool) -> bool {
+        assert!(!required, "AIDA_REQUIRE_BWRAP_LIVE: {reason}");
+        eprintln!("SKIP (bwrap unavailable): BUG-2169 live bubblewrap: {reason}");
+        false
+    }
+
+    #[test]
+    fn bug_2169_bwrap_required_gate_fails_on_missing_capability() {
+        use crate::test_exec::write_executable;
+
+        if let Some(expected) = Environment::capture().get("BUG_2701_PROBE_CHILD") {
+            assert_eq!(bwrap_live(), expected == "live");
+            if expected == "live" {
+                eprintln!("live probe succeeded");
+            }
+            return;
         }
-        ok
+        let dir = tempfile::tempdir().unwrap();
+        let check = |expected, required, success, message: &str| {
+            let mut child = Command::new("/proc/self/exe");
+            let thread = std::thread::current();
+            child
+                .args(["--exact", thread.name().unwrap(), "--nocapture"])
+                .env("BUG_2701_PROBE_CHILD", expected)
+                .env("PATH", dir.path())
+                .env_remove("AIDA_REQUIRE_BWRAP_LIVE");
+            if required {
+                child.env("AIDA_REQUIRE_BWRAP_LIVE", "1");
+            }
+            let out = child.output().unwrap();
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            assert_eq!(out.status.success(), success, "{stderr}");
+            assert!(stderr.contains(message), "{stderr}");
+        };
+        let unavailable = "unavailable";
+        check(unavailable, false, true, "SKIP (bwrap unavailable): BUG-2169 live bubblewrap: bwrap executable missing from PATH");
+        let required = "AIDA_REQUIRE_BWRAP_LIVE: bwrap executable missing from PATH";
+        check(unavailable, true, false, required);
+        let exe = dir.path().join("bwrap");
+        write_executable(&exe, "#!/bin/sh\nexit 0\n");
+        check("live", true, true, "live probe succeeded");
+        write_executable(&exe, "#!/nonexistent/bug-2701\n");
+        check(
+            unavailable,
+            false,
+            false,
+            "failed to start bwrap capability probe",
+        );
+        let denial = "bwrap: Creating new namespace failed: Operation not permitted";
+        for (prefix, exit) in [("bad ", "exit 1"), ("", "exit 2"), ("", "kill -TERM $$")] {
+            let script = format!("#!/bin/sh\necho '{prefix}{denial}' >&2\n{exit}");
+            write_executable(&exe, script);
+            check(unavailable, false, false, "unexpected bwrap probe failure");
+        }
+        write_executable(&exe, format!("#!/bin/sh\necho '{denial}' >&2\nexit 1"));
+        check(unavailable, false, true, "SKIP (bwrap unavailable): BUG-2169 live bubblewrap: unprivileged namespace creation unavailable");
     }
 
     /// Use the workspace's ignored target when it is outside a seat.
