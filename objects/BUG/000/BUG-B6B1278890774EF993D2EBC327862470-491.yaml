@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The guard's output includes per-phase timings, and its forge work has a bounded per-PR budget, so one slow PR or forge call can't consume the whole run.
   - AC2: At the deadline the guard reports its PARTIAL results (which PRs it covered and which it skipped) and exits normally instead of being killed. A test drives a slow fake forge and asserts partial output before the ceiling.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T17:21:58.787610270Z
+modified_at: 2026-11-24T17:54:47.625465817Z
 req_type: Bug
 tags:
 - doctor
@@ -229,6 +229,12 @@ comments:
   modified_at: 2026-11-24T17:21:58.787610270Z
   session_id: 01a20e8758ef
   harness_version: codex-cli 0.167.0
+- id: 01a20eb2-2cc9-7263-b3e6-d77ec79da810
+  author: aida-publication-done
+  content: Implementer push f613bc9c207b declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T17:54:47.625465210Z
+  modified_at: 2026-11-24T17:54:47.625465210Z
+  session_id: 01a20e8758ef
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
@@ -344,6 +350,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20eb2-2cc9-7263-b3e6-d7660bc7155d
+  author: aida-publication-done
+  timestamp: 2026-11-24T17:54:47.625463428Z
+  session_id: 01a20e8758ef
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
