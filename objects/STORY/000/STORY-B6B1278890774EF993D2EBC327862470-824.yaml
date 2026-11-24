@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: ONE function, called in the FINAL before_spawn hook, reloads the anchor and members FRESH and re-applies the hold gate, the track/headless policy and the WIP limit, refusing BEFORE spawn on any violation. No other site re-checks authority piecemeal.
   - AC2: Tests: (a) a hold placed during the wait refuses the spawn; (b) track:operator set after admission refuses the spawn; (c) a pull that flips the track refuses the spawn.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T18:08:04.638613690Z
+modified_at: 2026-11-24T18:11:46.261802264Z
 req_type: Story
 tags:
 - admission
@@ -272,6 +272,21 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-824` at head `unavailable`.'
   created_at: 2026-11-24T18:07:16.765556722Z
   modified_at: 2026-11-24T18:07:16.765556722Z
+- id: 01a20ec1-a0a7-7011-ae6b-bd4e31b0577a
+  author: dirtlab
+  content: |-
+    SKETCH (codex design lane): Keep the final decision and the actual release in one store-writer critical section.
+
+    1. Prepare inert launch inputs. Acquire the writer lock before starting the helper. Under it, reread hold, track and exemption evidence and do the fresh open-change/WIP lookup for the first spawn. Keep the guard. A lock timeout, unknown required evidence or refusal ends the attempt here. A 12-second eligible lookup spends zero seconds of the helper acceptance window.
+    2. Under the same guard, spawn the helper, validate the applied receipt, stamp the lease PID and bind the child grant and host services to that worker. Keep the existing bounded receipt/barrier protocol. On any error close the barrier, reap the wrapper and unwind attempt-local registration. Prior vetoes remain effective.
+    3. Make marker turnover generation-specific. Before spawn, stage fresh signal destinations for this attempt while retaining the previous host and seat vetoes as authoritative. Route child signals to the new generation. Do not unlink either old marker before release. Under the guard write the real acceptance byte (native path: spawn). On BrokenPipe or spawn error retain prior vetoes. A successful pipe write permits exec but cannot prove it: require a positive vendor-start acknowledgement before retiring the previous generation. Until then publication checks both generations; missing/ambiguous acknowledgement, crash or failed retirement keeps publication vetoed. Retire only the superseded generation, preserving any fresh punt/hold. Drop the store guard after release, before waiting for vendor completion.
+    4. Every pre-start failure rolls back only resources proven newly created by that pickup. On resume retain the private clone, worktree, lease and veto evidence at every exit. An uncertain start is recovery work; never apply fresh-setup rollback to it.
+
+    Retain the r3 resume data-loss guard, first-spawn-only WIP rule, fresh open-change count and real queue-pickup wiring test. Keep BUG-2139’s child-grant/lease assertions and exercise its intended contained-parent policy with trusted fixture inputs. Add a distinct wrapper-mode fixture using the production headless branch and a controllable helper. Delay eligible admission past 10 seconds and assert vendor entry. Synchronize a competing store writer at the actual barrier write: a nonblocking acquisition there must fail, then succeed after release. Also let the writer commit a hold before acquisition and assert no exec. Close the helper pipe before release with prior host/seat vetoes and verify both survive, publication refuses and resume assets remain. No fake launcher may invoke the authority callback on behalf of this test.
+  created_at: 2026-11-24T18:11:39.890008624Z
+  modified_at: 2026-11-24T18:11:39.890008624Z
+  session_id: 01a20ebdfd5b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
@@ -399,6 +414,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ec1-b996-7880-a484-c7a82ac045cb
+  author: dirtlab
+  timestamp: 2026-11-24T18:11:46.710741992Z
+  session_id: 01a20ebdfd5b
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -407,3 +431,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: Advisor sign-off required before implementation. The posted sketch accepts round 4 findings 1–3 and proposes the deadline, veto turnover and production barrier test changes.
+  raised_by: implementer
+  raised_at: 2026-11-24T18:11:46.261802264Z
