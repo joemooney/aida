@@ -1966,6 +1966,7 @@ fn bug_2740_bug_2684_headless_pickup_returns_disk_refusal_and_records_its_receip
     assert_eq!(receipt["reason_code"], "disk-deferred");
 }
 
+#[cfg(target_os = "linux")]
 fn pickup_host_probe(root: &Path, ambient: &mut crate::test_env::AmbientGuard) {
     // Host readiness precedes the disk check. Answer only its availability
     // probe so the regression also runs on hosts without user namespaces.
@@ -1985,6 +1986,7 @@ test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
     ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
 }
 
+#[cfg(target_os = "linux")]
 fn single_cold_slot(prefix: String, on_wait: impl FnMut() + 'static) {
     crate::lane_admission::TEST_HOST.with(|host| {
         host.replace(Some(crate::lane_admission::TestHost {
@@ -1999,6 +2001,7 @@ fn single_cold_slot(prefix: String, on_wait: impl FnMut() + 'static) {
 
 // trace:BUG-2740 | ai:codex
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2740_pickup_wait_precedes_pull_and_setup_and_rechecks_wip() {
     if crate::test_env::run_path_isolated_test() {
         return;
