@@ -10,12 +10,12 @@ description: |
   - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
   - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
   - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-24T14:45:13.228744404Z
+modified_at: 2026-11-24T15:01:46.769781814Z
 req_type: Bug
 tags:
 - ci
@@ -347,6 +347,13 @@ history:
   author: joe
   timestamp: 2026-11-24T14:27:25.647238646Z
   changes: []
+- id: 01a20e13-c691-7bd0-a06c-3ec3b52caf1f
+  author: aida-session-start
+  timestamp: 2026-11-24T15:01:46.769779133Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
