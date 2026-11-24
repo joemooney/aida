@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T07:35:25.746323003Z
+modified_at: 2026-11-24T07:35:50.314905049Z
 req_type: Task
 tags:
 - small
@@ -62,6 +62,11 @@ comments:
   modified_at: 2026-11-24T07:32:48.834511132Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c7b-812b-7ae2-a804-d7e8163bcf4d
+  author: joe
+  content: 'AUDIT VERDICT (not a lane instruction): alias chain closed by advisor 2026-11-24. advisor-122 ruling 00:38 on #4500: only F1 (exact-prefix admission regression) is fixed in r2; F2-F6 rejected with no follow-ups (this detector is a status hint, not a gate).'
+  created_at: 2026-11-24T07:35:50.314905049Z
+  modified_at: 2026-11-24T07:35:50.314905049Z
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe
