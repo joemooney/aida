@@ -75,6 +75,19 @@ comments:
   created_at: 2026-11-24T01:18:39.425984454Z
   modified_at: 2026-11-24T01:18:39.425984454Z
   session_id: 01a20b00bd28
+- id: 01a20b23-9b18-76a3-b590-268de93d596d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:19):
+    # TASK-3853 / PR #4474 REBASE round (integration-30 pre-check 18:18; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int30-task-3853). TINY.
+
+    The change is substantively OK, but it CONFLICTS with integration: int30-task-3853 was cut from 13bcf6bd671, before #4469 merged, and re-applies #4469's edits in the same test block.
+    DO: rebase onto CURRENT origin/integration (which has #4469, #4471 and #4472). Keep ONLY the NEW detach-enabled JSON/TOON-at-TTY block (about +30 net; it waits for the detached worker's "Refreshed at" and cites TASK-1527 #2349 as the deliberate change). DROP the duplicate #4469 hunks. Details on TASK-3853 (integration-30's comment).
+    One targeted run of tests/test_cache_refresh_outputs.py, then `make check-ci-fast`, then push to the same PR (#4474). COMMIT your work.
+  created_at: 2026-11-24T01:19:58.833535523Z
+  modified_at: 2026-11-24T01:19:58.833535523Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
