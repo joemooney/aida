@@ -1,0 +1,97 @@
+id: 01a20d19-bbdd-7c30-8099-cbc7b18ebb9c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-507
+agreed_id: BUG-2746
+title: Review-watch holds the shared admission.lock for a whole reviewer launch (fd inherited by spawned children), starving the auto-train
+description: |
+  Found 2026-11-24 03:25 MST (advisor-122; filed by product-15). The auto-train failed 6 times in a row with "admission.lock busy; holder legacy review-watch". The holder is the advisor loops worker (pid 427625, running 15m+), whose child runs `aida review watch --launch-reservation PR-4502:...`. Review-watch holds the SHARED admission.lock for the whole reviewer launch, starving the auto-train: p33 #4508 was green and dry-run clean but couldn't board.
+
+  ## Acceptance
+  - AC1: A reviewer-launch reservation holds admission.lock ONLY for the reservation write, not across the launch. Test: while a reviewer launch is blocked or slow, train admission still succeeds.
+  - AC2: The auto-train's "admission.lock busy" alert names the holder's ACTIVITY (e.g. "review-watch launching reviewer for PR-4502") and its AGE. Test.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T10:28:40.029171670Z
+modified_at: 2026-11-24T10:43:39.790419311Z
+req_type: Bug
+tags:
+- admission
+- review-watch
+- strict
+- train
+comments:
+- id: 01a20d25-5af9-7c40-ae15-8ba6118f1f88
+  author: joe
+  content: 'CORRECTION (advisor-122 2026-11-24 03:38): the admission.lock flock was held via an fd INHERITED from the 2.5-day-old deputy runner pid 2805119 (`aida deputy shell run`), passed down to the review-watch launch. AC1 ALSO requires: spawned children must NOT inherit admission.lock''s fd (O_CLOEXEC, or close before exec); test that a spawned child does not hold the lock. Root context: the 03:25 starvation was compounded by imac I/O saturation (see the runner-threads draft).'
+  created_at: 2026-11-24T10:41:21.656745989Z
+  modified_at: 2026-11-24T10:41:21.656745989Z
+- id: 01a20d26-4531-7f93-a4f6-30d96648e574
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-24 03:48 (HIGH, strict, MAIN, drive, <=200 lines; launched on dell1 because imac is I/O-starved).'
+  created_at: 2026-11-24T10:42:21.616850598Z
+  modified_at: 2026-11-24T10:42:21.616850598Z
+- id: 01a20d27-0a4a-7e82-a1e2-29d715447da1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:42):
+    # BUG-2746: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2746` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2746 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2746)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    NEW TESTS: if make check-ci-fast rejects new test names as unregistered, ADD them to scripts/ratchet-set.json (entries only; no other ratchet/gate changes) and list the added entries in the PR body. That is pre-approved; do not punt for it.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+
+    ROUTING (advisor-122 disposition 2026-11-24 03:48): HIGH, STRICT (lock/admission), MAIN, drive, <=200 lines.
+    AC1: a reviewer-launch reservation (`aida review watch --launch-reservation`) holds .aida/auto-train/admission.lock ONLY for the reservation write, not across the launch. Test: while a reviewer launch is blocked/slow, train admission succeeds.
+    AC2: spawned children NEVER inherit the admission.lock fd (O_CLOEXEC, or close before exec). Test that a spawned child does not hold the lock. The auto-train's "admission.lock busy" alert names the holder's ACTIVITY and AGE. Test.
+    Evidence: 2026-11-24 03:25 MST, 6 consecutive auto-train failures "admission.lock busy; holder legacy review-watch"; the flock was held by pid 2805119 (`aida deputy shell run`, 2.5 days old) via an inherited fd.
+  created_at: 2026-11-24T10:42:59.140806924Z
+  modified_at: 2026-11-24T10:42:59.140806924Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20d27-768e-7e71-81e9-d645b6f0022b
+  author: joe
+  content: 'CORRECTION (advisor-122 2026-11-24 03:38): the admission.lock flock was held via an fd INHERITED from the 2.5-day-old deputy runner pid 2805119 (`aida deputy shell run`), passed down to the review-watch launch. AC1 ALSO requires: spawned children must NOT inherit admission.lock''s fd (O_CLOEXEC, or close before exec); test that a spawned child does not hold the lock. Root context: the 03:25 starvation was compounded by imac I/O saturation (see the runner-threads draft).'
+  created_at: 2026-11-24T10:43:39.790419311Z
+  modified_at: 2026-11-24T10:43:39.790419311Z
+history:
+- id: 01a20d25-45d0-7f43-9465-17218e2f731c
+  author: joe
+  timestamp: 2026-11-24T10:41:16.240465865Z
+  changes:
+  - field_name: title
+    old_value: Review-watch holds the shared admission.lock for a whole reviewer launch, starving the auto-train
+    new_value: Review-watch holds the shared admission.lock for a whole reviewer launch (fd inherited by spawned children), starving the auto-train
+- id: 01a20d26-0020-7ae1-a58a-543d2a25a1aa
+  author: joe
+  timestamp: 2026-11-24T10:42:03.936663558Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a20d26-174b-71b1-8e72-78317e686bc4
+  author: joe
+  timestamp: 2026-11-24T10:42:09.867692064Z
+  changes: []
+- id: 01a20d26-2e2c-7f93-9440-775353a369d4
+  author: joe
+  timestamp: 2026-11-24T10:42:15.724667564Z
+  changes: []
+- id: 01a20d27-616f-7441-a928-9cc859a1b738
+  author: joe
+  timestamp: 2026-11-24T10:43:34.383931086Z
+  changes: []
+execution_mode: drive
+filed_at:
+  code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 103bb2ed7ea
+  vendor: claude

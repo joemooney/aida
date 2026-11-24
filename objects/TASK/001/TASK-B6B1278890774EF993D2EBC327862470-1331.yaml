@@ -111,6 +111,13 @@ comments:
   created_at: 2026-11-24T10:29:28.517002666Z
   modified_at: 2026-11-24T10:29:28.517002666Z
   session_id: 01a20cf84b20
+- id: 01a20d24-d866-7be0-82fd-8df33cfa46f6
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 03:52): PR-4510 @ 8adbd6e00a (STORY-3076 H1) PASSES AC1/AC2. +133/-17 in 3 files; Joe-authored (plus the product-preserved wip); merges CLEAN. (a) Credential dirs match as path COMPONENTS (split(''/'') any ''.aws''|''.ssh'') at any depth, including the root; ''.aws-docs'' doesn''t match (test credential_components_at_any_depth). (b) classify_exclusion checks path AND old_path (test rename_excludes_either_path, both directions). (c) Runtime exclusions use Path::starts_with (component-exact) over .aida-store, .aida/cache, .aida/cache-db, sessions, review-verdicts, locks and mailbox, so .aida/cache-policy.toml stays eligible (test runtime_prefix_requires_exact_components). (d) ProjectReviewRulesConfig::load_from_root returns anyhow::Result: it defaults ONLY when the file and any symlink are absent; a dangling symlink, a non-regular file, a read error or a TOML parse error each give a contextual error; it opens read-only with O_NONBLOCK and checks is_file, so a FIFO can''t hang it (test config_defaults_only_when_absent). Extras: 4 ratchet-set.json test names (same-PR, as declared) and one scripts/store-writers.toml row, which the write-sink inventory requires for the new OpenOptions::new call. It''s declared disposition read_only, with no lock or authority. This is S2''s merge gate.'
+  created_at: 2026-11-24T10:40:35.233366389Z
+  modified_at: 2026-11-24T10:40:35.233366389Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20cd4-39e1-7bc0-b0bc-022cffae235a
   author: joe

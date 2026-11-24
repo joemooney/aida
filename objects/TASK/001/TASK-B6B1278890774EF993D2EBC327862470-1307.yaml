@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-24T10:38:19.532404538Z
   modified_at: 2026-11-24T10:38:19.532404538Z
   session_id: 01a20cde53fc
+- id: 01a20d26-5526-7160-b63f-6e93a2acbfc1
+  author: joe
+  content: 'INTEGRATION FIDELITY + SECURITY PRE-CHECK (integration-30, 04:05): PR-4511 @ 657d344388 (STORY-3076 S2) PASSES. HOLD the merge until H1 #4510 (TASK-3866) is in integration. Joe-authored; merges CLEAN; +1072. Fidelity vs 0fdac177513: aida-cli-lib/src/{lib.rs, review_cmd.rs, review_cmd_args.rs} patch-id MATCH; review_prepare.rs DIFFERS by the required arg-safety hardening only. EXTRAS: the CLI help golden snapshot, the cli-format-json audit doc row, a ratchet-set group (4 review_prepare tests) and store-writers rows, which is the standard new-command and write-sink inventory. Security: every user ref (--commit/--from/--to/--path, PR base/head) passes git_arg_guard::reject_option_like before git, and rev-parse/merge-base use --end-of-options, so the ''diff ... <range> --'' calls can''t take an option-like range. Git diff runs with -z (unusual paths) and errors propagate (no silent empty inventory). --write is confined: relative-to-root, Normal components only, directories walked via pinned /proc/self/fd with O_NOFOLLOW|O_DIRECTORY, a non-regular destination refused, written via tempfile + rename. Blocking tests present: option_like_endpoints_refuse_before_git (--commit --help, --from -p, --to --stat), write_confines_new_and_existing_paths (.., absolute outside, symlinked dir, symlinked leaf; outside file untouched), git_inventory_and_content_errors_propagate, root_commit_preserves_unusual_git_paths.'
+  created_at: 2026-11-24T10:42:11.873810544Z
+  modified_at: 2026-11-24T10:42:11.873810544Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
   author: joe
