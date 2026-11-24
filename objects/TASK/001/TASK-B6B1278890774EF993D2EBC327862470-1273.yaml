@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:19:15.482224561Z
-modified_at: 2026-11-24T00:38:50.021832815Z
+modified_at: 2026-11-24T00:45:48.497492659Z
 req_type: Task
 tags:
 - ci
@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-24T00:38:50.021829658Z
   modified_at: 2026-11-24T00:38:50.021829658Z
   session_id: 01a20abfb86e
+- id: 01a20b04-576d-7782-82ca-0e827e69ead1
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 17:52): PR-4471 @ 892c7274f9 PASSES, FIXTURE-ONLY (+4/-2 in tests/test_seat_takeover_lifecycle.py). The ''grants'' are fixture grant JSON files. It replaces the hand-rolled /proc/self/stat ''proc:PID@linux-starttime'' binding with the shared test helper test_mcp_stdio.own_process_binding(), which binds in the current PID namespace. No production code.'
+  created_at: 2026-11-24T00:45:48.497492659Z
+  modified_at: 2026-11-24T00:45:48.497492659Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20ab8-154e-7660-9b6c-b3bf520e2e62
   author: joe
