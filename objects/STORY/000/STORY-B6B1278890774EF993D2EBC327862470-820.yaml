@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T18:58:23.279311311Z
+modified_at: 2026-11-24T19:31:06.263594190Z
 req_type: Story
 tags:
 - autonomy
@@ -334,6 +334,18 @@ comments:
   modified_at: 2026-11-24T18:27:06.350496847Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f0a-5d1c-7c20-8df4-e50ab1e251bb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9a12555ef75a5b1fbc0db25081e78729dd8e1e87 plus native working tree. Reviewed the merge-base diff and working changes; no untracked additions.
+    AC1: [evidence: behavioral-test] gate/tests/story_2884_unset_mode_tests.rs:570 and tests/story_1690_train_tests.rs:6494 cover approved docs, empty and unreadable evidence, unknown files, and withdrawal after a head gains code. The broad-policy test pairs each enforcement file with the CLI manual. gate/tests/story_1917_dispatch_flow_schedule_tests.rs:3395 verifies direct unattended ship refuses a withdrawn small classification. All three passed on the repeated approved_small run.
+    AC2: [evidence: configuration-validation] gate/unset_mode.rs:159 loads reviewed TOML, defaults the missing list to docs/cli/*.md, rejects mixed malformed lists and honors empty lists. docs/configuration-guide.md:75 and generated showcase passed the drift check. Explicit mode takes precedence. Approval reports the effective label without persisting it; ship rereads live base under the lease, train fetches base and re-gates each member.
+    Probes covered case, literal separators, empty and multi-file diffs, UTF-8 failure, git rename/deletion output, strict inventory and operator floor precedence. Fast gate identified the two missing mandate-gate markers; added both and reran the gate. Incremental patch totals 200 lines. Native Git metadata is read-only; merging the four origin/main commits, PR-head CI and protected-floor human/advisor merge are host steps.
+  created_at: 2026-11-24T19:31:06.263594190Z
+  modified_at: 2026-11-24T19:31:06.263594190Z
+  session_id: 01a20eec0c39
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
