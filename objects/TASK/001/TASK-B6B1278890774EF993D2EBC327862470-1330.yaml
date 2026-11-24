@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Mobile layout works at narrow widths (no horizontal overflow) and tabs are keyboard and screen-reader accessible (roles, aria-selected, focus order).
   - AC2: Print scope prints the content, not the slide/tab chrome.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T08:29:09.068197586Z
-modified_at: 2026-11-24T09:48:31.285320120Z
+modified_at: 2026-11-24T10:21:42.296758620Z
 req_type: Task
 tags:
 - docs
@@ -32,6 +32,12 @@ comments:
   modified_at: 2026-11-24T09:48:31.285320120Z
   session_id: 01a20cf16203
   harness_version: codex-cli 0.167.0
+- id: 01a20d13-5c18-7072-a58b-a244c1b7f301
+  author: aida-publication-done
+  content: Implementer push 13e7a41760cc declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T10:21:42.296758033Z
+  modified_at: 2026-11-24T10:21:42.296758033Z
+  session_id: 01a20cf16203
 history:
 - id: 01a20cac-beb1-73d3-87d2-0d67549a7354
   author: joe
@@ -50,6 +56,14 @@ history:
   session_id: 01a20cf16203
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20d13-5c18-7072-a58b-a23a597e2709
+  author: aida-publication-done
+  timestamp: 2026-11-24T10:21:42.296756280Z
+  session_id: 01a20cf16203
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
