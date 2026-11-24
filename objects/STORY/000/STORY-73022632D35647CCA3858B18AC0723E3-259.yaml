@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4481` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T03:41:45.872120866Z
-modified_at: 2026-11-24T03:42:35.058217683Z
+modified_at: 2026-11-24T06:46:31.296065026Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,12 @@ relationships:
   target_id: 01a20b60-4ecb-7e80-9a09-9680dfdf97d5
   created_at: 2026-11-24T03:42:35.058166952Z
   created_by: dirtlab
+comments:
+- id: 01a20c4e-5a80-7702-af91-cc317e266a7d
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #4481 closed on the forge without merging.'
+  created_at: 2026-11-24T06:46:31.296178707Z
+  modified_at: 2026-11-24T06:46:31.296178707Z
 history:
 - id: 01a20ba6-02fb-7fb1-839c-9735ae54a09c
   author: dirtlab
@@ -40,6 +46,13 @@ history:
   author: joe
   timestamp: 2026-11-24T04:56:51.143611962Z
   changes: []
+- id: 01a20c4e-5a80-7702-af91-cc4d5259bcb7
+  author: aida-auto-bump
+  timestamp: 2026-11-24T06:46:31.296183066Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
   branch: main
