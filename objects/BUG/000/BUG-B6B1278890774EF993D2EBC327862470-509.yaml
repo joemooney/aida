@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-24T14:31:06.282699215Z
+modified_at: 2026-11-24T15:19:25.570916832Z
 req_type: Bug
 tags:
 - launch
@@ -39,6 +39,27 @@ comments:
     ROUTING (advisor-122 07:30): MAIN, STRICT, drive, <=150 lines. Read `aida show BUG-2748` (it carries the exact source finding from the parked PR). Branch of the parked PR kept for reference only: write a fresh minimal change.
   created_at: 2026-11-24T14:31:06.282699215Z
   modified_at: 2026-11-24T14:31:06.282699215Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e24-222b-7833-ae8a-5745b8a553ff
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:19):
+    # BUG-2748: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2748` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2748 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2748)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    NEW TESTS: if make check-ci-fast rejects new test names as unregistered, ADD them to scripts/ratchet-set.json (entries only; no other ratchet/gate changes) and list the added entries in the PR body. That is pre-approved; do not punt for it.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+
+    ROUTING (advisor-122 07:30): MAIN, STRICT, drive, <=150 lines. Read `aida show BUG-2748` (it carries the exact source finding from the parked PR). Branch of the parked PR kept for reference only: write a fresh minimal change.
+  created_at: 2026-11-24T15:19:25.570916832Z
+  modified_at: 2026-11-24T15:19:25.570916832Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
