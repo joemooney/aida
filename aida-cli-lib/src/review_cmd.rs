@@ -218,6 +218,8 @@ pub(crate) fn handle_review_command(
             );
             Ok(())
         }
+        // trace:STORY-3076 | ai:antigravity
+        ReviewCommand::Prepare(args) => crate::review_prepare::handle_review_prepare(args, storage),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Record {
             no_carry,
