@@ -1,0 +1,34 @@
+id: 01a20aeb-f24a-7fb2-a8e6-72fd1abbc0ce
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-250
+title: 'Review PR-4469: [AI:codex] fix(cache): exercise current CLI refresh behavior (Refs TASK-3848)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20abd`) for branch `int29-task-3848`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4469>
+  - Branch: `int29-task-3848` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3848
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4469` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T00:19:24.874502658Z
+modified_at: 2026-11-24T00:19:24.874502658Z
+req_type: Story
+filed_at:
+  code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c78b5f8acd
+  session: 01a20abd4e9d
