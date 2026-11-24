@@ -3353,6 +3353,59 @@ impl DatabaseBackend for GitBackend {
         Ok(users)
     }
 
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    fn queue_update_notes(
+        &self,
+        requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        let queues = self.root.join("registry/queues");
+        let files = match std::fs::read_dir(&queues) {
+            Ok(files) => files,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(e.into()),
+        };
+        let paths = files
+            .map(|file| file.map(|entry| entry.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        let mut total = 0;
+        for path in paths {
+            if path.extension() != Some(std::ffi::OsStr::new("yaml")) {
+                continue;
+            }
+            let relative = path
+                .strip_prefix(&self.root)?
+                .to_str()
+                .context("queue path is not valid UTF-8")?;
+            if !Self::read_queue_file(&path)?
+                .iter()
+                .any(|row| requirement_ids.contains(&row.requirement_id))
+            {
+                continue;
+            }
+            let _lock = self.lock_queue_write()?;
+            let mut entries = Self::read_queue_file(&path)?;
+            let mut changed = false;
+            for entry in entries
+                .iter_mut()
+                .filter(|e| requirement_ids.contains(&e.requirement_id))
+            {
+                total += 1;
+                let note = update(entry.note.as_deref());
+                if entry.note.as_ref() != Some(&note) {
+                    entry.note = Some(note);
+                    changed = true;
+                }
+            }
+            if changed {
+                crate::fs_atomic::write_atomic(&path, serde_yaml::to_string(&entries)?)?;
+                self.auto_commit_paths("update queue note", &[relative]);
+            }
+        }
+        Ok(total)
+    }
+
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         // Held across the read-modify-write AND the commit below.
         // trace:BUG-1677 | ai:claude
