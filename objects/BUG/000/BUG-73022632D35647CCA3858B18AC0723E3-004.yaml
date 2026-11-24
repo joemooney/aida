@@ -1,0 +1,17 @@
+id: 01a20e61-a0ea-7e70-ba2e-7f10432f73f2
+spec_id: BUG-73022632d35647cca3858b18ac0723e3-004
+title: Unattended numbered ship can lose spec supervision when the target is missing from the open-change list
+description: Observed during STORY-3038 round 4 using the native ship fixture with an attested approval, green CI, an empty open-PR list and successful direct PR metadata. From main, the command reached the fake forge merge after a same-head size withdrawal. pr_cmd/mod.rs uses optional open_change_by_number output for the branch and title used in supervised admission. Investigate the missing or truncated list case, resolve the numbered target directly or refuse incomplete evidence, and retain the existing already-merged recovery behavior.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T16:26:48.938419383Z
+modified_at: 2026-11-24T16:26:48.938419383Z
+req_type: Bug
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: ea4cace77f
+  vendor: codex
+  session: 01a20e4f3291
+  harness_version: codex-cli 0.167.0
