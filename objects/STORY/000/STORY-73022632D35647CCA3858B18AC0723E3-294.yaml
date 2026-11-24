@@ -1,0 +1,32 @@
+id: 01a20fbc-1389-73d3-92e1-54fa7d9a6f99
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-294
+title: 'Review PR-4542: [AI:codex] fix(launch): retain reservations with incomplete receipt attribution (BUG-2748)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f4f`) for branch `bug-b6b1278890774ef993d2ebc327862470-509`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4542>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-509` → `main`
+
+  ## Covers
+
+  - BUG-2748
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4542` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T22:45:13.737861958Z
+modified_at: 2026-11-24T22:45:13.737861958Z
+req_type: Story
+filed_at:
+  code_sha: 841efeba1bc48f093c15d9ef5f362b0b5027f738
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 841efeba1b
+  session: 01a20f4fc4d9
