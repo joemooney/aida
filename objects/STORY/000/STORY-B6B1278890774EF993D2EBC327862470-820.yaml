@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T17:50:00.916387238Z
+modified_at: 2026-11-24T17:50:03.354593590Z
 req_type: Story
 tags:
 - autonomy
@@ -383,6 +383,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ead-d65a-70f1-a8b7-4f4c5895ceb4
+  author: joe
+  timestamp: 2026-11-24T17:50:03.354588489Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
