@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Mobile layout works at narrow widths (no horizontal overflow) and tabs are keyboard and screen-reader accessible (roles, aria-selected, focus order).
   - AC2: Print scope prints the content, not the slide/tab chrome.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T08:29:09.068197586Z
-modified_at: 2026-11-24T08:29:37.246624950Z
+modified_at: 2026-11-24T09:44:48.336251421Z
 req_type: Task
 tags:
 - docs
@@ -25,6 +25,13 @@ history:
   author: joe
   timestamp: 2026-11-24T08:29:37.329871317Z
   changes: []
+- id: 01a20cf1-93d0-7611-8bff-2d0bec4b4452
+  author: aida-session-start
+  timestamp: 2026-11-24T09:44:48.336249682Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
