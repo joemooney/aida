@@ -79,15 +79,15 @@ pub(crate) fn scan(
         }
     }
     let now = Utc::now();
-    let live = crate::process_probe::probe_live_claude_sessions();
+    let ownership = crate::ownership::reader::LeaseReader::new(root);
     let active: Vec<_> = crate::list_leases(root)
         .into_iter()
-        .filter(crate::leases::lease_is_live(&live, now))
         .filter(|l| {
             l.role
                 .as_deref()
                 .is_some_and(|r| r.eq_ignore_ascii_case("implementer"))
         })
+        .filter(|lease| ownership.retained(lease))
         .collect();
     let mut episodes = BTreeMap::new();
     let mut findings = Vec::new();
