@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T15:29:36.468069572Z
+modified_at: 2026-11-24T16:44:43.694794880Z
 req_type: Story
 tags:
 - doctor
@@ -197,6 +197,11 @@ comments:
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
   created_at: 2026-11-24T15:29:36.468063932Z
   modified_at: 2026-11-24T15:29:36.468063932Z
+- id: 01a20e72-072e-7503-8c30-ba73253b598f
+  author: joe
+  content: 'Slice 2 filed as TASK-3878 (Draft, HIGH, pending advisor disposition): detect open PRs CONFLICTING with their base with no lane, and queue a conflict-repair rework. Interim: product''s watcher now runs this check every sweep (product-15 2026-11-24 09:45).'
+  created_at: 2026-11-24T16:44:43.694794880Z
+  modified_at: 2026-11-24T16:44:43.694794880Z
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
