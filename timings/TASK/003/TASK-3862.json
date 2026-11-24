@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3862",
+  "publishes": [
+    {
+      "at": "2026-11-24T15:53:40.984977750Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T11:09:07.840016887Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4511,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "657d34438854ca176e867083c1dd1ed17f388050"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:11:39.256914697Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4511,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "657d34438854ca176e867083c1dd1ed17f388050"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:12:02.649952803Z",
+      "spec": "TASK-3862",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep for PR-4511 at 657d34438854ca176e867083c1dd1ed17f388050. TASK-b6b1278890774ef993d2ebc327862470-1307 (TASK-3862) — FAIL. The generated worksheet lists one completing spec and two applicable criteria.\nTASK-b6b1278890774ef993d2ebc327862470-1307.AC1: verified by comparing 0fdac177513 and the PR patch, matching Joe Mooney's author metadata, and confirming the forge target is integration. The three wiring hunks match the reference, the CLI handler is derived from it with safety and test changes, and the remaining files are CLI help/audit and test/writer inventories.\nTASK-b6b1278890774ef993d2ebc327862470-1307.AC2: unverified. The untraced-criterion list was checked against the diff. Hosted FAST compile/ratchet job 138384036559 ran and passed the four review_prepare tests on the merge of the reviewed head into 3e0fa1c4351. The leading-dash and static write-escape cases have direct behavioral evidence. The Git-error test covers diff, ls-files and show helper failures, while the CLI still accepts missing comparison/criteria evidence in paths identified below. The write test also omits a concurrent directory move. No local builds or tests were run.\nReviewed all eight changed files. The current local origin/integration is six commits ahead of the pinned head's merge base. Both overlapping inventory edits are additive. Finding 1 depends on H1 in the newer base, and finding 7 concerns exclusion behavior H1 already corrects in core. The other findings apply to the pinned CLI itself. The green FAST run predates H1.",
+        "recovery_hint": "address the review findings, move TASK-3862 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:56:58.237014626Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4511,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b554c5545a0c16c5582a3beab3cfcdc8f765028e"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:57:23.397157501Z",
+      "spec": "TASK-3862",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3862 AC1 passes. PR 4511 targets integration, preserves Joe Mooney’s authorship, and the three CLI wiring hunks match the reference patch. AC2 is partial. The leading-dash ref, output traversal, and diff/ls-files/show error tests are present. The handler propagates malformed H1 config errors, but the widened TASK-3862 brief still requires CLI-level regression tests, Git metadata protection, fail-closed history and exact PR-head lookup. CI pending at review time. FAST source gates passed and FAST compile was running. No local tests or builds were run. The reviewed head is two commits behind origin/integration. scripts/ratchet-set.json is the reported overlap, and none of the findings depends on the intervening base changes.",
+        "recovery_hint": "address the review findings, move TASK-3862 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T12:49:14.527786981Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4511,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "820a6146bf7b6fa24cfff4fbfe5e5566a3e0b3c5"
+      }
+    },
+    {
+      "ts": "2026-11-24T12:49:18.070582867Z",
+      "spec": "TASK-3862",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3862 AC1 PASS: the PR targets integration, the original and implementation commits credit Joe Mooney, and the registration hunks match the original stable patch ID. AC2 PARTIAL: source includes leading-dash, traversal and Git-error regressions, with round-two coverage for invalid rules, the .git pointer, missing shallow parent, forge head versus stale local branch, and credential exclusions before revision-content reads. Git metadata protection and exact PR evidence remain incomplete in the cases below. The findings do not depend on intervening base changes to scripts/ratchet-set.json or scripts/store-writers.toml. Fast source gates passed at the pinned head. Fast compile and merge-hold clearance were pending at review time. Review used source and existing evidence without local builds or tests.",
+        "recovery_hint": "address the review findings, move TASK-3862 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T13:47:06.877929324Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4511,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "49c0e73f5144097891ef0c770106b8e2fa5f1da8"
+      }
+    },
+    {
+      "ts": "2026-11-24T13:47:12.079413516Z",
+      "spec": "TASK-3862",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3862 AC1 PASS. PR targets integration, the original and initial implementation commits credit Joe Mooney, and the CLI registration hunks have matching stable patch IDs. AC2 PARTIAL. Source includes the required leading-dash, output-traversal, and Git-command error regressions. The source also propagates invalid rules and an unavailable shallow parent, excludes the credential paths in the committed fixture, protects the alternate Git metadata directory, and disables replacement objects on preparation's Git data reads. Exact PR/MR evidence remains unfulfilled because the GitHub hostname and GitLab project are still subject to ambient routing. Existing deferred hardening is tracked in TASK-3869. The one newer integration commit changes CI and Python test discovery only. Neither finding depends on it. At the last exact-head check, FAST source gates passed, FAST compile was running, and merge-hold status was pending. Review used source and existing CI evidence.",
+        "recovery_hint": "address the review findings, move TASK-3862 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T13:56:09.457545523Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4511,
+        "verdict": "APPROVED",
+        "reviewed_sha": "49c0e73f5144097891ef0c770106b8e2fa5f1da8"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:20:18.106666690Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4517,
+        "verdict": "APPROVED",
+        "reviewed_sha": "595a9a161b70141c1e78bf5e580d786d77184903"
+      }
+    },
+    {
+      "ts": "2026-11-24T15:43:42.233145310Z",
+      "spec": "TASK-3862",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4517
+      }
+    },
+    {
+      "ts": "2026-11-24T15:53:40.758598196Z",
+      "spec": "TASK-3862",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ea4cace77f021f44f0adedbbaf9a5c46803f00c7",
+        "pr": 4517,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
