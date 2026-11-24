@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T03:40:24.980122476Z
+modified_at: 2026-11-24T03:41:39.824345472Z
 req_type: Task
 tags:
 - doctor
@@ -94,6 +94,12 @@ comments:
   content: Implementer push e94099b539b9 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T03:39:33.987156760Z
   modified_at: 2026-11-24T03:39:33.987156760Z
+  session_id: 01a20b6dfa0b
+- id: 01a20ba5-1c70-7b20-9787-61c3dad32f3b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int30-task-3851` at head `e94099b539b9cd19d00f797a8dd872a305a5d623`.'
+  created_at: 2026-11-24T03:41:39.824333001Z
+  modified_at: 2026-11-24T03:41:39.824333001Z
   session_id: 01a20b6dfa0b
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
