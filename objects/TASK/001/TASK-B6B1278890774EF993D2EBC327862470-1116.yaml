@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-24T14:10:16.931272953Z
+modified_at: 2026-11-24T14:10:24.708357366Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -179,6 +179,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3155 AC1 PARTIAL — the note transform preserves unrelated text and the matching-row update uses the Git writer lock or SQLite immediate transaction, but Git discovery can still lose a persisted file''s identity. AC2 PARTIAL — the regression checks the surviving metadata, absence of removed or never-queued rows, and exclusion of a competing writer during the callback, but allows a stale preflight snapshot to be reused under lock. Reviewed the full landed diff against pinned main 4e140498bc8d425330633234bec803e5f8584ca0 (tree cbcb86b5587bc9a1e4020366b275e87904e8f49f). The PR head is one commit behind that base. The intervening main-watch change is unrelated to both findings. GitHub FAST gates passed and FAST compile was pending at review time. Source review and existing evidence only.. No triage reason was given.'
   created_at: 2026-11-24T14:10:16.931261786Z
   modified_at: 2026-11-24T14:10:16.931261786Z
+- id: 01a20de4-beb3-7210-bb35-ee7aa99825b0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3155):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dd2f0e4489eb
+    Recorded: 2026-11-23T22:46:36.368733793+00:00
+    Findings:
+    1. TASK-3155 AC1 — aida-core/src/db/git_backend.rs:3334–3352 and 3364–3374. The Git path still discards the exact queue file identity during discovery. It decodes and deduplicates the stems, then reconstructs a filename from each decoded ID. For example, a legacy literal `ops%41.yaml` queue and `opsA.yaml` both enumerate as `opsA`; the updater opens only `opsA.yaml`. The byte-to-character conversions likewise fail to round-trip a filename written for a non-ASCII owner. A matching existing row can retain its old marker or be reported absent. Carry the actual discovered queue file into the locked re-read and cover a legacy or non-ASCII filename alongside the alias-sibling case.
+    2. TASK-3155 AC2 — aida-cli-lib/src/lane_disk_deferral.rs:176–231. The revised regression probes lock ownership during note transformation, but both the edit and removal finish before the production annotation reads either queue. A Git implementation that uses the unlocked preflight rows as its update snapshot, then acquires the lock before calling the transform and writing, still passes this test. The hand-built negative control uses an earlier snapshot and cannot catch that production mutation. Interleave the edit and removal after the production preflight read and before its locked re-read, and verify that reusing preflight rows fails the regression.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T14:10:24.563454670Z
+  modified_at: 2026-11-24T14:10:24.563454670Z
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
