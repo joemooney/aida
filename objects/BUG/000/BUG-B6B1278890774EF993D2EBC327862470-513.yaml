@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T22:55:52.886319939Z
+modified_at: 2026-11-24T23:11:38.424105242Z
 req_type: Bug
 tags:
 - codex
@@ -160,6 +160,18 @@ comments:
   modified_at: 2026-11-24T21:01:32.290652026Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20fd4-46da-75d2-84d3-f899630413bb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 39850b8a0b34016206ca24cab1a1c37cba918f7d plus the native-lane working diff. Reviewed origin/main...HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] aida-cli/tests/support/codex_init.py:79 exercises clean re-init with the remote tip pinned before the native opt-in. The interactive fixture was inspected and syntax checked, but was outside the single targeted run.
+    AC2: [evidence: behavioral-test] task_2631_containment_tests.rs:538, bug_2752_remote_policy_refuses_until_published executed and passed. Missing policy suggests setup, local-only native gives the push command, and the published tip admits native launch.
+    Deep pass: both callers use the same hint, existing TOML parser, fully qualified local and tracking refs, and shell-quoted branch. Local evidence only changes refusal text. Retained prior refusal coverage. Corrected formatting. Concurrent config-writer race remains TASK-3881. Publication and exact-head CI belong to the host.
+  created_at: 2026-11-24T23:11:38.424105242Z
+  modified_at: 2026-11-24T23:11:38.424105242Z
+  session_id: 01a20fc57342
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe

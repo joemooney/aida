@@ -8,16 +8,29 @@ description: |
   ## Acceptance
   - AC1: (F1, diagnostic fidelity) the live review-watch dispatcher persists the full relevant queue-work failure (not only the last nonempty line) for reviewer launches (review_watch.rs:1668/1706/2668/2773). Test.
   - AC2: (F3) a capped pickup projects retry_backoff=false/retry_exhausted=true so reconciliation stops re-observing a head that needs operator release (review_watch.rs:4686); (F4) ordinary reservations omit pickup_retries=0 so mixed-version readers with deny_unknown_fields still accept them (review_watch.rs:330/370). A test each.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:52:30.579150419Z
-modified_at: 2026-11-24T23:03:42.122203328Z
+modified_at: 2026-11-24T23:12:23.746933011Z
 req_type: Task
 tags:
 - integration
 - review-watch
+comments:
+- id: 01a20fd4-f69e-7d03-88aa-17ded1af3e32
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e74e19b7c0fa4b54ddcc5532cefc63a8d80c41c9 plus the native worktree diff. origin/main...HEAD is empty. Two tracked files changed, no untracked additions.
+    AC1: [evidence: behavioral-test] review_watch.rs:2798 and task_1993_review_watch_tests.rs:5884 exercise multiline error and recovery text with preceding chatter, through receipt persistence.
+    AC2: [evidence: behavioral-test] review_watch.rs:4774 and tests:5924 cover below-cap, capped and completed attempts. review_watch.rs:330 and tests:5940 cover omitted zero, absent-field default and nonzero persistence.
+    Probes: classification and projection share the pickup matcher and cap. Fixed unmarked multiline fallback to retain the newest complete lines. Reads remain bounded and the existing UTF-8-safe receipt limit applies. Existing process, lock and admission checks remain in force. No tests weakened. rustfmt and git diff --check passed. Lane validation submitted. Manual publication blocker: remote integration at 78fe2ef652 lacks BUG-2720, which the provisioned checkout already contains.
+  created_at: 2026-11-24T23:12:23.746933011Z
+  modified_at: 2026-11-24T23:12:23.746933011Z
+  session_id: 01a20fcca4fc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f1e-587a-78c0-8541-32b33964f26d
   author: joe
@@ -37,6 +50,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20fd1-3bc0-72d0-ba59-ddfbe59bd84b
+  author: dirtlab
+  timestamp: 2026-11-24T23:08:20.288201398Z
+  session_id: 01a20fcca4fc
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20fd3-a838-7cc2-933d-99cb0d0e6e81
+  author: dirtlab
+  timestamp: 2026-11-24T23:10:59.128667713Z
+  session_id: 01a20fcca4fc
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
@@ -45,3 +73,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: The requested integration base (remote tip 78fe2ef652) lacks BUG-2720 pickup_retry and Attempt.pickup_retries. The provisioned native checkout e74e19b7c0 contains both. Host must integrate the prerequisite or authorize a different base before publishing these edits.
+  raised_by: implementer
+  raised_at: 2026-11-24T23:10:58.661659837Z
