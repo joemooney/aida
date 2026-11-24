@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T14:20:44.462940246Z
+modified_at: 2026-11-24T14:42:28.030920293Z
 req_type: Bug
 tags:
 - forge
@@ -132,6 +132,19 @@ comments:
   modified_at: 2026-11-24T14:14:23.076241265Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e02-1c3d-7223-bb88-d597296ae52c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a9c57e69f749db9efa0ee9c4bd6b65c8d2055160 plus the native working-tree diff. origin/main is an ancestor. No untracked additions.
+    AC1: [evidence: behavioral-test] The isolated bug2735_watchers_yield_core_budget_to_train_ci test passed on the final edits (1 executed, job j20261124T143712841-2-0). It exercises the 999/5000 and 1000/5000 boundary, main/review discovery, direct exact-SHA reads, and a streaming child dropping the budget on a different host from the default, with gh available only through fallback. No completion PR read followed. See tests/task_1993_review_watch_tests.rs:5660.
+    F1 fixed at pr_train.rs:5023 and :5081. Discovery skips; retained journal recovery still takes review locks and merge claims. F2 fixed at ci_gate.rs:482, :524 and :529. Each seat poll checks budget; throttle timeout has a distinct error so it cannot become CiRed. F3/F4 fixed at forge.rs:2398 and :2447. The interactive watcher pins its command route; main watch uses its API host. F5 fixed at ci_watch.rs in the terminal re-probe.
+    Deep pass checked host/project and executable agreement, typed numeric JSON, the exact threshold, empty/multiple journal sets, and a budget change during streaming. No new merge authority or unchecked head credit. Tightened the raw-gh inventory and corrected an ambient read found by the FAST source guard. make check-ci-fast is running in the launcher.
+    Deferred by the pickup ruling: F6 graceful terminal restoration, F7 idle-clock accounting, F8 supervisor throttle classification, F9 full worker/seat/recovery entry-point coverage. The active-train route was inspected; the automated fixture reaches the commit reader directly. AC2 is outside this review slice.
+  created_at: 2026-11-24T14:42:28.030920293Z
+  modified_at: 2026-11-24T14:42:28.030920293Z
+  session_id: 01a20dedf8ae
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
