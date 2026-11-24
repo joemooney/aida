@@ -108,6 +108,8 @@ pub(crate) enum Occupancy {
 /// What [`scan_occupancy`] looks for.
 #[derive(Debug, Default)]
 pub(crate) struct OccupancyProbe<'a> {
+    /// During recovery, invocation ancestry exempts only command-line evidence.
+    pub recovery: bool,
     /// Every process whose cwd is within this tree.
     pub worktree: Option<&'a Path>,
     /// Every process in this process group (the worker leads its own).
@@ -200,7 +202,7 @@ pub(crate) fn scan_occupancy_in_with_owner(
             continue;
         };
         seen += 1;
-        if exclude.contains(&pid) {
+        if !probe.recovery && exclude.contains(&pid) {
             continue;
         }
         let base = entry.path();
@@ -253,9 +255,45 @@ pub(crate) fn scan_occupancy_in_with_owner(
             return Occupancy::Occupied(format!("pid {pid} is in the supervisor's session {sid}"));
         }
         if let Some(attempt) = probe.attempt {
+            // trace:BUG-2747 | ai:codex
+            if probe.recovery {
+                match std::fs::read(base.join("environ")) {
+                    Ok(raw) => {
+                        if raw.split(|&b| b == 0).any(|field| {
+                            field
+                                .iter()
+                                .position(|&b| b == b'=')
+                                .is_some_and(|i| &field[i + 1..] == attempt.as_bytes())
+                        }) {
+                            return Occupancy::Occupied(format!(
+                                "pid {pid} carries attempt {attempt}"
+                            ));
+                        }
+                    }
+                    Err(e) if gone(&e) || !ours || predates => {}
+                    Err(e) => {
+                        return Occupancy::Unknown(format!(
+                            "process {pid}'s environment is unreadable: {e}"
+                        ))
+                    }
+                }
+            }
             match std::fs::read(base.join("cmdline")) {
                 Ok(raw) => {
-                    if String::from_utf8_lossy(&raw).contains(attempt) {
+                    let mut after_agent = false;
+                    let mut recovery_args = false;
+                    let names_attempt = raw.split(|&b| b == 0).any(|arg| {
+                        if after_agent && arg == b"recover-launch" {
+                            recovery_args = true;
+                        }
+                        after_agent = exclude.contains(&pid) && arg == b"agent";
+                        if recovery_args && arg == attempt.as_bytes() {
+                            recovery_args = false;
+                            return false;
+                        }
+                        String::from_utf8_lossy(arg).contains(attempt)
+                    });
+                    if names_attempt {
                         return Occupancy::Occupied(format!("pid {pid} names attempt {attempt}"));
                     }
                 }
@@ -756,6 +794,14 @@ fn log_birth_tick(dir: &Path, attempt: &str) -> Option<u64> {
 /// or worktree its receipt names (read leniently). Unreadable means NO.
 // trace:STORY-2254 | ai:claude
 pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
+    unknown_attempt_is_dead_for(dir, attempt, &[std::process::id()].into())
+}
+
+fn unknown_attempt_is_dead_for(
+    dir: &Path,
+    attempt: &str,
+    own: &std::collections::HashSet<u32>,
+) -> bool {
     let lenient = receipt_path(dir, attempt)
         .ok()
         .and_then(|p| std::fs::read(p).ok())
@@ -778,6 +824,7 @@ pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
     };
     let field = |name: &str| lenient.as_ref().and_then(|v| v.get(name));
     let probe = OccupancyProbe {
+        recovery: true,
         worktree: worktree.as_deref(),
         group: field_pid("worker"),
         session: field_pid("supervisor"),
@@ -792,9 +839,7 @@ pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
         .min()
         .or_else(|| log_birth_tick(dir, attempt)),
     };
-    let mut own = std::collections::HashSet::new();
-    own.insert(std::process::id());
-    scan_occupancy(&probe, &own) == Occupancy::Clear
+    scan_occupancy(&probe, own) == Occupancy::Clear
 }
 
 /// Admit `receipt` (phase Prepared) for its scope, or refuse while any
@@ -877,7 +922,7 @@ pub(crate) fn retire_unknown(dir: &Path, project_root: &Path, attempt: &str) -> 
             "attempt {attempt} has no receipt to retire"
         );
         anyhow::ensure!(
-            unknown_attempt_is_dead(dir, attempt),
+            unknown_attempt_is_dead_for(dir, attempt, &super::agent_codex_background::own_process_chain()),
             "attempt {attempt} ({why}) cannot be proven dead: a process may still run for it, or the process table could not be fully read; nothing was changed"
         );
         let retired = dir.join(RETIRED_DIR);
