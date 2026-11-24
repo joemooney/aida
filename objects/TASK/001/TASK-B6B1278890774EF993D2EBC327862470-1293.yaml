@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:32:35.025155532Z
-modified_at: 2026-11-24T05:47:55.875492257Z
+modified_at: 2026-11-24T05:49:23.135034369Z
 req_type: Task
 tags:
 - small
@@ -55,6 +55,12 @@ comments:
   content: Implementer push 929103959163 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T05:46:55.190829671Z
   modified_at: 2026-11-24T05:46:55.190829671Z
+  session_id: 01a20bdf8589
+- id: 01a20c1a-0b3f-7082-8f16-6370a1f17609
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int31-task-3857` at head `929103959163eb27f0a485945b944ea813863e7a`.'
+  created_at: 2026-11-24T05:49:23.135026463Z
+  modified_at: 2026-11-24T05:49:23.135026463Z
   session_id: 01a20bdf8589
 history:
 - id: 01a20bd4-271a-78c3-b285-2b0a41dee5b4
