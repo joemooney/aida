@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-24T21:43:08.781078841Z
+modified_at: 2026-11-24T22:05:57.633169011Z
 req_type: Bug
 tags:
 - launch
@@ -93,6 +93,13 @@ comments:
     Strict-tier probes covered reader/writer field spelling, JSON null and absent fields, zero PIDs, missing start ticks, empty paths, missing combinations, symlink/size handling, and the admission lock. No user-controlled proc-root selector, new grant route or gate edits. Rustfmt, diff --check, store-writer inventory and FAST source gates passed. Intermediate broad run: 35 passed and 4 failed, including the since-fixed positive control. Three existing supervisor checks exercised real process visibility and remained red in that run. No PR-head CI is available in this native lane.
   created_at: 2026-11-24T21:43:08.781078841Z
   modified_at: 2026-11-24T21:43:08.781078841Z
+  session_id: 01a20f4fc4d9
+  harness_version: codex-cli 0.167.0
+- id: 01a20f98-22e1-7f50-b093-19b8573b99f0
+  author: dirtlab
+  content: 'Final validation: make check-ci-fast exited 0. The rebuilt CLI refused the isolated grant-only receipt with exit 1, preserved its contents, and printed the attempt-specific launch-status command.'
+  created_at: 2026-11-24T22:05:57.633169011Z
+  modified_at: 2026-11-24T22:05:57.633169011Z
   session_id: 01a20f4fc4d9
   harness_version: codex-cli 0.167.0
 history:
