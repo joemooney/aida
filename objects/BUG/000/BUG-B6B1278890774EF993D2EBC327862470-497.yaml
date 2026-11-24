@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T14:11:36.000410429Z
+modified_at: 2026-11-24T14:15:43.131600296Z
 req_type: Bug
 tags:
 - integration
@@ -154,6 +154,27 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:11:35.854622401Z
   modified_at: 2026-11-24T14:11:35.854622401Z
+- id: 01a20de9-d0c5-7552-bfb0-09d521067809
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:15):
+    # BUG-2736 / PR #4475 rework (advisor-122 stalled-CR sweep 2026-11-24 07:20; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 40 lines. Note: 1 major; <=40 lines.
+
+    BLANKET RULING (advisor-122 2026-11-24 07:20 stalled-CR sweep): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major that is a behaviour REGRESSION this PR introduced. DEFER minor/p2 unmet-claimed-AC and test-strength items (mass-change): do NOT fix them; list them in the PR body as deferred. In your exit summary and PR body, list EACH finding as fixed or deferred.
+
+    CR at 93fd84ca. Findings:
+
+    F1. [major/unmet-claimed-ac/blocking] The shelve can still regress the stored status without a comment. aida-cli-lib/src/leases.rs:3756 reads the requirement outside the write lock, lines 3792–3797 decide whether to annotate that snapshot, and line 3800 saves the entire snapshot. If shelving reads NeedsAttention and a concurrent triage write moves the spec to InProgress before the save, shelving reverts the stored InProgress status to NeedsAttention without recording the writer or reason. Make the guarded transition, comment and failure-reason update together against the current requirement using the existing atomic per-spec update. Add a regression for the stale-snapshot interleaving.
+
+    F2. [minor/test-gap/deferred] The test at aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:1788 starts in InProgress, so it would miss a change that only silences the incident's Done-to-NeedsAttention transition. It would also pass if shelving appended a misleading comment on a retry that leaves the status unchanged. Add a Done refusal fixture and a second call to verify the persisted comment count stays at one.
+
+    F3. [minor/p2/deferred] Record the stale-refusal follow-up requested in the BUG-2736 brief. aida-cli-lib/src/review_commands.rs:3227 validates the verdict against its own PR head, and the call at line 3659 passes no PR or head association to the shelving writer. A refusal for a still-current older PR can therefore shelve a Done spec whose Done state was earned by another change. Document this in the PR body and track a separate fix that binds shelving to the change that earned Done.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T14:15:43.131600296Z
+  modified_at: 2026-11-24T14:15:43.131600296Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
