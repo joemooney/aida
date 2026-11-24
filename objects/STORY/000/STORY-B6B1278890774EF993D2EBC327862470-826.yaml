@@ -9,11 +9,11 @@ description: |
   - AC1: AIDA ships a "stalled review" detector (an `aida doctor` check, plus an advisor-loop or night-shift job) that lists open PRs whose latest verdict is request-changes AT THEIR CURRENT HEAD with no rework lane running or queued for the spec, with the PR, spec, verdict age and finding counts; and an "approved but not landing" list (approved at head, not on a train, with the blocking reason).
   - AC2: When an item stays stalled longer than a configurable threshold (default 60 min), it raises a routed alert to the advisor role, not silently. Tests: a stalled CR is reported; one with a queued rework is not; a re-pushed head clears it.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T14:36:20.125542229Z
+modified_at: 2026-11-24T14:36:22.820057951Z
 req_type: Story
 tags:
 - doctor
@@ -27,6 +27,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20dfc-85a4-78d0-a911-6d7c2d8b8aa0
+  author: joe
+  timestamp: 2026-11-24T14:36:22.820057395Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
   branch: main
