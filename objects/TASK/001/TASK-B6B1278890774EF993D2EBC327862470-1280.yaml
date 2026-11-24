@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-24T01:16:51.097876316Z
   modified_at: 2026-11-24T01:16:51.097876316Z
   session_id: 01a20b00bd28
+- id: 01a20b21-df2e-76b1-accf-fecd2e509dc0
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 18:22): PR-4474 @ 1a6b454e9c is SUBSTANTIVELY OK but CONFLICTS with integration. Content: test-only (tests/test_cache_refresh_outputs.py). A new detach-enabled block (AIDA_CACHE_NO_DETACH=0) runs explicit JSON and TOON ''list'' at a real TTY, asserts the output renders, and waits until this invocation''s detached refresh worker logs ''Refreshed at''. It cites TASK-1527 (#2349) as the deliberate replacement of the pre-C deferral with a detached request, which meets the advisor''s ''restore coverage OR prove the deferral removal was deliberate''. BLOCKER: the branch was cut from 13bcf6bd671, BEFORE #4469 (TASK-3848) merged, and re-applies #4469''s edits. git merge-tree against integration CONFLICTS in the same end-of-test block. Needs a codex rebase onto current integration keeping only the new detach-enabled block (about +30 net); then re-pre-check.'
+  created_at: 2026-11-24T01:18:05.304875609Z
+  modified_at: 2026-11-24T01:18:05.304875609Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
