@@ -1,0 +1,26 @@
+id: 01a20af9-07d4-77e0-bd30-21cbdf816cd4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1280
+agreed_id: TASK-3853
+title: Restore detach-enabled coverage for explicit JSON/TOON at a TTY in test_cache_refresh_outputs.py (follow-up to TASK-3848)
+description: |
+  Follow-up to TASK-3848 / #4469 (advisor-122 ruling 2026-11-23 17:40; filed by product-15). #4469 made tests/test_cache_refresh_outputs.py pass by setting AIDA_CACHE_NO_DETACH=1, which removed coverage of the DETACH-ENABLED path for explicit JSON/TOON output at a TTY.
+
+  ## Acceptance
+  - AC1: Restore a detach-enabled assertion for explicit JSON/TOON output at a TTY: EITHER they still defer (the pre-C rule) and a test asserts that, OR a test proves the deferral was removed on purpose (citing the change that removed it).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T00:33:42.356470431Z
+modified_at: 2026-11-24T00:33:42.356470431Z
+req_type: Task
+tags:
+- small
+- track:integration
+filed_at:
+  code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5db0b2b1b17
+  vendor: claude
