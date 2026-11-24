@@ -1,0 +1,32 @@
+id: 01a20fdb-7dc1-7fd3-979b-3e0d47fabd3d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-295
+title: 'Review PR-4544: [AI:codex] fix(train): bound the fetch-only store refresh (BUG-2750)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f8f`) for branch `bug-b6b1278890774ef993d2ebc327862470-511`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4544>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-511` → `main`
+
+  ## Covers
+
+  - BUG-2750
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4544` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T23:19:32.545272706Z
+modified_at: 2026-11-24T23:19:32.545272706Z
+req_type: Story
+filed_at:
+  code_sha: e74e19b7c0fa4b54ddcc5532cefc63a8d80c41c9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e74e19b7c0
+  session: 01a20f8ffc5d
