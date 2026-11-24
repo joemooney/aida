@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T15:17:51.276865978Z
+modified_at: 2026-11-24T15:19:32.458882914Z
 req_type: Bug
 tags:
 - store
@@ -72,6 +72,15 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: When a successful fetch and the canonical store disagree, should train admission require both snapshots to permit the member, or refuse admission until the local store incorporates the fetched tip? A fetched approval can coexist with a local refusal, and the timeout rule only specifies cached fallback.. No triage reason was given.'
   created_at: 2026-11-24T15:11:37.853247473Z
   modified_at: 2026-11-24T15:11:37.853247473Z
+- id: 01a20e23-f893-7da0-a313-9bf9bc21f647
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9cc76437f4f2054f6c97da341ed1b482c60c221d. Merge-base diff, working diff and untracked additions empty. AC1: [evidence: behavioral-test] unmet. Two-repository Git fixture saw the publication only at FETCH_HEAD; gate/review_publication.rs:255 resolves HEAD. Strict-tier probe: gate/mandate.rs:5-15 designates the Git event as audit-only; a fetched grant alone has no verifiable direct-human issuance under today's gate. AC2: [evidence: behavioral-test] unmet. No train timeout or lock regression run. Publication withheld pending mandate provenance ruling.
+  created_at: 2026-11-24T15:19:27.207824359Z
+  modified_at: 2026-11-24T15:19:27.207824359Z
+  session_id: 01a20e22071d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -113,6 +122,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20e23-1bbf-7552-8948-eb51d195ab6b
+  author: dirtlab
+  timestamp: 2026-11-24T15:18:31.615825805Z
+  session_id: 01a20e22071d
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20e24-0d75-7692-b5d8-9631141fa232
+  author: dirtlab
+  timestamp: 2026-11-24T15:19:33.493804760Z
+  session_id: 01a20e22071d
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -121,3 +145,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: The union and refusal precedence are clear. gate/mandate.rs:5-15 explicitly excludes Git from mandate authority and validates private direct-human grants and stop tombstones. Should fetched mandate evidence support coverage only under a currently active locally validated mandate, or can a fetched-only grant authorize train admission? If the latter, what authenticated issuance and revocation evidence must the train verify?
+  raised_by: implementer
+  raised_at: 2026-11-24T15:19:32.458882914Z
