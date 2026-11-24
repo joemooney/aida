@@ -1,0 +1,30 @@
+id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-513
+agreed_id: BUG-2752
+title: aida init with codex-only does not configure [contained.vendors] codex="native"; codex seat launch refuses and suggests claude
+description: |
+  Reported by Joe 2026-11-24 (filed by product-15) from a CODEX-ONLY environment (work, where Claude is not allowed). After `aida init` with ONLY codex selected, `aida agent new codex` → role advisor refuses:
+  "Error: `codex` cannot run an AIDA-contained session; refusing to launch it. Supported [contained.vendors] settings: claude = "aida" (AIDA containment), codex = "native" (explicit opt-in in the trusted default-branch config; native sandbox, not AIDA-contained). Use --vendor claude or AIDA_HEADLESS_VENDOR=claude for AIDA containment."
+  The remedy it suggests (use claude) is impossible there. Part of STORY-3099 (codex can hold the advisor seat).
+
+  ## Acceptance
+  - AC1: When `aida init` is run with codex as the only selected vendor, it writes `[contained.vendors] codex = "native"` into the committed default-branch config (the trusted location the check requires) and tells the user in one line what that means (codex's native sandbox, not AIDA containment). A test: init with codex-only → `aida agent new codex --role advisor` passes the containment check.
+  - AC2: When a codex launch is refused for missing containment config in a project with NO claude vendor configured, the error names the exact one-line fix (`[contained.vendors] codex = "native"` in .aida/config.toml on the default branch) instead of suggesting claude. Test.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T17:37:37.780326585Z
+modified_at: 2026-11-24T17:37:37.780326585Z
+req_type: Bug
+tags:
+- codex
+- init
+- seats
+filed_at:
+  code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1ee
+  vendor: claude
