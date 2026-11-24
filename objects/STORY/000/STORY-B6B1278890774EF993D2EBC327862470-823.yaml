@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:23:07.623752447Z
+modified_at: 2026-11-24T07:23:10.048773672Z
 req_type: Story
 tags:
 - track:integration
@@ -33,6 +33,11 @@ comments:
   content: 'Intake (product-15 2026-11-24 00:25): Joe implemented this himself (antigravity) in worktree /home/joe/ai/aida-story-3076, branch story-3076-review-engine @ 0fdac177513 (from main aaeb386bf51), now PUSHED to origin for safety. One commit, 23 files, +3497/-16: aida-core/src/review_engine.rs +1523 (8 unit tests), aida-cli-lib/src/review_prepare.rs +806 (0 tests), skill templates (aida-review.md, aida-code-review.md: mirrors need make sync-templates), docs/showcase/code-review.html +914, a 60KB .pptx and Marp source, plus doc links. Far over the small-PR rule; slicing plan sent to advisor-122 for ruling before any PR is opened.'
   created_at: 2026-11-24T07:19:13.226145264Z
   modified_at: 2026-11-24T07:19:13.226145264Z
+- id: 01a20c6f-e760-7a40-bd74-c083d274dc87
+  author: joe
+  content: 'Slicing per advisor-122 ruling 2026-11-24 00:30: S1 = this spec (core review_engine.rs + 8 tests; standard; size exception approved; the lane posts a <=1-page sketch comment here before merge, for advisor signoff), S2/S3/S4 child tasks filed. All TRACK=integration, cherry-picked from 0fdac177513 keeping Joe''s authorship; S2 after S1, S3 after S2, S4 independent; the .pptx is dropped.'
+  created_at: 2026-11-24T07:23:10.048773672Z
+  modified_at: 2026-11-24T07:23:10.048773672Z
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
