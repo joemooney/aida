@@ -1,5 +1,6 @@
 id: 01a20d19-5d89-7ee3-bd5f-15f00c435b18
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-277
+agreed_id: STORY-3092
 title: 'Review PR-4510: [AI:codex] fix(review): enforce content exclusions and report invalid rules (TASK-3866)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20cf8`) for branch `int32-task-3866`.
@@ -60,6 +61,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20d40-ce39-7cd1-a24d-e69eeb41f396
+  author: joe
+  timestamp: 2026-11-24T11:11:20.633259736Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
   branch: main

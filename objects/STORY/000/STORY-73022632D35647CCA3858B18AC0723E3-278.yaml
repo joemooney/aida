@@ -1,5 +1,6 @@
 id: 01a20d21-7710-7231-aa3a-11131aec8698
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-278
+agreed_id: STORY-3091
 title: 'Review PR-4511: [AI:codex] feat(review): aida review prepare CLI (TASK-3862)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20cde`) for branch `int32-task-3862`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T10:37:14.899368519Z
   session_id: 01a20cde53fc
+  changes: []
+- id: 01a20d40-9bd2-7e71-afec-fb89e8dfed9d
+  author: joe
+  timestamp: 2026-11-24T11:11:07.730242659Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af

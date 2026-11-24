@@ -1,5 +1,6 @@
 id: 01a20d13-b5d9-7f53-a971-659da7337954
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-276
+agreed_id: STORY-3093
 title: 'Review PR-4509: [AI:codex] fix(showcase): make review tabs accessible and print all sections (TASK-3865)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20cf1`) for branch `int32-task-3865`.
@@ -60,6 +61,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20d41-007f-7da3-a0eb-09fbaa7387b4
+  author: joe
+  timestamp: 2026-11-24T11:11:33.503934580Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
   branch: main
