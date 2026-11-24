@@ -59,6 +59,55 @@ fn task3809_runtime_lock_is_close_on_exec() {
     assert_ne!(flags & libc::FD_CLOEXEC, 0);
 }
 
+// trace:BUG-2746 | ai:codex
+#[test]
+fn bug2746_train_admission_during_reviewer_launch() {
+    let (temp, store) = fixture();
+    let attempt = dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
+    execute_reservation(
+        &store,
+        "PR-2",
+        &attempt.token,
+        |_| Ok(()),
+        |_| {
+            // Admission runs before the synchronous launch callback can return.
+            let train_dir = Directory::open(&temp.path().join(".aida/auto-train"))?;
+            let _tick = train_dir.admission_lock("auto-train supervising worker")?;
+            let _train = crate::admission_owner::cooperative_train(temp.path(), false)?;
+            let _members = train_members(temp.path(), &[1])?;
+            assert!(train_members(temp.path(), &[2]).is_err());
+            Ok(())
+        },
+    )
+    .unwrap();
+}
+
+// trace:BUG-2746 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn bug2746_admission_fd_absent_after_exec() {
+    let (temp, store) = fixture();
+    let _lock = store
+        .dir
+        .admission_lock("review-watch updating PR-2")
+        .unwrap();
+    let status = Command::new("/bin/sh")
+        .args([
+            "-c",
+            r#"
+                [ -f "$1" ] && [ -d /proc/self/fd ] || exit 2
+                for fd in /proc/self/fd/*; do
+                    if [ "$fd" -ef "$1" ]; then exit 1; fi
+                done
+            "#,
+            "probe",
+        ])
+        .arg(temp.path().join(".aida/review-watch/admission.lock"))
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
 fn fixture() -> (tempfile::TempDir, Store) {
     let temp = tempfile::tempdir().unwrap();
     let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();

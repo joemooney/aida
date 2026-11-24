@@ -644,6 +644,22 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
+    // Diagnostic only. Keep the permanent flock inode and describe the last
+    // recorded acquisition, since ownership may change while an alert is read.
+    // trace:BUG-2746 | ai:codex
+    fn admission_lock(&self, activity: &str) -> Result<RuntimeLock> {
+        let mut lock = self.lock("admission.lock")?;
+        // Pad each bounded ASCII record so a shorter activity overwrites the
+        // previous one in full on the already locked descriptor.
+        let record = format!("{} {activity}", chrono::Utc::now().timestamp());
+        anyhow::ensure!(
+            record.is_ascii() && record.len() <= 255,
+            "invalid lock activity"
+        );
+        writeln!(lock.0, "{record:<255}")?;
+        Ok(lock)
+    }
+
     fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
         // Retry brief concurrent transactions; a holder that outlasts the
@@ -656,6 +672,28 @@ impl Directory {
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e)
+                    if name == "admission.lock" && e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
+                    let mut record = String::new();
+                    let summary = (&file)
+                        .take(256)
+                        .read_to_string(&mut record)
+                        .ok()
+                        .and_then(|_| record.strip_suffix('\n')?.trim_end().split_once(' '))
+                        .and_then(|(at, activity)| {
+                            let age = chrono::Utc::now()
+                                .timestamp()
+                                .checked_sub(at.parse().ok()?)?;
+                            (age >= 0
+                                && !activity.is_empty()
+                                && !activity.chars().any(char::is_control))
+                            .then(|| format!("last recorded activity {activity}, age {age}s"))
+                        })
+                        .unwrap_or_else(|| "activity and age unknown".into());
+                    return Err(e)
+                        .with_context(|| format!("review-watch lock busy: {name}; {summary}"));
                 }
                 Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
             }
@@ -728,7 +766,9 @@ impl Store {
         parse_key(key)?;
         // Every writer uses this ordering. No forge query, child wait or mail
         // delivery occurs while either lock is held.
-        let _global = self.dir.lock("admission.lock")?;
+        let _global = self
+            .dir
+            .admission_lock(&format!("review-watch updating {key}"))?;
         let _change = self.dir.lock(&format!("{key}.lock"))?;
         let mut state = self.load()?;
         let initialized = self.dir.read("initialized")?.is_some();
@@ -774,7 +814,7 @@ impl Store {
     /// `None` drops no entry.
     fn settle(&self, open: Option<&BTreeSet<String>>) -> Result<usize> {
         // Every writer takes the global lock first, so it alone excludes them.
-        let _global = self.dir.lock("admission.lock")?;
+        let _global = self.dir.admission_lock("review-watch pruning state")?;
         let mut state = self.load()?;
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
@@ -4450,7 +4490,7 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
     // land/ship wait retries until they settle; other errors still refuse.
     // trace:BUG-2703 | ai:claude
     let busy = |why: String| -> anyhow::Error { crate::admission_owner::AdmissionBusy(why).into() };
-    let _lock = match dir.lock("admission.lock") {
+    let _lock = match dir.admission_lock("review-watch checking active reviews") {
         Ok(lock) => lock,
         Err(error) if is_busy(&error) => {
             return Err(busy("review-watch admission lock is busy".into()))
@@ -4532,7 +4572,7 @@ pub(crate) fn select_train_members(
 ) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
     let runtime = Directory::shared(&root.join(".aida"))?;
     let dir = Directory::open(&runtime.path().join("review-watch"))?;
-    let _global = dir.lock("admission.lock")?;
+    let _global = dir.admission_lock("train selecting members")?;
     let state = match dir.read(STATE)? {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;
