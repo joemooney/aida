@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T03:44:03.734467535Z
+modified_at: 2026-11-24T04:00:30.252701171Z
 req_type: Bug
 tags:
 - hygiene
@@ -45,6 +45,18 @@ comments:
   modified_at: 2026-11-24T03:31:51.127893634Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20bb6-5df5-74f1-852e-ef53c3a1aab0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5e3711c9f9fdd4617a00cefb897e8b493269c47 plus native working-tree diff. Empty merge-base diff, four edited files, no untracked additions.
+    AC1: [evidence: behavioral-test] task_2053_seat_clone_lifecycle_tests.rs:3173 verifies ignored .aida content reads clean and a tracked edit reads dirty in both probes. The ignored-only report did not reproduce on this base.
+    AC2: [evidence: behavioral-test] same file lines 3195, 3218 and 3239 independently verify unignored target/notes.txt, another local branch and a stash. Reap-mode destruction retained the unignored file and its contents. Fixed path-based runtime filtering and missing branch/stash evidence. Lane job j20261124T034847384-2-0 passed all five selected tests, including the existing collector/scan regression.
+    Strict pass: checked NUL-separated producer/reader agreement, newline filenames, zero and multiple refs, and combined stash/branch state. Both scan_clone_lease and destroy_inner in KeepUnshipped mode use probe_for_reap. Git errors return Unknown and keep the clone. Ordinary session-end and explicit discard keep their own policies. Publication/merge and holder checks remain in force. Dispatch uses locally available publication evidence under its deadline. The original incident clone was unavailable.
+  created_at: 2026-11-24T04:00:30.252701171Z
+  modified_at: 2026-11-24T04:00:30.252701171Z
+  session_id: 01a20b9fc4f8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe

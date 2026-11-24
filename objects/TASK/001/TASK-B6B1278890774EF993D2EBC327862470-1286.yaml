@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:41:03.472804465Z
-modified_at: 2026-11-24T03:56:18.436474203Z
+modified_at: 2026-11-24T04:03:48.424000127Z
 req_type: Task
 tags:
 - forge
@@ -43,6 +43,18 @@ comments:
   modified_at: 2026-11-24T03:43:05.258317307Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20bb9-659d-7f61-97ec-864490115f41
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: be227b8e5aded82547411bd2f25d89de3ad9ce99 plus native working tree, including the merge-base diff and untracked inventory. PR base integration.
+    AC1: [evidence: behavioral-test] forge.rs:1904 starts the shared deadline before both discovery calls. review_watch_forge.rs:69 caps each subprocess by time remaining. Criterion markers in forge_tests_inline_tests.rs:2142 and task_3852_core_budget.rs:7. The slow-origin fixture at task_3852_core_budget.rs:118 began lookup but was interrupted before its completion marker.
+    AC2: [evidence: behavioral-test] forge.rs:1909 fixes the executable path before changing directories. Reproduced unknown for relative PATH versus 19/100 for absolute PATH. Linked-worktree doctor and land fixture checked both sides of the warning threshold. Fixed the fixture after land's separate PR query picked up system gh.
+    Lane job j20261124T040324639-2-0: 1 passed, 0 failed. Formatting and git diff --check clean. Reviewed path interpretation, subprocess working directories, missing and expired evidence, repeat probes, and existing timeout caps. No authority edits. Residual validation: make check-ci-fast stopped in shard tooling because cargo metadata is unsupported by the lane runner. Host fast validation outstanding.
+  created_at: 2026-11-24T04:03:48.424000127Z
+  modified_at: 2026-11-24T04:03:48.424000127Z
+  session_id: 01a20baa19b8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20ba5-66be-7a31-bcaa-958dd2e9ad20
   author: joe
