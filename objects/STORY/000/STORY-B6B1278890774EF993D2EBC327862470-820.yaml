@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T14:10:35.500348550Z
+modified_at: 2026-11-24T14:14:07.323707516Z
 req_type: Story
 tags:
 - autonomy
@@ -165,6 +165,27 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:10:35.333881643Z
   modified_at: 2026-11-24T14:10:35.333881643Z
+- id: 01a20de8-56f4-7bf1-b241-b3a75015f2f9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:14):
+    # STORY-3038 / PR #4448 rework (advisor-122 stalled-CR sweep 2026-11-24 07:20; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 150 lines. Note: MUST fix the security-authority-bypass, plus the test gap.
+
+    BLANKET RULING (advisor-122 2026-11-24 07:20 stalled-CR sweep): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major that is a behaviour REGRESSION this PR introduced. DEFER minor/p2 unmet-claimed-AC and test-strength items (mass-change): do NOT fix them; list them in the PR body as deferred. In your exit summary and PR body, list EACH finding as fixed or deferred.
+
+    CR at 227141c5. Findings:
+
+    F1. [major/unmet-claimed-ac/blocking] STORY-3038.AC1 — The explicit strict-path list in aida-cli-lib/src/gate/unset_mode.rs:406 omits aida-cli-lib/src/locking_gate.rs and aida-core/src/lock.rs. The former invokes the latter to enforce the advisor's worktree lock and refuses commits under an active drain (locking_gate.rs:242–279). ADR-76 explicitly covers hooks that refuse commits. Changes to this enforcement retain the approved-small drain default because neither the new inventory nor the built-in protected floor covers these paths. Cover the commit-lock enforcement path in the trusted strict classification and add a regression asserting that its changes retain supervision.
+
+    F2. [major/unmet-claimed-ac/blocking] STORY-3038.AC1 — Normal implementer pickup still drops eligibility before landing. standalone_implementer.rs:1579 calls claim_spec, which records Approved → In Progress at lines 2144–2163. The completing push then records In Progress → Done (publication_completion.rs:171–184). approved_for_publication at gate/unset_mode.rs:380–401 accepts Done only when the immediately preceding status was Approved, so an approved, small, standard-tier spec with unset mode is supervised on this normal completing-PR path. The regression at tests/story_1690_train_tests.rs:6524 calls the publication writer straight from Approved and skips pickup. Preserve trusted approval across the recorded automatic pickup transition while honoring intervening withdrawals, and cover pickup through completing publication in the landing-policy regression.
+
+    F3. [major/mutation-kill/blocking] The direct-ship regression does not exercise transfer of the initially defaulted spec IDs into the final gate (pr_cmd/mod.rs:1046,2035). The checkpoint test checks only source order, while approved_small_publication_and_live_landing_checks passes IDs directly to the helper. Removing the population of defaulted_ids leaves both tests passing and makes the ship recheck return success immediately. Add a ship-boundary test that withdraws the small tag on the same head after initial admission and verifies that the forge merge is never called.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T14:14:07.323707516Z
+  modified_at: 2026-11-24T14:14:07.323707516Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
