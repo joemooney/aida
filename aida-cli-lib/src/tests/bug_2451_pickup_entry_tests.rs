@@ -1871,6 +1871,10 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
 // records a lane result receipt and prints its terminal line.
 // trace:BUG-2607 | ai:claude
 fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
+    headless_pickup_on_branch(storage, None)
+}
+
+fn headless_pickup_on_branch(storage: &crate::Storage, branch: Option<&str>) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -1882,7 +1886,7 @@ fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         /* no_pull */ true,
         None,
-        None,
+        branch,
         None,
         false,
         None,
@@ -1914,6 +1918,80 @@ fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
     )
 }
 
+#[cfg(target_os = "linux")]
+fn mock_host_readiness(ambient: &mut crate::test_env::AmbientGuard, root: &Path) {
+    // Host readiness precedes the disk check. Answer only its availability
+    // probe so the regression also runs on hosts without user namespaces.
+    let bin = root.join("probe-bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("bwrap"),
+        r#"#!/bin/sh
+test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let mut paths = vec![bin];
+    paths.extend(std::env::split_paths(
+        environment.get("PATH").unwrap_or_default(),
+    ));
+    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+}
+
+// trace:STORY-3080 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn story_3080_real_pickup_preserves_veto_on_late_hold() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    ambient.set_key("AIDA_AGENT_CMD", "/bin/false");
+    ambient.set_key(crate::orchestrator::PHASE_ENV, "");
+    ambient.set_key(crate::orchestrator::AUTO_COMPLETE_ENV, "");
+    mock_host_readiness(&mut ambient, &fx.root);
+    let _disk = crate::machine_readiness::test_lane_available_bytes(100 * 1024 * 1024 * 1024);
+    let scope = "BUG-2451";
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, scope);
+    let writer = crate::Storage::new(storage.path());
+    let veto = crate::punt::hold_signal_path(&fx.main, scope);
+    crate::punt::write_hold_signal(
+        &veto,
+        &crate::punt::HoldSignal {
+            spec: scope.into(),
+            branch: "bug-2451".into(),
+            reason: Some("prior attempt".into()),
+            spec_key: None,
+        },
+    )
+    .unwrap();
+    let prior = std::fs::read(&veto).unwrap();
+    let sentinel = fx.root.join("started");
+    let started = sentinel.clone();
+    crate::session::TEST_STANDALONE_LAUNCHER.set(Some(Box::new(move |hooks| {
+        writer.update_atomically(|store| {
+            let req = store.get_requirement_by_spec_id_mut(scope).unwrap();
+            req.deferred = true;
+            req.deferred_reason = Some("late pickup hold".into());
+        })?;
+        let _authority = hooks.before_spawn.unwrap()()?;
+        std::fs::write(started, "started")?;
+        anyhow::bail!("unexpected child launch")
+    })));
+    let error = headless_pickup_on_branch(&storage, Some("bug-2451")).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("late pickup hold"),
+        "{error:#}"
+    );
+    assert!(!sentinel.exists());
+    assert_eq!(std::fs::read(veto).unwrap(), prior);
+}
+
 // trace:TASK-3154 | ai:codex
 #[test]
 #[cfg(target_os = "linux")]
@@ -1931,22 +2009,7 @@ fn bug_2684_headless_pickup_returns_disk_refusal_and_records_its_receipt() {
     ambient.set_key(crate::orchestrator::PHASE_ENV, "");
     ambient.set_key(crate::orchestrator::AUTO_COMPLETE_ENV, "");
 
-    // Host readiness precedes the disk check. Answer only its availability
-    // probe so the regression also runs on hosts without user namespaces.
-    let bin = fx.root.join("probe-bin");
-    std::fs::create_dir(&bin).unwrap();
-    crate::test_exec::write_executable(
-        &bin.join("bwrap"),
-        r#"#!/bin/sh
-test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
-"#,
-    );
-    let environment = aida_core::exec_context::Environment::capture();
-    let mut paths = vec![bin];
-    paths.extend(std::env::split_paths(
-        environment.get("PATH").unwrap_or_default(),
-    ));
-    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+    mock_host_readiness(&mut ambient, &fx.root);
 
     let user = crate::test_env::HERMETIC_TEST_USER;
     let scope = "BUG-2451";

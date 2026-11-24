@@ -1771,8 +1771,10 @@ fn run(
                     if resume {
                         return revalidate(true);
                     }
+                    let authority =
+                        revalidate(false).map_err(crate::lane_admission::refused_before_spawn)?;
                     provision_attempt_signals(&main_root, &worktree, launch.spec)?;
-                    revalidate(false).map_err(crate::lane_admission::refused_before_spawn)
+                    Ok(authority)
                 }),
             },
         )

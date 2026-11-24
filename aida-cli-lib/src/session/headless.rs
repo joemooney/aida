@@ -2563,6 +2563,17 @@ pub(crate) fn resume_session_args(mut args: Vec<String>, session_id: &str) -> Re
     Ok(args)
 }
 
+// trace:STORY-3080 | ai:codex
+#[cfg(test)]
+type TestStandaloneLauncher =
+    Box<dyn FnOnce(&HeadlessChildHooks<'_>) -> Result<std::process::ExitStatus>>;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_STANDALONE_LAUNCHER: std::cell::RefCell<Option<TestStandaloneLauncher>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// STORY-1662: run a standalone implementer's headless child and wait for
 /// it. Unlike [`exec_vendor_headless`] this returns the exit status, so the
 /// launcher can classify the outcome. The launcher revokes the child's grant
@@ -2582,6 +2593,10 @@ pub(crate) fn run_standalone_implementer_child(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
+    #[cfg(test)]
+    if let Some(launcher) = TEST_STANDALONE_LAUNCHER.take() {
+        return launcher(hooks);
+    }
     run_vendor_headless_child(
         Some(project_root),
         host_main,
