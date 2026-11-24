@@ -53,3 +53,30 @@ class Discovery(unittest.TestCase):
             unwired = run()
             self.assertNotEqual(unwired.returncode, 0)
             self.assertIn("test_show_latency.py: missing standalone CI invocation", unwired.stderr)
+
+    # trace:TASK-3856 | ai:codex
+    def test_only_runnable_steps_supply_dedicated_invocations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflow = root / ".github/workflows/ci.yml"
+            workflow.parent.mkdir(parents=True)
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_show_latency.py").touch()
+            for condition, wired in [
+                ("false", False), ("${{ false }}", False), ("'false'", False),
+                ("${{ true && false }}", False), ("true", True),
+                ("matrix.shard == 'gates'", True), ("on", False),
+                ("matrix.shard == 'contracts'", False),
+            ]:
+                with self.subTest(condition=condition):
+                    workflow.write_text(
+                        "jobs:\n  build:\n    strategy:\n      matrix:\n        shard: [gates]\n"
+                        f"    steps:\n      - if: {condition}\n"
+                        "        run: python3 tests/test_show_latency.py\n"
+                    )
+                    result = subprocess.run([sys.executable, RUNNER], cwd=root,
+                                            capture_output=True, text=True, timeout=15)
+                    self.assertEqual(result.returncode, int(not wired), result.stderr)
+                    self.assertEqual("missing standalone CI invocation" in result.stderr,
+                                     not wired)
