@@ -44,6 +44,13 @@ pub enum LandCommand {
         #[clap(subcommand)]
         action: ModeCommand,
     },
+    /// Check the default branch's CI once and report: name the first red
+    /// commit, mail the advisor, and recommend a revert only when main does
+    /// not build or stays red past the fix window. It writes nothing to the
+    /// requirement store, and runs as its own scheduled job, never inside
+    /// the land loop or a train.
+    // trace:STORY-2897 | ai:claude
+    Watch,
 }
 
 /// `aida land mode` verbs.

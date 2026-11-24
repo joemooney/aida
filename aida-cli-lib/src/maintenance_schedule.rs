@@ -3819,6 +3819,20 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-2897: the red-main watch runs only as this job (and by hand),
+        // never inside a landing path, so nothing that merges can stall on
+        // it; the job's own timeout bounds a pass. It fetches and reads the
+        // forge, so never on the per-turn hook path.
+        // trace:STORY-2897 | ai:claude
+        (
+            &["land watch"],
+            ScheduledCommand {
+                display: "land watch",
+                // Capture the full error chain on stderr even with piped output.
+                args: &["land", "watch", "--format", "human"],
+                hook_allowed: false,
+            },
+        ),
         // The hub-bridge reconcile. Never `--yes`: identity-bearing content
         // stops the run and the failure routes to the advisor. Only a job
         // from this clone's machine-local layer may run it (`build_task`).
@@ -4055,7 +4069,17 @@ fn record_outcome_local(
                     job: task.name.clone(),
                     seat: task.seats.join(","),
                     error: trip.and_then(|t| t.audit_error.as_deref()).map_or_else(
-                        || routed_failure_error(outcome.status, &outcome.stderr),
+                        || {
+                            if task
+                                .command
+                                .as_ref()
+                                .is_some_and(|c| c.display == "land watch")
+                            {
+                                watch_failure_error(outcome.status, &outcome.stderr)
+                            } else {
+                                routed_failure_error(outcome.status, &outcome.stderr)
+                            }
+                        },
                         |error| {
                             format!(
                                 "exit {}: performance audit unavailable: {error}",
@@ -4068,6 +4092,25 @@ fn record_outcome_local(
                 },
             ),
         );
+    }
+}
+
+/// Keep the watch error and its final cause together in the advisor's trip.
+// trace:TASK-3859 | ai:codex
+fn watch_failure_error(status: i32, stderr: &str) -> String {
+    let mut lines = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
+    let start = lines
+        .clone()
+        .position(|line| line.starts_with("Error:"))
+        .unwrap_or(0);
+    let step = lines.nth(start).unwrap_or("");
+    let compact = |line: &str| line.chars().take(240).collect::<String>();
+    match lines.next_back() {
+        Some(cause) => format!("exit {status}: {} | {}", compact(step), compact(cause)),
+        None => format!("exit {status}: {}", compact(step)),
     }
 }
 

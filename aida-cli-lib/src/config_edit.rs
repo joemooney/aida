@@ -20,6 +20,42 @@ pub(crate) fn set_kv(path: &Path, section: &str, key: &str, value: Value) -> Res
     save_doc(path, &doc)
 }
 
+/// Set `key = value` in the nested table `tables` (`["landing", "red_main"]`
+/// is `[landing.red_main]`), creating the tables as needed and preserving the
+/// rest of the file.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn set_nested(path: &Path, tables: &[&str], key: &str, value: Value) -> Result<()> {
+    let (first, rest) = tables
+        .split_first()
+        .ok_or_else(|| anyhow::anyhow!("no table named for `{key}`"))?;
+    let mut doc = load_doc(path)?;
+    // An inline table (`landing = { mode = ... }`) on the path is never
+    // replaced by a standard one, which would drop its other keys: the edit
+    // is refused and the file is left as it is.
+    let refuse = |name: &str| {
+        anyhow::anyhow!(
+            "`{name}` in {} is an inline table; edit it by hand (nothing was changed)",
+            path.display()
+        )
+    };
+    if doc.get(first).is_some_and(|item| !item.is_table()) {
+        return Err(refuse(first));
+    }
+    let mut tbl = table_mut(&mut doc, first);
+    for name in rest {
+        match tbl.get(name) {
+            Some(item) if !item.is_table() => return Err(refuse(name)),
+            Some(_) => {}
+            None => {
+                tbl.insert(name, Item::Table(Table::new()));
+            }
+        }
+        tbl = tbl[*name].as_table_mut().ok_or_else(|| refuse(name))?;
+    }
+    tbl.insert(key, Item::Value(value));
+    save_doc(path, &doc)
+}
+
 /// Set several `[section] key = value` pairs in ONE write, preserving the rest
 /// of the file.
 // trace:STORY-1415 | ai:claude

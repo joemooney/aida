@@ -210,6 +210,8 @@ pub(crate) mod landing_policy;
 mod land_bindings;
 // trace:STORY-2903 | ai:claude
 pub(crate) mod land_mode;
+// trace:STORY-2897 | ai:claude
+pub(crate) mod main_watch;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex
@@ -319,6 +321,8 @@ mod remote_cmd;
 pub mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+// trace:STORY-3076 | ai:antigravity
+mod review_prepare;
 mod review_waiting;
 // trace:STORY-1742 | ai:claude
 #[cfg(unix)]
