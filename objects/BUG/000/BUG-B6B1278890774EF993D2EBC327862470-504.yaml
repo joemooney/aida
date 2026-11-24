@@ -14,13 +14,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T06:40:44.540393792Z
+modified_at: 2026-11-24T06:41:30.418112479Z
 req_type: Bug
 tags:
 - flaky
 - small
 - tests
 - track:integration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20c49-7c38-71a1-b720-e7c1b6234432
+  created_at: 2026-11-24T06:41:30.418083131Z
+  created_by: dirtlab
 comments:
 - id: 01a20c11-dc4d-7cf1-b581-0bde7e29c3fa
   author: joe
@@ -95,6 +101,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20c49-d325-77b0-a788-fd10413ba0e2
+  author: dirtlab
+  timestamp: 2026-11-24T06:41:34.501953868Z
+  session_id: 01a20c196274
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
