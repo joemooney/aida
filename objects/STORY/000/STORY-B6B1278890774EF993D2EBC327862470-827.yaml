@@ -18,12 +18,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T17:29:46.400294853Z
-modified_at: 2026-11-24T17:33:13.039349201Z
+modified_at: 2026-11-24T17:38:15.066647486Z
 req_type: Story
 tags:
 - advisor
 - codex
 - seats
+comments:
+- id: 01a20ea3-079b-7572-95ac-4f95fda2b1bc
+  author: joe
+  content: 'Related: BUG-2752 (codex-only aida init doesn''t set codex=native; the advisor launch refuses). Reported by Joe 2026-11-24 from the work environment.'
+  created_at: 2026-11-24T17:38:15.066647486Z
+  modified_at: 2026-11-24T17:38:15.066647486Z
 history:
 - id: 01a20e9e-5646-7470-a22e-6824f0dee6e0
   author: joe
