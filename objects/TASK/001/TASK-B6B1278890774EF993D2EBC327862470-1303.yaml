@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: An end-notice planning test with a SYNTHETIC SEAT audience that demonstrably hits the per-ID OverBudget path, asserting the unrelated notice survives. The existing relay test never reaches it because the relay audience has no seat role.
   - AC2: Update the stale delivery_gates doc comment to match r3's behaviour (ACK veto on retained-open failure via AckError::Partial; per-ID isolation otherwise).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:22:27.948675396Z
-modified_at: 2026-11-24T07:15:11.673735530Z
+modified_at: 2026-11-24T09:46:21.105627462Z
 req_type: Task
 tags:
 - mailbox
 - small
 - tests
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -94,6 +93,22 @@ history:
   timestamp: 2026-11-24T07:08:10.092009463Z
   session_id: 01a20c4167af
   changes: []
+- id: 01a20cf2-fde9-7301-8e71-e754df1ed4bd
+  author: aida-auto-bump
+  timestamp: 2026-11-24T09:46:21.033646652Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20cf2-fe31-7390-a6d1-7f16f6751ce6
+  timestamp: 2026-11-24T09:46:21.105624081Z
+  agent: aida
+  commit_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  summary: 'Advisor (delegated authority): promotion 32, linear on main 103bb2ed7ea + 6 cherry-picks; per-commit patch-ids match approved integration squashes (2d1970e3, e19440f4, 965a6dd2, edbd4bf8, 35c6d45f, 1af1d426); combined 559b487a51cc; no protected paths; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -102,3 +117,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T09:46:21.033637823Z
+  completion_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
