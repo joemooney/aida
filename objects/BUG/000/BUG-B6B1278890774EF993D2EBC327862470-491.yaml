@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T14:11:01.003924447Z
+modified_at: 2026-11-24T14:14:52.726191512Z
 req_type: Bug
 tags:
 - doctor
@@ -131,6 +131,37 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:11:00.864427347Z
   modified_at: 2026-11-24T14:11:00.864427347Z
+- id: 01a20de9-0b9a-7a81-af3d-f7635f6ed8cf
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:14):
+    # BUG-2730 / PR #4457 rework (advisor-122 stalled-CR sweep 2026-11-24 07:20; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 150 lines. Note: 3 major + untested-path.
+
+    BLANKET RULING (advisor-122 2026-11-24 07:20 stalled-CR sweep): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major that is a behaviour REGRESSION this PR introduced. DEFER minor/p2 unmet-claimed-AC and test-strength items (mass-change): do NOT fix them; list them in the PR body as deferred. In your exit summary and PR body, list EACH finding as fixed or deferred.
+
+    CR at bcb264c9. Findings:
+
+    F1. [major/unmet-claimed-ac/blocking] aida-cli-lib/src/land_stalls.rs:1565 AC1: The 220-second scope ends at line 1555. The `Instant` check before `default_branch_of` does not bound its Git/forge probes, and `github_stall_read` (forge.rs:7503) resolves `gh` before starting the timed subprocess with the earlier relative timeout. Without origin/HEAD, or when reading a red head, a slow `gh --version` can consume the remaining scheduler window or hang the guard. Scope these paths to the remaining absolute run/head deadline, including executable resolution and the command itself.
+
+    F2. [major/unmet-claimed-ac/blocking] aida-cli-lib/src/land_stalls.rs:1968 AC2: The scheduled path routes synchronously after printing PARTIAL. `raise_due` calls `schedule_ledger::write_cas`, which can wait for the store writer and push through `git_ops::push_exact` with an unbounded `Command::output`. A slow store remote can still cause the 300-second scheduler to kill the guard before it saves the run snapshot or emits the doctor report. Reserve time for bounded routing or defer publication while preserving the run and normal exit.
+
+    F3. [major/unmet-claimed-ac/blocking] aida-cli-lib/src/tests/story_2906_throughput_guard_tests.rs:1614 AC2: The slow-forge regression supplies its own deadline to `guard_rows` and manually renders/saves the observation. It still passes if the production deadline wiring or scheduled result emission is removed and does not exercise post-scan routing. Add a fake-forge test through the production observation and scheduled-report path with short injected budgets, asserting covered/skipped IDs and normal completion before the outer ceiling.
+
+    F4. [minor/p2/deferred] aida-cli-lib/src/land_stalls.rs:1555 The coverage message is produced only by `guard_rows`. If discovery exhausts the deadline (for example on a later GitLab page), `?` exits before timings or coverage are emitted. If all primary rows fit but red-detail or landing-history work hits the deadline, `partial` remains absent. Report unknown inventory distinctly from an empty inventory, and identify which supplementary observations ran out of time.
+
+    F5. [minor/p2/deferred] aida-cli-lib/src/land_stalls.rs:1286 A partial pass supplies red heads only from the covered subset, but `read_red_details` prunes every cached entry absent from that subset. A skipped, still-red PR loses cached test names and its scan-order timestamp. Keep entries for skipped heads and evict only from confirmed inventory/observations. Add a two-pass test covering a skipped cached red head.
+
+    F6. [minor/p2/deferred] aida-cli-lib/src/land_stalls.rs:1858 Skipping all routing-memory cleanup on partial runs also retains resolved stalls for covered PRs. If such a stall clears in one partial run and returns on the same head in another, `plan_routes` suppresses its new wake. Old rerun keys for confirmed closed or superseded heads also accumulate while partial runs persist. Reconcile covered observations and complete inventory separately, retaining only state whose status could not be established.
+
+    F7. [minor/p2/deferred] aida-cli-lib/src/land_stalls.rs:1512 Each scheduled pass starts again at the first forge-listed PR. When the same prefix uses the available budget, later PRs are repeatedly skipped; with sixteen PRs, eleven 20-second observations already consume the entire 220-second window even before setup. Resume from the skipped suffix or prioritize least-recently-covered changes on subsequent ticks.
+
+    F8. [minor/p2/deferred] aida-cli-lib/src/land.rs:850 An ordinary overlap with another landing fetch now fails the guard's `try_lock_exclusive` immediately even when the holder releases well inside the run deadline. `fetch` failure makes all pin-dependent observations unknown, but `guard_rows` can still mark them covered and `route_with` can then clear prior stall deduplication for the run. Retry contention within the remaining budget or report unavailable pins without discarding prior evidence.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T14:14:52.726191512Z
+  modified_at: 2026-11-24T14:14:52.726191512Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
