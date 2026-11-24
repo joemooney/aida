@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor` (a check) and `aida land status` show the remaining GitHub core REST budget (remaining/limit, reset time), using the cached rate_limit reading, and warn below 20%.
   - AC2: They name the top consumers since the last reset when known (review-watch, auto-train, main-watch, seat watchers), or say "unknown". Test with a fake rate_limit response below the threshold.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-23T23:29:31.296693110Z
+modified_at: 2026-11-24T00:19:46.936102168Z
 req_type: Task
 tags:
 - doctor
@@ -46,6 +46,12 @@ comments:
   modified_at: 2026-11-23T23:29:31.296693110Z
   session_id: 01a20ab558aa
   harness_version: codex-cli 0.167.0
+- id: 01a20aec-4878-7593-a0ae-349c1a5609c0
+  author: aida-publication-done
+  content: Implementer push eacfd4b52870 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T00:19:46.936101338Z
+  modified_at: 2026-11-24T00:19:46.936101338Z
+  session_id: 01a20ab558aa
 history:
 - id: 01a20a79-1c6c-7522-9c98-d2c929e0aa8c
   author: joe
@@ -64,6 +70,14 @@ history:
   session_id: 01a20ab558aa
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20aec-4878-7593-a0ae-348ca95c9d00
+  author: aida-publication-done
+  timestamp: 2026-11-24T00:19:46.936098981Z
+  session_id: 01a20ab558aa
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
