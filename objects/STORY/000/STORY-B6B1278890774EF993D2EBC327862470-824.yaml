@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T16:19:15.037970882Z
+modified_at: 2026-11-24T18:06:38.173727891Z
 req_type: Story
 tags:
 - admission
@@ -262,6 +262,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T16:19:14.886492263Z
   modified_at: 2026-11-24T16:19:14.886492263Z
+- id: 01a20ebd-045d-71c0-b8c4-61e30a59413c
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-824` at head `unavailable`.'
+  created_at: 2026-11-24T18:06:38.173720003Z
+  modified_at: 2026-11-24T18:06:38.173720003Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
