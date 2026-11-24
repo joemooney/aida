@@ -1,0 +1,28 @@
+id: 01a20fff-cc6f-7492-a3fd-56030fa44e88
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-519
+agreed_id: BUG-2758
+title: 'Review-watch outage: older readers reject the new pickup_retries state field (deny_unknown_fields across a binary rollover); tolerate unknown fields and omit zero'
+description: |
+  OUTAGE 2026-11-24 ~14:51-17:05+ (advisor-122 17:05; filed by product-15). HIGH. review-watch failed 6606 consecutive passes: "invalid advisor loop state … unknown field `pickup_retries`". #4413 BUG-2720 (landed 5665f7c661c) writes pickup_retries into .aida/review-watch/state.json; the 3-day-old deputy "default" runner (old binary, deleted) supervises review-watch and its reader rejects the new field under deny_unknown_fields. 9 PRs waited for reviews. This is #4413's deferred F4 (also in TASK-3883, which is on the slower integration track); this main-track fix supersedes that part.
+
+  ## Acceptance
+  - AC1: Advisor-loop / review-watch state READERS tolerate unknown fields (no deny_unknown_fields on persisted runtime state that crosses a binary rollover), so an older reader never hard-fails on a newer writer's field; add a test that state written with an extra unknown field loads.
+  - AC2: Writers OMIT pickup_retries when zero (skip_serializing_if), so ordinary reservations stay readable by older binaries. Test.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T23:59:11.983027226Z
+modified_at: 2026-11-24T23:59:11.983027226Z
+req_type: Bug
+tags:
+- outage
+- review-watch
+- rollover
+filed_at:
+  code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b3
+  vendor: claude
