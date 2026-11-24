@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S2 is the CLI. BLOCKING tests: an option-injection attempt (a ref starting with -), a --write path escaping the repo, fail-closed handling of git errors.
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T11:46:57.064930919Z
+modified_at: 2026-11-24T11:50:31.847995380Z
 req_type: Task
 tags:
 - review
@@ -111,12 +111,24 @@ comments:
   modified_at: 2026-11-24T11:45:58.940907562Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
-- id: 01a20d61-67a8-74d0-a86e-a504aa01de07
-  author: lane-recovery
-  content: 'Lane exit evidence: retained branch `int32-task-3862` at head `b554c5545a0c16c5582a3beab3cfcdc8f765028e`.'
-  created_at: 2026-11-24T11:46:57.064927266Z
-  modified_at: 2026-11-24T11:46:57.064927266Z
-  session_id: 01a20d367944
+- id: 01a20d64-e206-7a61-9a6d-112971eb6375
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:50):
+    # TASK-3862 / PR #4511 r2 WIDENED (advisor-122 ruling 2026-11-24 04:14, 15 findings at 657d3443; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3862, rebased/merged on integration >= f1f2503d). <=200 lines TOTAL for this round.
+    The previous micro-round may already have pushed item (1); verify it, keep it, and continue.
+    MUST:
+    (1) Compile: `ProjectReviewRulesConfig::load_from_root(&project_root).context("load .aida/review-rules.toml")?`, plus a CLI test that an invalid .aida/review-rules.toml FAILS.
+    (3) DATA LOSS: --write REFUSES any destination with a `.git` path component, and refuses the linked-worktree gitfile itself, BEFORE creating any directories. Test.
+    (4)+(15) FAIL CLOSED: linked-criteria git errors PROPAGATE (never swallowed). A root commit's message is read directly. A parent missing because of a SHALLOW boundary is an ERROR, never an empty tree. Tests for both.
+    (5) WRONG-COMMIT: PR mode uses the forge's EXACT head SHA and base; error if the forge lookup fails or that SHA isn't available locally. NO guessed branch fallback. Test with a stale same-named local branch.
+    (7) A CLI-level test that a root-level .ssh/ file and a rename away from .aws/ are NOT read into the bundle (H1 provides the core logic).
+    DEFERRED, do NOT implement: (2)(6) pinned-root confinement under concurrent reparenting; (8) rename-aware churn; (9) pathspec scoping; (10) non-regular entries/gitlinks; (11) rendering anchoring outcomes; (12) store ID resolution for specs; (13) non-UTF-8 paths; (14) --no-textconv.
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). Targeted tests + `make check-ci-fast`; push to #4511. COMMIT your work.
+  created_at: 2026-11-24T11:50:31.847995380Z
+  modified_at: 2026-11-24T11:50:31.847995380Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
   author: joe
@@ -198,7 +210,7 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
-  reopened_at_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  reopened_at_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
 failure_reason:
   phase: reviewer
   phase_index: 3
