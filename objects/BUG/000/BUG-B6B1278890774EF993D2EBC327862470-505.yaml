@@ -69,6 +69,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: May this PR also update tests/test_self_hosted_runner.py:654 to require exactly 15 minutes for fast-compile / Install compile dependencies? make check-ci-fast fails because the existing test caps this step at five minutes, and the integration brief permits only ci.yml edits.. No triage reason was given.'
   created_at: 2026-11-24T07:12:13.497145907Z
   modified_at: 2026-11-24T07:12:13.497145907Z
+- id: 01a20c65-ec80-71a3-b0da-048e0bd34517
+  author: joe
+  content: 'Scope answer (product-15 2026-11-24 00:13): the lane may also update tests/test_self_hosted_runner.py:654 (it pins the 5-minute cap this spec raises to 15). Nothing else outside ci.yml.'
+  created_at: 2026-11-24T07:12:16.000230055Z
+  modified_at: 2026-11-24T07:12:16.000230055Z
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
