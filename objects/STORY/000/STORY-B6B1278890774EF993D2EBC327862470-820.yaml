@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T14:20:16.475872655Z
+modified_at: 2026-11-24T14:31:22.432991243Z
 req_type: Story
 tags:
 - autonomy
@@ -186,6 +186,15 @@ comments:
   modified_at: 2026-11-24T14:14:07.323707516Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20df7-f214-7a33-bcab-502040f63ab1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 52b05936abe50d9e87d64d3ec0d5804fd2d1e179 plus native working-tree edits. AC1: [evidence: behavioral-test] gate/tests/story_2884_unset_mode_tests.rs:570 covers mixed standard and strict paths including both lock files. tests/story_1690_train_tests.rs:6494 covers the pickup writer, completing publication, and same-head tag withdrawal before the ship merge callback. The final check uses the admission returned by classification. Unknown paths and missing admitted records refuse. AC2: [evidence: behavioral-test] approved_small filter ran both regressions successfully. Config menu and generated reference checked against default-off semantics. Reviewed author and status spellings, path component boundaries, multiple records, explicit modes, and post-wait authority. F1, F2, F3 fixed. No new test names. Residual scope: isolated Git and spec fixtures exercise the production ship boundary with a sentinel merge callback. FAST validation continuing at comment time.
+  created_at: 2026-11-24T14:31:22.432991243Z
+  modified_at: 2026-11-24T14:31:22.432991243Z
+  session_id: 01a20ded613e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
