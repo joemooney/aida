@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T23:11:38.424105242Z
+modified_at: 2026-11-24T23:42:28.670986227Z
 req_type: Bug
 tags:
 - codex
@@ -170,6 +170,13 @@ comments:
     Deep pass: both callers use the same hint, existing TOML parser, fully qualified local and tracking refs, and shell-quoted branch. Local evidence only changes refusal text. Retained prior refusal coverage. Corrected formatting. Concurrent config-writer race remains TASK-3881. Publication and exact-head CI belong to the host.
   created_at: 2026-11-24T23:11:38.424105242Z
   modified_at: 2026-11-24T23:11:38.424105242Z
+  session_id: 01a20fc57342
+  harness_version: codex-cli 0.167.0
+- id: 01a20ff0-8096-79b3-a0ac-06222af8b52b
+  author: dirtlab
+  content: 'Self-review validation update for 39850b8a0b plus the working diff. AC1: [evidence: behavioral-test] the interactive codex_init.py fixture passed against the freshly built agent-profile CLI, including the unpublished re-init case. AC2: [evidence: behavioral-test] the targeted remote-policy refusal test passed. make check-ci-fast passed after formatting.'
+  created_at: 2026-11-24T23:42:28.670986227Z
+  modified_at: 2026-11-24T23:42:28.670986227Z
   session_id: 01a20fc57342
   harness_version: codex-cli 0.167.0
 history:
