@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:21.678180988Z
-modified_at: 2026-11-24T09:32:43.842408543Z
+modified_at: 2026-11-24T09:47:23.317139940Z
 req_type: Task
 tags:
 - review
@@ -62,6 +62,11 @@ comments:
   created_at: 2026-11-24T09:32:43.842402863Z
   modified_at: 2026-11-24T09:32:43.842402863Z
   session_id: 01a20ce06f89
+- id: 01a20cf3-f135-70c2-b67a-1b87fe095317
+  author: joe
+  content: 'Scope answer (product-15 2026-11-24 02:48): the lane may also register its 4 regression tests in scripts/ratchet-set.json (entries only, listed in the PR body), the same precedent the advisor approved for STORY-3076 S1. Preserved work committed as 52f811166a.'
+  created_at: 2026-11-24T09:47:23.317139940Z
+  modified_at: 2026-11-24T09:47:23.317139940Z
 history:
 - id: 01a20cd4-39e1-7bc0-b0bc-022cffae235a
   author: joe
