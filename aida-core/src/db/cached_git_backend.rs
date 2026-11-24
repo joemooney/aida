@@ -2247,6 +2247,16 @@ impl DatabaseBackend for CachedGitBackend {
         self.inner.queue_users()
     }
 
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    fn queue_update_notes(
+        &self,
+        requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        self.inner.queue_update_notes(requirement_ids, update)
+    }
+
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         self.inner.queue_add(entry)
     }

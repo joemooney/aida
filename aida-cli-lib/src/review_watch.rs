@@ -644,6 +644,32 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
+    // trace:BUG-2746 | ai:codex
+    fn admission_lock(&self, activity: &str) -> Result<RuntimeLock> {
+        self.admission_lock_with(|file| {
+            let pid = std::process::id();
+            let identity = aida_core::proc_identity::ProcIdentity::capture(pid)
+                .map_err(std::io::Error::other)?;
+            writeln!(
+                file,
+                "{pid} {} {} {activity}",
+                identity.starttime,
+                chrono::Utc::now().timestamp()
+            )
+        })
+    }
+
+    fn admission_lock_with(
+        &self,
+        record: impl FnOnce(&mut File) -> std::io::Result<()>,
+    ) -> Result<RuntimeLock> {
+        let mut lock = self.lock("admission.lock")?;
+        if lock.0.set_len(0).is_ok() && record(&mut lock.0).is_err() {
+            let _ = lock.0.set_len(0);
+        }
+        Ok(lock)
+    }
+
     fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
         // Retry brief concurrent transactions; a holder that outlasts the
@@ -652,10 +678,50 @@ impl Directory {
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(RuntimeLock(file)),
+                Ok(()) => return Ok(RuntimeLock(file, name == "admission.lock")),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e)
+                    if name == "admission.lock" && e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
+                    let mut record = String::new();
+                    let summary = (&file)
+                        .take(256)
+                        .read_to_string(&mut record)
+                        .ok()
+                        .and_then(|_| {
+                            let mut fields = record.strip_suffix('\n')?.splitn(4, ' ');
+                            let pid = fields.next()?.parse().ok()?;
+                            let start: u64 = fields.next()?.parse().ok()?;
+                            let at = fields.next()?;
+                            let meta = file.metadata().ok()?;
+                            let locks = std::fs::read_to_string("/proc/locks").ok()?;
+                            let holders = crate::admission_owner::flock_holders(
+                                &locks,
+                                meta.dev(),
+                                meta.ino(),
+                            );
+                            (holders == [pid]
+                                && aida_core::proc_identity::ProcIdentity::capture(pid)
+                                    .ok()?
+                                    .starttime
+                                    == start)
+                                .then_some((at, fields.next()?))
+                        })
+                        .and_then(|(at, activity)| {
+                            let age = chrono::Utc::now()
+                                .timestamp()
+                                .checked_sub(at.parse().ok()?)?;
+                            (age >= 0
+                                && !activity.is_empty()
+                                && !activity.chars().any(char::is_control))
+                            .then(|| format!("last recorded activity {activity}, age {age}s"))
+                        })
+                        .unwrap_or_else(|| "activity and age unknown".into());
+                    return Err(e)
+                        .with_context(|| format!("review-watch lock busy: {name}; {summary}"));
                 }
                 Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
             }
@@ -667,9 +733,12 @@ impl Directory {
 // the same open file description. End ownership at the transaction boundary,
 // even when a child has not yet exec'd (Rust opens files with CLOEXEC).
 // trace:TASK-3809 | ai:codex
-pub(crate) struct RuntimeLock(File);
+pub(crate) struct RuntimeLock(File, bool);
 impl Drop for RuntimeLock {
     fn drop(&mut self) {
+        if self.1 {
+            let _ = self.0.set_len(0);
+        }
         if let Err(error) = FileExt::unlock(&self.0) {
             eprintln!("review-watch runtime unlock failed: {error}");
         }
@@ -728,7 +797,9 @@ impl Store {
         parse_key(key)?;
         // Every writer uses this ordering. No forge query, child wait or mail
         // delivery occurs while either lock is held.
-        let _global = self.dir.lock("admission.lock")?;
+        let _global = self
+            .dir
+            .admission_lock(&format!("review-watch updating {key}"))?;
         let _change = self.dir.lock(&format!("{key}.lock"))?;
         let mut state = self.load()?;
         let initialized = self.dir.read("initialized")?.is_some();
@@ -774,7 +845,7 @@ impl Store {
     /// `None` drops no entry.
     fn settle(&self, open: Option<&BTreeSet<String>>) -> Result<usize> {
         // Every writer takes the global lock first, so it alone excludes them.
-        let _global = self.dir.lock("admission.lock")?;
+        let _global = self.dir.admission_lock("review-watch pruning state")?;
         let mut state = self.load()?;
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
@@ -1525,7 +1596,10 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                         // recorded before the key named the approval.
                         let (kind, digest) = rest.split_once(':').unwrap_or((rest, ""));
                         valid_sha(head)
-                            && matches!(kind, ready::WAKE_READY | ready::WAKE_AFTER_UPDATE)
+                            && matches!(
+                                kind,
+                                ready::WAKE_READY | ready::WAKE_TRAIN | ready::WAKE_AFTER_UPDATE
+                            )
                             && (digest.is_empty() || notice::valid_digest(digest))
                     }))
                 && entry
@@ -1689,7 +1763,7 @@ fn select_with_coverage(
         }
         // End ownership even if a concurrent fork retains the descriptor.
         // trace:BUG-2650 | ai:codex
-        let _member = RuntimeLock(member);
+        let _member = RuntimeLock(member, false);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -3476,6 +3550,108 @@ fn watch_change(
     admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
 }
 
+// Both recorders persist the PR and attested SHA in the verdict. Remember
+// a consumed intent while GitHub registers the FULL run.
+// trace:BUG-2729 | ai:codex
+pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
+    use crate::full_tier::{bounded, request_full_ci_with};
+    use crate::gate::review_verdict::read_recorded_verdict;
+    let repo = forge::Repository::load(root)?;
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))?;
+    let promote = |change: forge::Change| -> Result<()> {
+        let pr = change.id;
+        let key = change.key();
+        let receipt = format!("{key}.full-ci");
+        let _lock = receipts.lock(&format!("{receipt}.lock"))?;
+        let Some(v) = read_recorded_verdict(root, &key) else {
+            return Ok(());
+        };
+        let Some(head) = v.reviewed_sha.as_deref() else {
+            return Ok(());
+        };
+        if !v.kind.approves()
+            || v.is_closed()
+            || v.attestation.as_ref().is_none_or(|a| a.sha != head)
+            || receipts.read(&receipt)?.as_deref() == Some(head.as_bytes())
+        {
+            return Ok(());
+        }
+        if head != change.head {
+            eprintln!("{key}: discarding FULL request for superseded head {head}");
+            return receipts.write(&receipt, head.as_bytes());
+        }
+        let rows = repo.commit_checks(root, head)?.checks;
+        let mut fast = rows.iter().filter(|c| c.name == "ci-tier: fast");
+        let incomplete =
+            |c: &crate::forge::CommitCheck| c.workflow_id.is_none() || c.run_in_progress;
+        if fast.clone().next().is_none() || fast.any(incomplete) {
+            return Ok(());
+        }
+        let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
+            if repo.change(root, pr).map_err(|e| e.to_string())?.head != head {
+                return Err(format!("{key} moved from reviewed head {head}"));
+            }
+            bounded(root, cli, args)
+        })
+        .map_err(anyhow::Error::msg)?;
+        if edited {
+            receipts.write(&receipt, head.as_bytes())?;
+        }
+        Ok(())
+    };
+    let mut failures = Vec::new();
+    for change in repo.discover(root)?.into_iter().filter(|c| !c.gitlab) {
+        if let Err(error) = promote(change) {
+            failures.push(error.to_string());
+        }
+    }
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, record: impl FnOnce()) {
+    use serde_json::json;
+    let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
+    let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
+    let script = format!(
+        r#"#!/bin/sh
+state=$(cat state)
+case "$*" in
+  *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
+  *"pr list"*) echo '[{change}]';;
+  *statusCheckRollup*) case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/";;
+  *check-runs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"check_runs":[]}}'; else echo '{{"total_count":1,"check_runs":[{marker}]}}'; fi;;
+  *actions/runs*) printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","status":"%s"}}' "$state";;
+  *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
+  *"pr edit"*) echo "$*" >> edits;;
+  *) exit 1;;
+esac"#
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    forge::git(root, &["remote", "add", "origin", "git@github.com:o/r.git"]).unwrap();
+    let write = |name, value: &str| std::fs::write(root.join(name), value).unwrap();
+    write("state", "absent");
+    record();
+    assert!(!root.join("edits").exists());
+    let replacement = "a".repeat(40);
+    for state in ["absent", "queued", "in_progress", "moved", "done", "again"] {
+        let moved = state == "moved";
+        let completed = matches!(state, "done" | "again");
+        let settled = completed || moved;
+        write("state", if settled { "completed" } else { state });
+        write("current", if moved { &replacement } else { head });
+        let result = promote_approved_heads(root);
+        assert_eq!(result.is_err(), moved, "{result:?}");
+        assert_eq!(root.join("edits").exists(), completed);
+    }
+    let edits = std::fs::read_to_string(root.join("edits")).unwrap();
+    let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
+    assert_eq!(edits.trim(), expected);
+}
+
 // trace:TASK-1993 | ai:claude
 // trace:BUG-2674 | ai:claude
 #[allow(clippy::too_many_arguments)]
@@ -4450,7 +4626,7 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
     // land/ship wait retries until they settle; other errors still refuse.
     // trace:BUG-2703 | ai:claude
     let busy = |why: String| -> anyhow::Error { crate::admission_owner::AdmissionBusy(why).into() };
-    let _lock = match dir.lock("admission.lock") {
+    let _lock = match dir.admission_lock("review-watch checking active reviews") {
         Ok(lock) => lock,
         Err(error) if is_busy(&error) => {
             return Err(busy("review-watch admission lock is busy".into()))
@@ -4532,7 +4708,7 @@ pub(crate) fn select_train_members(
 ) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
     let runtime = Directory::shared(&root.join(".aida"))?;
     let dir = Directory::open(&runtime.path().join("review-watch"))?;
-    let _global = dir.lock("admission.lock")?;
+    let _global = dir.admission_lock("train selecting members")?;
     let state = match dir.read(STATE)? {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;

@@ -13,7 +13,7 @@ on:
     # head, before review, exactly as one headed for main is.
     # trace:BUG-2576 | ai:claude
     branches: [main, integration]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled]
   merge_group:
 
 # Superseded PR heads must not starve merge-train CI.
@@ -29,7 +29,7 @@ on:
 # identical (tests/test_ci_tiers.py compares them).
 # trace:BUG-2578 | ai:claude
 concurrency:
-  group: ${{ github.workflow }}-${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && format('label-{0}', github.run_id) || github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && format('label-{0}', github.run_id) || github.event.action == 'labeled' && format('full-{0}', github.event.pull_request.number) || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -43,7 +43,7 @@ jobs:
   # One selection feeds scheduling and the forge-readable check name.
   # trace:STORY-2735 | ai:codex
   # The ci:full label selects FULL for the head it was applied to: recording
-  # an approval (re)applies it, which starts the full run a merge train
+  # an approval schedules its application after FAST, which starts the full run a merge train
   # requires on that exact head. A push (synchronize) runs FAST again even
   # while the label lingers, until the new head is approved.
   # trace:STORY-2809 | ai:claude

@@ -1862,6 +1862,63 @@ impl DatabaseBackend for SqliteBackend {
         Ok(entries)
     }
 
+    // trace:TASK-3155 | ai:codex
+    fn queue_users(&self) -> Result<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt =
+            conn.prepare("SELECT DISTINCT user_id FROM queue_entries ORDER BY user_id")?;
+        let users = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(users)
+    }
+
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    fn queue_update_notes(
+        &self,
+        requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        let mut total = 0;
+        for user_id in self.queue_users()? {
+            if !self
+                .queue_list(&user_id, true)?
+                .iter()
+                .any(|row| requirement_ids.contains(&row.requirement_id))
+            {
+                continue;
+            }
+            let mut conn = self.conn.lock().unwrap();
+            let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            let mut matched = 0;
+            for requirement_id in requirement_ids {
+                let id = requirement_id.to_string();
+                let prior: Option<Option<String>> = tx
+                    .query_row(
+                        "SELECT note FROM queue_entries WHERE user_id = ?1 AND requirement_id = ?2",
+                        params![user_id, id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if let Some(prior) = prior {
+                    matched += 1;
+                    let note = update(prior.as_deref());
+                    if prior.as_ref() != Some(&note) {
+                        tx.execute(
+                            "UPDATE queue_entries SET note = ?3
+                         WHERE user_id = ?1 AND requirement_id = ?2",
+                            params![user_id, id, note],
+                        )?;
+                    }
+                }
+            }
+            tx.commit()?;
+            total += matched;
+        }
+        Ok(total)
+    }
+
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         let conn = self.conn.lock().unwrap();
 
