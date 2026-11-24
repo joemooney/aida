@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The ratchet credits only CI steps that can run. An invocation inside a step whose `if:` is always false (e.g. `if: false`, `if: ${{ false }}`) or that is otherwise disabled does not count as wiring, so that test is reported as unwired.
   - AC2: Regression cases: a disabled step's invocation does not satisfy the ratchet, and an enabled step's does.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T06:25:26.896720879Z
+modified_at: 2026-11-24T06:30:47.278258157Z
 req_type: Task
 tags:
 - ci
@@ -91,6 +91,14 @@ history:
   timestamp: 2026-11-24T06:05:46.241121281Z
   session_id: 01a20beec6d4
   changes: []
+- id: 01a20c3f-f2ee-7ca2-9bdb-1350a5297236
+  author: aida-orchestrator
+  timestamp: 2026-11-24T06:30:47.278408778Z
+  session_id: 01a20c3c4ff1
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
@@ -99,3 +107,15 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the complete two-file diff at 328f196e4982242add799a3686bb4e0455f5b1e6 against the generated one-spec worksheet.
+    TASK-b6b1278890774ef993d2ebc327862470-1292.AC1: unverified
+    TASK-b6b1278890774ef993d2ebc327862470-1292.AC2: verified by the disabled/enabled subtests in tests/test_python_discovery.py:58 (python3 -m unittest tests/test_python_discovery.py), inspected in source and reported passing by the implementer.
+    Literal false steps and a missing shard are covered. The ratchet still silently credits unreachable invocations, which blocks AC1. The supplied untraced list matches the fixture's bare spec trace. Exact-head FAST gates passed and FAST compile was pending at review time. No local tests or builds were run. At the forge check the head was six commits behind integration, up from five in the launch prompt. The newer base did not change either PR file or ci.yml, and no finding depends on a code path the base has since changed. The in-lane review claim command was refused. This is the standalone draft handoff.
+  recovery_hint: address the review findings, move TASK-3856 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T06:30:47.278258157Z
