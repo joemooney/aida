@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T05:26:23.456581450Z
+modified_at: 2026-11-24T05:52:32.840920739Z
 req_type: Bug
 tags:
 - admission
@@ -189,6 +189,13 @@ comments:
     Adversarial pass covered full and empty capacity, overrides, multiple member identities, stale or missing requirements, command arguments with spaces and lock identity. After a pull and at late handoff the working diff resolves the selected UUIDs and reapplies track policy. Lane job j20261124T051516065-2-0 passed 5 tests. FAST source checks and portability passed. Final targeted repeat and aggregate ratchets are running. Across the full branch the patch exceeds the 150-added-line target.
   created_at: 2026-11-24T05:26:23.456581450Z
   modified_at: 2026-11-24T05:26:23.456581450Z
+  session_id: 01a20bf89a2f
+  harness_version: codex-cli 0.167.0
+- id: 01a20c1c-f228-72d0-a8b7-25a526348f43
+  author: dirtlab
+  content: 'Final validation for the native working diff at eb2482ba8408: lane job j20261124T052446000-2-0 executed all five BUG-2740 tests, five passed. The runner reported a stale overlay seed during teardown and exited zero. make check-ci-fast passed, including all application ratchets, CLI build and dynamic manual verification. Native publication declaration accepted for PR 4481. Round three changes four files (+126/-178). Full landing diff is +253/-30, above the 150-line target.'
+  created_at: 2026-11-24T05:52:32.840920739Z
+  modified_at: 2026-11-24T05:52:32.840920739Z
   session_id: 01a20bf89a2f
   harness_version: codex-cli 0.167.0
 history:
