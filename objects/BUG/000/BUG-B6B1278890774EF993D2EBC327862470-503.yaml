@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: session-hygiene's "uncommitted work" check ignores git-ignored files (and AIDA's own .aida/* state), and reports dirty only for tracked changes, unique unpushed commits or stashes. Test: a clone whose only difference is ignored .aida/* files is NOT flagged; a clone with a tracked edit IS.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T04:29:03.216245983Z
+modified_at: 2026-11-24T04:37:06.661175247Z
 req_type: Bug
 tags:
 - hygiene
@@ -64,6 +64,12 @@ comments:
   modified_at: 2026-11-24T04:29:03.216245983Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a20bd7-dfe5-79e3-b437-8e948c9cdc93
+  author: aida-publication-done
+  content: Implementer push 1dc839b00db4 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T04:37:06.661173358Z
+  modified_at: 2026-11-24T04:37:06.661173358Z
+  session_id: 01a20b9fc4f8
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
@@ -89,6 +95,14 @@ history:
   session_id: 01a20b9fc4f8
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20bd7-dfe5-79e3-b437-8e8bd814b95f
+  author: aida-publication-done
+  timestamp: 2026-11-24T04:37:06.661170585Z
+  session_id: 01a20b9fc4f8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
