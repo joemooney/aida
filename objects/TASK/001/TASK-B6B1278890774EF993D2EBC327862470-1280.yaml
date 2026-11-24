@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:33:42.356470431Z
-modified_at: 2026-11-24T02:54:07.203788848Z
+modified_at: 2026-11-24T02:58:48.910674226Z
 req_type: Task
 tags:
 - small
@@ -88,6 +88,16 @@ comments:
   modified_at: 2026-11-24T01:19:58.833535523Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20b7d-e369-7870-9a19-9ed8eb077de8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1a6b454e9c589c4c5fb4b2be24d462b886e6df8d and the pending merge against baefe725cc4.
+    AC1: [evidence: behavioral-test] tests/test_cache_refresh_outputs.py:229 cites TASK-1527 (#2349). The targeted script passed against the installed aida binary for both explicit formats on a real TTY. Each iteration restores a stale database and waits for worker completion beyond its own log offset. Checked the worker message against aida-cli-lib/src/cache_cmd.rs:634, format assertions, absent and existing logs, and completion before output rendering. Removed three merge marker lines. Integration-relative diff is 27 added lines in one file, with no untracked additions. Timing limit is 30 seconds per worker. Host merge commit and its CI are pending.
+  created_at: 2026-11-24T02:58:48.910674226Z
+  modified_at: 2026-11-24T02:58:48.910674226Z
+  session_id: 01a20b7945f7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
