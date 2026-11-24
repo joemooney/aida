@@ -833,21 +833,31 @@ fn local_stale_finding(
 }
 
 // trace:BUG-2739 | ai:codex
+#[derive(Debug)]
+pub(crate) enum SelectedLease {
+    Local(leases::SessionLease),
+    Shared(std::path::PathBuf, crate::coordination::Claim),
+}
+
 pub(crate) fn targeted_stale_finding(
     project_root: &std::path::Path,
     id: &str,
-) -> Result<Option<DoctorFinding>> {
+) -> Result<Option<(DoctorFinding, SelectedLease)>> {
     let now = chrono::Utc::now();
     if let Some(generation) = id.strip_prefix("shared-") {
         let root = aida_core::store_locate::detect_distributed_store_from(project_root)
             .ok_or_else(|| anyhow::anyhow!("shared store unavailable"))?;
-        return Ok(crate::coordination::claim_by_generation(&root, generation)?
-            .as_ref()
-            .and_then(|claim| shared_stale_finding(claim, now)));
+        return Ok(
+            crate::coordination::claim_by_generation(&root, generation)?.and_then(|claim| {
+                shared_stale_finding(&claim, now)
+                    .map(|finding| (finding, SelectedLease::Shared(root, claim)))
+            }),
+        );
     }
     Ok(
         leases::read_exact_lease(project_root, id)?.and_then(|lease| {
             local_stale_finding(project_root, &lease, &std::cell::OnceCell::new(), now)
+                .map(|finding| (finding, SelectedLease::Local(lease)))
         }),
     )
 }

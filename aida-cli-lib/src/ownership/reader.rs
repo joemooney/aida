@@ -15,10 +15,11 @@ pub(crate) fn doctor_lease_liveness(
     let live = sessions.get_or_init(crate::process_probe::probe_live_claude_sessions);
     let state = crate::leases::lease_state_for(lease, live, now);
     let dead = lease.creator_pid.is_some_and(|pid| {
-        local_claim_process_is_dead(
+        local_process_is_dead(
             pid,
             lease.creator_pid_start_time.as_deref(),
             lease.pid_namespace,
+            true,
         )
     });
     (state, dead)
@@ -35,6 +36,15 @@ pub(crate) fn local_claim_process_is_dead(
     recorded_start: Option<&str>,
     pid_namespace: Option<u64>,
 ) -> bool {
+    local_process_is_dead(pid, recorded_start, pid_namespace, false)
+}
+
+fn local_process_is_dead(
+    pid: u32,
+    recorded_start: Option<&str>,
+    pid_namespace: Option<u64>,
+    count_exited: bool,
+) -> bool {
     pid != 0
         && aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
         && match aida_core::proc_identity::observe_legacy_registry(
@@ -42,6 +52,9 @@ pub(crate) fn local_claim_process_is_dead(
             recorded_start,
             pid_namespace,
         ) {
+            aida_core::proc_identity::Verdict::Dead(
+                aida_core::proc_identity::DeadReason::Exited,
+            ) => count_exited,
             aida_core::proc_identity::Verdict::Dead(
                 aida_core::proc_identity::DeadReason::Absent,
             ) => true,

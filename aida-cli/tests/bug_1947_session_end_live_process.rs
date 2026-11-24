@@ -736,3 +736,36 @@ fn session_end_with_its_own_mcp_claim_still_refuses_a_live_holder() {
     assert!(claim.exists(), "a refusal changes nothing, claim included");
     drop(live);
 }
+
+// trace:BUG-2739 | ai:codex
+#[test]
+fn bug2739_targeted_heal_removes_only_the_zombie_creators_worktree() {
+    let session = Session::start();
+    let zombie = KillOnDrop(Command::new("true").spawn().unwrap());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while aida_core::liveness::pid_is_alive(zombie.0.id()) {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    let registry = session.repo.join(".aida/sessions");
+    let path = registry.join(format!("{}.toml", session.id));
+    let mut lease: toml::Table = std::fs::read_to_string(&path).unwrap().parse().unwrap();
+    lease.insert("creator_pid".into(), i64::from(zombie.0.id()).into());
+    lease.remove("creator_pid_start_time");
+    lease.remove("active_pid");
+    lease.remove("holder_record");
+    std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+    let sibling = session.repo.parent().unwrap().join("sibling");
+    git(&session.repo, &["worktree", "add", "../sibling"]);
+    lease.insert("started_at".into(), "2000-01-01T00:00:00Z".into());
+    lease.insert("worktree_path".into(), sibling.to_str().unwrap().into());
+    let decoy = registry.join("other.toml");
+    std::fs::write(&decoy, toml::to_string(&lease).unwrap()).unwrap();
+    let mut cmd = aida(&session.repo, &session.home);
+    cmd.args(["doctor", "heal", "stale-leases", "--id"])
+        .arg(&session.id)
+        .arg("--yes");
+    run_ok(cmd, "targeted stale lease heal");
+    assert!(!path.exists() && !session.worktree.exists());
+    assert!(decoy.exists() && sibling.join(".git").exists());
+}

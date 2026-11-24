@@ -1428,12 +1428,25 @@ pub(super) fn heal_doctor_lease(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
+    apply_doctor_lease(project_root, finding, None)
+}
+
+pub(super) fn apply_doctor_lease(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+    expected: Option<crate::doctor_root::SelectedLease>,
+) -> Result<DoctorHealResult> {
+    use crate::doctor_root::SelectedLease;
     // trace:BUG-2655 | ai:codex
     if let Some(id) = finding.id.strip_prefix("shared-") {
         let root = aida_core::store_locate::detect_distributed_store_from(project_root)
             .ok_or_else(|| anyhow::anyhow!("shared store unavailable"))?;
         // trace:BUG-2739 | ai:codex
-        let claim = crate::coordination::claim_by_generation(&root, id)?;
+        let claim = match expected {
+            Some(SelectedLease::Shared(store, claim)) if store == root => Some(claim),
+            None => crate::coordination::claim_by_generation(&root, id)?,
+            _ => anyhow::bail!("selected shared store changed"),
+        };
         let removed = match claim {
             Some(claim) => crate::coordination::heal_exited_claim(&root, &claim)?,
             None => false,
@@ -1450,10 +1463,18 @@ pub(super) fn heal_doctor_lease(
     // run, or by a concurrent session) is a no-op, not an error — mirror the
     // dead-agent "already gone" handling so heal stays idempotent.
     // trace:BUG-471 | ai:claude
-    let Some(lease) = list_leases(project_root)
-        .into_iter()
-        .find(|lease| lease.id == finding.id)
-    else {
+    let current = match expected {
+        Some(SelectedLease::Local(original)) => {
+            let selected = crate::doctor_root::targeted_stale_finding(project_root, &finding.id)?;
+            match selected {
+                Some((_, SelectedLease::Local(current))) if current == original => Some(current),
+                _ => anyhow::bail!("selected lease changed or is no longer eligible"),
+            }
+        }
+        Some(_) => anyhow::bail!("selected lease identity mismatch"),
+        None => crate::leases::read_exact_lease(project_root, &finding.id)?,
+    };
+    let Some(lease) = current else {
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),

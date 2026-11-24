@@ -336,12 +336,12 @@ pub(crate) fn handle_doctor_command(
                 );
                 // trace:BUG-2739 | ai:codex
                 eprintln!("Checking stale lease {id} for heal eligibility");
-                let finding = crate::doctor_root::targeted_stale_finding(&root, id)?
+                let (finding, selected) = crate::doctor_root::targeted_stale_finding(&root, id)?
                     .ok_or_else(|| anyhow::anyhow!("no eligible stale lease finding `{id}`"))?;
                 if !yes && !confirm_doctor_category(&category, 1)? {
                     return Ok(());
                 }
-                let result = heal_doctor_lease(&root, &finding)?;
+                let result = apply_doctor_lease(&root, &finding, Some(selected))?;
                 println!("{}", serde_json::to_string(&result)?);
                 return Ok(());
             }

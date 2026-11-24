@@ -785,7 +785,10 @@ pub(crate) fn heal_exited_claim(store_root: &Path, expected: &Claim) -> Result<b
             if let Err(error) = refresh_store(store_root, &branch)? {
                 anyhow::bail!("cannot refresh shared claim: {error}");
             }
-            if read_claim(&claim_path(store_root, &expected.scope)).as_ref() != Some(expected)
+            let Some(generation) = &expected.claim_id else {
+                return Ok(None);
+            };
+            if claim_by_generation(store_root, generation)?.as_ref() != Some(expected)
                 || !exited_holder_is_dead(expected, Utc::now())
             {
                 return Ok(None);
@@ -1589,14 +1592,31 @@ pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
 
 // trace:BUG-2739 | ai:codex
 pub(crate) fn claim_by_generation(store_root: &Path, generation: &str) -> Result<Option<Claim>> {
-    let mut matches = list_claims(store_root)
-        .into_iter()
-        .filter(|claim| claim.claim_id.as_deref() == Some(generation));
-    let claim = matches.next();
-    anyhow::ensure!(
-        matches.next().is_none(),
-        "ambiguous shared claim ID shared-{generation}"
-    );
+    let entries = match std::fs::read_dir(leases_dir(store_root)) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let mut claim = None;
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().is_none_or(|ext| ext != "toml") {
+            continue;
+        }
+        let raw = aida_core::seat_clone_detect::read_regular_file_result(&path)
+            .with_context(|| format!("cannot read shared claim {}", path.display()))?;
+        let receipt: Claim = toml::from_str(&raw)
+            .with_context(|| format!("invalid shared claim {}", path.display()))?;
+        let canonical = claim_path(store_root, &receipt.scope);
+        anyhow::ensure!(path == canonical, "shared claim scope mismatch at {path:?}");
+        if receipt.claim_id.as_deref() == Some(generation) {
+            anyhow::ensure!(
+                claim.is_none(),
+                "ambiguous shared claim ID shared-{generation}"
+            );
+            claim = Some(receipt);
+        }
+    }
     Ok(claim)
 }
 
@@ -2176,7 +2196,7 @@ mod tests {
         let finding = crate::doctor_root::targeted_stale_finding(dir.path(), &id)
             .unwrap()
             .expect("eligible shared claim without a local lease");
-        assert_eq!(finding.id, id);
+        assert_eq!(finding.0.id, id);
         assert!(
             crate::doctor_root::targeted_stale_finding(dir.path(), "shared-other")
                 .unwrap()
@@ -2194,7 +2214,9 @@ mod tests {
             read_claim(&claim_path(&store, &holder.scope)).as_ref(),
             Some(&holder)
         );
-        let mut duplicate = holder;
+        drop(lock);
+        use aida_core::git_ops as git;
+        let mut duplicate = holder.clone();
         duplicate.scope = "other-scope".into();
         std::fs::write(
             claim_path(&store, &duplicate.scope),
@@ -2205,6 +2227,23 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("ambiguous shared claim ID"));
+        git::add(&store, &[LEASES_SUBDIR]).unwrap();
+        git::commit(&store, "duplicate generation at origin").unwrap();
+        let branch = git::current_branch(&store).unwrap();
+        assert!(git::push(&store, "origin", &branch).unwrap());
+        let tip = git::head_sha(&store).unwrap();
+        assert!(git::rollback_commit_if_head_matches(&store, &tip).unwrap());
+        let generation = holder.claim_id.as_deref().unwrap();
+        let unique = claim_by_generation(&store, generation).unwrap();
+        assert_eq!(unique.as_ref(), Some(&holder));
+        let error = heal_exited_claim(&store, &holder).unwrap_err().to_string();
+        assert!(error.contains("ambiguous shared claim ID"), "{error}");
+        let selected = claim_path(&store, &holder.scope);
+        assert_eq!(read_claim(&selected).as_ref(), Some(&holder));
+        let other = claim_path(&store, &duplicate.scope);
+        assert_eq!(read_claim(&other), Some(duplicate));
+        std::fs::write(other, "invalid toml").unwrap();
+        assert!(claim_by_generation(&store, generation).is_err());
     }
 
     #[test]
