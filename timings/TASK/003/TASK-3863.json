@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3863",
+  "publishes": [
+    {
+      "at": "2026-11-24T20:22:35.749375831Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T15:24:50.678084898Z",
+      "spec": "TASK-3863",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4520,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "f3d05fb597d08a6c820f1561b1794ebdbfe625e1"
+      }
+    },
+    {
+      "ts": "2026-11-24T15:25:22.282747945Z",
+      "spec": "TASK-3863",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep of all 10 changed files against the forge-reported integration base 88d8f9c4b01.\nTASK-b6b1278890774ef993d2ebc327862470-1308.AC1 verified by comparing the PR and reference commit: GitHub targets integration, Joe Mooney's author name and email match 0fdac177513, every touched path is in the reference commit, and the two master changes carry the source integration with a repo-wide scan adaptation and corrected facet wording. Git metadata confirms the resulting identity without establishing the exact commit command.\nTASK-b6b1278890774ef993d2ebc327862470-1308.AC2 verified by the implementer's recorded successful make sync-templates and make check-templates in a writable checkout with both edited masters, corroborated by inspection of the unchanged tracked Claude symlinks at the pinned head. The supplied untraced list names both procedural criteria. The evidence is Git inspection and the recorded configuration validation.\nThe changed showcase search entries match the pinned Markdown hashes and prose. The exact-head FAST source gates passed and FAST compile was still running. The change request is based on the workflow and showcase findings.",
+        "recovery_hint": "address the review findings, move TASK-3863 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T16:07:02.096348539Z",
+      "spec": "TASK-3863",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4520,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b7d33d9b17297432e2bc0962071c6c49f521a6e3"
+      }
+    },
+    {
+      "ts": "2026-11-24T16:07:23.678608352Z",
+      "spec": "TASK-3863",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3863 AC1 PASS. The PR targets integration and preserves Joe Mooney's authorship of the two skill hunks sourced from 0fdac177513, with a documented path-scope adaptation. AC2 PASS for the original S3 changes based on recorded implementer sync-templates and check-templates results and the tracked symlinks verified at this head. The R2 present-tense edits are present. The latest authoritative R3 brief is unmet because both templates omit the compatibility fallback. The installed reviewer CLI lists prompt and submit-draft in review help but has no prepare subcommand. The four newer integration commits do not touch either template or supply the missing guidance. Exact-head FAST source gates passed. FAST compile and merge-hold status were pending at review time.",
+        "recovery_hint": "address the review findings, move TASK-3863 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T17:40:44.075466355Z",
+      "spec": "TASK-3863",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4520,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e19159dfd613db663bf4a053911e7a8f767726ed"
+      }
+    },
+    {
+      "ts": "2026-11-24T17:52:03.517923156Z",
+      "spec": "TASK-3863",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4520,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e19159dfd613db663bf4a053911e7a8f767726ed"
+      }
+    },
+    {
+      "ts": "2026-11-24T19:20:31.494509705Z",
+      "spec": "TASK-3863",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4527,
+        "verdict": "APPROVED",
+        "reviewed_sha": "fdf07052d9d64b192ad3b35d09f00217225c86c4"
+      }
+    },
+    {
+      "ts": "2026-11-24T20:17:01.523770747Z",
+      "spec": "TASK-3863",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4527
+      }
+    },
+    {
+      "ts": "2026-11-24T20:22:35.529934168Z",
+      "spec": "TASK-3863",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "95eaccf328557402d176c0b41983afe1b677965f",
+        "pr": 4527,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
