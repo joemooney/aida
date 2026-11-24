@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T16:41:33.419749581Z
+modified_at: 2026-11-24T16:51:26.531673064Z
 req_type: Bug
 tags:
 - forge
@@ -170,6 +170,17 @@ comments:
     TITLE TRAILER: keep the existing PR title unchanged.
   created_at: 2026-11-24T16:41:33.419749581Z
   modified_at: 2026-11-24T16:41:33.419749581Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e78-6121-7f50-9065-17185d3666b7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:51):
+    # BUG-2735 / PR #4464 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 09:45; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4464 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4464. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:51:26.531673064Z
+  modified_at: 2026-11-24T16:51:26.531673064Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
