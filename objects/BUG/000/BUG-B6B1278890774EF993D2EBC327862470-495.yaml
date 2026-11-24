@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: CI runs every tests/test_*.py, either via one discovery step ('python3 -m unittest discover -s tests -p "test_*.py"') or a ratchet that fails when a tests/test_*.py file is not referenced by a CI step. Tests that need tools CI lacks are skipped explicitly with a reason, not left unwired.
   - AC2: Any currently-unwired test that fails when wired is fixed, or skipped with a linked follow-up spec, in the same PR (the small-PR rule applies; split the fix-ups if over 300 lines).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-24T04:57:35.383713729Z
+modified_at: 2026-11-24T08:16:24.379549045Z
 req_type: Bug
 tags:
 - ci
 - small
 - tests
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -256,6 +255,23 @@ history:
   timestamp: 2026-11-24T04:20:37.101171789Z
   session_id: 01a20bc52334
   changes: []
+- id: 01a20ca0-a4f3-76f1-9759-a544f37d6d97
+  author: aida-auto-bump
+  timestamp: 2026-11-24T08:16:24.307859936Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a20ca0-a53b-7e63-be8c-6e340fc024f1
+  timestamp: 2026-11-24T08:16:24.379546086Z
+  agent: aida
+  commit_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
+  summary: 'Advisor (delegated authority): promotion 30, linear on main f0d3a0ae222 + 5 cherry-picks; per-commit patch-ids match approved integration squashes (0bcf18da, 3aad9dc8, 5b57f2c1, fa7e9a9c, fbcd41f6); combined 6887cfc4d511; no protected paths; fast CI green.'
+  punted:
+  - 'punted: Reviewed the full three-file diff at 7a4b585746c53d3c1e7166a9423f1ef9a3182180 against the generated worksheet and the supplied untraced-criteria list. BUG-2734 is a completing spec (origin BUG-b6b1278890774ef993d2ebc327862470-495). BUG-b6b1278890774ef993d2ebc327862470-495.AC1 — unverified BUG-b6b1278890774ef993d2ebc327862470-495.AC2 — verified by the dated KNOWN_FAILING entries, the three matching AIDA follow-up specs, and the FAST gates log showing each exclusion on the PR check''s checkout. This verifies the original exclusions for the pinned head. The integration base subsequently received the three fixture fixes, and the advisor explicitly requires restoring their CI coverage in this PR. The FAST gates job (45318787642 / 138192013063) passed the new discovery regression. Its PR checkout also ran and passed the newer base''s test_build_git_stamp.py and test_closeout_audit_wording.py. FAST compile was in progress and the FULL matrix was skipped at review time. Neither contracts invocation added by the PR has a result in that run. Source inspection establishes the blocking findings without waiting on CI. The head is 18 commits behind origin/integration. Only the finding about the three already-fixed fixtures depends on subsequent base changes.'
+  - 'punted: BUG-2734 AC1 fails because the wiring ratchet treats commands in disabled CI steps as coverage. The FAST gates log confirms that discovery ran and passed the new discovery regression, test_build_git_stamp.py, and test_closeout_audit_wording.py. AC2 is partially verified. All three restored standalone suites are wired with the correct arguments and removed from the known-failing list. The advisor-required FULL contracts log showing all three passing is still outstanding. The pinned head had only a FAST run, with compile still pending and the FULL matrix skipped. The head is one commit behind origin/integration. That base commit does not affect the finding. Review claim was refused. No local tests or builds were run.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
@@ -268,12 +284,6 @@ filed_at:
   harness_version: 2.1.330 (Claude Code)
 implementation_info:
   implemented: false
+  completed_at: 2026-11-24T08:16:24.307852387Z
+  completion_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
   reopened_at_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2734 AC1 fails because the wiring ratchet treats commands in disabled CI steps as coverage. The FAST gates log confirms that discovery ran and passed the new discovery regression, test_build_git_stamp.py, and test_closeout_audit_wording.py. AC2 is partially verified. All three restored standalone suites are wired with the correct arguments and removed from the known-failing list. The advisor-required FULL contracts log showing all three passing is still outstanding. The pinned head had only a FAST run, with compile still pending and the FULL matrix skipped. The head is one commit behind origin/integration. That base commit does not affect the finding. Review claim was refused. No local tests or builds were run.
-  recovery_hint: address the review findings, move BUG-2734 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T04:20:03.301984480Z
