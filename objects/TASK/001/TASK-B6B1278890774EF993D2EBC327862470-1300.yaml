@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: main_watch tells a gh AUTHENTICATION failure apart from pending CI. With expired or missing gh auth, red-main-watch currently reads as Pending and exits 0, so CronJobFailed never fires. It must exit NON-ZERO with a clear auth cause. Test with a fake gh that fails auth.
   - AC2: The routed CronJobFailed trip keeps a COMPACT failed-step + cause summary, not just stderr's last line. Test.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:05:02.248297583Z
-modified_at: 2026-11-24T06:37:48.792025122Z
+modified_at: 2026-11-24T07:04:59.100443553Z
 req_type: Task
 tags:
 - main-watch
@@ -38,6 +38,12 @@ comments:
   modified_at: 2026-11-24T06:37:48.792025122Z
   session_id: 01a20c31ca41
   harness_version: codex-cli 0.167.0
+- id: 01a20c5f-41dc-7cf1-8ec4-873b35fe7e61
+  author: aida-publication-done
+  content: Implementer push 9bb10185cc8f declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T07:04:59.100442227Z
+  modified_at: 2026-11-24T07:04:59.100442227Z
+  session_id: 01a20c31ca41
 history:
 - id: 01a20c29-65ab-76d1-94ac-a40605b8d567
   author: joe
@@ -56,6 +62,14 @@ history:
   session_id: 01a20c31ca41
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c5f-41dc-7cf1-8ec4-87255cea2392
+  author: aida-publication-done
+  timestamp: 2026-11-24T07:04:59.100432951Z
+  session_id: 01a20c31ca41
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
