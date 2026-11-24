@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T23:19:44.842499704Z
+modified_at: 2026-11-24T23:20:56.429649616Z
 req_type: Bug
 tags:
 - store
@@ -188,6 +188,12 @@ comments:
   content: Implementer push df33cd956016 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T23:19:05.859390508Z
   modified_at: 2026-11-24T23:19:05.859390508Z
+  session_id: 01a20f8ffc5d
+- id: 01a20fdc-c56d-7010-8caf-0ee8081889dc
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-511` at head `df33cd9560164a371d02f273825e464f6006493e`.'
+  created_at: 2026-11-24T23:20:56.429643412Z
+  modified_at: 2026-11-24T23:20:56.429643412Z
   session_id: 01a20f8ffc5d
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
