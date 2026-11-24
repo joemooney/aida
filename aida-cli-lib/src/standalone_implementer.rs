@@ -1475,15 +1475,11 @@ pub(crate) fn revalidate_before_spawn(
     anchor: uuid::Uuid,
     members: impl Iterator<Item = uuid::Uuid>,
 ) -> Result<Option<aida_core::db::StoreWriteHold>> {
-    let hold = storage
-        .path()
-        .is_dir()
-        .then(|| aida_core::db::hold_store_write(storage.path()))
-        .transpose()?;
     anyhow::ensure!(
-        storage.path().try_exists()?,
-        "launch authority store disappeared"
+        storage.path().is_dir(),
+        "standalone launch requires a directory-backed authority store for writer exclusion"
     );
+    let hold = aida_core::db::hold_store_write(storage.path())?;
     let store = storage.load()?;
     for id in std::iter::once(anchor).chain(members.filter(|id| *id != anchor)) {
         let req = store
@@ -1500,7 +1496,7 @@ pub(crate) fn revalidate_before_spawn(
             return Err(error);
         }
     }
-    Ok(hold)
+    Ok(Some(hold))
 }
 
 // trace:STORY-2690 | ai:codex

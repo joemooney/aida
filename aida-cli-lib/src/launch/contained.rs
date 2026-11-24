@@ -2284,17 +2284,23 @@ impl ContainedChild {
     }
     /// Caller finishes host registry/lease binding while exec is still blocked.
     pub(crate) fn release(&mut self) -> Result<()> {
+        self.prepare_release()?()
+    }
+
+    /// Finish host service binding and return the one-shot vendor exec release.
+    // trace:STORY-3080 | ai:codex
+    pub(crate) fn prepare_release(&mut self) -> Result<impl FnOnce() -> Result<()> + use<>> {
         // trace:TASK-3225 | ai:codex — bind through the existing authority
         // owner first; an absent/empty/foreign binding cannot release tools.
         if let Some(service) = &mut self.mutation {
             let receipt = self.receipt.as_ref().context("service receipt absent")?;
             service.bind_worker(receipt.worker_pid, &receipt.worker_start)?;
         }
-        self.acceptance
+        let mut barrier = self
+            .acceptance
             .take()
-            .context("contained exec barrier already released")?
-            .write_all(b"R")?;
-        Ok(())
+            .context("contained exec barrier already released")?;
+        Ok(move || Ok(barrier.write_all(b"R")?))
     }
     pub(crate) fn receipt(&self) -> &ContainmentReceipt {
         self.receipt.as_ref().expect("accepted receipt")

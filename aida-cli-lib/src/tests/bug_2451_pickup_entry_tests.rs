@@ -1945,8 +1945,18 @@ fn story_3080_real_pickup_preserves_veto_on_late_hold() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    for change in ["hold", "track", "pulled-track"] {
+        story_3080_pickup_during_wait(change);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn story_3080_pickup_during_wait(change: &'static str) {
     let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
+    let store_root = fx.main.join(".aida-store");
+    aida_core::git_ops::init(&store_root).unwrap();
+    aida_core::git_ops::configure_user(&store_root, "Fixture", "fixture@example.com").unwrap();
     let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
     let gh = recovery_forge_fixture(&fx.main, &fx.root);
@@ -1958,7 +1968,6 @@ fn story_3080_real_pickup_preserves_veto_on_late_hold() {
     let _disk = crate::machine_readiness::test_lane_available_bytes(100 * 1024 * 1024 * 1024);
     let scope = "BUG-2451";
     let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, scope);
-    let writer = crate::Storage::new(storage.path());
     let veto = crate::punt::hold_signal_path(&fx.main, scope);
     crate::punt::write_hold_signal(
         &veto,
@@ -1973,23 +1982,86 @@ fn story_3080_real_pickup_preserves_veto_on_late_hold() {
     let prior = std::fs::read(&veto).unwrap();
     let sentinel = fx.root.join("started");
     let started = sentinel.clone();
+    use crate::lane_admission::{TestHost, TEST_HOST};
+    let prefix = TestHost::prefix();
+    let mut slot = Some(TestHost::hold(&prefix, 0));
+    let local = storage.path().to_owned();
+    TEST_HOST.set(Some(TestHost {
+        max_concurrent_cold_starts: 1,
+        min_memory_headroom_gib: 1,
+        prefix,
+        memory_gib: std::rc::Rc::new(std::cell::Cell::new(16)),
+        on_wait: Box::new(move || {
+            std::thread::scope(|s| {
+                s.spawn(|| story_3080_write_change(&local, scope, change))
+                    .join()
+                    .unwrap()
+                    .unwrap()
+            });
+            drop(slot.take().unwrap());
+        }),
+    }));
     crate::session::TEST_STANDALONE_LAUNCHER.set(Some(Box::new(move |hooks| {
-        writer.update_atomically(|store| {
-            let req = store.get_requirement_by_spec_id_mut(scope).unwrap();
-            req.deferred = true;
-            req.deferred_reason = Some("late pickup hold".into());
-        })?;
         let _authority = hooks.before_spawn.unwrap()()?;
         std::fs::write(started, "started")?;
         anyhow::bail!("unexpected child launch")
     })));
     let error = headless_pickup_on_branch(&storage, Some("bug-2451")).unwrap_err();
+    TEST_HOST.take();
     assert!(
-        format!("{error:#}").contains("late pickup hold"),
+        format!("{error:#}").contains(if change == "hold" {
+            "late pickup hold"
+        } else {
+            "supervised work"
+        }),
         "{error:#}"
     );
     assert!(!sentinel.exists());
     assert_eq!(std::fs::read(veto).unwrap(), prior);
+}
+
+#[cfg(target_os = "linux")]
+fn story_3080_write_change(
+    local: &std::path::Path,
+    scope: &str,
+    change: &str,
+) -> anyhow::Result<()> {
+    let writer = crate::Storage::new(local);
+    if change == "pulled-track" {
+        let remote = local.parent().unwrap().join("store-peer");
+        git_ok(local, &["clone", ".", remote.to_str().unwrap()]);
+        aida_core::git_ops::configure_user(&remote, "Fixture", "fixture@example.com")?;
+        let store = writer.load()?;
+        let mut req = store.get_requirement_by_spec_id(scope).unwrap().clone();
+        req.tags.insert("track:operator".into());
+        aida_core::object_store::write_object(&remote.join("objects"), &req)?;
+        git_ok(
+            &remote,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-am",
+                "require operator track",
+            ],
+        );
+        git_ok(local, &["remote", "add", "peer", remote.to_str().unwrap()]);
+        let branch = git_ok(&remote, &["branch", "--show-current"]);
+        aida_core::git_ops::pull_rebase_auto_merge(local, "peer", branch.trim())?;
+    } else {
+        writer.update_atomically(|store| {
+            let req = store.get_requirement_by_spec_id_mut(scope).unwrap();
+            if change == "hold" {
+                req.deferred = true;
+                req.deferred_reason = Some("late pickup hold".into());
+            } else {
+                req.tags.insert("track:operator".into());
+            }
+        })?;
+    }
+    Ok(())
 }
 
 // trace:TASK-3154 | ai:codex
@@ -2295,4 +2367,48 @@ fi
     assert!(req.comments.iter().any(|c| c
         .content
         .contains("no open PR; retained branch `other-lane`")));
+}
+
+// trace:STORY-3080 | ai:codex
+#[test]
+fn story_3080_writer_excluded_until_vendor_release() {
+    use fs2::FileExt;
+    let dir = tempfile::tempdir().unwrap();
+    let storage = crate::test_env::home_fixture_storage(dir.path());
+    let check = || aida_core::db::hold_store_write(storage.path()).map(Some);
+    let hooks = crate::session::HeadlessChildHooks {
+        before_spawn: Some(&check),
+        ..Default::default()
+    };
+    let writer = || {
+        let file =
+            std::fs::File::open(aida_core::db::store_write_lock_path(storage.path())).unwrap();
+        file.try_lock_exclusive()
+    };
+    hooks
+        .with_spawn_authority(|| {
+            assert_eq!(writer().unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+            Ok(())
+        })
+        .unwrap();
+    writer().unwrap();
+}
+
+#[test]
+fn story_3080_file_authority_refuses_standalone_launch() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["store.yaml", "store.sqlite"] {
+        let file = dir.path().join(name);
+        std::fs::write(&file, "").unwrap();
+        let result = crate::standalone_implementer::revalidate_before_spawn(
+            &crate::Storage::new(file),
+            uuid::Uuid::nil(),
+            std::iter::empty(),
+        );
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("directory-backed"));
+    }
 }

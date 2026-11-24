@@ -2550,6 +2550,14 @@ pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) hold_reap: Option<&'a dyn Fn() -> bool>,
 }
 
+impl HeadlessChildHooks<'_> {
+    // trace:STORY-3080 | ai:codex
+    pub(crate) fn with_spawn_authority<T>(&self, start: impl FnOnce() -> Result<T>) -> Result<T> {
+        let _authority = self.before_spawn.map(|check| check()).transpose()?;
+        start()
+    }
+}
+
 /// BUG-044: `args` (a composed `--session-id <id>` launch) rewritten to
 /// `--resume <id>`, every other flag kept, so a resume runs with the same
 /// posture, model and wrapper as the launch it continues.
@@ -2774,20 +2782,12 @@ fn run_vendor_headless_child(
                 &headless_worktree_root(),
                 host_main,
             )?;
-            let authority = hooks.before_spawn.map(|check| check()).transpose()?;
             let mut run = prepared.spawn(Stdio::from(log))?;
-            drop(authority);
             anyhow::ensure!(
                 containment_applied(vendor, true, Some(run.receipt())),
                 "missing applied receipt"
             );
             let worker = run.receipt().worker_pid();
-            if let Some(guard) = &mut handle_guard {
-                guard.disarm();
-            }
-            if let Some(on_spawn) = hooks.on_spawn {
-                on_spawn(worker);
-            }
             if let Some(id) = lease_id {
                 stamp_lease_active_pid(id, worker)?;
             }
@@ -2800,7 +2800,13 @@ fn run_vendor_headless_child(
             registered = true;
             // trace:TASK-2708 | ai:claude
             crate::gate::seat_authority::bind_contained_launch_worker(grant_env, run.receipt())?;
-            run.release()?;
+            hooks.with_spawn_authority(run.prepare_release()?)?;
+            if let Some(guard) = &mut handle_guard {
+                guard.disarm();
+            }
+            if let Some(on_spawn) = hooks.on_spawn {
+                on_spawn(worker);
+            }
             if !hooks.resume {
                 if let Some(on_delivery) = hooks.on_delivery {
                     on_delivery();
@@ -2829,18 +2835,18 @@ fn run_vendor_headless_child(
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     #[cfg(target_os = "linux")]
     let holder_capture = aida_core::proc_identity::prepare_command(&mut child_cmd)?;
-    let authority = match hooks.before_spawn.map(|check| check()).transpose() {
-        Ok(hold) => hold,
+    let mut child = match hooks.with_spawn_authority(|| {
+        child_cmd
+            .stdout(Stdio::from(log))
+            .spawn_retrying_etxtbsy()
+            .with_context(|| format!("failed to spawn {}", vendor.program()))
+    }) {
+        Ok(child) => child,
         Err(error) => {
             tee.stop();
             return Err(error);
         }
     };
-    let mut child = child_cmd
-        .stdout(Stdio::from(log))
-        .spawn_retrying_etxtbsy()
-        .with_context(|| format!("failed to spawn {}", vendor.program()))?;
-    drop(authority);
     if let Some(guard) = &mut handle_guard {
         guard.disarm();
     }

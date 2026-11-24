@@ -162,7 +162,18 @@ pub(crate) fn admit(
     if pickup == Pickup::Continues {
         return Ok(());
     }
-    let open = match open_changes(root) {
+    apply_observation(root, spec, pickup, over_wip, preview, open_changes(root))
+}
+
+fn apply_observation(
+    root: &Path,
+    spec: &str,
+    pickup: Pickup,
+    over_wip: bool,
+    preview: bool,
+    observation: Result<usize>,
+) -> Result<()> {
+    let open = match observation {
         Ok(open) => open,
         Err(why) => {
             eprintln!(
@@ -185,8 +196,14 @@ pub(crate) fn admit_before_spawn(
     if pickup != Pickup::New {
         return admit(root, spec, pickup, over_wip, false);
     }
-    let open = crate::land::open_change_count(root)?;
-    apply_count(root, spec, pickup, over_wip, false, open)
+    apply_observation(
+        root,
+        spec,
+        pickup,
+        over_wip,
+        false,
+        crate::land::open_change_count(root),
+    )
 }
 
 fn apply_count(
