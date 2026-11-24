@@ -104,6 +104,13 @@ comments:
   created_at: 2026-11-24T11:45:43.583468403Z
   modified_at: 2026-11-24T11:45:43.583468403Z
   session_id: 01a20d367944
+- id: 01a20d60-b6da-7b91-932a-3c795cdebb5b
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 04:48): PR-4511 @ b554c5545a resolves the H1 semantic conflict. The branch now CONTAINS integration''s H1 (f1f2503d167 is an ancestor), so its CI runs on the post-H1 base. The rework commit b554c5545a0 adds load_review_rules(root) = ProjectReviewRulesConfig::load_from_root(root).context(''load .aida/review-rules.toml''), and run_review_prepare uses it with ''?'', so a present-but-invalid or unreadable config FAILS prepare (H1 AC d). Test invalid_review_rules_errors writes ''[unterminated'' and asserts the contextual error. Nit: the ruling asked for ''aida review prepare exits non-zero''; the test exercises the helper prepare calls, not the CLI end to end (same code path). Merges CLEAN. Waiting on FAST at this head (the first run on the post-H1 base).'
+  created_at: 2026-11-24T11:45:58.940907562Z
+  modified_at: 2026-11-24T11:45:58.940907562Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20d61-67a8-74d0-a86e-a504aa01de07
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int32-task-3862` at head `b554c5545a0c16c5582a3beab3cfcdc8f765028e`.'
