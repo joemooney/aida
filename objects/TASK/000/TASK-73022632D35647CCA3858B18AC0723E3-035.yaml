@@ -6,11 +6,11 @@ description: |
   `aida mandate renew` (TASK-3820, PR-4280) extends grant records in place, but a grant's session key (used by sandboxed presenters such as agent tool calls) lives in the holder's session keyring with a TTL set at issue time. The renew process can only move the key expiry for keys it possesses (grant_keyring::extend); keys held by other terminals keep the old expiry, and the table prints a note. Follow-up: let a holder adopt the extension (e.g. a hook/statusline tick that re-times its own key when its grant's expires_at moved), so sandboxed tool calls in other terminals survive the old deadline.
   Raised by the implementer while working TASK-3820. Commit d790cb075a.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T03:57:59.597261329Z
-modified_at: 2026-11-24T17:33:40.266180684Z
+modified_at: 2026-11-24T17:33:45.470562795Z
 req_type: Task
 tags:
 - from-implementer:TASK-3820
@@ -37,6 +37,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20e9e-ea7e-7c13-93c3-fc6bed0120eb
+  author: joe
+  timestamp: 2026-11-24T17:33:45.470562006Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High
 filed_at:
   code_sha: d790cb075a4eaedd9e914fb037265c1e7c0e409f
   branch: task-b6b1278890774ef993d2ebc327862470-1104
