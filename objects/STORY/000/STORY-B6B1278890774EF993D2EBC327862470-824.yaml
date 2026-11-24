@@ -13,13 +13,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T07:43:36.149078844Z
+modified_at: 2026-11-24T07:44:12.696845908Z
 req_type: Story
 tags:
 - admission
 - authority
 - launch
 - strict
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20c83-029c-7320-afa9-40d5a68784bc
+  created_at: 2026-11-24T07:44:12.696830260Z
+  created_by: dirtlab
 comments:
 - id: 01a20c4a-f0a5-7b33-9c18-feafda1629be
   author: joe
@@ -95,6 +101,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20c83-3329-7840-91a2-3f73cf3deed5
+  author: dirtlab
+  timestamp: 2026-11-24T07:44:14.633262940Z
+  session_id: 01a20c4fa138
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
