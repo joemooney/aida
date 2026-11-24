@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T21:45:11.136374423Z
+modified_at: 2026-11-24T21:45:33.881916702Z
 req_type: Bug
 tags:
 - data-loss
@@ -110,6 +110,21 @@ comments:
   created_at: 2026-11-24T21:36:35.442628330Z
   modified_at: 2026-11-24T21:36:35.442628330Z
   session_id: 01a20f34dcec
+- id: 01a20f85-3695-7b93-8229-f482699e5a0d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2749):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5203d57dcf27
+    Recorded: 2026-11-24T21:45:09.333777494+00:00
+    Findings:
+    1. BUG-2749 AC1 — worktree_gc.rs:58–63 still runs repository-wide `git worktree prune` without testing any registered index. `session end` calls it at session_end.rs:2301, and even `session gc --dry-run` calls it at worktree_gc.rs:248 before examining dry-run. Consequently ending an unrelated session or previewing GC can delete the same unlocked missing-checkout registration the new guard retained. Other AIDA bare prune invocations also bypass the check, including pool allocation at aida-core/src/git_ops.rs:4291. Route registration removal through guarded, per-registration inspection and keep GC previews read-only. Add an end-to-end regression proving that routine cleanup leaves a sibling's staged index intact. Git's prune condition for absent checkouts uses index mtime and lock state. https://github.com/git/git/blob/v2.43.0/worktree.c#L677-L739
+    2. BUG-2749 AC1 — session_reap.rs:1900–1904 reserves the checkout pathname, but it does not exclude an in-flight Git index writer. For example, a Git process that began staging before checkout removal may already own the per-worktree `index.lock`. The cached comparison reads the old clean `index` while the writer writes or publishes the replacement. `remove_dir_all` can then delete the newly staged index or remove its pending lock file. Use an index-writer exclusion boundary held through comparison and deletion, and cover the case of a held `index.lock` with a regression.
+    3. BUG-2749 AC1 — session_reap.rs:1951–1962 treats successful `diff-index` as valid evidence. Git's ordinary index reader does not verify the trailing checksum, so a parseable index with a mismatched nonzero checksum can be compared as clean and deleted. The new text-corruption fixture only exercises invalid headers. Require integrity validation of the checked index snapshot, including shared index data when applicable, and add a checksum-corruption case that retains the registration. https://github.com/git/git/blob/v2.43.0/read-cache.c#L1605-L1637 https://github.com/git/git/blob/v2.43.0/builtin/diff-index.c#L60-L72
+    4. mail_retention.rs:271–288 reports `would-drop` during `aida mailbox retention prune --dry-run` for an unlocked deleted checkout with staged changes or an unreadable index, while the real command keeps it. Apply the same index eligibility check in a read-only preview or report uncertainty, and verify preview and apply agree for a staged-only index.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T21:45:18.229236417Z
+  modified_at: 2026-11-24T21:45:18.229236417Z
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
