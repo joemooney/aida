@@ -159,7 +159,7 @@ impl OwnMail {
     // trace:TASK-3846 | ai:codex
     pub(crate) fn missing_sidecar_note(&self) -> Option<String> {
         let ids = &self.ack_basis.as_ref()?.1.missing_seat_sidecars;
-        missing_seat_sidecar_note(ids)
+        missing_seat_sidecar_note(ids, false)
     }
 
     /// One line naming why the view is partial, or `None` when complete.
@@ -220,11 +220,26 @@ impl OwnMail {
 }
 
 // trace:TASK-3846 | ai:codex
-pub(crate) fn missing_seat_sidecar_note(ids: &[String]) -> Option<String> {
-    (!ids.is_empty()).then(|| format!(
-            "{} seat messages hidden: delivery sidecar missing ({}) — inspect with aida mailbox inbox --all",
-            ids.len(), ids.join(", ")
-        ))
+pub(crate) fn missing_seat_sidecar_note(
+    issues: &[aida_core::mailbox_logical::SeatSidecarIssue],
+    incomplete: bool,
+) -> Option<String> {
+    if issues.is_empty() && !incomplete {
+        return None;
+    }
+    let mut note = format!("{} seat messages hidden or UNVERIFIED", issues.len());
+    if incomplete {
+        note.push_str(" (observed count only; inventory incomplete)");
+    }
+    for issue in issues {
+        use std::fmt::Write;
+        let _ = write!(
+            note,
+            "\n{} — aida mailbox read {} (source {:?})",
+            issue.reason, issue.id, issue.source
+        );
+    }
+    Some(note)
 }
 
 /// The audience this process's verified identity facts grant.

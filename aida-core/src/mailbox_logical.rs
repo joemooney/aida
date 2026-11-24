@@ -468,9 +468,19 @@ pub fn inspection_sources_complete(ctx: &MailboxContext, limits: &ReadLimits) ->
     inspect_seat_sidecars(ctx, limits).0
 }
 
-/// Inventory confirmed missing seat sidecars without projecting messages or granting ACK access.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SeatSidecarIssue {
+    pub id: String,
+    pub source: PathBuf,
+    pub reason: &'static str,
+}
+
+/// Inventory missing or unverified seat sidecars without projecting messages or granting ACK access.
 /// trace:TASK-3846 | ai:codex
-pub fn inspect_seat_sidecars(ctx: &MailboxContext, limits: &ReadLimits) -> (bool, Vec<String>) {
+pub fn inspect_seat_sidecars(
+    ctx: &MailboxContext,
+    limits: &ReadLimits,
+) -> (bool, Vec<SeatSidecarIssue>) {
     let policy = PolicySubject {
         inspect_all_seat_sidecars: true,
         private: &[],
@@ -575,6 +585,7 @@ pub struct ReadLimits {
     pub deadline: Instant,
     pub max_roots: usize,
     pub max_entries: usize,
+    pub max_retained_probes: usize,
     pub max_message_bytes: u64,
     /// Materialized history, independent of unread discovery.
     pub max_total_bytes: u64,
@@ -594,6 +605,7 @@ impl ReadLimits {
             deadline,
             max_roots: 512,
             max_entries: 16_384,
+            max_retained_probes: 16_384,
             max_message_bytes: 1024 * 1024,
             max_total_bytes: 32 * 1024 * 1024,
             max_discovery_bytes: 128 * 1024 * 1024,
@@ -866,9 +878,9 @@ pub struct LogicalSnapshot {
     pub anchor_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
-    /// Direct seat messages for which a complete delivery search found no sidecar.
+    /// Observed seat messages with missing or unverified sidecars.
     // trace:TASK-3846 | ai:codex
-    pub missing_seat_sidecars: Vec<String>,
+    pub missing_seat_sidecars: Vec<SeatSidecarIssue>,
     /// Records whose delivery or receipt evidence could not be determined.
     /// Readers must not project these as unread or cleared mail. The raw
     /// records remain available for explicit ID resolution; coverage and ACK
@@ -1497,6 +1509,7 @@ struct Budget {
     deadline: Instant,
     max_roots: usize,
     entries_left: usize,
+    retained_probes_left: usize,
     max_message_bytes: u64,
     bytes_left: u64,
 }
@@ -1507,6 +1520,7 @@ impl Budget {
             deadline: limits.deadline,
             max_roots: limits.max_roots,
             entries_left: limits.max_entries,
+            retained_probes_left: limits.max_retained_probes,
             max_message_bytes: limits.max_message_bytes,
             bytes_left: limits.max_total_bytes,
         }
@@ -1989,6 +2003,7 @@ impl PinnedDir {
 }
 
 struct ObservedMessage {
+    source: PathBuf,
     message: Message,
     fingerprint: String,
     recorded: Recorded,
@@ -2073,6 +2088,7 @@ fn read_source(
         mtime_ns: i128::from(meta.mtime()) * 1_000_000_000 + i128::from(meta.mtime_nsec()),
     };
     let mut messages = Vec::new();
+    let mailbox_path = root.join(components.iter().collect::<PathBuf>());
     for name in dir.names(budget)? {
         if !name.ends_with(b".json") || name.starts_with(b".") {
             continue;
@@ -2102,6 +2118,7 @@ fn read_source(
             return Err(SourceErrorCode::CorruptMessage);
         }
         messages.push(ObservedMessage {
+            source: mailbox_path.join(OsStr::from_bytes(&name)),
             fingerprint: fingerprint(&bytes),
             message,
             recorded,
@@ -2205,14 +2222,14 @@ fn delivery_gates(
     Vec<PendingDelivery>,
     Conflicts,
     Vec<String>,
-    Vec<String>,
+    Vec<SeatSidecarIssue>,
 ) {
     let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
     let mut delivery_addressed = BTreeSet::new();
-    let mut seat_addressed = HashSet::new();
+    let mut seat_addressed = HashMap::new();
     let mut deleted = HashSet::new();
     for sidecar in salvaged {
         sidecars
@@ -2255,7 +2272,9 @@ fn delivery_gates(
             if (!keys.is_empty() || audience.inspect_all_seat_sidecars)
                 && matches!(&m.message.to, Recipient::Agent(to) if to.starts_with("seat:"))
             {
-                seat_addressed.insert(m.message.id.as_str());
+                seat_addressed
+                    .entry(m.message.id.as_str())
+                    .or_insert(&m.source);
                 delivery_addressed.insert(m.message.id.as_str());
             } else if keys
                 .iter()
@@ -2271,6 +2290,7 @@ fn delivery_gates(
         .into_iter()
         .filter(|id| !sidecars.contains_key(*id))
         .collect();
+    let mut unexamined = HashSet::new();
     if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
         match RetainedDeliveries::open(common.path(), budget) {
             Ok(retained) => {
@@ -2280,7 +2300,10 @@ fn delivery_gates(
                             sidecars.insert(id.to_string(), found);
                         }
                         Ok(_) => {}
-                        Err(()) => {
+                        Err(code) => {
+                            if code == SourceErrorCode::OverBudget {
+                                unexamined.insert(id);
+                            }
                             unknown_ids.insert(id.to_string());
                             gates.insert(id.to_string(), DeliveryGate::NotOwned);
                         }
@@ -2290,6 +2313,9 @@ fn delivery_gates(
             Err(code) => {
                 anchor.error.get_or_insert(code);
                 for &id in &wanted {
+                    if code == SourceErrorCode::OverBudget {
+                        unexamined.insert(id);
+                    }
                     unknown_ids.insert(id.to_string());
                     gates.insert(id.to_string(), DeliveryGate::NotOwned);
                 }
@@ -2298,15 +2324,22 @@ fn delivery_gates(
     }
     let mut missing_seat_sidecars = Vec::new();
     for id in wanted {
-        if (unsighted || seat_addressed.contains(id)) && !sidecars.contains_key(id) {
+        if (unsighted || seat_addressed.contains_key(id)) && !sidecars.contains_key(id) {
             // Retained lookup failures and unread sources are unknown, not confirmed absences.
             // trace:TASK-3846 | ai:codex
-            if !unsighted
-                && seat_addressed.contains(id)
-                && !unknown_ids.contains(id)
-                && !deleted.contains(id)
-            {
-                missing_seat_sidecars.push(id.to_string());
+            if let Some(&source) = seat_addressed.get(id).filter(|_| !deleted.contains(id)) {
+                let reason = if unexamined.contains(id) {
+                    "UNEXAMINED"
+                } else if unsighted || unknown_ids.contains(id) {
+                    "UNVERIFIED"
+                } else {
+                    "delivery sidecar missing"
+                };
+                missing_seat_sidecars.push(SeatSidecarIssue {
+                    id: id.to_owned(),
+                    source: source.clone(),
+                    reason,
+                });
             }
             unknown_ids.insert(id.to_string());
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
@@ -2421,16 +2454,33 @@ impl RetainedDeliveries {
 
     /// Every retained sidecar for message `id`. `Err` when one exists but
     /// cannot be read or parsed: that message's ownership is unknown.
-    fn lookup(&self, id: &str, budget: &mut Budget) -> Result<Vec<DeliverySidecar>, ()> {
+    fn lookup(
+        &self,
+        id: &str,
+        budget: &mut Budget,
+    ) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+        if budget.expired() || budget.retained_probes_left == 0 {
+            return Err(SourceErrorCode::OverBudget);
+        }
         let name = format!("{id}.json");
         let mut out = Vec::new();
+        if self.dirs.is_empty() {
+            budget.retained_probes_left -= 1;
+        }
         for dir in &self.dirs {
-            let bytes = dir
-                .read_file(OsStr::new(&name), DELIVERY_FILE_CAP)
-                .map_err(|_| ())?;
+            if budget.expired() {
+                return Err(SourceErrorCode::OverBudget);
+            }
+            budget.retained_probes_left = budget
+                .retained_probes_left
+                .checked_sub(1)
+                .ok_or(SourceErrorCode::OverBudget)?;
+            let bytes = dir.read_file(OsStr::new(&name), DELIVERY_FILE_CAP)?;
             let Some(bytes) = bytes else { continue };
-            budget.take(bytes.len()).map_err(|_| ())?;
-            out.push(DeliverySidecar::parse(&bytes, id).map_err(|_| ())?);
+            budget.take(bytes.len())?;
+            out.push(
+                DeliverySidecar::parse(&bytes, id).map_err(|_| SourceErrorCode::CorruptMessage)?,
+            );
         }
         Ok(out)
     }
