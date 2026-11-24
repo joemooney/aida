@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3246",
+  "publishes": [
+    {
+      "at": "2026-11-24T05:00:59.677957055Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T12:35:57.608690681Z",
+      "spec": "TASK-3246",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4430,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "363cf98095794842f00e692c644ed1720e889c10"
+      }
+    },
+    {
+      "ts": "2026-11-23T12:36:01.934986351Z",
+      "spec": "TASK-3246",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "REQUEST CHANGES — TASK-3246 (completing). The generated worksheet has no formal Acceptance or Verify section. The checks below come from the requirement description and the recovery behavior claimed in the diff.\n\n- An authorized resume can replace unreadable journal bytes and report recovery — verified by the landed source path from advisor loops resume through the locked authority check and atomic save, plus the existing implementer report for cargo test -p aida-cli-lib bug2703_drain_and_resume_refuse_without_advisor_authority (1 passed in lane job j20261123T112744446-2-0).\n- The replacement records that recovery happened, with actor and time — verified by the landed RecoveryResume event and its serialization, plus the fixture's single-event and actor assertions.\n- Malformed JSON and invalid UTF-8 stay fail-closed before explicit authorized recovery, and a grantless resume preserves the damaged bytes — verified by the landed reader and authority-check order and the same focused regression evidence. The valid-advisor drain refusal on damaged bytes has no direct regression assertion.\n- Successful recovery allows both loops to resume in the supported deployment — unverified. The preceding deputy and controller readers reject the recovery event, so the command's success cannot release their admission block during a mixed-version rollout or rollback.\n- Recovery is documented and exercised through the real resume entry point — verified by docs/cli/06-roles-sessions.md and the focused regression's calls to resume with both damaged payloads. The manual-recovery alternative is not-applicable-because the change implements command-based recovery.\n\nInspected the full diff from protected base ff524ebd21fa22d5744dedb7f4dff6c3c37fad22 to landed tree d9528c16fe1bc63bea273d4de96e63530d54cdae. The original PR head is two commits behind. Neither finding depends on files changed by those two base commits. GitHub fast gates and merge-hold-gate passed, and fast compile was pending at review time. No local build or test commands were run.",
+        "recovery_hint": "address the review findings, move TASK-3246 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T13:39:48.271063917Z",
+      "spec": "TASK-3246",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4430,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "12f0e85c1e3f7d878e35c8776576b0cdd31a5d34"
+      }
+    },
+    {
+      "ts": "2026-11-23T13:40:03.833176333Z",
+      "spec": "TASK-3246",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3246 — PARTIAL. Reviewed the landed diff against protected main ff524ebd21fa. PASS: recovery uses an existing v1 Resume event, and the expanded fixture covers unauthorized resume, authorized drain refusal with byte preservation, and authorized resume with an inactive readback. FAIL: the recovery audit prefix narrows the accepted actor length, so an authorized operator whose actor already passes normal drain and resume validation can still be unable to recover the unreadable journal. Fast gates passed and CI was pending at review time. Source and existing CI evidence only.",
+        "recovery_hint": "address the review findings, move TASK-3246 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T15:58:37.778073443Z",
+      "spec": "TASK-3246",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4430,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "df02796d124302b201279d1e87e6890d4187b306"
+      }
+    },
+    {
+      "ts": "2026-11-23T15:58:42.982419067Z",
+      "spec": "TASK-3246",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3246 — PARTIAL. The pinned landed diff preserves authority checks under the drain lock and exercises malformed JSON and invalid UTF-8, including refusal and byte preservation for unauthorized resume and authorized drain. The new reader round-trips a 512-byte actor, but the replacement exceeds the protected-base version-1 reader's actor limit and can leave both loops drained despite a successful resume. This regresses the previous review's compatibility requirement. Fast gates passed and CI was pending at review time. Review used source and existing CI evidence.",
+        "recovery_hint": "address the review findings, move TASK-3246 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:51:23.049832952Z",
+      "spec": "TASK-3246",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4430,
+        "verdict": "APPROVED",
+        "reviewed_sha": "08a3bb8e998ec12753f0f9bb2c52c2fbf646b005"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:56:28.998585253Z",
+      "spec": "TASK-3246",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4430
+      }
+    },
+    {
+      "ts": "2026-11-24T05:00:59.457620045Z",
+      "spec": "TASK-3246",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "aaeb386bf51117822caa1d0179ce1f6425ad619f",
+        "pr": 4430,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
