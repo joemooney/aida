@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T02:27:43.500405776Z
+modified_at: 2026-11-24T02:49:12.333229603Z
 req_type: Task
 tags:
 - small
@@ -63,6 +63,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: The assigned base 13bcf6bd671 and local origin/integration 669dc6e3dd lack forge::github_core_budget. TASK-3847 commit eacfd4b528 introduces it in PR #4470. Can product relaunch TASK-3852 on an integration base containing #4470?. No triage reason was given.'
   created_at: 2026-11-24T01:53:34.641361736Z
   modified_at: 2026-11-24T01:53:34.641361736Z
+- id: 01a20b75-172d-7852-ae0a-c03da1968058
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a8cd15cd98ab842874419ce3e215f06a284fd42f plus native working-tree changes and the new CLI test. Integration is the PR base.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/forge.rs:1896 resolves the probe through the test-aware binary resolver. aida-cli-lib/src/tests/forge_tests_inline_tests.rs:2144 reproduced the pre-fix missing reading and passed on the repaired implementation (1 executed test).
+    Folded routing and CLI coverage: [evidence: behavioral-test] aida-cli/tests/task_3852_core_budget.rs:8 passed through doctor and land in a linked checkout at 19% and 20%. The fake requires the pinned host and main cwd, cleared GH_REPO, and 60s cache. Both reports show the reset and remaining/limit.
+    Deep pass checked conflicting provider/origin, SSH and HTTPS forms, GitLab exclusion, ambient GH_HOST/GH_REPO and threshold equality. Reused land repository validation. Resolver and API share a five-second deadline. Resolution failure on an established GitHub repo keeps the unknown reading. No strict paths changed. Moved the fixture to the forge test module and used the shared executable writer. Store-writer and executable-fixture guards passed. Live GitHub quota was outside fixture coverage. Full FAST validation runs separately.
+  created_at: 2026-11-24T02:49:12.333229603Z
+  modified_at: 2026-11-24T02:49:12.333229603Z
+  session_id: 01a20b60b88b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20af8-f8c0-7502-a9b7-4065638fe1c1
   author: joe
