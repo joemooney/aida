@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: `aida doctor` (a check) and `aida land status` show the remaining GitHub core REST budget (remaining/limit, reset time), using the cached rate_limit reading, and warn below 20%.
   - AC2: They name the top consumers since the last reset when known (review-watch, auto-train, main-watch, seat watchers), or say "unknown". Test with a fake rate_limit response below the threshold.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-24T02:43:57.565161351Z
+modified_at: 2026-11-24T02:43:59.702184600Z
 req_type: Task
 tags:
 - doctor
 - forge
 - small
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -122,6 +121,20 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a20b70-4fd3-7f33-a088-745d5adbaf29
+  author: joe
+  timestamp: 2026-11-24T02:43:59.571180463Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a20b70-5056-7171-8c2f-2706c9162b5b
+  author: joe
+  timestamp: 2026-11-24T02:43:59.702181932Z
+  changes:
+  - field_name: tags
+    old_value: doctor, forge, small, track:integration
+    new_value: doctor, forge, small
 execution_mode: drain
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
@@ -130,3 +143,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f1a50179e5a
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T02:43:59.571116550Z
