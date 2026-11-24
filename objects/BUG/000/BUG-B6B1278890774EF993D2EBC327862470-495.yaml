@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: CI runs every tests/test_*.py, either via one discovery step ('python3 -m unittest discover -s tests -p "test_*.py"') or a ratchet that fails when a tests/test_*.py file is not referenced by a CI step. Tests that need tools CI lacks are skipped explicitly with a reason, not left unwired.
   - AC2: Any currently-unwired test that fails when wired is fixed, or skipped with a linked follow-up spec, in the same PR (the small-PR rule applies; split the fix-ups if over 300 lines).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-24T02:40:03.355736411Z
+modified_at: 2026-11-24T03:19:55.618115611Z
 req_type: Bug
 tags:
 - ci
@@ -94,6 +94,12 @@ comments:
   modified_at: 2026-11-24T02:40:03.355736411Z
   session_id: 01a20b6055af
   harness_version: codex-cli 0.167.0
+- id: 01a20b91-35e2-7611-8f0e-3c81d86b988d
+  author: aida-publication-done
+  content: Implementer push 7a4b585746c5 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T03:19:55.618115087Z
+  modified_at: 2026-11-24T03:19:55.618115087Z
+  session_id: 01a20b6055af
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
   author: joe
@@ -140,6 +146,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20b91-35e2-7611-8f0e-3c7c9bca5357
+  author: aida-publication-done
+  timestamp: 2026-11-24T03:19:55.618113032Z
+  session_id: 01a20b6055af
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
