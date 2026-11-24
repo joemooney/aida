@@ -1,0 +1,32 @@
+id: 01a20c18-40b2-7e93-9ec3-b0340605d5e2
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-264
+title: 'Review PR-4490: [AI:codex] fix(status): quiet unshipped-work alerts for deferred specs (TASK-3857)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20bdf`) for branch `int31-task-3857`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4490>
+  - Branch: `int31-task-3857` → `integration`
+
+  ## Covers
+
+  - TASK-3857
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4490` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T05:47:25.746970988Z
+modified_at: 2026-11-24T05:47:25.746970988Z
+req_type: Story
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf5
+  session: 01a20bdf8589
