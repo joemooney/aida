@@ -50,6 +50,13 @@ comments:
   created_at: 2026-11-24T10:23:27.213082202Z
   modified_at: 2026-11-24T10:23:27.213082202Z
   session_id: 01a20cf16203
+- id: 01a20d19-6ceb-7fc1-ae99-2c6e781046bb
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 03:31): PR-4509 @ 13e7a41760c PASSES. Only docs/showcase/code-review.html (+69/-23), Joe-authored commit, merges CLEAN. AC1: the facet tabs follow the WAI-ARIA tabs pattern: role=tablist (aria-label), role=tab with id, aria-controls and aria-selected, role=tabpanel with aria-labelledby and tabindex=0. A roving tabindex (active 0, others -1) and a keydown handler (ArrowLeft/Right wrap, Home/End) move focus, and the active state syncs aria-selected and panel visibility. Mobile: overflow-wrap:anywhere at <=1080px, plus the <=680px grid rules. AC2: @media print hides the topbar, pres-dock, tab strip and facet instructions, and shows ALL slide sections (including deck mode) and ALL facet panels, with pre and tables wrapping (table-layout fixed, overflow visible) so nothing clips. Docs-only showcase polish; no product code.'
+  created_at: 2026-11-24T10:28:06.600561950Z
+  modified_at: 2026-11-24T10:28:06.600561950Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20cac-beb1-73d3-87d2-0d67549a7354
   author: joe
