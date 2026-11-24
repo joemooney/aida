@@ -1,0 +1,28 @@
+id: 01a20ba4-8e70-77b3-a686-67aa24458c62
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1286
+agreed_id: TASK-3854
+title: 'TASK-3852 follow-ups: criterion trace markers, start the budget deadline before Repository::load, absolutize a relative gh path'
+description: |
+  Follow-up to TASK-3852 / #4478 (advisor-122 ruling 2026-11-23 20:45: CR overridden to APPROVE, merged into integration be227b8e for p29; filed by product-15). Three small refinements.
+
+  ## Acceptance
+  - AC1: Criterion trace markers (`// trace:<SPEC>.<AC>`) on the budget tests in forge_tests_inline_tests.rs (~:2142) and task_3852_core_budget.rs, so each test names the criterion it proves. The 5s budget deadline starts BEFORE main_root / Repository::load, so slow repository discovery counts against it (test with a slow load).
+  - AC2: A relative-PATH `gh` (e.g. AIDA_TEST_GH_BINARY=./bin/gh) is absolutized BEFORE current_dir is changed for the probe. Test with a linked-worktree fixture.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T03:41:03.472804465Z
+modified_at: 2026-11-24T03:41:03.472804465Z
+req_type: Task
+tags:
+- forge
+- small
+- track:integration
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
