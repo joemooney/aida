@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T14:11:36.807812617Z
+modified_at: 2026-11-24T15:02:28.189904425Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -125,6 +125,20 @@ comments:
   modified_at: 2026-11-24T14:08:29.325646585Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e14-6be6-72d3-838f-e7d9015492c7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2203aafd405fac076a74b1128fa60362ddac5c13 plus the native working diff. Inspected origin/main...HEAD, git diff HEAD and untracked additions (none).
+    AC0: [evidence: behavioral-test] doctor/worktrees.rs:1434 retains the selected record across confirmation. A final-binary CLI probe healed only the named worktree with an older same-ID decoy, unrelated FIFO and unreaped creator. A second PTY probe replaced the selected worktree path during confirmation and verified refusal with both worktrees and the lease intact. The checked-in CLI regression is at bug_1947_session_end_live_process.rs:742.
+    AC1: [evidence: behavioral-test] Partial scope. Targeted heal reports eligibility and bounds shared lock acquisition. Global forge and session hygiene deadlines remain deferred in this Refs slice.
+    AC2: [evidence: behavioral-test] coordination.rs:2192 passed in the launcher and against the rebuilt final test binary. The named contention error retains the receipt. A duplicate arriving from origin refuses under the lock and preserves both receipts. A malformed entry also refuses lookup.
+    F4: [evidence: configuration-validation] Bounded-wrapper scanner fixture passed and both bounded-lock sites are inventoried. The inventory reconciled 3858 sites. All 48 FAST source gates passed after replacing a direct PID check flagged by the legacy-process ratchet with the namespace-checked observer.
+    Adversarial review covered 0/1/multiple generations, exact filename and embedded identity, incomplete TOML reads, stale confirmation, process namespace and different zombie policies for local and shared records. FAST application tests passed through the final build. Dynamic manual verification is in progress.
+  created_at: 2026-11-24T15:02:28.189904425Z
+  modified_at: 2026-11-24T15:02:28.189904425Z
+  session_id: 01a20de56fd2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
