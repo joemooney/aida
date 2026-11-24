@@ -59,6 +59,55 @@ fn task3809_runtime_lock_is_close_on_exec() {
     assert_ne!(flags & libc::FD_CLOEXEC, 0);
 }
 
+// trace:BUG-2746 | ai:codex
+#[test]
+fn bug2746_train_admission_during_reviewer_launch() {
+    let (temp, store) = fixture();
+    let attempt = dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
+    execute_reservation(
+        &store,
+        "PR-2",
+        &attempt.token,
+        |_| Ok(()),
+        |_| {
+            // Admission runs before the synchronous launch callback can return.
+            let train_dir = Directory::open(&temp.path().join(".aida/auto-train"))?;
+            let _tick = train_dir.admission_lock("auto-train supervising worker")?;
+            let _train = crate::admission_owner::cooperative_train(temp.path(), false)?;
+            let _members = train_members(temp.path(), &[1])?;
+            assert!(train_members(temp.path(), &[2]).is_err());
+            Ok(())
+        },
+    )
+    .unwrap();
+}
+
+// trace:BUG-2746 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn bug2746_admission_fd_absent_after_exec() {
+    let (temp, store) = fixture();
+    let _lock = store
+        .dir
+        .admission_lock("review-watch updating PR-2")
+        .unwrap();
+    let status = Command::new("/bin/sh")
+        .args([
+            "-c",
+            r#"
+                [ -f "$1" ] && [ -d /proc/self/fd ] || exit 2
+                for fd in /proc/self/fd/*; do
+                    if [ "$fd" -ef "$1" ]; then exit 1; fi
+                done
+            "#,
+            "probe",
+        ])
+        .arg(temp.path().join(".aida/review-watch/admission.lock"))
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
 fn fixture() -> (tempfile::TempDir, Store) {
     let temp = tempfile::tempdir().unwrap();
     let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
@@ -4579,6 +4628,11 @@ fn bug2703_pause_control_refuses_a_managed_process_without_a_grant() {
         }
         env.set_terminal(false);
         refused("no grant and no terminal", expect_paused);
+        // trace:TASK-3210 | ai:codex
+        env.set_terminals(true, true, false);
+        refused("stderr redirected", expect_paused);
+        env.set_terminals(false, true, true);
+        refused("stdin redirected", expect_paused);
         env.set_terminal(true);
         for (key, value) in [
             ("AIDA_AGENT_NAME", "claude-implementer"),
@@ -5648,4 +5702,49 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
     leak("1c2d3e4f-1f3e-4c1d-9a7e-5d2f8c3b4a10");
     assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
     assert!(!leaked().is_empty());
+}
+
+// trace:BUG-2746 | ai:codex
+#[test]
+fn bug2746_unrecorded_takeover_and_failed_record() {
+    use std::io::{BufRead, BufReader};
+    let (_temp, store) = fixture();
+    let path = store.dir.path().join("admission.lock");
+    let held = store
+        .dir
+        .admission_lock("review-watch updating PR-2")
+        .unwrap();
+    let stale = std::fs::read(&path).unwrap();
+    drop(held);
+    assert!(std::fs::read(&path).unwrap().is_empty());
+    std::fs::write(&path, stale).unwrap();
+    let mut child = Command::new("flock")
+        .arg("-F")
+        .arg(_temp.path().join(".aida/review-watch/admission.lock"))
+        .args(["sh", "-c", "echo held; cat >/dev/null"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    assert_eq!(line, "held\n");
+    let unknown = || {
+        let err = store
+            .dir
+            .admission_lock("train selecting members")
+            .err()
+            .unwrap();
+        assert!(is_busy(&err) && err.to_string().contains("activity and age unknown"));
+    };
+    unknown();
+    drop(child.stdin.take());
+    assert!(child.wait().unwrap().success());
+    let _held = store
+        .dir
+        .admission_lock_with(|_| Err(std::io::Error::from_raw_os_error(libc::ENOSPC)))
+        .unwrap();
+    unknown();
 }

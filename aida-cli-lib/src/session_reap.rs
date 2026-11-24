@@ -1342,6 +1342,7 @@ pub(crate) fn classify_clone_reap(
         );
     }
     if facts.unpushed > 0 {
+        // trace:TASK-3858 | ai:codex
         return ReapVerdict::Skip(format!(
             "seat clone holds {} commit(s) origin does not have ({})",
             facts.unpushed,
@@ -1381,7 +1382,7 @@ fn clone_reap_branch(
 /// Scan one `clone` lease. The row's `branch_tip` is the HEAD the probe saw;
 /// [`reap_one_clone`] removes the clone only while HEAD is still there.
 // trace:TASK-2053 | ai:claude
-fn scan_clone_lease(
+pub(crate) fn scan_clone_lease(
     project_root: &std::path::Path,
     lease: &SessionLease,
     spec_finished: bool,
@@ -2605,6 +2606,11 @@ pub(crate) struct QuietReap {
 /// what the reap did beyond releasing leases (TASK-1915 F4).
 // trace:TASK-1915 | ai:claude
 pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
+    reap_quiet_with_skips(project_root).0
+}
+
+// trace:TASK-3858 | ai:codex
+pub(crate) fn reap_quiet_with_skips(project_root: &std::path::Path) -> (QuietReap, Vec<ReapRow>) {
     let agent_gc = agent_registry::gc_dead_agents(project_root, false, None)
         .map(|r| r.removed_count())
         .map_err(|e| format!("{e:#}"));
@@ -2623,10 +2629,13 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
     let report = scan_reapable_leases(project_root);
     release_orphan_pins(project_root, &report.orphan_pins); // trace:TASK-2053 | ai:claude
     if report.reapable.is_empty() {
-        return QuietReap {
-            agent_gc,
-            leases: gone,
-        };
+        return (
+            QuietReap {
+                agent_gc,
+                leases: gone,
+            },
+            report.skipped,
+        );
     }
     let leases = list_leases(project_root);
     let leases = gone
@@ -2644,7 +2653,7 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
                 .map(|(lease, tip)| (lease.id.clone(), reap_one(project_root, lease, tip))),
         )
         .collect();
-    QuietReap { agent_gc, leases }
+    (QuietReap { agent_gc, leases }, report.skipped)
 }
 
 // The reapable-predicate matrix + the process-exited derivation.

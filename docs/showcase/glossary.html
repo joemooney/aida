@@ -16,24 +16,36 @@
 <h2 id="terms">Terms</h2>
 <h3 id="agreed-id">Agreed ID</h3>
 <p>The short ID a spec keeps for good: its type and a number, such as <code>TASK-&lt;number&gt;</code>. It is unique across every clone of the project, because each number is handed out once from a shared range. See <a href="air-gapped.html">Support for air-gapped development</a>.</p>
+<h3 id="autoland-aida-land">Autoland (aida land)</h3>
+<p>Automatic landing moves ready changes toward the default branch. In CI-gated mode, <code>aida land run</code> boards ready changes onto the train. In review-gated mode it can ship them individually when authorized. See <a href="../advanced/landing.md">Landing modes</a>.</p>
+<h3 id="bisect">Bisect</h3>
+<p>When a test or gate fails on a merge train, AIDA splits the group into smaller trains and checks them separately. This helps isolate a failing change while allowing other changes to land. See <a href="../cli/04-git-lifecycle.md">Merge train operation</a>.</p>
 <h3 id="block">Block</h3>
 <p>A small range of spec numbers set aside for one clone. The clone gives new specs short agreed IDs from its own blocks, so it never has to ask anyone else first. Blocks are carved from a <a href="#pool">pool</a>. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
 <h3 id="brief">Brief</h3>
 <p>A short note that assigns a piece of work to a named agent, such as &quot;pick up this spec next&quot;. The agent reads it, does the work, and acknowledges it so it stops showing up. A brief goes one way; for a conversation, use the <a href="#mailbox">mailbox</a>. See <a href="../cli/06-roles-sessions.md#aida-brief"><code>aida brief</code></a>.</p>
 <h3 id="child-grant">Child grant</h3>
 <p>A <a href="#grant">grant</a> that a launcher gives an agent it starts, for one named seat. Your session can hand out only the seats you listed when you entered your own seat, and a child grant cannot be passed on again. See <a href="../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats">Entering seats and delegating child seats</a>.</p>
+<h3 id="cifull">ci:full</h3>
+<p>A pull request label that requests the full set of continuous integration checks. Ordinary pull requests get the fast checks by default. See <a href="../internal/testing/ci-test-shards.md">CI tiers</a>.</p>
 <h3 id="commit-trailer">Commit trailer</h3>
 <p>The spec ID in parentheses at the end of a commit subject, as in <code>fix(api): handle missing ids (SPEC-ID)</code>. When that commit lands on the main branch, AIDA marks the named spec completed. See the <a href="../commit-trailer-convention.md">commit trailer convention</a>.</p>
 <h3 id="control-plane">Control plane</h3>
 <p>The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it.</p>
+<h3 id="delta-review">Delta review</h3>
+<p>A reviewer inspects what changed after an earlier approval, for example how an author resolved a merge conflict. The resolution needs review before the updated change can land. See <a href="../cli/06-roles-sessions.md">Review handoffs</a>.</p>
 <h3 id="deputy">Deputy</h3>
 <p>A helper you start in your own terminal that runs work other sessions hand it, under your seat grant. There are two kinds. The command deputy (<code>aida deputy</code>) runs single commands you allowed. The script deputy (<code>aida deputy shell</code>) runs whole scripts from the advisor, one at a time, at your terminal and as you. Both record each job and tell the submitting session the result. See <a href="../advanced/deputies.md">Deputies: command vs script</a>.</p>
+<h3 id="deputy-shell">Deputy shell</h3>
+<p>An operator holding an advisor grant can start a script runner in their terminal. An authorized advisor can submit a whole script, which runs with the operator’s authority. See <a href="../cli/06-roles-sessions.md">Running the script deputy</a>.</p>
 <h3 id="grant">Grant</h3>
 <p>The authority your terminal session holds to act in a <a href="#seat">seat</a>. You get one by running <code>aida role enter &lt;seat&gt;</code> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See <a href="../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats">Entering seats and delegating child seats</a>.</p>
 <h3 id="handoff">Handoff</h3>
 <p>A note a session writes before it ends so the next session can carry on without the conversation that came before: what was done, what is open and what to do next. AIDA keeps handoff notes in the project&#x27;s <code>.aida/</code> folder.</p>
 <h3 id="hub">Hub</h3>
 <p>A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="include-gate-paths---include-gate-paths">Include gate paths (--include-gate-paths)</h3>
+<p>An operator can use this mandate option to let ships and trains handle changes to protected files, including the merge rules themselves. The change still needs approval and must satisfy the remaining gates. See <a href="../cli/04-git-lifecycle.md">Mandate options</a>.</p>
 <h3 id="local-id">Local ID</h3>
 <p>A longer spec ID that also names the clone that made it, used when that clone has no <a href="#block">block</a> to draw short numbers from. Local IDs never collide, so they need no coordination, and a spec can later be given an <a href="#agreed-id">agreed ID</a>. You can give the clone a friendly label with <code>aida node alias</code>. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
 <h3 id="mailbox">Mailbox</h3>
@@ -42,16 +54,24 @@
 <p>Time-limited permission, started by a person at a terminal with <code>aida mandate start</code>, for the advisor seat to do named things while that person is away, such as shipping held pull requests. It lasts 8 hours by default and at most 24, and never covers <a href="#operator-only">operator-only</a> specs. See <a href="../cli/04-git-lifecycle.md#aida-mandate"><code>aida mandate</code></a>.</p>
 <h3 id="merge-hold">Merge hold</h3>
 <p>A stop placed on a pull request so it cannot merge, even when its checks and review pass. It shows as the <code>aida:merge-hold</code> label and a failing required check. It stays until a person clears it with <code>aida merge-hold clear</code>, or AIDA releases it in the narrow cases it allows, such as under a <a href="#mandate">mandate</a>. See <a href="../what-is-aida.html">What is AIDA</a>.</p>
+<h3 id="merge-train">Merge train</h3>
+<p>AIDA stacks approved pull requests on the default branch and tests their combined changes. If the checks pass and the base still matches, the train can land the group together. See <a href="../cli/04-git-lifecycle.md">Train checks</a>.</p>
 <h3 id="operator-only">Operator-only</h3>
 <p>A tag that keeps a spec in human hands. No <a href="#mandate">mandate</a> covers it, so its pull request waits for a person to merge, and the tag&#x27;s effect remains even if the tag is later removed. See <a href="../cli/04-git-lifecycle.md#aida-mandate"><code>aida mandate</code></a>.</p>
 <h3 id="pool">Pool</h3>
 <p>A range of one spec type&#x27;s numbers given to one hub. Clones that sync through that hub take their <a href="#block">blocks</a> from it, so two hubs never hand out the same number. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="post-train-pull">Post-train pull</h3>
+<p>After a train lands, run <code>aida pull</code> to bring the merged commits into your checkout. AIDA reads their completion trailers to update the corresponding specs. See <a href="../cli/04-git-lifecycle.md">Pull and merge trains</a>.</p>
+<h3 id="ratchet">Ratchet</h3>
+<p>A check that sets a limit on an existing exception, such as the number of places still using an older interface. Removing an exception can tighten the limit so later changes cannot quietly add it back. See <a href="../internal/testing/ci-test-shards.md">CI checks</a>.</p>
 <h3 id="ref">Ref</h3>
 <p>Git&#x27;s name for a pointer to a commit, such as a branch. AIDA keeps its records on the <code>aida-store</code> branch, called the store ref; a push to it succeeds only if nobody else moved it first. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
 <h3 id="review-story">Review story</h3>
 <p>The story AIDA files when it opens a pull request, titled <code>Review PR-&lt;number&gt;: …</code> and routed to the reviewer seat. Whoever picks it up reviews that pull request and records a verdict. See <a href="../review-process.md">the review process</a>.</p>
 <h3 id="rework-round">Rework round</h3>
 <p>One trip back to the implementer after a reviewer asks for changes. <code>aida rework</code> returns the spec to active work with the reviewer&#x27;s reasons, and the implementer pushes fixes to the same pull request for another review. See <a href="../cli/04-git-lifecycle.md#aida-rework"><code>aida rework</code></a>.</p>
+<h3 id="rider">Rider</h3>
+<p>A pull request traveling on a <a href="#merge-train">merge train</a>. If the train lands, the member pull request closes with a pointer to its commit. See <a href="../cli/04-git-lifecycle.md">Merge train operation</a>.</p>
 <h3 id="role">Role</h3>
 <p>A named job in AIDA&#x27;s workflow, such as advisor, implementer, reviewer or integrator. Work can be routed to a role, and the role decides what a session wearing it is expected and allowed to do. See <a href="../cli/06-roles-sessions.md">Roles and sessions</a>.</p>
 <h3 id="root">Root</h3>

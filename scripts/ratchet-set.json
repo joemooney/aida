@@ -2,6 +2,29 @@
   "version": 1,
   "groups": [
     {
+      "package": "aida-core",
+      "target": [
+        "--lib"
+      ],
+      "filter": "review_engine::tests::",
+      "scope": "module",
+      "source": "aida-core/src/review_engine.rs",
+      "tests": [
+        "config_defaults_only_when_absent",
+        "credential_components_at_any_depth",
+        "rename_excludes_either_path",
+        "runtime_prefix_requires_exact_components",
+        "test_anchor_snippet_lines_exact_and_whitespace_tolerant",
+        "test_bundle_review_batches_pairs_tests_and_respects_budget",
+        "test_classify_diff_inventory_and_exclusions",
+        "test_custom_playbook_merge_and_override",
+        "test_diff_triggered_rust_content_facets_zero_overhead_when_absent",
+        "test_glob_matches_with_braces_and_doublestar",
+        "test_verify_coverage_ledger_enforces_100_percent_accountability",
+        "test_verify_observation_citations"
+      ]
+    },
+    {
       "package": "aida-cli-lib",
       "target": [
         "--lib"
