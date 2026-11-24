@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When RecipientDirectory::load fails, doctor still runs the seat-sidecar inventory (or reports "seat-sidecar inventory SKIPPED: registry load failed: <error>"), never silence.
   - AC2: Test with a failing registry load.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T00:51:04.031364225Z
+modified_at: 2026-11-24T00:56:19.917268971Z
 req_type: Task
 tags:
 - doctor
@@ -65,6 +65,13 @@ history:
   - field_name: tags
     old_value: doctor, mailbox, small
     new_value: doctor, mailbox, small, track:integration
+- id: 01a20b0d-becd-7ab3-ba6e-416185e35c2a
+  author: aida-session-start
+  timestamp: 2026-11-24T00:56:19.917267192Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
