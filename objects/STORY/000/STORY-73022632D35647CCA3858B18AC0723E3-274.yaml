@@ -1,5 +1,6 @@
 id: 01a20c97-12ac-7461-8e06-f5cfe4619f49
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-274
+agreed_id: STORY-3087
 title: 'Review PR-4504: [AI:codex] docs(review): review-engine showcase and presentation (TASK-3864)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c7a`) for branch `int32-task-3864`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T08:06:15.052854323Z
   session_id: 01a20c7a4e51
+  changes: []
+- id: 01a20c9f-c2ef-7162-8493-44c7265c184c
+  author: joe
+  timestamp: 2026-11-24T08:15:26.447187546Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: dd141d1a42e6f2450b54a345df6ee14e51c80fec

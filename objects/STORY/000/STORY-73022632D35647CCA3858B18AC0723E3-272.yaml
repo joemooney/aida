@@ -1,5 +1,6 @@
 id: 01a20c83-029c-7320-afa9-40d5a68784bc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-272
+agreed_id: STORY-3089
 title: 'Review PR-4502: [AI:codex] fix(queue): revalidate standalone launch authority before spawn (STORY-3080)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c4f`) for branch `story-b6b1278890774ef993d2ebc327862470-824`.
@@ -38,6 +39,12 @@ history:
 - id: 01a20c85-0de9-79f2-8051-9f8d346e66cf
   author: joe
   timestamp: 2026-11-24T07:46:16.169558462Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
+- id: 01a20ca0-2607-7522-91e0-29e5ce609bb6
+  author: joe
+  timestamp: 2026-11-24T08:15:51.815598298Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
