@@ -13,13 +13,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T17:54:47.625465817Z
+modified_at: 2026-11-24T17:55:12.851744037Z
 req_type: Bug
 tags:
 - doctor
 - scheduler
 - small
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20a3f-5cf7-7521-9f9c-c64404eecd3c
+  created_at: 2026-11-24T17:55:12.851705312Z
+  created_by: dirtlab
 comments:
 - id: 01a2084b-6601-7601-87a1-9e667d151685
   author: joe
@@ -358,6 +364,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20eb2-9eef-76b3-87f9-d49635cfa895
+  author: dirtlab
+  timestamp: 2026-11-24T17:55:16.847552482Z
+  session_id: 01a20e8758ef
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
