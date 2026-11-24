@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:05:02.248297583Z
-modified_at: 2026-11-24T06:16:01.385425268Z
+modified_at: 2026-11-24T06:37:48.792025122Z
 req_type: Task
 tags:
 - main-watch
@@ -26,6 +26,18 @@ comments:
   content: 'Filed Approved per advisor-122 ruling 2026-11-23 23:07 (#4491 follow-up; standard, drain, integration filler). Builds on #4491''s CronJobFailed routing: launched after #4491 merges into integration.'
   created_at: 2026-11-24T06:06:12.956519887Z
   modified_at: 2026-11-24T06:06:12.956519887Z
+- id: 01a20c46-6314-7670-a778-0074aa420410
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 38b74bf6cbc59c98ed73c3e9708e457bf18e9bf7 plus five native working-tree edits. No untracked additions.
+    AC1: [evidence: behavioral-test] tests/story_2897_main_watch_tests.rs:1428 exercises three fake gh authentication failures through the live watch and verifies HTTP 503 remains pending. Reproduced baseline HTTP 401 exiting zero.
+    AC2: [evidence: behavioral-test] tests/maintenance_schedule_tests.rs:2762 checks scheduled arguments and routes the failed step and final cause through to the advisor ledger. The successful pass leaves the route idle.
+    Probes covered output channels, error propagation across history scans, multiple diagnostics, case normalization and Unicode-safe length limits. Fixed piped error capture by selecting human format for the scheduled command. No authority changes. Targeted lane run j20261124T062836898-2-0 executed both tests successfully. Formatting and diff checks passed. FAST stopped during shard-planner tests because the lane runner rejects cargo metadata. Host CI pending.
+  created_at: 2026-11-24T06:37:48.792025122Z
+  modified_at: 2026-11-24T06:37:48.792025122Z
+  session_id: 01a20c31ca41
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c29-65ab-76d1-94ac-a40605b8d567
   author: joe

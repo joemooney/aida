@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T06:16:08.077091082Z
+modified_at: 2026-11-24T06:33:18.113528789Z
 req_type: Task
 tags:
 - small
@@ -25,6 +25,18 @@ comments:
   content: 'Filed Approved per advisor-122 ruling 2026-11-23 23:10 (#4490 follow-up; LOW, drain, integration filler). LAST follow-up on this detector: no further split-offs.'
   created_at: 2026-11-24T06:08:21.407286071Z
   modified_at: 2026-11-24T06:08:21.407286071Z
+- id: 01a20c42-4b02-74a3-8511-0e2164716e71
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fbcd41f650d0bd234992e89bd4abee872bbf55bf plus uncommitted status_prs.rs on int31-task-3860. Integration matches HEAD. Reviewed the merge-base diff and local additions.
+    AC1: [evidence: behavioral-test] status_prs.rs:2453 indexes origin and display IDs by numeric identity. Branch selection, commit fallback, live scopes, clone deferrals and both forge snapshots use this index. Raw branch refs and verdict label spellings remain available.
+    AC2: [evidence: behavioral-test] status_prs.rs:3560, 3585 and 3611 exercise padding and alias joins, mixed case, a distinct numeric suffix, refusal hints and duplicate evidence for one open PR. The baseline prefix predicate rejected task-1-97-work for TASK-1-097. Final detector module ran 26 tests, all passed. Formatting and diff checks passed.
+    Probe findings: fixed the verdict lookup to inspect the recorded origin as well as the branch and display spelling. Existing ambiguous-head and stale-branch population tests pass. This change affects reporting only. No strict-path files or untracked additions. Forge evidence tested with fixtures. Host PR CI pending.
+  created_at: 2026-11-24T06:33:18.113528789Z
+  modified_at: 2026-11-24T06:33:18.113528789Z
+  session_id: 01a20c31cd32
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe
