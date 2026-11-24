@@ -5,12 +5,12 @@ title: Grant renewal cannot extend session keys held in other terminals' keyring
 description: |
   `aida mandate renew` (TASK-3820, PR-4280) extends grant records in place, but a grant's session key (used by sandboxed presenters such as agent tool calls) lives in the holder's session keyring with a TTL set at issue time. The renew process can only move the key expiry for keys it possesses (grant_keyring::extend); keys held by other terminals keep the old expiry, and the table prints a note. Follow-up: let a holder adopt the extension (e.g. a hook/statusline tick that re-times its own key when its grant's expires_at moved), so sandboxed tool calls in other terminals survive the old deadline.
   Raised by the implementer while working TASK-3820. Commit d790cb075a.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:57:59.597261329Z
-modified_at: 2026-11-24T17:48:31.713496187Z
+modified_at: 2026-11-24T17:49:00.947074881Z
 req_type: Task
 tags:
 - from-implementer:TASK-3820
@@ -44,6 +44,15 @@ comments:
     Provisional budget (changed lines, including tests): aida-cli-lib/src/gate/seat_authority.rs 55; aida-cli-lib/src/grant_keyring.rs 15; aida-cli-lib/src/mandate.rs 25; aida-cli-lib/src/deputy_shell/attribution.rs 20; aida-cli-lib/src/gate/tests/bug_1934_keyring_tests.rs 80 = 195. Sign-off dependency: confirm a surviving holder/listener and reusable runner identity, wake and audit plumbing. If that cannot fit 200 lines, return for rescoping before coding.
   created_at: 2026-11-24T17:48:31.713496187Z
   modified_at: 2026-11-24T17:48:31.713496187Z
+  session_id: 01a20eaa75e4
+  harness_version: codex-cli 0.167.0
+- id: 01a20eac-b1b1-76e2-81dc-a4599f03338e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 289cc394a334ee2760c79067fd871bbe66f9c5a9. Design deliverable [evidence: manual-inspection] checked grant installation, lookup, renewal and deputy submit/claim lines cited in SKETCH. Merge-base diff, working diff and untracked additions empty. Probes covered copied handles, expired or absent key, duplicate wakes, subsecond TTL, runner replacement, stop after submit and audit interruption. Behavioral acceptance remains for implementation and lab; no tests executed. Referenced advisor lab plan absent from this checkout. Listener feasibility and 195-line estimate require advisor review.
+  created_at: 2026-11-24T17:48:47.568059119Z
+  modified_at: 2026-11-24T17:48:47.568059119Z
   session_id: 01a20eaa75e4
   harness_version: codex-cli 0.167.0
 history:
@@ -84,6 +93,15 @@ history:
   session_id: 01a20eaa75e4
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20eac-e49f-72f3-b866-6312b3e0f530
+  author: dirtlab
+  timestamp: 2026-11-24T17:49:01.471873022Z
+  session_id: 01a20eaa75e4
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: d790cb075a4eaedd9e914fb037265c1e7c0e409f
@@ -94,3 +112,8 @@ filed_at:
   vendor: claude
   session: 01a1f1c9322b
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: Design sketch posted. Advisor sign-off required before code; confirm holder-side listener and 200-line feasibility.
+  raised_by: implementer
+  raised_at: 2026-11-24T17:49:00.947074881Z
