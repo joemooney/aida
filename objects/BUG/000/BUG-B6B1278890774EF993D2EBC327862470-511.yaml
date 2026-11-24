@@ -1,0 +1,28 @@
+id: 01a20e00-053c-7331-bf72-64eb1042f7f3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-511
+agreed_id: BUG-2750
+title: 'Train pre-pass store refresh is fetch-only, deadline-bounded and lock-free (re-spec of parked #4419, BUG-2727)'
+description: |
+  Re-spec from parked #4419 BUG-2727 (advisor-122 ruling 2026-11-24 07:50; filed by product-15). STRICT, drive, <=150 lines. Parent: BUG-2727 (stays open). #4419 F1 (p1): the train pre-pass refresh at pr_train.rs:5014-5035 ran a full pull whose child.output() waited WITHOUT A DEADLINE on the remote fetch, while the pull held the shared store writer lock (store_push_pull.rs:3143-3158, git_ops.rs:2064-2086), the same failure class as the 2026-11-23/24 store-lock stalls. F2 (folded in): the full pull also filed due schedule tasks and pushed mirrors on an idle pass.
+
+  ## Acceptance
+  - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
+  - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T14:40:12.092419324Z
+modified_at: 2026-11-24T14:40:12.092419324Z
+req_type: Bug
+tags:
+- store
+- strict
+- train
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d58
+  vendor: claude
