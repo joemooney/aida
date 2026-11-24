@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T18:08:55.669893787Z
+modified_at: 2026-11-24T18:08:57.854091091Z
 req_type: Bug
 tags:
 - store
@@ -150,6 +150,11 @@ comments:
   content: 'SPLIT (advisor-122 2026-11-24 11:10): this spec = slice A (bounded lock-free fetch-only pre-pass + stalled-lock regression test; the fetched ref is read-only and makes NO admission decisions; <=150). Slice B = BUG-2753 (strict, <=200): refusal-union wiring + tests (a)-(e); launches after A merges.'
   created_at: 2026-11-24T18:08:55.669893787Z
   modified_at: 2026-11-24T18:08:55.669893787Z
+- id: 01a20ebf-25fe-7671-897b-3d2b4a85cdcc
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: May the signed-verdict and spec-policy admission changes, including final merge rechecks and tests (a)–(e), use a separate implementation slice beyond the 150-line limit? The fetch transport and stalled-lock regression are drafted. Both verdict selection and subsequent signature/identity revalidation currently resolve local HEAD, and the final train preflight separately reloads local spec policy. Wiring only the initial read would leave a strict-tier authority gap.. No triage reason was given.'
+  created_at: 2026-11-24T18:08:57.854084075Z
+  modified_at: 2026-11-24T18:08:57.854084075Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -264,6 +269,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20ebf-25fe-7671-897b-3d164f7f2dff
+  author: joe
+  timestamp: 2026-11-24T18:08:57.854075415Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -272,8 +284,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
-attention_reason:
-  category: other
-  detail: May the signed-verdict and spec-policy admission changes, including final merge rechecks and tests (a)–(e), use a separate implementation slice beyond the 150-line limit? The fetch transport and stalled-lock regression are drafted. Both verdict selection and subsequent signature/identity revalidation currently resolve local HEAD, and the final train preflight separately reloads local spec policy. Wiring only the initial read would leave a strict-tier authority gap.
-  raised_by: implementer
-  raised_at: 2026-11-24T17:16:34.556355107Z
