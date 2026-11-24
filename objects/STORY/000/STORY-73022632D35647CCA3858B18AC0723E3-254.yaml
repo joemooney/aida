@@ -1,0 +1,32 @@
+id: 01a20b20-d8de-7e93-bc27-3e04b33c6284
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-254
+title: 'Review PR-4474: [AI:codex] fix(cache): cover detached JSON and TOON refresh at a TTY (TASK-3853)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b00`) for branch `int30-task-3853`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4474>
+  - Branch: `int30-task-3853` → `integration`
+
+  ## Covers
+
+  - TASK-3853
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4474` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T01:17:11.774173019Z
+modified_at: 2026-11-24T01:17:11.774173019Z
+req_type: Story
+filed_at:
+  code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac22ab7f54
+  session: 01a20b00bd28
