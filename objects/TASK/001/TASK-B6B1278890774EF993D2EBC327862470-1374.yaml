@@ -1,0 +1,28 @@
+id: 01a20f30-8076-72d1-93a3-09d5d45452b7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1374
+agreed_id: TASK-3884
+title: Deadline-aware lease/seat locks and a bounded contained unwind (STORY-3080 prerequisite)
+description: |
+  PREREQUISITE slice for STORY-3080 (advisor-122 ruling 2026-11-24 13:15; filed by product-15). STRICT, drive, <=150 lines. The STORY-3080 critical-section slice punted because the locks it must take inside the bounded store-writer section block without a deadline (session/lease_lock.rs:55, gate/seat_authority.rs:189) and contained.rs:2312 waits synchronously during error unwinding. Option (A), staging bindings outside the guard, was REJECTED (it reopens the authority window).
+
+  ## Acceptance
+  - AC1: The lease_lock (session/lease_lock.rs:55) and seat_authority (gate/seat_authority.rs:189) exclusive locks gain a TRY-WITH-DEADLINE variant returning a typed Timeout. Existing callers keep their current blocking behaviour unless they opt in (NOT a global semantics change). Test: a lock held elsewhere → Timeout within the deadline.
+  - AC2: The contained.rs:2312 error-unwind wait is bounded by a deadline; past it the attempt is recorded as RECOVERY WORK (never blocks forever, never silently drops) and the caller returns. Test: an unwind past the deadline → recovery recorded, caller returns.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T20:12:46.582006412Z
+modified_at: 2026-11-24T20:12:46.582006412Z
+req_type: Task
+tags:
+- launch
+- locks
+- strict
+filed_at:
+  code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba5
+  vendor: claude
