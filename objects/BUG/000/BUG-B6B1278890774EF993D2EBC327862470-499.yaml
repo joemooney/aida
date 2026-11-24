@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-24T01:05:33.526372192Z
+modified_at: 2026-11-24T01:05:35.411816078Z
 req_type: Bug
 tags:
 - leases
 - review
 - small
+comments:
+- id: 01a20b16-38b3-7b70-a0f4-a7c666c33eef
+  author: joe
+  content: Filed Approved per advisor-122 ruling 2026-11-23 18:08 (strict, drive; advisor gates it). Root cause of BUG-2728's flip found by the BUG-2736 lane.
+  created_at: 2026-11-24T01:05:35.411816078Z
+  modified_at: 2026-11-24T01:05:35.411816078Z
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
