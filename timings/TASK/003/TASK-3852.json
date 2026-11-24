@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3852",
+  "publishes": [
+    {
+      "at": "2026-11-24T06:20:37.155799642Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T03:38:58.568063481Z",
+      "spec": "TASK-3852",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4478,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a2f048d7d0cdfb74977229c352068cb6c35339d8"
+      }
+    },
+    {
+      "ts": "2026-11-24T03:39:08.516838821Z",
+      "spec": "TASK-3852",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes on PR-4478 at a2f048d7d0cdfb74977229c352068cb6c35339d8. Reviewed the full three-file diff against the generated worksheet and the advisor's folded scope.\nTASK-b6b1278890774ef993d2ebc327862470-1279.AC1 — verified by the direct resolve_gh_binary_for_probe call and the fake-gh assertion in cargo test -p aida-cli-lib task_3852_budget_uses_probe_binary_and_land_origin. The implementer reported a passing targeted run.\nFolded main-origin and host routing — verified by shared main_root, Repository::load and pin_command calls plus the linked-worktree and conflicting provider/environment fixtures.\nFolded doctor and land cached reporting behavior — verified by the fixture in cargo test -p aida-cli --test task_3852_core_budget, which asserts the main cwd, pinned host, cleared GH_REPO, 60-second cache flag, remaining/limit/reset and warning at 19% and 20%. The implementer reported a passing targeted run.\nFolded criterion-traced doctor and land coverage — unverified. The new tests lack criterion-qualified markers.\nExact-head FAST gates and merge-hold-gate passed. FAST compile was pending at review time and FAST skipped runtime shards. Local build and test execution was omitted per reviewer policy. Integration was six commits ahead at baefe725cc44. The findings concern PR-added lines and are independent of base-side changes.",
+        "recovery_hint": "address the review findings, move TASK-3852 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T03:39:39.640636075Z",
+      "spec": "TASK-3852",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4478,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a2f048d7d0cdfb74977229c352068cb6c35339d8"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:55:24.524506067Z",
+      "spec": "TASK-3852",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4485,
+        "verdict": "APPROVED",
+        "reviewed_sha": "fc207b6958a51bfa43a5effa14a2711f326958c7"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:10:20.857380437Z",
+      "spec": "TASK-3852",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4485
+      }
+    },
+    {
+      "ts": "2026-11-24T06:20:36.932360454Z",
+      "spec": "TASK-3852",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c",
+        "pr": 4485,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
