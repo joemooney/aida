@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-24T17:01:20.120934831Z
+modified_at: 2026-11-24T17:20:15.616041363Z
 req_type: Bug
 tags:
 - ci
@@ -327,6 +327,11 @@ comments:
   created_at: 2026-11-24T17:01:20.120929281Z
   modified_at: 2026-11-24T17:01:20.120929281Z
   session_id: 01a20e4b0c4e
+- id: 01a20e92-8f00-74f2-9367-27897d378182
+  author: joe
+  content: '#4408 r4 FINAL: advisor-122 OVERRIDE -> APPROVE on FAST green (2026-11-24 10:20). The remaining 3 fail-closed findings plus the BUG-2725 #4407 p2 edges are in follow-up TASK-3879 (MEDIUM). Strict/supervised: after full CI, Joe''s train loop lands it.'
+  created_at: 2026-11-24T17:20:15.616041363Z
+  modified_at: 2026-11-24T17:20:15.616041363Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
