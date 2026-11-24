@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Criterion trace markers (`// trace:<SPEC>.<AC>`) on the budget tests in forge_tests_inline_tests.rs (~:2142) and task_3852_core_budget.rs, so each test names the criterion it proves. The 5s budget deadline starts BEFORE main_root / Repository::load, so slow repository discovery counts against it (test with a slow load).
   - AC2: A relative-PATH `gh` (e.g. AIDA_TEST_GH_BINARY=./bin/gh) is absolutized BEFORE current_dir is changed for the probe. Test with a linked-worktree fixture.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:41:03.472804465Z
-modified_at: 2026-11-24T04:13:32.843828064Z
+modified_at: 2026-11-24T04:36:20.252780645Z
 req_type: Task
 tags:
 - forge
@@ -64,6 +64,12 @@ comments:
   modified_at: 2026-11-24T04:13:32.843828064Z
   session_id: 01a20baa19b8
   harness_version: codex-cli 0.167.0
+- id: 01a20bd7-2a9c-7a53-beb1-e900f14d4f40
+  author: aida-publication-done
+  content: Implementer push 7ada68eff2ee declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T04:36:20.252779209Z
+  modified_at: 2026-11-24T04:36:20.252779209Z
+  session_id: 01a20baa19b8
 history:
 - id: 01a20ba5-66be-7a31-bcaa-958dd2e9ad20
   author: joe
@@ -82,6 +88,14 @@ history:
   session_id: 01a20baa19b8
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20bd7-2a9c-7a53-beb1-e8fd2855b27d
+  author: aida-publication-done
+  timestamp: 2026-11-24T04:36:20.252777624Z
+  session_id: 01a20baa19b8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
