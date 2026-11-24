@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T09:09:48.525891979Z
-modified_at: 2026-11-24T09:09:48.525891979Z
+modified_at: 2026-11-24T09:10:11.037700474Z
 req_type: Story
 tags:
 - authority
 - launch
 - strict
+history:
+- id: 01a20cd1-e1b5-7c30-9e0d-8c549954667e
+  author: joe
+  timestamp: 2026-11-24T09:10:11.125673008Z
+  changes: []
+execution_mode: drive
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
   branch: main
