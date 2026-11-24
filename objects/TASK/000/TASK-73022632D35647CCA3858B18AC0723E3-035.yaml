@@ -10,7 +10,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:57:59.597261329Z
-modified_at: 2026-11-24T17:47:21.766210321Z
+modified_at: 2026-11-24T17:48:31.713496187Z
 req_type: Task
 tags:
 - from-implementer:TASK-3820
@@ -28,6 +28,24 @@ comments:
   content: 'SLICE 1 of STORY-3099 (advisor-122 10:36). DESIGN RULED: renewal EXTENDS the existing session key (no new seat-bound token). Constraints: capped at the renewed mandate expiry; tombstones end it at once; bound to the same seat/session + deputy runner, no transfer; an audit ledger entry per extension naming the human renewal; tests: extends / expiry refuses / tombstone refuses / other session refused. Sketch first (codex design lane), advisor sign-off, then a <=200-line strict slice.'
   created_at: 2026-11-24T17:33:49.715503218Z
   modified_at: 2026-11-24T17:33:49.715503218Z
+- id: 01a20eac-73bd-7492-a437-2ff9faf0f66f
+  author: dirtlab
+  content: |-
+    SKETCH (codex design lane): Extend the existing key while its original holder still possesses it.
+
+    Today — aida-cli-lib/src/gate/seat_authority.rs:2292,3048 sets issue TTL to remaining grant/parent lifetime in seconds. The launcher's Linux session keyring is inherited by worker and tool children. grant_keyring.rs:142,341 searches the caller's session ring before setting timeout. seat_authority.rs:1001 checks possession; deputy_shell/attribution.rs:36,124 validates at submit and claim. seat_authority.rs:4319 therefore moves the durable deadline but cannot reach another terminal’s key.
+
+    Proposal — have the original launcher retain a holder-side renewal listener for the lifetime of the bound seat. Arm it at launch, independent of tool traffic or statusline activity. A human TTY renewal publishes its existing durable renewal identity and wakes holders; the wake is only a hint. Before the OLD deadline the listener must independently verify that exact renewal, live grant and ancestor chain, seat/session and original runner instance (PID namespace and start identity), and the digest of the existing possessed key. Re-time that same verified key serial in place. Never install, relink, disclose or recreate a key. Missed deadline, changed identity or unverifiable evidence requires fresh human-authorized issuance. Report pending until holder acknowledgement; a record update alone cannot promise continuity.
+
+    Deadline and stop — under the grant/ancestor serialization, use the earliest renewed mandate, grant and ancestor expiry. Round remaining seconds down and refuse zero (kernel zero clears timeout). Enforce absolute deadline at use. Check current stop/revoke tombstones at adoption, submit and immediately before runner dispatch; they supersede renewal even if kernel invalidation is unavailable. Preserve existing peer and claim checks. Record each extension against the human renewal (mandate ID, renewal timestamp/actor, grant, seat/session, runner, old/new deadline, outcome). Persist intent before retiming, then acknowledgement; retry the same renewal idempotently against its absolute cap. Unacknowledged work cannot claim success.
+
+    Acceptance tests — two isolated session rings and a short original TTL: renew from B, acknowledge in idle A, submit and claim on A past old expiry but before cap. Without renewal refuse past expiry. Stop mandate or revoke grant after renewal, including between submit and claim: refuse despite a live key. B with copied handle and a replacement runner must each fail. Repeat a wake; no extra time or duplicate successful extension.
+
+    Provisional budget (changed lines, including tests): aida-cli-lib/src/gate/seat_authority.rs 55; aida-cli-lib/src/grant_keyring.rs 15; aida-cli-lib/src/mandate.rs 25; aida-cli-lib/src/deputy_shell/attribution.rs 20; aida-cli-lib/src/gate/tests/bug_1934_keyring_tests.rs 80 = 195. Sign-off dependency: confirm a surviving holder/listener and reusable runner identity, wake and audit plumbing. If that cannot fit 200 lines, return for rescoping before coding.
+  created_at: 2026-11-24T17:48:31.713496187Z
+  modified_at: 2026-11-24T17:48:31.713496187Z
+  session_id: 01a20eaa75e4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f24b-6f01-7693-bfe7-88e1b02674e6
   author: joe
