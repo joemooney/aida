@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980293Z
-modified_at: 2026-11-24T07:34:51.404287857Z
+modified_at: 2026-11-24T07:36:34.797159672Z
 req_type: Task
 tags:
 - review
@@ -37,6 +37,17 @@ comments:
   modified_at: 2026-11-24T07:25:04.567861295Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c7c-3267-70a0-a4a6-b8cf37e581e0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 965a6dd2b2c440989d5096c440ea670fc18acdde plus native unstaged and untracked S4 files.
+    AC1: [evidence: manual-inspection] Compared all 12 files against Joe Mooney's 0fdac177513. Eleven are identical. docs/showcase/code-review.html differs only by removing the three PPTX links. origin/main...HEAD contains inherited integration changes; origin/integration...HEAD is empty. Host publication must preserve Joe Mooney <joe.mooney@gmail.com> as author and target integration.
+    AC2: [evidence: documentation-inspection] Six slide sections in docs/showcase/code-review.html:300 onward; Marp source registered at docs/internal/presentation/build.sh:26 and README.md:10. Checked all 11 showcase links, unique IDs, no PPTX link, no PPTX or publisher change. Generated capabilities.html fixed drift and matches reference. python3 docs/showcase/build.py --check and bash -n docs/internal/presentation/build.sh pass. No authority changes. Interactive rendering and PR-head CI unverified. PR body should note aida review prepare arrives in S2.
+  created_at: 2026-11-24T07:36:34.797159672Z
+  modified_at: 2026-11-24T07:36:34.797159672Z
+  session_id: 01a20c7a4e51
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
@@ -49,6 +60,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20c7b-2b76-7ff3-89b6-8f866288a91b
+  author: dirtlab
+  timestamp: 2026-11-24T07:35:28.374294212Z
+  session_id: 01a20c7a4e51
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c

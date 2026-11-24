@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:30:05.174372940Z
+modified_at: 2026-11-24T07:35:54.321069931Z
 req_type: Story
 tags:
 - track:integration
@@ -58,6 +58,19 @@ comments:
   content: S1 design sketch. aida-core::review_engine accepts caller-supplied diff entries, rules, coverage rows, observations and source text. It returns inventory, playbooks, batches, coverage reports and anchors in memory. The CLI review_prepare adapter belongs to S2. That adapter reads Git and working-tree inputs and writes files only at requested --write output paths. Nothing in gate/, the gate ledger, review verdict recording or train admission consumes this engine. It is advisory reviewer tooling only.
   created_at: 2026-11-24T07:30:05.174372940Z
   modified_at: 2026-11-24T07:30:05.174372940Z
+  session_id: 01a20c74cb2f
+  harness_version: codex-cli 0.167.0
+- id: 01a20c7b-9436-7831-8986-75bc99cdd47c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 965a6dd2b2c440989d5096c440ea670fc18acdde plus native working tree. The 19-file origin/main...HEAD diff is inherited integration work. Both S1 files match reference 0fdac177513 byte for byte, including the eight original tests. No additions beyond that commit.
+    AC1: [evidence: behavioral-test] review_engine.rs:1149–1521 exercises globs, classification, playbooks, Rust facets, batches, coverage, snippet anchoring and observation citations. Lane job j20261124T072947683-2-0 executed eight tests, all passed. Residual cases: root .aws/.ssh paths escape the directory exclusion, an individual oversized file can exceed the batch budget, and single-bracket citations are ignored. Filed findings ending 045 and 046. Duplicate coverage paths use the last row. These limits qualify the S1 acceptance evidence.
+    AC2: S2 CLI deferred by approved slice.
+    AC3: [evidence: behavioral-test] targeted core tests passed. CLI integration and its compile validation belong to S2.
+    Boundary: lib.rs:211 exports the module. The sole external reference consumer is review_prepare; no gate, verdict or train path reads the engine. Host publication must preserve Joe Mooney <joe.mooney@gmail.com> as author and target integration.
+  created_at: 2026-11-24T07:35:54.321069931Z
+  modified_at: 2026-11-24T07:35:54.321069931Z
   session_id: 01a20c74cb2f
   harness_version: codex-cli 0.167.0
 history:
