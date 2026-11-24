@@ -356,7 +356,7 @@ fn collect(
             live.dispatch_check()?;
             let checks = live.forge.commit_checks(&ci_key.head_sha)?;
             let selection = if live.forge.kind() == crate::forge::ForgeKind::GitHub {
-                train_runs_at(&live.project_root, &ci_key.head_sha)?
+                train_runs_at(&live.project_root, &ci_key.head_sha, change)?
             } else {
                 Default::default()
             };

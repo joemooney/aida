@@ -19,8 +19,8 @@ pub(super) fn observe(
     let slug = repo.github_slug().ok_or("GitHub repository is unknown")?;
     let (_, project) = slug.split_once('/').ok_or("GitHub project is unknown")?;
     let api = |path: &str| landing_ci_api(root, repo, &format!("repos/{project}/{path}"));
-    let selection =
-        crate::forge::tier_runs::latest_runs_at(&pr.head, api).map_err(|e| format!("{e:#}"))?;
+    let selection = crate::forge::tier_runs::latest_runs_at(&pr.head, pr.id, &pr.base, api)
+        .map_err(|e| format!("{e:#}"))?;
     let (ci, checks) =
         summarize_github_rollup(rollup, &selection, &slug).map_err(|e| format!("{e:#}"))?;
     verify(ci, &checks.iter().collect::<Vec<_>>(), &slug, base, |job| {
@@ -45,7 +45,7 @@ pub(super) fn head_ci(
 ) -> Result<Ci, String> {
     let slug = repo.github_slug().ok_or("GitHub repository is unknown")?;
     let (_, project) = slug.split_once('/').ok_or("GitHub project is unknown")?;
-    let selection = crate::forge::tier_runs::latest_runs_at(&pr.head, |path| {
+    let selection = crate::forge::tier_runs::latest_runs_at(&pr.head, pr.id, &pr.base, |path| {
         landing_ci_api(root, repo, &format!("repos/{project}/{path}"))
     })
     .map_err(|e| format!("{e:#}"))?;

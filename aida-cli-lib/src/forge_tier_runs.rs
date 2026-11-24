@@ -111,6 +111,8 @@ fn list(
 
 pub(crate) fn latest_runs_at(
     head: &str,
+    pr: u64,
+    base: &str,
     mut api: impl FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<TierSelection> {
     ensure!(
@@ -134,6 +136,17 @@ pub(crate) fn latest_runs_at(
         if run["event"].as_str().context("missing Actions event")? != "pull_request" {
             continue;
         }
+        // Commit checks are SHA-scoped. Even ignoring a foreign run here would
+        // leave its raw checks eligible to satisfy the exact-tip gate.
+        ensure!(
+            pr > 0
+                && !base.is_empty()
+                && run["pull_requests"].as_array().is_some_and(|owners| {
+                    matches!(owners.as_slice(), [owner] if owner["number"].as_u64() == Some(pr)
+                    && owner["base"]["ref"].as_str() == Some(base))
+                }),
+            "run {id} is not uniquely associated with PR #{pr} targeting {base}"
+        );
         let identity =
             super::ci_run_identity(run, id, Some(head)).context("invalid pinned run identity")?;
         let path = run["path"]
@@ -333,6 +346,10 @@ impl TierSelection {
                     outcome,
                     run_id: row.run_id,
                     workflow_id: None,
+                    cancelled: row.bucket == "cancel",
+                    job_id: row.job_id,
+                    run_attempt: Some(run.attempt),
+                    run_in_progress: run.bucket() == "pending",
                 });
             }
         }
@@ -354,12 +371,13 @@ pub(crate) mod fixture {
     pub const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     pub fn run(id: u64, tier: &str, conclusion: &str) -> Value {
         json!({"id":id, "name":"CI", "path":".github/workflows/ci.yml", "event":"pull_request",
+            "pull_requests":[{"number":1,"base":{"ref":"main"}}],
             "head_sha":HEAD,"head_repository":{"id":1},"head_branch":"feature","workflow_id":1,
             "run_attempt":1,"run_number":id,"status":if conclusion=="in_progress" {conclusion} else {"completed"},
             "conclusion":conclusion,"fixture_tier":tier})
     }
     pub fn read(runs: &[Value]) -> Result<TierSelection> {
-        latest_runs_at(HEAD, |endpoint| {
+        latest_runs_at(HEAD, 1, "main", |endpoint| {
             if endpoint == format!("actions/runs?head_sha={HEAD}&per_page=100&page=1") {
                 return Ok(serde_json::to_vec(
                     &json!({"total_count":runs.len(),"workflow_runs":runs}),

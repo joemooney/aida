@@ -820,8 +820,12 @@ enum TrainCiReadiness {
 const TRAIN_CI_AGGREGATE: &str = crate::forge::CI_AGGREGATOR_CHECK;
 
 // trace:BUG-2723 | ai:codex
-fn train_runs_at(repo: &Path, head: &str) -> Result<crate::forge::tier_runs::TierSelection> {
-    crate::forge::tier_runs::latest_runs_at(head, |path| {
+fn train_runs_at(
+    repo: &Path,
+    head: &str,
+    change: &crate::forge::ChangeRef,
+) -> Result<crate::forge::tier_runs::TierSelection> {
+    crate::forge::tier_runs::latest_runs_at(head, change.id, &change.base, |path| {
         let endpoint = format!("repos/{{owner}}/{{repo}}/{path}");
         gh_stdout(repo, &["api", &endpoint]).map(String::into_bytes)
     })
@@ -3432,7 +3436,7 @@ impl LiveTrainForge<'_> {
         // trace:BUG-2423 | ai:codex
         journal::before("read CI rows")?;
         let mut rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
-        let selection = train_runs_at(&self.project_root, tip)?;
+        let selection = train_runs_at(&self.project_root, tip, change)?;
         apply_train_selection(&mut rows, &selection).map_err(TrainCiReadError)?;
         if rows.is_empty() {
             assert_head()?;

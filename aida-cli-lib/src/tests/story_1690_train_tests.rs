@@ -6553,6 +6553,20 @@ fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
             "{field}"
         );
     }
+    let target = serde_json::json!({"number":1,"base":{"ref":"main"}});
+    for owners in [
+        serde_json::json!([{"number":2,"base":{"ref":"integration"}}]),
+        serde_json::json!([{"number":2,"base":{"ref":"main"}}]),
+        serde_json::json!([{"number":1,"base":{"ref":"integration"}}]),
+        serde_json::json!([target, {"number":2,"base":{"ref":"integration"}}]),
+        serde_json::json!([]),
+        serde_json::Value::Null,
+    ] {
+        let mut foreign = full.clone();
+        foreign["pull_requests"] = owners;
+        let error = read(&[rerun.clone(), foreign]).unwrap_err();
+        assert!(error.to_string().contains("not uniquely associated"));
+    }
     let mut wrong = full;
     wrong["head_sha"] = "b".repeat(40).into();
     assert!(read(&[fast, wrong]).is_err());
@@ -6560,10 +6574,14 @@ fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
         b"broken".as_slice(),
         br#"{"total_count":1,"workflow_runs":[]}"#,
     ] {
-        assert!(crate::forge::tier_runs::latest_runs_at(HEAD, |_| Ok(bytes.to_vec())).is_err());
+        assert!(
+            crate::forge::tier_runs::latest_runs_at(HEAD, 1, "main", |_| Ok(bytes.to_vec()))
+                .is_err()
+        );
     }
-    let err =
-        crate::forge::tier_runs::latest_runs_at(HEAD, |_| anyhow::bail!("checkpoint failure"))
-            .unwrap_err();
+    let err = crate::forge::tier_runs::latest_runs_at(HEAD, 1, "main", |_| {
+        anyhow::bail!("checkpoint failure")
+    })
+    .unwrap_err();
     assert!(err.to_string().contains("checkpoint failure"));
 }
