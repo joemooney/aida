@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:28:56.742501296Z
-modified_at: 2026-11-24T04:50:12.746201802Z
+modified_at: 2026-11-24T04:50:48.304244561Z
 req_type: Task
 tags:
 - carried-from:TASK-3823
@@ -54,6 +54,15 @@ comments:
   modified_at: 2026-11-24T04:47:09.851226327Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20be4-6c21-7c73-9795-842b8e1ec601
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3aad9dc80c53a9f306bd53d9bee4308022539810. AC1: [evidence: manual-inspection] Unmet for both vendors. This checkout includes TASK-3824 rollback ca95624cad (PR #4405) and lacks the temporary reviewer models. No task diff against integration or working-tree additions. No eligible launch observed, no fixes or tests.
+  created_at: 2026-11-24T04:50:48.304244561Z
+  modified_at: 2026-11-24T04:50:48.304244561Z
+  session_id: 01a20be3ab6a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fa0a-df31-7a52-a9db-d0f3a2dd4b37
   author: joe
