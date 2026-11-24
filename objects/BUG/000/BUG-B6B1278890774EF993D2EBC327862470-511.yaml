@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T15:38:09.168838229Z
+modified_at: 2026-11-24T15:39:39.830646589Z
 req_type: Bug
 tags:
 - store
@@ -103,6 +103,15 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: The union and refusal precedence are clear. gate/mandate.rs:5-15 explicitly excludes Git from mandate authority and validates private direct-human grants and stop tombstones. Should fetched mandate evidence support coverage only under a currently active locally validated mandate, or can a fetched-only grant authorize train admission? If the latter, what authenticated issuance and revocation evidence must the train verify?. No triage reason was given.'
   created_at: 2026-11-24T15:25:29.227730939Z
   modified_at: 2026-11-24T15:25:29.227730939Z
+- id: 01a20e36-666a-73a3-82b8-d41ae3b540db
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9cc76437f4f2054f6c97da341ed1b482c60c221d. Merge-base diff, working diff and untracked additions empty. AC1: [evidence: behavioral-test] unmet. No store refresh at pr_train.rs:5014. Strict-tier inspection found merge_hold_core.rs:1822 writes holds to the primary gate ledger (gate/ledger/mod.rs:1), outside the canonical Git store. review_publication.rs:1626 explicitly retains local hold lifecycle. A signed request-changes receipt cannot represent an independent operator hold. AC2: [evidence: behavioral-test] unmet. No timeout or lock regression executed.
+  created_at: 2026-11-24T15:39:35.025911354Z
+  modified_at: 2026-11-24T15:39:35.025911354Z
+  session_id: 01a20e34d637
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -173,6 +182,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20e35-91d8-7451-86da-63a780d6ffd6
+  author: dirtlab
+  timestamp: 2026-11-24T15:38:41.496858097Z
+  session_id: 01a20e34d637
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20e36-792d-7fd1-a2fe-daac7c578dd3
+  author: dirtlab
+  timestamp: 2026-11-24T15:39:40.717361010Z
+  session_id: 01a20e34d637
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -181,3 +205,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: Which Git-canonical record should represent an independent upstream merge hold for required test (b)? The production hold writer appends to the primary checkout's .aida/gate-ledger outside the fetched store, and signed review publications do not transport that hold. If none exists, may this slice use a signed request-changes refusal for (b) and track independent hold transport separately?
+  raised_by: implementer
+  raised_at: 2026-11-24T15:39:39.830646589Z

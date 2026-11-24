@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T15:33:25.544054044Z
+modified_at: 2026-11-24T15:39:10.620138063Z
 req_type: Task
 tags:
 - review
@@ -81,6 +81,13 @@ comments:
     AC2: [evidence: behavioral-test] review_engine.rs:1281 sub-256, exact and oversized caps, :1293 single and double brackets with repeated and bare IDs. All five executed and passed in j20261124T153112997-2-0. Ratchet manifest tests 7/7. Reviewed CLI error propagation, sorted duplicate diagnostics, serde defaults, length framing, zero/one/many entries and budget boundary arithmetic. Corrected stale oversized-file documentation. No existing test weakened. Remaining glob, CRLF, anchor, same-stem scope and Rust facet criteria deferred by H2b scope. Existing digest values change for nonempty inventories. Host CI pending.
   created_at: 2026-11-24T15:33:25.544054044Z
   modified_at: 2026-11-24T15:33:25.544054044Z
+  session_id: 01a20e2cff8a
+  harness_version: codex-cli 0.167.0
+- id: 01a20e36-0552-7ed3-a83b-fc37943e4bea
+  author: dirtlab
+  content: 'Validation update: make check-ci-fast passed preceding source guards, then stopped at Rust structural ratchets. Its seven Python fixtures passed, but the FAST no-build guard rejected the required aida lane job invocation used to dispatch Cargo. Host FAST validation remains pending. No gate edits.'
+  created_at: 2026-11-24T15:39:10.620138063Z
+  modified_at: 2026-11-24T15:39:10.620138063Z
   session_id: 01a20e2cff8a
   harness_version: codex-cli 0.167.0
 history:
