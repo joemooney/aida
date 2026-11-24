@@ -10,7 +10,7 @@ description: |
   - AC2: A live In Progress spec still shelves exactly as today. Test.
 status: Approved
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
 modified_at: 2026-11-24T01:06:30.703332593Z
@@ -45,6 +45,13 @@ history:
   author: joe
   timestamp: 2026-11-24T01:05:33.613041606Z
   changes: []
+- id: 01a20b18-fb89-7862-a506-877ebdfc516e
+  author: aida-session-start
+  timestamp: 2026-11-24T01:08:36.361464868Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
