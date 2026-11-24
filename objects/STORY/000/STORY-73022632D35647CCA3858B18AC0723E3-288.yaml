@@ -1,0 +1,32 @@
+id: 01a20f49-b69f-7b71-b8a7-07bc06ff0faa
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-288
+title: 'Review PR-4533: [AI:codex] fix(repair): publish resolved merges after snapshot regeneration failure (BUG-2756)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f18`) for branch `bug-b6b1278890774ef993d2ebc327862470-517`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4533>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-517` → `main`
+
+  ## Covers
+
+  - BUG-2756
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4533` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T20:40:18.847810503Z
+modified_at: 2026-11-24T20:40:18.847810503Z
+req_type: Story
+filed_at:
+  code_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba
+  session: 01a20f1888e6
