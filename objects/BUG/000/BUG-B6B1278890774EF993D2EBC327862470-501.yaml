@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T05:07:59.642032442Z
+modified_at: 2026-11-24T05:08:17.397154498Z
 req_type: Bug
 tags:
 - admission
@@ -147,6 +147,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2740 AC1 PASS on the lock-order criterion. Standalone admission precedes store sync and setup, nested admission refuses, and the production-path regression exercises an independent writer during the wait. The startup timer is armed after pickup setup and new-work WIP is rechecked after a slot wait. AC2 PASS for visible holders. Ordinary and bounded timeouts include PID and command in the applicable diagnostic, the mediated response keeps its Busy code, and the source includes an external-holder regression. The advisor deferred cross-namespace and unreadable-command coverage. The round-two disk-deferral requirement is PARTIAL for explicit unqueued pickups, and the early wait introduces a stale supervised-track decision. The FAST source gates passed and compile CI was pending at review time. No local tests were run. Reviewed the full pinned landing diff against aaeb386bf51117822caa1d0179ce1f6425ad619f. None of the findings depends on code changed by the intervening protected-base commit.. No triage reason was given.'
   created_at: 2026-11-24T05:07:59.642024514Z
   modified_at: 2026-11-24T05:07:59.642024514Z
+- id: 01a20bf4-6ae2-73a2-8001-5f822b68b489
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2740):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f034f939cb86
+    Recorded: 2026-11-24T05:06:27.635854202+00:00
+    Findings:
+    1. aida-cli-lib/src/queue_cmd/work.rs:5161 — A standalone headless pickup can launch supervised work after its track changes while it waits for a cold-start slot. The only headless track check uses the store snapshot at lines 4679–4708. The new potentially unbounded wait happens before store sync and setup, and the post-wait path rechecks only WIP. If the operator assigns the selected spec or a cluster member to track:operator during the wait, the already-admitted plan can still reach the unattended launcher. Reload the selected anchor and members and reapply the headless policy after the wait and any pull, before pickup mutations. Cover a track change while the production pickup is blocked.
+    2. BUG-2740 round 2 disk-deferral requirement, aida-cli-lib/src/queue_cmd/work.rs:5148–5153 — An explicit standalone pickup of an Approved, unqueued spec now exits on low disk before persisting its synthesized queue row at lines 5303–5319. The deferral helper only annotates existing rows, so the spec has no deferral note and an ordinary queue pickup cannot retry it. Before the reorder, the row was persisted before the launch-time disk check and remained queued with the deferral. Preserve that behavior on the early disk refusal without waiting for cold-start capacity. Add coverage for explicit pickup of an unqueued spec alongside the existing queued fixture.
+    3. aida-cli-lib/src/standalone_implementer.rs:1572–1583 — The early reservation also moves the only memory-floor reading ahead of store sync and worktree setup. The final handoff rechecks disk and accepts an existing reservation without rechecking memory. If RAM plus free swap falls below the configured floor during that setup, a normal pickup can spawn without the reasoned memory override that the previous late admission would have required. Recheck memory against the held reservation at launch and preserve override auditing.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T05:08:17.250820816Z
+  modified_at: 2026-11-24T05:08:17.250820816Z
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
