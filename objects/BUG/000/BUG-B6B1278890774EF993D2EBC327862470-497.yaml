@@ -60,6 +60,13 @@ comments:
   created_at: 2026-11-24T00:20:00.067869436Z
   modified_at: 2026-11-24T00:20:00.067869436Z
   session_id: 01a20ab3f410
+- id: 01a20af6-d549-70d0-b87b-19c24f1762ee
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 17:35): PR-4468 @ 2c5c07aba19 is a TEST-ONLY regression (Refs; keep BUG-2736 open). Its gh stub answers ''pr list --head bundle-lane --state open'' only with no base or base=integration, so it proves lane_recovery::reconcile_observed already finds an open integration-base PR and doesn''t write ''no open PR''. AC1 already holds in code. BUT it does not explain the incident it was filed for: BUG-2728''s history shows the flip was ''Done -> NeedsAttention'' at 21:15Z, 13 minutes AFTER lane-recovery''s only comment (''Lane exit evidence ...'' at 21:02:10Z, not the ''no open PR'' path this test covers), and #4455 had been open since 21:00:46Z. So something else moved a Done spec to NeedsAttention without a comment (candidates set NeedsAttention in supervisor.rs / zen_drive.rs). Recommend: merge #4468 as the regression it is, and re-scope BUG-2736 to find the 21:15Z transition (aida history BUG-2728 event 930883d1).'
+  created_at: 2026-11-24T00:31:04.149690967Z
+  modified_at: 2026-11-24T00:31:04.149690967Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
