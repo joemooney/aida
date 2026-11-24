@@ -120,7 +120,7 @@ mod linux {
         }
         let dir = tempfile::tempdir().unwrap();
         let check = |required, success, message: &str| {
-            let mut child = Command::new(std::env::current_exe().unwrap());
+            let mut child = Command::new("/proc/self/exe");
             let thread = std::thread::current();
             child
                 .args(["--exact", thread.name().unwrap(), "--nocapture"])
