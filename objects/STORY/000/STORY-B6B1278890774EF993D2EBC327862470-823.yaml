@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T08:47:38.411586912Z
+modified_at: 2026-11-24T08:58:06.125974057Z
 req_type: Story
 tags:
 - track:integration
@@ -160,6 +160,13 @@ comments:
   created_at: 2026-11-24T08:47:38.411582538Z
   modified_at: 2026-11-24T08:47:38.411582538Z
   session_id: 01a20c9a45fd
+- id: 01a20cc7-0444-7863-ba78-4b28de036d6c
+  author: joe
+  content: 'INTEGRATION FIDELITY PRE-CHECK S1 (integration-30, 02:02): PR-4506 @ 82c928f609 vs source 0fdac177513. Authors: Joe Mooney on both commits (fc7d7a89bee wip, 82c928f6096). aida-core/src/review_engine.rs (+1523) and aida-core/src/lib.rs (+2) are patch-id MATCH with the source (byte-identical changes). The ONLY extra is scripts/ratchet-set.json: one aida-core ''--lib'' group with filter ''review_engine::tests::'', source review_engine.rs and 8 tests, which is the approved scope adjustment for check-ci-fast''s structural-cover gate. All 8 named tests exist as fns in review_engine.rs (mod tests at :1145, exactly 8 #[test]), so the inventory can''t point at a missing test. Merges CLEAN. Per the slicing plan this is the ARCHITECTURE slice: it needs the advisor''s sketch signoff comment before merge.'
+  created_at: 2026-11-24T08:58:06.125974057Z
+  modified_at: 2026-11-24T08:58:06.125974057Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
