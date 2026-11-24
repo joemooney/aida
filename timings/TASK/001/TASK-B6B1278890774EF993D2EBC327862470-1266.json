@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-1266",
+  "publishes": [
+    {
+      "at": "2026-11-24T02:43:49.130053917Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T21:45:37.718202606Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-23T23:27:01.244400829Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T23:27:01.266738628Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T02:43:45.504694031Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-24T02:43:45.526873689Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-24T02:43:48.929828927Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-24T02:43:48.964214658Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1266",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
