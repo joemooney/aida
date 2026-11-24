@@ -150,11 +150,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install ratchet runner dependencies
         run: python3 -m pip install PyYAML
+      # trace:BUG-2744 | ai:codex
+      - name: Prepare compile dependency archives
+        id: compile-apt
+        run: |
+          mkdir -p "$RUNNER_TEMP/compile-apt"
+          echo "key=compile-apt-v1-$RUNNER_ARCH-$ImageOS-$ImageVersion-${{ hashFiles('.github/workflows/ci.yml') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: compile-apt-cache
+        with:
+          path: ${{ runner.temp }}/compile-apt/*.deb
+          key: ${{ steps.compile-apt.outputs.key }}
       - name: Install compile dependencies
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: |
           sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
+            -o Dir::Cache::archives="$RUNNER_TEMP/compile-apt" -o APT::Keep-Downloaded-Packages=true \
+            install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+      - uses: actions/cache/save@v4
+        if: steps.compile-apt-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/compile-apt/*.deb
+          key: ${{ steps.compile-apt.outputs.key }}
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile-fast-check
