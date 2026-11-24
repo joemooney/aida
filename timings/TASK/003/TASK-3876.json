@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3876",
+  "publishes": [
+    {
+      "at": "2026-11-24T22:56:04.154917883Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T20:21:24.500757757Z",
+      "spec": "TASK-3876",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4531,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "3c6018b7f1391ef1b08e2b9e1f3fab3ffc5a24c6"
+      }
+    },
+    {
+      "ts": "2026-11-24T20:21:28.913988461Z",
+      "spec": "TASK-3876",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3876 (origin TASK-b6b1278890774ef993d2ebc327862470-1360) — FAIL. The PR claims completion. The whole landed diff updates three prompt surfaces and tests their wording. The existing ship decision and behavioral test both begin with a preselected declaration.\nTASK-3876.AC1: unverified — the prompt advises the lane which declaration to make, but the ship decision does not use the brief or exit claim and still permits contrary titles.\nTASK-3876.AC2: unverified — the new assertions inspect text. The existing host test covers title formatting from a declaration already supplied and does not cover the required claim-to-title decision. The implementer reported that its focused run timed out during compilation.\nReviewed landed tree 4ccfc352e6580a7de73408a822e818dd63ec2fa7 on pinned main 95eaccf328557402d176c0b41983afe1b677965f. The PR is two commits behind that base. Neither finding depends on code changed by those commits. Exact-head FAST gates passed and FAST compile was pending at review time. No local tests were run under reviewer policy.",
+        "recovery_hint": "address the review findings, move TASK-3876 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T20:34:03.883214801Z",
+      "spec": "TASK-3876",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4531,
+        "verdict": "APPROVED",
+        "reviewed_sha": "3c6018b7f1391ef1b08e2b9e1f3fab3ffc5a24c6"
+      }
+    },
+    {
+      "ts": "2026-11-24T22:47:28.777369646Z",
+      "spec": "TASK-3876",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4531
+      }
+    },
+    {
+      "ts": "2026-11-24T22:56:03.950674950Z",
+      "spec": "TASK-3876",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d8857d3fb7484090c196fa5518e7116fd02d2373",
+        "pr": 4531,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
