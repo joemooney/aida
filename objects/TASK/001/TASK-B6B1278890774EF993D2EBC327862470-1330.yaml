@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T08:29:09.068197586Z
-modified_at: 2026-11-24T10:22:24.569576053Z
+modified_at: 2026-11-24T10:23:27.213086364Z
 req_type: Task
 tags:
 - docs
@@ -43,6 +43,12 @@ comments:
   content: Implementer push 13e7a41760cc declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T10:21:42.296758033Z
   modified_at: 2026-11-24T10:21:42.296758033Z
+  session_id: 01a20cf16203
+- id: 01a20d14-f5ed-7d60-babf-e84e4402ffb9
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int32-task-3865` at head `13e7a41760ccc433148a79b00b9e9b763753d1b1`.'
+  created_at: 2026-11-24T10:23:27.213082202Z
+  modified_at: 2026-11-24T10:23:27.213082202Z
   session_id: 01a20cf16203
 history:
 - id: 01a20cac-beb1-73d3-87d2-0d67549a7354
