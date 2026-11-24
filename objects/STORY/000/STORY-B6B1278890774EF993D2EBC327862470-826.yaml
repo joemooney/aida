@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T22:21:21.446554784Z
+modified_at: 2026-11-24T22:30:38.562638147Z
 req_type: Story
 tags:
 - doctor
@@ -211,6 +211,11 @@ comments:
   modified_at: 2026-11-24T22:21:21.446554784Z
   session_id: 01a20f99f6b0
   harness_version: codex-cli 0.167.0
+- id: 01a20fae-b8e3-7650-b6b0-6ef40f53d85a
+  author: joe
+  content: 'advisor-122 ruling 15:34 (slice 1): the doctor check is STATELESS + READ-ONLY (episode lock and state file deleted; staleness from existing gate-ledger timestamps); routing = a [[schedule.jobs]] entry (doctor check stalled-reviews --fail-on-findings every 20m) + the CronJobFailed->advisor route; NO store-writers/cli:doctor write mappings.'
+  created_at: 2026-11-24T22:30:38.562638147Z
+  modified_at: 2026-11-24T22:30:38.562638147Z
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
