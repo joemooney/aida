@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-24T18:41:19.246844690Z
+modified_at: 2026-11-24T19:08:56.271199773Z
 req_type: Bug
 tags:
 - ci
@@ -352,6 +352,15 @@ comments:
     Reviewed HEAD: 96ca442531569d3425f0635ee25987add8a659e3 plus the native working diff. AC1: [evidence: behavioral-test] story_1690_train_tests.rs:6532 and story_2768_land_tests.rs:765 cover an owned FAST, jobless cancellation and successful FULL on one head. A newer cancellation remains blocking. AC2: [evidence: behavioral-test] story_1690_train_tests.rs:6576 exercises a failed untiered job in a cancelled run through readiness and exact-tip diagnostics. AC3: [evidence: behavioral-test] both gate paths use the same pinned selection and the foreign and ambiguous PR/base cases refuse. The local three-run tests are in the launcher queue. AC4: [evidence: documentation-inspection] ci-test-shards.md:38 gives the update-branch retoggle rule and its Python regression passed. Checked merge-base diff, working diff, untracked files, name matching, malformed JSON, multiplicity, stale attempts, ownership and refusal paths. Five hosted failures traced to missing Actions inventory in three forge doubles. All three originally red dispatch authority tests passed locally with original assertions. Broad story_1917 filter: 71 passed, three other failures (missing CLI, two mailbox writer-admission refusals). The now-closed historical PR has empty owner arrays and refuses by design. CI at the host-published SHA remains outstanding.
   created_at: 2026-11-24T18:41:19.246844690Z
   modified_at: 2026-11-24T18:41:19.246844690Z
+  session_id: 01a20eca98fa
+  harness_version: codex-cli 0.167.0
+- id: 01a20ef6-11d2-76f0-a4b8-13d5bdbfeb5c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 96ca442531569d3425f0635ee25987add8a659e3 plus final uncommitted edits. AC1: [evidence: behavioral-test] train and landing/verified exact-tip BUG-2723 tests executed and passed. AC2: [evidence: behavioral-test] untiered cancellation diagnostics passed in the train regression. AC3: [evidence: behavioral-test] all five previously red tests from run 45448934302 passed, including the held and revoked authority scenarios. AC4: [evidence: documentation-inspection] ci-test-shards.md:38 and the Python retoggle-rule test passed. make check-ci-fast passed, including all 48 source gates and the CLI manual verifier. The matching CLI build fixed the separate BUG-2398 fixture prerequisite. Two other tests in the broad story_1917 filter still hit the mailbox writer-admission refusal during reviewer-worktree cleanup. Final diff check clean, no untracked additions. Fresh hosted FULL CI remains outstanding.
+  created_at: 2026-11-24T19:08:56.271199773Z
+  modified_at: 2026-11-24T19:08:56.271199773Z
   session_id: 01a20eca98fa
   harness_version: codex-cli 0.167.0
 history:
