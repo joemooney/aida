@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T02:35:39.615231564Z
+modified_at: 2026-11-24T02:36:31.367838112Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -47,6 +47,11 @@ comments:
   modified_at: 2026-11-24T02:35:39.615231564Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a20b69-7908-77b3-834a-cfd1931183c9
+  author: joe
+  content: 'CORRECTION (product-15 19:33): the TASK-3851 ''repro'' above is NOT this bug. After the BUG-2740 store-lock deadlock was cleared on dell1 (19:20), the same targeted heal (aida doctor heal stale-leases --id shared-207c3564-6f8b-424c-beba-2fef6d8adaa4 --yes) completed instantly with status healed. Its earlier rc=124 hang was the dell1 store write lock held by a lane parent waiting for a cold-start slot (BUG-2740).'
+  created_at: 2026-11-24T02:36:31.367838112Z
+  modified_at: 2026-11-24T02:36:31.367838112Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
