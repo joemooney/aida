@@ -1,0 +1,27 @@
+id: 01a20f0a-b813-7a23-964d-75633c5c4032
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-517
+agreed_id: BUG-2756
+title: A conflict-repair lane host post-exit snapshot regeneration failure strands a fully resolved merge
+description: |
+  Seen 2026-11-24 on dell1 (filed by product-15 per advisor-122 ruling 12:35): the conflict-repair lanes for #4416 BUG-2713 and #4413 BUG-2720 fully resolved their merges (0 unmerged, 0 markers, all staged), then the HOST post-exit step failed: "host post-exit commit failed: pending repair merge retained with its staged index; … repair regeneration refused: Compiling proc-macro2…". The snapshot regeneration (`AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib --lib -- --exact command_registry::story_1728_command_registry_tests::help_…`) errored, and the resolved merge was stranded uncommitted until product committed it by hand. Separate code path from BUG-2754.
+
+  ## Acceptance
+  - AC1: When the merge is fully resolved and snapshot regeneration fails, the host STILL commits and pushes the resolved merge, and reports "snapshot regeneration failed: <cause>; CI will verify", instead of refusing.
+  - AC2: The regeneration error is recorded on the spec (comment). A test with a failing regeneration command.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T19:31:30.451226600Z
+modified_at: 2026-11-24T19:31:30.451226600Z
+req_type: Bug
+tags:
+- conflict-repair
+- lanes
+filed_at:
+  code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
