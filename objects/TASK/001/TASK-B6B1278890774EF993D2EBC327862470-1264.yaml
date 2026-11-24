@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ccb9ea51cc5064223378a2022840f02a89b4f561
 
   The new stamp regression has no CI entry point. .github/workflows/ci.yml selects Python tests by name and the full test shards use nextest. Move the standalone regression into the existing shared-stamp Rust test suite or register python3 -m unittest tests/test_build_git_stamp.py in CI so the tracked/untracked contract keeps running.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T12:37:33.253777373Z
+modified_at: 2026-11-24T12:39:40.478331137Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
@@ -89,6 +89,21 @@ history:
   session_id: 01a20d8f0a70
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20d90-e9db-7b53-b12e-3a73cc724d4b
+  author: dirtlab
+  timestamp: 2026-11-24T12:38:50.587909079Z
+  session_id: 01a20d8f0a70
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20d91-aedb-7400-b5c2-2d14f864c58f
+  author: dirtlab
+  timestamp: 2026-11-24T12:39:41.019574840Z
+  session_id: 01a20d8f0a70
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: ccb9ea51cc5064223378a2022840f02a89b4f561
@@ -98,3 +113,8 @@ filed_at:
   aida_build_sha: f1a50179e5a
   vendor: claude
   session: 01a20a4056c3
+attention_reason:
+  category: blocked-dependency
+  detail: The required native ship declaration ending (TASK-3296 TASK-3286 TASK-3293 TASK-3321) was rejected because the launcher accepts one spec ID. Can the host publish int35-task-3296 to integration with the required four-ID title?
+  raised_by: implementer
+  raised_at: 2026-11-24T12:39:40.478331137Z

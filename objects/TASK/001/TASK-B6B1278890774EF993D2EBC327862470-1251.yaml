@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f2f2903d70c9294046921dee86a86c3c35299176
 
   docs/internal/testing/ci-test-shards.md:18 and docs/advanced/landing.md:113 still describe label addition as canceling the running workflow, which contradicts the changed labeled-event expression. Update the operator guidance to describe the final scheduling behavior and the approval path used by review-watch.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T11:17:07.353676794Z
-modified_at: 2026-11-24T12:38:12.025850111Z
+modified_at: 2026-11-24T12:39:42.939392437Z
 req_type: Task
 tags:
 - carried-from:BUG-2729
@@ -51,6 +51,15 @@ comments:
   modified_at: 2026-11-24T12:32:53.062114903Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20d91-a754-7c32-8399-2655ad60c740
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 51cc0a828f94f4ab90e840b40293d78836bd5335 (empty origin/main merge-base diff). Inspected both working-tree edits and status; no untracked additions. AC1: [evidence: documentation-inspection] landing.md:113 now scopes removal correctly. Checked addition, removal, unrelated labels and successive runs against ci.yml:32-33. Integration still cancels on addition and lacks reviewed BUG-2729 changes from f2f2903. Publication blocked pending dependency. TASK-3266 AC4: [evidence: documentation-inspection] ci-test-shards.md:40 gives the update-branch, wait, retoggle order; focused text assertion and git diff --check passed. Assertion ran locally only (docs-only scope).
+  created_at: 2026-11-24T12:39:38.654406657Z
+  modified_at: 2026-11-24T12:39:38.654406657Z
+  session_id: 01a20d902084
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20838-dd87-7f91-a3ee-de1bfdc2aac4
   author: joe
@@ -83,6 +92,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20d90-d62d-7303-b21a-8c7ed77dca75
+  author: dirtlab
+  timestamp: 2026-11-24T12:38:45.549175890Z
+  session_id: 01a20d902084
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20d91-b856-7581-bd56-173a5ecbf3ac
+  author: dirtlab
+  timestamp: 2026-11-24T12:39:43.446718787Z
+  session_id: 01a20d902084
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f2f2903d70c9294046921dee86a86c3c35299176
@@ -92,3 +116,8 @@ filed_at:
   aida_build_sha: 55f63f38008
   vendor: claude
   session: 01a2081bec8b
+attention_reason:
+  category: blocked-dependency
+  detail: Should product land BUG-2729 (f2f2903) on integration and relaunch this docs lane, or should the guides describe the current integration behavior instead?
+  raised_by: implementer
+  raised_at: 2026-11-24T12:39:42.939392437Z
