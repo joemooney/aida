@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T21:45:33.881916702Z
+modified_at: 2026-11-24T21:45:43.999219847Z
 req_type: Bug
 tags:
 - data-loss
@@ -167,6 +167,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a20f85-d6b7-7ed1-bba7-df560828709c
+  author: joe
+  timestamp: 2026-11-24T21:45:59.223420582Z
+  session_id: 01a20f81960b
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -178,3 +183,16 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 5665f7c661c7b100b06434132c000715144387e7
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    BUG-2749 FAIL. Reviewed the full pinned landing diff against protected main 5665f7c661c7b100b06434132c000715144387e7 and attested the original head. The original head is two commits behind. Neither base commit changed the code any finding depends on.
+    BUG-b6b1278890774ef993d2ebc327862470-510.AC1 unverified — repository-wide prune bypasses the check, concurrent index publication can invalidate the checked snapshot, and a structurally parseable index with a bad checksum can pass.
+    BUG-b6b1278890774ef993d2ebc327862470-510.AC2 verified by source inspection of aida-cli-lib/src/tests/bug_1694_registration_clear_claim_tests.rs:207. The new regression stages a unique file, deletes the checkout, asserts Declined and compares the retained index bytes. It also checks invalid-header and missing indexes. Runnable command `cargo test -p aida-cli-lib bug_2749_missing_checkout_preserves_registered_index`.
+    BUG-2749 (bug protocol), PR touches at least one test file — met. The new test covers both worksheet criteria's ordinary staged-only case, with the AC1 gaps listed in findings.
+    Exact-head CI at review time had fast gates and merge-hold checks green, fast compile running, and full test shards skipped for the fast tier. The focused test was inspected in source. No local tests or builds ran.
+  recovery_hint: address the review findings, move BUG-2749 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T21:45:43.999219847Z
