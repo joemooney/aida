@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-24T14:10:24.708357366Z
+modified_at: 2026-11-24T14:15:09.703330398Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -192,6 +192,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:10:24.563454670Z
   modified_at: 2026-11-24T14:10:24.563454670Z
+- id: 01a20de9-4c99-7a91-9d3a-f597c876c683
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:15):
+    # TASK-3155 / PR #4443 rework (advisor-122 stalled-CR sweep 2026-11-24 07:20; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 150 lines. Note: 2 major findings.
+
+    BLANKET RULING (advisor-122 2026-11-24 07:20 stalled-CR sweep): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major that is a behaviour REGRESSION this PR introduced. DEFER minor/p2 unmet-claimed-AC and test-strength items (mass-change): do NOT fix them; list them in the PR body as deferred. In your exit summary and PR body, list EACH finding as fixed or deferred.
+
+    CR at dd2f0e44. Findings:
+
+    F1. [major/unmet-claimed-ac/blocking] TASK-3155 AC1 — aida-core/src/db/git_backend.rs:3334–3352 and 3364–3374. The Git path still discards the exact queue file identity during discovery. It decodes and deduplicates the stems, then reconstructs a filename from each decoded ID. For example, a legacy literal `ops%41.yaml` queue and `opsA.yaml` both enumerate as `opsA`; the updater opens only `opsA.yaml`. The byte-to-character conversions likewise fail to round-trip a filename written for a non-ASCII owner. A matching existing row can retain its old marker or be reported absent. Carry the actual discovered queue file into the locked re-read and cover a legacy or non-ASCII filename alongside the alias-sibling case.
+
+    F2. [major/unmet-claimed-ac/blocking] TASK-3155 AC2 — aida-cli-lib/src/lane_disk_deferral.rs:176–231. The revised regression probes lock ownership during note transformation, but both the edit and removal finish before the production annotation reads either queue. A Git implementation that uses the unlocked preflight rows as its update snapshot, then acquires the lock before calling the transform and writing, still passes this test. The hand-built negative control uses an earlier snapshot and cannot catch that production mutation. Interleave the edit and removal after the production preflight read and before its locked re-read, and verify that reusing preflight rows fails the regression.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T14:15:09.703330398Z
+  modified_at: 2026-11-24T14:15:09.703330398Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
