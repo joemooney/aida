@@ -1,0 +1,31 @@
+id: 01a20ca5-7e54-7241-b638-23be6c4d98c1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1314
+title: 'Review follow-up: The new AC1 regression assertion is conditional on finding the existing job and step names'
+description: |-
+  From BUG-2744
+  Reviewed sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
+
+  The new AC1 regression assertion is conditional on finding the existing job and step names in AptBounds.steps() (tests/test_self_hosted_runner.py:638-657). Deleting that step or moving the apt commands into a helper lets the timeout assertion disappear while the suite still passes against the other apt steps. Require exactly one matching fast-compile install step before asserting its timeout.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T08:21:42.100768525Z
+modified_at: 2026-11-24T08:21:42.100768525Z
+req_type: Task
+tags:
+- carried-from:BUG-2744
+- finding-hash:8ee93f53
+- from-review:BUG-2744
+relationships:
+- rel_type: References
+  target_id: 01a20c54-6d4a-7413-a677-c2e357c87c0e
+  created_at: 2026-11-24T08:21:54.948539397Z
+filed_at:
+  code_sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
+  branch: pr-4503
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd141d1a42e
+  vendor: claude
+  session: 01a20ca28b2a
