@@ -1,0 +1,31 @@
+id: 01a20ba3-a91f-7210-88d0-89e24a63c385
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1285
+title: 'Review follow-up: BUG-2734.AC2 — tests/test_python_discovery.py exercises a failing discovered suite and an '
+description: |-
+  From BUG-2734
+  Reviewed sha: 7a4b585746c53d3c1e7166a9423f1ef9a3182180
+
+  BUG-2734.AC2 — tests/test_python_discovery.py exercises a failing discovered suite and an unwired standalone suite but never exercises the known-failure exemption at scripts/discover-python-tests.py:74-80. The current FAST log proves the three valid entries are reported, but cannot detect a regression that accepts an exemption with a missing follow-up ID. Add coverage for reporting a dated linked exemption and refusing an exemption without a follow-up ID.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T03:40:04.767223592Z
+modified_at: 2026-11-24T03:40:04.767223592Z
+req_type: Task
+tags:
+- carried-from:BUG-2734
+- finding-hash:be184f17
+- from-review:BUG-2734
+relationships:
+- rel_type: References
+  target_id: 01a20a37-7237-7e20-8191-fded1935b7ad
+  created_at: 2026-11-24T03:40:17.277416565Z
+filed_at:
+  code_sha: 7a4b585746c53d3c1e7166a9423f1ef9a3182180
+  branch: pr-4479
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
+  session: 01a20b9b54cb
