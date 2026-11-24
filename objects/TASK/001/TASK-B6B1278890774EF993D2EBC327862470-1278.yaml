@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T04:51:26.193490164Z
+modified_at: 2026-11-24T04:52:42.312038Z
 req_type: Task
 tags:
 - doctor
@@ -160,6 +160,21 @@ comments:
   created_at: 2026-11-24T04:51:26.193485525Z
   modified_at: 2026-11-24T04:51:26.193485525Z
   session_id: 01a20bb47d43
+- id: 01a20be6-5a13-70e0-af20-5468ea236eb7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:52):
+    # TASK-3851 / PR #4480 r3 MICRO-ROUND, CAP EXCEPTION (advisor-122 ruling 2026-11-23 21:53; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int30-task-3851). <=30 lines. NOTHING ELSE changes.
+
+    r2 @ 8cf50d92 is a FAIL-OPEN on an ACK gate, caused by the r2 wording "never as anchor.error". That meant per-ID lookup failures, NOT a failure to open the whole retained store.
+    (a) LogicalSnapshot::ack_eligible() ALSO returns false when retained_inventory_incomplete is set BECAUSE RetainedDeliveries::open FAILED. Per-ID OverBudget/UNEXAMINED must still NOT block unrelated records (keep the r2 isolation).
+    (b) TEST: when the retained store can't be opened, explicit ACK planning is REFUSED; AND one oversized sidecar still leaves an unrelated record ACK-eligible (the existing test stays green).
+    (c) Add the new flag to the partial-coverage codes.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4480). COMMIT your work.
+  created_at: 2026-11-24T04:52:42.312038Z
+  modified_at: 2026-11-24T04:52:42.312038Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
   author: joe
