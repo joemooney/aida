@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T06:42:06.973969419Z
+modified_at: 2026-11-24T06:42:45.146844182Z
 req_type: Story
 tags:
 - admission
 - authority
 - launch
 - strict
+history:
+- id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
+  author: joe
+  timestamp: 2026-11-24T06:42:45.228064737Z
+  changes: []
+execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
   branch: main
