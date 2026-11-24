@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T07:16:16.059849611Z
+modified_at: 2026-11-24T14:26:55.074983990Z
 req_type: Bug
 tags:
 - ci
@@ -228,6 +228,11 @@ comments:
   modified_at: 2026-11-23T07:16:16.059849611Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20df3-dbe3-7fc2-841a-9ea7ba761a05
+  author: joe
+  content: 'FOLLOW-UP ITEMS (advisor-122 07:30, from #4407 BUG-2725 override): run-selection edges belong to BUG-2723''s run selector: (1) a label event can hide a green FULL run; (2) workflow_dispatch run selection. Add to BUG-2723''s follow-up.'
+  created_at: 2026-11-24T14:26:55.074983990Z
+  modified_at: 2026-11-24T14:26:55.074983990Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
