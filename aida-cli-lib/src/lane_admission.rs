@@ -155,7 +155,6 @@ impl HostOverride {
 /// What admission granted: the slot (none when the cap was overridden) and
 /// the host checks the override passed.
 struct Admitted {
-    waited: bool,
     slot: Option<UnixDatagram>,
     overridden: Vec<String>,
 }
@@ -207,7 +206,6 @@ fn admit(
         !aida_core::db::any_store_write_lock_held(),
         "lane admission refused while holding the store write lock"
     );
-    let mut waited = false;
     loop {
         let slot = reserve(settings, prefix)?;
         let mut overridden = Vec::new();
@@ -216,7 +214,6 @@ fn admit(
                 if let Some(why) = memory_shortfall(settings, &memory) {
                     anyhow::bail!("lane launch refused: {why}");
                 }
-                waited = true;
                 on_wait();
                 continue;
             }
@@ -231,11 +228,7 @@ fn admit(
             }
             overridden.push(format!("memory floor: {why}"));
         }
-        return Ok(Admitted {
-            slot,
-            overridden,
-            waited,
-        });
+        return Ok(Admitted { slot, overridden });
     }
 }
 
@@ -304,20 +297,7 @@ impl TestHost {
     }
 }
 
-/// Holds capacity throughout pickup setup. Only a launched startup has a timer.
-pub(crate) struct Reservation {
-    slot: Option<UnixDatagram>,
-    pub(crate) waited: bool,
-}
-
-impl Reservation {
-    pub(crate) fn start(self) -> Result<Startup> {
-        self.start_with_timeout(STARTUP_TIMEOUT)
-    }
-
-    fn start_with_timeout(self, timeout: Duration) -> Result<Startup> {
-        Startup::with_timeout(self.slot, timeout)
-    }
+impl Startup {
     /// Admit one implementer launch on this host. `root` and `spec` say where
     /// and for what an override is recorded.
     pub(crate) fn acquire(
@@ -422,20 +402,7 @@ impl Reservation {
                 eprintln!("lane launch: {line}");
             }
         }
-        Ok(Self {
-            slot: admitted.slot,
-            waited: admitted.waited,
-        })
-    }
-}
-
-impl Startup {
-    pub(crate) fn acquire(
-        root: &Path,
-        spec: Option<&str>,
-        over: Option<&HostOverride>,
-    ) -> Result<Self> {
-        Reservation::acquire(root, spec, over)?.start()
+        Self::with_timeout(admitted.slot, STARTUP_TIMEOUT)
     }
 
     fn with_timeout(slot: Option<UnixDatagram>, timeout: Duration) -> Result<Self> {
@@ -568,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn bug_2740_timeout_releases_startup_slot_only_after_setup() {
+    fn bug_2682_timeout_releases_startup_slot() {
         let settings = Settings {
             max_concurrent_cold_starts: 1,
             ..Settings::default()
@@ -577,14 +544,7 @@ mod tests {
         let memory = || Ok(8 * KIB_PER_GIB);
         let first =
             wait_for_slot(&settings, &prefix, memory, || panic!("first launch queued")).unwrap();
-        let reservation = Reservation {
-            slot: Some(first),
-            waited: false,
-        };
-        let timeout = Duration::from_millis(10);
-        thread::sleep(timeout * 2);
-        assert!(reserve(&settings, &prefix).unwrap().is_none());
-        let _startup = reservation.start_with_timeout(timeout).unwrap();
+        let _startup = Startup::with_timeout(Some(first), Duration::from_millis(10)).unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let _next = wait_for_slot(&settings, &prefix, memory, || {
             assert!(

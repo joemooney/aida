@@ -1471,7 +1471,7 @@ pub(crate) fn run_for_test(launch: Launch<'_>) -> Result<()> {
 // trace:STORY-2690 | ai:codex
 pub(crate) fn run_recorded(
     launch: Launch<'_>,
-    startup: Option<crate::lane_admission::Reservation>,
+    recheck: Option<&dyn Fn() -> Result<()>>,
     attempt: Option<&crate::lane_result::Attempt>,
     on_started: Option<&dyn Fn()>,
     on_delivery: Option<&dyn Fn()>,
@@ -1500,7 +1500,7 @@ pub(crate) fn run_recorded(
         }
     }
     let spec = launch.spec;
-    let result = run(launch, startup, attempt, on_started, on_delivery);
+    let result = run(launch, recheck, attempt, on_started, on_delivery);
     // Explicit signals outrank later publication/wait failures. Never reuse a
     // previous attempt's veto when this attempt never spawned.
     // trace:STORY-2690 | ai:codex
@@ -1560,7 +1560,7 @@ pub(crate) fn run_recorded(
 // trace:STORY-2690 | ai:codex
 fn run(
     launch: Launch<'_>,
-    startup: Option<crate::lane_admission::Reservation>,
+    recheck: Option<&dyn Fn() -> Result<()>>,
     attempt: &crate::lane_result::Attempt,
     on_started: Option<&dyn Fn()>,
     on_delivery: Option<&dyn Fn()>,
@@ -1573,14 +1573,14 @@ fn run(
     // Host limits hold under `--over-wip`; only the explicit, reasoned
     // host-limit override passes them, and it is recorded.
     // trace:BUG-2682 | ai:claude
-    let startup = match startup {
-        Some(startup) => startup,
-        None => crate::lane_admission::Reservation::acquire(
-            &main_root,
-            Some(launch.spec),
-            crate::lane_admission::HostOverride::from_env()?.as_ref(),
-        )?,
-    };
+    let startup = crate::lane_admission::Startup::acquire(
+        &main_root,
+        Some(launch.spec),
+        crate::lane_admission::HostOverride::from_env()?.as_ref(),
+    )?;
+    if let Some(recheck) = recheck {
+        recheck()?;
+    }
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1712,7 +1712,6 @@ fn run(
     };
     // Published on the lease, so every vendor's tool shell finds it through
     // its public selector. trace:BUG-2383 | ai:claude
-    let startup = startup.start()?;
     let runner = lane_jobs.clone().map(|lane| {
         crate::lane_job::Runner::start_published(lane, &main_root, Some(startup.release_handle()))
     });

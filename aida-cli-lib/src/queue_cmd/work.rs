@@ -4708,7 +4708,28 @@ pub(crate) fn handle_queue_work(
             return Err(refusal);
         }
 
+        let anchor_id = anchor.map(|req| req.id);
         drop(current_store);
+
+        // Pull and cold-start admission can both outlive the original track decision.
+        // trace:BUG-2740 | ai:codex
+        let recheck_headless_track = || -> Result<()> {
+            let fresh = storage.load()?;
+            let members = plan.entries.iter().map(|entry| entry.queue.requirement_id);
+            for id in anchor_id.into_iter().chain(members) {
+                let req = fresh
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == id)
+                    .with_context(|| {
+                        format!("selected requirement {id} disappeared before launch")
+                    })?;
+                if let Some(error) = operator_track_headless_refusal(req, no_human) {
+                    return Err(error);
+                }
+            }
+            Ok(())
+        };
 
         // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
         // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
@@ -5031,15 +5052,7 @@ pub(crate) fn handle_queue_work(
             // trace:TASK-3799 | ai:codex — resolved existing branches are audited too.
             branch: branch_override.is_some() || canonical_resume.is_some(),
         });
-        // STORY-1662: a fresh headless implementer pickup outside a drain waits
-        // for its child and reports the outcome. Its concurrency slot is taken
-        // before any setup and held until this command returns.
-        // trace:STORY-1662 | ai:claude
-        let standalone_implementer =
-            !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
-        // A standalone override is audited once, at the final admission decision.
-        let late_override = standalone_implementer && over_wip && !dry_run;
-        if !list_sessions && !plan_only && !late_override {
+        if !list_sessions && !plan_only {
             crate::wip_limit::admit(
                 &project_root,
                 &plan.anchor_display,
@@ -5048,6 +5061,12 @@ pub(crate) fn handle_queue_work(
                 dry_run,
             )?;
         }
+        // STORY-1662: a fresh headless implementer pickup outside a drain waits
+        // for its child and reports the outcome. Its concurrency slot is taken
+        // before any setup and held until this command returns.
+        // trace:STORY-1662 | ai:claude
+        let standalone_implementer =
+            !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
         // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
         // view so we can detect whether the pull below reveals that another
         // machine claimed the spec under us. Best-effort + read-only — a load
@@ -5060,7 +5079,6 @@ pub(crate) fn handle_queue_work(
         });
 
         let mut _standalone_slot = None;
-        let mut startup = None;
         if !list_sessions {
             eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
             // trace:STORY-2749 | ai:claude
@@ -5145,37 +5163,11 @@ pub(crate) fn handle_queue_work(
                 // trace:STORY-1662 | ai:claude
                 // trace:STORY-2660 | ai:codex
                 if standalone_implementer {
-                    crate::machine_readiness::lane_disk_preflight(&project_root).map_err(
-                        |error| {
-                            let ids = disk_deferral_requirement_ids(storage, &plan);
-                            crate::lane_disk_deferral::defer(storage, &plan.scope, &ids, error)
-                        },
-                    )?;
                     _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
                         &project_root,
                         &plan.scope,
                         crate::standalone_implementer::configured_cap(&project_root)?,
                     )?);
-                    // Wait before the pickup pulls or mutates the shared store.
-                    // trace:BUG-2740 | ai:codex
-                    let reservation = crate::lane_admission::Reservation::acquire(
-                        &project_root,
-                        Some(&plan.scope),
-                        crate::lane_admission::HostOverride::from_env()?.as_ref(),
-                    )?;
-                    if !plan_only
-                        && (late_override
-                            || (reservation.waited && pickup == crate::wip_limit::Pickup::New))
-                    {
-                        crate::wip_limit::admit(
-                            &project_root,
-                            &plan.anchor_display,
-                            pickup,
-                            over_wip,
-                            false,
-                        )?;
-                    }
-                    startup = Some(reservation);
                 }
                 // trace:BUG-2548 | ai:codex — refuse conflicts before store I/O.
                 let review_retirement = if role == "reviewer"
@@ -5228,6 +5220,9 @@ pub(crate) fn handle_queue_work(
                     "pre-pickup pull failed; pickup stopped before session setup and store writes; \
                      resolve the store sync failure and retry `aida db sync --pull`, or use `--no-pull` for an intentional offline pickup",
                 )?;
+                    if standalone_implementer {
+                        recheck_headless_track()?;
+                    }
                 }
 
                 // trace:BUG-2557 | ai:claude — `--rereview` needs a launched review of a PR.
@@ -6801,7 +6796,7 @@ pub(crate) fn handle_queue_work(
                             child_grant,
                             host_main: host_main.as_deref(),
                         },
-                        startup,
+                        Some(&recheck_headless_track),
                         attempt.as_ref(),
                         Some(&|| agent.starting()),
                         on_brief_delivery,
