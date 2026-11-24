@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-24T16:28:45.460732051Z
+modified_at: 2026-11-24T16:52:06.478466937Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -230,6 +230,15 @@ comments:
   modified_at: 2026-11-24T15:23:45.097776078Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e78-cd68-70a0-9a78-bfa43c19bde2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e89d78c09a9a3c820f6456a8d82b1e0e8a5edcb3 plus native-lane working diff. AC1: [evidence: behavioral-test] Git retains each discovered path through lock, write and commit (git_backend.rs:3358). Alias siblings and colliding ops%41.yaml / opsA.yaml all receive the new marker. AC2: [evidence: behavioral-test] lane_disk_deferral.rs:261 waits for store-specific lock contention, then edits and removes through the regular queue writers. Reusing preflight rows failed at line 295 (2 matched, expected 1). Restored code passed the targeted Git and SQLite regression, 1 executed. Checked empty and multiple matches, lock refusal, note preservation, backend forwarding and filename identity. No findings deferred. Hosted CI for the host publication is pending.
+  created_at: 2026-11-24T16:52:06.478466937Z
+  modified_at: 2026-11-24T16:52:06.478466937Z
+  session_id: 01a20e631449
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
