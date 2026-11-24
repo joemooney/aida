@@ -8,10 +8,13 @@
 //! inventories, focused domain playbooks, token-bounded batches, and
 //! verifiable line spans and observation citations.
 
+use anyhow::Context;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 /// Default token budget per review batch (~12,000 tokens, estimated at 4 bytes/token).
@@ -142,15 +145,34 @@ fn default_true() -> bool {
 
 impl ProjectReviewRulesConfig {
     /// Load `.aida/review-rules.toml` if present, otherwise return default config.
-    pub fn load_from_root(project_root: &Path) -> Self {
+    // trace:TASK-3866 | ai:codex
+    pub fn load_from_root(project_root: &Path) -> anyhow::Result<Self> {
         let path = project_root.join(".aida").join("review-rules.toml");
-        if !path.is_file() {
-            return Self::default();
-        }
-        match std::fs::read_to_string(&path) {
-            Ok(raw) => toml::from_str(&raw).unwrap_or_default(),
-            Err(_) => Self::default(),
-        }
+        let mut file = match std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&path)
+        {
+            Err(err)
+                if err.kind() == std::io::ErrorKind::NotFound
+                    && matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                return Ok(Self::default())
+            }
+            result => result.with_context(|| format!("open {}", path.display()))?,
+        };
+        let metadata = file
+            .metadata()
+            .with_context(|| format!("inspect {}", path.display()))?;
+        anyhow::ensure!(
+            metadata.is_file(),
+            "{} is not a regular file",
+            path.display()
+        );
+        let mut raw = String::new();
+        file.read_to_string(&mut raw)
+            .with_context(|| format!("read {}", path.display()))?;
+        toml::from_str(&raw).with_context(|| format!("parse {}", path.display()))
     }
 }
 
@@ -552,7 +574,14 @@ pub fn classify_exclusion(
         return Some(ExclusionReason::PureDeletion);
     }
 
-    let norm = entry.path.replace('\\', "/");
+    // trace:TASK-3866 | ai:codex
+    std::iter::once(entry.path.as_str())
+        .chain(entry.old_path.as_deref())
+        .find_map(|path| classify_path_exclusion(path, user_excludes))
+}
+
+fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<ExclusionReason> {
+    let norm = path.replace('\\', "/");
     let file_name = Path::new(&norm)
         .file_name()
         .and_then(|s| s.to_str())
@@ -564,13 +593,18 @@ pub fn classify_exclusion(
     }
 
     // Check AIDA runtime substrate paths.
-    if norm.starts_with(".aida-store/")
-        || norm == ".aida-store"
-        || norm.starts_with(".aida/cache")
-        || norm.starts_with(".aida/sessions/")
-        || norm.starts_with(".aida/review-verdicts/")
-        || norm.starts_with(".aida/locks/")
-        || norm.starts_with(".aida/mailbox/")
+    let path = Path::new(&norm);
+    if [
+        ".aida-store",
+        ".aida/cache",
+        ".aida/cache-db",
+        ".aida/sessions",
+        ".aida/review-verdicts",
+        ".aida/locks",
+        ".aida/mailbox",
+    ]
+    .iter()
+    .any(|prefix| path.starts_with(prefix))
     {
         return Some(ExclusionReason::AidaSubstrate);
     }
@@ -611,7 +645,9 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
     {
         return true;
     }
-    norm_path.contains("/.aws/") || norm_path.contains("/.ssh/")
+    norm_path
+        .split('/')
+        .any(|part| matches!(part, ".aws" | ".ssh"))
 }
 
 /// Classify raw diff entries into reviewable and excluded lists, resolving each
@@ -1144,6 +1180,81 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3866 | ai:codex
+    #[test]
+    fn credential_components_at_any_depth() {
+        for dir in [".aws", ".ssh"] {
+            for prefix in ["", "one/", "one/two/"] {
+                assert_eq!(
+                    classify_path_exclusion(&format!("{prefix}{dir}/config"), &[]),
+                    Some(ExclusionReason::SecretSensitivePath)
+                );
+            }
+            assert_eq!(
+                classify_path_exclusion(&format!("{dir}-docs/config"), &[]),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn rename_excludes_either_path() {
+        for (old, new) in [(".ssh/config", "public"), ("public", ".ssh/config")] {
+            let entry = RawDiffEntry {
+                path: new.into(),
+                old_path: Some(old.into()),
+                kind: FileChangeKind::Renamed,
+                additions: 0,
+                deletions: 0,
+                is_binary: false,
+                patch_bytes: 0,
+            };
+            assert_eq!(
+                classify_exclusion(&entry, &[]),
+                Some(ExclusionReason::SecretSensitivePath)
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_prefix_requires_exact_components() {
+        for path in [".aida/cache", ".aida/cache/entry", ".aida/cache-db/entry"] {
+            assert_eq!(
+                classify_path_exclusion(path, &[]),
+                Some(ExclusionReason::AidaSubstrate)
+            );
+        }
+        assert_eq!(
+            classify_path_exclusion(".aida/cache-policy.toml", &[]),
+            None
+        );
+    }
+
+    #[test]
+    fn config_defaults_only_when_absent() {
+        let root = tempfile::tempdir().unwrap();
+        let load = || ProjectReviewRulesConfig::load_from_root(root.path());
+        assert!(load().unwrap().exclude.is_empty());
+        let dir = root.path().join(".aida");
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("review-rules.toml");
+        std::fs::write(&path, "exclude = ['docs/**'] # comment").unwrap();
+        assert_eq!(load().unwrap().exclude, ["docs/**"]);
+        for bytes in [b"exclude = [".as_slice(), &[0xff]] {
+            std::fs::write(&path, bytes).unwrap();
+            assert!(load()
+                .unwrap_err()
+                .to_string()
+                .contains(path.to_str().unwrap()));
+        }
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink("missing", &path).unwrap();
+        assert!(load()
+            .unwrap_err()
+            .to_string()
+            .contains(path.to_str().unwrap()));
+    }
 
     #[test]
     fn test_glob_matches_with_braces_and_doublestar() {
