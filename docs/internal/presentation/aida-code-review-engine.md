@@ -20,11 +20,7 @@ trace:STORY-3076 | ai:antigravity
 
 # Deterministic Engineering × Agent Review
 
-### Upcoming with CLI slice S2 and review skills slice S3
-
 Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-Seat Agent Intelligence** (`STORY-3076`)
-
-<!-- The command is upcoming with CLI slice S2. Skill integration follows in S3. -->
 
 ---
 
@@ -142,7 +138,7 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 # Illustrative Feature Matrix
 
-## OpenCodeReview and the upcoming AIDA workflow
+## OpenCodeReview and the AIDA workflow
 
 | Capability | Standalone External CLI Review Tools | AIDA Native (`aida review prepare` + `/aida-review`) |
 |---|---|---|
@@ -158,9 +154,9 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 # Getting Started & CLI Reference
 
-## Upcoming CLI and skill integration
+## CLI and skill integration
 
-S2 adds `aida review prepare`. S3 connects it to `/aida-review` and `/aida-code-review`.
+Both `/aida-review` and `/aida-code-review` use `aida review prepare` to build their file inventories.
 
 ```bash
 # 1. Prepare a PR or branch range review with linked spec acceptance criteria

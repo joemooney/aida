@@ -284,7 +284,7 @@ sets a short-lived presence for the advisor code gate.
 
 ## Deterministic review preparation (`aida review prepare`) — trace:STORY-3076 | ai:antigravity
 
-Upcoming (lands with the CLI/skills slices): S2 adds `aida review prepare` and S3 integrates it into `/aida-review` and `/aida-code-review`.
+Both `/aida-review` and `/aida-code-review` use `aida review prepare` to build their file inventories.
 
 Git is required in every mode. Workspace mode compares local changes with HEAD and includes non-ignored untracked files. Range mode uses the merge base of the supplied refs (target defaults to HEAD). PR mode needs forge base/head metadata and local revisions. Commit mode needs the commit and its parent. Scan mode uses `git ls-files --cached --others --exclude-standard` under the selected paths.
 
