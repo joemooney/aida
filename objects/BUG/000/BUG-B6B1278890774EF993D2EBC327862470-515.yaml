@@ -1,0 +1,27 @@
+id: 01a20ee3-a5c8-77b2-b201-256a03611b44
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-515
+agreed_id: BUG-2754
+title: 'Lane jobs cannot run make check-ci-fast: the lane-only cargo rule rejects cargo metadata, so lanes punt or skip the pre-push gate'
+description: |
+  Lane jobs can't run `make check-ci-fast`: the lane-only cargo rule rejects `cargo metadata` (used by the shard tooling), so lanes either punt or skip the pre-push gate. Seen 2026-11-24: BUG-2735's conflict-repair lane (#4464) finished its merge (97 module tests passed) but punted before publishing: "Required make check-ci-fast cannot finish under the lane-only Cargo rule: its shard tooling invokes cargo metadata, which the launcher rejects." Advisor-122 ruling 11:52; filed by product-15.
+
+  ## Acceptance
+  - AC1: The lane runner allows the read-only `cargo metadata` invocation (or check-ci-fast uses a lane-safe path that doesn't need it), without widening the lane cargo rule to builds/tests. A test shows a lane-run `make check-ci-fast` completes.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T18:48:49.864469968Z
+modified_at: 2026-11-24T18:48:49.864469968Z
+req_type: Bug
+tags:
+- ci
+- lanes
+- small
+filed_at:
+  code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 289cc394a33
+  vendor: claude
