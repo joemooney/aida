@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T23:27:27.601609273Z
+modified_at: 2026-11-24T23:27:35.559724492Z
 req_type: Bug
 tags:
 - hygiene
@@ -187,6 +187,11 @@ comments:
     A reference merge (commit 71bb63b62b39, `(Refs BUG-2742)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-24T23:20:50.972562567Z
   modified_at: 2026-11-24T23:20:50.972562567Z
+- id: 01a20fe2-dc88-7023-bf8e-7b9e6f6b73c5
+  author: joe
+  content: 'Completed by product-15 (2026-11-24 16:22): landed via #4487 (71bb63b62b3, train #4543, titled Refs) after advisor-122 approval at 493969e1 (conflict repair).'
+  created_at: 2026-11-24T23:27:35.559724492Z
+  modified_at: 2026-11-24T23:27:35.559724492Z
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
