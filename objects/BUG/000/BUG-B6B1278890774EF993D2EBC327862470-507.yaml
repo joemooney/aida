@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T12:21:17.464510157Z
+modified_at: 2026-11-24T12:35:29.082305199Z
 req_type: Bug
 tags:
 - admission
@@ -134,6 +134,13 @@ comments:
     Checked record parsing, incomplete/legacy records, zero or ambiguous flock holders, PID reuse, inode identity and ownership transitions. Missing holder evidence reports unknown. Exclusive flock and explicit unlock remain the admission boundary. Diagnostics are a point-in-time observation. No exact-head CI result exists for the unpublished edits.
   created_at: 2026-11-24T12:21:17.464510157Z
   modified_at: 2026-11-24T12:21:17.464510157Z
+  session_id: 01a20d7932a1
+  harness_version: codex-cli 0.167.0
+- id: 01a20d8d-dbf1-7461-8400-26dbb60abc6b
+  author: dirtlab
+  content: Implementer self-review addendum for 38c638cbf7 plus the working tree. The fast gate identified the two new truncate sites. Reviewed scripts/store-writers.toml:1917 and :1925 against the held admission descriptor. Both rows retain the blocked cutover disposition. The rerun passed the inventory scan and its mutation fixtures.
+  created_at: 2026-11-24T12:35:29.082305199Z
+  modified_at: 2026-11-24T12:35:29.082305199Z
   session_id: 01a20d7932a1
   harness_version: codex-cli 0.167.0
 history:
