@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T11:17:07.353676794Z
-modified_at: 2026-11-24T20:30:28.269524252Z
+modified_at: 2026-11-24T20:31:08.538619758Z
 req_type: Task
 tags:
 - carried-from:BUG-2729
@@ -87,6 +87,11 @@ comments:
   content: 'Lane exit evidence: retained branch `int35-task-3282` at head `unavailable`.'
   created_at: 2026-11-24T20:30:28.269517830Z
   modified_at: 2026-11-24T20:30:28.269517830Z
+- id: 01a20f41-50fa-73b0-9073-3f45cdd8332e
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `int35-task-3282` at head `unavailable`.'
+  created_at: 2026-11-24T20:31:08.538610034Z
+  modified_at: 2026-11-24T20:31:08.538610034Z
 history:
 - id: 01a20838-dd87-7f91-a3ee-de1bfdc2aac4
   author: joe
