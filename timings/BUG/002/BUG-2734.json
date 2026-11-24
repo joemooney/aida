@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2734",
+  "publishes": [
+    {
+      "at": "2026-11-24T08:16:50.794277246Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T03:40:20.380579627Z",
+      "spec": "BUG-2734",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4479,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7a4b585746c53d3c1e7166a9423f1ef9a3182180"
+      }
+    },
+    {
+      "ts": "2026-11-24T03:40:31.053776001Z",
+      "spec": "BUG-2734",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the full three-file diff at 7a4b585746c53d3c1e7166a9423f1ef9a3182180 against the generated worksheet and the supplied untraced-criteria list. BUG-2734 is a completing spec (origin BUG-b6b1278890774ef993d2ebc327862470-495).\n\nBUG-b6b1278890774ef993d2ebc327862470-495.AC1 — unverified\nBUG-b6b1278890774ef993d2ebc327862470-495.AC2 — verified by the dated KNOWN_FAILING entries, the three matching AIDA follow-up specs, and the FAST gates log showing each exclusion on the PR check's checkout. This verifies the original exclusions for the pinned head. The integration base subsequently received the three fixture fixes, and the advisor explicitly requires restoring their CI coverage in this PR.\n\nThe FAST gates job (45318787642 / 138192013063) passed the new discovery regression. Its PR checkout also ran and passed the newer base's test_build_git_stamp.py and test_closeout_audit_wording.py. FAST compile was in progress and the FULL matrix was skipped at review time. Neither contracts invocation added by the PR has a result in that run. Source inspection establishes the blocking findings without waiting on CI. The head is 18 commits behind origin/integration. Only the finding about the three already-fixed fixtures depends on subsequent base changes.",
+        "recovery_hint": "address the review findings, move BUG-2734 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:19:58.695904867Z",
+      "spec": "BUG-2734",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4479,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5a670b9fc7d83e9cf5fa6901a321716305f08358"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:20:39.617329432Z",
+      "spec": "BUG-2734",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2734 AC1 fails because the wiring ratchet treats commands in disabled CI steps as coverage. The FAST gates log confirms that discovery ran and passed the new discovery regression, test_build_git_stamp.py, and test_closeout_audit_wording.py. AC2 is partially verified. All three restored standalone suites are wired with the correct arguments and removed from the known-failing list. The advisor-required FULL contracts log showing all three passing is still outstanding. The pinned head had only a FAST run, with compile still pending and the FULL matrix skipped. The head is one commit behind origin/integration. That base commit does not affect the finding. Review claim was refused. No local tests or builds were run.",
+        "recovery_hint": "address the review findings, move BUG-2734 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:26:56.443189855Z",
+      "spec": "BUG-2734",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4479,
+        "verdict": "APPROVED",
+        "reviewed_sha": "5a670b9fc7d83e9cf5fa6901a321716305f08358"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:40:44.999767484Z",
+      "spec": "BUG-2734",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4493,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0e5e72b9bdd091e036bf1977b2ee3c0df4e20838"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:12:17.721866847Z",
+      "spec": "BUG-2734",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4493
+      }
+    },
+    {
+      "ts": "2026-11-24T08:16:50.576263022Z",
+      "spec": "BUG-2734",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e",
+        "pr": 4493,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
