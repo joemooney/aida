@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T16:27:32.788001430Z
+modified_at: 2026-11-24T14:40:47.579299254Z
 req_type: Bug
 tags:
 - agreed-id
@@ -242,6 +242,11 @@ comments:
   created_at: 2026-11-23T16:27:32.787995483Z
   modified_at: 2026-11-23T16:27:32.787995483Z
   session_id: 01a208e8ebe4
+- id: 01a20e00-8fdb-7de0-b5b7-3179429fcdb3
+  author: joe
+  content: 'PARKED (advisor-122 2026-11-24 07:50): #4419 closed unmerged after 4 rounds (branch kept). Re-specced as BUG-2750 (fetch-only, bounded, lock-free pre-pass refresh). BUG-2727 stays open as the parent.'
+  created_at: 2026-11-24T14:40:47.579299254Z
+  modified_at: 2026-11-24T14:40:47.579299254Z
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
