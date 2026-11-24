@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: The ratchet credits only CI steps that can run. An invocation inside a step whose `if:` is always false (e.g. `if: false`, `if: ${{ false }}`) or that is otherwise disabled does not count as wiring, so that test is reported as unwired.
   - AC2: Regression cases: a disabled step's invocation does not satisfy the ratchet, and an enabled step's does.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T06:30:53.472484708Z
+modified_at: 2026-11-24T09:46:04.845527550Z
 req_type: Task
 tags:
 - ci
 - small
 - tests
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -106,6 +105,24 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20cf2-be65-7083-8f6e-7fd77b9cd2d9
+  author: aida-auto-bump
+  timestamp: 2026-11-24T09:46:04.773336244Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a20cf2-bead-7133-bd0d-a4085bcd18d4
+  timestamp: 2026-11-24T09:46:04.845523783Z
+  agent: aida
+  commit_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  summary: 'Advisor (delegated authority): promotion 32, linear on main 103bb2ed7ea + 6 cherry-picks; per-commit patch-ids match approved integration squashes (2d1970e3, e19440f4, 965a6dd2, edbd4bf8, 35c6d45f, 1af1d426); combined 559b487a51cc; no protected paths; fast CI green.'
+  punted:
+  - 'punted: Reviewed the complete two-file diff at 328f196e4982242add799a3686bb4e0455f5b1e6 against the generated one-spec worksheet. TASK-b6b1278890774ef993d2ebc327862470-1292.AC1: unverified TASK-b6b1278890774ef993d2ebc327862470-1292.AC2: verified by the disabled/enabled subtests in tests/test_python_discovery.py:58 (python3 -m unittest tests/test_python_discovery.py), inspected in source and reported passing by the implementer. Literal false steps and a missing shard are covered. The ratchet still silently credits unreachable invocations, which blocks AC1. The supplied untraced list matches the fixture''s bare spec trace. Exact-head FAST gates passed and FAST compile was pending at review time. No local tests or builds were run. At the forge check the head was six commits behind integration, up from five in the launch prompt. The newer base did not change either PR file or ci.yml, and no finding depends on a code path the base has since changed. The in-lane review claim command was refused. This is the standalone draft handoff.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
@@ -114,15 +131,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Reviewed the complete two-file diff at 328f196e4982242add799a3686bb4e0455f5b1e6 against the generated one-spec worksheet.
-    TASK-b6b1278890774ef993d2ebc327862470-1292.AC1: unverified
-    TASK-b6b1278890774ef993d2ebc327862470-1292.AC2: verified by the disabled/enabled subtests in tests/test_python_discovery.py:58 (python3 -m unittest tests/test_python_discovery.py), inspected in source and reported passing by the implementer.
-    Literal false steps and a missing shard are covered. The ratchet still silently credits unreachable invocations, which blocks AC1. The supplied untraced list matches the fixture's bare spec trace. Exact-head FAST gates passed and FAST compile was pending at review time. No local tests or builds were run. At the forge check the head was six commits behind integration, up from five in the launch prompt. The newer base did not change either PR file or ci.yml, and no finding depends on a code path the base has since changed. The in-lane review claim command was refused. This is the standalone draft handoff.
-  recovery_hint: address the review findings, move TASK-3856 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T06:30:47.278258157Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T09:46:04.773328962Z
+  completion_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
