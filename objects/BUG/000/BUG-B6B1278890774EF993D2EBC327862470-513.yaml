@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T20:59:09.360553010Z
+modified_at: 2026-11-24T21:01:32.290652026Z
 req_type: Bug
 tags:
 - codex
@@ -147,6 +147,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T20:59:09.210737062Z
   modified_at: 2026-11-24T20:59:09.210737062Z
+- id: 01a20f5d-5db2-7d80-aae4-1bdff2599fb7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:01):
+    # BUG-2752 / PR #4529 r3 (advisor-122 ruling 2026-11-24 14:03 at 35f4bef3; product-15). Lane: CODEX. MAIN, existing branch. <=40 lines. ONE small round.
+    MAJOR: when LOCAL main has `[contained.vendors] codex = "native"` but origin/main does NOT, the launch guard's refusal must say exactly that and give the fix: "policy committed locally but not pushed: run `git push origin main` (or your remote)". It must NOT recommend init or a local commit. `aida init` in that state must print the SAME push hint. Add a test for that state.
+    DEFERRED: F6 (commit snapshot race), already TASK-3881.
+    One targeted cargo run, then make check-ci-fast, then push to #4529. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T21:01:32.290652026Z
+  modified_at: 2026-11-24T21:01:32.290652026Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
