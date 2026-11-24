@@ -2569,7 +2569,8 @@ impl GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        let mut api =
+            |endpoint: &str| commit_ci_api_read(&gh, &self.project_root, endpoint, verify_jobs);
         // `gh api` fills `{owner}/{repo}` from this checkout's repository.
         github_checks_with_attempts("{owner}/{repo}", sha, &mut api, verify_jobs)
     }
@@ -5878,6 +5879,28 @@ pub(crate) fn commit_ci_api_tail(
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
 fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    commit_ci_api_read(cli, root, endpoint, false)
+}
+
+// trace:TASK-3859 | ai:codex
+#[derive(Debug)]
+pub(crate) struct WatchAuthenticationFailed;
+
+impl std::fmt::Display for WatchAuthenticationFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "GitHub CLI authentication failed while reading commit CI; refresh gh credentials",
+        )
+    }
+}
+impl std::error::Error for WatchAuthenticationFailed {}
+
+fn commit_ci_api_read(
+    cli: &Path,
+    root: &Path,
+    endpoint: &str,
+    watch_github: bool,
+) -> Result<Vec<u8>> {
     // The verified train gate reads check-run pages and commit statuses here,
     // independently of the ordinary PR checks runner. Each request needs its
     // own durable checkpoint. Outside an active train this is a no-op.
@@ -5895,6 +5918,22 @@ fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
                 cli.display()
             )
         })?;
+    if watch_github && !out.status.success() {
+        let diagnostic = String::from_utf8_lossy(&out.stderr).to_ascii_lowercase();
+        if out.status.code() == Some(4)
+            || [
+                "http 401",
+                "bad credentials",
+                "to get started with github cli",
+                "gh_token environment variable",
+                "authentication required",
+            ]
+            .iter()
+            .any(|marker| diagnostic.contains(marker))
+        {
+            return Err(WatchAuthenticationFailed.into());
+        }
+    }
     anyhow::ensure!(
         out.status.success(),
         "`{} api {endpoint}` failed ({}): {}",

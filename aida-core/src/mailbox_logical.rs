@@ -2228,8 +2228,11 @@ enum DeliveryGate {
 /// after the sending worktree is retired. Faults stay local to their
 /// message: a retained sidecar or a queued delivery's binding that cannot be
 /// read or parsed hides that one message (its ownership is unknown) and
-/// offers nothing to bind, without making the whole view partial. Only a
-/// retained area that cannot be opened at all is a view-wide anchor error.
+/// offers nothing to bind. An over-budget lookup also marks the retained
+/// inventory incomplete. Unrelated observed deliveries remain eligible for
+/// ACK. Failure to open the retained inventory vetoes ACK for the snapshot
+/// via AckError::Partial and leaves receipt-anchor evidence separate.
+// trace:TASK-3861 | ai:codex
 ///
 /// `salvaged`: the sidecars of live sources whose message read failed but
 /// whose `.deliveries/` was read on its own.

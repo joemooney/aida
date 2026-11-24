@@ -230,6 +230,59 @@ fn ending_a_run_tells_each_sender_once_and_never_bounces_a_bounce() {
     assert!(seen.iter().all(|held| !held), "{seen:?}");
 }
 
+// trace:TASK-3861 | ai:codex
+#[test]
+fn oversized_retained_seat_delivery_preserves_unrelated_end_notice() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path();
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q"])
+        .current_dir(project)
+        .status()
+        .unwrap()
+        .success());
+    let (id, _cap, _lock) = bind_live(project, "relay-a");
+    let uuid = RecipientUuid::parse(&id).unwrap();
+    let mut run = load_run(project, &id).unwrap().unwrap();
+    // Give the planner a seat audience so both envelopes require sidecar lookup.
+    run.label = "seat:advisor".into();
+    record_terminal(&mut run, TerminalReason::Stop, Utc::now());
+    write_run(project, &run).unwrap();
+    for message_id in ["good", "oversized"] {
+        let delivery = DeliverySidecar::relay(message_id, &uuid);
+        crate::mailbox_store::write_message_with_deliveries(
+            project,
+            &message(message_id, "advisor", &run.label),
+            (message_id == "good").then_some(&delivery),
+        )
+        .unwrap();
+    }
+    let retained = project.join(".git/aida/mail-lifecycle/retained/key/gen/data/.deliveries");
+    std::fs::create_dir_all(&retained).unwrap();
+    let sidecar = serde_json::to_vec(&DeliverySidecar::relay("oversized", &uuid)).unwrap();
+    let mut file = std::fs::File::create(retained.join("oversized.json")).unwrap();
+    file.write_all(&sidecar).unwrap();
+    // JSON permits trailing spaces. Size alone distinguishes the two planning passes.
+    let padding = aida_core::mailbox_delivery::DELIVERY_FILE_CAP as usize + 1 - sidecar.len();
+    file.write_all(&vec![b' '; padding]).unwrap();
+
+    let report = outbox::insert_end_notices(project, &id).unwrap();
+    assert!(report.partial);
+    let entries = outbox::list_entries(project, &id).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].message_id, "good");
+    assert_eq!(entries[0].destination.kind, DestinationKind::Sender);
+
+    file.set_len(sidecar.len() as u64).unwrap();
+    let retry = outbox::insert_end_notices(project, &id).unwrap();
+    assert!(!retry.partial);
+    assert_eq!(retry.inserted, 1);
+    assert!(outbox::list_entries(project, &id)
+        .unwrap()
+        .iter()
+        .any(|entry| entry.message_id == "oversized"));
+}
+
 #[test]
 fn an_advisor_who_sent_the_mail_is_told_once() {
     let tmp = tempfile::tempdir().unwrap();
