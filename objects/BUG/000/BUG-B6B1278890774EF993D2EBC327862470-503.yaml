@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T05:02:59.138417933Z
+modified_at: 2026-11-24T05:17:31.290343366Z
 req_type: Bug
 tags:
 - hygiene
@@ -128,6 +128,15 @@ comments:
   modified_at: 2026-11-24T04:59:33.844073618Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20bfc-e0c6-7663-9386-2979081285f9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 99423140602f96a9ec4e970f277307beece645dc plus the native working-tree delta. AC1: [evidence: behavioral-test] Both BUG-2742 tests in task_2053_seat_clone_lifecycle_tests.rs:3166 and :3189 passed in lane job j20261124T050352319-2-0. They cover ignored-only state, a tracked edit and retention of an ordinary untracked file during cleanup. Both status calls explicitly use Git’s existing ignored=no default. Checked NUL-delimited Git output with a newline in a filename. Reviewed the merge-base diff, HEAD delta and untracked additions. Restored the existing non-recursive dispatch status, stash/branch classification, publication checks, timeout behavior and original placeholder fixture. Probe errors and the closed-unmerged PR gate retain main behavior. No incident reproduction or change to reap authority is claimed. Full FAST validation still running.
+  created_at: 2026-11-24T05:17:31.290343366Z
+  modified_at: 2026-11-24T05:17:31.290343366Z
+  session_id: 01a20bef5b01
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe

@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:32:35.025155532Z
-modified_at: 2026-11-24T05:13:26.831574572Z
+modified_at: 2026-11-24T05:19:57.198778706Z
 req_type: Task
 tags:
 - small
@@ -35,6 +35,13 @@ comments:
     Probes: checked ID case normalization, legacy tag syntax, display-ID precedence, zero/multiple summaries, and unreadable-clone handling. Removed an unintended seat-tree listing edit before the passing run. Changes affect reporting only. No new authority paths. Git diff --check and all 48 FAST source gates passed. Additional Rust ratchets passed. Make exited on manual verification because the built binary is mounted inside the job overlay. Running that last verifier directly against the same built binary. No PR-head CI yet.
   created_at: 2026-11-24T05:13:26.831574572Z
   modified_at: 2026-11-24T05:13:26.831574572Z
+  session_id: 01a20bdf8589
+  harness_version: codex-cli 0.167.0
+- id: 01a20bff-1c05-7b70-ae64-270fb3c87768
+  author: dirtlab
+  content: 'Validation follow-up: the final FAST manual check passed against the binary built in this lane’s overlay (exit 0, 85 commands and all 14 surface-change declarations verified, subcommands and flags passed). The rerun memoized the pure identifier parser in memory. All check-ci-fast components passed across the runs.'
+  created_at: 2026-11-24T05:19:57.198778706Z
+  modified_at: 2026-11-24T05:19:57.198778706Z
   session_id: 01a20bdf8589
   harness_version: codex-cli 0.167.0
 history:
