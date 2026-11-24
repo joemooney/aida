@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Set `timeout-minutes: 15` on the "Install compile dependencies" step.
   - AC2: Cache the apt packages (actions/cache over the apt archive, or a preinstalled-deps step if that's cheap), so a warm run skips most downloads. Show a warm-run timing in the PR body. Keep the diff minimal: the advisor reviews the ci.yml hunk line by line.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T08:35:03.879585382Z
+modified_at: 2026-11-24T08:57:51.672854386Z
 req_type: Bug
 tags:
 - ci
@@ -133,6 +133,12 @@ comments:
   modified_at: 2026-11-24T08:35:03.879585382Z
   session_id: 01a20cae2559
   harness_version: codex-cli 0.167.0
+- id: 01a20cc6-9938-75f2-be44-251851b7703f
+  author: aida-publication-done
+  content: Implementer push c76d24debac7 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T08:57:51.672853827Z
+  modified_at: 2026-11-24T08:57:51.672853827Z
+  session_id: 01a20cae2559
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
@@ -197,6 +203,14 @@ history:
   session_id: 01a20cae2559
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20cc6-9938-75f2-be44-2509fb00666e
+  author: aida-publication-done
+  timestamp: 2026-11-24T08:57:51.672851980Z
+  session_id: 01a20cae2559
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
