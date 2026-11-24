@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-24T03:24:18.080979026Z
+modified_at: 2026-11-24T03:25:44.858183948Z
 req_type: Bug
 tags:
 - ci
@@ -125,6 +125,21 @@ comments:
   created_at: 2026-11-24T03:23:18.203510781Z
   modified_at: 2026-11-24T03:23:18.203510781Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20b96-b9f8-7212-b552-d62fd260f432
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:25):
+    # BUG-2734 / PR #4479 r2, ONE in-PR round (advisor-122 ruling 2026-11-23 20:32, relayed by integration-30; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int28-bug-2734). TINY.
+
+    NOTHING ELSE in scope:
+    1. In scripts/discover-python-tests.py, DROP test_cache_refresh_outputs.py (TASK-3848), test_pr_ship_preflight.py (TASK-3849) and test_seat_takeover_lifecycle.py (TASK-3850) from KNOWN_FAILING (their fixes are already on the base: #4469, #4472, #4471) and ADD them to the CLI set.
+    2. In .github/workflows/ci.yml's contracts-shard step (next to test_gitlab_review_handoff.py), add standalone invocations: `python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida`, `python3 tests/test_pr_ship_preflight.py --aida target/debug/aida`, `python3 tests/test_seat_takeover_lifecycle.py target/debug/aida`. CHECK each script's argv convention and adjust to what it actually accepts.
+    PROOF: the full-CI contracts-shard log must show all three running and passing. If one goes red, put ONLY that one back in KNOWN_FAILING with a new follow-up ID (punt asking product for the ID; lanes can't mail product). There is no further round.
+    Commit `[AI:codex] fix(ci): ... (BUG-2734)`. `make check-ci-fast`, then push to #4479. COMMIT your work.
+  created_at: 2026-11-24T03:25:44.858183948Z
+  modified_at: 2026-11-24T03:25:44.858183948Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
