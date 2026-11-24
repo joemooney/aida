@@ -1,0 +1,27 @@
+id: 01a20efd-700f-73b2-b5e9-0a2875617f3f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-516
+agreed_id: BUG-2755
+title: 'Lease heal refuses when the seat clone is absent: end the lease when the tree is verifiably absent, still refuse when present but unreadable'
+description: |
+  Filed by product-15 per advisor-122 ruling 2026-11-24 12:16. LOW, STRICT (lease safety), drive. Seen on dell1: `aida doctor check leases` prescribes "save patch if dirty, then end lease 01a2078e7236" for TASK-1190 (worktree missing), but `aida doctor heal stale-leases --id 01a2078e7236` refuses: "could not read the seat clone …-1190". The spec is completed; the lease stays forever.
+
+  ## Acceptance
+  - AC1: When the recorded tree is verifiably ABSENT (ENOENT on the path AND no mount), the heal ends the lease and records "tree absent, nothing to salvage". Test.
+  - AC2: An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T19:17:00.047109161Z
+modified_at: 2026-11-24T19:17:00.047109161Z
+req_type: Bug
+tags:
+- leases
+- strict
+filed_at:
+  code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
