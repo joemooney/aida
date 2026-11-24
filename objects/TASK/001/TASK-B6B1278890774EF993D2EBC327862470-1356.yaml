@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:00:31.801480938Z
-modified_at: 2026-11-24T19:43:12.599821561Z
+modified_at: 2026-11-24T19:44:48.638276605Z
 req_type: Task
 tags:
 - review
@@ -108,6 +108,32 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Host-staged merge overlaps behavior in aida-core/src/review_engine.rs and aida-cli-lib/src/review_prepare.rs: both branches change the inventory classification call and per-entry exclusion decision. H2b compiles exclusions once, while H2a adds a token-cap exclusion and framed digest. Round 2 finding 2 changes that same API again. Stopped under the explicit behavioral-overlap punt instruction. scripts/ratchet-set.json also remains conflicted and requires the union of test names. All four review findings remain open and none is disputed.. No triage reason was given.'
   created_at: 2026-11-24T19:43:12.599810661Z
   modified_at: 2026-11-24T19:43:12.599810661Z
+- id: 01a20f17-1d06-7cc2-aa28-ffffe4441d49
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:44):
+    # TASK-3872 (H2b) / PR #4525 REBASE ROUND (advisor-122 10:23 + integration-30 10:22; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int36-task-3872). NO SCOPE CHANGE.
+    H2a (#4523, TASK-3867) has merged into integration and conflicts with H2b: both edit review_engine.rs and scripts/ratchet-set.json.
+    Merge (or rebase onto) current origin/integration, resolve conflicts preserving BOTH sides' intent: KEEP H2b's 4 AC1 items and their tests; in ratchet-set.json keep BOTH sets of test names (union, no removals). Nothing else. `make check-ci-fast`, then push to #4525. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+
+    ALSO FOLD IN (advisor-122 ruling 2026-11-24 11:00 on the CR at 5bfd563d; <=80 extra lines):
+    MUST F1: a playbook whose pattern fails to compile or exceeds the brace budget is an ERROR naming the playbook, NEVER silently dropped. Test.
+    MUST F2: an exclusion pattern that fails to compile is an ERROR, NEVER match-all. Test.
+    F3: make the linear-matcher test DETECT the old algorithm (count comparisons, or bound work via an instrumented counter).
+    F4: update the guide to name resolved_span.start_line/end_line and drop the sliding-window wording.
+
+    RECONCILIATION RULING (advisor-122 2026-11-24 12:45; answers your behavioural-overlap punt). <=150 lines total for this round:
+    - The resolved API is H2b's COMPILE-ONCE exclusion set. H2a's oversize token cap becomes ONE MORE exclusion reason in the SAME per-entry decision (excluded-with-reason, same inventory/coverage reporting).
+    - F2: an exclusion compile failure is an ERROR at compile time. F1: likewise a playbook compile failure is an ERROR naming the playbook.
+    - scripts/ratchet-set.json = UNION of both sides' test names.
+    - AMENDMENT: keep H2a's length-framed inventory DIGEST UNCHANGED (H2b must not alter the digest encoding); add a test that the digest of a fixed inventory equals the H2a value.
+    - Keep ALL H2a + H2b tests green, plus the 4 folded findings (F1-F4 above).
+    Your previous attempt's partial merge is saved on dell1 at ~/salvage/TASK-3872-rebase-punt-clone-20261124T1241 (reference only); start the merge fresh from origin/integration.
+  created_at: 2026-11-24T19:44:48.638276605Z
+  modified_at: 2026-11-24T19:44:48.638276605Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e13-15d8-7192-8c48-006617c031fe
   author: joe
