@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   - AC1: Lane admission waits (cold-start limit, memory/disk headroom, any queue wait) do NOT hold the store write lock. The lock is taken only around the actual store mutation and released before waiting. Test: a launch blocked on the cold-start limit doesn't hold store-write.lock, and a concurrent store write succeeds.
   - AC2: A store-lock timeout error names the HOLDER (pid plus command line) so this is diagnosable without /proc/locks. Test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T05:52:32.840920739Z
+modified_at: 2026-11-24T06:20:22.066056824Z
 req_type: Bug
 tags:
 - admission
@@ -198,6 +198,12 @@ comments:
   modified_at: 2026-11-24T05:52:32.840920739Z
   session_id: 01a20bf89a2f
   harness_version: codex-cli 0.167.0
+- id: 01a20c36-68b2-7232-af28-3b244b2acd97
+  author: aida-publication-done
+  content: Implementer push d16977713b0a declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T06:20:22.066053030Z
+  modified_at: 2026-11-24T06:20:22.066053030Z
+  session_id: 01a20bf89a2f
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
@@ -278,6 +284,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20c36-68b2-7232-af28-3b1d11ca0bf1
+  author: aida-publication-done
+  timestamp: 2026-11-24T06:20:22.066050552Z
+  session_id: 01a20bf89a2f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
