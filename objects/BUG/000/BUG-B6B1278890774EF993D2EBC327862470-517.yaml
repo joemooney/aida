@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-24T20:54:20.937103831Z
+modified_at: 2026-11-24T20:55:28.180464684Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -72,6 +72,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T20:54:20.779885344Z
   modified_at: 2026-11-24T20:54:20.779885344Z
+- id: 01a20f57-cca7-7092-bc87-3a0fcbf3eb7b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:55):
+    # BUG-2756 / PR #4533 r2 (advisor-122 ruling 2026-11-24 13:57 at 8bf4bbc5; product-15). Lane: CODEX. MAIN, existing branch. <=120 lines. ONE round.
+    MUST (otherwise the fix doesn't actually unstrand merges):
+    (F1) Writing the spec comment is BEST-EFFORT: a store conflict or transient failure logs and continues to commit + push, NEVER aborts.
+    (F2) When regeneration fell back, the mandatory host `cargo check --workspace --tests` must NOT block publication: downgrade it to ADVISORY for this path (record its result) and let CI verify, as the warning promises.
+    (F3) An OSError launching the snapshot command takes the SAME fallback as a nonzero exit, when the golden is intact and nothing was written.
+    (F5) The journal records regeneration as "snapshot deferred to CI", NOT regeneration_success=true.
+    (F6) ONE host-boundary test: a fully resolved repair with a FAILING snapshot command ends committed + pushed, with the warning on the spec.
+    DEFERRED (do NOT do): F4 (full diagnostic capture), F7 (helper-level fixture fidelity).
+    One targeted cargo run, then make check-ci-fast, then push to #4533. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T20:55:28.180464684Z
+  modified_at: 2026-11-24T20:55:28.180464684Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
