@@ -1,0 +1,26 @@
+id: 01a20efd-c16f-7751-845d-1d6d1cd7707a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1368
+agreed_id: TASK-3881
+title: 'BUG-2752 deferred F6: close the auto-commit race window in the codex-only init native opt-in'
+description: |
+  Deferred from #4529 BUG-2752 r1 (advisor-122 2026-11-24 12:20; filed by product-15). LOW.
+
+  ## Acceptance
+  - AC1: (F6) close the auto-commit race window in the codex-only init native opt-in: the committed config cannot race a concurrent writer between the offer and the commit. Test.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T19:17:20.879859308Z
+modified_at: 2026-11-24T19:17:20.879859308Z
+req_type: Task
+tags:
+- codex
+- init
+filed_at:
+  code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
