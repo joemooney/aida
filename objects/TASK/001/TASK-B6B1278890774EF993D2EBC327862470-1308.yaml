@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S3 is the templates. Run make sync-templates and make check-templates in the same PR.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:06.238132894Z
-modified_at: 2026-11-24T16:46:45.660026810Z
+modified_at: 2026-11-24T17:29:37.439840946Z
 req_type: Task
 tags:
 - review
@@ -115,6 +115,12 @@ comments:
   modified_at: 2026-11-24T16:46:45.660026810Z
   session_id: 01a20e6f5078
   harness_version: codex-cli 0.167.0
+- id: 01a20e9b-219f-7783-a478-58bede66969a
+  author: aida-publication-done
+  content: Implementer push e19159dfd613 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T17:29:37.439839986Z
+  modified_at: 2026-11-24T17:29:37.439839986Z
+  session_id: 01a20e6f5078
 history:
 - id: 01a20c6f-7831-71b0-b9fa-5f3500ee061c
   author: joe
@@ -204,6 +210,14 @@ history:
   session_id: 01a20e6f5078
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20e9b-219f-7783-a478-58a1eeff00ae
+  author: aida-publication-done
+  timestamp: 2026-11-24T17:29:37.439837656Z
+  session_id: 01a20e6f5078
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
