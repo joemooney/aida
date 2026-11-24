@@ -817,7 +817,44 @@ enum TrainCiReadiness {
 }
 
 /// The CI workflow's aggregate check: red whenever any lane is red or cancelled.
-const TRAIN_CI_AGGREGATE: &str = "Build (ubuntu-latest)";
+const TRAIN_CI_AGGREGATE: &str = crate::forge::CI_AGGREGATOR_CHECK;
+
+// trace:BUG-2723 | ai:codex
+fn train_runs_at(
+    repo: &Path,
+    head: &str,
+    change: &crate::forge::ChangeRef,
+) -> Result<crate::forge::tier_runs::TierSelection> {
+    crate::forge::tier_runs::latest_runs_at(head, change.id, &change.base, |path| {
+        let endpoint = format!("repos/{{owner}}/{{repo}}/{path}");
+        gh_stdout(repo, &["api", &endpoint]).map(String::into_bytes)
+    })
+    .map_err(|error| {
+        if error.is::<TrainCiUnavailable>() {
+            error
+        } else {
+            TrainCiReadError(error).into()
+        }
+    })
+}
+
+fn apply_train_selection(
+    rows: &mut Vec<crate::ci_gate::CheckRow>,
+    selection: &crate::forge::tier_runs::TierSelection,
+) -> Result<()> {
+    for row in rows.iter() {
+        selection.verify_marker(&row.name, row.run_id.as_deref())?;
+    }
+    rows.retain(|row| {
+        !row.run_id
+            .as_ref()
+            .is_some_and(|id| selection.owned.contains(id))
+    });
+    for run in &selection.selected {
+        rows.extend(run.rows()?);
+    }
+    Ok(())
+}
 
 // trace:BUG-2401 | ai:codex
 fn train_ci_readiness(
@@ -878,6 +915,64 @@ fn train_ci_readiness(
         refined,
         tolerate_hold,
     ))
+}
+
+// trace:BUG-2723 | ai:codex
+fn describe_train_ci_refusal(
+    state: &mut TrainCiReadiness,
+    rows: &[crate::ci_gate::CheckRow],
+    required: &[String],
+    cfg: &crate::ci_gate::CiGateConfig,
+    admitted: bool,
+    selection: &crate::forge::tier_runs::TierSelection,
+) {
+    let (reason, blocking) = match state {
+        TrainCiReadiness::Red(reason) | TrainCiReadiness::InfraRed(reason) => (
+            reason,
+            crate::ci_gate::classify_red(rows, required, cfg, admitted, false).real,
+        ),
+        TrainCiReadiness::Refused(reason) => (
+            reason,
+            rows.iter()
+                .filter(|row| {
+                    row.bucket == "skipping"
+                        && required
+                            .iter()
+                            .any(|name| crate::ci_gate::check_name_eq(name, &row.name))
+                        && !(admitted
+                            && crate::ci_gate::check_name_eq(
+                                &row.name,
+                                crate::ci_gate::HOLD_GATE_CHECK,
+                            ))
+                })
+                .cloned()
+                .collect(),
+        ),
+        TrainCiReadiness::Pending(names) => {
+            for run in &selection.selected {
+                if run.bucket() == "pending" {
+                    names.push(run.detail());
+                }
+            }
+            return;
+        }
+        _ => return,
+    };
+    let mut runs = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for row in blocking {
+        runs.entry((row.run_id, row.bucket))
+            .or_default()
+            .push(row.name);
+    }
+    for ((id, bucket), names) in runs {
+        let state = if bucket == "cancel" {
+            "cancelled"
+        } else {
+            &bucket
+        };
+        let detail = selection.describe(id.as_deref(), state);
+        reason.push_str(&format!("; {}: {detail}", names.join(", ")));
+    }
 }
 
 fn train_ci_red(refined: &crate::ci_gate::RedRefinement) -> TrainCiReadiness {
@@ -3361,7 +3456,9 @@ impl LiveTrainForge<'_> {
         };
         // trace:BUG-2423 | ai:codex
         journal::before("read CI rows")?;
-        let rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+        let mut rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+        let selection = train_runs_at(&self.project_root, tip, change)?;
+        apply_train_selection(&mut rows, &selection).map_err(TrainCiReadError)?;
         if rows.is_empty() {
             assert_head()?;
             self.dispatch_check()?;
@@ -3375,9 +3472,10 @@ impl LiveTrainForge<'_> {
         // Green (BUG-2214's tolerance, decided once the others settle).
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
-        let state = train_ci_readiness(&rows, required, &cfg, admitted, |row| {
+        let mut state = train_ci_readiness(&rows, required, &cfg, admitted, |row| {
             read_train_infrastructure_failure(&self.project_root, tip, row)
         })?;
+        describe_train_ci_refusal(&mut state, &rows, required, &cfg, admitted, &selection);
         // Detail is informational and cannot replace the pinned readiness proof.
         // trace:TASK-3782 | ai:codex
         if matches!(
