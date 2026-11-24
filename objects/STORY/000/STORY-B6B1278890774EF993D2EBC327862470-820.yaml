@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T14:10:28.191240658Z
+modified_at: 2026-11-24T14:10:35.500348550Z
 req_type: Story
 tags:
 - autonomy
@@ -151,6 +151,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3038 AC1 FAIL: completing publications after normal pickup lose approved-small eligibility, and the strict-path inventory omits commit-lock enforcement. The direct-ship recheck also lacks behavioral coverage at the ship entry point. AC2 PASS on source inspection: the traced off/on, strict-tier and explicit-mode cases and the config registry are present. Reviewed the landed tree 5968021b754b0741b30361483bc8de2111d213ce against main 4e140498bc8d425330633234bec803e5f8584ca0 and attest the original PR head. The head is one commit behind, and the base-only main-watch changes do not affect these findings. Exact-head FAST gates passed and FAST compile was pending. No local builds or tests were run.. No triage reason was given.'
   created_at: 2026-11-24T14:10:28.191232840Z
   modified_at: 2026-11-24T14:10:28.191232840Z
+- id: 01a20de4-e8c5-7d93-95ac-3e7939dc1cb6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3038):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 227141c50e4a
+    Recorded: 2026-11-23T22:54:42.928311331+00:00
+    Findings:
+    1. STORY-3038.AC1 — The explicit strict-path list in aida-cli-lib/src/gate/unset_mode.rs:406 omits aida-cli-lib/src/locking_gate.rs and aida-core/src/lock.rs. The former invokes the latter to enforce the advisor's worktree lock and refuses commits under an active drain (locking_gate.rs:242–279). ADR-76 explicitly covers hooks that refuse commits. Changes to this enforcement retain the approved-small drain default because neither the new inventory nor the built-in protected floor covers these paths. Cover the commit-lock enforcement path in the trusted strict classification and add a regression asserting that its changes retain supervision.
+    2. STORY-3038.AC1 — Normal implementer pickup still drops eligibility before landing. standalone_implementer.rs:1579 calls claim_spec, which records Approved → In Progress at lines 2144–2163. The completing push then records In Progress → Done (publication_completion.rs:171–184). approved_for_publication at gate/unset_mode.rs:380–401 accepts Done only when the immediately preceding status was Approved, so an approved, small, standard-tier spec with unset mode is supervised on this normal completing-PR path. The regression at tests/story_1690_train_tests.rs:6524 calls the publication writer straight from Approved and skips pickup. Preserve trusted approval across the recorded automatic pickup transition while honoring intervening withdrawals, and cover pickup through completing publication in the landing-policy regression.
+    3. The direct-ship regression does not exercise transfer of the initially defaulted spec IDs into the final gate (pr_cmd/mod.rs:1046,2035). The checkpoint test checks only source order, while approved_small_publication_and_live_landing_checks passes IDs directly to the helper. Removing the population of defaulted_ids leaves both tests passing and makes the ship recheck return success immediately. Add a ship-boundary test that withdraws the small tag on the same head after initial admission and verifies that the forge merge is never called.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T14:10:35.333881643Z
+  modified_at: 2026-11-24T14:10:35.333881643Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
