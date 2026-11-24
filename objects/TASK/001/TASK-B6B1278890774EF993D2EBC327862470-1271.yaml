@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:18:34.370466098Z
-modified_at: 2026-11-24T02:44:15.102220845Z
+modified_at: 2026-11-24T02:44:22.519663126Z
 req_type: Task
 tags:
 - ci
@@ -75,6 +75,11 @@ comments:
   modified_at: 2026-11-24T02:42:17.257613066Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20b70-a978-7e12-b1bf-feed6f7180bf
+  author: joe
+  content: 'Completed by product-15 (2026-11-23 19:40): shipped to main in promotion 28 (e5e3711c9f9, #4473), whose squash title lists all members as Refs, so the trailer did not complete it.'
+  created_at: 2026-11-24T02:44:22.519663126Z
+  modified_at: 2026-11-24T02:44:22.519663126Z
 history:
 - id: 01a20ab7-9583-7983-9b8f-0454fad3a798
   author: joe
