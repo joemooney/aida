@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T19:53:46.934202228Z
+modified_at: 2026-11-24T20:34:25.091617829Z
 req_type: Story
 tags:
 - autonomy
@@ -353,6 +353,12 @@ comments:
   modified_at: 2026-11-24T19:53:46.934202228Z
   session_id: 01a20eec0c39
   harness_version: codex-cli 0.167.0
+- id: 01a20f44-50c3-77b3-83f9-26803f6ff75f
+  author: aida-publication-done
+  content: Implementer push 369406b8ee12 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T20:34:25.091616727Z
+  modified_at: 2026-11-24T20:34:25.091616727Z
+  session_id: 01a20eec0c39
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
@@ -514,6 +520,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20f44-50c3-77b3-83f9-267aeb0d6144
+  author: aida-publication-done
+  timestamp: 2026-11-24T20:34:25.091614393Z
+  session_id: 01a20eec0c39
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
