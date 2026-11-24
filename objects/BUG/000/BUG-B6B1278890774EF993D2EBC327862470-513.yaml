@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T20:59:02.427812027Z
+modified_at: 2026-11-24T20:59:09.360553010Z
 req_type: Bug
 tags:
 - codex
@@ -134,6 +134,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed BUG-2752 against protected main 95eaccf328557402d176c0b41983afe1b677965f and landed tree d0d492aff5a75ff6331d1c78126f10b3b0bc1c08. AC1 is partial. The PTY fixture covers fresh Codex-only init, the committed policy and controlled advisor launch, plus topic refusal, clean local re-init and optional prompt error handling. Recovery still fails to guide users when the locally committed opt-in is absent from the trusted remote tip. AC2 is partial. Missing-policy refusals give Codex-specific guidance, but the manual remedy stops at a local commit even where launch requires the remote tip. The head is one commit behind main. Neither finding depends on code changed by the base advance. CI pending at review time. No local tests or builds were run.. No triage reason was given.'
   created_at: 2026-11-24T20:59:02.427800244Z
   modified_at: 2026-11-24T20:59:02.427800244Z
+- id: 01a20f5a-f61a-73e3-88ea-207654ed83ff
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2752):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 35f4bef36bbe
+    Recorded: 2026-11-24T20:57:54.411425704+00:00
+    Findings:
+    1. BUG-2752 AC1/AC2 and rework F2. aida-cli-lib/src/config_cmd.rs:1744–1765,1794–1800 and aida-cli-lib/src/vendors/mod.rs:440. In an initialized checkout where origin/main lacks the policy but local main already contains codex = "native", the launch guard still refuses and recommends init or a local commit. Init sees the existing local key, skips the offer, and prints the publication command only when it writes a new key. This also strands users with an opt-in left dirty by the old init after they follow the new warning to commit the file and rerun. Detect a local native opt-in missing from the trusted remote tip and give the explicit publication or protected-branch landing step even when no new edit is made. Include publication in the manual launch remedy for remote-backed projects and cover this re-init state.
+    2. Deferred follow-up TASK-3881 (prior F6). aida-cli-lib/src/config_cmd.rs:1744–1758,1805–1817. The prompt-time comparison catches edits during consent. The clean check, initial read, save, and Git path commit still use separate snapshots, so an unrelated concurrent edit can be included in the policy commit. Bind that commit to the verified initial and intended final config in the existing follow-up.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T20:59:09.210737062Z
+  modified_at: 2026-11-24T20:59:09.210737062Z
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
