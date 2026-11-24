@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T07:37:25.771085826Z
+modified_at: 2026-11-24T07:41:27.027276330Z
 req_type: Task
 tags:
 - small
@@ -85,6 +85,13 @@ comments:
   created_at: 2026-11-24T07:37:25.771085826Z
   modified_at: 2026-11-24T07:37:25.771085826Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20c80-d4f5-73f3-baa8-94aaa6e87349
+  author: joe
+  content: 'INTEGRATION SEAT CORRECTION (integration-30, 00:45): my 00:40 note ''equivalent for the old prefix rule'' was WRONG; the advisor upheld CR F1 at 00:38. DetectorSpecs::branch_id consults known-id prefixes ONLY when work_spec_id_from_branch returns None. For a lease-less branch like task-42-2026-fix, the heuristic parser returns TASK-42-2026 (unknown), so active_branch says inactive, although the old branch_belongs_to_active_work matched the active TASK-42 prefix (''task-42'' + ''-''). Do not merge b1eb6307. r2 (<=60 lines) tries known prefixes BEFORE the heuristic parser, plus a regression test for exactly this case. My r2 pre-check will check that a known-prefix match wins over the parser for the case above, and that parser-only branches (no known prefix) still resolve as before.'
+  created_at: 2026-11-24T07:41:27.027276330Z
+  modified_at: 2026-11-24T07:41:27.027276330Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
