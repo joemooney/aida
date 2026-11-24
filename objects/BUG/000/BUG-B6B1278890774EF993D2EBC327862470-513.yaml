@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T18:19:28.643808969Z
+modified_at: 2026-11-24T18:37:17.965360998Z
 req_type: Bug
 tags:
 - codex
@@ -37,6 +37,13 @@ comments:
     Deep pass covered vendor normalization, malformed and inline TOML, zero and multiple vendor selections, dirty config and changes during the consent prompt. Fixed wrapper diagnostics and guarded against changes during the prompt. Only the operator-approved native setting can authorize native launch. Existing policy, pre-publication refusal and clone scaffold commit suppression retain their checks. Formatting, git diff --check and all 48 FAST source gates passed. No published-head CI is available in this native lane.
   created_at: 2026-11-24T18:19:28.643808969Z
   modified_at: 2026-11-24T18:19:28.643808969Z
+  session_id: 01a20ebafafb
+  harness_version: codex-cli 0.167.0
+- id: 01a20ed9-1a86-73d1-8298-292013630fb7
+  author: dirtlab
+  content: Validation complete on the final working tree. Both targeted regressions passed (jobs j20261124T182417596-3-0 and j20261124T181621334-3-0). All 48 FAST source gates and every compiled ratchet passed. The make wrapper could not see the overlay binary at its default path. The original verify-manual.py then passed against the exact lane-built binary via AIDA_BIN, including command completeness, spec reflection, subcommands and flags.
+  created_at: 2026-11-24T18:37:17.965360998Z
+  modified_at: 2026-11-24T18:37:17.965360998Z
   session_id: 01a20ebafafb
   harness_version: codex-cli 0.167.0
 history:
