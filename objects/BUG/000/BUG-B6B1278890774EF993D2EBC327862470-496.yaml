@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T23:03:39.148921783Z
+modified_at: 2026-11-24T23:33:05.709902187Z
 req_type: Bug
 tags:
 - forge
@@ -234,6 +234,15 @@ comments:
   modified_at: 2026-11-24T21:06:28.563648022Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20fe7-e9c7-7e71-84eb-2994b93f4e9c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 33b344371ac19008b4ec14986274d033669edbfd plus the native working tree for the pending merge with e74e19b7c0fa. AC1: [evidence: behavioral-test] review_watch::tests::bug2735_watchers_yield_core_budget_to_train_ci passed (1 executed). queue_cmd/integrate.rs:618 skips recurring discovery before the Done-spec reads and PR snapshot, independently of wait-ci. forge.rs:2406 uses gh's repository selection. The coarse probe at forge.rs:2370 preserves implicit selection and ci_probe.rs:813 uses the caller's root. An installed-gh smoke test selected the GHES upstream over github.com origin. The final fixture gives the hosts independent budgets, checked separately after the Cargo run was submitted. AC2 deferred per pickup. Examined the merge-base and working-tree diffs, route overrides, missing evidence, threshold equality, and retained train reads. The incoming regression tests match the merge input and no conflict markers remain. F4-F7 remain deferred. Rustfmt and diff checks passed. make check-ci-fast stopped in test-speed tooling because the native launcher refuses cargo metadata. Host fast-gate and new-commit CI results are pending.
+  created_at: 2026-11-24T23:33:05.709902187Z
+  modified_at: 2026-11-24T23:33:05.709902187Z
+  session_id: 01a20fcc4de8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
