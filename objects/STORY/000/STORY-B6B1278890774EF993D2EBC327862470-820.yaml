@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T20:49:01.574670210Z
+modified_at: 2026-11-24T20:49:08.854943864Z
 req_type: Story
 tags:
 - autonomy
@@ -380,6 +380,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing STORY-3038 (origin STORY-b6b1278890774ef993d2ebc327862470-820). REQUEST CHANGES. The complete landed diff was checked against protected main 95eaccf328557402d176c0b41983afe1b677965f (landed tree bf36b4108febceee8121204b504ea27149a99552). This verdict attests original head 369406b8ee12c6cbac47b88395cf315cce12b5ef. The head is six commits behind the pinned base. I checked the overlapping files in the landed tree, including the base''s train and fetch changes. No finding depends on code removed or replaced by those base commits.. No triage reason was given.'
   created_at: 2026-11-24T20:49:01.574660240Z
   modified_at: 2026-11-24T20:49:01.574660240Z
+- id: 01a20f51-cc5f-7a63-89ac-5848cd89087e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3038):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 369406b8ee12
+    Recorded: 2026-11-24T20:47:16.844733556+00:00
+    Findings:
+    1. STORY-3038.AC1 — Revalidate approved-small inside the per-attempt merge guard after refreshing the trusted default branch. At pr_cmd/mod.rs:1358 and :2022, ship reads the work item and its policy before landing_merge::merge; pr_service.rs:202 and :289–313 resolve policy from local refs before live_paths merely resolves the remote base SHA. landing_merge.rs:105–158 and :551–596 refresh refs and recheck other policy on every forge attempt, but never rerun approved-small. A reviewed policy change disabling the knob or narrowing the allow-list during CI can be missed if the fetched configuration ref is stale, even when the new base object exists locally. After a transient forge failure, withdrawing the small tag before retry also leaves the old decision in force. Bind current policy and changed-path evidence to the refreshed base, and cover a policy change during CI and an eligibility withdrawal between forge attempts.
+    2. STORY-3038.AC1 — The strict-tier backstop in unset_mode.rs:455–554 omits actual enforcement paths. An expanded trusted allow-list that matches .gitlab-ci.yml or aida-cli-lib/src/commit.rs permits approved-small Drain for either file, since neither is covered by the strict inventory or the built-in protected floor. .gitlab-ci.yml:41–48 wires the forge merge-hold gate, and commit.rs:139–152 invokes two commit-refusal checks. Ensure these enforcement paths stay supervised even when the allow-list matches them, and add broad-list regressions.
+    3. STORY-3038.AC1 — The signed approval-time classification misses a supported work branch. show_label at unset_mode.rs:375–381 checks only refs/remotes/origin/<lowercased stored ID>. brief.rs:413–417 creates <id>-work and recognizes existing branches linked to the spec. Approval through requirements_cli.rs:9344 therefore reports unknown paths and supervised for a known eligible docs-only <id>-work branch, while train can resolve its actual PR head and assign Drain. Resolve the spec's real, unambiguous branch/head through supported linkage, retain supervision for missing or ambiguous evidence, and cover the approval and show entry points.
+    4. The new decisive path recheck at pr_cmd/mod.rs:1358 calls open_change_by_number, which scans list_changes (pr_cmd/shipping.rs:887–900). GitHub's implementation at forge.rs:3527 leaves gh pr list at its 30-item default. A branch-resolved PR outside that page can pass initial classification and all CI, then fail with unknown paths solely because the new final lookup did not include it. Use an exact-number metadata read for the live PR and require its branch, base and head to match the evidence being evaluated. This is an additional failure point beyond the known initial numbered-ship list limitation.
+    5. The new approved-small recheck at pr_service.rs:289–313 ignores live draft-only policy. Ship runs the draft-only filter before CI at pr_cmd/mod.rs:976. Adding review:draft-only after CI begins leaves the small default intact, and the newly added final reread checks only requires_supervision(), so the PR can still reach the forge even though that tag requires a human merge. Reapply the draft-only filter to the current records at the merge boundary and exercise the change at a fixed PR head.
+    6. The signed after-CI changed-path regression still bypasses production ship wiring. approved_small_publication_and_live_landing_checks (story_1690_train_tests.rs:6505–6568) injects the changed-path callback directly into ShipDefaultAdmission::merge. The real unattended ship test at story_1917_dispatch_flow_schedule_tests.rs:3395 changes only the small tag. Neither exercises the new live_paths implementation after fresh base/head evidence, so an incorrect production path source can escape those tests. Add a real unattended ship fixture that changes the path evidence after initial admission and checks the Review refusal and zero forge merge calls.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T20:49:08.703644789Z
+  modified_at: 2026-11-24T20:49:08.703644789Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
