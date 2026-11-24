@@ -1,0 +1,34 @@
+id: 01a20c20-fd21-7401-800e-cac06b8446b1
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-823
+agreed_id: STORY-3076
+title: Clean-room deterministic review preparation, path-scoped playbooks, batching, coverage manifest, and snippet-anchored positioning
+description: |-
+  ## Summary
+  Implement a 100% original, clean-room native Rust review preparation and verification engine inside `aida-core` and `aida-cli-lib`. Replaces ad-hoc LLM diff reading with deterministic engineering constraints:
+  1. Diff Inventory & File-Coverage Manifest: classifies changed files across a commit, branch range, PR, or working tree into `reviewable` vs `excluded` (with explicit exclusion reasons: binary, deleted, generated/lockfile, AIDA substrate, secret-sensitive, or user-configured exclusion), and verifies 100% file accountability (`reviewed` or `skipped` with reason).
+  2. Path-Scoped Playbook & Rule Engine: clean-room glob matcher combining built-in language review playbooks (Rust, Go, TypeScript/JS, Python, SQL, Shell, TOML/YAML/JSON) with project `.aida/review-rules.toml` rules and linked AIDA spec `## Acceptance` criteria.
+  3. Smart File Bundling & Token-Budgeted Batches: pairs implementation files with their corresponding test files (`foo.rs` + `foo_test.rs` / `tests/*foo*`) and groups remaining files by shared rule playbooks into token-budgeted batches so host reviewer agents never skim large changesets.
+  4. Snippet-Anchored Line Positioning & Evidence Citation Verifier: deterministically anchors quoted code snippets to exact `start_line..end_line` spans on the target revision (or working tree) to eliminate LLM line-number drift, and validates `[obs-N]` observation citations against recorded evidence.
+
+  ## Acceptance
+  - `aida_core::review_engine` provides clean-room Rust types and pure functions for:
+    - File classification (`classify_diff_inventory`) and 100% file coverage verification (`verify_coverage_ledger`).
+    - Glob-based playbook matching (`PlaybookRegistry`) with built-in Rust-first + multi-language checklists and optional `.aida/review-rules.toml` overrides.
+    - Token-budgeted semantic file batching (`bundle_review_batches`) pairing source and test files and bounding batch token estimates.
+    - Exact and whitespace-normalized snippet-to-line-range resolution (`anchor_snippet_lines`) and `[obs-N]` evidence citation verification (`verify_observation_citations`).
+  - `aida review prepare` subcommand in `aida-cli-lib` resolves a target (`--pr <N>`, `--from <base> [--to <head>]`, `--commit <sha>`, or workspace changes), links AIDA spec `## Acceptance` criteria, and outputs the structured preparation manifest (JSON, TOON, or human markdown) plus optional `--verify-coverage <ledger.json>` and `--anchor-findings <findings.json>` verification modes.
+  - Comprehensive unit tests in `aida-core` verify all four subsystems cleanly via `cargo test -p aida-core` and `cargo check -p aida-cli-lib`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T05:56:58.273415588Z
+modified_at: 2026-11-24T05:56:58.273415588Z
+req_type: Story
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: antigravity
