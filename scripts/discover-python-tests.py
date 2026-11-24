@@ -39,10 +39,37 @@ CLI = {
 }
 
 
+# trace:TASK-3856 | ai:codex
+def condition_can_run(condition, routes):
+    """Credit known runnable build routes. New expressions need explicit evidence."""
+    if not isinstance(condition, str):
+        return False
+    expr = condition.strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2].strip()
+    return expr.lower() in {"true", "success()", "always()"} or expr in routes
+
+
 def dedicated_invocations():
-    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text())
+    # Preserve expression text (SafeLoader coerces YAML 1.1 words like "on" to True).
+    workflow = yaml.load(Path(".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader)
     dedicated = set()
-    for step in workflow["jobs"]["build"]["steps"]:
+    build = workflow["jobs"]["build"]
+    if not condition_can_run(build.get("if", "true"), {"needs.tier.outputs.full == 'true'"}):
+        return dedicated
+    # Full-tier PRs can run both dedicated test shards with full_ci set.
+    routes = set()
+    matrix = build.get("strategy", {}).get("matrix", {})
+    shards = matrix.get("shard", []) if isinstance(matrix, dict) else []
+    for shard in ("gates", "contracts"):
+        if isinstance(shards, list) and shard in shards and "exclude" not in matrix:
+            shard_check = f"matrix.shard == '{shard}'"
+            routes.add(shard_check)
+            for extra in ("steps.changes.outputs.full_ci == 'true'", "github.event_name == 'pull_request'"):
+                routes.update((f"{shard_check} && {extra}", f"{shard_check} && ({extra})"))
+    for step in build["steps"]:
+        if not condition_can_run(step.get("if", "true"), routes):
+            continue
         for line in step.get("run", "").splitlines():
             line = line.strip()
             match = UNIT.fullmatch(line)
