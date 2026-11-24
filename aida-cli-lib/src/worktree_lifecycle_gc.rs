@@ -874,6 +874,21 @@ fn parse_mountinfo(mounts: &[u8]) -> Result<Vec<MountEntry>> {
     Ok(entries)
 }
 
+// trace:BUG-2755 | ai:codex
+pub(crate) fn ensure_no_tree_mount(path: &Path, mountinfo: &[u8]) -> Result<()> {
+    let mounts = parse_mountinfo(mountinfo)?;
+    anyhow::ensure!(
+        mounts.iter().any(|m| m.mountpoint == Path::new("/")),
+        "mount inventory has no root"
+    );
+    anyhow::ensure!(
+        !mounts.iter().any(|m| m.mountpoint.starts_with(path)),
+        "mount remains at or inside {}",
+        path.display()
+    );
+    Ok(())
+}
+
 /// The candidate as a bind mount would name it: the device of the mount it
 /// resolves through (the last, topmost, of the longest matching mountpoints)
 /// and its path inside that filesystem.

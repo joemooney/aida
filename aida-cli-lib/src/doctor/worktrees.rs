@@ -1424,6 +1424,80 @@ pub(super) fn heal_doctor_dead_agent(
     })
 }
 
+// trace:BUG-2755 | ai:codex
+fn real_directory(path: &std::path::Path) -> Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) => {
+            anyhow::ensure!(meta.is_dir(), "{} is not a real directory", path.display());
+            Ok(true)
+        }
+        Err(e) if e.raw_os_error() == Some(libc::ENOENT) => Ok(false),
+        Err(e) => Err(e).with_context(|| format!("inspect {}", path.display())),
+    }
+}
+
+/// An unbound clone cannot authorize destruction. Doctor can release its lease
+/// alone when the tree has no work to salvage and holds no local mail.
+// trace:BUG-2755 | ai:codex
+fn unbound_clone_heal(
+    main: &std::path::Path,
+    tree: &std::path::Path,
+) -> Result<Option<&'static str>> {
+    anyhow::ensure!(tree.is_absolute(), "clone path must be absolute");
+    if !real_directory(tree)? {
+        // Resolve the closest existing ancestor. A dangling ancestor link or
+        // traversal component is not evidence that the recorded tree is gone.
+        for ancestor in tree.ancestors().skip(1) {
+            if real_directory(ancestor)? {
+                anyhow::ensure!(ancestor.canonicalize()? == ancestor, "ambiguous clone path");
+                break;
+            }
+        }
+        anyhow::ensure!(
+            !tree
+                .components()
+                .any(|c| c == std::path::Component::ParentDir),
+            "ambiguous clone path"
+        );
+        crate::worktree_lifecycle_gc::ensure_no_tree_mount(
+            tree,
+            &std::fs::read("/proc/self/mountinfo")?,
+        )?;
+        anyhow::ensure!(!real_directory(tree)?, "clone reappeared");
+        return Ok(Some("tree absent, nothing to salvage"));
+    }
+    if crate::mail_retention::verified_clone_main(main, tree).is_some() {
+        return Ok(None);
+    }
+    anyhow::ensure!(
+        tree.canonicalize()? == tree
+            && !tree.starts_with(main)
+            && !main.starts_with(tree)
+            && tree.file_name().is_some_and(|n| n
+                .as_encoded_bytes()
+                .starts_with(aida_core::seat_clone_detect::CLONE_DIR_PREFIX.as_bytes())),
+        "unrecognised seat clone path {}",
+        tree.display()
+    );
+    match crate::seat_clone::probe_counting_origin(main, tree, None, &[], None) {
+        crate::seat_clone::Probe::Known(facts) => {
+            anyhow::ensure!(!facts.unshipped(), "unbound seat clone has unsaved work")
+        }
+        crate::seat_clone::Probe::Unknown(reason)
+        | crate::seat_clone::Probe::HasSubmodules(reason) => {
+            anyhow::bail!("could not verify unbound seat clone: {reason}")
+        }
+    }
+    let mailbox = aida_core::mailbox::local_mailbox_dir(tree);
+    if real_directory(&tree.join(".aida"))? && real_directory(&mailbox)? {
+        anyhow::ensure!(
+            std::fs::read_dir(mailbox)?.next().transpose()?.is_none(),
+            "unbound seat clone holds mail"
+        );
+    }
+    Ok(Some("clean unbound clone retained; no local mail"))
+}
+
 pub(super) fn heal_doctor_lease(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -1477,6 +1551,19 @@ pub(super) fn heal_doctor_lease(
                 in_use.summary()
             )),
         });
+    }
+    // trace:BUG-2755 | ai:codex
+    if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        if let Some(detail) = unbound_clone_heal(project_root, &lease.worktree_path)? {
+            crate::land::run::release_lease(project_root, &lease.id)?;
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: "ended stale clone lease".into(),
+                status: "healed".into(),
+                detail: Some(detail.into()),
+            });
+        }
     }
     let salvage = salvage_worktree_patch(
         project_root,
