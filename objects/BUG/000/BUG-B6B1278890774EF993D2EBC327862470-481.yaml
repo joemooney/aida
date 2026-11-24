@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-24T14:30:19.123345161Z
+modified_at: 2026-11-24T15:18:38.501275417Z
 req_type: Bug
 tags:
 - review-watch
@@ -111,6 +111,29 @@ comments:
     Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
   created_at: 2026-11-24T14:30:19.123345161Z
   modified_at: 2026-11-24T14:30:19.123345161Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e23-6991-78b3-bb5d-8895ed04e112
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:18):
+    # BUG-2720 / PR #4413 rework (advisor-122 stalled-CR ruling 2026-11-24 07:30; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 100 lines. NOTE: fix the ONE major only; defer the 3 minors.
+
+    BLANKET RULING (advisor-122 07:20/07:30): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major regression this PR introduced; DEFER minor/p2 unmet-claimed-AC and test-strength items (list them in the PR body as deferred). Per finding, list fixed or deferred.
+
+    CR at 2fcffa99. Findings:
+
+    F1. [major/unmet-claimed-ac/blocking] AC1: pickup_retry at review_watch.rs:1620 rechecks ownership only for held_tree. For a lock-busy exit it returns ready as soon as the deadline passes, and select_with_coverage charges a retry even when the same lock is still held. With a lock held across all three retries, releasing it later cannot recover the head because the cap check always wins. Persist enough blocker identity to recheck lock availability without spending pickup attempts while it is held. Add a lock-contention regression spanning all retry deadlines and then release the lock and assert same-head dispatch.
+
+    F2. [minor/p2/deferred] pickup_retry invokes preflight_queue_work_branch inside Store::transaction while holding the global admission lock and the train-member lock. This waits for git worktree list, and on an occupied checkout also checks Git cleanliness and process liveness. A slow or stalled Git subprocess for one occupied worktree can prevent all other reviews and train admissions. Probe outside the lock and verify the token, head and deadline again when committing the selection.
+
+    F3. [minor/p2/deferred] apply_pr_state_snapshot reads only no_verdict_retry_at and no_verdict_blocker. Pickup retries use pickup_retry_at instead, so a permanently capped pickup with no verdict continues to project retry_backoff=true, retry_exhausted=false. PR state tells the reconciler to reobserve indefinitely when an operator is required. Project the pickup deadline and exhausted state into the PR facts and cover a capped pickup.
+
+    F4. [minor/p2/deferred] Attempt denies unknown fields and the state remains version 1. pickup_retries is serialized even at zero, so after any ordinary reservation write the previous watcher binary can no longer load the shared state during rollback or mixed-version use. Omit the zero value for unaffected receipts and define a safe compatibility or migration path for receipts with active pickup retry metadata.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T15:18:38.501275417Z
+  modified_at: 2026-11-24T15:18:38.501275417Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
