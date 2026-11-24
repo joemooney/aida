@@ -1872,6 +1872,82 @@ pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
         .unwrap_or(ForgeKind::None)
 }
 
+// trace:TASK-3847 | ai:codex
+pub(crate) const CORE_BUDGET_CATEGORY: &str = "github-core-budget";
+
+// GitHub reports account totals but does not attribute requests to pollers.
+fn describe_core_budget(body: &[u8]) -> Option<(String, bool)> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let core = value.pointer("/resources/core")?;
+    let limit = core["limit"].as_u64()?;
+    let remaining = core["remaining"].as_u64()?;
+    if limit == 0 || remaining > limit {
+        return None;
+    }
+    let reset = chrono::DateTime::from_timestamp(core["reset"].as_i64()?, 0)?;
+    let low = u128::from(remaining) * 5 < u128::from(limit);
+    let warning = if low { " WARNING: below 20%." } else { "" };
+    Some((format!(
+        "GitHub core REST budget: {remaining}/{limit} remaining, resets {reset}.{warning} Top consumers since last reset: unknown."
+    ), low))
+}
+
+// trace:TASK-3847 | ai:codex
+pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
+    use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
+    use crate::review_watch::forge::{main_root, Repository};
+    use std::time::Duration;
+
+    // Use the same main-repository identity and host pin as land discovery.
+    // trace:TASK-3852 | ai:codex
+    // trace:TASK-3854 | ai:codex
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
+        let root = main_root(root).ok()?;
+        let repo = Repository::load(&root).ok()?;
+        repo.github_slug()?;
+        let reading = (|| {
+            let gh_bin = std::path::absolute(crate::kernel::resolve_gh_binary_for_probe()?).ok()?;
+            let mut command = Command::new(gh_bin);
+            repo.pin_command(&mut command);
+            command
+                .current_dir(&root)
+                .args(["api", "rate_limit", "--cache", "60s"])
+                .stdin(std::process::Stdio::null());
+            let remaining = crate::forge_lookup::forge_lookup_deadline()?
+                .checked_duration_since(std::time::Instant::now())?;
+            let BoundedCommandOutput::Completed(out) =
+                command_output_with_timeout_capped(command, remaining, 65536)
+            else {
+                return None;
+            };
+            if !out.status.success() {
+                return None;
+            }
+            describe_core_budget(&out.stdout)
+        })();
+        Some(reading.unwrap_or_else(|| {
+            (
+                "GitHub core REST budget: unknown. Top consumers since last reset: unknown.".into(),
+                false,
+            )
+        }))
+    })
+}
+
+#[test]
+fn task_3847_cached_rate_limit_report() {
+    for (remaining, low) in [(0, true), (999, true), (1000, false), (5000, false)] {
+        let fake = serde_json::json!({"resources":{"core":{"remaining":remaining,"limit":5000,"reset":3600}}});
+        let (summary, warning) = describe_core_budget(fake.to_string().as_bytes()).unwrap();
+        assert_eq!(warning, low);
+        assert_eq!(summary.contains("WARNING"), low);
+        assert!(summary.contains(&format!("{remaining}/5000")));
+        assert!(summary.contains("1970-01-01 01:00:00 UTC"));
+        assert!(summary.contains("Top consumers since last reset: unknown"));
+    }
+    assert!(describe_core_budget(b"{}").is_none());
+}
+
 /// [`resolve_forge_kind`]'s answer for a read-only report: a stale pure-git
 /// config still resolves to the origin forge, but the config is not repaired.
 // trace:STORY-2824 | ai:claude
@@ -2531,7 +2607,8 @@ impl GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        let mut api =
+            |endpoint: &str| commit_ci_api_read(&gh, &self.project_root, endpoint, verify_jobs);
         // `gh api` fills `{owner}/{repo}` from this checkout's repository.
         github_checks_with_attempts("{owner}/{repo}", sha, &mut api, verify_jobs)
     }
@@ -5840,6 +5917,28 @@ pub(crate) fn commit_ci_api_tail(
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
 fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    commit_ci_api_read(cli, root, endpoint, false)
+}
+
+// trace:TASK-3859 | ai:codex
+#[derive(Debug)]
+pub(crate) struct WatchAuthenticationFailed;
+
+impl std::fmt::Display for WatchAuthenticationFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "GitHub CLI authentication failed while reading commit CI; refresh gh credentials",
+        )
+    }
+}
+impl std::error::Error for WatchAuthenticationFailed {}
+
+fn commit_ci_api_read(
+    cli: &Path,
+    root: &Path,
+    endpoint: &str,
+    watch_github: bool,
+) -> Result<Vec<u8>> {
     // The verified train gate reads check-run pages and commit statuses here,
     // independently of the ordinary PR checks runner. Each request needs its
     // own durable checkpoint. Outside an active train this is a no-op.
@@ -5857,6 +5956,22 @@ fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
                 cli.display()
             )
         })?;
+    if watch_github && !out.status.success() {
+        let diagnostic = String::from_utf8_lossy(&out.stderr).to_ascii_lowercase();
+        if out.status.code() == Some(4)
+            || [
+                "http 401",
+                "bad credentials",
+                "to get started with github cli",
+                "gh_token environment variable",
+                "authentication required",
+            ]
+            .iter()
+            .any(|marker| diagnostic.contains(marker))
+        {
+            return Err(WatchAuthenticationFailed.into());
+        }
+    }
     anyhow::ensure!(
         out.status.success(),
         "`{} api {endpoint}` failed ({}): {}",
