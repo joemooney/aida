@@ -14,12 +14,12 @@ description: |
 
   - Route a failed red-main-watch invocation to the advisor seat with the failed job name and existing trip evidence. Include scheduler timeouts through the same route. Point the recipient to the failed step and preserve its diagnostic within the existing display bounds.
   - Check that the route qualifies exactly for red-main-watch failures and that a successful pass produces no failure item. Use existing scheduler cadence and deduplication, and preserve other jobs' routes.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.173596810Z
-modified_at: 2026-11-24T05:17:23.087803006Z
+modified_at: 2026-11-24T05:47:23.466506917Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -96,6 +96,12 @@ comments:
   modified_at: 2026-11-24T05:17:23.087803006Z
   session_id: 01a20be5080b
   harness_version: codex-cli 0.167.0
+- id: 01a20c18-37ca-7ac2-8809-440855755ff3
+  author: aida-publication-done
+  content: Implementer push 0560b3407e7b declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T05:47:23.466506280Z
+  modified_at: 2026-11-24T05:47:23.466506280Z
+  session_id: 01a20be5080b
 history:
 - id: 01a1fd68-b1dd-78c2-a574-7b1a9c2b6017
   author: joe
@@ -177,6 +183,14 @@ history:
   session_id: 01a20be5080b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c18-37ca-7ac2-8809-43fde58b7071
+  author: aida-publication-done
+  timestamp: 2026-11-24T05:47:23.466503229Z
+  session_id: 01a20be5080b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
