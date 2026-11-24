@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (a) credential-directory exclusion matches `.aws` / `.ssh` path COMPONENTS at ANY depth, including the repo root; (b) a rename evaluates BOTH sides (old and new path) for exclusion.
   - AC2: (c) .aida runtime exclusions match EXACT components (`.aida/cache-policy.toml` stays eligible); (d) a present-but-invalid or unreadable project config (.aida/review-rules.toml) gives a contextual ERROR, defaulting only when the file is ABSENT. One test for each of (a)-(d).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:21.678180988Z
-modified_at: 2026-11-24T09:47:25.035465294Z
+modified_at: 2026-11-24T09:52:21.171022420Z
 req_type: Task
 tags:
 - review
@@ -106,6 +106,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20cf8-7cb3-7d21-b3fc-c180506dbe35
+  author: aida-session-start
+  timestamp: 2026-11-24T09:52:21.171020726Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
