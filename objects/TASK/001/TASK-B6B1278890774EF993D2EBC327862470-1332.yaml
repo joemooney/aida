@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T18:18:35.661790320Z
+modified_at: 2026-11-24T18:22:12.590745534Z
 req_type: Task
 tags:
 - review
@@ -136,6 +136,13 @@ comments:
   created_at: 2026-11-24T18:18:35.661784123Z
   modified_at: 2026-11-24T18:18:35.661784123Z
   session_id: 01a20e981a7e
+- id: 01a20ecb-7da7-77f3-a359-4e797aa80c0c
+  author: joe
+  content: 'INTEGRATION PRE-CHECK H2a r2 (integration-30, 11:25): PR-4523 @ bef383c825 PASSES the advisor''s 09:25 ruling on CONTENT, with SIZE over both caps for the advisor to waive or trim. Behaviour: classify_diff_inventory takes token_cap; a file over the cap is EXCLUDED with reason ''oversize: {N} estimated tokens > cap {M}'', surfaced in a new not_reviewable_by_batch coverage list, and the remaining files still batch (no hard failure). h2a_budget_is_a_cap asserts the exact reason ''oversize: 36 estimated tokens > cap 32'' for large.rs. Docs (review-process.md, presentation, code-review.html) are updated to describe exclusion. The PR body now carries the item->test map (5 items -> 5 h2a_* tests). Net scope vs integration: 6 files (review_engine, review_prepare, 3 docs, ratchet-set); the ProcIdentity/ci-structural hunks in the commit range come from its main/integration merge, not the PR. SIZE: the r2 commit is +73/-34 = 107 lines vs the <=40-line r2 ruling, and H2a''s net is +226/-60 = 286 vs the split''s <=250. The growth is coherent (rework batching to exclude and report oversize, plus tests and docs). Merges CLEAN.'
+  created_at: 2026-11-24T18:22:12.590745534Z
+  modified_at: 2026-11-24T18:22:12.590745534Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20cd4-4160-7d93-a028-44fad8a0f0dd
   author: joe
