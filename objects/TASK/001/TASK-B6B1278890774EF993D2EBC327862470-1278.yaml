@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When RecipientDirectory::load fails, doctor still runs the seat-sidecar inventory (or reports "seat-sidecar inventory SKIPPED: registry load failed: <error>"), never silence.
   - AC2: Test with a failing registry load.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T03:12:10.312808819Z
+modified_at: 2026-11-24T03:39:33.987157297Z
 req_type: Task
 tags:
 - doctor
@@ -83,6 +83,12 @@ comments:
   modified_at: 2026-11-24T03:12:10.312808819Z
   session_id: 01a20b6dfa0b
   harness_version: codex-cli 0.167.0
+- id: 01a20ba3-30e3-7361-8307-b56784414407
+  author: aida-publication-done
+  content: Implementer push e94099b539b9 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T03:39:33.987156760Z
+  modified_at: 2026-11-24T03:39:33.987156760Z
+  session_id: 01a20b6dfa0b
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
   author: joe
@@ -152,6 +158,14 @@ history:
   session_id: 01a20b6dfa0b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20ba3-30e3-7361-8307-b552f703b4b0
+  author: aida-publication-done
+  timestamp: 2026-11-24T03:39:33.987154457Z
+  session_id: 01a20b6dfa0b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
