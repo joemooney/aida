@@ -41,6 +41,7 @@ const OPERATOR_SEAT: &str = crate::mail_backlog::OPERATOR_SEAT;
 const ADVISOR_SEAT: &str = "advisor";
 const SENDER: &str = "aida-throughput-guard";
 const NOTIFY_RULE: &str = "throughput-guard-escalation";
+const RUN_BUDGET: std::time::Duration = std::time::Duration::from_secs(220);
 /// Bound on one forge call.
 const GH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 /// Time one run may spend reading CI detail. Every forge call is given what
@@ -1197,7 +1198,9 @@ impl Gh<'_> {
         if cfg!(test) {
             return Err("the forge is not read in unit tests".into());
         }
-        crate::forge::github_stall_read(self.0, args, timeout)
+        crate::forge_lookup::with_forge_lookup_deadline(timeout, || {
+            crate::forge::github_stall_read(self.0, args, timeout)
+        })
     }
 }
 
@@ -1535,17 +1538,23 @@ fn guard_rows(
 /// by fact, and CI detail for the red approved heads. Returns the report and
 /// the memory to keep (a scheduled run saves it; `aida land stalls` does
 /// not).
-fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report, Memory, PathBuf)> {
+fn observe(
+    start: &Path,
+    policy: &Policy,
+    now: DateTime<Utc>,
+    run_budget: std::time::Duration,
+    per_pr: std::time::Duration,
+) -> Result<(Report, Memory, PathBuf)> {
     use std::time::{Duration as StdDuration, Instant};
     let started = Instant::now();
-    let end = started + StdDuration::from_secs(220);
+    let end = started + run_budget;
     let mut setup_time = StdDuration::ZERO;
     let (pass, (mut prs, partial)) = crate::forge_lookup::with_forge_lookup_deadline(
         end.saturating_duration_since(Instant::now()),
         || {
             super::live_pass_with(start, |changes, evidence| {
                 setup_time = started.elapsed();
-                guard_rows(changes, end, GH_TIMEOUT, |pr| {
+                guard_rows(changes, end, per_pr, |pr| {
                     let row = super::derive(pr, evidence);
                     let fact = pr_fact(pr, &row, evidence);
                     (row, fact)
@@ -1562,7 +1571,20 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
     let root = pass.root.clone();
     let mut memory = load_memory(&root);
     let mut unknown = pass.warnings.clone();
-    let branch = (Instant::now() < end).then(|| crate::forge::default_branch_of(&root));
+    let branch = crate::forge_lookup::with_forge_lookup_deadline(
+        end.saturating_duration_since(Instant::now()),
+        || {
+            let symref = ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"];
+            super::git_text(&root, &symref)
+                .ok()
+                .and_then(|name| name.strip_prefix("origin/").map(str::to_owned))
+                .or_else(|| {
+                    super::origin_git(&root, &["ls-remote", "--symref", "origin", "HEAD"], 20)
+                        .ok()
+                        .and_then(|out| crate::forge::parse_ls_remote_symref_head(&out))
+                })
+        },
+    );
     let red_heads: Vec<(String, String)> = prs
         .iter()
         .filter(|fact| fact.wants_red_detail())
@@ -1616,7 +1638,10 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
             end.saturating_duration_since(Instant::now()),
             || landing_times(&root, &branch, dry_since),
         ),
-        _ => (Err("guard deadline reached".into()), None),
+        _ => (
+            Err("default branch or time budget unavailable".into()),
+            None,
+        ),
     };
     let facts = Facts {
         prs,
@@ -1639,7 +1664,7 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
 pub(crate) fn run(start: &Path, json: bool) -> Result<()> {
     let cfg = crate::read_project_config_value(&crate::main_worktree_root_from(start));
     let policy = Policy::from_config(cfg.as_ref());
-    let (mut report, memory, _root) = observe(start, &policy, Utc::now())?;
+    let (mut report, memory, _root) = observe(start, &policy, Utc::now(), RUN_BUDGET, GH_TIMEOUT)?;
     report.last_scheduled_run = memory.runs.last().cloned();
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1703,7 +1728,7 @@ fn raise_due(root: &Path, store: &Path, seat: &str, evidence: &str, now: DateTim
         "{job}@{}",
         now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
     );
-    if let Err(err) = schedule_ledger::write_cas(store, &job, |ledger| {
+    match schedule_ledger::write_local_bounded(store, &job, |ledger| {
         if ledger.due_since.is_none() {
             ledger.due_since = Some(now);
         }
@@ -1716,8 +1741,12 @@ fn raise_due(root: &Path, store: &Path, seat: &str, evidence: &str, now: DateTim
             error: Some(evidence.to_string()),
         });
     }) {
-        eprintln!("warning: could not write schedule ledger for '{job}': {err}");
-        return false;
+        Ok(true) => {}
+        Ok(false) => return false,
+        Err(err) => {
+            eprintln!("warning: could not write schedule ledger for '{job}': {err}");
+            return false;
+        }
     }
     if !already_due {
         events::emit(
@@ -1954,13 +1983,22 @@ pub(crate) fn scan_and_route(
     project_root: &Path,
     route_findings: bool,
 ) -> Result<Vec<DoctorFinding>> {
+    scan_with_budgets(project_root, route_findings, RUN_BUDGET, GH_TIMEOUT)
+}
+
+fn scan_with_budgets(
+    project_root: &Path,
+    route_findings: bool,
+    run_budget: std::time::Duration,
+    per_pr: std::time::Duration,
+) -> Result<Vec<DoctorFinding>> {
     let cfg = crate::read_project_config_value(project_root);
     let policy = Policy::from_config(cfg.as_ref());
     if !policy.enabled {
         return Ok(Vec::new());
     }
     let now = Utc::now();
-    let (report, mut memory, root) = observe(project_root, &policy, now)?;
+    let (report, mut memory, root) = observe(project_root, &policy, now, run_budget, per_pr)?;
     if let Some(partial) = &report.partial {
         eprintln!("throughput-guard: {partial}");
     }

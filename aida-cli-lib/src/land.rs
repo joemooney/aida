@@ -744,7 +744,7 @@ fn origin_command(root: &Path, args: &[&str]) -> std::process::Command {
 fn origin_git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<String> {
     let out = crate::command_output_with_timeout(
         origin_command(root, args),
-        std::time::Duration::from_secs(timeout_secs),
+        crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(timeout_secs))?,
     )
     .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))?;
     anyhow::ensure!(

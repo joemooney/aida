@@ -1613,63 +1613,97 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
 #[test]
 fn bug_2730_slow_approval_forge_reports_partial_before_ceiling() {
     use std::time::{Duration as StdDuration, Instant};
-    if crate::test_env::run_path_isolated_test() {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1], skipped PRs [2, 3]"));
+        assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1, 3], skipped PRs [2]"));
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .env("GIT_COMMITTER_DATE", "2020-01-01T00:00:00Z")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    };
+    git(&["init", "-b", "main"]);
+    let commit = |contents: &str| {
+        std::fs::write(root.join("file"), contents).unwrap();
+        git(&["add", "file"]);
+        git(&["commit", "-m", contents]);
+        git(&["rev-parse", "HEAD"])
+    };
+    commit("common");
+    git(&["checkout", "-b", "topic"]);
+    let conflict = commit("topic");
+    git(&["checkout", "main"]);
+    let main = commit("main");
+    git(&["init", "-b", "aida-store", ".aida-store"]);
+    git(&["-C", ".aida-store", "remote", "add", "origin", ".."]);
+    let origin = "https://github.com/example/fixture";
+    git(&["remote", "add", "origin", origin]);
+    let main_ref = "refs/remotes/origin/main";
+    git(&["symbolic-ref", "refs/remotes/origin/HEAD", main_ref]);
+    git(&["update-ref", main_ref, &main]);
+    let mut rows = Vec::new();
+    for (id, head) in [(1, &conflict), (2, &main), (3, &main)] {
+        git(&["update-ref", &format!("refs/pull/{id}/head"), head]);
+        rows.push(serde_json::json!({"number":id, "title":"fixture", "headRefOid":head,
+            "headRefName":if id == 3 {"train/example"} else {"topic"}, "baseRefName":"main","statusCheckRollup":[]}));
+    }
+    std::fs::write(root.join("rows"), serde_json::to_vec(&rows).unwrap()).unwrap();
     std::fs::create_dir(root.join(".aida")).unwrap();
     std::fs::write(
         root.join(".aida/config.toml"),
-        "[forge]\nprovider = \"github\"\n",
+        "[forge]\nprovider='github'\n[throughput_guard]\nenabled=true\n",
     )
     .unwrap();
-    let gh = root.join("gh");
-    crate::test_exec::write_executable(&gh, "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh version 2'; exit 0; fi\ntouch reading\nexec sleep 12\n");
-    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TEST_GH_BINARY", gh.to_str())]);
+    crate::test_exec::write_executable(
+        &root.join("gh"),
+        r#"#!/bin/sh
+case "$1 $2" in
+  "pr list") cat rows ;;
+  "--version " ) echo 'gh version 2' ;;
+  *) touch reading; exec sleep 20 ;;
+esac
+"#,
+    );
+    crate::test_exec::write_executable(
+        &root.join("git"),
+        r#"#!/bin/sh
+if [ "$1" = fetch ]; then
+    exec /usr/bin/git -c "url.file://$PWD.insteadOf=https://github.com/example/fixture" "$@"
+fi
+exec /usr/bin/git "$@"
+"#,
+    );
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
     let _transport = crate::review_pr_transport_fixture();
-    let changes: Vec<_> = (1..=3).map(|n| change(n, "main", "feature")).collect();
-    for (run_secs, pr_secs, expected) in [
-        (
-            2,
-            5,
-            "PARTIAL: covered PRs [1], skipped PRs [2, 3] (deadline)",
-        ),
-        (
-            8,
-            2,
-            "PARTIAL: covered PRs [1, 3], skipped PRs [2] (deadline)",
-        ),
-    ] {
+    for (run, per_pr, covered, skipped) in [(5, 8, "[1]", "[2, 3]"), (12, 3, "[1, 3]", "[2]")] {
         let start = Instant::now();
-        let (_, (prs, partial)) = guard_rows(
-            &changes,
-            start + StdDuration::from_secs(run_secs),
-            StdDuration::from_secs(pr_secs),
-            |pr| {
-                if pr.id == 2 {
-                    let (_, _, _, answered) =
-                        crate::gate::approval::merge_approval_subject_observed(
-                            &[root],
-                            root,
-                            pr.id,
-                            &[],
-                            None,
-                            Some(&pr.head),
-                        );
-                    assert!(!answered);
-                }
-                assert!(pr.id != 3 || run_secs > pr_secs);
-                observed(pr.id, &Fake::default())
-            },
+        let findings = scan_with_budgets(
+            root,
+            true,
+            StdDuration::from_secs(run),
+            StdDuration::from_secs(per_pr),
+        )
+        .unwrap();
+        assert!(start.elapsed() < StdDuration::from_secs(10));
+        std::fs::remove_file(root.join("reading")).expect("slow forge read ran");
+        let memory = load_memory(root);
+        let coverage = format!("PARTIAL: covered PRs {covered}, skipped PRs {skipped} (deadline)");
+        assert_eq!(
+            memory.runs.last().unwrap().partial.as_ref(),
+            Some(&coverage)
         );
-        std::fs::remove_file(root.join("reading")).expect("the fake forge ran");
-        let mut memory = Memory::default();
-        let mut report = build_report(&facts(prs), &Policy::default(), &mut memory, now());
-        report.partial = partial;
-        assert!(render(&report).contains(expected));
-        record_run(&mut memory, &report);
-        assert!(snapshot_line(memory.runs.last().unwrap()).contains(expected));
-        assert!(start.elapsed() < StdDuration::from_secs(7));
+        assert_eq!(findings.len(), 1);
+        assert_eq!(memory.routed.len(), 1);
+        assert!(git(&["branch", "--list", "aida-store"]).is_empty());
     }
 }
