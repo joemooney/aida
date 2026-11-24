@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T20:47:51.768902109Z
+modified_at: 2026-11-24T20:48:58.868631693Z
 req_type: Story
 tags:
 - autonomy
@@ -370,6 +370,11 @@ comments:
   created_at: 2026-11-24T20:36:37.606384628Z
   modified_at: 2026-11-24T20:36:37.606384628Z
   session_id: 01a20eec0c39
+- id: 01a20f51-a5f4-7f52-9b3e-65a5080a4665
+  author: joe
+  content: 'advisor-122 13:52 (#4532 r1): F2 REJECTED. With the allow-list = docs/cli/*.md only, the backstop gap is moot. POLICY: widening drain_safe_paths is a per-entry, advisor-reviewed, protected-config change. F3/F4 deferred to TASK-3886 (LOW). r2: F1/F5/F6 + shrink to <=350, or split.'
+  created_at: 2026-11-24T20:48:58.868631693Z
+  modified_at: 2026-11-24T20:48:58.868631693Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
