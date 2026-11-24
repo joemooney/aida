@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The ratchet credits only CI steps that can run. An invocation inside a step whose `if:` is always false (e.g. `if: false`, `if: ${{ false }}`) or that is otherwise disabled does not count as wiring, so that test is reported as unwired.
   - AC2: Regression cases: a disabled step's invocation does not satisfy the ratchet, and an enabled step's does.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T04:21:51.765055945Z
+modified_at: 2026-11-24T05:02:20.001957394Z
 req_type: Task
 tags:
 - ci
@@ -31,6 +31,13 @@ history:
   author: joe
   timestamp: 2026-11-24T04:21:49.819503852Z
   changes: []
+- id: 01a20bee-f761-75e3-93c3-a418f4517347
+  author: aida-session-start
+  timestamp: 2026-11-24T05:02:20.001954513Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
