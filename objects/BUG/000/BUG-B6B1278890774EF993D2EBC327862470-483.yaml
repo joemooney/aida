@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728Z
-modified_at: 2026-11-24T16:48:50.224960035Z
+modified_at: 2026-11-24T17:01:43.435243308Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -284,6 +284,11 @@ comments:
   modified_at: 2026-11-24T16:48:50.224960035Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e81-968b-7f80-adbc-c9523222a7a1
+  author: joe
+  content: 'POST-LAND PLAN (advisor-122 10:06 + Joe, via product-15): after #4403 lands and dell1 promotes, re-run aida doctor check for reservations pr-4376-...-01a2053df3e6 (BUG-2669) and pr-4401-...-01a206405299 (STORY-2897); if still retained with dead lanes, product submits two attested repair-reservations jobs to a deputy-shell runner and Joe types each confirmation at its PTY. Then conflict repairs for #4376 and #4401. Full commands: product .aida/tmp/after-2722-release-plan.md.'
+  created_at: 2026-11-24T17:01:43.435243308Z
+  modified_at: 2026-11-24T17:01:43.435243308Z
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
