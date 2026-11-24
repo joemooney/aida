@@ -98,6 +98,13 @@ comments:
   created_at: 2026-11-24T08:04:14.882645526Z
   modified_at: 2026-11-24T08:04:14.882645526Z
   session_id: 01a20c6ec678
+- id: 01a20c96-331c-7c81-8723-e256c87bf8ea
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 01:10): PR-4503 @ ea821ddd34 PASSES. +23/-2, merges CLEAN. AC1: in .github/workflows/ci.yml job ''fast-compile'', the ''Install compile dependencies'' step goes from timeout-minutes 5 to 15. tests/test_self_hosted_runner.py AptBounds pins exactly (''fast-compile'',''Install compile dependencies'') == 15 (safe_load, so the int compare is right) and keeps every other apt step <=5, plus build''s 12. AC2: a ''Prepare compile dependency archives'' step makes $RUNNER_TEMP/compile-apt and a key compile-apt-v1-<arch>-<ImageOS>-<ImageVersion>-<hash of ci.yml>; actions/cache/restore@v4 restores *.deb; apt install uses -o Dir::Cache::archives=<that dir> -o APT::Keep-Downloaded-Packages=true; actions/cache/save@v4 runs only on a miss. Caveat for the PR body: ''apt-get update'' still hits the network, so the cache saves package downloads, not the index refresh. The 15-minute timeout is the operative fix. Hashing ci.yml into the key invalidates the cache on every ci.yml change (acceptable). The advisor reviews the ci.yml hunk line by line.'
+  created_at: 2026-11-24T08:04:47.162459145Z
+  modified_at: 2026-11-24T08:04:47.162459145Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
