@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3115",
+  "publishes": [
+    {
+      "at": "2026-11-24T17:07:06.215239906Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T13:34:06.648164515Z",
+      "spec": "TASK-3115",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4432,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5d32993516df48bf679c28db590822c4724702b9"
+      }
+    },
+    {
+      "ts": "2026-11-23T13:34:33.899326326Z",
+      "spec": "TASK-3115",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full-sweep review of TASK-3115 (TASK-73022632d35647cca3858b18ac0723e3-010). The generated worksheet has no formal Acceptance or Verify block. The two criteria below come from its cited requirement description, corroborated by the implementer self-review. The PR claims completion.\n- AC1, evaluate active mandate coverage using train rules for held and supervised PRs: verified by the shared ship decision and by source inspection of the held and unheld admission comparisons in bug2406_train_tests.rs (with the implementer's reported before/after runs).\n- AC2, evaluate coverage without evidence or other project writes: unverified (the source shows a reachable forge configuration write even though the preview suppresses exclusion and carry-over recording).\nReviewed every file in the pinned landed diff. The report also regresses the command's deadline and evidence classification, and the changed gate caller lacks a write-sensitive regression. CI fast gates and merge-hold gate passed. Fast compile was pending at review time. No local tests were run.",
+        "recovery_hint": "address the review findings, move TASK-3115 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T16:26:30.651086384Z",
+      "spec": "TASK-3115",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4432,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "53a2b50e3858ae47511045c85147d566b1a78f74"
+      }
+    },
+    {
+      "ts": "2026-11-23T16:26:41.925305888Z",
+      "spec": "TASK-3115",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3115 on protected main 6708d633cf3a and landed tree 1dcd1dbad4074. PASS for invoking the shared coverage decision for held and supervised PRs and avoiding stale forge-config repair. FAIL for the claimed read-only behavior: mandate collection can still create or refresh the persistent exclusion-history index and its lock. The new stale-config fixture verifies the config and selected gate evidence files but misses these writes. The draft also includes a deferred JSON evidence-classification follow-up. Hosted fast gates passed and fast compile was pending at review time. Review used source and existing evidence, with no local builds or tests.",
+        "recovery_hint": "address the review findings, move TASK-3115 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:30:16.347231501Z",
+      "spec": "TASK-3115",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4432,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4848978e584a8a68c3ba90a2760c2b471629f5e4"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:30:26.003638112Z",
+      "spec": "TASK-3115",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3115 on protected main 4e140498bc8d and landed tree 6b15fc36ab91. PASS for using the shared mandate coverage decision for held and supervised PRs, preserving stale forge config, and refreshing the mandate history index in memory without creating its lock. FAIL for the claimed read-only behavior because the new plain check path can still rewrite the store Git index and install store hooks. The PR head is one commit behind main. That base commit changes main-watch code and none of these findings depends on it. Hosted fast gates passed and fast compilation was pending at review time. No local tests or builds were run.",
+        "recovery_hint": "address the review findings, move TASK-3115 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:32:13.507436557Z",
+      "spec": "TASK-3115",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4432,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b3fe0fe9f31fb80280a9599406e9b479a5dd1826"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:33:07.723671316Z",
+      "spec": "TASK-3115",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3115 reviewed against protected main 8dfad228d5897828a20168a919294468baab8452 and landed tree 3dd4fecef60297a73392a5e83622c86ba9ae7def. PASS for routing held and supervised checks through the shared mandate decision, avoiding forge config repair, and suppressing publication of the mandate history index and sidecar. FAIL for the read-only contract: the preview can still cause Git to rewrite the store worktree index during the dirt snapshot. Two lower-priority follow-ups cover evidence classification and a blocking cache read. Exact-head fast gates, fast compile and the aggregate build passed. The merge-hold check still awaited recorded clearance. Review used source and existing CI evidence.",
+        "recovery_hint": "address the review findings, move TASK-3115 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:33:48.248693214Z",
+      "spec": "TASK-3115",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4432,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b3fe0fe9f31fb80280a9599406e9b479a5dd1826"
+      }
+    },
+    {
+      "ts": "2026-11-24T17:03:23.099308628Z",
+      "spec": "TASK-3115",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4432
+      }
+    },
+    {
+      "ts": "2026-11-24T17:07:02.557167661Z",
+      "spec": "TASK-3115",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "289cc394a334ee2760c79067fd871bbe66f9c5a9",
+        "pr": 4432,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
