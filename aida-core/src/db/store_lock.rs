@@ -274,7 +274,7 @@ fn acquire_until(
                 if start.elapsed() >= limit {
                     // trace:TASK-3223 | ai:codex — bounded service admission
                     if budget.is_some() {
-                        anyhow::bail!("Busy");
+                        return Err(anyhow::anyhow!(holder_description(&file)).context("Busy"));
                     }
                     // On a saturated disk the holder is waiting on the device,
                     // not stuck: say so. trace:BUG-HOME-041 | ai:claude

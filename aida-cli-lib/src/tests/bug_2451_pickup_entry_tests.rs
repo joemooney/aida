@@ -1871,6 +1871,10 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
 // records a lane result receipt and prints its terminal line.
 // trace:BUG-2607 | ai:claude
 fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
+    headless_pickup_with_pull_policy(storage, true)
+}
+
+fn headless_pickup_with_pull_policy(storage: &crate::Storage, no_pull: bool) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -1880,7 +1884,7 @@ fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
         /* sandbox: a contained lane passes the host containment preflight */ true,
         /* no_launch */ false,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
-        /* no_pull */ true,
+        no_pull,
         None,
         None,
         None,
@@ -1917,7 +1921,7 @@ fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
 // trace:TASK-3154 | ai:codex
 #[test]
 #[cfg(target_os = "linux")]
-fn bug_2684_headless_pickup_returns_disk_refusal_and_records_its_receipt() {
+fn bug_2740_bug_2684_headless_pickup_returns_disk_refusal_and_records_its_receipt() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -1931,26 +1935,14 @@ fn bug_2684_headless_pickup_returns_disk_refusal_and_records_its_receipt() {
     ambient.set_key(crate::orchestrator::PHASE_ENV, "");
     ambient.set_key(crate::orchestrator::AUTO_COMPLETE_ENV, "");
 
-    // Host readiness precedes the disk check. Answer only its availability
-    // probe so the regression also runs on hosts without user namespaces.
-    let bin = fx.root.join("probe-bin");
-    std::fs::create_dir(&bin).unwrap();
-    crate::test_exec::write_executable(
-        &bin.join("bwrap"),
-        r#"#!/bin/sh
-test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
-"#,
-    );
-    let environment = aida_core::exec_context::Environment::capture();
-    let mut paths = vec![bin];
-    paths.extend(std::env::split_paths(
-        environment.get("PATH").unwrap_or_default(),
-    ));
-    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+    pickup_host_probe(&fx.root, &mut ambient);
 
     let user = crate::test_env::HERMETIC_TEST_USER;
     let scope = "BUG-2451";
     let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, scope);
+    let prefix = crate::lane_admission::TestHost::prefix();
+    let _held = crate::lane_admission::TestHost::hold(&prefix, 0);
+    single_cold_slot(prefix, || panic!("disk refusal must precede admission"));
     let _disk = crate::machine_readiness::test_lane_available_bytes(0);
     let error = headless_pickup(&storage).unwrap_err();
     let refusal = crate::lane_disk_deferral::refusal(&error)
@@ -1972,6 +1964,96 @@ test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
     assert_eq!(receipt["started"], false);
     assert_eq!(receipt["result"], "refused-before-start");
     assert_eq!(receipt["reason_code"], "disk-deferred");
+}
+
+fn pickup_host_probe(root: &Path, ambient: &mut crate::test_env::AmbientGuard) {
+    // Host readiness precedes the disk check. Answer only its availability
+    // probe so the regression also runs on hosts without user namespaces.
+    let bin = root.join("probe-bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("bwrap"),
+        r#"#!/bin/sh
+test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let mut paths = vec![bin];
+    paths.extend(std::env::split_paths(
+        environment.get("PATH").unwrap_or_default(),
+    ));
+    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+}
+
+fn single_cold_slot(prefix: String, on_wait: impl FnMut() + 'static) {
+    crate::lane_admission::TEST_HOST.with(|host| {
+        host.replace(Some(crate::lane_admission::TestHost {
+            prefix,
+            max_concurrent_cold_starts: 1,
+            min_memory_headroom_gib: 1,
+            memory_gib: std::rc::Rc::new(std::cell::Cell::new(8)),
+            on_wait: Box::new(on_wait),
+        }));
+    });
+}
+
+// trace:BUG-2740 | ai:codex
+#[test]
+fn bug_2740_pickup_wait_precedes_pull_and_setup_and_rechecks_wip() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", gh);
+    ambient.set_key(crate::orchestrator::PHASE_ENV, "");
+    ambient.set_key(crate::orchestrator::AUTO_COMPLETE_ENV, "");
+    pickup_host_probe(&fx.root, &mut ambient);
+    ambient.set_key("AIDA_STORE_LOCK_TIMEOUT_SECS", "2");
+    let fake = fx.root.join("aida-sync");
+    crate::test_exec::write_executable(&fake, "#!/bin/sh\nexit 97\n");
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let _disk = crate::machine_readiness::test_lane_available_bytes(u64::MAX);
+    story_2768_snapshot(&fx.main, 0);
+    let prefix = crate::lane_admission::TestHost::prefix();
+    let mut held = Some(crate::lane_admission::TestHost::hold(&prefix, 0));
+    let main = fx.main.clone();
+    let root = storage.path().to_owned();
+    let before_pickup = git_ok(&root, &["rev-parse", "HEAD"]);
+    let user = crate::test_env::HERMETIC_TEST_USER;
+    single_cold_slot(prefix, move || {
+        if held.is_some() {
+            assert_eq!(git_ok(&root, &["rev-parse", "HEAD"]), before_pickup);
+            assert!(crate::list_leases(&main).is_empty());
+            std::thread::scope(|threads| {
+                threads
+                    .spawn(|| {
+                        let writer = crate::Storage::new(&root);
+                        let mut entry = writer.queue_list(user, true).unwrap().remove(0);
+                        entry.note = Some("independent writer".into());
+                        writer.queue_add(entry).unwrap();
+                    })
+                    .join()
+                    .unwrap();
+            });
+            story_2768_snapshot(&main, 10);
+            held.take();
+        }
+    });
+    let error = headless_pickup_with_pull_policy(&storage, false).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("10 changes are open"),
+        "{error:#}"
+    );
+    assert_eq!(
+        storage.queue_list(user, true).unwrap()[0].note.as_deref(),
+        Some("independent writer")
+    );
+    assert!(crate::list_leases(&fx.main).is_empty());
 }
 
 // A foreign clone seat leased on `branch`, dirty when asked.

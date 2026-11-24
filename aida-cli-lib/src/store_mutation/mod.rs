@@ -377,6 +377,7 @@ impl Session {
                             Ok(result) => serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"result":result}),
                             Err(error) => {
                                 let reason = error.to_string();
+                                if reason == "Busy" { eprintln!("store mutation busy: {error:#}"); }
                                 let code = if error.downcast_ref::<aida_core::db::redo::OutcomeUnknown>().is_some() { "OutcomeUnknown" }
                                     else if ["Conflict", "Expired", "Revoked", "Unauthorized", "Busy", "InvalidRequest", "UnsupportedOperation"].contains(&reason.as_str()) { &reason }
                                     else { "Unavailable" };

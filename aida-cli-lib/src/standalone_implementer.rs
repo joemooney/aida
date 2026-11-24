@@ -1471,7 +1471,7 @@ pub(crate) fn run_for_test(launch: Launch<'_>) -> Result<()> {
 // trace:STORY-2690 | ai:codex
 pub(crate) fn run_recorded(
     launch: Launch<'_>,
-    startup: Option<crate::lane_admission::Startup>,
+    startup: Option<crate::lane_admission::Reservation>,
     attempt: Option<&crate::lane_result::Attempt>,
     on_started: Option<&dyn Fn()>,
     on_delivery: Option<&dyn Fn()>,
@@ -1560,7 +1560,7 @@ pub(crate) fn run_recorded(
 // trace:STORY-2690 | ai:codex
 fn run(
     launch: Launch<'_>,
-    startup: Option<crate::lane_admission::Startup>,
+    startup: Option<crate::lane_admission::Reservation>,
     attempt: &crate::lane_result::Attempt,
     on_started: Option<&dyn Fn()>,
     on_delivery: Option<&dyn Fn()>,
@@ -1575,7 +1575,7 @@ fn run(
     // trace:BUG-2682 | ai:claude
     let startup = match startup {
         Some(startup) => startup,
-        None => crate::lane_admission::Startup::acquire(
+        None => crate::lane_admission::Reservation::acquire(
             &main_root,
             Some(launch.spec),
             crate::lane_admission::HostOverride::from_env()?.as_ref(),
@@ -1712,6 +1712,7 @@ fn run(
     };
     // Published on the lease, so every vendor's tool shell finds it through
     // its public selector. trace:BUG-2383 | ai:claude
+    let startup = startup.start()?;
     let runner = lane_jobs.clone().map(|lane| {
         crate::lane_job::Runner::start_published(lane, &main_root, Some(startup.release_handle()))
     });

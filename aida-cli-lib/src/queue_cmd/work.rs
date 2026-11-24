@@ -5031,7 +5031,15 @@ pub(crate) fn handle_queue_work(
             // trace:TASK-3799 | ai:codex — resolved existing branches are audited too.
             branch: branch_override.is_some() || canonical_resume.is_some(),
         });
-        if !list_sessions && !plan_only {
+        // STORY-1662: a fresh headless implementer pickup outside a drain waits
+        // for its child and reports the outcome. Its concurrency slot is taken
+        // before any setup and held until this command returns.
+        // trace:STORY-1662 | ai:claude
+        let standalone_implementer =
+            !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
+        // A standalone override is audited once, at the final admission decision.
+        let late_override = standalone_implementer && over_wip && !dry_run;
+        if !list_sessions && !plan_only && !late_override {
             crate::wip_limit::admit(
                 &project_root,
                 &plan.anchor_display,
@@ -5040,12 +5048,6 @@ pub(crate) fn handle_queue_work(
                 dry_run,
             )?;
         }
-        // STORY-1662: a fresh headless implementer pickup outside a drain waits
-        // for its child and reports the outcome. Its concurrency slot is taken
-        // before any setup and held until this command returns.
-        // trace:STORY-1662 | ai:claude
-        let standalone_implementer =
-            !no_launch && matches!(launch, Some(QueueWorkLaunch::Fresh(_))) && implementer_route;
         // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
         // view so we can detect whether the pull below reveals that another
         // machine claimed the spec under us. Best-effort + read-only — a load
@@ -5143,6 +5145,12 @@ pub(crate) fn handle_queue_work(
                 // trace:STORY-1662 | ai:claude
                 // trace:STORY-2660 | ai:codex
                 if standalone_implementer {
+                    crate::machine_readiness::lane_disk_preflight(&project_root).map_err(
+                        |error| {
+                            let ids = disk_deferral_requirement_ids(storage, &plan);
+                            crate::lane_disk_deferral::defer(storage, &plan.scope, &ids, error)
+                        },
+                    )?;
                     _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
                         &project_root,
                         &plan.scope,
@@ -5150,11 +5158,24 @@ pub(crate) fn handle_queue_work(
                     )?);
                     // Wait before the pickup pulls or mutates the shared store.
                     // trace:BUG-2740 | ai:codex
-                    startup = Some(crate::lane_admission::Startup::acquire(
+                    let reservation = crate::lane_admission::Reservation::acquire(
                         &project_root,
                         Some(&plan.scope),
                         crate::lane_admission::HostOverride::from_env()?.as_ref(),
-                    )?);
+                    )?;
+                    if !plan_only
+                        && (late_override
+                            || (reservation.waited && pickup == crate::wip_limit::Pickup::New))
+                    {
+                        crate::wip_limit::admit(
+                            &project_root,
+                            &plan.anchor_display,
+                            pickup,
+                            over_wip,
+                            false,
+                        )?;
+                    }
+                    startup = Some(reservation);
                 }
                 // trace:BUG-2548 | ai:codex — refuse conflicts before store I/O.
                 let review_retirement = if role == "reviewer"
