@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T08:24:29.379274529Z
+modified_at: 2026-11-24T08:27:29.334416587Z
 req_type: Bug
 tags:
 - ci
@@ -110,6 +110,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full two-file diff for PR-4503 at ea821ddd34be72fe4f36d7ad25ca50577df3ff66 against the generated worksheet. The PR claims completion of BUG-2744 (BUG-b6b1278890774ef993d2ebc327862470-505).. It was punted on: design-fork: May this PR also update tests/test_self_hosted_runner.py:654 to require exactly 15 minutes for fast-compile / Install compile dependencies? make check-ci-fast fails because the existing test caps this step at five minutes, and the integration brief permits only ci.yml edits.. No triage reason was given.'
   created_at: 2026-11-24T08:24:29.379268087Z
   modified_at: 2026-11-24T08:24:29.379268087Z
+- id: 01a20caa-fb1c-7b00-9895-0c337bdd0706
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:27):
+    # BUG-2744 / PR #4503 r2, REMOVE RATHER THAN PATCH (advisor-122 ruling 2026-11-24 01:24 at ea821ddd; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-bug-2744). <=15 lines NET.
+
+    The apt cache is PR-scoped (refs/pull/N/merge), so every new PR starts cold, and its key goes stale when package versions change: complexity for almost no benefit. The real fix is the timeout.
+    DO: DROP the three cache steps (prepare, restore, save) and the Dir::Cache / Keep-Downloaded options from .github/workflows/ci.yml. KEEP `timeout-minutes: 15` on "Install compile dependencies".
+    TEST (F4): in tests/test_self_hosted_runner.py, REQUIRE exactly ONE fast-compile "Install compile dependencies" step BEFORE asserting its timeout is 15.
+    Nothing else. `make check-ci-fast`, then push to #4503. COMMIT your work.
+  created_at: 2026-11-24T08:27:29.334416587Z
+  modified_at: 2026-11-24T08:27:29.334416587Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
