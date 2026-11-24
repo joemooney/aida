@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T05:43:38.663682018Z
+modified_at: 2026-11-24T05:44:40.812795907Z
 req_type: Bug
 tags:
 - flaky
@@ -29,6 +29,26 @@ comments:
   modified_at: 2026-11-24T05:40:14.041811102Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a20c15-ed9f-7d82-a3dd-5a2ac5e07863
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:44):
+    # BUG-2743: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2743` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2743 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2743)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION (advisor-122 disposition 22:46; HIGH; product-15): branch `int31-bug-2743`, cut from origin/integration fa7e9a9c255. PR base MUST be `integration`. <=40 lines.
+    The deputy_shell story_2775 test reads child.pid before the PID is written (ParseIntError Empty); that flake cost p29 train #4488. Race confirmed at supervisor.rs:272-281 (waits for child.pid to EXIST, then parses it).
+    FIX: the test polls until the PID PARSES, within its deadline. ONLY IF the production writer is non-atomic, make it write via temp file + rename (atomic). No other production change: if anything else in the deputy/authority path would need changing, STOP and punt.
+  created_at: 2026-11-24T05:44:40.812795907Z
+  modified_at: 2026-11-24T05:44:40.812795907Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c14-b9eb-72e1-a1e3-9c482909bb69
   author: joe
