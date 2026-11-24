@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-auto-train-5cb8c2bd-896d-4e01-a37d-e8171fbad373",
+  "thread_id": "advisor-loop-auto-train-5cb8c2bd-896d-4e01-a37d-e8171fbad373",
+  "from": "auto-train",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795553821025,
+  "body": "auto-train failed 3 consecutive times. Last failure: auto-train admission.lock busy; holder not verified: no live legacy auto-train holder verified; receipts: PID 247728, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:214405842 (pidns 4026531836), purpose cooperative manual train: alive; PID 66725, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:214227174 (pidns 4026531836), purpose legacy review-watch: alive: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11). Inspect aida advisor loops status and train-status, and .aida/auto-train/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "auto-train: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
