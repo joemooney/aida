@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T18:00:59.926170202Z
+modified_at: 2026-11-24T18:24:14.539047818Z
 req_type: Bug
 tags:
 - hygiene
@@ -160,6 +160,15 @@ comments:
   modified_at: 2026-11-24T16:36:49.773555308Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ecd-247a-7d41-b508-e6eb2553e86e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 05a17b1e3eccb773d3b0ea19979693007d06d6a6 plus working-tree merge of 289cc394a334. AC1: [evidence: behavioral-test] task_2053_seat_clone_lifecycle_tests.rs:3166 checks ignored state and tracked edits. AC2: [evidence: behavioral-test] line 3188 checks retention of untracked work. Line 3211 preserves main's independent stash-only summary test. Lane job j20261124T180211093-2-0 passed all 62 lifecycle tests. Both parents appended at EOF; compared each addition byte-for-byte. Status formats, path handling, refusal paths and authority are preserved across the repair. No untracked additions or conflict markers. Incident PR #3449 closed unmerged; its reap policy is outside this slice. FAST source gates passed (48); remaining ratchets in progress.
+  created_at: 2026-11-24T18:24:14.539047818Z
+  modified_at: 2026-11-24T18:24:14.539047818Z
+  session_id: 01a20eb781c4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
