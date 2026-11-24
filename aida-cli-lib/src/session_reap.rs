@@ -2616,12 +2616,19 @@ pub(crate) fn reap_quiet(
     leases.sort_by(|a, b| a.id.cmp(&b.id));
     let start = resume.map_or(0, |id| leases.partition_point(|l| l.id.as_str() < id));
     let mut scan = None;
+    // The unbounded pass checks for gone trees before any session teardown.
+    // A sibling lease must still pass classification if we remove its tree.
+    let initially_missing: HashSet<_> = leases[start..]
+        .iter()
+        .map(|lease| &lease.worktree_path)
+        .filter(|path| !path.as_os_str().is_empty() && matches!(path.try_exists(), Ok(false)))
+        .collect();
     let mut release_gone = gone_tree_releaser(project_root);
     let progress = visit_sessions(&leases[start..], expired, |listed| {
         let Ok(Some(lease)) = leases::read_exact_lease(project_root, &listed.id) else {
             return false;
         };
-        if release_gone(&lease) {
+        if initially_missing.contains(&lease.worktree_path) && release_gone(&lease) {
             return true;
         }
         let classify = scan.get_or_insert_with(|| {

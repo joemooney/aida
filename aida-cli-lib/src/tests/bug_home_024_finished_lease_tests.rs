@@ -551,6 +551,9 @@ fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
         req.status = aida_core::RequirementStatus::Completed;
         let mut store = aida_core::RequirementsStore::default();
         store.requirements.push(req);
+        let mut unfinished = aida_core::Requirement::new("unfinished".into(), String::new());
+        unfinished.spec_id = Some("BUG-2711".into());
+        store.requirements.push(unfinished);
         crate::test_env::home_fixture_storage(repo.path().join(".aida-store"))
             .save(&store)
             .unwrap();
@@ -571,19 +574,30 @@ fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
             lease.hostname = crate::coordination::hostname();
             write_lease(repo.path(), &lease);
         }
+        let mut claim = lease_at(
+            "later3",
+            "BUG-2711",
+            &holder.path().join("dead1"),
+            "dead1",
+            Some(reaped_pid()),
+        );
+        claim.claim_verb = true;
+        claim.hostname = crate::coordination::hostname();
+        write_lease(repo.path(), &claim);
         let notes = holder.path().join("dirty2/notes");
         std::fs::write(&notes, "unsaved").unwrap();
         if budgeted {
             let progress = super::reap_quiet(repo.path(), None, || false);
             assert_eq!(
                 (progress.visited, progress.reaped, progress.next_session),
-                (2, 1, None)
+                (3, 1, None)
             );
         } else {
             let outcomes = super::reap_quiet_outcomes(repo.path());
             assert_eq!(outcomes.leases.len(), 1);
             assert_eq!(outcomes.leases[0].0, "dead1");
         }
+        assert!(lease_path(repo.path(), "later3").exists());
         assert!(!lease_path(repo.path(), "dead1").exists());
         assert!(!holder.path().join("dead1").exists());
         assert!(!local_branch_exists(repo.path(), "dead1"));
