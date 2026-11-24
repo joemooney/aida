@@ -1444,6 +1444,12 @@ fn story2767_retired_sender_preserves_seat_delivery_ownership() {
     std::fs::create_dir_all(&retained).unwrap();
     let sent = crate::mailbox_store::read_local_messages(&r.sib).unwrap();
     assert_eq!(sent.len(), 3);
+    let missing_id = sent
+        .iter()
+        .find(|m| m.body == "missing sidecar")
+        .unwrap()
+        .id
+        .clone();
     for m in sent {
         put_canonical(&r.store, &m);
         if m.body != "missing sidecar" {
@@ -1474,9 +1480,19 @@ fn story2767_retired_sender_preserves_seat_delivery_ownership() {
         bodies(view_from(&r.main, &r.store, &original)),
         ["for the original cohort"]
     );
-    assert!(view_from(&r.main, &r.store, &successor)
-        .records()
-        .is_empty());
+    // trace:TASK-3846 | ai:codex
+    let view = view_from(&r.main, &r.store, &successor);
+    assert!(view.records().is_empty());
+    let note = view.missing_sidecar_note().unwrap();
+    assert!(note.contains("1 seat messages hidden or UNVERIFIED"));
+    assert!(note.contains(&format!(
+        "delivery sidecar missing — aida mailbox read {missing_id}"
+    )));
+    let path = crate::mailbox_store::canonical_dir(&r.store).join(format!("{missing_id}.json"));
+    assert!(note.contains(&format!("{path:?}")));
+    assert!(crate::mail_backlog::scan(&r.main)
+        .iter()
+        .any(|finding| Some(&finding.summary) == view.missing_sidecar_note().as_ref()));
     let bound = read_own_mail_binding(
         &r.main,
         &r.store,
@@ -1485,4 +1501,27 @@ fn story2767_retired_sender_preserves_seat_delivery_ownership() {
         BindWait::Explicit,
     );
     assert_eq!(bodies(bound), ["for the next holder"]);
+
+    for (_, mut entry) in crate::agent_registry::load_entries(&r.main) {
+        entry.seat = Some("unrelated".into());
+        crate::agent_registry::write_entry(&r.main, &entry).unwrap();
+    }
+    std::fs::write(retained.join(format!("{missing_id}.json")), b"invalid").unwrap();
+    assert!(crate::mail_backlog::scan(&r.main).iter().any(|f| f
+        .summary
+        .contains("1 seat messages hidden or UNVERIFIED")
+        && f.summary
+            .contains(&format!("UNVERIFIED — aida mailbox read {missing_id}"))));
+
+    let mut first: Message = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    first.id = "-first-miss".into();
+    put_canonical(&r.store, &first);
+    let ctx = aida_core::mailbox_logical::MailboxContext::resolve_or_local(&r.main, Some(&r.store))
+        .unwrap();
+    let mut limits = explicit_limits();
+    limits.max_retained_probes = 1;
+    let (_, issues) = aida_core::mailbox_logical::inspect_seat_sidecars(&ctx, &limits);
+    assert_eq!(issues.len(), 4);
+    assert_eq!(issues[0].reason, "delivery sidecar missing");
+    assert!(issues[1..].iter().all(|issue| issue.reason == "UNEXAMINED"));
 }
