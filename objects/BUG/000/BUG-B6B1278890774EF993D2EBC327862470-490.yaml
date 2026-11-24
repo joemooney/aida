@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-24T18:35:58.956408057Z
+modified_at: 2026-11-24T18:36:07.047251113Z
 req_type: Bug
 tags:
 - ci
@@ -203,6 +203,11 @@ comments:
     A reference merge (commit ee2e6d830ffe, `(Refs BUG-2729)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-24T18:23:49.996868946Z
   modified_at: 2026-11-24T18:23:49.996868946Z
+- id: 01a20ed8-0207-7511-a1c9-c2c50929591c
+  author: joe
+  content: 'Completed by product-15 (2026-11-24 11:36): landed via #4425 (ee2e6d830ff, train #4526, titled Refs) after advisor-122 OVERRIDE->APPROVE (09:40); follow-up TASK-3877.'
+  created_at: 2026-11-24T18:36:07.047251113Z
+  modified_at: 2026-11-24T18:36:07.047251113Z
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
