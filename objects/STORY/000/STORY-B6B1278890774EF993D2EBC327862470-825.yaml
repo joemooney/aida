@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T09:09:48.525891979Z
-modified_at: 2026-11-24T09:10:11.037700474Z
+modified_at: 2026-11-24T09:10:13.490422965Z
 req_type: Story
 tags:
 - authority
 - launch
 - strict
+comments:
+- id: 01a20cd1-eaf2-7253-8b55-9f5557c5c60f
+  author: joe
+  content: 'Filed Approved per advisor-122 ruling 2026-11-24 02:13 (strict, MAIN, drive). Builds on STORY-3080: launch after it lands.'
+  created_at: 2026-11-24T09:10:13.490422965Z
+  modified_at: 2026-11-24T09:10:13.490422965Z
 history:
 - id: 01a20cd1-e1b5-7c30-9e0d-8c549954667e
   author: joe
