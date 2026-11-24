@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3856",
+  "publishes": [
+    {
+      "at": "2026-11-24T09:46:29.905432422Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T06:30:36.679691612Z",
+      "spec": "TASK-3856",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4492,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "328f196e4982242add799a3686bb4e0455f5b1e6"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:30:48.997517778Z",
+      "spec": "TASK-3856",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete two-file diff at 328f196e4982242add799a3686bb4e0455f5b1e6 against the generated one-spec worksheet.\nTASK-b6b1278890774ef993d2ebc327862470-1292.AC1: unverified\nTASK-b6b1278890774ef993d2ebc327862470-1292.AC2: verified by the disabled/enabled subtests in tests/test_python_discovery.py:58 (python3 -m unittest tests/test_python_discovery.py), inspected in source and reported passing by the implementer.\nLiteral false steps and a missing shard are covered. The ratchet still silently credits unreachable invocations, which blocks AC1. The supplied untraced list matches the fixture's bare spec trace. Exact-head FAST gates passed and FAST compile was pending at review time. No local tests or builds were run. At the forge check the head was six commits behind integration, up from five in the launch prompt. The newer base did not change either PR file or ci.yml, and no finding depends on a code path the base has since changed. The in-lane review claim command was refused. This is the standalone draft handoff.",
+        "recovery_hint": "address the review findings, move TASK-3856 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:48:05.072579027Z",
+      "spec": "TASK-3856",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4492,
+        "verdict": "APPROVED",
+        "reviewed_sha": "328f196e4982242add799a3686bb4e0455f5b1e6"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:31:52.434217434Z",
+      "spec": "TASK-3856",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4505,
+        "verdict": "APPROVED",
+        "reviewed_sha": "277b219ea9bae2c8213970dac31731ede9950f7c"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:36:32.899995886Z",
+      "spec": "TASK-3856",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4505
+      }
+    },
+    {
+      "ts": "2026-11-24T09:46:29.692650940Z",
+      "spec": "TASK-3856",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "91c070eb012a63da0770c0f5d76cd883dda414af",
+        "pr": 4505,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
