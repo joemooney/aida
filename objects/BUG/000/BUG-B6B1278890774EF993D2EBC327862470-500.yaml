@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T02:27:33.801612334Z
+modified_at: 2026-11-24T02:27:40.871962872Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -28,6 +28,11 @@ comments:
   content: 'Repro (product-15): after the global imac heal finished, the expired shared claim for TASK-3851 (task-...-1278-3acc2856dc7c47e2.toml, shared-207c3564-6f8b-424c-beba-2fef6d8adaa4, lease 01a20b0d78d6) is still present; doctor check leases lists it as eligible, yet both the targeted heal (dell1, rc=124 at 120s, no output) and the global heal left it. TASK-3851 stays parked.'
   created_at: 2026-11-24T02:27:33.801612334Z
   modified_at: 2026-11-24T02:27:33.801612334Z
+- id: 01a20b61-60c8-7ce2-9fc5-db2035f38de5
+  author: joe
+  content: 'Note (product-15 19:32, per advisor): the dell1 TARGETED heal timeout (rc=124 at 120s) is most likely BUG-2740 (a lane parent held store-write.lock during a cold-start wait), not this bug''s serial per-branch gh calls (imac global heal).'
+  created_at: 2026-11-24T02:27:40.871962872Z
+  modified_at: 2026-11-24T02:27:40.871962872Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
