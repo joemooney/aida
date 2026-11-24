@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: unshipped-work detection skips branches whose spec is DEFERRED (or reports them in a separate "parked: deferred until …" line, not as an alert). Test with a deferred spec plus a parked branch.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:05.669804177Z
-modified_at: 2026-11-24T03:49:45.781795980Z
+modified_at: 2026-11-24T04:15:20.169378441Z
 req_type: Bug
 tags:
 - small
@@ -52,6 +52,12 @@ comments:
   modified_at: 2026-11-24T03:49:45.781795980Z
   session_id: 01a20b9e6c1c
   harness_version: codex-cli 0.167.0
+- id: 01a20bc3-f069-7872-b638-bb617ee21b48
+  author: aida-publication-done
+  content: Implementer push 8468290642b9 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T04:15:20.169377898Z
+  modified_at: 2026-11-24T04:15:20.169377898Z
+  session_id: 01a20b9e6c1c
 history:
 - id: 01a20b99-adf0-7950-aee0-2bcd6fbf00a2
   author: joe
@@ -84,6 +90,14 @@ history:
   session_id: 01a20b9e6c1c
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20bc3-f069-7872-b638-bb5fd9d25c35
+  author: aida-publication-done
+  timestamp: 2026-11-24T04:15:20.169375697Z
+  session_id: 01a20b9e6c1c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
