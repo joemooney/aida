@@ -18,12 +18,13 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T17:28:56.742501296Z
-modified_at: 2026-11-21T09:26:52.940408901Z
+modified_at: 2026-11-24T04:45:36.831201999Z
 req_type: Task
 tags:
 - carried-from:TASK-3823
 - finding-hash:e2b12d96
 - from-review:TASK-3823
+- track:integration
 relationships:
 - rel_type: References
   target_id: 01a1f99c-9c75-7a33-b419-667d975fdc7b
@@ -70,6 +71,13 @@ history:
       This is TASK-3823's pending post-landing acceptance check for the product seat. Use an already-needed, admitted review-watch reviewer launch with a PR head carrying 012b95ef890 and the exact reviewer settings. All 12 PR heads inspected on 2026-11-21 carried those settings. A PR-4373 pickup preview resolved Codex but printed no model or effort, so the preview does not satisfy this check.
 
       Record the exact PR head, checkout, vendor and effective model and effort arguments from the real launch, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT clear in the launching environment. Verify that the vendor accepted the configured model and the reviewer began normally. Capture one eligible launch per vendor while the boost remains in force, or explicitly report which vendor was not exercised. Record only the evidence fields needed for acceptance and omit credential material. TASK-3171 covers adding a diagnostic. TASK-3824 retains the scheduled rollback.
+- id: 01a20bdf-a8bf-7ad3-abf2-e31cd76e8cfa
+  author: joe
+  timestamp: 2026-11-24T04:45:36.831201288Z
+  changes:
+  - field_name: tags
+    old_value: carried-from:TASK-3823, finding-hash:e2b12d96, from-review:TASK-3823
+    new_value: carried-from:TASK-3823, finding-hash:e2b12d96, from-review:TASK-3823, track:integration
 filed_at:
   code_sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
   branch: pr-4369
