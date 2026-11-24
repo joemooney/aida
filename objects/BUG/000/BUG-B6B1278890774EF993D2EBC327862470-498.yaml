@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T01:01:32.110728339Z
+modified_at: 2026-11-24T01:01:37.187012475Z
 req_type: Bug
 comments:
 - id: 01a20b07-5cd1-7631-8b48-a439402e24e5
@@ -51,6 +51,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: May the lane change aida-cli-lib/src/gate/ledger/event.rs to pass a verified PR base tip to the risk classifier? The only production caller is in the protected floor and currently supplies the default-branch tip.. No triage reason was given.'
   created_at: 2026-11-24T01:01:32.110718426Z
   modified_at: 2026-11-24T01:01:32.110718426Z
+- id: 01a20b12-9623-7c72-849e-856150d713c4
+  author: joe
+  content: 'Moved OFF the p30 integration bundle to MAIN, strict review, mode drive (product-15 18:03): the bundle lane correctly punted on a strict path (BUG-2736: leases.rs shelve writer; BUG-2737: gate/ledger/event.rs, protected floor, needs a human/advisor merge).'
+  created_at: 2026-11-24T01:01:37.187012475Z
+  modified_at: 2026-11-24T01:01:37.187012475Z
 history:
 - id: 01a20b07-3d37-7d11-b94a-d087427bce06
   author: joe
