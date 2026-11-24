@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T17:28:07.634162613Z
+modified_at: 2026-11-24T17:58:14.049409934Z
 req_type: Bug
 tags:
 - store
@@ -124,6 +124,13 @@ comments:
     Reviewed HEAD: 289cc394a334ee2760c79067fd871bbe66f9c5a9. Reviewed the empty origin/main...HEAD diff, working diff, and the new 126-line module. AC1: [evidence: behavioral-test] incomplete. A two-repository fixture reproduced the stale HEAD and confirmed the SHA in both unchanged and fast-forward fetch output. pr_train_store_refresh.rs:9 fetches with a deadline; pr_train.rs:39 registers the module only. Train admission still reads local HEAD. AC2: [evidence: behavioral-test] partial. pr_train_store_refresh.rs:79 exercised a successful fetch, a stalled transport, and a nonblocking writer lock probe. Final lane job j20261124T171618638-2-0 passed 1 test in 2.02s. No train-level fallback or permit/refusal union is exercised. Probes covered ref and output formatting, destination and SHA validation, concurrent tracking-ref readers, and absence of a writer lock during a stall. Fixed space-prefixed fast-forward parsing and fixture Git maintenance. Strict-tier gaps remain in review_publication.rs:978, :1293 and pr_train_verified.rs:746. No new authority path is active. Punted for a scope split; no publication declaration.
   created_at: 2026-11-24T17:28:07.634162613Z
   modified_at: 2026-11-24T17:28:07.634162613Z
+  session_id: 01a20e87b17f
+  harness_version: codex-cli 0.167.0
+- id: 01a20eb5-5505-7d73-9207-25515823c4d9
+  author: dirtlab
+  content: 'Validation follow-up: make check-ci-fast exited 0 after moving the test fixture to the guarded Git helper. No ratchet entries changed. Final targeted test passed in 2.02s.'
+  created_at: 2026-11-24T17:58:14.049409934Z
+  modified_at: 2026-11-24T17:58:14.049409934Z
   session_id: 01a20e87b17f
   harness_version: codex-cli 0.167.0
 history:
