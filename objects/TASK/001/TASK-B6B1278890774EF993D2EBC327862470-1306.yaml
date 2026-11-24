@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 328f196e4982242add799a3686bb4e0455f5b1e6
 
   tests/test_python_discovery.py:57 uses only a bare TASK-3856 trace. The supplied criteria audit still has no executable test links for AC1 or AC2. Attach criterion-level trace markers to the existing disabled/enabled fixture and to the added route reachability regressions, as applicable.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T06:30:19.709652585Z
-modified_at: 2026-11-24T06:30:19.709652585Z
+modified_at: 2026-11-24T12:30:20.083390651Z
 req_type: Task
 tags:
 - carried-from:TASK-3856
@@ -29,6 +29,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a20d89-1fb3-71c2-88ef-ca09386ccbb7
+  author: joe
+  timestamp: 2026-11-24T12:30:20.083381937Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 328f196e4982242add799a3686bb4e0455f5b1e6
   branch: pr-4492
