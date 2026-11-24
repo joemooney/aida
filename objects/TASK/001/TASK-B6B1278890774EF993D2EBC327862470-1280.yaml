@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:33:42.356470431Z
-modified_at: 2026-11-24T04:01:29.270542620Z
+modified_at: 2026-11-24T04:05:50.244771214Z
 req_type: Task
 tags:
 - small
@@ -104,6 +104,13 @@ comments:
   created_at: 2026-11-24T04:01:29.270381158Z
   modified_at: 2026-11-24T04:01:29.270381158Z
   session_id: 01a20b7945f7
+- id: 01a20bbb-a7b1-7de0-b143-c70c3fae3d51
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 21:08): PR-4474 @ 9c6810d6e7 PASSES. The rebase resolved the conflict: it now merges CLEAN on integration, and its net diff vs integration is +27 in tests/test_cache_refresh_outputs.py, exactly the detach-enabled JSON/TOON-at-TTY block (AIDA_CACHE_NO_DETACH=0, renders output, waits for this invocation''s ''refresh worker: Refreshed at'' in the append-only log, citing TASK-1527 #2349). The duplicate #4469 hunks are gone. Note: CI runs this file only after BUG-2734 r2 (#4479) wires it as a standalone CLI suite. Fast CI pending.'
+  created_at: 2026-11-24T04:05:50.244771214Z
+  modified_at: 2026-11-24T04:05:50.244771214Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
