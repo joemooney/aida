@@ -15,12 +15,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T16:31:16.499980191Z
-modified_at: 2026-11-24T16:31:42.203714223Z
+modified_at: 2026-11-24T16:33:02.482293959Z
 req_type: Task
 tags:
 - lanes
 - ship
 - small
+comments:
+- id: 01a20e67-8ec6-70a3-bef2-af69be3ee97a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:33):
+    # TASK-3876: lane ship step completing-trailer rule (advisor-122 ruling 2026-11-24 09:35; product-15). Lane: CODEX. MAIN. <=200 lines.
+    Implement AC1+AC2 of TASK-3876 (aida show TASK-3876). Slice 2 (the post-land detector) is OUT OF SCOPE.
+    Find where the lane ship step builds the PR title (rg 'Refs ' in aida-cli-lib/src for the ship/publish path). One targeted cargo run, then make check-ci-fast. COMMIT your work.
+    NEW TESTS: if make check-ci-fast rejects new test names as unregistered, ADD them to scripts/ratchet-set.json (entries only; no other ratchet/gate changes) and list the added entries in the PR body. That is pre-approved; do not punt for it.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+    TITLE TRAILER: ship with the COMPLETING "(SPEC-ID)" trailer when your work meets every acceptance criterion of the spec. Use "Refs SPEC-ID" ONLY if this brief explicitly says this is a partial slice (advisor-122 ruling 2026-11-24 09:35).
+  created_at: 2026-11-24T16:33:02.482293959Z
+  modified_at: 2026-11-24T16:33:02.482293959Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e66-1ae3-7fc3-86c4-e2e953404751
   author: joe
