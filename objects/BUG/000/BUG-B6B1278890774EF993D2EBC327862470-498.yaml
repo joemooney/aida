@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T01:01:37.187012475Z
+modified_at: 2026-11-24T01:03:15.801909629Z
 req_type: Bug
 comments:
 - id: 01a20b07-5cd1-7631-8b48-a439402e24e5
@@ -56,6 +56,24 @@ comments:
   content: 'Moved OFF the p30 integration bundle to MAIN, strict review, mode drive (product-15 18:03): the bundle lane correctly punted on a strict path (BUG-2736: leases.rs shelve writer; BUG-2737: gate/ledger/event.rs, protected floor, needs a human/advisor merge).'
   created_at: 2026-11-24T01:01:37.187012475Z
   modified_at: 2026-11-24T01:01:37.187012475Z
+- id: 01a20b14-4ba0-7ed2-8717-6e895569a0f5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:03):
+    # BUG-2737: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2737` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2737 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2737)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    ROUTED TO MAIN, STRICT REVIEW, mode drive (product-15 18:03, after the p30 bundle lane correctly punted). You ARE authorized to change aida-cli-lib/src/gate/ledger/event.rs (protected floor: this PR needs a human/advisor merge) SCOPED to passing the VERIFIED PR base tip (the PR's actual base ref, e.g. integration) to the risk classifier instead of the default-branch tip. No other gate semantics change. Regression: an integration branch carrying a sensitive-path change the PR does not touch must NOT tag the PR STRICT, while a PR that DOES touch a sensitive path still does.
+  created_at: 2026-11-24T01:03:15.801909629Z
+  modified_at: 2026-11-24T01:03:15.801909629Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b07-3d37-7d11-b94a-d087427bce06
   author: joe
