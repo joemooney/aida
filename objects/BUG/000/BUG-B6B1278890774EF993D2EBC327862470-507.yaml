@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T12:13:11.203161226Z
+modified_at: 2026-11-24T12:21:17.464510157Z
 req_type: Bug
 tags:
 - admission
@@ -124,6 +124,18 @@ comments:
   modified_at: 2026-11-24T12:10:14.312461206Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20d80-d990-79c2-86a4-2acea6c151c1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 38c638cbf7d5ed989033cce870955654a29833de plus the native worktree diff. Inspected origin/main...HEAD, git diff HEAD and untracked files.
+    AC1: [evidence: behavioral-test] task_1993_review_watch_tests.rs:64 and :88 exercise train admission during launch and the child exec boundary.
+    AC2: [evidence: behavioral-test] review_watch_train_service.rs:9 drives select_train_members against the review-watch inode and checks the three-failure auto-train alert against a known acquisition time. task_1993_review_watch_tests.rs:5709 checks release cleanup, a live legacy takeover and injected ENOSPC with continued exclusion. All six bug2746 tests passed in lane job j20261124T121435465-2-0.
+    Checked record parsing, incomplete/legacy records, zero or ambiguous flock holders, PID reuse, inode identity and ownership transitions. Missing holder evidence reports unknown. Exclusive flock and explicit unlock remain the admission boundary. Diagnostics are a point-in-time observation. No exact-head CI result exists for the unpublished edits.
+  created_at: 2026-11-24T12:21:17.464510157Z
+  modified_at: 2026-11-24T12:21:17.464510157Z
+  session_id: 01a20d7932a1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20d25-45d0-7f43-9465-17218e2f731c
   author: joe
