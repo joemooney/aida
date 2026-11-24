@@ -59,7 +59,7 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 - **Deterministic Classification (`classify_diff_inventory`)**:
   - Git is required. Workspace mode uses HEAD and local changes, range mode uses a merge base, PR mode needs forge metadata and local refs, commit mode needs the parent, and scan mode lists tracked and non-ignored untracked files with `git ls-files`.
-  - Classifies excluded files with explicit reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, or `user_excluded:<glob>`.
+  - Classifies excluded files with explicit reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, `user_excluded:<glob>`, or `oversize: N estimated tokens > cap M`.
   - Seals the review scope with a canonical **SHA-256 inventory digest** (`inventory_sha256`) and flags whether the literal `trace:` occurs, without validating an ID.
 - **Optional CLI File Accountability (`--verify-coverage <ledger.json>`)**:
   - `verify_coverage_ledger` checks that **100% of `reviewable_files`** are explicitly marked `reviewed` or `skipped` (with a mandatory non-empty rationale).
@@ -75,13 +75,13 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 - **Companion Test Pairing (`canonical_module_stem`)**:
   - Automatically normalizes stems across `<name>.rs`, `<name>_test.rs`, `<name>_tests.rs`, `test_<name>.py`, and `<name>.test.ts`.
-  - Uses a same-stem heuristic to identify likely companions. Oversized files get their own batches.
+  - Uses a same-stem heuristic to identify likely companions. Preparation lists over-cap files and their token estimates in the exclusions and coverage report, then batches the remaining files.
 - **Crate-Qualified Generic Stems**:
   - Qualifies entry-point filenames (`lib.rs`, `mod.rs`, `main.rs`, `index.ts`) by parent directory (`aida-core/src/lib` vs `aida-cli-lib/src/lib`) so unrelated crates never collide.
 - **Token & File-Count Bin Packing (`bundle_review_batches`)**:
   - Packs remaining files by shared playbook ID toward `DEFAULT_BATCH_TOKEN_BUDGET` (`12,000` tokens) and `DEFAULT_MAX_FILES_PER_BATCH` (`8` files).
 
-<!-- Files with matching stems can be unrelated. An oversized file gets its own batch. -->
+<!-- Files with matching stems can be unrelated. Preparation lists over-cap files and their token estimates in the exclusions and coverage report, then batches the remaining files. -->
 
 ---
 
