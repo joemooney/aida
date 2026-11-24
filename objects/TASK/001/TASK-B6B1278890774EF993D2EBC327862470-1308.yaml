@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:06.238132894Z
-modified_at: 2026-11-24T15:16:10.301693539Z
+modified_at: 2026-11-24T15:25:07.353398751Z
 req_type: Task
 tags:
 - review
@@ -110,6 +110,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a20e29-5b1e-7240-b012-7c7f33a57e31
+  author: joe
+  timestamp: 2026-11-24T15:25:21.054650229Z
+  session_id: 01a20e26b6c3
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -121,3 +126,15 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 9cc76437f4f2054f6c97da341ed1b482c60c221d
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Round 1 full sweep of all 10 changed files against the forge-reported integration base 88d8f9c4b01.
+    TASK-b6b1278890774ef993d2ebc327862470-1308.AC1 verified by comparing the PR and reference commit: GitHub targets integration, Joe Mooney's author name and email match 0fdac177513, every touched path is in the reference commit, and the two master changes carry the source integration with a repo-wide scan adaptation and corrected facet wording. Git metadata confirms the resulting identity without establishing the exact commit command.
+    TASK-b6b1278890774ef993d2ebc327862470-1308.AC2 verified by the implementer's recorded successful make sync-templates and make check-templates in a writable checkout with both edited masters, corroborated by inspection of the unchanged tracked Claude symlinks at the pinned head. The supplied untraced list names both procedural criteria. The evidence is Git inspection and the recorded configuration validation.
+    The changed showcase search entries match the pinned Markdown hashes and prose. The exact-head FAST source gates passed and FAST compile was still running. The change request is based on the workflow and showcase findings.
+  recovery_hint: address the review findings, move TASK-3863 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T15:25:07.353398751Z
