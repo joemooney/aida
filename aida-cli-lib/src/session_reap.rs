@@ -1414,11 +1414,12 @@ fn scan_clone_lease(
             let shipped = crate::seat_clone::merged_pr_heads(project_root, branch);
             // BUG-051: the ancestor-of-origin rule session end applies.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-            let probe = crate::seat_clone::probe_for_reap(
+            let probe = crate::seat_clone::probe_counting_origin(
                 project_root,
                 &lease.worktree_path,
                 Some(branch),
                 &shipped,
+                None,
             );
             if let crate::seat_clone::Probe::Known(facts) = &probe {
                 branch_tip = facts.head.clone();

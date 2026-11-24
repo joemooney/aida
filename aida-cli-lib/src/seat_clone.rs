@@ -1589,10 +1589,7 @@ fi
 printf '\0'
 ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || git rev-list --count main..HEAD 2>/dev/null || printf '0')
 printf '%s\0' "$ahead"
-stash=$(git for-each-ref --format='%(refname)' refs/stash)
-unique=$(git rev-list -1 --branches --not --remotes=origin)
-printf '%s\0%s\0' "$stash" "$unique"
-git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=none
+git status --porcelain=v1 -z --ignored=no --untracked-files=all --ignore-submodules=all
 "#;
     run_sandboxed_until(
         clone,
@@ -1603,31 +1600,6 @@ git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=none
         Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
-}
-
-/// Reap also retains non-ignored runtime-looking paths and any stash,
-/// including one whose commit is reachable elsewhere. Use the same check at
-/// discovery and destruction; the normal publication evidence still applies.
-// trace:BUG-2742 | ai:codex
-pub(crate) fn probe_for_reap(
-    main: &Path,
-    clone: &Path,
-    branch: Option<&str>,
-    shipped: &[String],
-) -> Probe {
-    let mut result = probe_counting_origin(main, clone, branch, shipped, None);
-    if let Probe::Known(facts) = &mut result {
-        if !facts.unshipped() {
-            let script = r#"set -eu
-git for-each-ref --format='%(refname)' refs/stash
-git status --porcelain=v2 --untracked-files=all --ignore-submodules=none"#;
-            match probe_run(clone, main, &["-c".as_ref(), script.as_ref()], "sh") {
-                Ok(output) => facts.dirty.extend(output.lines().map(str::to_owned)),
-                Err(reason) => return Probe::Unknown(reason),
-            }
-        }
-    }
-    result
 }
 
 const PENDING_MERGE_PATH: &str = r#"set -eu
@@ -2124,6 +2096,7 @@ pub(crate) fn probe_until(
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
             "--branch".as_ref(),
+            "--ignored=no".as_ref(), // trace:BUG-2742 | ai:codex
             "--untracked-files=all".as_ref(),
             "--ignore-submodules=none".as_ref(),
             // Match commit_pending: the host marker is never seat work.
@@ -6158,12 +6131,7 @@ fn destroy_inner(
         // Recheck publication against origin, including explicit refspec pushes
         // that left no tracking ref. Keep fresh dirty/unpublished work protected.
         // trace:BUG-2630 | ai:codex
-        let probe = if mode == DestroyMode::KeepUnshipped {
-            probe_for_reap(main, clone, None, shipped)
-        } else {
-            probe_counting_origin(main, clone, None, shipped, None)
-        };
-        let facts = match probe {
+        let facts = match probe_counting_origin(main, clone, None, shipped, None) {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
