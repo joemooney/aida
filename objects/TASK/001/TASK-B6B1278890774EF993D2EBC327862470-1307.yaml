@@ -201,6 +201,13 @@ comments:
   created_at: 2026-11-24T13:34:26.814401134Z
   modified_at: 2026-11-24T13:34:26.814401134Z
   session_id: 01a20d9f542d
+- id: 01a20dc4-d02a-7e43-adbb-5f63056aed50
+  author: joe
+  content: 'INTEGRATION PRE-CHECK FINAL r3 (integration-30, 06:38): PR-4511 @ 49c0e73f51 PASSES the three CR gaps (my 05:52 correction). The rework commit 49c0e73f514: +88/-44 in review_prepare.rs + forge.rs; merges CLEAN on integration (which contains H1 and p34). (a) Gitfile/renamed git dir: write_output canonicalizes the destination and refuses it under the real ''rev-parse --path-format=absolute --absolute-git-dir'' AND ''--git-common-dir'' (canonicalized). The test turns .git into a gitfile pointing at an ordinary ''metadata/'' and asserts both ''metadata'' and ''metadata/config'' are refused; the existing O_NOFOLLOW pinned-fd walk still blocks symlinks into it. (b) Replace refs: ALL git calls now go through git_text, which sets GIT_NO_REPLACE_OBJECTS=1 (rev-parse and merge-base were rewritten onto it; the log read replaces git_log_messages with ''log -z --end-of-options <range> --''). The test creates a real ''git replace original replacement'' and asserts the ORIGINAL commit is reviewed. (c) GH_REPO: PR mode uses GitHubForge::for_review, which pins the repo via merge_hold::resolve_pinned_repo (origin), env_remove(''GH_REPO'') and passes ''-R <pinned>''. The test sets GH_REPO=wrong/repo and a fake gh that requires GH_REPO unset and ''-R fixture/repo''. Other GitHubForge users are unaffected (metadata_repo None). Waiting on FAST at this head.'
+  created_at: 2026-11-24T13:35:19.159722725Z
+  modified_at: 2026-11-24T13:35:19.159722725Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20dc5-0733-78b2-a392-dc2025522d16
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int32-task-3862` at head `49c0e73f5144097891ef0c770106b8e2fa5f1da8`.'
