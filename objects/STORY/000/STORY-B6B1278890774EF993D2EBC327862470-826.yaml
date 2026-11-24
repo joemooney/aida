@@ -13,13 +13,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T14:36:28.310750057Z
+modified_at: 2026-11-24T14:36:30.780039269Z
 req_type: Story
 tags:
 - doctor
 - review
 - throughput
 - track:integration
+comments:
+- id: 01a20dfc-a4bc-7c81-a826-4c03c66251f6
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-24 07:44 (HIGH, standard, drain, integration). Slice 1 = aida doctor check stalled-reviews + routed wake; slice 2 = advisor-loop job.'
+  created_at: 2026-11-24T14:36:30.780039269Z
+  modified_at: 2026-11-24T14:36:30.780039269Z
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
