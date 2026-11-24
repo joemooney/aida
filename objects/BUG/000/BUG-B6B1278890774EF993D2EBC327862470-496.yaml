@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T21:04:15.978547373Z
+modified_at: 2026-11-24T21:04:27.765424651Z
 req_type: Bug
 tags:
 - forge
@@ -202,6 +202,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: PR #4464 merge repair is present in aida-cli-lib/src/tests/task_1993_review_watch_tests.rs. Both parent tests were preserved, markers cleared and 97 module tests passed. Required make check-ci-fast cannot finish under the lane-only Cargo rule: its shard tooling invokes cargo metadata, which the launcher rejects. Host fast validation is needed before publication. Findings 6-9 remain outside the conflict-only pickup.. No triage reason was given.'
   created_at: 2026-11-24T21:04:15.978534513Z
   modified_at: 2026-11-24T21:04:15.978534513Z
+- id: 01a20f5f-d1bb-70d0-b8c3-8cad4f214069
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4464):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 33b344371ac1
+    Recorded: 2026-11-24T19:00:43.455239714+00:00
+    Findings:
+    1. BUG-2735.AC1 — aida-cli-lib/src/queue_cmd/integrate.rs:583. The shipped `aida integrate --watch` loop still probes each Done spec at lines 638–643 and collects a PR snapshot at line 669 without a budget observation. A 999/5000 response has no effect on these recurring reads, including passes with `--no-wait-ci`. Gate and report background discovery before these calls and leave selected landing checks eligible.
+    2. BUG-2735.AC1 — aida-cli-lib/src/forge.rs:2411 and aida-cli-lib/src/pr_train.rs:5038. Without GH_REPO, the budget probe explicitly uses origin's host, while auto-train discovery (`forge.rs:3622`) and seat CI registration and refinement (`forge.rs:2892–2916`) still use gh's implicit repo selection. In a checkout with github.com origin and an authenticated GHES upstream selected as the gh default, a healthy github.com budget permits polling against a depleted GHES budget. The terminal progress snapshot also uses process cwd (`ci_probe.rs:685,808`) instead of the budget check's injected root. Use the actual watched command's resolved route throughout and test a checkout where the hosts differ. GitHub CLI repository selection is documented in https://github.com/cli/cli/blob/v2.105.0/pkg/cmd/factory/default.go#L50-L69.
+    3. BUG-2735.AC1 — aida-cli-lib/src/forge.rs:2383 and aida-cli-lib/src/ci_watch.rs:23. The routing fix changes existing CI evidence selection to explicit origin when GH_REPO is absent. A fork whose gh default is its upstream can now watch a fork run or get `NoPr` even though the upstream PR has checks. This also changes non-watcher callers of the shared coarse probe, including the phase driver's initial read at `phase_driver_trait.rs:1581`, while its PR check reads still use gh's default. Preserve the existing repository selection when establishing a common route for the budget probe, watch and completion read.
+    4. Deferred follow-up — aida-cli-lib/src/ci_watch.rs:62. Throttling SIGKILLs the interactive child before gh can exit its alternate screen. Restore the terminal with bounded graceful cancellation before emitting the throttle message. See https://github.com/cli/cli/blob/v2.105.0/pkg/iostreams/iostreams.go#L361-L388.
+    5. Deferred follow-up — aida-cli-lib/src/ci_probe.rs:658. Time spent intentionally throttled still counts toward CI inactivity, so a running check can be shelved as unavailable before the budget recovers. Distinguish throttle duration from observed CI inactivity and retain the absolute ceiling.
+    6. Deferred follow-up — aida-cli-lib/src/advisor_loop_service.rs:1183 and aida-cli-lib/src/review_watch.rs:2988. Throttle is returned as a generic discovery error, inflating supervisor recovery failures and review-watch discovery failures. Report it as an expected idle skip and keep genuine discovery failures on the existing error path.
+    7. Deferred follow-up — aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:5709. The fixture exercises the discovery helper, a main-watch pass, a direct commit reader and a quick streaming exit. Add production entry-point coverage for low-budget review, startup and auto-train discovery, retained-train recovery, the seat watcher and supervisor recovery. The direct commit-reader assertion alone cannot detect an earlier stop in retained-train recovery.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T21:04:27.579604432Z
+  modified_at: 2026-11-24T21:04:27.579604432Z
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
