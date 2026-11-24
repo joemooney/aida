@@ -657,6 +657,7 @@ pub fn classify_diff_inventory<F>(
     entries: &[RawDiffEntry],
     registry: &PlaybookRegistry,
     user_excludes: &[String],
+    token_cap: usize,
     mut trace_detector: F,
 ) -> ClassifiedInventory
 where
@@ -678,8 +679,16 @@ where
         }
     };
     for entry in &sorted_entries {
-        if let Some(reason) = classify_exclusion(entry, user_excludes) {
-            let reason_str = reason.label();
+        let estimated_tokens =
+            estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
+        let reason = classify_exclusion(entry, user_excludes)
+            .map(|r| r.label())
+            .or_else(|| {
+                (estimated_tokens > token_cap).then(|| {
+                    format!("oversize: {estimated_tokens} estimated tokens > cap {token_cap}")
+                })
+            });
+        if let Some(reason_str) = reason {
             frame(&["excluded", &entry.path, &reason_str]);
             excluded_files.push(ExcludedFile {
                 path: entry.path.clone(),
@@ -688,8 +697,6 @@ where
             });
         } else {
             let playbook = registry.resolve(&entry.path);
-            let estimated_tokens =
-                estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
             let has_trace_comment = trace_detector(&entry.path);
             frame(&["reviewable", &entry.path, entry.kind.as_str(), &playbook.id]);
             reviewable_files.push(ReviewableFile {
@@ -783,9 +790,6 @@ pub fn bundle_review_batches(
     max_tokens_per_batch: usize,
     max_files_per_batch: usize,
 ) -> anyhow::Result<Vec<ReviewBatch>> {
-    if files.is_empty() {
-        return Ok(Vec::new());
-    }
     let token_cap = max_tokens_per_batch;
     if let Some(file) = files.iter().find(|f| f.estimated_tokens > token_cap) {
         anyhow::bail!(
@@ -907,6 +911,8 @@ pub struct CoverageLedger {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoverageVerificationReport {
     pub passed: bool,
+    #[serde(default)]
+    pub not_reviewable_by_batch: Vec<ExcludedFile>,
     pub total_reviewable: usize,
     pub reviewed_count: usize,
     pub skipped_count: usize,
@@ -977,6 +983,12 @@ pub fn verify_coverage_ledger(
 
     CoverageVerificationReport {
         passed,
+        not_reviewable_by_batch: inventory
+            .excluded_files
+            .iter()
+            .filter(|f| f.reason.starts_with("oversize: "))
+            .cloned()
+            .collect(),
         total_reviewable,
         reviewed_count,
         skipped_count,
@@ -1211,8 +1223,8 @@ mod tests {
     use super::*;
 
     // trace:TASK-3867 | ai:codex
-    fn inventory(paths: &[&str], binary: bool) -> ClassifiedInventory {
-        let entries = paths
+    fn diff_entries(paths: &[&str], binary: bool) -> Vec<RawDiffEntry> {
+        paths
             .iter()
             .map(|p| RawDiffEntry {
                 path: (*p).into(),
@@ -1223,8 +1235,12 @@ mod tests {
                 patch_bytes: 0,
                 is_binary: binary,
             })
-            .collect::<Vec<_>>();
-        classify_diff_inventory(&entries, &PlaybookRegistry::default(), &[], |_| false)
+            .collect()
+    }
+
+    fn inventory(paths: &[&str], binary: bool) -> ClassifiedInventory {
+        let entries = diff_entries(paths, binary);
+        classify_diff_inventory(&entries, &Default::default(), &[], usize::MAX, |_| false)
     }
 
     #[test]
@@ -1281,12 +1297,22 @@ mod tests {
     fn h2a_budget_is_a_cap() {
         let files = inventory(&["a", "b"], false).reviewable_files;
         assert_eq!(bundle_review_batches(&files, 32, 2).unwrap().len(), 2);
-        for cap in [0, 31] {
-            assert!(bundle_review_batches(&files, cap, 2)
-                .unwrap_err()
-                .to_string()
-                .contains("exceeding batch budget"));
-        }
+        let mut entries = diff_entries(&["large.rs", "small.rs"], false);
+        entries[0].additions = 3;
+        let inv = classify_diff_inventory(&entries, &Default::default(), &[], 32, |_| false);
+        assert_eq!(inv.excluded_files.len(), 1);
+        assert_eq!(inv.excluded_files[0].path, "large.rs");
+        assert_eq!(
+            inv.excluded_files[0].reason,
+            "oversize: 36 estimated tokens > cap 32"
+        );
+        assert_eq!(
+            verify_coverage_ledger(&inv, &CoverageLedger::default()).not_reviewable_by_batch,
+            inv.excluded_files
+        );
+        let batches = bundle_review_batches(&inv.reviewable_files, 32, 2).unwrap();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].files, ["small.rs"]);
     }
 
     #[test]
@@ -1436,9 +1462,10 @@ mod tests {
         ];
 
         let user_excludes = vec!["docs/legacy/**".to_string()];
-        let inv = classify_diff_inventory(&entries, &registry, &user_excludes, |path| {
-            path.ends_with("review_engine.rs")
-        });
+        let inv =
+            classify_diff_inventory(&entries, &registry, &user_excludes, usize::MAX, |path| {
+                path.ends_with("review_engine.rs")
+            });
 
         assert_eq!(inv.reviewable_files.len(), 1);
         assert_eq!(

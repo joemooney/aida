@@ -291,11 +291,11 @@ Git is required in every mode. Workspace mode compares local changes with HEAD a
 The optional CLI ledger check accounts for each reviewable file as reviewed or skipped with a reason. Merge gates operate independently.
 
 1. **SHA-256-Sealed Inventory & 100% File Coverage (`--verify-coverage <ledger.json>`)**:
-   - Classifies every changed or scanned file into `reviewable_files` vs `excluded_files` (with explicit exclusion reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, or `user_excluded:<glob>`).
+   - Classifies every changed or scanned file into `reviewable_files` vs `excluded_files` (with explicit exclusion reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, `user_excluded:<glob>`, or `oversize: N estimated tokens > cap M`).
    - Seals the scope with `inventory_sha256` and records whether the file contains the literal `trace:` marker, without validating an ID.
    - When `--verify-coverage` is passed, `aida review prepare` fails closed unless 100% of `reviewable_files` are explicitly marked `reviewed` or `skipped` (with a non-empty reason).
 2. **Zero-LLM Token-Budgeted Semantic Batching**:
-   - A same-stem heuristic groups likely source and test companions. The default cap is 12,000 estimated tokens per batch. Preparation reports an error if any file exceeds the configured cap.
+   - A same-stem heuristic groups likely source and test companions. The default cap is 12,000 estimated tokens per batch. Preparation lists over-cap files and their token estimates in the exclusions and coverage report, then batches the remaining files.
 3. **Core Playbooks + Whole-File Substring Security Facets**:
    - Matches files against built-in language playbooks (`rust`, `cargo_toml`, `go`, `typescript_js`, `python`, `shell`, `sql`, `config_data`) layered beneath optional project rules in `.aida/review-rules.toml`.
    - For Rust files, injects an always-on core checklist (~250 tokens mapped directly to AIDA's finding classes: `fail-open`, `absent-evidence-reads-as-good`, `perf`, `portability`, `contract-drift`, `incomplete-fix`, `untested-path`) and appends conditional facets (`rust_unsafe_ffi`, `rust_async_concurrency`, `rust_io_subprocess_security`, `rust_macros` distilled from the Rust API Guidelines, ANSSI Secure Rust, and Tokio) **only** when their substrings appear anywhere in the reviewed files, including unchanged lines and comments.

@@ -146,11 +146,14 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     }
 
     // 3. Classify inventory and cache target revision file contents for trace + facet detection.
+    let token_budget = rules_cfg
+        .batch_token_budget
+        .unwrap_or(DEFAULT_BATCH_TOKEN_BUDGET);
     let target_rev = head_ref.as_deref();
     let mut content_cache: BTreeMap<String, String> = BTreeMap::new();
     let mut read_error = None;
-    let inventory = classify_diff_inventory(&raw_entries, &registry, &excludes, |rel_path| {
-        match read_file_at_revision(&project_root, target_rev, rel_path) {
+    let detect_trace =
+        |rel_path: &str| match read_file_at_revision(&project_root, target_rev, rel_path) {
             Ok(Some(content)) => {
                 let has_trace = content.contains("trace:");
                 content_cache.insert(rel_path.to_owned(), content);
@@ -161,16 +164,19 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
                 false
             }
             Ok(None) => false,
-        }
-    });
+        };
+    let inventory = classify_diff_inventory(
+        &raw_entries,
+        &registry,
+        &excludes,
+        token_budget,
+        detect_trace,
+    );
     if let Some(err) = read_error {
         return Err(err);
     }
 
     // 4. Bundle reviewable files into semantic, token-bounded batches.
-    let token_budget = rules_cfg
-        .batch_token_budget
-        .unwrap_or(DEFAULT_BATCH_TOKEN_BUDGET);
     let max_files = rules_cfg
         .max_files_per_batch
         .unwrap_or(DEFAULT_MAX_FILES_PER_BATCH);
@@ -782,6 +788,12 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
             "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
             cov.passed, cov.coverage_rate_pct, cov.total_reviewable
         ));
+        for file in &cov.not_reviewable_by_batch {
+            out.push_str(&format!(
+                "- **Not reviewable by batch**: `{}` ({})\n",
+                file.path, file.reason
+            ));
+        }
         if !cov.ambiguous_files.is_empty() {
             out.push_str(&format!(
                 "- **Ambiguous ledger rows**: `{}`\n",
