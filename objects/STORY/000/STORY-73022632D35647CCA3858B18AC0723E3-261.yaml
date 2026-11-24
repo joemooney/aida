@@ -1,0 +1,32 @@
+id: 01a20bc4-6290-79f1-81a6-0c0df2e9d28f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-261
+title: 'Review PR-4483: [AI:codex] fix(status): skip deferred branches in unshipped-work alerts (BUG-2741)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b9e`) for branch `int30-bug-2741`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4483>
+  - Branch: `int30-bug-2741` → `integration`
+
+  ## Covers
+
+  - BUG-2741
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4483` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T04:15:49.392798081Z
+modified_at: 2026-11-24T04:15:49.392798081Z
+req_type: Story
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f
+  session: 01a20b9e6c1c
