@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T14:17:30.349855142Z
+modified_at: 2026-11-24T14:20:21.888241625Z
 req_type: Story
 tags:
 - admission
@@ -195,6 +195,18 @@ comments:
   created_at: 2026-11-24T10:07:54.505165830Z
   modified_at: 2026-11-24T10:07:54.505165830Z
   session_id: 01a20cd5940f
+- id: 01a20dee-12a3-7232-84fc-9b675e668da1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:20):
+    # STORY-3080 / PR #4502 r4, LAST round: FULL-CI FIX (advisor-122 2026-11-24 07:18; strict, containment; product-15). Lane: CODEX. MAIN, existing branch (907701f8).
+    Full CI is RED in cli-0 AND cli-1: `aida-cli::bug_2139_headless_child_grant contained_fresh_headless_child_gets_its_own_implementer_grant` panics at aida-cli/tests/bug_2139_headless_child_grant.rs:368 (run 45410322228). That's the contained headless path this PR touches, so it's likely a REAL REGRESSION from the before_spawn revalidation.
+    DO: make that test PASS WITHOUT WEAKENING IT. Find what the revalidation changed for a contained fresh headless child's implementer grant, and fix the production code. NO test edits unless the test's assumption is PROVABLY wrong; if so, explain why in the PR body.
+    Run that test targeted (`cargo test -p aida-cli --test bug_2139_headless_child_grant`) plus this PR's own tests, then `make check-ci-fast`, then push to #4502. COMMIT your work.
+  created_at: 2026-11-24T14:20:21.888241625Z
+  modified_at: 2026-11-24T14:20:21.888241625Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
