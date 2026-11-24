@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: session-hygiene's "uncommitted work" check ignores git-ignored files (and AIDA's own .aida/* state), and reports dirty only for tracked changes, unique unpushed commits or stashes. Test: a clone whose only difference is ignored .aida/* files is NOT flagged; a clone with a tracked edit IS.
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T06:17:23.178474982Z
+modified_at: 2026-11-24T16:34:29.720532944Z
 req_type: Bug
 tags:
 - hygiene
@@ -217,6 +217,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20e68-a8d8-7382-913b-823ae30080c4
+  author: joe
+  timestamp: 2026-11-24T16:34:29.720525210Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
@@ -225,3 +232,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
+implementation_info:
+  implemented: false
+  reopened_at_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
