@@ -114,17 +114,20 @@ mod linux {
     fn bug_2169_bwrap_required_gate_fails_on_missing_capability() {
         use crate::test_exec::write_executable;
 
-        if Environment::capture().get("BUG_2701_PROBE_CHILD").is_some() {
-            assert!(!bwrap_live());
+        if let Some(expected) = Environment::capture().get("BUG_2701_PROBE_CHILD") {
+            assert_eq!(bwrap_live(), expected == "live");
+            if expected == "live" {
+                eprintln!("live probe succeeded");
+            }
             return;
         }
         let dir = tempfile::tempdir().unwrap();
-        let check = |required, success, message: &str| {
+        let check = |expected, required, success, message: &str| {
             let mut child = Command::new("/proc/self/exe");
             let thread = std::thread::current();
             child
                 .args(["--exact", thread.name().unwrap(), "--nocapture"])
-                .env("BUG_2701_PROBE_CHILD", "1")
+                .env("BUG_2701_PROBE_CHILD", expected)
                 .env("PATH", dir.path())
                 .env_remove("AIDA_REQUIRE_BWRAP_LIVE");
             if required {
@@ -135,20 +138,28 @@ mod linux {
             assert_eq!(out.status.success(), success, "{stderr}");
             assert!(stderr.contains(message), "{stderr}");
         };
-        check(false, true, "SKIP (bwrap unavailable): BUG-2169 live bubblewrap: bwrap executable missing from PATH");
+        let unavailable = "unavailable";
+        check(unavailable, false, true, "SKIP (bwrap unavailable): BUG-2169 live bubblewrap: bwrap executable missing from PATH");
         let required = "AIDA_REQUIRE_BWRAP_LIVE: bwrap executable missing from PATH";
-        check(true, false, required);
+        check(unavailable, true, false, required);
         let exe = dir.path().join("bwrap");
+        write_executable(&exe, "#!/bin/sh\nexit 0\n");
+        check("live", true, true, "live probe succeeded");
         write_executable(&exe, "#!/nonexistent/bug-2701\n");
-        check(false, false, "failed to start bwrap capability probe");
+        check(
+            unavailable,
+            false,
+            false,
+            "failed to start bwrap capability probe",
+        );
         let denial = "bwrap: Creating new namespace failed: Operation not permitted";
         for (prefix, exit) in [("bad ", "exit 1"), ("", "exit 2"), ("", "kill -TERM $$")] {
             let script = format!("#!/bin/sh\necho '{prefix}{denial}' >&2\n{exit}");
             write_executable(&exe, script);
-            check(false, false, "unexpected bwrap probe failure");
+            check(unavailable, false, false, "unexpected bwrap probe failure");
         }
         write_executable(&exe, format!("#!/bin/sh\necho '{denial}' >&2\nexit 1"));
-        check(false, true, "SKIP (bwrap unavailable): BUG-2169 live bubblewrap: unprivileged namespace creation unavailable");
+        check(unavailable, false, true, "SKIP (bwrap unavailable): BUG-2169 live bubblewrap: unprivileged namespace creation unavailable");
     }
 
     /// Use the workspace's ignored target when it is outside a seat.
