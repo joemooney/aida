@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T12:49:43.609088958Z
+modified_at: 2026-11-24T12:49:48.677414963Z
 req_type: Task
 tags:
 - review
@@ -162,6 +162,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3862 AC1 PASS: the PR targets integration, the original and implementation commits credit Joe Mooney, and the registration hunks match the original stable patch ID. AC2 PARTIAL: source includes leading-dash, traversal and Git-error regressions, with round-two coverage for invalid rules, the .git pointer, missing shallow parent, forge head versus stale local branch, and credential exclusions before revision-content reads. Git metadata protection and exact PR evidence remain incomplete in the cases below. The findings do not depend on intervening base changes to scripts/ratchet-set.json or scripts/store-writers.toml. Fast source gates passed at the pinned head. Fast compile and merge-hold clearance were pending at review time. Review used source and existing evidence without local builds or tests.. No triage reason was given.'
   created_at: 2026-11-24T12:49:43.609078090Z
   modified_at: 2026-11-24T12:49:43.609078090Z
+- id: 01a20d9b-271e-7010-9d6d-e1f6d62a9e15
+  author: joe
+  content: 'INTEGRATION SEAT CORRECTION (integration-30, 05:52): my 05:40 widened-r2 PASS missed three gaps an independent CR found (advisor-ordered FINAL r3, <=60 lines): (a) a .git GITFILE pointing at an ordinarily named git dir (gitdir: ../meta) means --write meta/config writes into git metadata, which the ''.git''-component check can''t see. The confinement must resolve the real git dir (git rev-parse --absolute-git-dir / --git-common-dir) and refuse paths under it. (b) Replace refs: refs/replace can substitute the objects the review reads, so the ''pinned evidence'' needs --no-replace-objects or GIT_NO_REPLACE_OBJECTS=1 on every git call. (c) GH_REPO: an inherited GH_REPO can retarget PR-mode forge metadata to another repo; pin or clear it as forge::github_core_budget does via Repository::pin_command (TASK-3852). The r3 pre-check will check all three plus a test each.'
+  created_at: 2026-11-24T12:49:48.677414963Z
+  modified_at: 2026-11-24T12:49:48.677414963Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
   author: joe
