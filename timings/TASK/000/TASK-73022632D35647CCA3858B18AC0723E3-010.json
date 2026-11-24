@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-73022632D35647CCA3858B18AC0723E3-010",
+  "publishes": [
+    {
+      "at": "2026-11-24T17:07:07.379117304Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-15T20:47:38.515487291Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T13:34:49.012430469Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T13:34:49.046115116Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T14:41:36.526129082Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T20:38:50.297949836Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T20:38:50.322708087Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T17:07:07.162257543Z",
+      "spec": "TASK-73022632d35647cca3858b18ac0723e3-010",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "289cc394a334ee2760c79067fd871bbe66f9c5a9",
+        "pr": 4432,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
