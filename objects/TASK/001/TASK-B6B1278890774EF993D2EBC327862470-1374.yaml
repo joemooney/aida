@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The lease_lock (session/lease_lock.rs:55) and seat_authority (gate/seat_authority.rs:189) exclusive locks gain a TRY-WITH-DEADLINE variant returning a typed Timeout. Existing callers keep their current blocking behaviour unless they opt in (NOT a global semantics change). Test: a lock held elsewhere → Timeout within the deadline.
   - AC2: The contained.rs:2312 error-unwind wait is bounded by a deadline; past it the attempt is recorded as RECOVERY WORK (never blocks forever, never silently drops) and the caller returns. Test: an unwind past the deadline → recovery recorded, caller returns.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-24T21:27:38.076684996Z
+modified_at: 2026-11-24T21:59:55.279075446Z
 req_type: Task
 tags:
 - launch
@@ -47,6 +47,12 @@ comments:
   modified_at: 2026-11-24T21:27:38.076684996Z
   session_id: 01a20f356c20
   harness_version: codex-cli 0.167.0
+- id: 01a20f92-988f-76f1-b230-7be2c80b1e9f
+  author: aida-publication-done
+  content: Implementer push 17aa093cb0ff declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T21:59:55.279074364Z
+  modified_at: 2026-11-24T21:59:55.279074364Z
+  session_id: 01a20f356c20
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
@@ -65,6 +71,14 @@ history:
   session_id: 01a20f356c20
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20f92-988f-76f1-b230-7bd11d15b52f
+  author: aida-publication-done
+  timestamp: 2026-11-24T21:59:55.279070434Z
+  session_id: 01a20f356c20
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
