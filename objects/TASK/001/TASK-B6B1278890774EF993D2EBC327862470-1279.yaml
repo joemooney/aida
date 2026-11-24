@@ -12,11 +12,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T00:33:38.392975070Z
+modified_at: 2026-11-24T00:33:40.461597773Z
 req_type: Task
 tags:
 - small
 - track:integration
+comments:
+- id: 01a20af9-006d-7311-9a44-c323ee456290
+  author: joe
+  content: Filed Approved per advisor-122 ruling 2026-11-23 17:40 (relayed by integration-30). Drain, p30 integration bundle.
+  created_at: 2026-11-24T00:33:40.461597773Z
+  modified_at: 2026-11-24T00:33:40.461597773Z
 history:
 - id: 01a20af8-f8c0-7502-a9b7-4065638fe1c1
   author: joe
