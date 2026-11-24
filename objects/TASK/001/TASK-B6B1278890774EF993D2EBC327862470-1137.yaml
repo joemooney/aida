@@ -18,7 +18,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T17:28:56.742501296Z
-modified_at: 2026-11-24T04:45:38.756107669Z
+modified_at: 2026-11-24T04:47:09.851226327Z
 req_type: Task
 tags:
 - carried-from:TASK-3823
@@ -36,6 +36,24 @@ comments:
     Advisor validation, 2026-11-21: agent-new reviewer previews for Codex and Claude from main, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT unset, still omit model and effort argv. They use the interactive preview route and prove no headless reviewer acceptance. Current config show likewise omits effective reviewer tuning. TASK-3171 is queued for read-only diagnostics using the actual headless resolver. TASK-3173 remains open for an actual launch from a PR worktree containing the tuning commit without env overrides.
   created_at: 2026-11-21T09:10:26.427212544Z
   modified_at: 2026-11-21T09:10:26.427212544Z
+- id: 01a20be1-4573-7df0-94fa-67ee1a4e9a77
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:47):
+    # TASK-3173: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3173` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3173 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3173)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE (product-15 21:50, filling idle dell1 slots): branch `int31-task-3173`, cut from origin/integration 3aad9dc80c5. PR base MUST be `integration`. SMALL-PR RULE binding (<=300 lines; ship the first coherent slice if bigger). STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission, mandate/train or the CI gate runner; if needed, STOP and punt.
+  created_at: 2026-11-24T04:47:09.851226327Z
+  modified_at: 2026-11-24T04:47:09.851226327Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fa0a-df31-7a52-a9db-d0f3a2dd4b37
   author: joe
