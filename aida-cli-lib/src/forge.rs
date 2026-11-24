@@ -1906,8 +1906,8 @@ pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
         let repo = Repository::load(&root).ok()?;
         repo.github_slug()?;
         let reading = (|| {
-            let binary = std::path::absolute(crate::kernel::resolve_gh_binary_for_probe()?).ok()?;
-            let mut command = Command::new(binary);
+            let gh_bin = std::path::absolute(crate::kernel::resolve_gh_binary_for_probe()?).ok()?;
+            let mut command = Command::new(gh_bin);
             repo.pin_command(&mut command);
             command
                 .current_dir(&root)
