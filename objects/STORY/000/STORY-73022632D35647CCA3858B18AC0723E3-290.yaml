@@ -1,5 +1,6 @@
 id: 01a20f7b-cc80-7d11-b0e7-eef30599d3c5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-290
+agreed_id: STORY-3107
 title: 'Review PR-4537: [AI:codex] fix(worktrees): retain missing checkouts with staged changes (BUG-2749)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f34`) for branch `bug-b6b1278890774ef993d2ebc327862470-510`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T21:35:16.706387406Z
   session_id: 01a20f34dcec
+  changes: []
+- id: 01a20f8a-6e4c-75e3-b891-d2a8653c55d5
+  author: joe
+  timestamp: 2026-11-24T21:51:00.172379176Z
   changes: []
 filed_at:
   code_sha: 5665f7c661c7b100b06434132c000715144387e7
