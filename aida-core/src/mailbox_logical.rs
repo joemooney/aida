@@ -582,6 +582,8 @@ impl Query {
 /// number of small-file reads (no listing, no git process).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadLimits {
+    #[cfg(test)]
+    expire_at_retained_checkpoint: Option<usize>,
     pub deadline: Instant,
     pub max_roots: usize,
     pub max_entries: usize,
@@ -602,6 +604,8 @@ impl ReadLimits {
 
     pub fn with_deadline(deadline: Instant) -> Self {
         Self {
+            #[cfg(test)]
+            expire_at_retained_checkpoint: None,
             deadline,
             max_roots: 512,
             max_entries: 16_384,
@@ -815,7 +819,9 @@ pub fn relay_run_unread_deliveries(
     // (advisor ruling on TASK-...-077). trace:STORY-1843 | ai:claude
     let receipts_unknown = snapshot.anchor_error.is_some();
     let mut out = RelayRunDeliveries {
-        complete: snapshot.live_sources_observed() && !receipts_unknown,
+        complete: snapshot.live_sources_observed()
+            && !snapshot.retained_inventory_incomplete
+            && !receipts_unknown,
         receipts_unknown,
         ..Default::default()
     };
@@ -876,6 +882,9 @@ pub struct LogicalSnapshot {
     /// The receipt anchor could not be read for some key: acknowledgements
     /// recorded there may be missing, so the view is partial.
     pub anchor_error: Option<SourceErrorCode>,
+    pub retained_inventory_incomplete: bool,
+    /// Failure to open the shared retained inventory, before any per-ID lookup.
+    pub retained_open_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
     /// Observed seat messages with missing or unverified sidecars.
@@ -899,6 +908,7 @@ impl LogicalSnapshot {
     /// history was materialized.
     pub fn complete(&self) -> bool {
         !self.history_truncated
+            && !self.retained_inventory_incomplete
             && self.inventory_error.is_none()
             && self.anchor_error.is_none()
             && !matches!(self.canonical, CanonicalCoverage::Refused(_))
@@ -970,6 +980,7 @@ impl LogicalSnapshot {
         let local_only = self.inventory_error == Some(SourceErrorCode::NotAGitCheckout);
         (self.inventory_error.is_none() || local_only)
             && self.anchor_error.is_none()
+            && self.retained_open_error.is_none()
             && match self.canonical {
                 CanonicalCoverage::Refused(SourceErrorCode::NotAGitCheckout) => local_only,
                 CanonicalCoverage::Refused(_) => false,
@@ -1109,16 +1120,15 @@ fn snapshot_for_policy(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let (delivered, pending_deliveries, delivery_conflicts, mut unknown_ids, missing_seat_sidecars) =
-        delivery_gates(
-            ctx,
-            &observed,
-            salvaged,
-            unsighted,
-            audience,
-            &mut anchor,
-            &mut budget,
-        );
+    let (
+        delivered,
+        pending_deliveries,
+        delivery_conflicts,
+        mut unknown_ids,
+        missing_seat_sidecars,
+        retained_inventory_incomplete,
+        retained_open_error,
+    ) = delivery_gates(ctx, &observed, salvaged, unsighted, audience, &mut budget);
     let (mut records, mut conflicts) = reconcile(
         &observed,
         local_count,
@@ -1218,6 +1228,8 @@ fn snapshot_for_policy(
         retention: RetentionCoverage::Unestablished,
         exact_found: None,
         anchor_error: anchor.error,
+        retained_inventory_incomplete,
+        retained_open_error,
         missing_seat_sidecars,
         inspection_unknown_ids: unknown_ids.clone(),
         pending_deliveries: pending_deliveries
@@ -1510,6 +1522,8 @@ struct Budget {
     max_roots: usize,
     entries_left: usize,
     retained_probes_left: usize,
+    #[cfg(test)]
+    expire_at_retained_checkpoint: Option<usize>,
     max_message_bytes: u64,
     bytes_left: u64,
 }
@@ -1521,6 +1535,8 @@ impl Budget {
             max_roots: limits.max_roots,
             entries_left: limits.max_entries,
             retained_probes_left: limits.max_retained_probes,
+            #[cfg(test)]
+            expire_at_retained_checkpoint: limits.expire_at_retained_checkpoint,
             max_message_bytes: limits.max_message_bytes,
             bytes_left: limits.max_total_bytes,
         }
@@ -1528,6 +1544,23 @@ impl Budget {
 
     fn expired(&self) -> bool {
         Instant::now() >= self.deadline
+    }
+
+    // trace:TASK-3851 | ai:codex
+    fn check_retained_deadline(&mut self) -> Result<(), SourceErrorCode> {
+        #[cfg(test)]
+        if let Some(left) = self.expire_at_retained_checkpoint.as_mut() {
+            if *left == 0 {
+                self.deadline = Instant::now();
+            } else {
+                *left -= 1;
+            }
+        }
+        if self.expired() {
+            Err(SourceErrorCode::OverBudget)
+        } else {
+            Ok(())
+        }
     }
 
     /// Draw one directory entry from the snapshot-wide entry budget.
@@ -2195,8 +2228,11 @@ enum DeliveryGate {
 /// after the sending worktree is retired. Faults stay local to their
 /// message: a retained sidecar or a queued delivery's binding that cannot be
 /// read or parsed hides that one message (its ownership is unknown) and
-/// offers nothing to bind, without making the whole view partial. Only a
-/// retained area that cannot be opened at all is a view-wide anchor error.
+/// offers nothing to bind. An over-budget lookup also marks the retained
+/// inventory incomplete. Unrelated observed deliveries remain eligible for
+/// ACK. Failure to open the retained inventory vetoes ACK for the snapshot
+/// via AckError::Partial and leaves receipt-anchor evidence separate.
+// trace:TASK-3861 | ai:codex
 ///
 /// `salvaged`: the sidecars of live sources whose message read failed but
 /// whose `.deliveries/` was read on its own.
@@ -2215,7 +2251,6 @@ fn delivery_gates(
     salvaged: Vec<DeliverySidecar>,
     unsighted: bool,
     audience: &PolicySubject<'_>,
-    anchor: &mut AnchorEvidence,
     budget: &mut Budget,
 ) -> (
     HashMap<String, DeliveryGate>,
@@ -2223,6 +2258,8 @@ fn delivery_gates(
     Conflicts,
     Vec<String>,
     Vec<SeatSidecarIssue>,
+    bool,
+    Option<SourceErrorCode>,
 ) {
     let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
@@ -2290,6 +2327,9 @@ fn delivery_gates(
         .into_iter()
         .filter(|id| !sidecars.contains_key(*id))
         .collect();
+    // trace:TASK-3851 | ai:codex
+    let mut retained_inventory_incomplete = false;
+    let mut retained_open_error = None;
     let mut unexamined = HashSet::new();
     if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
         match RetainedDeliveries::open(common.path(), budget) {
@@ -2302,6 +2342,7 @@ fn delivery_gates(
                         Ok(_) => {}
                         Err(code) => {
                             if code == SourceErrorCode::OverBudget {
+                                retained_inventory_incomplete = true;
                                 unexamined.insert(id);
                             }
                             unknown_ids.insert(id.to_string());
@@ -2311,7 +2352,8 @@ fn delivery_gates(
                 }
             }
             Err(code) => {
-                anchor.error.get_or_insert(code);
+                retained_open_error = Some(code);
+                retained_inventory_incomplete = true;
                 for &id in &wanted {
                     if code == SourceErrorCode::OverBudget {
                         unexamined.insert(id);
@@ -2404,6 +2446,8 @@ fn delivery_gates(
         conflicts,
         unknown_ids.into_iter().collect(),
         missing_seat_sidecars,
+        retained_inventory_incomplete,
+        retained_open_error,
     )
 }
 
@@ -2422,6 +2466,12 @@ struct RetainedDeliveries {
 
 impl RetainedDeliveries {
     fn open(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
+        let result = Self::open_generations(common, budget);
+        budget.check_retained_deadline()?;
+        result
+    }
+
+    fn open_generations(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
         let mut dir = PinnedDir::open_root(common)?;
         for component in RETAINED_PATH {
             match dir.child_dir(component)? {
@@ -2435,6 +2485,7 @@ impl RetainedDeliveries {
                 continue;
             };
             for generation in key_dir.names(budget)? {
+                budget.check_retained_deadline()?;
                 let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))?
                 else {
                     continue;
@@ -2455,6 +2506,16 @@ impl RetainedDeliveries {
     /// Every retained sidecar for message `id`. `Err` when one exists but
     /// cannot be read or parsed: that message's ownership is unknown.
     fn lookup(
+        &self,
+        id: &str,
+        budget: &mut Budget,
+    ) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+        let result = self.probe_generations(id, budget);
+        budget.check_retained_deadline()?;
+        result
+    }
+
+    fn probe_generations(
         &self,
         id: &str,
         budget: &mut Budget,

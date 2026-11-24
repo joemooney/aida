@@ -4,6 +4,7 @@ A presentation for newcomers and engineering management, centered on **a governe
 
 - Open [index.html](index.html) for the interactive showcase.
 - Open [executive-brief.html](executive-brief.html) for a concise meeting handout. Its Print / Save as PDF button uses the browser's print dialog.
+- Open [code-review.html](code-review.html) for the interactive presentation and technical deep-dive on AIDA's deterministic Rust code review engine (`aida review prepare`).
 - Open [engineering-audit.html](engineering-audit.html) for the interactive DORA, GitClear, and LinearB engineering architecture & delivery benchmark report.
 - Read [the detailed overview](../what-is-aida.md) for supporting technical context and limitations.
 
