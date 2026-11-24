@@ -1,0 +1,31 @@
+id: 01a20c36-ce7a-7e93-b4b1-c138d928a547
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1302
+title: 'Review follow-up: Update the delivery_gates documentation at aida-core/src/mailbox_logical.rs:2228 to reflec'
+description: |-
+  From TASK-3851
+  Reviewed sha: ec99bae57bce2446943871b3b4d1babd39075e69
+
+  Update the delivery_gates documentation at aida-core/src/mailbox_logical.rs:2228 to reflect the two failure scopes. It currently says retained per-ID failures leave overall coverage complete and a retained open failure is a receipt-anchor error. Per-ID OverBudget now marks coverage incomplete while preserving unrelated ACK eligibility, and a retained open failure vetoes ACK through retained_open_error.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T06:20:48.122331880Z
+modified_at: 2026-11-24T06:20:48.122331880Z
+req_type: Task
+tags:
+- carried-from:TASK-3851
+- finding-hash:e4a77b39
+- from-review:TASK-3851
+relationships:
+- rel_type: References
+  target_id: 01a20abc-01fd-76f1-ac21-75a3cd1d36db
+  created_at: 2026-11-24T06:21:01.371060773Z
+filed_at:
+  code_sha: ec99bae57bce2446943871b3b4d1babd39075e69
+  branch: pr-4480
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
+  session: 01a20c3453b2
