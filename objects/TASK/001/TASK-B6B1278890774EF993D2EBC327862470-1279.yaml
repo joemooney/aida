@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: forge::github_core_budget resolves gh via crate::kernel::resolve_gh_binary_for_probe() (one line), so the seam is honoured. A test uses the fake gh (AIDA_TEST_GH_BINARY) and asserts the budget reading comes from it.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T01:53:34.641374697Z
+modified_at: 2026-11-24T02:27:11.544365979Z
 req_type: Task
 tags:
 - small
@@ -97,6 +97,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20b60-ee38-7800-82a3-dc33ca175bff
+  author: aida-session-start
+  timestamp: 2026-11-24T02:27:11.544364943Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
