@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-24T02:43:46.277186164Z
+modified_at: 2026-11-24T02:43:53.955784786Z
 req_type: Task
 tags:
 - doctor
@@ -152,6 +152,11 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3846 AC1 partial. The reader and doctor count and name observed hidden messages, but the inspection command fails for hyphenated IDs accepted by the reader. AC2 passes source review. The regression checks that the missing-sidecar body stays hidden and its count and ID appear in the reader and doctor reports. Rework F2 reports a corrupt retained sidecar with an unrelated live reader. F4 is partial because retained discovery can continue past the deadline and an exhausted per-ID scan can still report complete coverage. The authorized registry-load follow-up remains deferred. GitHub FAST source gates passed and FAST compile was pending at review time. No local tests or builds were run. The pinned head is two commits behind integration. Neither intervening commit changes the code implicated by these findings.. No triage reason was given.'
   created_at: 2026-11-24T02:43:44.385770110Z
   modified_at: 2026-11-24T02:43:44.385770110Z
+- id: 01a20b70-39e3-7910-beab-98529645d6dd
+  author: joe
+  content: 'Completed by product-15 (2026-11-23 19:40): shipped to main in promotion 28 (e5e3711c9f9, #4473), whose squash title lists all members as Refs, so the trailer did not complete it.'
+  created_at: 2026-11-24T02:43:53.955784786Z
+  modified_at: 2026-11-24T02:43:53.955784786Z
 history:
 - id: 01a20a5f-1ffd-7a60-89c4-efc8c7468411
   author: joe
