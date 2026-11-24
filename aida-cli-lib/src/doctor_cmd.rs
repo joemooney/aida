@@ -121,6 +121,22 @@ pub(crate) fn handle_doctor_command(
             json,
             fail_on_findings,
         } => {
+            // trace:STORY-3095 | ai:codex
+            if normalize_doctor_category(category).as_deref().ok() == Some("stalled-reviews") {
+                let root = main_worktree_root_from(&find_project_root()?);
+                let store = Storage::new(root.join(".aida-store")).load()?;
+                let report =
+                    DoctorReport::from_findings(crate::stalled_reviews::scan(&root, &store)?);
+                let reason = (*fail_on_findings && !report.findings.is_empty())
+                    .then(|| format!("{} stalled reviews", report.findings.len()));
+                return emit_doctor_report(
+                    report,
+                    reason,
+                    doctor_render_mode(*json),
+                    false,
+                    |_| {},
+                );
+            }
             // TASK-1473: `doctor check runaway-seats` is what the
             // maintenance scheduler dispatches every 15 minutes (the
             // watchdog job) — and the watchdog rule never touches the AIDA

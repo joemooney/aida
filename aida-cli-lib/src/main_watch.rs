@@ -1706,9 +1706,22 @@ impl Ports for Live {
     }
 
     fn mail(&mut self, key: &str, subject: &str, body: &str) -> Result<()> {
+        Self::advisor_mail(&self.root, "red-main-watch", key, subject, body)
+    }
+}
+
+impl Live {
+    // trace:STORY-3095 | ai:codex
+    pub(crate) fn advisor_mail(
+        root: &Path,
+        sender: &str,
+        key: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<()> {
         use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
         let id = format!("{key}-advisor");
-        if aida_core::mailbox::read_local_messages(&self.root)?
+        if aida_core::mailbox::read_local_messages(root)?
             .iter()
             .any(|m| m.id == id)
         {
@@ -1717,7 +1730,7 @@ impl Ports for Live {
         let message = Message {
             id: id.clone(),
             thread_id: key.to_string(),
-            from: "red-main-watch".into(),
+            from: sender.into(),
             to: Recipient::Agent("advisor".into()),
             timestamp: Utc::now().timestamp_millis(),
             in_reply_to: None,
@@ -1733,7 +1746,7 @@ impl Ports for Live {
             from_seat: None,
             relayed_from: None,
         };
-        match aida_core::mailbox::write_local_message(&self.root, &message) {
+        match aida_core::mailbox::write_local_message(root, &message) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
             Err(e) => Err(e.into()),

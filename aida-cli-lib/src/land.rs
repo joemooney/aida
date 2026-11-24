@@ -1433,8 +1433,8 @@ fn short(sha: &str) -> &str {
 }
 
 /// CI summed over a GitHub `statusCheckRollup`.
-#[cfg(test)]
-fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
+// trace:STORY-3095 | ai:codex
+pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     ci_of_checks(rollup.as_array().into_iter().flatten())
 }
 
