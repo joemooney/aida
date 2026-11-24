@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:28:56.742501296Z
-modified_at: 2026-11-24T04:51:53.550089150Z
+modified_at: 2026-11-24T04:56:06.428673462Z
 req_type: Task
 tags:
 - carried-from:TASK-3823
@@ -75,6 +75,11 @@ comments:
   created_at: 2026-11-24T04:51:53.550078898Z
   modified_at: 2026-11-24T04:51:53.550078898Z
   session_id: 01a20be3ab6a
+- id: 01a20be9-441d-7203-998f-a6aadcc63e07
+  author: joe
+  content: 'CLOSED as obsolete (advisor-122 ruling 2026-11-23 21:59; product-15): superseded by #4405 (TASK-3824), which reverted the temporary reviewer-model boost (TASK-3823) before pickup, so there is no boost-window launch to verify. The durable requirement moved to STORY-1033 (owner of [agents.<vendor>.seats] model config): whenever a reviewer/seat model override is configured, the launch line must name the effective model.'
+  created_at: 2026-11-24T04:56:06.428673462Z
+  modified_at: 2026-11-24T04:56:06.428673462Z
 history:
 - id: 01a1fa0a-df31-7a52-a9db-d0f3a2dd4b37
   author: joe
