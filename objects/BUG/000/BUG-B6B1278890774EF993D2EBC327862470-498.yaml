@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T00:49:21.617766504Z
+modified_at: 2026-11-24T00:50:47.339934025Z
 req_type: Bug
 tags:
 - track:integration
@@ -18,6 +18,24 @@ comments:
   content: 'Draft to Approved + drain: advisor-122 ruling 2026-11-23 17:52 (relayed by integration-30); next integration bundle. Product note: if the classifier lives under aida-cli-lib/src/gate/ (protected floor), the lane must punt to main/strict.'
   created_at: 2026-11-24T00:49:21.617766504Z
   modified_at: 2026-11-24T00:49:21.617766504Z
+- id: 01a20b08-e4bf-7963-aa96-3c45807a77ee
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:50):
+    # BUG-2737: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2737` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2737 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2737)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE p30 (advisor-122 ruling 17:52; product-15): branch `int30-bug-2737`, cut from origin/integration 3e8f586ad41. PR base MUST be `integration`. STRICT-PATH STOP: do not touch aida-cli-lib/src/gate/ (protected floor), leases, claims, grants, containment, session_reap, admission or the CI gate runner; if the fix needs them, STOP and punt.
+  created_at: 2026-11-24T00:50:47.339934025Z
+  modified_at: 2026-11-24T00:50:47.339934025Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b07-3d37-7d11-b94a-d087427bce06
   author: joe
