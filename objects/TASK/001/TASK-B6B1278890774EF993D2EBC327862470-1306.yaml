@@ -7,18 +7,17 @@ description: |-
   Reviewed sha: 328f196e4982242add799a3686bb4e0455f5b1e6
 
   tests/test_python_discovery.py:57 uses only a bare TASK-3856 trace. The supplied criteria audit still has no executable test links for AC1 or AC2. Attach criterion-level trace markers to the existing disabled/enabled fixture and to the added route reachability regressions, as applicable.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T06:30:19.709652585Z
-modified_at: 2026-11-24T12:30:43.263924106Z
+modified_at: 2026-11-24T15:53:26.895390080Z
 req_type: Task
 tags:
 - carried-from:TASK-3856
 - finding-hash:9c1757ff
 - from-review:TASK-3856
-- track:integration
 relationships:
 - rel_type: References
   target_id: 01a20bc9-3ae1-72a2-90e2-73f6c26a6ddf
@@ -54,6 +53,22 @@ history:
   - field_name: tags
     old_value: carried-from:TASK-3856, finding-hash:9c1757ff, from-review:TASK-3856
     new_value: carried-from:TASK-3856, finding-hash:9c1757ff, from-review:TASK-3856, track:integration
+- id: 01a20e43-142a-7e80-8170-99e35e9f3d1c
+  author: aida-auto-bump
+  timestamp: 2026-11-24T15:53:26.826751471Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a20e43-146f-7a90-b1d6-993667a43d96
+  timestamp: 2026-11-24T15:53:26.895386933Z
+  agent: aida
+  commit_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
+  summary: 'Advisor (delegated authority): promotion 35, linear on main 8dfad228d58 + 2 cherry-picks; per-commit patch-ids match approved integration squashes (e718bc07, 88d8f9c4); 11 files +1273; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 328f196e4982242add799a3686bb4e0455f5b1e6
@@ -63,3 +78,7 @@ filed_at:
   aida_build_sha: aaeb386bf51
   vendor: claude
   session: 01a20c3c4ff1
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T15:53:26.826743957Z
+  completion_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
