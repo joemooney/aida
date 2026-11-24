@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: Restore a detach-enabled assertion for explicit JSON/TOON output at a TTY: EITHER they still defer (the pre-C rule) and a test asserts that, OR a test proves the deferral was removed on purpose (citing the change that removed it).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:33:42.356470431Z
-modified_at: 2026-11-24T02:49:51.606020539Z
+modified_at: 2026-11-24T02:54:07.203788848Z
 req_type: Task
 tags:
 - small
@@ -133,6 +133,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a20b79-9563-72f0-be3c-21d3027be6a1
+  author: aida-session-start
+  timestamp: 2026-11-24T02:54:07.203785722Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
