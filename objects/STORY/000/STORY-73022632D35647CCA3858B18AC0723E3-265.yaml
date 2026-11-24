@@ -1,5 +1,6 @@
 id: 01a20c18-bdd7-73e1-b4db-3576509fa0c5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-265
+agreed_id: STORY-3079
 title: 'Review PR-4491: [AI:codex] fix(schedule): route red-main watch failures to advisor (TASK-3218)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20be5`) for branch `int31-task-3218`.
@@ -60,6 +61,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20c33-24c7-7c71-8c39-e348bab82983
+  author: joe
+  timestamp: 2026-11-24T06:16:48.071364087Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
   branch: main

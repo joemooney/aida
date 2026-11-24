@@ -1,5 +1,6 @@
 id: 01a20c28-5a15-7bf3-b1d2-faed887533b2
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1299
+agreed_id: TASK-3318
 title: 'Review follow-up: The newly eligible origin-named branches can produce misleading ship recommendations. Addi'
 description: |-
   From TASK-3857
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20bd3-bad1-70e2-90f2-267562371b64
   created_at: 2026-11-24T06:05:13.675665369Z
+history:
+- id: 01a20c32-6701-7652-8d3d-d108049f49c3
+  author: joe
+  timestamp: 2026-11-24T06:15:59.489773303Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 929103959163eb27f0a485945b944ea813863e7a
   branch: pr-4490

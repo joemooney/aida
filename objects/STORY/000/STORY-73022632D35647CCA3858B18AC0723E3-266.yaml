@@ -1,5 +1,6 @@
 id: 01a20c28-7ea8-7da1-acd0-a18ee5b3df5f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-266
+agreed_id: STORY-3078
 title: 'Review PR-4492: [AI:codex] fix(ci): exclude disabled steps from Python test wiring (TASK-3856)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20bee`) for branch `int31-task-3856`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T06:05:38.382126593Z
   session_id: 01a20beec6d4
+  changes: []
+- id: 01a20c32-e40b-7043-a651-25c089bef836
+  author: joe
+  timestamp: 2026-11-24T06:16:31.499275758Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
