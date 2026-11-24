@@ -1,5 +1,6 @@
 id: 01a20e95-9bd9-7c91-8b82-b71c03e9390c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-284
+agreed_id: STORY-3101
 title: 'Review PR-4475: [AI:codex] fix(leases): record why an automated shelve changed spec status (BUG-2736)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20e4f`) for branch `bug-b6b1278890774ef993d2ebc327862470-497`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T17:24:05.572783473Z
   session_id: 01a20e4f3409
+  changes: []
+- id: 01a20eca-491a-7020-ab29-0a9fde68a4de
+  author: joe
+  timestamp: 2026-11-24T18:21:07.738986575Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69

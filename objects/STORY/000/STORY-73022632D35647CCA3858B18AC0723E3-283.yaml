@@ -1,5 +1,6 @@
 id: 01a20e8f-bb76-7432-b2c8-d5508236ebf9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-283
+agreed_id: STORY-3100
 title: 'Review PR-4525: [AI:codex] fix(review): bound glob compilation and resolve snippet anchors (Refs TASK-3872)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20e3d`) for branch `int36-task-3872`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T17:17:45.390534963Z
   session_id: 01a20e3d38ce
+  changes: []
+- id: 01a20eca-1082-78b3-bae0-5ce070c0cd13
+  author: joe
+  timestamp: 2026-11-24T18:20:53.250610215Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
