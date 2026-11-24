@@ -1,0 +1,32 @@
+id: 01a20bd7-7f29-7ea0-8ba8-850b4c82afe6
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-262
+title: 'Review PR-4486: [AI:codex] fix(forge): include repository discovery in the budget and resolve gh before changing directories (TASK-3854)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20baa`) for branch `int31-task-3854`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4486>
+  - Branch: `int31-task-3854` → `integration`
+
+  ## Covers
+
+  - TASK-3854
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4486` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T04:36:41.897889917Z
+modified_at: 2026-11-24T04:36:41.897889917Z
+req_type: Story
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f
+  session: 01a20baa19b8
