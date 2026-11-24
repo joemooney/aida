@@ -67,13 +67,9 @@ fn stalled_version_probe_exhausts_risk_budget() {
         ),
     );
     let mut env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TEST_GH_BINARY", None)]);
-    let path = std::env::var_os("PATH").unwrap_or_default();
     env.set_key(
         "PATH",
-        std::env::join_paths(
-            std::iter::once(root.to_path_buf()).chain(std::env::split_paths(&path)),
-        )
-        .unwrap(),
+        std::env::join_paths([root, Path::new("/usr/bin"), Path::new("/bin")]).unwrap(),
     );
     let start = Instant::now();
     let head = "a".repeat(40);
