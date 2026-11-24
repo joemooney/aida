@@ -13,12 +13,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-24T05:08:38.936494586Z
+modified_at: 2026-11-24T05:08:41.249352106Z
 req_type: Story
 tags:
 - hygiene
 - policy
 - sessions
+comments:
+- id: 01a20bf4-c8a1-7a10-a65d-e1c1340f4b3e
+  author: joe
+  content: 'Draft to Approved with the POLICY DECIDED (advisor-122 2026-11-23 22:10; LOW, strict, MAIN, drive): reapable when the tree is clean (per BUG-2742), no stash, and every local commit is reachable from an origin ref verified by a fresh bounded fetch at reap time, regardless of PR state; record branch + tip SHA on the owning spec before reaping; refuse with ''publication unknown'' if the fetch fails. AC1 closed-unmerged+published -> reaped with comment; AC2 one unpushed commit -> refused; AC3 fetch failure -> refused. HOLD until BUG-2742 lands.'
+  created_at: 2026-11-24T05:08:41.249352106Z
+  modified_at: 2026-11-24T05:08:41.249352106Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
