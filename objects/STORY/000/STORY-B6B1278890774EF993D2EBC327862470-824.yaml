@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: ONE function, called in the FINAL before_spawn hook, reloads the anchor and members FRESH and re-applies the hold gate, the track/headless policy and the WIP limit, refusing BEFORE spawn on any violation. No other site re-checks authority piecemeal.
   - AC2: Tests: (a) a hold placed during the wait refuses the spawn; (b) track:operator set after admission refuses the spawn; (c) a pull that flips the track refuses the spawn.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T18:52:59.780776414Z
+modified_at: 2026-11-24T19:29:01.169328831Z
 req_type: Story
 tags:
 - admission
@@ -493,6 +493,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a20f08-70f1-7ac2-bff5-790c720fab06
+  author: aida-session-start
+  timestamp: 2026-11-24T19:29:01.169325793Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
