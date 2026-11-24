@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A reviewer-launch reservation holds admission.lock ONLY for the reservation write, not across the launch. Test: while a reviewer launch is blocked or slow, train admission still succeeds.
   - AC2: The auto-train's "admission.lock busy" alert names the holder's ACTIVITY (e.g. "review-watch launching reviewer for PR-4502") and its AGE. Test.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T13:08:40.506771590Z
+modified_at: 2026-11-24T14:53:43.360606051Z
 req_type: Bug
 tags:
 - admission
@@ -238,6 +238,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20e0c-65f9-7271-80e0-3c502307fe6c
+  author: aida-auto-bump
+  timestamp: 2026-11-24T14:53:43.289108201Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20e0c-6640-7451-adda-67bb9429b489
+  timestamp: 2026-11-24T14:53:43.360602931Z
+  agent: aida
+  commit_sha: 9cc76437f4f2054f6c97da341ed1b482c60c221d
+  summary: BUG-2746 AC1 PASS. The reservation transition releases the shared flock before launch work begins. The regressions exercise train admission during the launch callback and inspect the spawned shell for the exact lock inode after exec. AC2 PASS. Contention on the review-watch lock carries activity and age from member selection into the auto-train failure alert. The diagnostic checks the inode's flock holder and process start time, clears its record before unlock, and preserves the acquired guard on a diagnostic write failure. Regressions cover alert propagation, stale evidence after a legacy takeover, and injected ENOSPC. Reviewed the pinned landing diff against main at 8dfad228d589. The base-side store-writer inventory addition is independent of the two new lock-metadata entries. The implementer reported six focused passes. No local tests were run in review. Exact-head FAST CI passed, with the separate merge-hold gate awaiting recorded clearance at review time.
+  punted:
+  - 'punted: Round 1 full sweep for completing BUG-2746 (origin BUG-b6b1278890774ef993d2ebc327862470-507). - AC1 — verified by source inspection of execute_reservation and RuntimeLock, and by the new behavioral coverage in `cargo test -p aida-cli-lib bug2746_train_admission_during_reviewer_launch` and `cargo test -p aida-cli-lib bug2746_admission_fd_absent_after_exec`. The train acquires admission for an unrelated member while the reservation callback is still running, and the exec probe checks for the exact review-watch lock inode. The implementer reports these tests passed. I did not run local tests. - AC2 — unverified. The diff adds a supervisor alert fixture, but it does not exercise auto-train member selection contending with a review-watch transaction. The alert can also report the previous acquirer''s activity and age when the current holder has not written a record. Reviewed the complete landed diff from protected base 6c832e0d3a8b189ff57b0665563aafb822a7a71d to tree 8c31ab0de5b99f906be9d9161d26ed6dd821c85e. The attestation names the original PR head. That head is one commit behind the protected base. None of the findings depends on code changed by the intervening base commit. Exact-head CI fast gates and merge-hold gate passed. Fast compile was pending at review time.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
@@ -246,3 +262,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 103bb2ed7ea
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T14:53:43.289100921Z
+  completion_sha: 9cc76437f4f2054f6c97da341ed1b482c60c221d
