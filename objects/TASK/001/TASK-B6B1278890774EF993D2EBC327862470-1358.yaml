@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-24T22:41:59.565734956Z
+modified_at: 2026-11-24T23:47:41.579190625Z
 req_type: Task
 tags:
 - integration
@@ -30,6 +30,15 @@ comments:
     Probes covered case-insensitive head matching, full hex OIDs, missing or malformed evidence, fetch ref side effects, unique merge-base handling and resolver timeouts. Advisory classification grants no authority. Corrected the test deadline seam and environment guard, and adopted the maintenance-disabled Git fixture. Unreachable or unfetchable targets retain STRICT. Formatting and diff checks passed. Full fast gate still running; no PR-head CI exists before host publication.
   created_at: 2026-11-24T22:41:59.565734956Z
   modified_at: 2026-11-24T22:41:59.565734956Z
+  session_id: 01a20fa680dd
+  harness_version: codex-cli 0.167.0
+- id: 01a20ff5-472c-7690-911b-2ccce9625886
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a43bd93b6ba528bbb4263dd78f75bd80ff88c00f plus the native working diff. Host fast-gate follow-up: tests/task_3874_review_risk.rs:70 gives the stalled gh fixture a fixed Linux PATH. Verified the fixture is tracked and the ExecContext scan reports 1197 exact sites, zero additions. AC1: [evidence: behavioral-test] advanced-base regression passed. AC2: [evidence: behavioral-test] stalled resolver regression passed. Launcher job j20261124T231820362-3-0 executed both tests. Full make check-ci-fast exited 0, including all 48 fast source gates and application ratchets. Only the test fixture changed during this round.
+  created_at: 2026-11-24T23:47:41.579190625Z
+  modified_at: 2026-11-24T23:47:41.579190625Z
   session_id: 01a20fa680dd
   harness_version: codex-cli 0.167.0
 history:
