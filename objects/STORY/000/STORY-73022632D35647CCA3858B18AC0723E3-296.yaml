@@ -1,0 +1,32 @@
+id: 01a20ff5-2252-7b62-a4dc-ebd3343eab32
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-296
+title: 'Review PR-4545: [AI:codex] fix(docs): clarify approved-head FULL CI scheduling (TASK-3282)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20fc2`) for branch `int35-task-3282`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4545>
+  - Branch: `int35-task-3282` → `integration`
+
+  ## Covers
+
+  - TASK-3282
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4545` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T23:47:33.074117935Z
+modified_at: 2026-11-24T23:47:33.074117935Z
+req_type: Story
+filed_at:
+  code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b
+  session: 01a20fc2545c
