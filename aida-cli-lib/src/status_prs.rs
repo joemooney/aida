@@ -2552,12 +2552,24 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         );
     };
 
+    // The full store snapshot includes parked work and takes precedence over
+    // caller summaries when both identify the same spec. trace:BUG-2741 | ai:codex
     let mut status_by_spec = std::collections::HashMap::new();
-    insert_summary_statuses(&mut status_by_spec, summaries);
-    insert_summary_statuses(
-        &mut status_by_spec,
-        &all_requirement_summaries(project_root),
-    );
+    for summary in summaries
+        .iter()
+        .chain(&all_requirement_summaries(project_root))
+    {
+        if let Some(id) = summary.agreed_id.as_ref().or(summary.spec_id.as_ref()) {
+            let status = if summary.deferred {
+                "deferred".to_string()
+            } else {
+                summary.status.to_ascii_lowercase()
+            };
+            status_by_spec.insert(id.to_ascii_uppercase(), status);
+        }
+    }
+    let excluded =
+        |status: &str| matches!(status, "deferred" | "completed" | "rejected" | "superseded");
 
     let live = process_probe::probe_live_claude_sessions();
     let now = chrono::Utc::now();
@@ -2597,15 +2609,12 @@ pub(crate) fn collect_unshipped_work_items_bounded(
     // carry real unshipped commits under, before the commit/patch probe ever
     // ran. The bound this exists for is "don't probe every stale ref in the
     // repo" (301+ of them), not "only probe two statuses" — so the gate is
-    // an EXCLUDE-list of the terminal statuses instead: everything that
-    // isn't Completed/Rejected/Superseded is still eligible for the probe.
-    // The exclusion set intentionally mirrors the terminal-status check
-    // applied to the resolved branch spec_id further below in this
-    // function, so a branch is never filtered here for a reason that
-    // wouldn't also filter it there. trace:BUG-1288 | ai:claude
+    // an EXCLUDE-list. Parked (deferred) specs are also quiet until resumed.
+    // Recheck the resolved spec below for candidates admitted by a recorded lease.
+    // trace:BUG-1288 | ai:claude
     let active_prefixes: Vec<String> = status_by_spec
         .iter()
-        .filter(|(_, status)| !matches!(status.as_str(), "completed" | "rejected" | "superseded"))
+        .filter(|(_, status)| !excluded(status))
         .map(|(spec, _)| spec.to_ascii_lowercase())
         .collect();
     let lease_branches: std::collections::HashSet<&str> =
@@ -2746,11 +2755,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         if live_scopes.contains(&spec_key) || live_branches.contains(&short_branch) {
             continue;
         }
-        if status_by_spec
-            .get(&spec_key)
-            .map(|status| matches!(status.as_str(), "completed" | "rejected" | "superseded"))
-            .unwrap_or(false)
-        {
+        if status_by_spec.get(&spec_key).is_some_and(|s| excluded(s)) {
             continue;
         }
         // BUG-1756: one candidate gets at most UNSHIPPED_PROBE_SLICE (and
@@ -3418,6 +3423,25 @@ mod story_1043_unshipped_work_tests {
             completed_at: None, // trace:TASK-1474 | ai:claude
             yaml_path: String::new(),
         }
+    }
+
+    // trace:BUG-2741 | ai:codex
+    #[test]
+    fn detector_skips_deferred_branch_until_deferral_is_lifted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        let branch = "bug-2688-journal-loop";
+        branch_with_commit(root, branch, "BUG-2688");
+        let mut spec = summary("BUG-2688", "Approved");
+        spec.deferred = true;
+
+        let scan = |spec| collect_unshipped_work_items(root, &[spec], true, false);
+        assert!(scan(spec.clone()).is_empty());
+        spec.deferred = false;
+        let rows = scan(spec);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch, branch);
     }
 
     // BUG-1288: stale refs must not enlarge the expensive probe set. This is
