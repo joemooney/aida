@@ -3178,3 +3178,46 @@ fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
         "cleanup reached salvage"
     );
 }
+
+// trace:TASK-3858 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_task_3858_stash_only_clone_hygiene_summary() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "stash-only", "c0ffee003858");
+    std::fs::write(clone.join("README.md"), "pending work\n").unwrap();
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=Seat",
+            "-c",
+            "user.email=seat@example.com",
+            "stash",
+        ],
+    );
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    let row = crate::session_reap::scan_clone_lease(
+        &fx.main,
+        &lease,
+        true,
+        &[],
+        &Default::default(),
+        lease.started_at,
+    );
+    assert_eq!(row.verdict, "skip");
+    let outcome = crate::session_hygiene::HygieneOutcome {
+        scan_skipped: vec![row],
+        ..Default::default()
+    };
+    for dry_run in [false, true] {
+        let summary = crate::session_hygiene::render_summary(&outcome, dry_run);
+        assert!(summary.contains("origin does not have"), "{summary}");
+        assert!(summary.contains("commit(s) on refs/stash"), "{summary}");
+        assert!(!summary.contains("git "), "{summary}");
+    }
+}

@@ -122,9 +122,10 @@ pub(crate) fn defer(
             format!("{scope} stays queued, but its queue row could not record the reason: {why:#}")
         }
     };
-    anyhow::Error::new(crate::standalone_implementer::StandaloneImplementerExit {
+    // trace:TASK-3154 | ai:codex
+    error.context(crate::standalone_implementer::StandaloneImplementerExit {
         code: EXIT_CODE,
-        message: format!("{error:#}\n{outcome}"),
+        message: outcome,
         vendor_exit: false,
     })
 }

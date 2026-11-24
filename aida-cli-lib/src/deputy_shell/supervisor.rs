@@ -256,6 +256,10 @@ mod tests {
             let base = dir.path().join("queues");
             let q = super::super::queue_in(&base, "test").unwrap();
             q.ensure().unwrap();
+            // Exercise the empty PID file a shell redirection can expose before echo writes.
+            // trace:BUG-2743 | ai:codex
+            let pid_path = q.root.join("child.pid");
+            std::fs::File::create(&pid_path).unwrap();
             let mut child = Command::new("/proc/self/exe")
                 .args([
                     "--exact",
@@ -266,19 +270,20 @@ mod tests {
                 .spawn()
                 .unwrap();
             let deadline = Instant::now() + Duration::from_secs(8);
-            while !q.root.join("child.pid").exists() && Instant::now() < deadline {
+            let runner_pid = loop {
+                if let Some(pid) = std::fs::read_to_string(&pid_path)
+                    .ok()
+                    .and_then(|contents| contents.trim().parse::<u32>().ok())
+                {
+                    break pid;
+                }
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("supervisor child did not write a parseable PID");
+                }
                 std::thread::sleep(Duration::from_millis(10));
-            }
-            if !q.root.join("child.pid").exists() {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!("supervisor child did not become ready");
-            }
-            let runner_pid: u32 = std::fs::read_to_string(q.root.join("child.pid"))
-                .unwrap()
-                .trim()
-                .parse()
-                .unwrap();
+            };
             unsafe {
                 libc::kill(child.id() as i32, signal);
             }

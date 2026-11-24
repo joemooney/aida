@@ -2769,8 +2769,24 @@ fn bug_2517_ownership_index_visits_corpus_once_per_discovery() {
 #[test]
 fn review_risk_is_ledger_metadata_not_verdict_authority() {
     let (_tmp, root) = root();
-    let _env =
-        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    // trace:BUG-2737 | ai:codex
+    let gh = root.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+[ "$*" = "pr view 999 --repo github.com/test/project --json headRefOid,baseRefOid" ] || exit 1
+printf '{"headRefOid":"%s","baseRefOid":"%s"}\n' "$(git rev-parse HEAD)" "$(git rev-parse integration)"
+"#,
+    );
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        &root,
+        None,
+        &[
+            ("AIDA_CONTAINED", None),
+            ("GIT_ALLOW_PROTOCOL", Some("ssh:file")),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
+    );
     git(&root, &["init", "--initial-branch=main", "--quiet"]);
     git(&root, &["config", "user.email", "test@example.com"]);
     git(&root, &["config", "user.name", "Test"]);
@@ -2787,11 +2803,37 @@ fn review_risk_is_ledger_metadata_not_verdict_authority() {
             "refs/remotes/origin/main",
         ],
     );
+    // Serve origin from a local bare main while keeping a real forge identity.
+    let origin = tempfile::tempdir().unwrap();
+    git(
+        &root,
+        &["clone", "--bare", ".", origin.path().to_str().unwrap()],
+    );
+    let ssh = root.join("fixture-ssh");
+    crate::test_exec::write_executable(
+        &ssh,
+        format!(
+            "#!/bin/sh\nexec git-upload-pack '{}'\n",
+            origin.path().display()
+        ),
+    );
+    git(&root, &["config", "core.sshCommand", ssh.to_str().unwrap()]);
+    git(&root, &["config", "ssh.variant", "ssh"]);
+    git(&root, &["checkout", "-qb", "integration"]);
+    std::fs::create_dir(root.join("scripts")).unwrap();
+    let sensitive = root.join("scripts/ci-structural-exclusions.json");
+    std::fs::write(&sensitive, "[]\n").unwrap();
+    git(&root, &["add", "scripts"]);
+    git(&root, &["commit", "-qm", "integration policy"]);
+    git(&root, &["checkout", "-qb", "topic"]);
     std::fs::write(root.join("docs/help.md"), "updated\n").unwrap();
-    git(&root, &["add", "."]);
+    git(&root, &["add", "docs"]);
     git(&root, &["commit", "-qm", "docs"]);
     let head = crate::gate::review_carryover::resolve_commit(&root, "HEAD").unwrap();
-    git(&root, &["remote", "add", "origin", root.to_str().unwrap()]);
+    git(
+        &root,
+        &["remote", "add", "origin", "git@github.com:test/project.git"],
+    );
     let change = ChangeKey::pr(999);
     for verdict in ["approved", "request-changes"] {
         let mut rec = record(verdict, &ts(0), None);
@@ -2804,7 +2846,12 @@ fn review_risk_is_ledger_metadata_not_verdict_authority() {
         assert_eq!(risk.tier, crate::review_risk::Tier::Fasttrack);
         assert!(risk.advisory_only);
         assert_eq!(risk.head.as_deref(), Some(head.as_str()));
-        assert!(risk.base.is_some());
+        assert_eq!(event.base_ref.as_deref(), Some("main"));
+        assert!(event.base_tip.is_some());
+        assert_eq!(
+            risk.base,
+            crate::gate::review_carryover::resolve_commit(&root, "integration")
+        );
         assert_eq!(event.verdict_record(), Some(&rec));
         store::append(&root, change, vec![event]).unwrap();
         let (mut parsed, body, _) = crate::review_verdict_show_body_with_coverage(
@@ -2835,11 +2882,22 @@ fn review_risk_is_ledger_metadata_not_verdict_authority() {
     let before = store::read_file(&root, change);
     let mut record = before.last().unwrap().verdict_record().unwrap().clone();
     record.insert("recorded_at".into(), ts(1).into());
-    git(&root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(&root, &["branch", "-f", "integration", "HEAD"]);
     let updated = event::verdict_event(&root, change, &record, None);
     assert_eq!(updated.risk.as_ref().unwrap()["tier"], "STRICT");
     store::append(&root, change, vec![updated]).unwrap();
     assert_eq!(store::read_file(&root, change).len(), before.len() + 1);
+    std::fs::write(sensitive, "[1]\n").unwrap();
+    git(&root, &["commit", "-qam", "change PR policy"]);
+    let stale = event::verdict_event(&root, change, &record, None);
+    assert_eq!(stale.risk.as_ref().unwrap()["tier"], "STRICT");
+    assert!(stale.risk.unwrap()["base"].is_null());
+    let head = crate::gate::review_carryover::resolve_commit(&root, "HEAD").unwrap();
+    record.insert("reviewed_sha".into(), head.into());
+    let sensitive_event = event::verdict_event(&root, change, &record, None);
+    let risk = sensitive_event.risk.unwrap();
+    assert_eq!(risk["tier"], "STRICT");
+    assert!(risk["reasons"].to_string().contains("sensitive path"));
     let mut legacy = serde_json::to_value(before.last().unwrap()).unwrap();
     legacy["risk"] = serde_json::json!({"tier": "future-or-malformed"});
     let tolerant: GateEvent = serde_json::from_value(legacy.clone()).unwrap();

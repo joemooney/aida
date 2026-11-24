@@ -119,7 +119,7 @@ comment. Disabled projects retain their existing result output.
 - `migrate` — rewrites existing IDs to a new format. The escape hatch for "I picked the wrong scheme," not a routine command — it touches every spec.
 - `hints` — toggles the state-transition hints printed inline (queue drained → open PR, etc.). `false` quiets them project-wide; the `AIDA_HINTS=false` env var overrides per-shell without writing config.
 - `user` — writes `~/.aida/preferences.toml` (preferred node id, fallback email). Machine-global, not per-project — it seeds defaults for future `init`s.
-- `menu` — a navigable TUI listing every configurable item — per row the knob's name, current value, built-in default, where it was set (scope: `.aida/config.toml` / env / built-in default), and a one-line explanation. The visual companion to `config show`: same resolved surface (it reuses the same policy registry), one scrollable screen, arrow-key navigation (↑/↓ or j/k, PgUp/PgDn, g/G, q/Esc). Read-only for now — edit knobs with the matching `config` subcommand or your `config.toml`. Needs a TTY; without one it prints a pointer to `config show` and exits cleanly.
+- `menu` — a read-only TUI for the policy registry shared with `config show`. Each row shows the knob’s name, current value, built-in default, source, and a short explanation. Use the arrow keys or j/k to scroll, PgUp/PgDn or g/G to jump, and q/Esc to exit. Without a TTY the command prints a pointer to `config show`. Use `config show` for the additional headless report with vendor tiers and per-seat model and effort. Edit settings with the matching `config` subcommand or in `config.toml`.
 
 <!-- trace:STORY-2821 | ai:claude -->
 **Reviewer stale-base policy.** `[review] stale_base` in `.aida/config.toml`

@@ -1793,6 +1793,17 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
     match args.action {
         land_args::LandCommand::Status => {
             let root = crate::find_project_root()?;
+            let json =
+                ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json);
+            // Report even if an exhausted budget prevents change discovery.
+            // trace:TASK-3847 | ai:codex
+            if let Some((summary, _)) = crate::forge::github_core_budget(&root) {
+                if json {
+                    eprintln!("{summary}");
+                } else {
+                    println!("{summary}");
+                }
+            }
             let started = std::time::Instant::now();
             let pass = live_pass(&root)?;
             // Every pass refreshes the snapshot `aida now` renders.
@@ -1801,7 +1812,7 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
                 eprintln!("the `aida now` snapshot was not written: {error:#}");
             }
             let rows = pass.rows;
-            if ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json) {
+            if json {
                 println!("{}", serde_json::to_string_pretty(&rows)?);
             } else {
                 print!("{}", render(&rows));
