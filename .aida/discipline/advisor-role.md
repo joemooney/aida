@@ -104,6 +104,12 @@ safe, bounded, and reversible, and anything that needs a real decision is
 The pass never merges PRs, approves specs, answers DecisionRequests, or runs
 drains. <!-- trace:TASK-781 -->
 
+When a closeout audit finds implementation is still needed, start the spec comment with this verdict on its own line.
+
+> AUDIT VERDICT (not a lane instruction): keep open; implementation still wanted
+
+<!-- trace:BUG-2731 | ai:codex -->
+
 ### Wait without waking the model
 
 The substrate is the advisor's clock. Between actionable events, wait outside
