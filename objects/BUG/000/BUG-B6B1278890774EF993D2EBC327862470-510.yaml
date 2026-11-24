@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T23:06:57.006354307Z
+modified_at: 2026-11-24T23:55:34.967878411Z
 req_type: Bug
 tags:
 - data-loss
@@ -201,6 +201,17 @@ comments:
   modified_at: 2026-11-24T23:06:57.006354307Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ffc-7e5f-7b10-aa3b-017d5920fb66
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f53950cd6b1a256b5a09ab6c523132f7a84177c3 plus the native working diff. Reviewed origin/main...HEAD and checked for untracked additions.
+    AC1: [evidence: behavioral-test] session_reap.rs:1936 acquires index.lock through comparison and retirement. The BUG-2749 fixture at tests/bug_1694_registration_clear_claim_tests.rs:206 exercises a held writer lock, an invalid trailing checksum, missing and malformed indexes, GC preview and apply with two registrations, and mailbox preview/apply parity. The split-index test at line 258 verifies preservation of the shared snapshot. Both tests passed.
+    AC2: [evidence: behavioral-test] The staged-only fixture confirmed that applied GC removed the clean sibling while preserving the staged index byte-for-byte. Scanned Rust and shell cleanup paths for global prune invocations. Clean split indexes are conservatively retained. Lowered both exact raw-Git counts, all seven TASK-2143 checks passed. The first fast gate found stale writer inventory rows. Regenerated the inventory and verified the five new rows have blocked dispositions. The fast gate rerun is in progress.
+  created_at: 2026-11-24T23:55:34.967878411Z
+  modified_at: 2026-11-24T23:55:34.967878411Z
+  session_id: 01a20feb6197
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
