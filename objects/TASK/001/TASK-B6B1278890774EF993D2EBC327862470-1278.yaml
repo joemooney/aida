@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When RecipientDirectory::load fails, doctor still runs the seat-sidecar inventory (or reports "seat-sidecar inventory SKIPPED: registry load failed: <error>"), never silence.
   - AC2: Test with a failing registry load.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T00:49:24.010934941Z
+modified_at: 2026-11-24T00:49:26.353921189Z
 req_type: Task
 tags:
 - doctor
@@ -25,6 +25,14 @@ comments:
   content: 'FOLDED (advisor-122 ruling 2026-11-23 17:52 on #4463 TASK-3846 r2; relayed by integration-30): this task now ALSO covers two deferred #4463 refinements. (a) The hint prints `aida mailbox read -- <id>` when an id starts with ''-'' (the test fixture uses ''-first-miss''). (b) Recheck the deadline BETWEEN retained-generation opens and AFTER the final probe, returning UNEXAMINED/incomplete instead of a late answer. Both with tests. Approved, drain, next integration bundle.'
   created_at: 2026-11-24T00:49:24.010934941Z
   modified_at: 2026-11-24T00:49:24.010934941Z
+history:
+- id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
+  author: joe
+  timestamp: 2026-11-24T00:49:26.353912116Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
   branch: main
