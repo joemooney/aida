@@ -1,5 +1,6 @@
 id: 01a20f2e-bd48-7c63-8590-41733ed26e03
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-286
+agreed_id: STORY-3103
 title: 'Review PR-4531: [AI:codex] fix(ship): use completing lane titles when all criteria are claimed (TASK-3876)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ef7`) for branch `task-b6b1278890774ef993d2ebc327862470-1360`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T20:11:18.126184408Z
   session_id: 01a20ef772c0
+  changes: []
+- id: 01a20f36-1c47-7280-b93c-9a10cc5b6c71
+  author: joe
+  timestamp: 2026-11-24T20:18:54.151998033Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
