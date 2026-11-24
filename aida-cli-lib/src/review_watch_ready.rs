@@ -6,6 +6,7 @@ use super::*;
 
 /// Wakes of one kind for a head reach the advisor once.
 pub(super) const WAKE_READY: &str = "ready";
+pub(super) const WAKE_TRAIN: &str = "ready-for-train";
 pub(super) const WAKE_AFTER_UPDATE: &str = "ready-after-update-branch";
 
 /// A change's readiness to ship. Recomputed on every evaluation from the
@@ -13,6 +14,7 @@ pub(super) const WAKE_AFTER_UPDATE: &str = "ready-after-update-branch";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Readiness {
     Ready,
+    ReadyForTrain,
     /// Behind its base only on paths it does not touch: ready once the
     /// branch is updated, which the watcher never does itself.
     ReadyAfterUpdateBranch {
@@ -24,6 +26,7 @@ pub(super) enum Readiness {
 impl Readiness {
     pub(super) fn line(&self, change: &forge::Change) -> String {
         match self {
+            Readiness::ReadyForTrain => "ready for the train".into(),
             Readiness::Ready => "ready".into(),
             Readiness::ReadyAfterUpdateBranch { behind } => format!(
                 "ready after its branch is updated ({behind} commit(s) behind `{}`, no overlapping paths): {}",
@@ -35,6 +38,7 @@ impl Readiness {
     }
     pub(super) fn wake(&self) -> Option<&'static str> {
         match self {
+            Readiness::ReadyForTrain => Some(WAKE_TRAIN),
             Readiness::Ready => Some(WAKE_READY),
             Readiness::ReadyAfterUpdateBranch { .. } => Some(WAKE_AFTER_UPDATE),
             Readiness::NotReady(_) => None,
@@ -103,11 +107,18 @@ pub(super) trait Evidence {
     fn required_checks(&self) -> Result<Vec<String>>;
     /// Commits behind the base, and whether the base's changes overlap the
     /// change's paths.
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)>;
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)>;
     /// Whether policy permits an overlapping stale head with a verified clean merge.
     // trace:TASK-3108 | ai:codex
     fn clean_stale_overlap(&self, _change: &forge::Change) -> Result<bool> {
         Ok(false)
+    }
+    // trace:BUG-2725 | ai:codex
+    fn clean_merge_train(&self) -> bool {
+        false
+    }
+    fn latest_ci_run(&self, _head: &str) -> Result<(String, String, u64)> {
+        anyhow::bail!("CI workflow identity unavailable")
     }
     /// The change's head, re-read from the forge.
     fn head(&self, change: &forge::Change) -> Result<String>;
@@ -128,12 +139,20 @@ pub(super) fn evaluate(
         Ok(None) => {}
         Err(error) => return not(format!("merge-hold evidence unreadable: {error:#}")),
     }
-    let (behind, overlap) = match evidence.base(change) {
+    let (behind, overlap, conflict) = match evidence.base(change) {
         Ok(base) => base,
         Err(error) => return not(format!("base evidence unknown: {error:#}")),
     };
     // trace:TASK-3108 | ai:codex
-    let clean_stale_overlap = if behind > 0 && overlap {
+    let clean_policy =
+        behind > 0 && !change.gitlab && change.base == "main" && evidence.clean_merge_train();
+    let clean_stale_overlap = if clean_policy {
+        match conflict {
+            Some(false) => true,
+            Some(true) => return not("merge-tree reports a conflict with the base".into()),
+            None => return not("base merge evidence unknown".into()),
+        }
+    } else if behind > 0 && overlap {
         match evidence.clean_stale_overlap(change) {
             Ok(clean) => clean,
             Err(error) => return not(format!("base merge evidence unknown: {error:#}")),
@@ -161,6 +180,36 @@ pub(super) fn evaluate(
             short(&checks.sha)
         ));
     }
+    if clean_policy {
+        let (workflow, run, attempt) = match evidence.latest_ci_run(&change.head) {
+            Ok(run) => run,
+            Err(error) => return not(format!("latest FULL CI unavailable: {error:#}")),
+        };
+        let mut aggregate = false;
+        let mut full = false;
+        for row in checks.checks.iter().filter(|row| {
+            row.workflow_id.as_ref() == Some(&workflow) && row.run_id.as_ref() == Some(&run)
+        }) {
+            if row.run_in_progress || row.run_attempt != Some(attempt) {
+                return not("latest full-tier CI attempt is unsettled".into());
+            }
+            let marker = match row.name.as_str() {
+                crate::forge::CI_AGGREGATOR_CHECK => &mut aggregate,
+                "ci-tier: full" => &mut full,
+                name if name.starts_with("ci-tier: ") => {
+                    return not("latest CI has a non-full-tier marker".into());
+                }
+                _ => continue,
+            };
+            if *marker || row.outcome != crate::forge::CheckOutcome::Passed {
+                return not("latest full-tier CI evidence is ambiguous or unsuccessful".into());
+            }
+            *marker = true;
+        }
+        if !(aggregate && full) {
+            return not("stale base requires successful full-tier CI on the exact head".into());
+        }
+    }
     let required = match evidence.required_checks() {
         Ok(required) => required,
         Err(error) => return not(format!("required CI checks unknown: {error:#}")),
@@ -187,7 +236,9 @@ pub(super) fn evaluate(
         Ok(head) => return not(format!("head moved to {} during evaluation", short(&head))),
         Err(error) => return not(format!("head re-read refused: {error:#}")),
     }
-    let readiness = if behind > 0 && !clean_stale_overlap {
+    let readiness = if clean_policy {
+        Readiness::ReadyForTrain
+    } else if behind > 0 && !clean_stale_overlap {
         Readiness::ReadyAfterUpdateBranch { behind }
     } else {
         Readiness::Ready
@@ -225,6 +276,10 @@ pub(super) fn wake_message(
         .unwrap_or_default();
     let ship = format!("`aida pr ship {}`", change.id);
     let (state, next) = match readiness {
+        Readiness::ReadyForTrain => (
+            format!("behind `{}` with a verified clean merge", change.base),
+            format!("Run `aida pr train {}` to land it.", change.id),
+        ),
         Readiness::ReadyAfterUpdateBranch { behind } => (
             format!(
                 "{behind} commit(s) behind `{}` on paths it does not touch",
@@ -294,6 +349,47 @@ impl Live<'_> {
 }
 
 impl Evidence for Live<'_> {
+    fn latest_ci_run(&self, head: &str) -> Result<(String, String, u64)> {
+        let slug = self
+            .repo
+            .github_slug()
+            .context("unknown GitHub repository")?;
+        let (_, project) = slug.split_once('/').context("unknown project")?;
+        let path = format!("repos/{project}/actions/workflows/ci.yml");
+        let body = crate::forge::landing_ci_api(self.root, self.repo, &path)?;
+        let workflow: serde_json::Value = serde_json::from_slice(&body)?;
+        anyhow::ensure!(
+            workflow["path"] == ".github/workflows/ci.yml",
+            "unexpected CI workflow path"
+        );
+        // TODO(BUG-2723): share latest_runs_at when available on the protected base.
+        anyhow::ensure!(valid_sha(head), "invalid CI head");
+        let id = workflow["id"].as_u64().context("missing CI workflow ID")?;
+        let path =
+            format!("repos/{project}/actions/workflows/{id}/runs?head_sha={head}&per_page=1");
+        let body = crate::forge::landing_ci_api(self.root, self.repo, &path)?;
+        let listing: serde_json::Value = serde_json::from_slice(&body)?;
+        let run = &listing["workflow_runs"][0];
+        anyhow::ensure!(
+            run["workflow_id"].as_u64() == Some(id)
+                && run["head_sha"] == head
+                && run["path"] == ".github/workflows/ci.yml"
+                && run["status"] == "completed"
+                && run["conclusion"] == "success",
+            "latest project CI run is missing, unsettled or unsuccessful"
+        );
+        Ok((
+            id.to_string(),
+            run["id"].as_u64().context("missing run ID")?.to_string(),
+            run["run_attempt"]
+                .as_u64()
+                .filter(|n| *n > 0)
+                .context("missing run attempt")?,
+        ))
+    }
+    fn clean_merge_train(&self) -> bool {
+        crate::landing_policy::load(self.root).clean_merge_train()
+    }
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)
     }
@@ -365,14 +461,15 @@ impl Evidence for Live<'_> {
     fn required_checks(&self) -> Result<Vec<String>> {
         required_checks(self.root)
     }
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
         if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
-            return Ok((behind, overlap));
+            return Ok((behind, overlap, change.conflict));
         }
         let probed = self.probe_base(change)?;
         Ok((
             probed.behind.context("behind count unknown")?,
             probed.overlap.context("overlap unknown")?,
+            probed.conflict,
         ))
     }
     // trace:TASK-3108 | ai:codex
