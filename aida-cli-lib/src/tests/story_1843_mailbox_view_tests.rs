@@ -1524,4 +1524,15 @@ fn story2767_retired_sender_preserves_seat_delivery_ownership() {
     assert_eq!(issues.len(), 4);
     assert_eq!(issues[0].reason, "delivery sidecar missing");
     assert!(issues[1..].iter().all(|issue| issue.reason == "UNEXAMINED"));
+
+    // trace:TASK-3851 | ai:codex
+    let registry = crate::agent_registry::agents_dir(&r.main);
+    std::fs::remove_dir_all(&registry).unwrap();
+    std::fs::write(registry, b"not a directory").unwrap();
+    assert!(crate::mailbox_resolver::RecipientDirectory::load(&r.main, &r.store).is_err());
+    let findings = crate::mail_backlog::scan(&r.main);
+    assert!(findings.iter().any(|f| f
+        .summary
+        .contains("delivery sidecar missing — aida mailbox read -- -first-miss (source")));
+    assert!(findings.iter().any(|f| f.id == "mail-backlog:unknown"));
 }
