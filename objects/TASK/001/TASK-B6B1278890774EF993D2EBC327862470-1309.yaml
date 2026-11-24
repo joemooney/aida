@@ -16,12 +16,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980293Z
-modified_at: 2026-11-24T07:23:02.368726551Z
+modified_at: 2026-11-24T07:25:04.567861295Z
 req_type: Task
 tags:
 - review
 - story-3076
 - track:integration
+comments:
+- id: 01a20c71-d746-7020-b652-b39047d5d756
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:25):
+    # TASK-3864 (STORY-3076 slice; advisor-122 ruling 2026-11-24 00:30; product-15). Lane: CODEX. Base: INTEGRATION (branch `int32-task-3864`, cut from origin/integration 965a6dd2b2c). PR base MUST be `integration`.
+
+    SOURCE: Joe's reference commit 0fdac177513 on branch story-3076-review-engine (git fetch origin story-3076-review-engine). Do NOT modify that branch.
+    CHERRY-PICK AS A FILE SUBSET: `git checkout 0fdac177513 -- <files>` (and hand-apply only this slice's hunks to shared files such as lib.rs). KEEP Joe's authorship: commit with `--author="Joe Mooney <joe.mooney@gmail.com>"`.
+    SLICE S4 = docs only: docs/showcase/code-review.html, docs/showcase/index.html, docs/showcase/executive-brief.html, docs/showcase/search-data.js, docs/showcase/trust.html, the docs/*.md link edits (product-capabilities.md, trust-and-evidence.md, review-process.md), docs/internal/presentation/aida-code-review-engine.md + its build.sh/README registration. DROP docs/showcase/aida-deterministic-code-review.pptx and the docs/showcase/publish.py .pptx change; remove or adjust the .pptx download button/link in code-review.html; keep the Marp source and the showcase HTML. Run `python3 docs/showcase/build.py --check`. Commit `[AI:codex] docs(review): review-engine showcase and presentation (TASK-3864)`. If a doc page refers to `aida review prepare`, note in the PR body that the command arrives in S2.
+    Add `// trace:TASK-3864 | ai:codex` only where you add code. One targeted test run, then `make check-ci-fast`, then ship the PR INTO integration. COMMIT your work.
+  created_at: 2026-11-24T07:25:04.567861295Z
+  modified_at: 2026-11-24T07:25:04.567861295Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
