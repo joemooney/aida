@@ -1,5 +1,6 @@
 id: 01a20c6b-05bf-7332-bafd-a222273d6164
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-271
+agreed_id: STORY-3085
 title: 'Review PR-4500: [AI:codex] fix(status): resolve unshipped work by spec identity (TASK-3860)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c31`) for branch `int31-task-3860`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T07:18:19.168701040Z
   session_id: 01a20c31cd32
+  changes: []
+- id: 01a20c85-6efa-7e50-94e5-75d570f73e4f
+  author: joe
+  timestamp: 2026-11-24T07:46:41.018625340Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c

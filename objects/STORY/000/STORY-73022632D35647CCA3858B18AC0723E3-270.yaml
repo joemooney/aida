@@ -1,5 +1,6 @@
 id: 01a20c61-e7c5-7dd0-ac52-4c6b74de79af
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-270
+agreed_id: STORY-3084
 title: 'Review PR-4499: [AI:codex] fix(mailbox): cover end-notice isolation for oversized seat deliveries (TASK-3861)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c41`) for branch `int32-task-3861`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20c85-3e8f-75b1-8d59-5ed0e41ccd33
+  author: joe
+  timestamp: 2026-11-24T07:46:28.623270957Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
   branch: main

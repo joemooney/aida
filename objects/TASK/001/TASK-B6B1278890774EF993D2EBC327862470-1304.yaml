@@ -1,5 +1,6 @@
 id: 01a20c3f-16e3-7bd2-8fde-e05ae2a0e37c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1304
+agreed_id: TASK-3324
 title: 'Review follow-up: scripts/discover-python-tests.py:65 discards every shard route when the matrix contains an'
 description: |-
   From TASK-3856
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20bc9-3ae1-72a2-90e2-73f6c26a6ddf
   created_at: 2026-11-24T06:30:05.993364643Z
+history:
+- id: 01a20c84-79c3-7490-991e-254bbfeb5773
+  author: joe
+  timestamp: 2026-11-24T07:45:38.243049345Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 328f196e4982242add799a3686bb4e0455f5b1e6
   branch: pr-4492

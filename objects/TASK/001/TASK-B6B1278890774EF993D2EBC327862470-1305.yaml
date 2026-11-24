@@ -1,5 +1,6 @@
 id: 01a20c3f-5367-7b30-9947-0480b4a2915f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1305
+agreed_id: TASK-3323
 title: 'Review follow-up: scripts/discover-python-tests.py:50 compares known conditional routes as literal strings. '
 description: |-
   From TASK-3856
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20bc9-3ae1-72a2-90e2-73f6c26a6ddf
   created_at: 2026-11-24T06:30:19.301029038Z
+history:
+- id: 01a20c84-4901-7be3-9170-76e350be73d1
+  author: joe
+  timestamp: 2026-11-24T07:45:25.761753764Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 328f196e4982242add799a3686bb4e0455f5b1e6
   branch: pr-4492

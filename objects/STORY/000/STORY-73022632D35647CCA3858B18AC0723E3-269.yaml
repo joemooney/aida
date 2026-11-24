@@ -1,5 +1,6 @@
 id: 01a20c5f-b897-7a01-a173-a13fab63d723
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-269
+agreed_id: STORY-3082
 title: 'Review PR-4498: [AI:codex] fix(main-watch): route GitHub authentication failures with their cause (TASK-3859)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c31`) for branch `int31-task-3859`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20c84-dcd2-7463-9b0a-617b2a14059a
+  author: joe
+  timestamp: 2026-11-24T07:46:03.602632750Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
   branch: main

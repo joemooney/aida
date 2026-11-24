@@ -1,5 +1,6 @@
 id: 01a20c77-240b-7661-a187-79a92f601809
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-045
+agreed_id: TASK-3320
 title: Review engine misses repository-root credential directories
 description: In the S1 reference, review_engine.rs:614 recognizes nested /.aws/ and /.ssh/ only. A repository-relative .aws/credentials or .ssh/config falls through to reviewable. Add path-component matching and root/nested fixtures before the CLI starts presenting source content.
 status: Draft
@@ -14,6 +15,13 @@ tags:
 - kind:observation
 - linked:STORY-3076
 - severity:major
+history:
+- id: 01a20c83-b64f-7602-98cc-554db51f875e
+  author: joe
+  timestamp: 2026-11-24T07:44:48.207571762Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0d3a0ae22

@@ -1,5 +1,6 @@
 id: 01a20c49-a299-7212-b305-facf3df23460
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-268
+agreed_id: STORY-3081
 title: 'Review PR-4496: [AI:codex] chore: Session hygiene: stash- and other-branch-specific reap refusal guidance (split from BUG-2742) (TASK-3858)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c0f`) for branch `int31-task-3858`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T06:41:41.028175828Z
   session_id: 01a20c0fef5f
+  changes: []
+- id: 01a20c84-ac13-77b0-ba41-2626ca3adcd2
+  author: joe
+  timestamp: 2026-11-24T07:45:51.123561263Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
