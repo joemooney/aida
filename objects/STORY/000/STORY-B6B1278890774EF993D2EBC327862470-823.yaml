@@ -18,12 +18,12 @@ description: |-
     - Exact and whitespace-normalized snippet-to-line-range resolution (`anchor_snippet_lines`) and `[obs-N]` evidence citation verification (`verify_observation_citations`).
   - `aida review prepare` subcommand in `aida-cli-lib` resolves a target (`--pr <N>`, `--from <base> [--to <head>]`, `--commit <sha>`, or workspace changes), links AIDA spec `## Acceptance` criteria, and outputs the structured preparation manifest (JSON, TOON, or human markdown) plus optional `--verify-coverage <ledger.json>` and `--anchor-findings <findings.json>` verification modes.
   - Comprehensive unit tests in `aida-core` verify all four subsystems cleanly via `cargo test -p aida-core` and `cargo check -p aida-cli-lib`.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:51:26.654235505Z
+modified_at: 2026-11-24T07:51:29.169096190Z
 req_type: Story
 tags:
 - track:integration
@@ -90,6 +90,11 @@ comments:
   content: 'S1 scope adjustment (product-15 2026-11-24 00:47): the S1 lane punted because make check-ci-fast requires CI test-inventory entries (checked structural cover) for the 8 new tests. Approved: add ONLY those inventory entries, listed in the PR body as explicit additions beyond 0fdac177513.'
   created_at: 2026-11-24T07:51:26.654235505Z
   modified_at: 2026-11-24T07:51:26.654235505Z
+- id: 01a20c89-d491-7542-874d-52d0e4d5b82f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: All eight S1 reference tests pass, but make check-ci-fast fails the checked structural cover for all eight. The explicit two-file S1 scope excludes the CI inventory needed to satisfy the gate. Both source files match Joe’s reference. Host publication needs an approved scope adjustment or a prerequisite inventory change.. No triage reason was given.'
+  created_at: 2026-11-24T07:51:29.169084273Z
+  modified_at: 2026-11-24T07:51:29.169084273Z
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
@@ -124,6 +129,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20c89-d491-7542-874d-52c85ef85fda
+  author: joe
+  timestamp: 2026-11-24T07:51:29.169075098Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -132,9 +144,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: antigravity
-attention_reason:
-  category: design-fork
-  detail: All eight S1 reference tests pass, but make check-ci-fast fails the checked structural cover for all eight. The explicit two-file S1 scope excludes the CI inventory needed to satisfy the gate. Both source files match Joe’s reference. Host publication needs an approved scope adjustment or a prerequisite inventory change.
-  lean: Authorize the minimal CI inventory addition and list it in the PR body as extra to the reference.
-  raised_by: implementer
-  raised_at: 2026-11-24T07:39:41.859172054Z
