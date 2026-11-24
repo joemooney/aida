@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T07:56:53.010993084Z
+modified_at: 2026-11-24T07:57:51.580822497Z
 req_type: Story
 tags:
 - admission
@@ -104,6 +104,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T07:56:52.860891621Z
   modified_at: 2026-11-24T07:56:52.860891621Z
+- id: 01a20c8f-da92-7412-98e8-9a5ef09aec2b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:57):
+    # STORY-3080 / PR #4502 r2 (advisor-122 ruling 2026-11-24 01:00: CR UPHELD at c6130afc; strict, MAIN; product-15). Lane: CODEX. Existing branch. <=250 TOTAL lines.
+
+    MUST:
+    (1) DATA LOSS (F1): a revalidation refusal is rollback-eligible ONLY before the first child has ever started. On automatic or FAST-fix RESUME, a refusal must NEVER invoke SessionStartCleanup or touch the clone, worktree or lease; it just refuses to start a new child. TEST: a late hold on resume -> no new child, and the checkout, work and lease SURVIVE.
+    (2) WIP CONTINUATION (F6): new-work WIP applies ONLY to the FIRST spawn of a Pickup::New. Resumes use continuation semantics and are EXEMPT. The Pickup::Branch exemption is decided BEFORE any count lookup, so a forge failure can't block an exempt branch.
+    (3) ORDERING (F2): do all slow preparation (forge WIP discovery, publication prep) FIRST, THEN the fresh spec read and gate checks, THEN spawn immediately. No I/O between the final read and spawn, beyond what spawn itself needs.
+    (4) FRESH WIP (F3): the final check uses a FRESH open-change count, bypassing the 600s snapshot reuse.
+    (5) TEST (F5): drive the PRODUCTION BeforeSpawn hook via the standalone launch path with a fake child and a controlled wait. Cover a hold during the wait, track:operator after admission, and a track flip delivered by the pre-pickup pull (git-canonical). Assert the spawn sentinel is UNTOUCHED.
+    REJECTED, do NOT change: F4 (keep session_start's own hold check as defense in depth); F7 (audit wording).
+    If you are still blocked on anything except test fidelity, the advisor will scope-cut to (1)+(2)+(5) and defer (3)/(4): say clearly in your exit summary which items are done.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4502). COMMIT your work.
+  created_at: 2026-11-24T07:57:51.580822497Z
+  modified_at: 2026-11-24T07:57:51.580822497Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
