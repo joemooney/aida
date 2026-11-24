@@ -1,0 +1,30 @@
+id: 01a20e65-b613-7ce1-87f5-53c50fe1ec69
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1360
+agreed_id: TASK-3876
+title: Lane ship step uses the completing (SPEC) trailer when every AC is claimed; Refs only for declared partial slices
+description: |
+  Lanes keep titling FULL fixes "Refs X", which skips merge-time completion (2026-11-24: #4477 BUG-2737 and #4435 TASK-3171 both landed complete but left their specs open). Advisor-122 ruling 2026-11-24 09:35; filed by product-15.
+
+  Slice 1 (this task) is the PREVENTIVE half. A post-land detector (flag Refs-titled landed PRs whose spec has no remaining open AC) is slice 2, a separate follow-up.
+
+  ## Acceptance
+  - AC1: The lane ship step titles the PR with the completing "(X)" trailer when the lane's exit summary claims every acceptance criterion of X, and uses "Refs X" ONLY when the brief or the exit summary declares a partial slice.
+  - AC2: Tests for both cases: an all-AC-claimed exit produces "(X)"; a declared-slice exit produces "Refs X".
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T16:31:16.499980191Z
+modified_at: 2026-11-24T16:31:16.499980191Z
+req_type: Task
+tags:
+- lanes
+- ship
+- small
+filed_at:
+  code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9cc76437f4f
+  vendor: claude
