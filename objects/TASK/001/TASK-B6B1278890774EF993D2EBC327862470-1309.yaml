@@ -66,6 +66,13 @@ comments:
   created_at: 2026-11-24T08:07:19.474995932Z
   modified_at: 2026-11-24T08:07:19.474995932Z
   session_id: 01a20c7a4e51
+- id: 01a20c9a-fb37-7601-a2b5-cf7217bad4fe
+  author: joe
+  content: 'INTEGRATION FIDELITY PRE-CHECK (integration-30, 01:15): PR-4504 @ 417ba689a6 (STORY-3076 S4) vs source 0fdac177513. Author: Joe Mooney (kept). 11 of 12 slice files are byte-identical in change to the source (patch-id MATCH): presentation README/.md/build.sh, product-capabilities.md, review-process.md, trust-and-evidence.md, and showcase capabilities/executive-brief/index.html/search-data.js/trust.html. docs/showcase/code-review.html DIFFERS ONLY by removing the three ''.pptx'' download links (lines 269/289/827 of the source), consistent with dropping the pptx. publish.py is dropped, consistent (its only change added ''.pptx'' to PUBLISHED_SUFFIXES). ONE GAP: docs/showcase/README.md is also dropped, but the source''s single added line indexes BOTH code-review.html (''interactive presentation and technical deep-dive ... aida review prepare'') and the pptx. Dropping the line loses the README entry for the new page. The faithful slice keeps it, minus the '', or download the companion ... .pptx ... slide deck'' clause (1 line). Merges CLEAN; lane fast_gate=pass.'
+  created_at: 2026-11-24T08:10:00.651561104Z
+  modified_at: 2026-11-24T08:10:00.651561104Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
