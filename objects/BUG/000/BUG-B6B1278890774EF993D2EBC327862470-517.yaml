@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the merge is fully resolved and snapshot regeneration fails, the host STILL commits and pushes the resolved merge, and reports "snapshot regeneration failed: <cause>; CI will verify", instead of refusing.
   - AC2: The regeneration error is recorded on the spec (comment). A test with a failing regeneration command.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-24T20:53:13.919727455Z
+modified_at: 2026-11-24T20:54:13.810544615Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -49,6 +49,11 @@ comments:
   created_at: 2026-11-24T20:42:03.075383943Z
   modified_at: 2026-11-24T20:42:03.075383943Z
   session_id: 01a20f1888e6
+- id: 01a20f56-7432-7932-93cc-fb07641367b4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing spec BUG-2756. Reviewed all four changed files in landed tree d3a6121194927271bacf8c06c2c36555d4b933cd against pinned main 95eaccf328557402d176c0b41983afe1b677965f. No finding depends on code changed by the one intervening base commit.. No triage reason was given.'
+  created_at: 2026-11-24T20:54:13.810533177Z
+  modified_at: 2026-11-24T20:54:13.810533177Z
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
@@ -88,6 +93,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20f56-7432-7932-93cc-faf92cb6b6cf
+  author: joe
+  timestamp: 2026-11-24T20:54:13.810524059Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
@@ -96,16 +108,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1 full sweep for completing spec BUG-2756. Reviewed all four changed files in landed tree d3a6121194927271bacf8c06c2c36555d4b933cd against pinned main 95eaccf328557402d176c0b41983afe1b677965f. No finding depends on code changed by the one intervening base commit.
-    BUG-b6b1278890774ef993d2ebc327862470-517.AC1 — unverified
-    BUG-b6b1278890774ef993d2ebc327862470-517.AC2 — unverified
-    The Python fixture covers partial golden restoration and the driver warning. The Rust fixture covers a successful direct comment write. Neither exercises the complete production sequence from failed regeneration through host commit, push, and spec comment. The marker-free unmerged-index case is covered by the new assertion in the existing marker-gate test.
-    At review time, exact-head CI fast gates had passed and fast compile was still running. This review used source and existing CI evidence only.
-  recovery_hint: address the review findings, move BUG-2756 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T20:53:13.919727455Z
