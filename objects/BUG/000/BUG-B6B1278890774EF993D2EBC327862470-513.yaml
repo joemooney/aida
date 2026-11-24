@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T19:17:49.699412904Z
+modified_at: 2026-11-24T19:20:50.048310785Z
 req_type: Bug
 tags:
 - codex
@@ -86,6 +86,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T19:17:49.547871139Z
   modified_at: 2026-11-24T19:17:49.547871139Z
+- id: 01a20f01-274d-7b60-87f2-52ed7ca8a417
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:20):
+    # BUG-2752 / PR #4529 r2 (advisor-122 ruling 2026-11-24 12:20 at d4a4583e; STRICT containment config; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. ONE round.
+    MUST:
+    (F1) An END-TO-END test: run_init (codex-only) -> offer -> commit -> `aida agent new --vendor codex --role advisor` no longer refuses. Not unit calls with self-set state.
+    (F2) Re-init on an already-initialized project WITHOUT native policy must offer the opt-in AND commit it (or print the exact commit/push command). It must NEVER leave a dirty key that makes the next init skip the offer.
+    (F3) The opt-in must land WHERE THE LAUNCH GUARD READS IT: if init runs on a topic branch, either commit to the default branch or refuse to offer and tell the user to run it on main. Test the topic-branch case.
+    (F4) Update bug_2144_2146_containment_refusal_tests to the new Codex-specific guidance. Do NOT weaken the claude/agy expectations.
+    (F5) A failure in the optional native prompt is a WARNING, never a partial-init failure.
+    DEFERRED (do NOT do): F6 (the auto-commit race window), a LOW follow-up.
+    One targeted cargo run, then make check-ci-fast, then push to #4529. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T19:20:50.048310785Z
+  modified_at: 2026-11-24T19:20:50.048310785Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
