@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-24T12:30:35.390868950Z
+modified_at: 2026-11-24T12:30:45.036906163Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -23,6 +23,12 @@ relationships:
 - rel_type: References
   target_id: 01a20665-c8ff-7311-969e-f9d8ec1451a1
   created_at: 2026-11-23T05:51:24.371419797Z
+comments:
+- id: 01a20d89-812c-7501-a8ec-0524901706bc
+  author: joe
+  content: Draft to Approved (advisor-122 05:38); FOLDED into the TASK-3282 docs lane.
+  created_at: 2026-11-24T12:30:45.036906163Z
+  modified_at: 2026-11-24T12:30:45.036906163Z
 history:
 - id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
   author: joe
