@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T20:49:08.854943864Z
+modified_at: 2026-11-24T20:51:20.678734788Z
 req_type: Story
 tags:
 - autonomy
@@ -397,6 +397,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T20:49:08.703644789Z
   modified_at: 2026-11-24T20:49:08.703644789Z
+- id: 01a20f54-059d-7843-b810-1762cad638a8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:51):
+    # STORY-3038 / PR #4532 r2 (advisor-122 ruling 2026-11-24 13:52 at 369406b8; STRICT; product-15). Lane: CODEX. MAIN, existing branch. ONE round. The PR is +665/-69 against the signed <=200: this round must also SHRINK.
+    MUST:
+    (F1) Re-read approved-small eligibility AND the drain-safe policy INSIDE the per-attempt merge guard, after refreshing the trusted default branch, IMMEDIATELY before landing_merge::merge.
+    (F5) That final recheck also honours a live review:draft-only label (and any supervision label) added after CI began.
+    (F6) The after-CI changed-path regression goes through the REAL unattended ship wiring, not an injected callback.
+    REJECTED (do NOT do): F2. With the allow-list = docs/cli/*.md only, the backstop gap is moot; widening the list is a per-entry, advisor-reviewed protected-config change.
+    DEFERRED (do NOT do): F3 (<id>-work branch, fails safe → supervised), F4 (pagination).
+    SIZE: get the PR to <=350 total changed lines by REMOVING anything not in the signed sketch (extra refactors, broad renames). LIST the removed pieces in the PR body. If you cannot get to <=350 with F1/F5/F6, SPLIT: this PR = slice 1 (policy + approval-time decision + the docs/cli allow-list) and PUNT with "slice 2 = ship/train live recheck (F1/F5/F6)".
+    One targeted cargo run, then make check-ci-fast, then push to #4532. COMMIT your work.
+    TITLE TRAILER: "Refs STORY-3038" if you split, else keep "(STORY-3038)".
+  created_at: 2026-11-24T20:51:20.678734788Z
+  modified_at: 2026-11-24T20:51:20.678734788Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
