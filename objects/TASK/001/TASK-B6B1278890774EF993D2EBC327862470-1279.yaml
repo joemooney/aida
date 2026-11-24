@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: forge::github_core_budget resolves gh via crate::kernel::resolve_gh_binary_for_probe() (one line), so the seam is honoured. A test uses the fake gh (AIDA_TEST_GH_BINARY) and asserts the budget reading comes from it.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T02:49:12.333229603Z
+modified_at: 2026-11-24T03:17:04.907074043Z
 req_type: Task
 tags:
 - small
@@ -75,6 +75,12 @@ comments:
   modified_at: 2026-11-24T02:49:12.333229603Z
   session_id: 01a20b60b88b
   harness_version: codex-cli 0.167.0
+- id: 01a20b8e-9b0b-7770-8469-89061b164f24
+  author: aida-publication-done
+  content: Implementer push a2f048d7d0cd declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T03:17:04.907072980Z
+  modified_at: 2026-11-24T03:17:04.907072980Z
+  session_id: 01a20b60b88b
 history:
 - id: 01a20af8-f8c0-7502-a9b7-4065638fe1c1
   author: joe
@@ -122,6 +128,14 @@ history:
   session_id: 01a20b60b88b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20b8e-9b0b-7770-8469-88fec2cfdf4a
+  author: aida-publication-done
+  timestamp: 2026-11-24T03:17:04.907070621Z
+  session_id: 01a20b60b88b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
