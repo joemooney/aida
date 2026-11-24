@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-24T19:51:29.094093389Z
+modified_at: 2026-11-24T19:54:10.158936179Z
 req_type: Bug
 tags:
 - review-watch
@@ -177,6 +177,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-481` at head `unavailable`.'
   created_at: 2026-11-24T19:30:30.805040971Z
   modified_at: 2026-11-24T19:30:30.805040971Z
+- id: 01a20f1f-776e-71a1-b315-475213bacb25
+  author: joe
+  content: 'advisor-122 OVERRIDE->APPROVE (2026-11-24 12:55) at 9fdf2f78 once FAST is current. F1+F3+F4 -> TASK-3883 (LOW); F2 raised to its own MEDIUM -> BUG-2757. Supervised: Joe''s loop trains #4413 after full CI.'
+  created_at: 2026-11-24T19:54:10.158936179Z
+  modified_at: 2026-11-24T19:54:10.158936179Z
 history:
 - id: 01a206d3-578e-7762-a596-c22bf46a234d
   author: aida-session-start
