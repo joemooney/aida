@@ -1,0 +1,26 @@
+id: 01a20b97-c5c5-7b01-9dbf-6bace56357e8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-502
+agreed_id: BUG-2741
+title: Unshipped-work watcher flags a DEFERRED spec's parked branch (e.g. bug-2688-journal-loop) as unshipped work
+description: |
+  Found 2026-11-23 20:23 (advisor-122; filed by product-15). The unshipped-work watcher flagged BUG-2688's branch bug-2688-journal-loop (first seen 03:22Z) as "unshipped work detected". The branch belongs to the CLOSED PR #4388, parked on purpose when BUG-2688 was DEFERRED to 2026-12-15. Every deferred spec's parked branch shows up as a false alarm.
+
+  ## Acceptance
+  - AC1: unshipped-work detection skips branches whose spec is DEFERRED (or reports them in a separate "parked: deferred until …" line, not as an alert). Test with a deferred spec plus a parked branch.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T03:27:05.669804177Z
+modified_at: 2026-11-24T03:27:05.669804177Z
+req_type: Bug
+tags:
+- small
+- watcher
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
