@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T08:19:06.043614443Z
+modified_at: 2026-11-24T08:29:39.955140044Z
 req_type: Story
 tags:
 - track:integration
@@ -149,6 +149,11 @@ comments:
   modified_at: 2026-11-24T08:19:06.043614443Z
   session_id: 01a20c9a45fd
   harness_version: codex-cli 0.167.0
+- id: 01a20cac-c8f3-7953-b3d2-2e706be109eb
+  author: joe
+  content: 'NOTE FOR JOE (product-15 2026-11-24, per advisor-122 ruling 01:30 on #4504): the published docs/showcase claims were TONED DOWN to match the reference implementation (0fdac177513). Changed wording, so you can restore any you have evidence for: F3 the coverage ledger is described as optional CLI file accountability, not merge-gate enforcement; F4 12k tokens is an estimated target, oversized files get their own batch, pairing is a same-stem heuristic; F5 facets come from whole-file substring matching, not diff-triggered; F6 the trace: flag is a marker check, not verification; F7 the CLI anchors snippets, the citation verifier is library-only for now; F8 Git is required, with per-mode inputs listed; F9/F10 the six-defect comparison, the 100% anchoring figure and the OpenCodeReview comparison are labelled an illustrative case study / feature matrix rather than a measured benchmark, and the API-key claim is dropped unless cited. Also the .pptx is not shipped (generate on demand from the Marp source).'
+  created_at: 2026-11-24T08:29:39.955140044Z
+  modified_at: 2026-11-24T08:29:39.955140044Z
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
