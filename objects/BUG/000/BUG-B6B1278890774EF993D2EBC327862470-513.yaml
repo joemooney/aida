@@ -15,12 +15,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T17:54:21.587365333Z
+modified_at: 2026-11-24T17:54:23.778203357Z
 req_type: Bug
 tags:
 - codex
 - init
 - seats
+comments:
+- id: 01a20eb1-cfa2-7550-acdc-a21951e6f28c
+  author: joe
+  content: 'advisor-122 APPROVED 2026-11-24 11:00 (HIGH, STRICT, drive; linked to STORY-3099). AC1: do not leave codex launches blocked: write the correct contained setting or leave it unset for the launcher default; do NOT weaken containment. AC2: the refusal names the real fix (config key + command), not --vendor claude. Tests for both.'
+  created_at: 2026-11-24T17:54:23.778203357Z
+  modified_at: 2026-11-24T17:54:23.778203357Z
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
