@@ -182,10 +182,10 @@ pub(crate) fn admit_before_spawn(
     pickup: Pickup,
     over_wip: bool,
 ) -> Result<()> {
-    if pickup == Pickup::Continues {
-        return Ok(());
+    if pickup != Pickup::New {
+        return admit(root, spec, pickup, over_wip, false);
     }
-    let open = open_changes(root)?;
+    let open = crate::land::open_change_count(root)?;
     apply_count(root, spec, pickup, over_wip, false, open)
 }
 
@@ -370,14 +370,33 @@ mod tests {
     // trace:STORY-3080 | ai:codex
     #[test]
     fn story_3080_reapplies_wip_to_originally_new_work() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let now = chrono::Utc::now().to_rfc3339();
         crate::now::write(root, &snapshot(&now, 0)).unwrap();
         admit(root, "TASK-3080", Pickup::New, false, false).unwrap();
-        crate::now::write(root, &snapshot(&now, 10)).unwrap();
+        aida_core::git_ops::init(root).unwrap();
+        let remote = ["remote", "add", "origin", "https://github.com/example/test"];
+        crate::seat_clone::seat_publish_tests::git_ok(root, &remote);
+        let rows: Vec<_> = (1..=10).map(|n| serde_json::json!({
+            "number": n, "headRefOid": "a".repeat(40), "headRefName": "work", "baseRefName": "main", "title": "test"
+        })).collect();
+        crate::test_exec::write_executable(
+            &root.join("gh"),
+            format!("#!/bin/sh\necho '{}'\n", serde_json::json!(rows)),
+        );
+        let _path = crate::test_env::EnvVarGuard::prepend_path(root);
         let refusal = admit_before_spawn(root, "TASK-3080", Pickup::New, false).unwrap_err();
-        assert!(refusal.to_string().contains("10 changes are open"));
+        assert!(
+            refusal.to_string().contains("10 changes are open"),
+            "{refusal:#}"
+        );
+        admit_before_spawn(root, "TASK-3080", Pickup::Continues, false).unwrap();
+        let offline = tempfile::tempdir().unwrap();
+        admit_before_spawn(offline.path(), "TASK-3080", Pickup::Branch, false).unwrap();
     }
 
     #[test]

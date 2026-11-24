@@ -6210,15 +6210,25 @@ fn run_refused_launch(
     launch: &RefusedLaunch,
     attempt: Option<&crate::lane_result::Attempt>,
 ) -> anyhow::Error {
+    use crate::session::HeadlessVendor::Codex;
+    run_checked_launch(launch, attempt, Codex, &|_| Ok(None)).unwrap_err()
+}
+
+fn run_checked_launch(
+    launch: &RefusedLaunch,
+    attempt: Option<&crate::lane_result::Attempt>,
+    vendor: crate::session::HeadlessVendor,
+    check: &dyn Fn(bool) -> anyhow::Result<Option<aida_core::db::StoreWriteHold>>,
+) -> anyhow::Result<()> {
     let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
         cause: "test".into(),
     };
     crate::standalone_implementer::run_recorded(
         crate::standalone_implementer::Launch {
             project_root: &launch.fx.main,
-            vendor: crate::session::HeadlessVendor::Codex,
+            vendor,
             prompt: "go",
-            session_id: "test",
+            session_id: "019e0000-0000-7000-8000-000000003080",
             spec: "BUG-1",
             lease_id: REFUSED_LEASE,
             branch: REFUSED_BRANCH,
@@ -6229,9 +6239,8 @@ fn run_refused_launch(
         attempt,
         None,
         None,
-        &|| Ok(()),
+        check,
     )
-    .unwrap_err()
 }
 
 // A standalone launch refused before its agent starts reports the seat it
@@ -6329,6 +6338,95 @@ pub(super) fn started_lane_configured(
         keys.extend(setup(fx, clone));
         keys
     })
+}
+
+// trace:STORY-3080 | ai:codex
+#[test]
+fn story_3080_standalone_refuses_late_authority_changes() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _space = crate::machine_readiness::test_lane_available_bytes(100 * 1024 * 1024 * 1024);
+    for case in ["hold", "track", "pull", "resume"] {
+        let lane = started_lane(
+            true,
+            |fx, clone| {
+                format!(
+            "echo unpublished > '{}/progress'\necho started >> '{}'\necho '{{\"type\":\"result\",\"is_error\":false,\"result\":\"waiting for tests\"}}'\nexit 0",
+            clone.display(), fx.root.join("spawns").display())
+            },
+            no_setup,
+        );
+        let remote = lane.fx.root.join("authority");
+        let storage = crate::test_env::home_fixture_storage(&remote);
+        git_ok(&remote, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+        aida_core::git_ops::configure_user(&remote, "Fixture", "fixture@example.com").unwrap();
+        let mut store = aida_core::RequirementsStore::new();
+        let anchor = title_spec("launch");
+        let id = anchor.id;
+        let mut child = title_spec("member");
+        child.spec_id = Some("BUG-2".into());
+        store.requirements.extend([anchor, child.clone()]);
+        storage.save(&store).unwrap();
+        let local = lane.fx.root.join("local");
+        git_ok(&lane.fx.root, &["clone", "authority", "local"]);
+        let authority = aida_core::Storage::new(&local);
+        let sentinel = lane.fx.root.join("spawns");
+        let work = lane.clone.join("progress");
+        use crate::standalone_implementer::revalidate_before_spawn;
+        let check = || revalidate_before_spawn(&authority, id, [child.id].into_iter());
+        drop(check().unwrap());
+        let held = matches!(case, "resume" | "hold");
+        let update = || {
+            let source = if case == "pull" { &remote } else { &local };
+            let mut req = child.clone();
+            if held {
+                req.deferred = true;
+                req.deferred_reason = Some("late hold".into());
+            } else {
+                req.tags.insert("track:operator".into());
+            }
+            aida_core::db::with_store_write_lock(source, || {
+                aida_core::object_store::write_object(&source.join("objects"), &req)?;
+                Ok(())
+            })
+            .unwrap();
+            if case == "pull" {
+                git_ok(source, &["commit", "-am", "set operator track"]);
+                aida_core::git_ops::pull_rebase_auto_merge(&local, "origin", "main").unwrap();
+            }
+        };
+        if case == "pull" {
+            update();
+        }
+        let result = run_checked_launch(
+            &lane,
+            None,
+            crate::session::HeadlessVendor::Claude,
+            &|resume| {
+                if case != "pull" && (case != "resume" || resume) {
+                    std::thread::scope(|s| s.spawn(&update).join().unwrap());
+                }
+                check()
+            },
+        );
+        let error = format!("{:#}", result.as_ref().unwrap_err());
+        assert!(
+            error.contains(if held { "late hold" } else { "supervised work" }),
+            "{case}: {error}"
+        );
+        assert_eq!(
+            crate::queue_cmd::launch_refused_before_agent(&result, sentinel.exists()),
+            case != "resume"
+        );
+        if case == "resume" {
+            assert_eq!(std::fs::read_to_string(sentinel).unwrap(), "started\n");
+            assert_eq!(std::fs::read_to_string(work).unwrap(), "unpublished\n");
+            assert!(crate::lease_path(&lane.fx.main, REFUSED_LEASE).is_file());
+        } else {
+            assert!(!sentinel.exists());
+        }
+    }
 }
 
 // Run a started lane through the runner's own terminal boundaries; its

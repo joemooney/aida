@@ -1465,34 +1465,30 @@ fn retained_merge(main: &Path, tree: &Path, outcome: &Outcome) -> Option<String>
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
 pub(crate) fn run_for_test(launch: Launch<'_>) -> Result<()> {
-    run_recorded(launch, None, None, None, &|| Ok(()))
+    run_recorded(launch, None, None, None, &|_| Ok(None))
 }
 
-/// Re-read the exact specs admitted before sync and setup. The original WIP
-/// classification survives the status bump and branch creation during setup.
+/// Pin Git-canonical authority through spawn and re-read the admitted specs.
 // trace:STORY-3080 | ai:codex
 pub(crate) fn revalidate_before_spawn(
     storage: &aida_core::Storage,
-    root: &Path,
     anchor: uuid::Uuid,
     members: impl Iterator<Item = uuid::Uuid>,
-    pickup: crate::wip_limit::Pickup,
-    over_wip: bool,
-) -> Result<()> {
+) -> Result<Option<aida_core::db::StoreWriteHold>> {
+    let hold = storage
+        .path()
+        .is_dir()
+        .then(|| aida_core::db::hold_store_write(storage.path()))
+        .transpose()?;
     anyhow::ensure!(
         storage.path().try_exists()?,
         "launch authority store disappeared"
     );
     let store = storage.load()?;
-    let lookup = |id| {
-        store
+    for id in std::iter::once(anchor).chain(members.filter(|id| *id != anchor)) {
+        let req = store
             .get_requirement_by_id(&id)
-            .with_context(|| format!("pickup requirement {id} disappeared before spawn"))
-    };
-    let anchor = lookup(anchor)?;
-    for req in std::iter::once(Ok(anchor)).chain(members.filter(|id| *id != anchor.id).map(lookup))
-    {
-        let req = req?;
+            .with_context(|| format!("pickup requirement {id} disappeared before spawn"))?;
         if let Some(error) = crate::gate::operator_hold::operator_hold_refusal(
             &req.friendly_id(),
             req.deferred,
@@ -1504,8 +1500,7 @@ pub(crate) fn revalidate_before_spawn(
             return Err(error);
         }
     }
-    let spec = anchor.display_id(); // canonical-id: WIP gate ledger key.
-    crate::wip_limit::admit_before_spawn(root, &spec, pickup, over_wip)
+    Ok(hold)
 }
 
 // trace:STORY-2690 | ai:codex
@@ -1514,7 +1509,7 @@ pub(crate) fn run_recorded(
     attempt: Option<&crate::lane_result::Attempt>,
     on_started: Option<&dyn Fn()>,
     on_delivery: Option<&dyn Fn()>,
-    revalidate: &dyn Fn() -> Result<()>,
+    revalidate: &dyn Fn(bool) -> Result<Option<aida_core::db::StoreWriteHold>>,
 ) -> Result<()> {
     let owns_attempt = attempt.is_none();
     let owned;
@@ -1603,7 +1598,7 @@ fn run(
     attempt: &crate::lane_result::Attempt,
     on_started: Option<&dyn Fn()>,
     on_delivery: Option<&dyn Fn()>,
-    revalidate: &dyn Fn() -> Result<()>,
+    revalidate: &dyn Fn(bool) -> Result<Option<aida_core::db::StoreWriteHold>>,
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
@@ -1773,11 +1768,11 @@ fn run(
                 resume,
                 hold_reap: Some(hold),
                 before_spawn: Some(&|| {
-                    revalidate().map_err(crate::lane_admission::refused_before_spawn)?;
-                    if !resume {
-                        provision_attempt_signals(&main_root, &worktree, launch.spec)?;
+                    if resume {
+                        return revalidate(true);
                     }
-                    Ok(())
+                    provision_attempt_signals(&main_root, &worktree, launch.spec)?;
+                    revalidate(false).map_err(crate::lane_admission::refused_before_spawn)
                 }),
             },
         )

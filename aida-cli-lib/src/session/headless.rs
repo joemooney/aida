@@ -2048,7 +2048,7 @@ pub(crate) fn run_vendor_headless_to_exit(
                                         )?;
                                     }
                                 }
-                                Ok(())
+                                Ok(None)
                             }),
                             resume,
                             hold_reap: hold,
@@ -2541,7 +2541,7 @@ pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) on_spawn: Option<&'a dyn Fn(u32)>,
     pub(crate) on_delivery: Option<&'a dyn Fn()>,
     /// Consume prior-attempt markers only after command policy/prepare succeeds.
-    pub(crate) before_spawn: Option<&'a dyn Fn() -> Result<()>>,
+    pub(crate) before_spawn: Option<&'a dyn Fn() -> Result<Option<aida_core::db::StoreWriteHold>>>,
     /// BUG-044: `--resume` the existing `session_id` instead of starting it
     /// (Claude only; the launcher never asks another vendor to resume).
     pub(crate) resume: bool,
@@ -2759,10 +2759,9 @@ fn run_vendor_headless_child(
                 &headless_worktree_root(),
                 host_main,
             )?;
-            if let Some(before_spawn) = hooks.before_spawn {
-                before_spawn()?;
-            }
+            let authority = hooks.before_spawn.map(|check| check()).transpose()?;
             let mut run = prepared.spawn(Stdio::from(log))?;
+            drop(authority);
             anyhow::ensure!(
                 containment_applied(vendor, true, Some(run.receipt())),
                 "missing applied receipt"
@@ -2815,16 +2814,18 @@ fn run_vendor_headless_child(
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     #[cfg(target_os = "linux")]
     let holder_capture = aida_core::proc_identity::prepare_command(&mut child_cmd)?;
-    if let Some(before_spawn) = hooks.before_spawn {
-        if let Err(error) = before_spawn() {
+    let authority = match hooks.before_spawn.map(|check| check()).transpose() {
+        Ok(hold) => hold,
+        Err(error) => {
             tee.stop();
             return Err(error);
         }
-    }
+    };
     let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
+    drop(authority);
     if let Some(guard) = &mut handle_guard {
         guard.disarm();
     }

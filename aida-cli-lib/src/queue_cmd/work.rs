@@ -6781,14 +6781,19 @@ pub(crate) fn handle_queue_work(
                         attempt.as_ref(),
                         Some(&|| agent.starting()),
                         on_brief_delivery,
-                        &|| {
+                        &|resume| {
+                            if !resume {
+                                crate::wip_limit::admit_before_spawn(
+                                    &project_root,
+                                    &plan.anchor_display,
+                                    pickup,
+                                    over_wip,
+                                )?;
+                            }
                             crate::standalone_implementer::revalidate_before_spawn(
                                 launch_store,
-                                &project_root,
                                 admitted_anchor.context("missing admitted launch anchor")?,
                                 plan.entries.iter().map(|entry| entry.queue.requirement_id),
-                                pickup,
-                                over_wip,
                             )
                         },
                     );
