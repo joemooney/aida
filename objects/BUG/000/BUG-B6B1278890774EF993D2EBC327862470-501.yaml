@@ -1,0 +1,33 @@
+id: 01a20b60-4ecb-7e80-9a09-9680dfdf97d5
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-501
+agreed_id: BUG-2740
+title: A lane launch waiting for a cold-start slot holds the store write lock for the whole wait, deadlocking every other store writer on the host
+description: |
+  Found 2026-11-23 19:18 MST on dell1 (product-15). A lane parent `aida queue work BUG-2738 …` held an EXCLUSIVE flock on ~/ai/aida/.aida-store/.aida/store-write.lock (/proc/locks: FLOCK WRITE 825645) for over an hour, while it was only WAITING to launch ("lane launch queued: host cold-start limit reached (lanes.max_concurrent_cold_starts = 2)"). Every other store writer on the host blocked behind it:
+  - other lanes' pre-pickup pulls failed ("pre-pickup pull failed … resolve the store sync failure"): BUG-2734, TASK-3852;
+  - BUG-2736's lane timed out after 120s on the store write lock;
+  - BUG-2737's finished lane could not persist its exit evidence ("lane recovery … needs retry: failed to persist captured lane exit evidence … Timed out after 120s waiting for the store write lock").
+  That is a DEADLOCK: the waiting launch holds the lock the finishing lane needs, and the finishing lane holds a cold-start slot until it finishes. No codex agent was running on the host. Resolved by SIGTERM to the waiting parent (it had no agent and no work).
+
+  ## Acceptance
+  - AC1: Lane admission waits (cold-start limit, memory/disk headroom, any queue wait) do NOT hold the store write lock. The lock is taken only around the actual store mutation and released before waiting. Test: a launch blocked on the cold-start limit doesn't hold store-write.lock, and a concurrent store write succeeds.
+  - AC2: A store-lock timeout error names the HOLDER (pid plus command line) so this is diagnosable without /proc/locks. Test.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T02:26:30.731169338Z
+modified_at: 2026-11-24T02:26:30.731169338Z
+req_type: Bug
+tags:
+- admission
+- deadlock
+- lanes
+- store
+filed_at:
+  code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac22ab7f548
+  vendor: claude
