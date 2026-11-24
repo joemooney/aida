@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Lane-recovery treats an OPEN PR from the lane's branch into ANY base (including `integration` / promote branches) as the lane's PR: no "no open PR" needs-attention while it's open. Test with an integration-base PR fixture.
   - AC2: When a landing's completion trailer names a spec in needs-attention whose PR is landed, it completes the spec (or reports clearly why not). Test.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T16:19:24.389128723Z
+modified_at: 2026-11-24T17:23:14.969109547Z
 req_type: Bug
 tags:
 - integration
@@ -184,6 +184,12 @@ comments:
   modified_at: 2026-11-24T16:19:24.389128723Z
   session_id: 01a20e4f3409
   harness_version: codex-cli 0.167.0
+- id: 01a20e95-4b99-7d31-bec9-b32aa070b9e5
+  author: aida-publication-done
+  content: Implementer push dfa658dd96d9 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T17:23:14.969103489Z
+  modified_at: 2026-11-24T17:23:14.969103489Z
+  session_id: 01a20e4f3409
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
@@ -283,6 +289,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20e95-4b99-7d31-bec9-b313d7341e81
+  author: aida-publication-done
+  timestamp: 2026-11-24T17:23:14.969101104Z
+  session_id: 01a20e4f3409
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
