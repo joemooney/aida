@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-24T18:27:24.069566593Z
+modified_at: 2026-11-24T18:50:43.096010753Z
 req_type: Bug
 tags:
 - hygiene
@@ -145,6 +145,15 @@ comments:
   modified_at: 2026-11-24T16:51:43.393850369Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ee5-61df-77d2-be68-54b1d53fcdd1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ba014d8fb4716d1d8785bf25913ead084084ac85 plus the working-tree merge with ee2e6d830ffe. AC1: [evidence: behavioral-test] session_end.rs:1189 folds the actual clone probe failure before agent rendering. git_ops.rs:5035 requests per-file status for both safety-scan paths. The refusal regressions at task_2053_seat_clone_lifecycle_tests.rs:3204 and :3241 passed, including warning followed by fatal stderr and two untracked filenames in one directory. Launcher module result: 62 passed. Compared quoting, rename field order, multiline and empty evidence, multiple entries, and retention of the tree and lease on refusal. The conflict was adjacent test additions; verified exact preservation of both sides including main's stash-only case. No untracked additions. AC2–AC4 outside this Refs-only conflict repair; the live seat was not exercised. All 48 FAST source gates passed.
+  created_at: 2026-11-24T18:50:43.096010753Z
+  modified_at: 2026-11-24T18:50:43.096010753Z
+  session_id: 01a20ecfcb6a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
