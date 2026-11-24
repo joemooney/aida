@@ -12,12 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T03:29:21.461014019Z
+modified_at: 2026-11-24T03:29:23.513495817Z
 req_type: Bug
 tags:
 - hygiene
 - sessions
 - small
+comments:
+- id: 01a20b99-e039-7111-842e-2f8df37bfa0e
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 20:33. STRICT (narrows what hygiene counts as dirty before it reaps): MAIN, drive. Added AC2: untracked non-ignored files, any unique commit on any local branch, and stashes STILL count as dirty, each with its own test; only gitignored paths are excluded; never force-reap a dirty tree. <=300 lines.'
+  created_at: 2026-11-24T03:29:23.513495817Z
+  modified_at: 2026-11-24T03:29:23.513495817Z
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
