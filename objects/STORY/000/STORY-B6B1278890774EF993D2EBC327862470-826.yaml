@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T15:25:34.769705905Z
+modified_at: 2026-11-24T15:26:08.277388872Z
 req_type: Story
 tags:
 - doctor
@@ -185,6 +185,12 @@ comments:
   content: 'Lane exit evidence: retained branch `int35-story-3095` at head `88c5c45b09d3a9722d6b0e70c0ac7774d7168f68`.'
   created_at: 2026-11-24T15:25:34.769700894Z
   modified_at: 2026-11-24T15:25:34.769700894Z
+  session_id: 01a20e094287
+- id: 01a20e2a-1395-7b62-a2b2-227f3c18fab2
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `int35-story-3095` at head `88c5c45b09d3a9722d6b0e70c0ac7774d7168f68`.'
+  created_at: 2026-11-24T15:26:08.277385408Z
+  modified_at: 2026-11-24T15:26:08.277385408Z
   session_id: 01a20e094287
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
