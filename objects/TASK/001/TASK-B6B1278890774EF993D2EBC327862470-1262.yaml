@@ -7,18 +7,17 @@ description: |-
   Reviewed sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
 
   The standalone wording check in `tests/test_closeout_audit_wording.py:9` is not selected by the repository CI workflow or its local CI gate targets. Reverting the verdict line in both guide copies would preserve mirror parity and leave the check unexecuted. Add this test to an existing documentation check run by CI, or put the assertion in an existing test suite that CI runs.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T18:08:56.586388162Z
-modified_at: 2026-11-24T12:30:38.949443613Z
+modified_at: 2026-11-24T15:53:16.053654181Z
 req_type: Task
 tags:
 - carried-from:BUG-2731
 - finding-hash:0061a46e
 - from-review:BUG-2731
-- track:integration
 relationships:
 - rel_type: References
   target_id: 01a208f5-2928-7921-9dff-50aa746498fb
@@ -54,6 +53,22 @@ history:
   - field_name: tags
     old_value: carried-from:BUG-2731, finding-hash:0061a46e, from-review:BUG-2731
     new_value: carried-from:BUG-2731, finding-hash:0061a46e, from-review:BUG-2731, track:integration
+- id: 01a20e42-e9d0-7df3-83a0-23f645b56320
+  author: aida-auto-bump
+  timestamp: 2026-11-24T15:53:15.984845373Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a20e42-ea15-72f2-a149-1d9b64557512
+  timestamp: 2026-11-24T15:53:16.053651452Z
+  agent: aida
+  commit_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
+  summary: 'Advisor (delegated authority): promotion 35, linear on main 8dfad228d58 + 2 cherry-picks; per-commit patch-ids match approved integration squashes (e718bc07, 88d8f9c4); 11 files +1273; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
@@ -63,3 +78,7 @@ filed_at:
   aida_build_sha: ef906ec7464
   vendor: claude
   session: 01a20994e923
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T15:53:15.984837502Z
+  completion_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
