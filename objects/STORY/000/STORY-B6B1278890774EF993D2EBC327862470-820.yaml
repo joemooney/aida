@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T18:11:05.684818745Z
+modified_at: 2026-11-24T18:12:48.235385128Z
 req_type: Story
 tags:
 - autonomy
@@ -285,6 +285,26 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-820` at head `unavailable`.'
   created_at: 2026-11-24T17:56:37.215514513Z
   modified_at: 2026-11-24T17:56:37.215514513Z
+- id: 01a20ec2-66bd-7651-b8c3-cac5dc821051
+  author: dirtlab
+  content: |-
+    SKETCH (codex design lane): Fail-closed default for Approved small specs
+
+    Policy. Add drain_safe_paths to [gate.unset_mode] in the trusted default-branch .aida/config.toml. Use a TOML array of case-sensitive, repo-root-relative globs with literal path separators. A missing key uses the reviewed built-in list. An explicit list replaces it, [] permits nothing, and malformed policy keeps supervision.
+
+    Initial list (one entry): docs/cli/*.md covers direct CLI manual pages, a narrow prose-only area. Defer test trees and Rust leaves until individually reviewed for executable fixtures, generated inputs and authority checks.
+
+    Decision. Preserve explicit modes and existing spec eligibility checks. At approval and unattended ship/train entry, require a known, nonempty merge-base diff. Every path must match the allow-list and none may match the strict inventory or protected floor/operator extensions. Otherwise keep supervised and report the first exclusion or evidence failure. Include deleted paths and both sides of renames. Read paths losslessly or refuse undecodable evidence. Never persist provisional Drain as an explicit mode. After CI, under the merge lease, resolve base/head again; if either moved, reclassify the entire new diff and require current-head CI before merge. Missing evidence stops unattended publication.
+
+    Reuse from #4448: approved-small eligibility, trusted config reader, strict/protected checks, NUL-delimited no-renames discovery and pinned-head ship/train plumbing. Extend the strict inventory and built-in floor with advisor_code_gate.rs and team_cmd.rs under aida-cli-lib/src so even an expanded allow-list cannot admit either.
+
+    Tests. An unknown new module, empty diff or unreadable diff stays supervised. A change only to docs/cli/02-specs.md defaults to Drain. With a deliberately broad allow-list, pair that manual with each named enforcement file independently and require supervision. Simulate a docs-only head gaining an unlisted file during CI and assert no merge after reclassification.
+
+    Estimate: 150–195 changed lines incremental to the parked branch, including tests and config documentation. Expected files under aida-cli-lib/src are gate/{unset_mode,mandate_gates}.rs, pr_service.rs, pr_cmd/shipping.rs, gate/tests/story_2884_unset_mode_tests.rs and tests/story_1690_train_tests.rs, plus docs/configuration-guide.md. Advisor sign-off precedes implementation.
+  created_at: 2026-11-24T18:12:30.168849638Z
+  modified_at: 2026-11-24T18:12:30.168849638Z
+  session_id: 01a20ec0de94
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
@@ -423,6 +443,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ec2-ad6d-7b61-ad9d-3dad8b9d6beb
+  author: dirtlab
+  timestamp: 2026-11-24T18:12:49.133466765Z
+  session_id: 01a20ec0de94
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
@@ -431,3 +460,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'PR #4448 round 5, STORY-3038.AC1: advisor_code_gate.rs and team_cmd.rs are genuine strict-tier omissions. I dispute a deny-list-only repair as sufficient. The advisor parked #4448 and requires sign-off on the posted fail-closed allow-list sketch before implementation or publication.'
+  raised_by: implementer
+  raised_at: 2026-11-24T18:12:48.235385128Z
