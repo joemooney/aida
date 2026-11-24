@@ -1,0 +1,26 @@
+id: 01a20f19-b0f7-7b60-8ff2-b117b95009d5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1369
+agreed_id: TASK-3882
+title: 'BUG-2713 deferred F2: quote trailing-space filenames unambiguously in agent refusal summaries'
+description: |
+  Deferred from #4416 BUG-2713 round 3 (advisor-122 2026-11-24 12:50; filed by product-15). LOW.
+
+  ## Acceptance
+  - AC1: (F2) refusal summaries quote dirty-path filenames that have trailing spaces unambiguously. Test.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T19:47:51.671464379Z
+modified_at: 2026-11-24T19:47:51.671464379Z
+req_type: Task
+tags:
+- session
+- small
+filed_at:
+  code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
