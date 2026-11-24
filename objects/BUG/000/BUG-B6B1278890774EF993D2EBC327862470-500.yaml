@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T14:06:21.587395227Z
+modified_at: 2026-11-24T14:06:32.220460159Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -96,6 +96,21 @@ comments:
   created_at: 2026-11-24T04:00:46.813071368Z
   modified_at: 2026-11-24T04:00:46.813071368Z
   session_id: 01a20b762f9e
+- id: 01a20de1-328c-7b50-90d7-1f3cad36dc7d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4482):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4a5d76cd6d69
+    Recorded: 2026-11-24T04:32:21.242334554+00:00
+    Findings:
+    1. aida-cli-lib/src/doctor/worktrees.rs:1453 — The local --id apply path calls list_leases after targeted_stale_finding verified only <id>.toml. It opens and parses every sibling lease, so an unrelated unreadable or stalled registry entry can still interfere (a FIFO blocks), and a different filename containing the same embedded id can win the sorted first-match and supply a different worktree for cleanup. Carry the selected lease through confirmation and re-read/revalidate that exact record for apply. Add an end-to-end --id case with an unrelated entry and verify that only the selected worktree is touched.
+    2. aida-cli-lib/src/coordination.rs:785 — Duplicate-generation refusal is checked only before taking the store lock. The subsequent refresh can introduce a second matching receipt in another scope while the selected scope's receipt stays byte-for-byte equal. The locked path then salvages and deletes one of two ambiguous receipts. Recheck generation uniqueness and the selected receipt under the lock after refresh and before salvage, and cover a duplicate arriving from origin in a regression test. Use a fallible registry lookup for the destructive decision, because list_claims currently drops unreadable and invalid entries and cannot establish uniqueness on an incomplete read.
+    3. aida-cli-lib/src/ownership/reader.rs:16 — Reusing local_claim_process_is_dead changes local doctor eligibility for a zombie creator. The previous pid_is_alive returns false for a zombie, while the shared-claim helper deliberately rejects DeadReason::Exited. An ordinary lease with no active PID, an existing idle worktree, a fresh age, and an unreaped creator was healable before this change and now stays Dormant until the 24-hour backstop or the creator is reaped. Preserve the local zombie classification with namespace-checked evidence, or leave local eligibility unchanged in this scoped fix, and add a regression.
+    4. scripts/store-writers.toml:322 — This removes the heal_exited_claim store-lock sink even though it still acquires the same writer lock and performs a transaction through with_store_write_lock_bounded. The inventory scanner's sink regex only recognizes the unbounded spelling, so FAST passing leaves this admission site invisible. Teach the inventory scanner the bounded wrapper and regenerate its rows with reviewed metadata so this route stays inventoried.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T14:06:32.076348713Z
+  modified_at: 2026-11-24T14:06:32.076348713Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
