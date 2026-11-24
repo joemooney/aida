@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T04:07:39.620644229Z
+modified_at: 2026-11-24T04:25:39.935904873Z
 req_type: Task
 tags:
 - doctor
@@ -132,6 +132,13 @@ comments:
     Probes covered exact sidecar filenames, absent and oversized entries, single and multiple retained generations, corrupt per-ID payloads, and the receipt-anchor refusal path (mailbox_logical_tests.rs:936). Preserved the existing corrupt-payload behavior and retained the global refusal for actual receipt-anchor failures. Structural selection initially flagged the new tests; after classification all seven structural coverage tests passed. No reviewer verdict recorded.
   created_at: 2026-11-24T04:07:39.620644229Z
   modified_at: 2026-11-24T04:07:39.620644229Z
+  session_id: 01a20bb47d43
+  harness_version: codex-cli 0.167.0
+- id: 01a20bcd-6936-7940-8e58-9b1f89402479
+  author: dirtlab
+  content: 'Validation addendum to implementer self-review: the FAST-built CLI test binary executed ending_a_run_tells_each_sender_once_and_never_bounces_a_bounce and story2767_retired_sender_preserves_seat_delivery_ownership. Both passed (2 passed, 0 failed), covering actual end-notice emission and registry-load failure.'
+  created_at: 2026-11-24T04:25:39.935904873Z
+  modified_at: 2026-11-24T04:25:39.935904873Z
   session_id: 01a20bb47d43
   harness_version: codex-cli 0.167.0
 history:
