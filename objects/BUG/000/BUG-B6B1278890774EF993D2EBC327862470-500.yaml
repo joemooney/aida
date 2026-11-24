@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T15:02:28.189904425Z
+modified_at: 2026-11-24T15:07:21.067957575Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -137,6 +137,13 @@ comments:
     Adversarial review covered 0/1/multiple generations, exact filename and embedded identity, incomplete TOML reads, stale confirmation, process namespace and different zombie policies for local and shared records. FAST application tests passed through the final build. Dynamic manual verification is in progress.
   created_at: 2026-11-24T15:02:28.189904425Z
   modified_at: 2026-11-24T15:02:28.189904425Z
+  session_id: 01a20de56fd2
+  harness_version: codex-cli 0.167.0
+- id: 01a20e18-e245-7850-9a6e-d8ae0e06e93e
+  author: dirtlab
+  content: 'Final validation for the round-two working tree: make check-ci-fast passed in launcher job j20261124T143155262-2-0, including the dynamic manual check. The final shared-claim regression passed in 6.81 seconds. Both disposable CLI probes passed. Host publication remains Refs BUG-2739 for the targeted-doctor slice.'
+  created_at: 2026-11-24T15:07:21.067957575Z
+  modified_at: 2026-11-24T15:07:21.067957575Z
   session_id: 01a20de56fd2
   harness_version: codex-cli 0.167.0
 history:
