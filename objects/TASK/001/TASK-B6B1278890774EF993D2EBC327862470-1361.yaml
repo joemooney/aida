@@ -1,0 +1,27 @@
+id: 01a20e71-8c11-79c3-b45e-f8241b82465e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1361
+agreed_id: TASK-3877
+title: 'ci:full intent: re-read head before recording, settle on workflow conclusion, key FAST marker by PR+base (BUG-2729 follow-up)'
+description: |
+  Follow-up from #4425 BUG-2729 r2 (advisor-122 OVERRIDE ruling 2026-11-24 09:40; filed by product-15). MEDIUM. All three degrade to today's behaviour (an early ci:full), so they were not blocking.
+
+  ## Acceptance
+  - AC1: When recording ci:full intent, RE-READ the PR head and skip if it moved since the snapshot (head-snapshot-then-verdict race). Use the workflow run's CONCLUSION, not the marker's run_in_progress flag, to decide settlement.
+  - AC2: Key the FAST marker by PR number + base, not by SHA+name alone, so PRs sharing a head cannot match each other's marker. A test for each of the three cases.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T16:44:12.177622684Z
+modified_at: 2026-11-24T16:44:12.177622684Z
+req_type: Task
+tags:
+- ci
+- small
+filed_at:
+  code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1ee
+  vendor: claude
