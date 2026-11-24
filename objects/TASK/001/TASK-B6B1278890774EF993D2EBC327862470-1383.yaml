@@ -1,0 +1,27 @@
+id: 01a20f8d-b0b7-7760-be7e-1e451d7a6430
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1383
+agreed_id: TASK-3889
+title: 'Merge-hold gate: resolve change approvals against the live PR head and check both approval keys before the wrong-head fallback (BUG-2718 follow-up)'
+description: |
+  Follow-up from #4411 BUG-2718 (advisor-122 OVERRIDE->APPROVE 2026-11-24 15:05 at c871fba3; filed by product-15). MEDIUM. Both items fail CLOSED today (a hold stays held, never released wrongly), but they leave valid holds unreleased.
+
+  ## Acceptance
+  - AC1: The merge-hold gate resolves change approvals against the LIVE PR head (from the forge), not the local branch tip, so an approval at the live head releases the hold. Test.
+  - AC2: Both approval key names are checked BEFORE the wrong-head fallback, so a valid approval recorded under either key releases the hold. Test.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T21:54:33.783785604Z
+modified_at: 2026-11-24T21:54:33.783785604Z
+req_type: Task
+tags:
+- merge-hold
+- strict
+filed_at:
+  code_sha: 841efeba1bc48f093c15d9ef5f362b0b5027f738
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5665f7c661c
+  vendor: claude
