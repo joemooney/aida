@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T04:08:42.632446825Z
+modified_at: 2026-11-24T04:09:00.624161633Z
 req_type: Bug
 tags:
 - admission
@@ -82,6 +82,23 @@ comments:
   created_at: 2026-11-24T03:43:53.880297828Z
   modified_at: 2026-11-24T03:43:53.880297828Z
   session_id: 01a20b651a11
+- id: 01a20bbd-e0b9-7221-b767-f48c3047b886
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2740):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 833284c12f44
+    Recorded: 2026-11-24T04:06:25.952957207+00:00
+    Findings:
+    1. BUG-2740 AC1 (aida-cli-lib/src/lane_admission.rs:458, aida-cli-lib/src/queue_cmd/work.rs:5153). The regression calls Startup::acquire directly against a temporary directory, so it still passes if queue work moves admission back below store setup or skips the early acquisition. Drive the production standalone queue-work path with a full cold-start slot against a distributed store fixture. At the blocked boundary, have an independent writer mutate that same store and verify that the pickup has not entered store synchronization or setup.
+    2. BUG-2740 AC2 (aida-core/src/db/store_lock.rs:274). The bounded store writer takes the same lock but returns bare Busy after five seconds, before holder lookup. A bounded timeout therefore supplies no PID or command even when the live holder is visible. Preserve the stable mediated Busy response while providing holder evidence in the authorized host diagnostic, and cover this timeout branch.
+    3. BUG-2740 AC2 (aida-core/src/db/store_lock.rs:152). Holder identification depends exclusively on the waiter's procfs. A live writer outside that procfs PID namespace can still hold the shared flock while its row is filtered out, producing holder unavailable on an ordinary timeout. A readable row also leaves the command unavailable when cmdline is inaccessible. Provide a trusted holder diagnostic for supported isolated callers, with a regression for a live holder hidden from the waiter. Keep host command details within the authorized diagnostic boundary.
+    4. aida-cli-lib/src/queue_cmd/work.rs:5153 and aida-cli-lib/src/standalone_implementer.rs:1572. Moving the cold-start wait ahead of the disk-floor preflight reverses their order. On a host with full cold-start capacity and disk below the floor, a pickup now waits for a slot before it can return the typed disk refusal and queue deferral. Preserve a disk-floor refusal with the existing deferral semantics before the potentially unbounded slot wait, and recheck disk at launch.
+    5. aida-cli-lib/src/lane_admission.rs:405 and aida-cli-lib/src/queue_cmd/work.rs:5153. Early acquisition immediately starts the 30-minute release timer, so store sync and pickup setup now consume the cold-start reservation budget. If setup outlasts it, the timer drops the socket and standalone run still accepts the expired Startup, allowing spawn without a reservation. Start the launch timeout after setup or detect expiry and re-admit outside the store lock before spawning.
+    6. aida-cli-lib/src/queue_cmd/work.rs:5035 and :5153. The WIP limit is checked before the newly introduced potentially unbounded wait, and the pickup never checks it again before entering setup. A new pickup that saw room can sit in the cold-start queue while another lane fills the limit, then start anyway. Revalidate the new-work WIP decision after a cold-start wait and before pickup mutation, preserving the existing rework and explicit override behavior.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T04:08:42.937286243Z
+  modified_at: 2026-11-24T04:08:42.937286243Z
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
