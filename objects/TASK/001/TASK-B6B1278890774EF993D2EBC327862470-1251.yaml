@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f2f2903d70c9294046921dee86a86c3c35299176
 
   docs/internal/testing/ci-test-shards.md:18 and docs/advanced/landing.md:113 still describe label addition as canceling the running workflow, which contradicts the changed labeled-event expression. Update the operator guidance to describe the final scheduling behavior and the approval path used by review-watch.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T11:17:07.353676794Z
-modified_at: 2026-11-24T22:54:37.145540481Z
+modified_at: 2026-11-24T23:46:57.958403579Z
 req_type: Task
 tags:
 - carried-from:BUG-2729
@@ -102,6 +102,12 @@ comments:
   modified_at: 2026-11-24T22:54:37.145540481Z
   session_id: 01a20fc2545c
   harness_version: codex-cli 0.167.0
+- id: 01a20ff4-9926-7fc2-9df6-b404727e7e31
+  author: aida-publication-done
+  content: Implementer push 4cee4247025c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T23:46:57.958402775Z
+  modified_at: 2026-11-24T23:46:57.958402775Z
+  session_id: 01a20fc2545c
 history:
 - id: 01a20838-dd87-7f91-a3ee-de1bfdc2aac4
   author: joe
@@ -173,6 +179,14 @@ history:
   session_id: 01a20fc2545c
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20ff4-9926-7fc2-9df6-b3fd9e13885a
+  author: aida-publication-done
+  timestamp: 2026-11-24T23:46:57.958399957Z
+  session_id: 01a20fc2545c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f2f2903d70c9294046921dee86a86c3c35299176
