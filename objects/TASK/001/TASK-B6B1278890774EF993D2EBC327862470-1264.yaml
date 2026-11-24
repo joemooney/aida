@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ccb9ea51cc5064223378a2022840f02a89b4f561
 
   The new stamp regression has no CI entry point. .github/workflows/ci.yml selects Python tests by name and the full test shards use nextest. Move the standalone regression into the existing shared-stamp Rust test suite or register python3 -m unittest tests/test_build_git_stamp.py in CI so the tracked/untracked contract keeps running.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T12:32:38.042666311Z
+modified_at: 2026-11-24T12:37:03.752894099Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
@@ -76,6 +76,13 @@ history:
   - field_name: tags
     old_value: carried-from:BUG-2728, finding-hash:bb67e327, from-review:BUG-2728
     new_value: carried-from:BUG-2728, finding-hash:bb67e327, from-review:BUG-2728, track:integration
+- id: 01a20d8f-4888-78d1-99c4-e5c29ebdb519
+  author: aida-session-start
+  timestamp: 2026-11-24T12:37:03.752890991Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ccb9ea51cc5064223378a2022840f02a89b4f561
