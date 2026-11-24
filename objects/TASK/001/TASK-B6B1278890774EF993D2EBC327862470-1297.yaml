@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T06:43:08.445004291Z
+modified_at: 2026-11-24T06:52:17.720577810Z
 req_type: Task
 tags:
 - hygiene
@@ -85,6 +85,13 @@ comments:
   created_at: 2026-11-24T06:43:08.444998638Z
   modified_at: 2026-11-24T06:43:08.444998638Z
   session_id: 01a20c0fef5f
+- id: 01a20c53-d7ef-7973-8645-b940801202d0
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 23:58): PR-4496 @ cd7112f316 PASSES as OUTPUT-ONLY (option A); no classification change verified. +83/-8. session_reap::classify_clone_reap returns the SAME ReapVerdict::Skip under the SAME ''facts.unpushed > 0'' condition, and only appends advice to the reason (''inspect stash entries ... git stash list --stat'' for refs/stash; ''git log --oneline --decorate --branches --not --remotes=origin'' for refs/heads/*). reap_quiet_outcomes is now a thin wrapper over reap_quiet_with_skips, which runs the identical reap path and also returns report.skipped; session_hygiene renders those as ''<session>  skipped — <reason>'' in both dry-run and live summaries. No code matches the Skip reason string exactly (grep finds only doc comments), so the suffix can''t break a consumer. Note for the reviewer: the file is session_reap.rs (path-sensitive), but no reap decision changes. Merges CLEAN; the fast-compile infra timeout is being rerun.'
+  created_at: 2026-11-24T06:52:17.720577810Z
+  modified_at: 2026-11-24T06:52:17.720577810Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
