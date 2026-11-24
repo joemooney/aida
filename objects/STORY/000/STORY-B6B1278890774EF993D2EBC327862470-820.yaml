@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T21:48:11.203178650Z
+modified_at: 2026-11-24T22:02:22.541938915Z
 req_type: Story
 tags:
 - autonomy
@@ -415,6 +415,18 @@ comments:
   modified_at: 2026-11-24T20:51:20.678734788Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f94-e525-7de0-9b2a-606bc0e138b5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0d31cc9df71712530a947f13931b972384873386 plus the native working-tree delta. Compared the merge-base diff and round delta, checked untracked files and diff whitespace. Final slice is +318/-26.
+    AC1: [evidence: behavioral-test] Approval-time preview only. The resolver at gate/unset_mode.rs:294 keeps the landing path supervised. The shared approval/show helper at line 367 checks unambiguous local and origin refs against a pinned trusted base. Strict source trees and GitLab CI stay supervised under broad globs. The legacy numbered lookup is unchanged. Removed the new paginated landing lookup, ship/train admission object, publication history reconstruction and landing fixtures. F1/F5/F6 remain open for slice 2 under the recorded punt.
+    AC2: [evidence: behavioral-test] Lane job j20261124T214547706-2-0 executed both approved_small tests and passed. The run was submitted before final working-tree refinements. Tests at gate/tests/story_2884_unset_mode_tests.rs:570 and :626 check knob, paths, branch ambiguity and strict metadata. Branch test exercises the shared entry-point function, not a CLI subprocess. Config knob and docs describe preview scope. All 48 fast source gates passed. The separate ratchet run is in progress.
+    Deep pass covered case/ID matching, invalid globs and path bytes, zero/one/multiple branch heads, and missing evidence. Both rename sides and deletes use no-renames diff. Conservative enforcement-tree exclusion can withhold preview on ordinary source files in those trees. No independent reviewer verdict.
+  created_at: 2026-11-24T22:02:22.541938915Z
+  modified_at: 2026-11-24T22:02:22.541938915Z
+  session_id: 01a20f835529
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
