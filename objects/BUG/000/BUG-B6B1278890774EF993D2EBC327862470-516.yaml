@@ -13,11 +13,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-24T19:17:19.555148206Z
+modified_at: 2026-11-24T20:03:50.860834185Z
 req_type: Bug
 tags:
 - leases
 - strict
+comments:
+- id: 01a20f28-53cd-7710-b50e-f5227d2b3b15
+  author: joe
+  content: |2-
+
+    - AC3: (advisor-122 13:12) an ABSENT or RECREATED tree with NO host binding must end cleanly through doctor heal (mail fenced or provably empty). Test. LIVE REPRO on dell1: lease 01a2078e7236 (TASK-1190); a clean clone was recreated at /home/dirtlab/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-1190 (= origin d7b559f9, dirty 0); `session end --force` → "state could not be read" (before recreation); after recreation `doctor heal stale-leases --id 01a2078e7236` → partial, `session end` → "mail retention refused … no verified host binding to its main checkout". Leave it in place for this lane.
+  created_at: 2026-11-24T20:03:50.860834185Z
+  modified_at: 2026-11-24T20:03:50.860834185Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
