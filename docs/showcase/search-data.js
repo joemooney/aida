@@ -91,9 +91,9 @@ window.AIDA_DOCS = [
   },
   {
     "category": "human",
-    "sha256": "8c9f5ec9d22fa87514847ab46f92b859489892354de2c4235abff85b926311e3",
+    "sha256": "f60bb4c1753c7fc72696e38a4608ddf157a0fb84d779fcd99d2d5f86ada4a4ac",
     "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
-    "text": "Product glossary Plain-language definitions of the words AIDA uses in its guides, commands and messages. Each entry says what you see or do, and links to the page that explains it in depth where one exists. Developer-facing machinery terms (orchestrator, drain, lease, worktree and others) are defined in the machinery glossary, and lifecycle states (committed, pushed, merged, completed, released) in the lifecycle vocabulary. Terms Agreed ID The short ID a spec keeps for good: its type and a number, such as TASK-\u003cnumber>. It is unique across every clone of the project, because each number is handed out once from a shared range. See Support for air-gapped development. Block A small range of spec numbers set aside for one clone. The clone gives new specs short agreed IDs from its own blocks, so it never has to ask anyone else first. Blocks are carved from a pool. See Support for air-gapped development. Brief A short note that assigns a piece of work to a named agent, such as \"pick up this spec next\". The agent reads it, does the work, and acknowledges it so it stops showing up. A brief goes one way; for a conversation, use the mailbox. See aida brief. Child grant A grant that a launcher gives an agent it starts, for one named seat. Your session can hand out only the seats you listed when you entered your own seat, and a child grant cannot be passed on again. See Entering seats and delegating child seats. Commit trailer The spec ID in parentheses at the end of a commit subject, as in fix(api): handle missing ids (SPEC-ID). When that commit lands on the main branch, AIDA marks the named spec completed. See the commit trailer convention. Control plane The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it. Deputy A helper you start in your own terminal that runs work other sessions hand it, under your seat grant. There are two kinds. The command deputy (aida deputy) runs single commands you allowed. The script deputy (aida deputy shell) runs whole scripts from the advisor, one at a time, at your terminal and as you. Both record each job and tell the submitting session the result. See Deputies: command vs script. Grant The authority your terminal session holds to act in a seat. You get one by running aida role enter \u003cseat> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See Entering seats and delegating child seats. Handoff A note a session writes before it ends so the next session can carry on without the conversation that came before: what was done, what is open and what to do next. AIDA keeps handoff notes in the project's .aida/ folder. Hub A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See Support for air-gapped development. Local ID A longer spec ID that also names the clone that made it, used when that clone has no block to draw short numbers from. Local IDs never collide, so they need no coordination, and a spec can later be given an agreed ID. You can give the clone a friendly label with aida node alias. See Support for air-gapped development. Mailbox AIDA's message channel between agents and people, for things that are not a change of state: a heads-up, a question, a warning about a shared file. Messages are kept, so a different agent can read them the next day. See the inter-agent mailbox. Mandate Time-limited permission, started by a person at a terminal with aida mandate start, for the advisor seat to do named things while that person is away, such as shipping held pull requests. It lasts 8 hours by default and at most 24, and never covers operator-only specs. See aida mandate. Merge hold A stop placed on a pull request so it cannot merge, even when its checks and review pass. It shows as the aida:merge-hold label and a failing required check. It stays until a person clears it with aida merge-hold clear, or AIDA releases it in the narrow cases it allows, such as under a mandate. See What is AIDA. Operator-only A tag that keeps a spec in human hands. No mandate covers it, so its pull request waits for a person to merge, and the tag's effect remains even if the tag is later removed. See aida mandate. Pool A range of one spec type's numbers given to one hub. Clones that sync through that hub take their blocks from it, so two hubs never hand out the same number. See Support for air-gapped development. Ref Git's name for a pointer to a commit, such as a branch. AIDA keeps its records on the aida-store branch, called the store ref; a push to it succeeds only if nobody else moved it first. See Support for air-gapped development. Review story The story AIDA files when it opens a pull request, titled Review PR-\u003cnumber>: \u2026 and routed to the reviewer seat. Whoever picks it up reviews that pull request and records a verdict. See the review process. Rework round One trip back to the implementer after a reviewer asks for changes. aida rework returns the spec to active work with the reviewer's reasons, and the implementer pushes fixes to the same pull request for another review. See aida rework. Role A named job in AIDA's workflow, such as advisor, implementer, reviewer or integrator. Work can be routed to a role, and the role decides what a session wearing it is expected and allowed to do. See Roles and sessions. Root The one clone of a project that owns every spec number not yet handed out. You choose it once with aida node enroll-root; it splits the numbers into pools. See Support for air-gapped development. Roster The list of seats each person is allowed to take, kept per project. It is a ceiling: aida role enter refuses a seat that is not on your roster, and aida team allow-seat adds one. See Entering seats and delegating child seats. Seat A role as a place in the workflow that a session occupies, such as the advisor seat. A seat can receive work and hold sessions, and some seats allow only one active occupant at a time. See Roles and sessions. Supervised spec A sensitive spec, such as one touching security, containment, review or merge authority, or one marked guided or keystone. A mandate leaves its merge hold for a person unless that person started the mandate with --include-supervised. See aida mandate. How to add a term This file is the canonical source for AIDA's product vocabulary. It is the template master aida-core/templates/.aida/discipline/product-glossary.md. Two outputs are generated from it: the CLI glossary (aida docs glossary, published as the book's Glossary chapter by make book-glossary) and the website glossary page (python3 docs/showcase/build.py). The terms that earlier lived as approved type=term specs (local ID, role, seat, control plane) have been folded in here; stakeholder persona was already in the machinery glossary. Draft term specs were left out on purpose: a draft term is folded in once it is approved. Add new product vocabulary here, not as a term spec. Each entry follows the same rules. (The website renderer reads one list item per line.) - Heading. Add a ### heading under Terms, in alphabetical order. The heading becomes the anchor: ### Merge hold is glossary.html#merge-hold. Do not rename a heading once pages link to it. - Wording. Write 1 to 3 plain sentences about what the reader sees or does, not how it is built. Do not cite spec IDs. - Links. Link the page that explains the term in depth, relative to this file (../../../../docs/\u003cpage>.md), and other terms as #anchor. - Outputs. Copy the master to .aida/discipline/ (make sync-templates), rebuild the binary, run make book-glossary and python3 docs/showcase/build.py, and commit the regenerated files.",
+    "text": "Product glossary Plain-language definitions of the words AIDA uses in its guides, commands and messages. Each entry says what you see or do, and links to the page that explains it in depth where one exists. Developer-facing machinery terms (orchestrator, drain, lease, worktree and others) are defined in the machinery glossary, and lifecycle states (committed, pushed, merged, completed, released) in the lifecycle vocabulary. Terms Agreed ID The short ID a spec keeps for good: its type and a number, such as TASK-\u003cnumber>. It is unique across every clone of the project, because each number is handed out once from a shared range. See Support for air-gapped development. Autoland (aida land) Automatic landing moves ready changes toward the default branch. In CI-gated mode, aida land run boards ready changes onto the train. In review-gated mode it can ship them individually when authorized. See Landing modes. Bisect When a test or gate fails on a merge train, AIDA splits the group into smaller trains and checks them separately. This helps isolate a failing change while allowing other changes to land. See Merge train operation. Block A small range of spec numbers set aside for one clone. The clone gives new specs short agreed IDs from its own blocks, so it never has to ask anyone else first. Blocks are carved from a pool. See Support for air-gapped development. Brief A short note that assigns a piece of work to a named agent, such as \"pick up this spec next\". The agent reads it, does the work, and acknowledges it so it stops showing up. A brief goes one way; for a conversation, use the mailbox. See aida brief. Child grant A grant that a launcher gives an agent it starts, for one named seat. Your session can hand out only the seats you listed when you entered your own seat, and a child grant cannot be passed on again. See Entering seats and delegating child seats. ci:full A pull request label that requests the full set of continuous integration checks. Ordinary pull requests get the fast checks by default. See CI tiers. Commit trailer The spec ID in parentheses at the end of a commit subject, as in fix(api): handle missing ids (SPEC-ID). When that commit lands on the main branch, AIDA marks the named spec completed. See the commit trailer convention. Control plane The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it. Delta review A reviewer inspects what changed after an earlier approval, for example how an author resolved a merge conflict. The resolution needs review before the updated change can land. See Review handoffs. Deputy A helper you start in your own terminal that runs work other sessions hand it, under your seat grant. There are two kinds. The command deputy (aida deputy) runs single commands you allowed. The script deputy (aida deputy shell) runs whole scripts from the advisor, one at a time, at your terminal and as you. Both record each job and tell the submitting session the result. See Deputies: command vs script. Deputy shell An operator holding an advisor grant can start a script runner in their terminal. An authorized advisor can submit a whole script, which runs with the operator\u2019s authority. See Running the script deputy. Grant The authority your terminal session holds to act in a seat. You get one by running aida role enter \u003cseat> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See Entering seats and delegating child seats. Handoff A note a session writes before it ends so the next session can carry on without the conversation that came before: what was done, what is open and what to do next. AIDA keeps handoff notes in the project's .aida/ folder. Hub A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See Support for air-gapped development. Include gate paths (--include-gate-paths) An operator can use this mandate option to let ships and trains handle changes to protected files, including the merge rules themselves. The change still needs approval and must satisfy the remaining gates. See Mandate options. Local ID A longer spec ID that also names the clone that made it, used when that clone has no block to draw short numbers from. Local IDs never collide, so they need no coordination, and a spec can later be given an agreed ID. You can give the clone a friendly label with aida node alias. See Support for air-gapped development. Mailbox AIDA's message channel between agents and people, for things that are not a change of state: a heads-up, a question, a warning about a shared file. Messages are kept, so a different agent can read them the next day. See the inter-agent mailbox. Mandate Time-limited permission, started by a person at a terminal with aida mandate start, for the advisor seat to do named things while that person is away, such as shipping held pull requests. It lasts 8 hours by default and at most 24, and never covers operator-only specs. See aida mandate. Merge hold A stop placed on a pull request so it cannot merge, even when its checks and review pass. It shows as the aida:merge-hold label and a failing required check. It stays until a person clears it with aida merge-hold clear, or AIDA releases it in the narrow cases it allows, such as under a mandate. See What is AIDA. Merge train AIDA stacks approved pull requests on the default branch and tests their combined changes. If the checks pass and the base still matches, the train can land the group together. See Train checks. Operator-only A tag that keeps a spec in human hands. No mandate covers it, so its pull request waits for a person to merge, and the tag's effect remains even if the tag is later removed. See aida mandate. Pool A range of one spec type's numbers given to one hub. Clones that sync through that hub take their blocks from it, so two hubs never hand out the same number. See Support for air-gapped development. Post-train pull After a train lands, run aida pull to bring the merged commits into your checkout. AIDA reads their completion trailers to update the corresponding specs. See Pull and merge trains. Ratchet A check that sets a limit on an existing exception, such as the number of places still using an older interface. Removing an exception can tighten the limit so later changes cannot quietly add it back. See CI checks. Ref Git's name for a pointer to a commit, such as a branch. AIDA keeps its records on the aida-store branch, called the store ref; a push to it succeeds only if nobody else moved it first. See Support for air-gapped development. Review story The story AIDA files when it opens a pull request, titled Review PR-\u003cnumber>: \u2026 and routed to the reviewer seat. Whoever picks it up reviews that pull request and records a verdict. See the review process. Rework round One trip back to the implementer after a reviewer asks for changes. aida rework returns the spec to active work with the reviewer's reasons, and the implementer pushes fixes to the same pull request for another review. See aida rework. Rider A pull request traveling on a merge train. If the train lands, the member pull request closes with a pointer to its commit. See Merge train operation. Role A named job in AIDA's workflow, such as advisor, implementer, reviewer or integrator. Work can be routed to a role, and the role decides what a session wearing it is expected and allowed to do. See Roles and sessions. Root The one clone of a project that owns every spec number not yet handed out. You choose it once with aida node enroll-root; it splits the numbers into pools. See Support for air-gapped development. Roster The list of seats each person is allowed to take, kept per project. It is a ceiling: aida role enter refuses a seat that is not on your roster, and aida team allow-seat adds one. See Entering seats and delegating child seats. Seat A role as a place in the workflow that a session occupies, such as the advisor seat. A seat can receive work and hold sessions, and some seats allow only one active occupant at a time. See Roles and sessions. Supervised spec A sensitive spec, such as one touching security, containment, review or merge authority, or one marked guided or keystone. A mandate leaves its merge hold for a person unless that person started the mandate with --include-supervised. See aida mandate. How to add a term This file is the canonical source for AIDA's product vocabulary. It is the template master aida-core/templates/.aida/discipline/product-glossary.md. Two outputs are generated from it: the CLI glossary (aida docs glossary, published as the book's Glossary chapter by make book-glossary) and the website glossary page (python3 docs/showcase/build.py). The terms that earlier lived as approved type=term specs (local ID, role, seat, control plane) have been folded in here; stakeholder persona was already in the machinery glossary. Draft term specs were left out on purpose: a draft term is folded in once it is approved. Add new product vocabulary here, not as a term spec. Each entry follows the same rules. (The website renderer reads one list item per line.) - Heading. Add a ### heading under Terms, in alphabetical order. The heading becomes the anchor: ### Merge hold is glossary.html#merge-hold. Do not rename a heading once pages link to it. - Wording. Write 1 to 3 plain sentences about what the reader sees or does, not how it is built. Do not cite spec IDs. - Links. Link the page that explains the term in depth, relative to this file (../../../../docs/\u003cpage>.md), and other terms as #anchor. - Outputs. Copy the master to .aida/discipline/ (make sync-templates), rebuild the binary, run make book-glossary and python3 docs/showcase/build.py, and commit the regenerated files.",
     "title": "Product glossary",
     "url": "glossary.html"
   },
@@ -105,6 +105,24 @@ window.AIDA_DOCS = [
     "text": "The short ID a spec keeps for good: its type and a number, such as TASK-\u003cnumber>. It is unique across every clone of the project, because each number is handed out once from a shared range. See Support for air-gapped development.",
     "title": "Agreed ID",
     "url": "glossary.html#agreed-id"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "2aed9607168a7ea42ac3e103f455905ac6e96c4b617601ef49129053b5a619da",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "Automatic landing moves ready changes toward the default branch. In CI-gated mode, aida land run boards ready changes onto the train. In review-gated mode it can ship them individually when authorized. See Landing modes.",
+    "title": "Autoland (aida land)",
+    "url": "glossary.html#autoland-aida-land"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "f7b8c0345f23fb5702ccdffa3cd6070e6fdf2a253d597d751eb5998755d43908",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "When a test or gate fails on a merge train, AIDA splits the group into smaller trains and checks them separately. This helps isolate a failing change while allowing other changes to land. See Merge train operation.",
+    "title": "Bisect",
+    "url": "glossary.html#bisect"
   },
   {
     "category": "human",
@@ -136,6 +154,15 @@ window.AIDA_DOCS = [
   {
     "category": "human",
     "kind": "term",
+    "sha256": "2ac1ae26d79f7477ca78f22168a2f357e419c78a6dca544d0910cde5d614090c",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A pull request label that requests the full set of continuous integration checks. Ordinary pull requests get the fast checks by default. See CI tiers.",
+    "title": "ci:full",
+    "url": "glossary.html#cifull"
+  },
+  {
+    "category": "human",
+    "kind": "term",
     "sha256": "05a229c15c26cb6987b276ecf5b3e5b3373faa3f97fe385e830147d9fb961e93",
     "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
     "text": "The spec ID in parentheses at the end of a commit subject, as in fix(api): handle missing ids (SPEC-ID). When that commit lands on the main branch, AIDA marks the named spec completed. See the commit trailer convention.",
@@ -154,11 +181,29 @@ window.AIDA_DOCS = [
   {
     "category": "human",
     "kind": "term",
+    "sha256": "510cc34cd1314e4ef96f1124f0cd47283fc7c9c184d427d6f43dfe39593d6213",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A reviewer inspects what changed after an earlier approval, for example how an author resolved a merge conflict. The resolution needs review before the updated change can land. See Review handoffs.",
+    "title": "Delta review",
+    "url": "glossary.html#delta-review"
+  },
+  {
+    "category": "human",
+    "kind": "term",
     "sha256": "7df31c2cd58a7b696006eb1c523556a1e25d02a544c86009f44b29bcb198163f",
     "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
     "text": "A helper you start in your own terminal that runs work other sessions hand it, under your seat grant. There are two kinds. The command deputy (aida deputy) runs single commands you allowed. The script deputy (aida deputy shell) runs whole scripts from the advisor, one at a time, at your terminal and as you. Both record each job and tell the submitting session the result. See Deputies: command vs script.",
     "title": "Deputy",
     "url": "glossary.html#deputy"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "d08d188192e2fbbb97dd622db5d5f20fcfd56c0e06fd6148f2dc8a62cdada932",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "An operator holding an advisor grant can start a script runner in their terminal. An authorized advisor can submit a whole script, which runs with the operator\u2019s authority. See Running the script deputy.",
+    "title": "Deputy shell",
+    "url": "glossary.html#deputy-shell"
   },
   {
     "category": "human",
@@ -186,6 +231,15 @@ window.AIDA_DOCS = [
     "text": "A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See Support for air-gapped development.",
     "title": "Hub",
     "url": "glossary.html#hub"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "2c1dc2d2a7b9b3474a954496c721dbd9f7b373dba7a13b4ada4226ca6f796743",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "An operator can use this mandate option to let ships and trains handle changes to protected files, including the merge rules themselves. The change still needs approval and must satisfy the remaining gates. See Mandate options.",
+    "title": "Include gate paths (--include-gate-paths)",
+    "url": "glossary.html#include-gate-paths---include-gate-paths"
   },
   {
     "category": "human",
@@ -226,6 +280,15 @@ window.AIDA_DOCS = [
   {
     "category": "human",
     "kind": "term",
+    "sha256": "f17876fd9ff30f5ff9093e40bb1d3794336f174a785ba9974552793309fa90a5",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "AIDA stacks approved pull requests on the default branch and tests their combined changes. If the checks pass and the base still matches, the train can land the group together. See Train checks.",
+    "title": "Merge train",
+    "url": "glossary.html#merge-train"
+  },
+  {
+    "category": "human",
+    "kind": "term",
     "sha256": "378dd5a0de81ebe226051e002a558da62f1a3e263ee206ab364c1f6bfd32626f",
     "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
     "text": "A tag that keeps a spec in human hands. No mandate covers it, so its pull request waits for a person to merge, and the tag's effect remains even if the tag is later removed. See aida mandate.",
@@ -240,6 +303,24 @@ window.AIDA_DOCS = [
     "text": "A range of one spec type's numbers given to one hub. Clones that sync through that hub take their blocks from it, so two hubs never hand out the same number. See Support for air-gapped development.",
     "title": "Pool",
     "url": "glossary.html#pool"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "8f04a3634ea268bd2915f79f55ea2b1d8f9baa97f573e7fe9b9a1c4d57e2712a",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "After a train lands, run aida pull to bring the merged commits into your checkout. AIDA reads their completion trailers to update the corresponding specs. See Pull and merge trains.",
+    "title": "Post-train pull",
+    "url": "glossary.html#post-train-pull"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "0636eb628f7324f21b1aea3eab4bdab479aabf8ce3ea9a91d0a919474489a4eb",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A check that sets a limit on an existing exception, such as the number of places still using an older interface. Removing an exception can tighten the limit so later changes cannot quietly add it back. See CI checks.",
+    "title": "Ratchet",
+    "url": "glossary.html#ratchet"
   },
   {
     "category": "human",
@@ -267,6 +348,15 @@ window.AIDA_DOCS = [
     "text": "One trip back to the implementer after a reviewer asks for changes. aida rework returns the spec to active work with the reviewer's reasons, and the implementer pushes fixes to the same pull request for another review. See aida rework.",
     "title": "Rework round",
     "url": "glossary.html#rework-round"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "d9d901a31be3c584527e3093c3ee85d31a0ce7665faeea6eb6cd367057ce8fbd",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A pull request traveling on a merge train. If the train lands, the member pull request closes with a pointer to its commit. See Merge train operation.",
+    "title": "Rider",
+    "url": "glossary.html#rider"
   },
   {
     "category": "human",

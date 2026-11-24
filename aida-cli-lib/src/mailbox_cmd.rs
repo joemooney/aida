@@ -691,6 +691,10 @@ pub(crate) fn handle_mailbox_command(
                 &crate::mailbox_view::explicit_limits(),
                 crate::mailbox_view::BindWait::Explicit,
             );
+            // trace:TASK-3846 | ai:codex
+            if let Some(note) = view.missing_sidecar_note() {
+                eprintln!("{note}");
+            }
             let inbox = select_inbox_rows(view.records(), *archived, *unread, *recent_read_tail);
             let who_label = audience.keys().collect::<Vec<_>>().join(" + ");
             let partial = view.partial_note();

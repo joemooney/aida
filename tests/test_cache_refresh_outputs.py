@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-C cache-label CLI acceptance, using an isolated git store and HOME.
+"""Cache-label CLI acceptance, using an isolated git store and HOME.
 
 trace:TASK-1526 | ai:codex
 Run after building: python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida
@@ -78,7 +78,7 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
         env.update(HOME=str(home), AIDA_HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"),
                    GIT_AUTHOR_NAME="Test", GIT_AUTHOR_EMAIL="test@example.invalid",
                    GIT_COMMITTER_NAME="Test", GIT_COMMITTER_EMAIL="test@example.invalid",
-                   AIDA_TELEMETRY="0", AIDA_CACHE_READ_WAIT_MS="20", AIDA_CACHE_RETRY_COUNT="0")
+                   AIDA_CACHE_NO_DETACH="1", AIDA_TELEMETRY="0", AIDA_CACHE_READ_WAIT_MS="20", AIDA_CACHE_RETRY_COUNT="0")
         require(run(["git", "init", "-q"], root, env))
         require(run([binary, "init", "--no-skills", "--no-hooks"], root, env))
         require(run([binary, "add", "--title", "cache-label-seed", "--type", "task", "--status", "draft"], root, env))
@@ -90,7 +90,10 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
             built_at = conn.execute("SELECT value FROM cache_meta WHERE key='built_at'").fetchone()[0]
             uuid, spec = conn.execute("SELECT id, spec_id FROM requirements_cache WHERE title='cache-label-seed'").fetchone()
         # One canonical commit without write-through, preserving the useful old row.
-        files = list((store / "objects").rglob(f"{spec}.yaml"))
+        # The cache exposes the display ID. Object names use the origin ID.
+        # trace:TASK-3848 | ai:codex
+        files = [path for path in (store / "objects").rglob("*.yaml")
+                 if f"id: {uuid}" in path.read_text().splitlines()]
         assert len(files) == 1
         files[0].write_text(files[0].read_text().replace("cache-label-seed", "cache-label-new"))
         require(run(["git", "add", "objects"], store, env))
@@ -131,7 +134,12 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
                         fcntl.flock(flock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     try:
                         start = time.monotonic()
-                        result = require(run([binary, *args, "--format", output_format], root, env))
+                        # Simulate a reader inside a worker. Its recursion guard
+                        # refuses the spawn after filing the refresh request.
+                        reader_env = env
+                        if state == "deferred":
+                            reader_env = dict(env, AIDA_CACHE_NO_DETACH="0", AIDA_CACHE_WORKER="1")
+                        result = require(run([binary, *args, "--format", output_format], root, reader_env))
                         elapsed = time.monotonic() - start
                         # Bound the ordinary single-query fixture, not the CPU
                         # work of dashboards aggregating independent sections.
@@ -164,7 +172,10 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
                         elif output_format == "toon":
                             assert "cache:\n" in result.stdout
                             assert f'  refreshing: "{state}"' in result.stdout
-                        assert not Path(str(cache) + ".refresh-request").exists()
+                        request = Path(str(cache) + ".refresh-request")
+                        assert request.exists() == (state == "deferred")
+                        if state == "deferred":
+                            request.unlink()
                     finally:
                         if writer is not None: writer.rollback(); writer.close()
                         if flock is not None: flock.close()
@@ -172,7 +183,7 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
         # These read surfaces still use strict load() today (TASK-1514 owns
         # expansion). Their object renderers nevertheless always carry cache.
         for name, args in [
-            ("graph/tree", ["graph", spec, "--tree", "--format", "json"]),
+            ("graph/tree", ["graph", spec, "--format", "json"]),
             ("history", ["history", "--limit", "1", "--format", "json"]),
             ("digest", ["digest", "--digest-format", "json", "--format", "human"]),
         ]:
@@ -202,6 +213,7 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
                 assert time.monotonic() - start < 2, args
                 assert "requested" not in result.stderr
         print("PASS advisory surfaces: zero wait", flush=True)
+        # With detaching disabled, every format refreshes inline at a TTY.
         for mode in ("json", "toon", "human"):
             with sqlite3.connect(baseline) as source, sqlite3.connect(cache) as dest:
                 source.backup(dest)
@@ -210,15 +222,9 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
             result = require(run_tty([binary, "list", "--format", mode], root, env))
             with sqlite3.connect(cache) as conn:
                 recorded = conn.execute("SELECT value FROM cache_meta WHERE key='source_head_sha'").fetchone()
-            if mode == "human":
-                assert recorded is not None and recorded[0] != original_head
-                assert "cache-label-new" in result.stdout
-                assert "refresh is deferred" not in result.stderr
-            else:
-                assert recorded is None, (mode, "machine output rebuilt at a TTY")
-                assert "refresh is deferred" in result.stderr
-        print("PASS tty_full_rebuild_winner_remains_strict_before_c: explicit JSON/TOON still defer at a TTY", flush=True)
-        print("PASS losing_reader_past_wait_prints_stale_note_and_json_flag_exit_0", flush=True)
+            assert recorded and recorded[0] != original_head, mode
+            assert "cache-label-new" in result.stdout, mode
+            assert "note: showing results cached at" not in result.stderr, mode
 
 
 if __name__ == "__main__":
