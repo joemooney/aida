@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:41:03.472804465Z
-modified_at: 2026-11-24T04:38:10.531242144Z
+modified_at: 2026-11-24T04:49:46.527891636Z
 req_type: Task
 tags:
 - forge
@@ -87,6 +87,13 @@ comments:
   content: 'INTEGRATION PRE-CHECK (integration-30, 21:45): PR-4486 @ 7ada68eff2 PASSES. +89/-34 in 4 files, merges CLEAN on integration. AC1: github_core_budget now enters forge_lookup::with_forge_lookup_deadline(5s) BEFORE main_root and Repository::load, so slow repository discovery spends the same budget; criterion trace markers were added to the budget tests (forge_tests_inline_tests.rs, task_3852_core_budget.rs). AC2: the gh binary is std::path::absolute()''d before current_dir(&root). I checked this is safe: kernel::resolve_forge_binary_before never returns a bare ''gh''. It returns PATH-dir.join(exe), an absolute fallback, or the test env value, so absolutizing only changes a relative PATH entry like ./bin/gh, resolved against the probe''s original cwd as intended. Fast CI pending.'
   created_at: 2026-11-24T04:40:27.952517892Z
   modified_at: 2026-11-24T04:40:27.952517892Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20be3-ac67-7b72-8c3b-52c1c901f989
+  author: joe
+  content: 'INTEGRATION NOTE (integration-30, 22:00): the story_2326 launch-ledger failure in this lane''s log (aida-cli-lib/src/forge.rs found=2 ledger=1) came from the FIRST commit 780f16a0a1d, which spawned via ''Command::new(binary)''. ''binary'' isn''t on NON_VENDOR_SPELLINGS, so the ratchet counted it as a possible vendor child. The second commit 7ada68eff2e (PR head) renamed it to ''gh_bin'', which is allowlisted. An emulation of markers() on forge.rs at the head gives 1 (the existing ''cli'' site), matching the ledger. No rework needed; PR CI at the head is the confirmation.'
+  created_at: 2026-11-24T04:49:46.527891636Z
+  modified_at: 2026-11-24T04:49:46.527891636Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
