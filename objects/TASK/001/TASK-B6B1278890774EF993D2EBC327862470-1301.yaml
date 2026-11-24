@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The status_prs unshipped-work detector uses aida_core::id_identity for ALL status keys and lookups, including zero-padding equivalence (TASK-1-097 == TASK-1-97) and consistent branch-identity resolution across the detector's other checks.
   - AC2: Tests: padded vs unpadded IDs and alias forms resolve to the same spec in every detector check.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T06:08:21.407286071Z
+modified_at: 2026-11-24T06:15:36.709133985Z
 req_type: Task
 tags:
 - small
@@ -30,6 +30,13 @@ history:
   author: joe
   timestamp: 2026-11-24T06:08:18.591027993Z
   changes: []
+- id: 01a20c32-0e05-7963-8ba8-dfcdc41f7587
+  author: aida-session-start
+  timestamp: 2026-11-24T06:15:36.709131459Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
