@@ -1,0 +1,29 @@
+id: 01a20bc9-3ae1-72a2-90e2-73f6c26a6ddf
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1292
+agreed_id: TASK-3856
+title: discover-python-tests.py coverage ratchet credits only CI steps that can run (a disabled if:false step does not count as wiring)
+description: |
+  Follow-up from the #4479 BUG-2734 r2 review (advisor-122 ruling 2026-11-23 21:22, overridden to APPROVE; relayed by integration-30; filed by product-15). scripts/discover-python-tests.py's coverage ratchet counts a test as "wired" when ci.yml contains an invocation for it, even inside a step that can never run.
+
+  ## Acceptance
+  - AC1: The ratchet credits only CI steps that can run. An invocation inside a step whose `if:` is always false (e.g. `if: false`, `if: ${{ false }}`) or that is otherwise disabled does not count as wiring, so that test is reported as unwired.
+  - AC2: Regression cases: a disabled step's invocation does not satisfy the ratchet, and an enabled step's does.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T04:21:06.913518651Z
+modified_at: 2026-11-24T04:21:06.913518651Z
+req_type: Task
+tags:
+- ci
+- small
+- tests
+- track:integration
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
