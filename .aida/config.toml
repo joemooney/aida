@@ -158,6 +158,13 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# trace:BUG-2729 | ai:codex
+[[schedule.jobs]]
+name = "approved-head-full-ci"
+command = "review --promote-approved-heads"
+every = "2m"
+enabled = true
+
 # Catch up an existing enabled history index; disabled/missing/busy is a no-op.
 # trace:STORY-1661 | ai:codex
 [[schedule.jobs]]
@@ -232,6 +239,14 @@ enabled = true
 name = "red-main-watch"
 command = "land watch"
 every = "5m"
+enabled = true
+
+# trace:TASK-3218 | ai:codex
+[[schedule.jobs]]
+name = "red-main-watch-route"
+seats = ["advisor"]
+on = ["CronJobFailed:red-main-watch"]
+prompt = "The red-main-watch job failed. Inspect the routed trip diagnostic for the failed land watch step and consult .aida/schedule.log for its command output."
 enabled = true
 
 [[schedule.jobs]]

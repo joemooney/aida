@@ -921,7 +921,7 @@ mod standalone_review_verdict_draft_tests {
     // trace:BUG-2707 | ai:claude
     #[test]
     fn bug_2707_default_policy_remedy_matches_the_recorder_rule() {
-        let (_tmp, launch) = launch_under("");
+        let (tmp, launch) = launch_under("");
         let err = refusal(
             &launch,
             &approved(serde_json::json!(["P3: rename the helper"])),
@@ -946,6 +946,23 @@ mod standalone_review_verdict_draft_tests {
             .submit(&approved(serde_json::json!([example])).to_string())
             .unwrap();
         assert_eq!(accepted.verdict, "approved");
+        // trace:TASK-3257 | ai:codex
+        let recorded = rv::build_verdict_object(
+            tmp.path(),
+            &rv::verdict_path(tmp.path(), "TASK-3257"),
+            Some("approved"),
+            None,
+            None,
+            None,
+            &accepted.record_findings(),
+            "reviewer",
+        )
+        .unwrap();
+        assert!(rv::disposition_verdict(&recorded).approves());
+        assert_eq!(
+            recorded["finding_dispositions"][0]["disposition"],
+            "deferred"
+        );
         // A multi-line rationale is not a deferral, exactly as the recorder rules.
         let multi = serde_json::json!({"text":"t","severity":"minor","disposition":"deferred","rationale":"a\nb"}).to_string();
         assert!(launch
@@ -1549,7 +1566,7 @@ mod standalone_review_verdict_parent_tests {
         if crate::test_env::run_path_isolated_test() {
             return;
         }
-        let f = Fixture::new();
+        let mut f = Fixture::new();
         let launch = LaunchDraft::prepare_local(&f.root, 59, f.head.clone()).unwrap();
         let refused = ra::with_identity_source(ra::IdentitySource::default(), || {
             f.record("approved", &[], None)
@@ -1579,8 +1596,18 @@ mod standalone_review_verdict_parent_tests {
         assert!(child.wait().unwrap().success());
         let draft = launch.read().unwrap();
         let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
-        f.record(&draft.verdict, &draft.findings, Some(&reviewer))
-            .unwrap();
+        f._env
+            .set_key("PATH", format!("{}:/usr/bin:/bin", f.root.display()));
+        crate::review_watch::test_apply_recorded_full_ci(&f.root, 59, &f.head, || {
+            let subject = crate::ReviewPrSubject {
+                head_ref: "feature".into(),
+                commit_subjects: vec!["change (STORY-77)".into()],
+            };
+            crate::with_review_pr_subject(subject, || {
+                crate::record_reviewer_draft(f.root.clone(), "STORY-77", &draft, &reviewer)
+            })
+            .unwrap()
+        });
         let checks = crate::queue_cmd::StandaloneVerdictChecks {
             project_root: &f.root,
             pr: 59,
@@ -1590,6 +1617,7 @@ mod standalone_review_verdict_parent_tests {
         };
         let sidecar = f.root.join(".aida/review-verdicts/STORY-77.json");
         std::fs::write(&sidecar, serde_json::json!({"verdict":"approved","reviewed_sha":f.head,"summary":"unstamped sidecar"}).to_string()).unwrap();
+        // trace:BUG-2729 | ai:codex
         let collected = rv::verify_recorded_draft(
             &f.root,
             &rv::verdict_path(&f.root, "PR-59"),

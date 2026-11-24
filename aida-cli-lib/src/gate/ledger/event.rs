@@ -277,9 +277,20 @@ pub(crate) fn verdict_event(
     // Compute afresh on every verdict, including refusals and collected verdicts.
     // Keep this outside the signed body and delivery reconciliation identity.
     // trace:STORY-2698 | ai:codex
+    // Bound PRs need forge evidence for this head. An unavailable base
+    // yields STRICT through assess; carryover retains its protected base.
+    // trace:BUG-2737 | ai:codex
+    let risk_base = if change.forge == super::ChangeForge::Pr && change.number != 0 {
+        event
+            .head
+            .as_deref()
+            .and_then(|head| crate::forge::review_risk_pr_base(root, change.number, head))
+    } else {
+        event.base_tip.clone()
+    };
     event.risk = serde_json::to_value(crate::review_risk::assess(
         root,
-        event.base_tip.as_deref(),
+        risk_base.as_deref(),
         event.head.as_deref(),
     ))
     .ok();

@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="paper">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIDA Deterministic Code Review Engine — Architecture, Playbooks &amp; Self-Review Case Study</title>
+  <link rel="icon" type="image/png" href="assets/aida-icon.png" />
+  <link rel="icon" href="assets/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/aida-icon.png" />
+  <style>
+    :root, [data-theme="paper"] {
+      --bg: #f4f1e9;
+      --bg-elevated: #fbf9f4;
+      --bg-panel: #eae5d9;
+      --bg-dark-card: #232a26;
+      --ink: #252a26;
+      --ink-secondary: #5a6057;
+      --ink-muted: #7a8076;
+      --line: #d5d0c3;
+      --line-strong: #252a26;
+      --accent: #ba3916;
+      --accent-bright: #ff7a45;
+      --accent-soft: rgba(186, 57, 22, 0.12);
+      --emerald: #1b6b4c;
+      --emerald-mid: #2d8662;
+      --emerald-light: #479e7b;
+      --emerald-soft: rgba(27, 107, 76, 0.13);
+      --amber: #b4650c;
+      --amber-soft: rgba(180, 101, 12, 0.14);
+      --crimson: #a82020;
+      --crimson-soft: rgba(168, 32, 32, 0.13);
+      --blue: #235789;
+      --blue-soft: rgba(35, 87, 137, 0.13);
+      --shadow: 0 8px 28px rgba(37, 42, 38, 0.06);
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --serif: Georgia, "Times New Roman", Times, serif;
+    }
+
+    [data-theme="terminal"] {
+      --bg: #111513;
+      --bg-elevated: #181d1a;
+      --bg-panel: #1f2622;
+      --bg-dark-card: #0c0f0d;
+      --ink: #ece9e0;
+      --ink-secondary: #adb3aa;
+      --ink-muted: #7b8278;
+      --line: #2c3530;
+      --line-strong: #ece9e0;
+      --accent: #ff7849;
+      --accent-bright: #ff956e;
+      --accent-soft: rgba(255, 120, 73, 0.16);
+      --emerald: #3dd68c;
+      --emerald-mid: #34b87a;
+      --emerald-light: #5ce0a0;
+      --emerald-soft: rgba(61, 214, 140, 0.15);
+      --amber: #f5a623;
+      --amber-soft: rgba(245, 166, 35, 0.16);
+      --crimson: #ff5c5c;
+      --crimson-soft: rgba(255, 92, 92, 0.16);
+      --blue: #58a6ff;
+      --blue-soft: rgba(88, 166, 255, 0.16);
+      --shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 88px; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+    a { color: inherit; text-decoration: none; }
+    code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-panel); padding: 1px 5px; border-radius: 2px; }
+    pre { font-family: var(--mono); font-size: 12px; line-height: 1.55; background: #141816; color: #ece9e0; padding: 16px 18px; overflow-x: auto; border: 1px solid #353d38; margin: 12px 0; }
+    pre code { background: transparent; padding: 0; color: inherit; }
+    .shell { max-width: 1400px; width: calc(100% - 64px); margin: 0 auto; }
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg); border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 74px; gap: 16px; flex-wrap: wrap;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+      font-weight: 750; font-size: 22px; letter-spacing: -0.8px;
+    }
+    .brand-mark {
+      display: grid; place-items: center; width: 34px; height: 34px;
+      background: #232a26; border: 1px solid #3c443e; border-radius: 4px;
+      padding: 3px; overflow: hidden;
+    }
+    .brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .brand-sub {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+      color: var(--ink-secondary); border-left: 1px solid var(--line);
+      padding-left: 12px; font-weight: 500;
+    }
+    .nav-links { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .nav-links a {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.6px;
+      color: var(--ink-secondary); text-transform: uppercase;
+      padding: 4px 0; border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .nav-links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .btn-ghost {
+      background: var(--bg-elevated); color: var(--ink);
+      border: 1px solid var(--line); padding: 7px 11px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-ghost:hover, .btn-ghost.active { border-color: var(--accent); color: var(--accent); }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      border: 1px solid var(--accent); padding: 7px 12px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary:hover { opacity: 0.92; }
+
+    .hero { padding: 52px 0 40px; border-bottom: 1px solid var(--line); }
+    .eyebrow {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 1.2px;
+      text-transform: uppercase; color: var(--accent);
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 16px; font-weight: 600;
+    }
+    .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
+    .hero-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 44px; align-items: start; }
+    h1 {
+      font-family: var(--serif); font-weight: 400;
+      font-size: clamp(36px, 4.2vw, 60px); line-height: 1.06;
+      letter-spacing: -1.6px; margin: 0 0 20px;
+    }
+    h1 span { color: var(--accent); }
+    .hero-lead { font-size: 17px; color: var(--ink-secondary); line-height: 1.65; margin: 0 0 24px; max-width: 740px; }
+    .meta-strip {
+      display: flex; flex-wrap: wrap; gap: 12px 24px;
+      padding: 14px 18px; background: var(--bg-panel);
+      border-left: 3px solid var(--accent); font-family: var(--mono);
+      font-size: 11px; color: var(--ink-secondary);
+    }
+    .meta-strip strong { color: var(--ink); }
+    .verdict-card {
+      background: var(--bg-dark-card); color: #f4f1e9;
+      padding: 28px; border: 1px solid var(--line); box-shadow: var(--shadow);
+    }
+    .verdict-head-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 10px;
+    }
+    .verdict-orbital-logo {
+      width: 74px; height: auto; border: 1px solid #39413c;
+      border-radius: 3px; background: #07090e; flex-shrink: 0; display: block;
+    }
+    .verdict-card .card-kicker {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px;
+      color: #ff8658; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .verdict-card h3 { font-family: var(--serif); font-size: 23px; font-weight: 400; margin: 0 0 12px; line-height: 1.2; color: #fff; }
+    .verdict-card p { font-size: 13.5px; color: #c8ccc4; line-height: 1.65; margin: 0 0 16px; }
+    .verdict-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 1px solid #39413c; padding-top: 16px; }
+    .v-pill { background: rgba(255, 255, 255, 0.04); padding: 10px 12px; border-left: 2px solid #ff8658; }
+    .v-pill.good { border-left-color: #3dd68c; }
+    .v-pill small { display: block; font-family: var(--mono); font-size: 9px; color: #9aa197; text-transform: uppercase; letter-spacing: 0.7px; }
+    .v-pill strong { font-family: var(--mono); font-size: 13.5px; color: #fff; }
+
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      border: 1px solid var(--line); border-top: 0;
+      background: var(--bg-elevated); margin-bottom: 48px;
+    }
+    .kpi-cell { padding: 22px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; }
+    .kpi-cell:last-child { border-right: 0; }
+    .kpi-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-secondary); margin-bottom: 8px; }
+    .kpi-value { font-family: var(--serif); font-size: 32px; line-height: 1.05; letter-spacing: -1px; margin-bottom: 8px; color: var(--ink); }
+    .kpi-foot { font-family: var(--mono); font-size: 10px; display: flex; align-items: center; gap: 6px; }
+    .badge { display: inline-block; padding: 2px 7px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; border-radius: 2px; }
+    .badge-elite { background: var(--emerald-soft); color: var(--emerald); border: 1px solid rgba(27, 107, 76, 0.3); }
+    .badge-warn { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(180, 101, 12, 0.3); }
+    .badge-crit { background: var(--crimson-soft); color: var(--crimson); border: 1px solid rgba(168, 32, 32, 0.3); }
+    .badge-info { background: var(--blue-soft); color: var(--blue); border: 1px solid rgba(35, 87, 137, 0.3); }
+
+    .report-section { padding: 54px 0; border-bottom: 1px solid var(--line); }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+    .section-num { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+    h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3vw, 42px); letter-spacing: -1.1px; line-height: 1.12; margin: 0; }
+    .section-desc { max-width: 560px; color: var(--ink-secondary); font-size: 14px; margin: 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 28px; }
+    .card { background: var(--bg-elevated); border: 1px solid var(--line); padding: 26px; box-shadow: var(--shadow); position: relative; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .card-title { font-family: var(--serif); font-size: 21px; font-weight: 400; margin: 0 0 4px; letter-spacing: -0.4px; }
+    .card-subtitle { font-family: var(--mono); font-size: 10.5px; color: var(--ink-secondary); margin: 0; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 11px 13px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-secondary); background: var(--bg-panel); white-space: nowrap; }
+    tr:hover td { background: rgba(186, 57, 22, 0.04); }
+    td.code-cell { font-family: var(--mono); font-size: 11.5px; }
+
+    .callout { padding: 18px 22px; border-left: 4px solid var(--accent); background: var(--bg-panel); margin-top: 20px; font-size: 13.5px; }
+    .callout.strength { border-left-color: var(--emerald); background: var(--emerald-soft); }
+    .callout.weakness { border-left-color: var(--crimson); background: var(--crimson-soft); }
+    .callout-title { font-family: var(--mono); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+
+    .facet-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .facet-btn {
+      border: 1px solid var(--line); background: var(--bg); color: var(--ink-secondary);
+      font-family: var(--mono); font-size: 11px; padding: 8px 13px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .facet-btn[aria-selected="true"], .facet-btn:hover {
+      background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
+    }
+    .facet-panel { display: none; }
+    .facet-panel.active { display: block; }
+
+    body.deck-mode .slide-section { display: none; animation: slideFade 0.25s ease; }
+    body.deck-mode .slide-section.active-slide { display: block; min-height: calc(100vh - 170px); padding-top: 32px; padding-bottom: 100px; }
+    @keyframes slideFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .pres-dock {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      z-index: 400; background: var(--bg-dark-card); color: #f4f1e9;
+      border: 1px solid #454d47; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      padding: 8px 14px; display: flex; align-items: center; gap: 12px;
+      border-radius: 4px; font-family: var(--mono); font-size: 11px;
+    }
+    .pres-btn {
+      background: rgba(255, 255, 255, 0.08); color: #f4f1e9;
+      border: 1px solid #4a524c; padding: 6px 11px; font-family: var(--mono);
+      font-size: 10.5px; cursor: pointer; display: inline-flex; align-items: center;
+      gap: 5px; transition: all 0.15s; white-space: nowrap;
+    }
+    .pres-btn:hover, .pres-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .pres-dots { display: flex; align-items: center; gap: 6px; }
+    .pres-dot { width: 9px; height: 9px; border-radius: 50%; background: #555e57; border: 0; padding: 0; cursor: pointer; transition: all 0.15s; }
+    .pres-dot.active { background: #ff7849; transform: scale(1.3); }
+    .pres-status { min-width: 215px; text-align: center; color: #d5d9d2; font-size: 10.5px; white-space: nowrap; }
+
+    footer { padding: 40px 0 90px; font-family: var(--mono); font-size: 11px; color: var(--ink-secondary); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    @media (max-width: 1080px) { .hero-grid, .grid-2, .grid-4 { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(3, 1fr); } .kpi-cell { border-bottom: 1px solid var(--line); } }
+    @media (max-width: 1080px) {
+      .topbar { position: static; }
+      .topbar-inner { height: auto; padding-block: 12px; }
+      .hero-grid, .grid-2, .grid-4 { grid-template-columns: minmax(0, 1fr); }
+      .shell { overflow-wrap: anywhere; }
+    }
+    @media (max-width: 680px) {
+      .shell { width: calc(100% - 32px); }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pres-dock {
+        position: static; transform: none; flex-wrap: wrap;
+        justify-content: center; gap: 8px;
+      }
+      .pres-status { min-width: 0; white-space: normal; }
+      .pres-dock > span { display: none; }
+    }
+    @media print {
+      .topbar, .pres-dock, .facet-tabs, .facet-instructions { display: none; }
+      body.deck-mode .slide-section, body.deck-mode .slide-section.active-slide,
+      .facet-panel { display: block; min-height: 0; padding-block: 0; animation: none; }
+      body { background: #fff; color: #000; }
+      .card { box-shadow: none; break-inside: avoid; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .table-wrap { overflow: visible; }
+      table { table-layout: fixed; overflow-wrap: anywhere; }
+      th { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="pres-dock" role="region" aria-label="Slide Deck Navigation Controls">
+  <button class="pres-btn" type="button" onclick="stepSlide(-1)" title="Previous Slide (Left Arrow)">◀ Prev</button>
+  <div class="pres-dots" id="pres-dots-container"></div>
+  <div class="pres-status" id="pres-status-label">01 / 06 · Overview &amp; Problem</div>
+  <button class="pres-btn" type="button" onclick="stepSlide(1)" title="Next Slide (Right Arrow)">Next ▶</button>
+  <span style="color:#454d47;">|</span>
+  <button class="pres-btn" id="dock-deck-btn" type="button" onclick="toggleDeckMode()" title="Toggle Single-Slide Presentation Mode (Shortcut: D)">▣ Slide Deck Mode</button>
+</div>
+
+<header class="topbar">
+  <div class="shell topbar-inner">
+    <a href="index.html" class="brand" title="Back to AIDA Showcase">
+      <span class="brand-mark"><img src="assets/aida-icon-64.png" width="26" height="26" alt="AIDA Icon" /></span>
+      <span>AIDA</span>
+      <span class="brand-sub">DETERMINISTIC CODE REVIEW ENGINE · STORY-3076</span>
+    </a>
+    <nav class="nav-links" aria-label="Presentation Sections">
+      <a href="index.html">← Showcase</a>
+      <a href="#slide-overview" onclick="goToSlide(0)">01. Problem &amp; Hybrid</a>
+      <a href="#slide-pillars" onclick="goToSlide(1)">02. Four Rust Pillars</a>
+      <a href="#slide-playbooks" onclick="goToSlide(2)">03. Playbooks &amp; Facets</a>
+      <a href="#slide-dogfood" onclick="goToSlide(3)">04. Self-Review Case Study</a>
+      <a href="#slide-comparison" onclick="goToSlide(4)">05. Architecture Matrix</a>
+      <a href="#slide-cli" onclick="goToSlide(5)">06. CLI &amp; Integration</a>
+    </nav>
+    <div class="top-actions">
+      <button class="btn-ghost" id="top-deck-btn" type="button" onclick="toggleDeckMode()" title="Present Slide-by-Slide (Shortcut: D)">▣ Present</button>
+      <button class="btn-ghost" id="theme-toggle" type="button" title="Toggle Paper / Terminal Theme">
+        <span id="theme-icon">◐</span> <span id="theme-label">Terminal Mode</span>
+      </button>
+      <button class="btn-ghost" type="button" onclick="window.print()">⎙ Print / PDF</button>
+    </div>
+  </div>
+</header>
+
+<main id="top" class="shell">
+
+  <!-- SLIDE 1: HERO & THE PROBLEM WITH RAW LLM CODE REVIEW -->
+  <div class="slide-section active-slide" id="slide-overview" data-slide-title="01 / 06 · Overview &amp; Problem">
+    <section class="hero">
+      <div class="eyebrow">
+        <span class="pulse-dot"></span>
+        SUBSTRATE-AS-BOUNCER ASSURANCE · CLEAN-ROOM RUST REVIEW ENGINE (STORY-3076)
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>Beyond "vibe-check"<br /><span>AI code review.</span></h1>
+          <p class="hero-lead">
+            General-purpose coding agents cut corners on large diffs, hallucinate line numbers, fluctuate across prompt phrasing, and inspect code without knowing the requirement it was built to satisfy.
+            Upcoming (lands with the CLI/skills slices): S2 adds <code>aida review prepare</code> and S3 integrates it into <code>/aida-review</code> and <code>/aida-code-review</code>.
+          </p>
+          <div class="meta-strip">
+            <div><strong>CRATES:</strong> <code>aida_core::review_engine</code> + <code>aida_cli_lib::review_prepare</code></div>
+            <div><strong>PROVENANCE:</strong> 100% Clean-Room Native Rust</div>
+            <div><strong>STANDARDS:</strong> Rust API Guidelines · ANSSI Secure Rust · Tokio · Google Eng</div>
+          </div>
+        </div>
+
+        <aside class="verdict-card" aria-label="Architectural Thesis">
+          <div class="verdict-head-row">
+            <div>
+              <div class="card-kicker">ARCHITECTURAL THESIS</div>
+              <h3>Deterministic Engineering × Agent Intelligence</h3>
+            </div>
+            <img class="verdict-orbital-logo" src="assets/aida-logo-orbital.jpg" width="74" height="58" alt="AIDA orbital emblem" />
+          </div>
+          <p>
+            Never ask an LLM to perform mechanical bookkeeping that Rust can guarantee deterministically.
+            The CLI inventories files, selects facets by whole-file substring matches and anchors quoted snippets. The optional CLI ledger check accounts for each reviewable file as reviewed or skipped with a reason. Merge gates operate independently.
+          </p>
+          <div class="verdict-pills">
+            <div class="v-pill good">
+              <small>FILE ACCOUNTABILITY</small>
+              <strong>Optional file ledger</strong>
+            </div>
+            <div class="v-pill good">
+              <small>DEFAULT BATCH TARGET</small>
+              <strong>12,000 Tok / 8 Files</strong>
+            </div>
+            <div class="v-pill">
+              <small>LINE POSITIONING</small>
+              <strong>2-Pass Snippet Anchor</strong>
+            </div>
+            <div class="v-pill">
+              <small>SELF-REVIEW DOGFOOD</small>
+              <strong>Six example defects</strong>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="kpi-grid" aria-label="Review Engine Key Metrics">
+      <div class="kpi-cell">
+        <div class="kpi-label">Files accounted for in a supplied ledger</div>
+        <div class="kpi-value">100%</div>
+        <div class="kpi-foot"><span class="badge badge-elite">Fail-Closed</span> Reviewed or skipped+reason</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label">Estimated batch target</div>
+        <div class="kpi-value">12.0k</div>
+        <div class="kpi-foot"><span class="badge badge-info">Zero-LLM</span> Source + test pairing</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label">Core Rust Playbook</div>
+        <div class="kpi-value">~250 tok</div>
+        <div class="kpi-foot"><span class="badge badge-elite">High Signal</span> Anti-noise + AIDA classes</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label">Conditional Facets</div>
+        <div class="kpi-value">4 Facets</div>
+        <div class="kpi-foot"><span class="badge badge-info">0 Overhead</span> Injected only when triggered</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label">Line Anchor Precision</div>
+        <div class="kpi-value">Exact</div>
+        <div class="kpi-foot"><span class="badge badge-elite">2-Pass</span> Exact + whitespace fallback</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="kpi-label">Reviewer seats</div>
+        <div class="kpi-value">3 vendors</div>
+        <div class="kpi-foot"><span class="badge badge-elite">Multi-Vendor</span> Claude · Codex · Antigravity</div>
+      </div>
+    </section>
+
+    <section class="report-section" style="padding-top:0;">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Why General-Purpose Agent Reviews Fail</h3>
+              <p class="card-subtitle">FOUR FAILURE MODES OF UNCONSTRAINED LLM DIFF SKILLS</p>
+            </div>
+            <span class="badge badge-crit">Unconstrained Prompting</span>
+          </div>
+          <ul>
+            <li><strong>Incomplete file coverage (Attention Drop-Off):</strong> On changesets over 400–1,000 LoC, general-purpose agents skim files in the middle of the prompt and silently omit them from the review.</li>
+            <li><strong>Line-number position drift:</strong> LLMs routinely miscalculate line numbers in unified diff hunks, attaching findings to unrelated code lines.</li>
+            <li><strong>Vague checklist variance:</strong> Generic prompts (<em>"check error handling and concurrency"</em>) cause models to stop after spotting a single <code>?</code> operator.</li>
+            <li><strong>Intent blindness:</strong> Standalone code-review tools inspect syntax in isolation without knowing the spec's <code>## Acceptance</code> criteria or AIDA authority invariants.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">How AIDA's Hybrid Architecture Solves It</h3>
+              <p class="card-subtitle">DETERMINISTIC RUST SUBSTRATE × INDEPENDENT REVIEWER SEAT</p>
+            </div>
+            <span class="badge badge-elite">Substrate as Bouncer</span>
+          </div>
+          <ul>
+            <li><strong>Sealed inventory.</strong> Rust hashes the file inventory and records whether each file contains the literal <code>trace:</code> marker.</li>
+            <li><strong>Batching.</strong> A same-stem heuristic groups likely source and test companions. The default target is 12,000 estimated tokens per batch. An oversized file gets its own batch.</li>
+            <li><strong>Whole-File Substring Security &amp; Concurrency Facets:</strong> Injects ANSSI <code>unsafe</code>/FFI, Tokio async cancellation, subprocess option-injection, and macro checklists <em>only</em> when matching substrings appear anywhere in the file.</li>
+            <li><strong>Snippet anchoring.</strong> The CLI locates matching quoted lines in the target file.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 2: THE FOUR DETERMINISTIC RUST PILLARS -->
+  <div class="slide-section" id="slide-pillars" data-slide-title="02 / 06 · Four Rust Pillars">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">02 / DETERMINISTIC ENGINEERING SUBSTRATE</div>
+          <h2>The Four Clean-Room Rust Pillars</h2>
+        </div>
+        <p class="section-desc">
+          The core logic lives in <code>aida-core</code>. The CLI calls Git to collect its inputs.
+        </p>
+      </div>
+
+      <div class="grid-4">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Pillar 1 · Sealed Inventory &amp; Optional Coverage Ledger</h3>
+              <p class="card-subtitle"><code>classify_diff_inventory</code> &amp; <code>verify_coverage_ledger</code></p>
+            </div>
+            <span class="badge badge-elite">SHA-256 Sealed</span>
+          </div>
+          <p>Git is required in every mode. Workspace mode compares local changes with HEAD and includes non-ignored untracked files. Range mode uses the merge base of the supplied refs (target defaults to HEAD). PR mode needs forge base/head metadata and local revisions. Commit mode needs the commit and its parent. Scan mode uses <code>git ls-files --cached --others --exclude-standard</code> under the selected paths.</p>
+          <ul>
+            <li><strong>Explicit Exclusion Taxonomy:</strong> Automatically filters <code>binary_file</code>, <code>pure_deletion</code>, <code>generated_or_lockfile</code> (<code>Cargo.lock</code>, <code>target/</code>), <code>aida_substrate</code> (<code>.aida-store/</code>, <code>.aida/cache*</code>), <code>secret_sensitive_path</code> (<code>.env*</code>, <code>*.pem</code>, <code>*.key</code>), and <code>user_excluded:&lt;glob&gt;</code>.</li>
+            <li><strong>Fail-Closed Coverage Verification:</strong> <code>--verify-coverage &lt;ledger.json&gt;</code> requires 100% of <code>reviewable_files</code> to be marked <code>reviewed</code> or <code>skipped</code> (with a non-empty reason).</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Pillar 2 · Token-Budgeted Semantic Batching</h3>
+              <p class="card-subtitle"><code>bundle_review_batches</code> &amp; <code>canonical_module_stem</code></p>
+            </div>
+            <span class="badge badge-info">12k estimated target</span>
+          </div>
+          <p>A same-stem heuristic groups likely source and test companions. The default target is 12,000 estimated tokens per batch. An oversized file gets its own batch.</p>
+          <ul>
+            <li><strong>Source + Companion Test Pairing:</strong> Normalizes <code>foo.rs</code>, <code>foo_test.rs</code>, <code>foo_tests.rs</code>, <code>test_foo.py</code>, and <code>foo.test.ts</code> to a shared stem as a heuristic for identifying likely companions.</li>
+            <li><strong>Crate-Qualified Generic Stems:</strong> Entry-point filenames (<code>lib.rs</code>, <code>mod.rs</code>, <code>main.rs</code>, <code>index.ts</code>) are qualified by parent directory (<code>aida-core/src/lib</code> vs <code>aida-cli-lib/src/lib</code>) so unrelated crates never collide.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Pillar 3 · Requirement Graph &amp; Trace Linkage</h3>
+              <p class="card-subtitle"><code>resolve_linked_specs</code> &amp; <code>has_trace_comment</code></p>
+            </div>
+            <span class="badge badge-elite">Intent-Aware</span>
+          </div>
+          <p>Connects every code review directly to AIDA's git-canonical requirement store (<code>.aida-store</code>).</p>
+          <ul>
+            <li><strong>Automatic Spec Extraction:</strong> Parses completing and <code>Refs</code> spec IDs from commit trailers in <code>merge_base..head</code> (or explicit <code>--specs CSV</code>) and injects each spec's <code>## Acceptance</code> section into the preparation bundle.</li>
+            <li><strong>Trace marker.</strong> The flag records the substring <code>trace:</code>. It does not validate comment syntax or resolve a spec ID.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Pillar 4 · Snippet Line-Anchoring &amp; Citations</h3>
+              <p class="card-subtitle"><code>anchor_snippet_lines</code> &amp; <code>verify_observation_citations</code></p>
+            </div>
+            <span class="badge badge-info">Zero Line Drift</span>
+          </div>
+          <p>Replaces LLM line-number guessing with deterministic two-pass sliding-window resolution against the target git revision (<code>git show &lt;sha&gt;:&lt;path&gt;</code>).</p>
+          <ul>
+            <li><strong>Pass 1 (Exact) &amp; Pass 2 (Trimmed Whitespace):</strong> Resolves quoted <code>existing_code</code> to 1-based inclusive <code>(start_line, end_line)</code> spans, breaking ties by minimum distance to an optional <code>start_line</code> hint.</li>
+            <li><strong>Library-only Observation Citation Verifier:</strong> Validates every <code>[[obs-NNNNNN]]</code> evidence tag in a review report against recorded observations, flagging unknown or errored IDs.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 3: MODULAR PLAYBOOKS & WHOLE-FILE SUBSTRING FACETS -->
+  <div class="slide-section" id="slide-playbooks" data-slide-title="03 / 06 · Playbooks &amp; Facets">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">03 / HIGH-SIGNAL, ZERO-BLOAT PROMPT ENGINEERING</div>
+          <h2>Core Playbooks + Whole-File Substring Security Facets</h2>
+        </div>
+        <p class="section-desc">
+          Synthesizes the <strong>Rust API Guidelines</strong>, <strong>ANSSI Secure Rust</strong>, <strong>Tokio Concurrency Patterns</strong>, and <strong>Google Engineering Practices</strong> mapped directly to AIDA's finding classes.
+        </p>
+      </div>
+
+      <div class="card" style="margin-bottom:28px;">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Interactive Playbook &amp; Conditional Facet Explorer</h3>
+            <p class="card-subtitle facet-instructions">CLICK EACH TAB TO INSPECT THE ALWAYS-ON CORE AND WHOLE-FILE SUBSTRING CONDITIONAL FACETS</p>
+          </div>
+          <span class="badge badge-elite">Zero Token Overhead When Absent</span>
+        </div>
+
+        <div class="facet-tabs" role="tablist" aria-label="Review facets">
+          <button class="facet-btn" type="button" role="tab" id="tab-core" aria-controls="facet-core" aria-selected="true" tabindex="0">Always-On Rust Core (~250 tok)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-io" aria-controls="facet-io" aria-selected="false" tabindex="-1">Facet 1: I/O, Subprocess &amp; Serde (ANSSI)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-async" aria-controls="facet-async" aria-selected="false" tabindex="-1">Facet 2: Async, Locks &amp; Atomics (Tokio)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-unsafe" aria-controls="facet-unsafe" aria-selected="false" tabindex="-1">Facet 3: Unsafe &amp; FFI (ANSSI / Rustonomicon)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-macros" aria-controls="facet-macros" aria-selected="false" tabindex="-1">Facet 4: Macro Hygiene</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-polyglot" aria-controls="facet-polyglot" aria-selected="false" tabindex="-1">Polyglot &amp; Custom TOML Rules</button>
+        </div>
+
+        <div class="facet-panel active" id="facet-core" role="tabpanel" aria-labelledby="tab-core" tabindex="0">
+          <p><strong>Trigger:</strong> Always active on <code>**/*.rs</code>. Maps directly to AIDA's <code>aida review record --finding-class</code> taxonomy:</p>
+          <ul>
+            <li><strong>Anti-noise &amp; evidence floor:</strong> Do not duplicate diagnostics that <code>rustc</code>, the borrow checker, <code>cargo clippy</code>, or <code>rustfmt</code> catch reliably. Verify reachable call sites, trait bounds, and input boundaries before flagging.</li>
+            <li><strong>Fail-closed error semantics (<code>fail-open</code>, <code>absent-evidence-reads-as-good</code>):</strong> Flag any <code>.unwrap()</code>, uncontextualized <code>.expect("")</code>, or <code>panic!</code> in production paths. Flag <code>Result</code> or <code>Option</code> values silently mapped to empty/success defaults (<code>unwrap_or_default</code>, <code>if let Ok(...)</code>) where an I/O, git, or parse failure is misread as "0 items".</li>
+            <li><strong>Ownership, allocations &amp; algorithmic complexity (<code>perf</code>):</strong> Flag <code>O(n^2)</code> nested scans where a <code>BTreeMap</code>/<code>HashMap</code>/<code>HashSet</code> or sorted index suffices, repeated <code>Regex::new</code> or collection rebuilds inside loops, and avoidable <code>.clone()</code>s.</li>
+            <li><strong>UTF-8, integer casts &amp; slice bounds (<code>portability</code>):</strong> Flag byte-index string slicing (<code>&amp;s[a..b]</code>) not proven to lie on UTF-8 character boundaries, unchecked slice indexing, and lossy <code>as</code> numeric casts (<code>u64 as usize</code>).</li>
+            <li><strong>Caller contract &amp; AIDA traceability (<code>contract-drift</code>, <code>incomplete-fix</code>, <code>untested-path</code>):</strong> Verify every call site when a signature or behavior changes, confirm <code>// trace:&lt;SPEC-ID&gt; | ai:&lt;tool&gt;</code> presence, and ensure tests falsify failure/refusal paths.</li>
+          </ul>
+        </div>
+
+        <div class="facet-panel" id="facet-io" role="tabpanel" aria-labelledby="tab-io" tabindex="0">
+          <p><strong>Triggered only when reviewed files contain:</strong> <code>Command::new</code>, <code>std::fs::</code>, <code>OpenOptions</code>, <code>Path::new</code>, <code>PathBuf</code>, <code>serde_json::</code>, <code>serde_yaml::</code>, or <code>toml::</code>.</p>
+          <ul>
+            <li><strong>Subprocess option injection:</strong> Never build commands via shell string interpolation; validate user/ref inputs with <code>reject_option_like</code> and pass <code>--end-of-options</code> (<code>END_OF_OPTIONS</code>) or <code>--</code> before positional refs/paths.</li>
+            <li><strong>Path traversal &amp; TOCTOU:</strong> Reject <code>Component::ParentDir</code> (<code>..</code>) and unexpected <code>RootDir</code> on external relative paths, verify symlink/containment boundaries, and check that revision-pinned reads never silently fall back to the live working tree.</li>
+            <li><strong>Schema &amp; deserialization hygiene:</strong> Bound untrusted input sizes before parsing, use <code>#[serde(deny_unknown_fields)]</code> on authority/verdict payloads, and preserve <code>#[serde(default)]</code> backward compatibility on config files.</li>
+          </ul>
+        </div>
+
+        <div class="facet-panel" id="facet-async" role="tabpanel" aria-labelledby="tab-async" tabindex="0">
+          <p><strong>Triggered only when reviewed files contain:</strong> <code>async fn</code>, <code>.await</code>, <code>tokio::</code>, <code>Mutex</code>, <code>RwLock</code>, <code>Atomic</code>, <code>std::thread</code>, or <code>select!</code>.</p>
+          <ul>
+            <li><strong>Locks across <code>.await</code> &amp; blocking in async:</strong> Never hold a synchronous <code>std::sync::Mutex</code>/<code>RwLock</code> guard across <code>.await</code>, and do not run blocking filesystem/subprocess I/O on async worker threads.</li>
+            <li><strong>Cancellation safety:</strong> In <code>tokio::select!</code> loops or cancellable futures, ensure dropping a future mid-flight cannot lose buffered data, leave partial writes, or leak a lock/permit.</li>
+            <li><strong>Lock ordering &amp; atomics:</strong> Verify consistent lock acquisition order across call paths, check-then-act TOCTOU races around shared caches/files, and justify <code>Atomic</code> memory orderings.</li>
+          </ul>
+        </div>
+
+        <div class="facet-panel" id="facet-unsafe" role="tabpanel" aria-labelledby="tab-unsafe" tabindex="0">
+          <p><strong>Triggered only when reviewed files contain:</strong> <code>unsafe </code>, <code>unsafe{</code>, <code>extern "C"</code>, <code>MaybeUninit</code>, <code>transmute</code>, <code>from_raw_parts</code>, or <code>libc::</code>.</p>
+          <ul>
+            <li><strong>Minimality &amp; proof:</strong> Every <code>unsafe</code> block, <code>unsafe fn</code>, or <code>unsafe impl Send/Sync</code> must be as narrow as possible and carry an explicit <code>// SAFETY:</code> comment proving the invariant.</li>
+            <li><strong>Pointer &amp; slice soundness:</strong> Verify non-null, alignment, initialization, lifetime bounds, and absence of mutable aliasing (<code>&amp;mut T</code> overlap) before <code>from_raw_parts</code> or raw pointer dereference.</li>
+            <li><strong>FFI &amp; descriptor hygiene:</strong> Check <code>libc</code> return codes (<code>-1</code> / <code>errno</code>), prevent Rust panics from unwinding across FFI boundaries, and verify file-descriptor / allocation ownership transfer.</li>
+          </ul>
+        </div>
+
+        <div class="facet-panel" id="facet-macros" role="tabpanel" aria-labelledby="tab-macros" tabindex="0">
+          <p><strong>Triggered only when reviewed files contain:</strong> <code>macro_rules!</code>, <code>proc_macro</code>, <code>proc_macro_attribute</code>, or <code>proc_macro_derive</code>.</p>
+          <ul>
+            <li><strong>Single evaluation:</strong> Bind <code>$x:expr</code> arguments to a <code>let</code> once inside the macro expansion so caller side effects do not execute multiple times.</li>
+            <li><strong>Hygiene &amp; precedence:</strong> Prefix internal path references with <code>$crate::</code>, wrap re-emitted <code>$t:tt</code> fragments in parentheses, and emit <code>syn::Error</code>/<code>compile_error!</code> instead of panicking in proc macros.</li>
+          </ul>
+        </div>
+
+        <div class="facet-panel" id="facet-polyglot" role="tabpanel" aria-labelledby="tab-polyglot" tabindex="0">
+          <p><strong>Built-in Polyglot Playbooks + Project <code>.aida/review-rules.toml</code> Overrides:</strong></p>
+          <ul>
+            <li>Built-in playbooks cover <code>rust</code> (<code>**/*.rs</code>), <code>cargo_toml</code> (<code>**/Cargo.toml</code>), <code>go</code> (<code>**/*.go</code>), <code>typescript_js</code> (<code>**/*.{ts,tsx,js,jsx,mjs,cjs}</code>), <code>python</code> (<code>**/*.py</code>), <code>shell</code> (<code>**/*.sh</code>), <code>sql</code> (<code>**/*.sql</code>), and <code>config_data</code> (<code>**/*.{toml,yaml,yml,json}</code>).</li>
+            <li>Projects can layer custom path rules in <code>.aida/review-rules.toml</code> with <code>merge_builtin = true</code> (appends to the built-in language playbook) or <code>merge_builtin = false</code> (replaces it).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 4: DOGFOOD CASE STUDY — REVIEWING ITSELF -->
+  <div class="slide-section" id="slide-dogfood" data-slide-title="04 / 06 · Self-Review Case Study">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">04 / ILLUSTRATIVE CASE STUDY</div>
+          <h2>What Happened When <code>aida review prepare</code> Reviewed Itself</h2>
+        </div>
+        <p class="section-desc">
+          This illustrative case study follows six defects in the review engine. The 100% anchoring figure describes the six examples shown here. No controlled benchmark accompanies the comparison.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Six Defect Examples from <code>STORY-3076</code></h3>
+            <p class="card-subtitle">ILLUSTRATIVE SELF-REVIEW CASE STUDY</p>
+          </div>
+          <span class="badge badge-elite">6 / 6 Anchored &amp; Resolved</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>File &amp; Anchored Span</th>
+                <th>AIDA Defect Class</th>
+                <th>Severity</th>
+                <th>Defect Discovered in Initial Implementation</th>
+                <th>How It Was Caught &amp; Fixed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1</strong></td>
+                <td class="code-cell"><code>aida-core/src/review_engine.rs:551..554</code><br /><span class="badge badge-elite">exact anchor</span></td>
+                <td class="code-cell"><code>contract-drift</code></td>
+                <td><span class="badge badge-warn">Medium</span></td>
+                <td><code>canonical_module_stem</code> stripped <code>.rs</code> and paired bare <code>"lib"</code> across crates, grouping <code>aida-core/src/lib.rs</code> and <code>aida-cli-lib/src/lib.rs</code> into one <code>module:lib</code> batch.</td>
+                <td>Visible immediately in <code>aida review prepare</code>'s own batch output. Fixed by qualifying generic stems (<code>lib</code>, <code>mod</code>, <code>main</code>, <code>index</code>) with their parent directory.</td>
+              </tr>
+              <tr>
+                <td><strong>2</strong></td>
+                <td class="code-cell"><code>aida-cli-lib/src/review_prepare.rs:336..339</code><br /><span class="badge badge-elite">exact anchor</span></td>
+                <td class="code-cell"><code>incomplete-fix</code></td>
+                <td><span class="badge badge-crit">High</span></td>
+                <td><code>collect_git_diff_entries</code> ran <code>git diff --numstat</code> without <code>--no-renames</code> (causing renamed paths to format as <code>old =&gt; new</code> and miss the lookup map) and called <code>parts.last().unwrap()</code> in production code.</td>
+                <td>Caught by Core Playbook Rule #2 (no <code>.unwrap()</code> in production paths). Fixed with <code>--no-renames</code> and slice pattern matching <code>if let [add, del, .., path] = parts.as_slice()</code>.</td>
+              </tr>
+              <tr>
+                <td><strong>3</strong></td>
+                <td class="code-cell"><code>aida-cli-lib/src/review_prepare.rs:280..285</code><br /><span class="badge badge-elite">exact anchor</span></td>
+                <td class="code-cell"><code>security</code></td>
+                <td><span class="badge badge-warn">Medium</span></td>
+                <td><code>git_rev_parse</code> and <code>git_merge_base</code> validated <code>reject_option_like</code> (Layer 1) but omitted <code>crate::git_arg_guard::END_OF_OPTIONS</code> (<code>--end-of-options</code>, Layer 2).</td>
+                <td>Caught by <code>rust_io_subprocess_security</code> facet. Added <code>END_OF_OPTIONS</code> before positional revision args across all git invocations.</td>
+              </tr>
+              <tr>
+                <td><strong>4</strong></td>
+                <td class="code-cell"><code>aida-cli-lib/src/review_prepare.rs:346..428</code><br /><span class="badge badge-elite">exact anchor</span></td>
+                <td class="code-cell"><code>fail-open</code> / <code>absent-evidence-reads-as-good</code></td>
+                <td><span class="badge badge-crit">High</span></td>
+                <td><code>collect_git_diff_entries</code> used <code>if let Ok(out) = status_cmd.output() { if out.status.success() { ... } }</code>, silently returning an empty 0-file inventory if <code>git diff</code> failed.</td>
+                <td>Caught by Core Playbook Rule #2 (<em>"Flag Result/Option silently mapped to empty defaults where a failure is misread as 0 items"</em>). Now fails closed via <code>anyhow::bail!</code>.</td>
+              </tr>
+              <tr>
+                <td><strong>5</strong></td>
+                <td class="code-cell"><code>aida-cli-lib/src/review_prepare.rs:474..505</code><br /><span class="badge badge-elite">exact anchor</span></td>
+                <td class="code-cell"><code>security</code> / <code>contract-drift</code></td>
+                <td><span class="badge badge-crit">High</span></td>
+                <td>When <code>rev</code> was <code>Some(sha)</code> and <code>git show &lt;sha&gt;:&lt;path&gt;</code> failed, <code>read_file_at_revision</code> fell through to reading the dirty working tree on disk, and lacked <code>Component::ParentDir</code> (<code>..</code>) validation.</td>
+                <td>Caught by <code>rust_io_subprocess_security</code> facet. Removed working-tree fallback when a commit SHA is pinned and rejected <code>ParentDir</code>/<code>RootDir</code> components.</td>
+              </tr>
+              <tr>
+                <td><strong>6</strong></td>
+                <td class="code-cell"><code>aida-core/src/review_engine.rs:898..911</code><br /><span class="badge badge-elite">exact anchor</span></td>
+                <td class="code-cell"><code>perf</code></td>
+                <td><span class="badge badge-info">Low</span></td>
+                <td><code>verify_observation_citations</code> recompiled <code>Regex::new(r"\[\[(obs-...)\]\]")</code> on every call.</td>
+                <td>Caught by Core Playbook Rule #3 (repeated regex compilation). Replaced with <code>static OBS_RE: once_cell::sync::Lazy&lt;Regex&gt;</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 5: ARCHITECTURAL COMPARISON MATRIX -->
+  <div class="slide-section" id="slide-comparison" data-slide-title="05 / 06 · Architecture Matrix">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">05 / ILLUSTRATIVE FEATURE MATRIX</div>
+          <h2>AIDA Native Review Engine vs. Standalone Review Binaries</h2>
+        </div>
+        <p class="section-desc">
+          This qualitative feature matrix compares the upcoming <code>aida review prepare</code> against standalone external AI code review CLI tools (such as OpenCodeReview / <code>ocr</code>) and raw prompt skills.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th>Raw Agent Prompt Skill</th>
+                <th>Standalone External Review CLI (e.g. <code>ocr</code>)</th>
+                <th>AIDA Native (<code>aida review prepare</code> + <code>/aida-review</code>)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Supply-Chain &amp; Provenance</strong></td>
+                <td>Markdown prompt only</td>
+                <td>External third-party Go binary + Node wrapper</td>
+                <td><span class="badge badge-elite">100% Clean-Room Rust</span> compiled directly inside <code>aida-core</code> &amp; <code>aida-cli-lib</code></td>
+              </tr>
+              <tr>
+                <td><strong>Requirement &amp; Acceptance Linkage</strong></td>
+                <td>Manual copy-paste</td>
+                <td>Blind by default; requires shell wrapper + 8,000-char truncated background file</td>
+                <td><span class="badge badge-elite">Native Graph Access</span> reads <code>.aida-store</code>, lifts <code>## Acceptance</code>, checks for the <code>trace:</code> marker</td>
+              </tr>
+              <tr>
+                <td><strong>Batching in Host-Agent Mode</strong></td>
+                <td>None (dumps entire diff)</td>
+                <td>Dumps all files of the same language into 1 flat group in delegation mode</td>
+                <td><span class="badge badge-elite">Deterministic Batching</span> pairs <code>&lt;stem&gt;.rs</code> + <code>&lt;stem&gt;_test.rs</code> by normalized stem where the estimated budget permits</td>
+              </tr>
+              <tr>
+                <td><strong>Playbook Signal-to-Token Ratio</strong></td>
+                <td>Generic 5-line prompt</td>
+                <td>Static 75-line language prompt injected on every file regardless of content</td>
+                <td><span class="badge badge-elite">Core (~250 tok) + Whole-File Substring Facets</span> injects <code>unsafe</code>/async/subprocess rules on matching substrings</td>
+              </tr>
+              <tr>
+                <td><strong>Line-Number Positioning in Host-Agent Mode</strong></td>
+                <td>LLM guesses line numbers (drifts)</td>
+                <td>Disabled in delegation mode (only runs in standalone LLM API mode)</td>
+                <td><span class="badge badge-elite">CLI 2-Pass Snippet Anchor</span> (<code>--anchor-findings</code>) resolves exact 1-based line ranges on pinned SHA</td>
+              </tr>
+              <tr>
+                <td><strong>Optional CLI file accountability</strong></td>
+                <td>None (silent skipping)</td>
+                <td>Advisory checklist instruction in delegation mode</td>
+                <td><span class="badge badge-elite">Optional ledger check</span> (<code>--verify-coverage</code>) exits non-zero on any unaccounted file</td>
+              </tr>
+              <tr>
+                <td><strong>Diff + Full-Directory Scan Surface</strong></td>
+                <td>Ad-hoc file reads</td>
+                <td>Separate commands (<code>ocr review</code> vs <code>ocr scan</code>)</td>
+                <td><span class="badge badge-elite">Unified Command</span> (<code>--pr</code>, <code>--from</code>, <code>--commit</code>, or <code>--scan --path &lt;dir&gt;</code>)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 6: CLI REFERENCE & WORKFLOW INTEGRATION -->
+  <div class="slide-section" id="slide-cli" data-slide-title="06 / 06 · CLI &amp; Integration">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">06 / WORKFLOW &amp; CLI REFERENCE</div>
+          <h2>Upcoming integration with <code>/aida-review</code>, <code>/aida-code-review</code> &amp; the CLI</h2>
+        </div>
+        <p class="section-desc">
+          Upcoming (lands with the CLI/skills slices): S2 adds <code>aida review prepare</code> and S3 integrates it into <code>/aida-review</code> and <code>/aida-code-review</code>.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Core CLI Commands</h3>
+              <p class="card-subtitle">PR REVIEW, RANGE DIFF, FULL-FILE SCAN &amp; VERIFICATION</p>
+            </div>
+            <span class="badge badge-info">aida review prepare</span>
+          </div>
+<pre><code># 1. Prepare a PR review (auto-resolves base..head &amp; linked specs)
+aida review prepare --pr 42 --write .aida/review-prepare-pr-42.md
+
+# 2. Prepare a branch range or single commit review
+aida review prepare --from main --specs STORY-3076
+aida review prepare --commit HEAD --specs STORY-3076
+
+# 3. Full-file scan mode for /aida-code-review audits (no diff needed)
+aida review prepare --scan --path aida-core/src --write .aida/scan.md
+
+# 4. Verify 100% file coverage &amp; anchor quoted code snippets to exact lines
+aida review prepare --pr 42 \
+  --verify-coverage .aida/review-coverage.json \
+  --anchor-findings .aida/review-findings.json \
+  --json --write .aida/review-verified.json</code></pre>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Project Customization (<code>.aida/review-rules.toml</code>)</h3>
+              <p class="card-subtitle">PATH EXCLUSIONS, BATCH BUDGETS &amp; CUSTOM PATH PLAYBOOKS</p>
+            </div>
+            <span class="badge badge-elite">Optional Config</span>
+          </div>
+<pre><code># .aida/review-rules.toml
+exclude = [
+  "docs/archive/**",
+  "**/testdata/**"
+]
+batch_token_budget = 12000
+max_files_per_batch = 8
+
+[[rules]]
+id = "gate_authority_strict"
+pattern = "**/gate/**/*.rs"
+merge_builtin = true
+checklist = """
+- Verify every authority or lease check fails closed on missing files.
+- Require a negative unit test proving unauthorized callers are refused.
+"""</code></pre>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div>AIDA · The Governed Software Factory · Deterministic Code Review Engine (<code>STORY-3076</code>)</div>
+    <div>
+      <a href="index.html">← Back to Showcase</a> &nbsp;·&nbsp;
+      <a href="executive-brief.html">Executive Brief ↗</a> &nbsp;·&nbsp;
+      <a href="engineering-audit.html">Engineering Audit ↗</a>
+    </div>
+  </footer>
+
+</main>
+
+<script>
+  // Theme toggle
+  const themeBtn = document.getElementById('theme-toggle');
+  const themeLabel = document.getElementById('theme-label');
+  themeBtn?.addEventListener('click', () => {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'terminal';
+    html.setAttribute('data-theme', isDark ? 'paper' : 'terminal');
+    if (themeLabel) themeLabel.textContent = isDark ? 'Terminal Mode' : 'Paper Mode';
+  });
+
+  // trace:TASK-3865 | ai:codex
+  const facetTabs = Array.from(document.querySelectorAll('.facet-tabs [role="tab"]'));
+  function selectFacet(selected) {
+    for (const tab of facetTabs) {
+      const active = tab === selected;
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+      document.getElementById(tab.getAttribute('aria-controls')).classList.toggle('active', active);
+    }
+  }
+
+  facetTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => selectFacet(tab));
+    tab.addEventListener('keydown', event => {
+      let next;
+      switch (event.key) {
+        case 'ArrowLeft': next = (index + facetTabs.length - 1) % facetTabs.length; break;
+        case 'ArrowRight': next = (index + 1) % facetTabs.length; break;
+        case 'Home': next = 0; break;
+        case 'End': next = facetTabs.length - 1; break;
+        default: return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      selectFacet(facetTabs[next]);
+      facetTabs[next].focus();
+    });
+  });
+
+  // Slide deck presentation mode
+  const slides = Array.from(document.querySelectorAll('.slide-section'));
+  const dotsContainer = document.getElementById('pres-dots-container');
+  const statusLabel = document.getElementById('pres-status-label');
+  let currentSlide = 0;
+  let isDeckMode = false;
+
+  slides.forEach((_, idx) => {
+    const dot = document.createElement('button');
+    dot.className = 'pres-dot' + (idx === 0 ? ' active' : '');
+    dot.type = 'button';
+    dot.title = slides[idx].getAttribute('data-slide-title') || ('Slide ' + (idx + 1));
+    dot.addEventListener('click', () => goToSlide(idx));
+    dotsContainer?.appendChild(dot);
+  });
+
+  function updateIndicators() {
+    slides.forEach((s, i) => s.classList.toggle('active-slide', i === currentSlide));
+    Array.from(dotsContainer?.children || []).forEach((d, i) => d.classList.toggle('active', i === currentSlide));
+    if (statusLabel && slides[currentSlide]) {
+      statusLabel.textContent = slides[currentSlide].getAttribute('data-slide-title') || '';
+    }
+    document.getElementById('dock-deck-btn')?.classList.toggle('active', isDeckMode);
+    document.getElementById('top-deck-btn')?.classList.toggle('active', isDeckMode);
+  }
+
+  function goToSlide(idx) {
+    currentSlide = (idx + slides.length) % slides.length;
+    updateIndicators();
+    if (isDeckMode) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      slides[currentSlide]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function stepSlide(delta) {
+    goToSlide(currentSlide + delta);
+  }
+
+  function toggleDeckMode() {
+    isDeckMode = !isDeckMode;
+    document.body.classList.toggle('deck-mode', isDeckMode);
+    updateIndicators();
+    if (isDeckMode) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    if (e.key === 'd' || e.key === 'D') {
+      toggleDeckMode();
+    } else if (e.key === 'ArrowRight') {
+      stepSlide(1);
+    } else if (e.key === 'ArrowLeft') {
+      stepSlide(-1);
+    }
+  });
+</script>
+<!-- trace:TASK-3864 | ai:codex -->
+<!-- trace:STORY-3076 | ai:antigravity -->
+</body>
+</html>

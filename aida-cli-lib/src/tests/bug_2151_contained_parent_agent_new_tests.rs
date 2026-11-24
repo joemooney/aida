@@ -274,7 +274,7 @@ fn ended_agent(root: &std::path::Path, agent_type: &str, name: &str) {
 // trace:BUG-2619 | ai:codex
 #[test]
 fn bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript() {
-    if crate::test_env::run_path_isolated_test() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
@@ -323,6 +323,7 @@ fn bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript() {
     crate::test_exec::write_executable(
         &bin.join("claude"),
         r#"#!/bin/sh
+touch "${0%/*}/../vendor-started"
 if [ "$1" = --version ]; then echo fixture; exit 0; fi
 printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
 "#,
@@ -360,6 +361,33 @@ printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
             &resume,
         )
     };
+    // trace:TASK-3151 | ai:codex
+    env.set_key("AIDA_CONTAINED", "1");
+    let err = aida_core::git_ops::with_host_git_version("git version 2.45.0", launch)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("contained resume requires the recorded worktree"),
+        "{err}"
+    );
+    assert!(!tmp.path().join("vendor-started").exists());
+
+    let recorded_dir = crate::session::claude_project_dir(&root).unwrap();
+    std::fs::create_dir_all(&recorded_dir).unwrap();
+    let recorded = recorded_dir.join("018f-session.jsonl");
+    let alternate = transcript_dir.join("018f-session.jsonl");
+    std::fs::rename(&alternate, &recorded).unwrap();
+    let launch_cwd = crate::agent_launch::verify_agent_native_session_available(
+        &root,
+        "claude",
+        &root,
+        "018f-session",
+    )
+    .unwrap();
+    assert_eq!(launch_cwd, root);
+    std::fs::rename(&recorded, &alternate).unwrap();
+    env.unset_key("AIDA_CONTAINED");
+
     let unrelated = transcript_dir.with_file_name("-unrelated");
     std::fs::create_dir(&unrelated).unwrap();
     std::fs::write(unrelated.join("018f-session.jsonl"), "{}\n").unwrap();
@@ -405,6 +433,64 @@ printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
     assert_eq!(
         std::fs::read_to_string(&receipt).unwrap(),
         format!("{}\n--resume\n018f-session\n", worktree.display())
+    );
+
+    // trace:TASK-3149 | ai:codex
+    // Keep the same recorded cwd, grant, and resume entry point. Move the
+    // only transcript to a private clone and vary its registration evidence.
+    std::fs::remove_file(&receipt).unwrap();
+    let origin = crate::test_git::git_command()
+        .current_dir(&root)
+        .args(["remote", "add", "origin"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(
+        origin.status.success(),
+        "{}",
+        String::from_utf8_lossy(&origin.stderr)
+    );
+    let clone = tmp.path().join("aida-seat-resume");
+    crate::seat_clone::create(&root, &clone, "resume-seat", "HEAD").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    let clone_project = crate::session::claude_project_dir(&clone).unwrap();
+    std::fs::create_dir_all(&clone_project).unwrap();
+    std::fs::rename(
+        transcript_dir.join("018f-session.jsonl"),
+        clone_project.join("018f-session.jsonl"),
+    )
+    .unwrap();
+    let refused = || {
+        let error = launch().unwrap_err().to_string();
+        assert!(error.contains("cannot uniquely recover"), "{error}");
+        assert!(
+            error.contains(&clone_project.display().to_string()),
+            "{error}"
+        );
+        assert!(!receipt.exists(), "refusal must precede Claude launch");
+    };
+    refused();
+
+    let lease = crate::lease_path(&root, "c0ffee003149");
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(lease, format!(
+        "id = \"c0ffee003149\"\nscope = \"TASK-3149\"\nslug = \"resume\"\nowner = \"test\"\nworktree_path = {}\nbranch = \"resume-seat\"\nstarted_at = \"2026-11-20T00:00:00Z\"\nhostname = \"test\"\ntree_kind = \"clone\"\n",
+        aida_core::toml_quote::toml_string(clone.to_str().unwrap()),
+    )).unwrap();
+    // A lease alone puts the clone in the inventory. Without its marker,
+    // recovery must still reject this candidate inside the inventory loop.
+    let marker = clone.join(crate::seat_clone::MARKER_RELATIVE);
+    let marker_bytes = std::fs::read(&marker).unwrap();
+    std::fs::remove_file(&marker).unwrap();
+    assert!(crate::seat_trees(&root)
+        .iter()
+        .any(|tree| tree.clone && tree.path == clone));
+    refused();
+    std::fs::write(marker, marker_bytes).unwrap();
+    assert!(launch().unwrap());
+    assert_eq!(
+        std::fs::read_to_string(receipt).unwrap(),
+        format!("{}\n--resume\n018f-session\n", clone.display())
     );
 }
 

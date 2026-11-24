@@ -13,7 +13,7 @@ on:
     # head, before review, exactly as one headed for main is.
     # trace:BUG-2576 | ai:claude
     branches: [main, integration]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled]
   merge_group:
 
 # Superseded PR heads must not starve merge-train CI.
@@ -29,7 +29,7 @@ on:
 # identical (tests/test_ci_tiers.py compares them).
 # trace:BUG-2578 | ai:claude
 concurrency:
-  group: ${{ github.workflow }}-${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && format('label-{0}', github.run_id) || github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && format('label-{0}', github.run_id) || github.event.action == 'labeled' && format('full-{0}', github.event.pull_request.number) || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -43,7 +43,7 @@ jobs:
   # One selection feeds scheduling and the forge-readable check name.
   # trace:STORY-2735 | ai:codex
   # The ci:full label selects FULL for the head it was applied to: recording
-  # an approval (re)applies it, which starts the full run a merge train
+  # an approval schedules its application after FAST, which starts the full run a merge train
   # requires on that exact head. A push (synchronize) runs FAST again even
   # while the label lingers, until the new head is approved.
   # trace:STORY-2809 | ai:claude
@@ -150,11 +150,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install ratchet runner dependencies
         run: python3 -m pip install PyYAML
+      # trace:BUG-2744 | ai:codex
       - name: Install compile dependencies
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: |
           sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
+            install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile-fast-check
@@ -617,7 +619,14 @@ jobs:
       # trace:TASK-1780 | ai:claude
       - name: test-touched planner tests
         if: matrix.shard == 'gates'
-        run: python3 -m unittest tests/test_test_touched.py
+        run: |
+          python3 -m unittest tests/test_test_touched.py
+          # trace:TASK-3296 | ai:codex
+          # trace:TASK-3286 | ai:codex
+          # trace:TASK-3293 | ai:codex
+          python3 -m unittest tests/test_build_git_stamp.py tests/test_duration_cap_inventory.py tests/test_closeout_audit_wording.py
+          # trace:BUG-2734 | ai:codex
+          python3 scripts/discover-python-tests.py
 
       # Host adapter fixtures use fake AIDA/Codex executables and temporary repos.
       # trace:TASK-2347 | ai:codex
@@ -792,7 +801,14 @@ jobs:
       # trace:STORY-1477 | ai:codex
       - name: Run history template CLI/config/MCP contract tests
         if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
-        run: bash tests/test_history_templates.sh
+        run: |
+          bash tests/test_history_templates.sh
+          # Standalone suites require the built CLI. trace:BUG-2734 | ai:codex
+          python3 tests/test_gitlab_review_handoff.py --aida target/debug/aida
+          python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida
+          python3 tests/test_pr_ship_preflight.py --aida target/debug/aida
+          python3 tests/test_seat_takeover_lifecycle.py "$PWD/target/debug/aida"
+          python3 tests/test_skill_discovery.py --aida target/debug/aida
 
       # trace:BUG-1801 | ai:codex
       - name: Run single-spec show latency regression
