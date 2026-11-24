@@ -106,24 +106,10 @@ approved again.
 
 ## Full CI starts when a head is approved
 
-`aida review record <ID> --verdict approved --pr <N>` applies the `ci:full`
-label to the pull request after it records the verdict. GitHub starts a FULL
-run on the head that was approved.
-
-Any label change on a pull request cancels its CI run in flight, so the command
-changes labels only when that starts a run without losing one:
-
-- The label is absent: it is added.
-- The label is present from an earlier head and no check is running on the
-  current head: it is removed and added again, because adding a label that is
-  already there starts nothing.
-- A single full-tier run is verified completed and cancelled, with no checks
-  still running: the label is added, or removed and added again if present.
-- A check is still running on a labelled head, or an existing full-tier run
-  is successful, failed, or ambiguous: nothing changes. `aida pr train` asks
-  again for missing or red full-tier evidence on approved heads; only a
-  verified cancelled run qualifies for an automatic retry.
-<!-- trace:TASK-3105 | ai:codex -->
+Manual and review-watch approvals persist the reviewed SHA as a FULL request.
+The two-minute scheduler job waits for that head’s FAST workflow to finish, then adds
+`ci:full` (removing it first if inherited). Removal triggers no workflow. Label-triggered
+FULL runs have their own per-PR concurrency group. The train can retry a missing or cancelled run.
 
 An advisor can start the same run by hand:
 

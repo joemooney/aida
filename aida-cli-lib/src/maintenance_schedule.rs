@@ -3478,6 +3478,14 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: true,
             },
         ),
+        (
+            &["review --promote-approved-heads"],
+            ScheduledCommand {
+                display: "review --promote-approved-heads",
+                args: &["review", "--promote-approved-heads"],
+                hook_allowed: false,
+            },
+        ),
         // Inline history-only work belongs to timer ticks, never prompt hooks.
         // trace:STORY-1661 | ai:codex
         (
