@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Before clearing a missing-checkout worktree registration, inspect its registered index against the pinned tip; RETAIN the registration on any difference or unreadable evidence.
   - AC2: Test: a missing checkout with a staged-only file is retained, not cleared.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T15:38:04.924380268Z
+modified_at: 2026-11-24T20:17:54.532420705Z
 req_type: Bug
 tags:
 - data-loss
@@ -92,6 +92,13 @@ history:
   author: joe
   timestamp: 2026-11-24T15:34:20.435146789Z
   changes: []
+- id: 01a20f35-3364-7622-b7f1-926a2b010229
+  author: aida-session-start
+  timestamp: 2026-11-24T20:17:54.532419048Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
