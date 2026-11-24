@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3218",
+  "publishes": [
+    {
+      "at": "2026-11-24T07:50:26.008404878Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T06:04:24.438052150Z",
+      "spec": "TASK-3218",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4491,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0560b3407e7b2727aae0f78f763ab1ae69330427"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:04:27.841567389Z",
+      "spec": "TASK-3218",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep of PR-4491 at 0560b3407e7b2727aae0f78f763ab1ae69330427. Reviewed both changed files and the production watch, scheduler, and advisor delivery paths. The generated worksheet listed TASK-3218 by its origin ID and omitted its acceptance section. The criteria below come from the full AIDA requirement.\n\n- TASK-3218 AC1 — Route watch failures and scheduler timeouts to the advisor with the job, trip, and bounded failed-step diagnostic — unverified. Nonzero exit and scheduler timeout reach the correct seat with trip evidence. Expired GitHub credentials can still result in a successful scheduler status, and a multiline fetch failure can lose the failed step and cause in the routed diagnostic.\n- TASK-3218 AC2 — Match only red-main-watch failures, leave successful passes clear, and preserve cadence, deduplication, and other routes — verified by the exact event-kind and source-job comparison, the unchanged five-minute cadence and scheduler cursor/due-marker logic, and source inspection of the success and unrelated-failure cases in the added regression.\n- Shared scope constraint — Keep the observation pass independent of requirement-store writes — verified by source inspection. The added seat route uses the scheduler's existing separate ledger, and the observation command is unchanged.\n\nThe head is two commits behind integration at fa7e9a9c2559. Neither finding depends on behavior changed by those commits. CI was pending at review time. Fast gates and merge-hold-gate passed, and fast compile was running. The implementer reported a passing targeted test with injected outcomes. No local tests or builds were run during review.",
+        "recovery_hint": "address the review findings, move TASK-3218 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:08:23.587243873Z",
+      "spec": "TASK-3218",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4491,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0560b3407e7b2727aae0f78f763ab1ae69330427"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:43:09.754945469Z",
+      "spec": "TASK-3218",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4494,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b907daa144008146c93551e6ca817e6e73b4a98f"
+      }
+    },
+    {
+      "ts": "2026-11-24T07:32:35.491696725Z",
+      "spec": "TASK-3218",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4494
+      }
+    },
+    {
+      "ts": "2026-11-24T07:50:25.807940758Z",
+      "spec": "TASK-3218",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "dd141d1a42e6f2450b54a345df6ee14e51c80fec",
+        "pr": 4494,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
