@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
 
   The standalone wording check in `tests/test_closeout_audit_wording.py:9` is not selected by the repository CI workflow or its local CI gate targets. Reverting the verdict line in both guide copies would preserve mirror parity and leave the check unexecuted. Add this test to an existing documentation check run by CI, or put the assertion in an existing test suite that CI runs.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T18:08:56.586388162Z
-modified_at: 2026-11-23T18:08:56.586388162Z
+modified_at: 2026-11-24T12:30:13.009132248Z
 req_type: Task
 tags:
 - carried-from:BUG-2731
@@ -29,6 +29,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a20d89-0411-7a13-894c-83186f97721a
+  author: joe
+  timestamp: 2026-11-24T12:30:13.009124771Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
   branch: pr-4450
