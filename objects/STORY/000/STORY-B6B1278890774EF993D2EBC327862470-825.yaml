@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T09:09:48.525891979Z
-modified_at: 2026-11-24T09:10:13.490422965Z
+modified_at: 2026-11-24T16:08:05.280367543Z
 req_type: Story
 tags:
 - authority
@@ -25,6 +25,11 @@ comments:
   content: 'Filed Approved per advisor-122 ruling 2026-11-24 02:13 (strict, MAIN, drive). Builds on STORY-3080: launch after it lands.'
   created_at: 2026-11-24T09:10:13.490422965Z
   modified_at: 2026-11-24T09:10:13.490422965Z
+- id: 01a20e50-7ba0-75b1-93a8-30afefe782d6
+  author: joe
+  content: 'NOTE (advisor-122 2026-11-24 09:12, via product-15): STORY-3080 r4 (#4502 @ af86ff2f) holds launch authority through the contained vendor release (prepare_release / with_spawn_authority), which also covers the earlier F1 window. The CONTAINED-path part of this story (AC1: writer guard from final revalidation through run.release()) may already be done when #4502 lands; re-check AC1 against main before laning, and narrow this story to AC2 (file/SQLite stores) if so.'
+  created_at: 2026-11-24T16:08:05.280367543Z
+  modified_at: 2026-11-24T16:08:05.280367543Z
 history:
 - id: 01a20cd1-e1b5-7c30-9e0d-8c549954667e
   author: joe
