@@ -568,7 +568,7 @@ fn story_2254_bg_transfer_before_drop_never_rolls_back() {
 /// A receipt lost or corrupted mid-attempt is never read as acceptance: the
 /// supervisor refuses before release (the worker never executes), revokes
 /// its own grant, and the scope the corrupt receipt names stays held until
-/// it is explicitly retired as provably dead.
+/// complete evidence is available.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_lost_or_corrupt_receipt_is_unknown_not_acceptance() {
@@ -604,9 +604,10 @@ fn story_2254_bg_lost_or_corrupt_receipt_is_unknown_not_acceptance() {
     let err = recover_launch_at(&h.dir, h.root(), &h.attempt, &own_process_chain()).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
     assert!(wait_gone(&worker));
-    receipt::retire_unknown(&h.dir, h.root(), &h.attempt).unwrap();
-    assert!(!path.exists());
-    assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2259").is_none());
+    // trace:BUG-2748 | ai:codex
+    assert!(receipt::retire_unknown(&h.dir, h.root(), &h.attempt, Path::new("/proc")).is_err());
+    assert!(path.exists());
+    assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2259").is_some());
 }
 
 /// A bootstrap killed before release is a failed launch, never acceptance.

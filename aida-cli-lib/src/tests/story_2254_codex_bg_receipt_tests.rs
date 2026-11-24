@@ -147,22 +147,49 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
         .spawn()
         .unwrap();
     assert!(scope_entry_blocker(f.project.path(), "implementer", "TASK-10").is_some());
-    let err = retire_unknown(&dir, f.project.path(), &attempt).unwrap_err();
+    let err = retire_unknown(&dir, f.project.path(), &attempt, Path::new("/proc")).unwrap_err();
     assert!(
         format!("{err:#}").contains("cannot be proven dead"),
         "{err:#}"
     );
     let _ = running.kill();
     let _ = running.wait();
+    // trace:BUG-2748 | ai:codex
+    let complete = serde_json::json!({
+        "grant_id": "public-selector",
+        "worker": {"pid": 2147483647, "start": me().start},
+        "supervisor": {"pid": 2147483646, "start": me().start},
+        "worktree": f.project.path(),
+    });
+    for missing in ["worker", "supervisor", "worktree", "all"] {
+        let mut partial = complete.clone();
+        partial
+            .as_object_mut()
+            .unwrap()
+            .retain(|key, _| key == "grant_id" || (missing != "all" && key != missing));
+        std::fs::write(&path, partial.to_string()).unwrap();
+        assert!(matches!(
+            attempt_occupancy(&dir, &attempt, Path::new("/proc")),
+            Occupancy::Unknown(ref reason) if reason.contains("incomplete receipt attribution")
+        ));
+        let err = admit(&dir, &receipt_for(&f, "implementer", "TASK-10"), || Ok(())).unwrap_err();
+        let inspect = format!("aida agent launch-status {attempt}");
+        assert!(err.to_string().contains(&inspect), "{missing}: {err}");
+        let err = retire_unknown(&dir, f.project.path(), &attempt, Path::new("/proc")).unwrap_err();
+        assert!(err.to_string().contains(&inspect), "{missing}: {err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), partial.to_string());
+    }
     // Provably dead: no longer blocks, and retires out of admission.
-    assert!(scope_entry_blocker(f.project.path(), "implementer", "TASK-10").is_none());
-    let kept = retire_unknown(&dir, f.project.path(), &attempt).unwrap();
+    std::fs::write(&path, complete.to_string()).unwrap();
+    let proc_root = f.project.path(); // Mock process table containing only the inspector.
+    std::fs::create_dir(proc_root.join(std::process::id().to_string())).unwrap();
+    let kept = retire_unknown(&dir, f.project.path(), &attempt, proc_root).unwrap();
     assert!(kept.starts_with(dir.join("retired")) && kept.exists());
     assert!(!path.exists());
     // A readable receipt is recovered, never retired.
     let r = receipt_for(&f, "implementer", "TASK-11");
     admit(&dir, &r, || Ok(())).unwrap();
-    assert!(retire_unknown(&dir, f.project.path(), &r.attempt).is_err());
+    assert!(retire_unknown(&dir, f.project.path(), &r.attempt, Path::new("/proc")).is_err());
     // A symlinked receipt is not ours either.
     let attempt = uuid::Uuid::new_v4().to_string();
     let path = dir.join("attempts").join(format!("{attempt}.json"));

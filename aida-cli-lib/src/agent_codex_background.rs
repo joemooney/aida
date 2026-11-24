@@ -30,6 +30,7 @@ use super::codex_bg_receipt::{
 };
 use super::*;
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 
 /// The private descriptor the dispatcher→supervisor and supervisor→barrier
 /// channels are installed at in the child.
@@ -2121,7 +2122,7 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
         .context("no detached launch receipts exist for this project")?;
     let own = own_process_chain();
     if retire_unknown {
-        let kept = receipt::retire_unknown(&dir, &root, attempt)?;
+        let kept = receipt::retire_unknown(&dir, &root, attempt, Path::new("/proc"))?;
         println!(
             "retired unknown attempt {attempt}: no process runs for it; its receipt is kept as evidence at {}",
             kept.display()

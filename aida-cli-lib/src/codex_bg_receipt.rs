@@ -699,7 +699,9 @@ fn scope_blocker_except(
                 // every scope only while something may still run for it.
                 let blocks = match unknown_receipt_scope(dir, &attempt) {
                     Some(owned) => owned == *scope,
-                    None => !unknown_attempt_is_dead(dir, &attempt),
+                    None => {
+                        attempt_occupancy(dir, &attempt, Path::new("/proc")) != Occupancy::Clear
+                    }
                 };
                 if blocks {
                     return Some(format!(
@@ -729,72 +731,50 @@ pub(crate) fn unknown_receipt_scope(dir: &Path, attempt: &str) -> Option<ScopeKe
     (!role.trim().is_empty() && !spec.trim().is_empty()).then(|| ScopeKey::new(role, spec))
 }
 
-/// For a receipt with no readable identities: the boot tick of the
-/// attempt's private log's creation (made right after admission, before its
-/// supervisor and worker existed), less a 2s margin. `None` when the birth
-/// time or the boot time cannot be read.
-// trace:STORY-2254 | ai:claude
-fn log_birth_tick(dir: &Path, attempt: &str) -> Option<u64> {
-    let born = std::fs::symlink_metadata(dir.join("logs").join(format!("{attempt}.log")))
-        .ok()?
-        .created()
-        .ok()?
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?
-        .as_secs();
-    let boot: u64 = std::fs::read_to_string("/proc/stat")
-        .ok()?
-        .lines()
-        .find_map(|l| l.strip_prefix("btime ")?.trim().parse().ok())?;
-    // SAFETY: sysconf only reads a system constant.
-    let hz = u64::try_from(unsafe { libc::sysconf(libc::_SC_CLK_TCK) }).ok()?;
-    Some(born.checked_sub(boot)?.saturating_sub(2) * hz)
-}
-
 /// Whether a FRESH scan proves nothing runs for an unknown attempt: no
 /// process names it, and none occupies the worker group, supervisor session
 /// or worktree its receipt names (read leniently). Unreadable means NO.
 // trace:STORY-2254 | ai:claude
-pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
-    let lenient = receipt_path(dir, attempt)
+// trace:BUG-2748 | ai:codex
+fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
+    #[derive(Deserialize)]
+    struct Attribution {
+        worker: ProcId,
+        supervisor: ProcId,
+        worktree: PathBuf,
+        owner: Option<Owner>,
+    }
+    let attribution = receipt_path(dir, attempt)
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok());
-    let field_pid = |name: &str| {
-        lenient
-            .as_ref()
-            .and_then(|v| v.get(name)?.get("pid")?.as_u64())
-            .and_then(|p| u32::try_from(p).ok())
+        .and_then(|p| aida_core::seat_clone_detect::read_regular_file(&p))
+        .filter(|body| body.len() as u64 <= RECEIPT_MAX_BYTES);
+    let Some(fields) = attribution.and_then(|raw| serde_json::from_str::<Attribution>(&raw).ok())
+    else {
+        return Occupancy::Unknown("incomplete receipt attribution".into());
     };
-    let worktree = lenient
-        .as_ref()
-        .and_then(|v| v.get("worktree")?.as_str().map(PathBuf::from));
-    let tick = |v: Option<&serde_json::Value>| {
-        v?.get("start")?
-            .as_str()?
-            .strip_prefix("linux-starttime:")?
-            .parse::<u64>()
-            .ok()
+    let (Some(worker_tick), Some(supervisor_tick)) =
+        (fields.worker.start_tick(), fields.supervisor.start_tick())
+    else {
+        return Occupancy::Unknown("incomplete receipt attribution".into());
     };
-    let field = |name: &str| lenient.as_ref().and_then(|v| v.get(name));
+    if fields.worker.pid == 0 || fields.supervisor.pid == 0 || !fields.worktree.is_absolute() {
+        return Occupancy::Unknown("incomplete receipt attribution".into());
+    }
+    let first_process_tick = worker_tick.min(supervisor_tick);
+    let owner_tick = match fields.owner {
+        Some(Owner::Dispatcher(p) | Owner::Supervisor(p)) => p.start_tick(),
+        _ => None,
+    };
     let probe = OccupancyProbe {
-        worktree: worktree.as_deref(),
-        group: field_pid("worker"),
-        session: field_pid("supervisor"),
+        worktree: Some(&fields.worktree),
+        group: Some(fields.worker.pid),
+        session: Some(fields.supervisor.pid),
         attempt: Some(attempt),
-        not_before: [
-            tick(field("owner")),
-            tick(field("supervisor")),
-            tick(field("worker")),
-        ]
-        .into_iter()
-        .flatten()
-        .min()
-        .or_else(|| log_birth_tick(dir, attempt)),
+        not_before: Some(owner_tick.map_or(first_process_tick, |t| t.min(first_process_tick))),
     };
     let mut own = std::collections::HashSet::new();
     own.insert(std::process::id());
-    scan_occupancy(&probe, &own) == Occupancy::Clear
+    scan_occupancy_in(proc_root, &probe, &own)
 }
 
 /// Admit `receipt` (phase Prepared) for its scope, or refuse while any
@@ -862,7 +842,12 @@ pub(crate) fn prune_terminal_receipts(
 /// evidence, out of admission into `retired/`. Refuses a readable receipt
 /// (recover it instead) and any attempt a fresh scan cannot prove dead.
 // trace:STORY-2254 | ai:claude
-pub(crate) fn retire_unknown(dir: &Path, project_root: &Path, attempt: &str) -> Result<PathBuf> {
+pub(crate) fn retire_unknown(
+    dir: &Path,
+    project_root: &Path,
+    attempt: &str,
+    proc_root: &Path,
+) -> Result<PathBuf> {
     with_admission_lock(dir, || {
         let why = match read_receipt(dir, project_root, attempt) {
             ReceiptRead::Known(r) => anyhow::bail!(
@@ -876,9 +861,10 @@ pub(crate) fn retire_unknown(dir: &Path, project_root: &Path, attempt: &str) -> 
             std::fs::symlink_metadata(&path).is_ok(),
             "attempt {attempt} has no receipt to retire"
         );
+        let occupancy = attempt_occupancy(dir, attempt, proc_root);
         anyhow::ensure!(
-            unknown_attempt_is_dead(dir, attempt),
-            "attempt {attempt} ({why}) cannot be proven dead: a process may still run for it, or the process table could not be fully read; nothing was changed"
+            occupancy == Occupancy::Clear,
+            "attempt {attempt} ({why}) cannot be proven dead: {occupancy:?}; inspect `aida agent launch-status {attempt}`; nothing was changed"
         );
         let retired = dir.join(RETIRED_DIR);
         ensure_private_dir(&retired)?;
