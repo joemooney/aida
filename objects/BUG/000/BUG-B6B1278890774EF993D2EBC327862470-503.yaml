@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T04:37:35.220365061Z
+modified_at: 2026-11-24T04:38:38.372313280Z
 req_type: Bug
 tags:
 - hygiene
@@ -75,6 +75,12 @@ comments:
   content: Implementer push 1dc839b00db4 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T04:37:06.661173358Z
   modified_at: 2026-11-24T04:37:06.661173358Z
+  session_id: 01a20b9fc4f8
+- id: 01a20bd9-4624-7633-a317-1190d27f29a4
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-503` at head `1dc839b00db4fb4c4be42959f1e2796389da719a`.'
+  created_at: 2026-11-24T04:38:38.372310133Z
+  modified_at: 2026-11-24T04:38:38.372310133Z
   session_id: 01a20b9fc4f8
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
