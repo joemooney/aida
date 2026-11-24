@@ -12,12 +12,12 @@ description: |
   - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
   - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
   - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-23T03:11:13.500189565Z
+modified_at: 2026-11-24T16:39:44.793133674Z
 req_type: Bug
 tags:
 - mass-change
@@ -312,6 +312,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20e6d-7799-7822-b2c2-4d8ef9e4c545
+  author: joe
+  timestamp: 2026-11-24T16:39:44.793131682Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
