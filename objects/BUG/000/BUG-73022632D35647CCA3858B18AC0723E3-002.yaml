@@ -4,12 +4,12 @@ agreed_id: BUG-2701
 title: Nested Bubblewrap Git fixtures fail under the dell1 lane job wrapper
 description: |
   TASK-3133 baseline on unmodified origin/main at b82066836029b7ef323861eb91d1dbd4967a3096, dell1 lane job j20261119T175135035-2-0, reproduced failures in the live BUG-2169 nested Bubblewrap tests for clone Git operations, origin HEAD and tags, and the fixture's historical-layout positive controls. Diagnostics include Git alternates and repository discovery failures. This is separate from the TASK-2712 case already owned by BUG-2676. Compare the effective fixture environment on a direct host and in a lane job. Preserve live denial and positive-control assertions. Full job output is under .aida/lane-jobs/01a1f4ece859 on dell1.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-23T21:05:55.681574792Z
+modified_at: 2026-11-24T14:10:38.733162593Z
 req_type: Bug
 tags:
 - bwrap
@@ -64,6 +64,11 @@ comments:
   created_at: 2026-11-23T20:59:17.514895863Z
   modified_at: 2026-11-23T20:59:17.514895863Z
   session_id: 01a209ef8404
+- id: 01a20de4-f60d-72a2-a088-7b4b822b7249
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1: REQUEST CHANGES for BUG-2701, a completing spec. Reviewed the full pinned diff on main f1a50179e5a3640451b4232e08f2e589df93e7d5. The landed tree matches the original PR head''s tree. Used the generated worksheet. It has no formal Acceptance or Verify section, so the criteria below come from the requirement description and the advisor''s authoritative brief.. No triage reason was given.'
+  created_at: 2026-11-24T14:10:38.733155866Z
+  modified_at: 2026-11-24T14:10:38.733155866Z
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
@@ -112,28 +117,16 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20de4-f60d-72a2-a088-7b32054f3594
+  author: joe
+  timestamp: 2026-11-24T14:10:38.733144646Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5b78d27e1
   vendor: codex
   session: 01a1f4ece859
   harness_version: codex-cli 0.167.0
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1: REQUEST CHANGES for BUG-2701, a completing spec. Reviewed the full pinned diff on main f1a50179e5a3640451b4232e08f2e589df93e7d5. The landed tree matches the original PR head's tree. Used the generated worksheet. It has no formal Acceptance or Verify section, so the criteria below come from the requirement description and the advisor's authoritative brief.
-    - Adapt the nested Git fixtures to run under the dell1 lane wrapper without skipping: verified by the pinned base's fixture-only read-only rebind in expose_fixture_after_tmpfs and implementer-reported dell1 job j20261123T194458102-2-0, which ran the focused suite with zero skips or failures. The landed diff preserves that fixture wiring.
-    - Compare the direct-host and lane-job fixture environments: verified by source inspection of fixture_tempdir and the two wrapper callers. The normal workspace target path and the lane's temporary fixture path are handled explicitly, with the latter restored after mounting the nested /tmp. The implementer reported no separate direct-host run, and the raw dell1 output was unavailable in this review.
-    - Preserve the live denial and positive-control assertions: verified by the full pinned diff and inspection of the clone Git and historical-layout test callers. The assertions are unchanged and the implementer reported a passing lane run.
-    - Limit skips to explicitly named missing host capabilities: unverified. A broken bwrap executable can be mislabeled as absent and skipped. The stderr check can also accept unrelated text containing the allowlisted wording.
-    - Make any remaining skip fail the required-live gates: unverified. The required flag currently reaches an assertion in the probe, but the new skip message escapes the workflow's independent log check.
-    - Add a regression asserting that missing capability fails the live-required gate: unverified. The test invokes the panic helper with a hard-coded true and misses the actual probe and environment wiring.
-    - Keep the PR within 300 changed lines and add the BUG-2701 trace: verified by the 56-line pinned diff and the inline trace on the new helper.
-    - Use the specified commit subject format: verified by 9e251dbc1f5e's subject.
-    BUG-2701 (bug protocol): the PR touches at least one test file — met. The pinned diff changes aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs.
-    CI pending at review time. Exact-head fast gates passed, fast compile was running, and FAST CI skipped the full runtime shards. The implementer reported that the targeted lane job and fast gate passed. This review used source and existing evidence.
-  recovery_hint: address the review findings, move BUG-2701 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T21:05:55.681574792Z
