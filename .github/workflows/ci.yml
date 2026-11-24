@@ -799,6 +799,9 @@ jobs:
           bash tests/test_history_templates.sh
           # Standalone suites require the built CLI. trace:BUG-2734 | ai:codex
           python3 tests/test_gitlab_review_handoff.py --aida target/debug/aida
+          python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida
+          python3 tests/test_pr_ship_preflight.py --aida target/debug/aida
+          python3 tests/test_seat_takeover_lifecycle.py "$PWD/target/debug/aida"
           python3 tests/test_skill_discovery.py --aida target/debug/aida
 
       # trace:BUG-1801 | ai:codex

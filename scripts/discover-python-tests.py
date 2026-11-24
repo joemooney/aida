@@ -22,14 +22,7 @@ OTHER_HARNESSES = {
 }
 
 # Dated failures from the initial discovery run. Product owns follow-up IDs.
-KNOWN_FAILING = {
-    # Expected one canonical object under the displayed spec ID.
-    "test_cache_refresh_outputs.py": ("2026-11-23", "TASK-3848"),
-    # Definition scenario refused on missing current-head approval (exit 23).
-    "test_pr_ship_preflight.py": ("2026-11-23", "TASK-3849"),
-    # Fixture role current did not report orchestrator.
-    "test_seat_takeover_lifecycle.py": ("2026-11-23", "TASK-3850"),
-}
+KNOWN_FAILING = {}
 
 # Only simple standalone invocations qualify. Comments, command arguments to
 # other programs, and incidental mentions in workflow text are not wiring.
@@ -41,6 +34,7 @@ CLI = {
     "test_show_latency.py", "test_status_cold_cache.py", "test_origin_prompt.py",
     "test_fixture_pid_namespace.py", "test_work_ci_relay.py", "test_mail_notice_hook.py",
     "test_precompact_handoff_hook.py", "test_grant_expiry_notice_hook.py",
+    "test_cache_refresh_outputs.py", "test_pr_ship_preflight.py", "test_seat_takeover_lifecycle.py",
     "test_gitlab_review_handoff.py", "test_skill_discovery.py",
 }
 
