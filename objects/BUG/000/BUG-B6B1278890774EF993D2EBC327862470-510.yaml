@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T22:44:28.045620302Z
+modified_at: 2026-11-24T22:49:59.929342780Z
 req_type: Bug
 tags:
 - data-loss
@@ -154,6 +154,18 @@ comments:
   modified_at: 2026-11-24T21:49:43.249993044Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20fc0-7686-7680-aedd-153d86db9d17
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7d382ae3e835d1d6d09f67f02ca6f430c69c7351 plus the native lane working diff.
+    AC1: [evidence: behavioral-test] session_reap.rs:1858 reserves the checkout and index.lock, verifies the registered index checksum against its object format and compares against the pinned tip, then renames the registration while locked. Split indexes and unreadable evidence retain. worktree_gc.rs:55 and mail_retention.rs share per-registration selection. The first targeted run passed all 6 registration tests, including clean-sibling removal, staged-only retention, held lock, checksum mismatch, and preview/apply agreement. The final run adds an explicit session GC preview assertion.
+    AC2: [evidence: behavioral-test] tests/bug_1694_registration_clear_claim_tests.rs:207 compares preserved staged bytes after routine cleanup.
+    Deep pass covered clean/staged siblings, dry-run/apply differences, SHA-1/SHA-256 digest selection, writer exclusion and fail-closed paths. Raw Git ratchet: 6/7 tests passed, the exact-count test requires two downward ledger edits. FAST store-writer inventory requires updates for new lock and rename sites and stale wrappers. No ledger edits per pickup. Punt recorded. No new commit or exact-head CI for the native working diff.
+  created_at: 2026-11-24T22:49:59.929342780Z
+  modified_at: 2026-11-24T22:49:59.929342780Z
+  session_id: 01a20facea54
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
