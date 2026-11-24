@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T12:39:40.478331137Z
+modified_at: 2026-11-24T12:45:59.493265698Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
@@ -51,6 +51,15 @@ comments:
   modified_at: 2026-11-24T12:32:38.042666311Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20d97-7700-7403-803a-57a1d28eb22e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 51cc0a828f94f4ab90e840b40293d78836bd5335 and native working diff. No untracked additions. TASK-3296, TASK-3286, TASK-3293 AC1: [evidence: configuration-validation] .github/workflows/ci.yml:627 registers all three existing suites in the FAST planner step. Before editing, this integration tip already ran them through discovery. Confirmed the dedicated-invocation parser recognizes all three paths and skips duplicate execution. TASK-3321 AC1: [evidence: behavioral-test] tests/test_python_discovery.py:60 covers enabled, disabled, literal, expression and matrix routes. Both TASK-3856 criteria now resolve there via aida criteria. All five targeted tests passed. All 48 FAST source gates passed. Reviewed path spelling, YAML step routing, unittest arguments and execution multiplicity. No authority or test logic changes. No PR-head CI yet. Native ship refused the required four-ID trailer; punted for host resolution.
+  created_at: 2026-11-24T12:45:59.493265698Z
+  modified_at: 2026-11-24T12:45:59.493265698Z
+  session_id: 01a20d8f0a70
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a71-33e0-7fb0-bef6-36f004672540
   author: joe
