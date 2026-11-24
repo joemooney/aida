@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When RecipientDirectory::load fails, doctor still runs the seat-sidecar inventory (or reports "seat-sidecar inventory SKIPPED: registry load failed: <error>"), never silence.
   - AC2: Test with a failing registry load.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T00:56:19.917268971Z
+modified_at: 2026-11-24T00:57:09.032086160Z
 req_type: Task
 tags:
 - doctor
@@ -72,6 +72,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20b0e-3fc1-71a2-afde-7d5c3d112a4f
+  author: dirtlab
+  timestamp: 2026-11-24T00:56:52.929329124Z
+  session_id: 01a20b0d78d6
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20b0e-818b-70c2-b7f5-873a0346f7ca
+  author: dirtlab
+  timestamp: 2026-11-24T00:57:09.771957158Z
+  session_id: 01a20b0d78d6
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
@@ -80,3 +95,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4e140498bc8
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: 'Can the host relaunch int30-task-3851 at integration commit 9368afc5d4, which contains prerequisite #4463? The mandated base 3e8f586ad41 predates the seat-sidecar inventory, hint and bounded retained probe. Git metadata is read-only in this lane.'
+  raised_by: implementer
+  raised_at: 2026-11-24T00:57:09.032086160Z
