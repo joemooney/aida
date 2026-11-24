@@ -542,10 +542,37 @@ fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
     for budgeted in [false, true] {
         let repo = committed_repo();
         let holder = tempfile::tempdir().unwrap();
-        for (id, pid) in [("dead1", reaped_pid()), ("live2", std::process::id())] {
-            let tree = deleted_worktree(repo.path(), holder.path(), id);
-            write_lease(repo.path(), &lease_at(id, "PR-6", &tree, id, Some(pid)));
+        crate::test_env::write_project_config_fixture(
+            repo.path(),
+            "store_path = \".aida-store\"\n",
+        );
+        let mut req = aida_core::Requirement::new("finished".into(), String::new());
+        req.spec_id = Some("BUG-2710".into());
+        req.status = aida_core::RequirementStatus::Completed;
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        crate::test_env::home_fixture_storage(repo.path().join(".aida-store"))
+            .save(&store)
+            .unwrap();
+        assert!(git(
+            repo.path(),
+            &["update-ref", "refs/remotes/origin/main", "HEAD"]
+        )
+        .status
+        .success());
+        for id in ["dead1", "dirty2"] {
+            let tree = holder.path().join(id);
+            let added = git(
+                repo.path(),
+                &["worktree", "add", "-qb", id, tree.to_str().unwrap()],
+            );
+            assert!(added.status.success(), "{added:?}");
+            let mut lease = lease_at(id, "BUG-2710", &tree, id, Some(reaped_pid()));
+            lease.hostname = crate::coordination::hostname();
+            write_lease(repo.path(), &lease);
         }
+        let notes = holder.path().join("dirty2/notes");
+        std::fs::write(&notes, "unsaved").unwrap();
         if budgeted {
             let progress = super::reap_quiet(repo.path(), None, || false);
             assert_eq!(
@@ -558,6 +585,10 @@ fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
             assert_eq!(outcomes.leases[0].0, "dead1");
         }
         assert!(!lease_path(repo.path(), "dead1").exists());
-        assert!(lease_path(repo.path(), "live2").exists());
+        assert!(!holder.path().join("dead1").exists());
+        assert!(!local_branch_exists(repo.path(), "dead1"));
+        assert!(lease_path(repo.path(), "dirty2").exists());
+        assert!(local_branch_exists(repo.path(), "dirty2"));
+        assert_eq!(std::fs::read_to_string(notes).unwrap(), "unsaved");
     }
 }
