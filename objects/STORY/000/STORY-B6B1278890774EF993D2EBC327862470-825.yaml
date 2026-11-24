@@ -1,0 +1,28 @@
+id: 01a20cd1-896d-7151-8400-223240697ec0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-825
+agreed_id: STORY-3083
+title: 'Launch-authority coherence through the exec barrier: hold the store writer guard from final revalidation to run.release(); file/SQLite stores keep writer exclusion or refuse (deferred from STORY-3080)'
+description: |
+  Deferred from STORY-3080 / #4502 (advisor-122 ruling 2026-11-24 02:13; filed by product-15). STORY-3080 closes the minutes-long cold-start window with one pre-spawn revalidation. A millisecond window remains between that final revalidation and exec, on paths not yet covered. Git-canonical directory stores (the production path) are already covered.
+
+  ## Acceptance
+  - AC1 (F1): On the contained launch path, hold the store writer guard from the final revalidation through run.release() (the exec barrier), so no authority change can land between revalidation and exec. Test.
+  - AC2 (F2): File-backed / SQLite stores either retain writer exclusion across the same window, or refuse the revalidated launch mode with a clear error. Test.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T09:09:48.525891979Z
+modified_at: 2026-11-24T09:09:48.525891979Z
+req_type: Story
+tags:
+- authority
+- launch
+- strict
+filed_at:
+  code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 103bb2ed7ea
+  vendor: claude
