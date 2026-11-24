@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T18:05:25.501523832Z
+modified_at: 2026-11-24T18:19:28.643808969Z
 req_type: Bug
 tags:
 - codex
@@ -27,6 +27,18 @@ comments:
   content: 'advisor-122 APPROVED 2026-11-24 11:00 (HIGH, STRICT, drive; linked to STORY-3099). AC1: do not leave codex launches blocked: write the correct contained setting or leave it unset for the launcher default; do NOT weaken containment. AC2: the refusal names the real fix (config key + command), not --vendor claude. Tests for both.'
   created_at: 2026-11-24T17:54:23.778203357Z
   modified_at: 2026-11-24T17:54:23.778203357Z
+- id: 01a20ec8-d01c-7563-9818-3ff95c9bc4d5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 289cc394a334ee2760c79067fd871bbe66f9c5a9 plus the six uncommitted native-lane files. The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/task_2631_containment_tests.rs:513 passed in lane job j20261124T180637306-2-0. The accepted offer commits clean tracked config after scaffold consent. A seat still refuses against the older remote tip and selects native after publication. This exercises the seat policy resolver, without spawning an advisor.
+    AC2: [evidence: behavioral-test] The same regression exercises the missing-policy refusal. The recovery text names the interactive init command, key, file and trusted branch. The updated preflight regression at aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs:566 covers both child paths.
+    Deep pass covered vendor normalization, malformed and inline TOML, zero and multiple vendor selections, dirty config and changes during the consent prompt. Fixed wrapper diagnostics and guarded against changes during the prompt. Only the operator-approved native setting can authorize native launch. Existing policy, pre-publication refusal and clone scaffold commit suppression retain their checks. Formatting, git diff --check and all 48 FAST source gates passed. No published-head CI is available in this native lane.
+  created_at: 2026-11-24T18:19:28.643808969Z
+  modified_at: 2026-11-24T18:19:28.643808969Z
+  session_id: 01a20ebafafb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
