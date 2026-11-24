@@ -1,0 +1,32 @@
+id: 01a20e95-9bd9-7c91-8b82-b71c03e9390c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-284
+title: 'Review PR-4475: [AI:codex] fix(leases): record why an automated shelve changed spec status (BUG-2736)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20e4f`) for branch `bug-b6b1278890774ef993d2ebc327862470-497`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4475>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-497` → `main`
+
+  ## Covers
+
+  - BUG-2736
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4475` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T17:23:35.513779769Z
+modified_at: 2026-11-24T17:23:35.513779769Z
+req_type: Story
+filed_at:
+  code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1e
+  session: 01a20e4f3409
