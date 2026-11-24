@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T07:02:27.092359886Z
+modified_at: 2026-11-24T07:24:55.670976941Z
 req_type: Story
 tags:
 - admission
@@ -54,6 +54,13 @@ comments:
     Probes: checked zero, duplicate-anchor and multiple-member iteration, UUID identity across pulls, error propagation, original WIP exemptions/override, native and wrapped spawns. Fixed relative store path resolution before launch changes cwd. Test fixture callbacks are confined to tests. No existing assertions weakened. Regression drives the authority function with a real pull, while hook placement was inspected. Existing WIP snapshot freshness and BUG-2740 lock lifecycle remain applicable. No published-head CI exists yet.
   created_at: 2026-11-24T07:02:27.092359886Z
   modified_at: 2026-11-24T07:02:27.092359886Z
+  session_id: 01a20c4fa138
+  harness_version: codex-cli 0.167.0
+- id: 01a20c71-856c-7750-ad62-4a85a743dc73
+  author: dirtlab
+  content: Implementer validation update for reviewed HEAD f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c and its worktree diff. The first FAST gate identified a canonical-ID ledger annotation on the wrong line. Moved it to the ID expression. Final make check-ci-fast passed, lane job j20261124T070834505-2-0, exit 0. Targeted job j20261124T065854175-2-0 executed both regression tests successfully. git diff --check passed.
+  created_at: 2026-11-24T07:24:55.670976941Z
+  modified_at: 2026-11-24T07:24:55.670976941Z
   session_id: 01a20c4fa138
   harness_version: codex-cli 0.167.0
 history:
