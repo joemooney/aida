@@ -1,0 +1,18 @@
+{
+  "id": "mandate-expiry-2f660714-f039-49b2-991c-af6dbd7fcb7f-1795484996-1",
+  "thread_id": "mandate-expiry-2f660714-f039-49b2-991c-af6dbd7fcb7f-1795484996-1",
+  "from": "aida-mandate",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795481433624,
+  "body": "MANDATE expires in 60m, run: aida mandate renew",
+  "subject": "Mandate renewal due",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
