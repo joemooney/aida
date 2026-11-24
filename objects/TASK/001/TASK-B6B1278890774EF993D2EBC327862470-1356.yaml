@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:00:31.801480938Z
-modified_at: 2026-11-24T18:39:53.368120519Z
+modified_at: 2026-11-24T18:42:05.984760809Z
 req_type: Task
 tags:
 - review
@@ -77,6 +77,21 @@ comments:
   modified_at: 2026-11-24T18:37:08.138989632Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20edd-7b8e-70c0-aa18-f906aae6956d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4525):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5bfd563d1752
+    Recorded: 2026-11-24T17:32:58.220765107+00:00
+    Findings:
+    1. TASK-3872 AC1: A custom playbook can silently disappear when its pattern exceeds the brace expansion budget or the combined regex fails to compile. PlaybookRegistry::new stores the failed compilation, resolve treats it as a nonmatch, and review prepare validates only exclusion globs. Previously accepted scoped rules can therefore be replaced by the built-in or general checklist with no diagnostic while the command succeeds. Make registry construction report the offending rule ID and pattern on compilation failure and propagate that error before generating a bundle. Cover the CLI-facing custom-rule failure path.
+    2. TASK-3872 AC1: In the public core classification API, an exclusion that fails to compile matches every ordinary path. classify_diff_inventory forwards compile_exclusions output without validation, and classify_path_exclusion treats the missing matcher as a successful match. A consumer can therefore get an empty reviewable inventory and a passing 100% coverage result with no reviewed files. The current CLI precheck prevents this on review prepare. Make the core API return a compilation error or accept only successfully compiled exclusions, and cover rejection before inventory and coverage calculation.
+    3. The repeated-prefix regression only asserts the resulting line number, which the old sliding-window algorithm also computes. Reintroducing that algorithm leaves this assertion green if CI has enough time. Instrument the matcher in tests and assert a linear bound on line comparisons for the repeated-prefix fixture.
+    4. The review-engine guide still describes a sliding-window search and calls the anchored output start_line..end_line without identifying the new JSON location. Update the guide to name resolved_span.start_line and resolved_span.end_line, explain that the top-level coordinates remain submitted hints, and describe the prefix-table matcher.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T18:42:05.838113415Z
+  modified_at: 2026-11-24T18:42:05.838113415Z
 history:
 - id: 01a20e13-15d8-7192-8c48-006617c031fe
   author: joe
