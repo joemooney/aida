@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-24T00:45:18.475840364Z
   modified_at: 2026-11-24T00:45:18.475840364Z
   session_id: 01a20abec8e2
+- id: 01a20b04-9651-78c3-84d0-0edfa0b5021e
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 17:52): PR-4472 @ 9696d7535e PASSES as test-only (+34/-8 in tests/test_pr_ship_preflight.py). The fixture catches up with current gates: a bare local origin over a fake ssh (forge-shaped remote for label reads), fresh recorded_at, and a review receipt plus recorder_attestation on approvals; ''corpus'' now asserts the ''retained round has no recorded_by provenance'' refusal. One expectation change, checked: ''definition_override'' goes 21 -> 24 and must not read CI. That case passes --override-stale-check, which overrides the stale-base check, not the definition gate, so a definition refusal (24) before any CI read is the correct expectation.'
+  created_at: 2026-11-24T00:46:05.498898342Z
+  modified_at: 2026-11-24T00:46:05.498898342Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20ab7-f1a5-7640-bd70-c99b97044e42
   author: joe
