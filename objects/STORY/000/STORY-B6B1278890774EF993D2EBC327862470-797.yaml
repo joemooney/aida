@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-24T16:39:31.950432087Z
+modified_at: 2026-11-24T16:42:23.169507902Z
 req_type: Story
 tags:
 - landing
@@ -1306,6 +1306,17 @@ comments:
     A reference merge (commit a16f3592f015, `(Refs STORY-2897)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-23T06:37:36.417432422Z
   modified_at: 2026-11-23T06:37:36.417432422Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e70-1712-7160-91d1-39040de2b30f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:42):
+    # STORY-2897 / PR #4401 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 09:45; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4401 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4401. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:42:23.169507902Z
+  modified_at: 2026-11-24T16:42:23.169507902Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
