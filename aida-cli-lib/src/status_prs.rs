@@ -2503,18 +2503,13 @@ impl DetectorSpecs {
     }
 
     fn branch_id(&self, branch: &str) -> Option<String> {
-        let parsed = work_spec_id_from_branch(branch);
-        // PR snapshots and custom requirement types can also be known store IDs.
-        if parsed.is_none() {
-            for end in
-                std::iter::once(branch.len()).chain(branch.rmatch_indices('-').map(|(i, _)| i))
-            {
-                if self.by_id.contains_key(&id_key(&branch[..end])) {
-                    return Some(branch[..end].to_ascii_uppercase());
-                }
+        // A numeric suffix can be branch prose. Prefer the longest known ID.
+        for end in std::iter::once(branch.len()).chain(branch.rmatch_indices('-').map(|(i, _)| i)) {
+            if self.by_id.contains_key(&id_key(&branch[..end])) {
+                return Some(branch[..end].to_ascii_uppercase());
             }
         }
-        parsed
+        work_spec_id_from_branch(branch)
     }
 
     fn active_branch(&self, branch: &str) -> bool {
@@ -3604,6 +3599,21 @@ mod story_1043_unshipped_work_tests {
         let rows = collect_unshipped_work_items(root, &[spec], true, false);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].branch, "wip");
+    }
+
+    // trace:TASK-3860 | ai:codex
+    #[test]
+    fn task_3860_admits_leaseless_branch_with_numeric_suffix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        let branch = "task-42-2026-fix";
+        branch_with_commit(root, branch, "fix");
+        let rows =
+            collect_unshipped_work_items(root, &[summary("TASK-42", "Approved")], true, false);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch, branch);
+        assert_eq!(rows[0].spec_id, "TASK-42");
     }
 
     // trace:TASK-3860 | ai:codex
