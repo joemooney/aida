@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T16:07:13.073909688Z
+modified_at: 2026-11-24T16:32:00.800513091Z
 req_type: Story
 tags:
 - autonomy
@@ -240,6 +240,18 @@ comments:
   modified_at: 2026-11-24T15:42:38.526359761Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e66-6639-7891-a04a-0fdfc72af06a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7eb5d0d65ad88b8a72480c6374034dae78e7ac61 plus the native-seat working diff. No untracked additions.
+    AC1: [evidence: behavioral-test] approved_small_default_requires_approval_size_and_standard_tier covers the cooperative admission owner. The protected floor requires that exact file and its mandate marker. approved_small_unattended_ship_refuses_size_withdrawal_after_ci drives the unattended numbered ship at a fixed PR head, removes small after green CI, checks the typed Review refusal and its spec-specific reason, and counts zero forge merge calls. The ordinary publication and live landing test also passed. Targeted lane job j20261124T162631353-2-0 executed all three successfully.
+    AC2: [evidence: behavioral-test] the default-off, opt-in, strict-path and explicit-mode cases are covered in gate/tests/story_2884_unset_mode_tests.rs. The CLI knob is described by config_cmd.rs and docs/configuration-guide.md.
+    Probe findings: normalized tag and path comparisons, absent and multiple changed paths, protected floor inventory, unchanged-head withdrawal and test-only checkpoint scope reviewed. Gate dependency check against origin/main passed after using the gate-local authority predicate. A separate missing open-list entry can prevent initial admission from identifying the numbered PR, filed as BUG-73022632D35647CCA3858B18AC0723E3-004. F2 remains deferred by the Round 4 ruling. The protected floor change requires human/advisor merge.
+  created_at: 2026-11-24T16:32:00.800513091Z
+  modified_at: 2026-11-24T16:32:00.800513091Z
+  session_id: 01a20e4f3291
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe

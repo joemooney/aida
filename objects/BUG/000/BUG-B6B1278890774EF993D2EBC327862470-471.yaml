@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-24T16:21:52.295616526Z
+modified_at: 2026-11-24T16:35:18.681279058Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -167,6 +167,15 @@ comments:
   modified_at: 2026-11-24T14:15:59.914095625Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e69-6bc8-7991-9e4e-48f1070780f8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5935935fc7 plus the native-seat working diff. F4: [evidence: behavioral-test] bug_home_024_finished_lease_tests.rs:541 exercises both reap paths with registered trees and checks the dirty-file refusal and clean-tree removal. Lane job j20261124T162331210-2-0 passed (1 test). Reviewed merge-base diff, working diff and untracked inventory. F1 deferred: synchronous per-session work can stall. F2 deferred: shared maintenance can overrun on empty or final batches. F3 deferred: scheduled success logs omit partial progress. Test-only pickup scope. Formatting and diff checks passed. FAST stopped when direct cargo metadata was disabled in this seat.
+  created_at: 2026-11-24T16:35:18.681279058Z
+  modified_at: 2026-11-24T16:35:18.681279058Z
+  session_id: 01a20e5cde50
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
