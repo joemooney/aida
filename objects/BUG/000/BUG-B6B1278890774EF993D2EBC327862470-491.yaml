@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T14:10:49.147768332Z
+modified_at: 2026-11-24T14:11:01.003924447Z
 req_type: Bug
 tags:
 - doctor
@@ -112,6 +112,25 @@ comments:
   created_at: 2026-11-23T21:12:00.967675416Z
   modified_at: 2026-11-23T21:12:00.967675416Z
   session_id: 01a209f813f6
+- id: 01a20de5-4c80-7822-8a42-ed5f6b5b1ce3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4457):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bcb264c93397
+    Recorded: 2026-11-23T21:25:05.392001220+00:00
+    Findings:
+    1. aida-cli-lib/src/land_stalls.rs:1565 AC1: The 220-second scope ends at line 1555. The `Instant` check before `default_branch_of` does not bound its Git/forge probes, and `github_stall_read` (forge.rs:7503) resolves `gh` before starting the timed subprocess with the earlier relative timeout. Without origin/HEAD, or when reading a red head, a slow `gh --version` can consume the remaining scheduler window or hang the guard. Scope these paths to the remaining absolute run/head deadline, including executable resolution and the command itself.
+    2. aida-cli-lib/src/land_stalls.rs:1968 AC2: The scheduled path routes synchronously after printing PARTIAL. `raise_due` calls `schedule_ledger::write_cas`, which can wait for the store writer and push through `git_ops::push_exact` with an unbounded `Command::output`. A slow store remote can still cause the 300-second scheduler to kill the guard before it saves the run snapshot or emits the doctor report. Reserve time for bounded routing or defer publication while preserving the run and normal exit.
+    3. aida-cli-lib/src/tests/story_2906_throughput_guard_tests.rs:1614 AC2: The slow-forge regression supplies its own deadline to `guard_rows` and manually renders/saves the observation. It still passes if the production deadline wiring or scheduled result emission is removed and does not exercise post-scan routing. Add a fake-forge test through the production observation and scheduled-report path with short injected budgets, asserting covered/skipped IDs and normal completion before the outer ceiling.
+    4. aida-cli-lib/src/land_stalls.rs:1555 The coverage message is produced only by `guard_rows`. If discovery exhausts the deadline (for example on a later GitLab page), `?` exits before timings or coverage are emitted. If all primary rows fit but red-detail or landing-history work hits the deadline, `partial` remains absent. Report unknown inventory distinctly from an empty inventory, and identify which supplementary observations ran out of time.
+    5. aida-cli-lib/src/land_stalls.rs:1286 A partial pass supplies red heads only from the covered subset, but `read_red_details` prunes every cached entry absent from that subset. A skipped, still-red PR loses cached test names and its scan-order timestamp. Keep entries for skipped heads and evict only from confirmed inventory/observations. Add a two-pass test covering a skipped cached red head.
+    6. aida-cli-lib/src/land_stalls.rs:1858 Skipping all routing-memory cleanup on partial runs also retains resolved stalls for covered PRs. If such a stall clears in one partial run and returns on the same head in another, `plan_routes` suppresses its new wake. Old rerun keys for confirmed closed or superseded heads also accumulate while partial runs persist. Reconcile covered observations and complete inventory separately, retaining only state whose status could not be established.
+    7. aida-cli-lib/src/land_stalls.rs:1512 Each scheduled pass starts again at the first forge-listed PR. When the same prefix uses the available budget, later PRs are repeatedly skipped; with sixteen PRs, eleven 20-second observations already consume the entire 220-second window even before setup. Resume from the skipped suffix or prioritize least-recently-covered changes on subsequent ticks.
+    8. aida-cli-lib/src/land.rs:850 An ordinary overlap with another landing fetch now fails the guard's `try_lock_exclusive` immediately even when the holder releases well inside the run deadline. `fetch` failure makes all pin-dependent observations unknown, but `guard_rows` can still mark them covered and `route_with` can then clear prior stall deduplication for the run. Retry contention within the remaining budget or report unavailable pins without discarding prior evidence.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T14:11:00.864427347Z
+  modified_at: 2026-11-24T14:11:00.864427347Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
