@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T07:14:16.252558671Z
+modified_at: 2026-11-24T07:19:14.561089989Z
 req_type: Task
 tags:
 - hygiene
@@ -119,6 +119,18 @@ comments:
   modified_at: 2026-11-24T07:14:16.252558671Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c6c-5114-7ab3-aa2b-fd5b5bd88e6a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 274094881c08ac8991956a4abf912807589e3e9a plus native working-tree edits on int31-task-3858. No untracked additions.
+    AC1: [evidence: behavioral-test] Under the r2 ruling, session_reap.rs:1347 reports the retained ref evidence without either raw Git hint. The documented commit-pending operation applies to pending worktree edits, not stash or side-branch recovery. F2/F3 deferred per ruling.
+    AC2: [evidence: behavioral-test] task_2053_seat_clone_lifecycle_tests.rs:3167 exercises the production scan and both summary modes with a real stash-only clone. Initial fixture hit the liveness gate. Corrected its clock and namespace; lane job j20261124T071534257-3-0 executed 1 test, passed with live bwrap. story_2351_session_hygiene_tests.rs:276 covers stash and side-branch summary text.
+    Probe findings: removed duplicate parsing of formatted refs; all ref detail lines use the existing join, including multiple refs. The skip gate still precedes merge lookup and adds no clone command or authority. Formatting and git diff --check passed. make check-ci-fast stopped at Rust structural ratchets because the FAST no-build guard refused the aida lane-job invocation used for Cargo. Full FAST and exact publication-head CI unverified.
+  created_at: 2026-11-24T07:19:14.561089989Z
+  modified_at: 2026-11-24T07:19:14.561089989Z
+  session_id: 01a20c620f83
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
