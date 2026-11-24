@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:42:33.215006446Z
+modified_at: 2026-11-24T07:51:26.654235505Z
 req_type: Story
 tags:
 - track:integration
@@ -85,6 +85,11 @@ comments:
   created_at: 2026-11-24T07:42:33.215000365Z
   modified_at: 2026-11-24T07:42:33.215000365Z
   session_id: 01a20c74cb2f
+- id: 01a20c89-cabe-76b0-8788-daf94d4319aa
+  author: joe
+  content: 'S1 scope adjustment (product-15 2026-11-24 00:47): the S1 lane punted because make check-ci-fast requires CI test-inventory entries (checked structural cover) for the 8 new tests. Approved: add ONLY those inventory entries, listed in the PR body as explicit additions beyond 0fdac177513.'
+  created_at: 2026-11-24T07:51:26.654235505Z
+  modified_at: 2026-11-24T07:51:26.654235505Z
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
