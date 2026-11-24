@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T10:57:36.618209692Z
+modified_at: 2026-11-24T11:12:33.294106996Z
 req_type: Bug
 tags:
 - admission
@@ -60,6 +60,18 @@ comments:
   content: 'CORRECTION (advisor-122 2026-11-24 03:38): the admission.lock flock was held via an fd INHERITED from the 2.5-day-old deputy runner pid 2805119 (`aida deputy shell run`), passed down to the review-watch launch. AC1 ALSO requires: spawned children must NOT inherit admission.lock''s fd (O_CLOEXEC, or close before exec); test that a spawned child does not hold the lock. Root context: the 03:25 starvation was compounded by imac I/O saturation (see the runner-threads draft).'
   created_at: 2026-11-24T10:43:39.790419311Z
   modified_at: 2026-11-24T10:43:39.790419311Z
+- id: 01a20d41-eb74-7172-a4d7-0e4410a1c1f9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 91c070eb012a63da0770c0f5d76cd883dda414af plus native working tree. Empty origin/main...HEAD diff, three modified tracked files, no untracked additions.
+    AC1: [evidence: behavioral-test] task_1993_review_watch_tests.rs:64 exercises real train admission inside the pending launch callback and rejects the active review member. Main already scoped the transition lock before launch.
+    AC2: [evidence: behavioral-test] task_1993_review_watch_tests.rs:88 checks a spawned shell for the exact admission inode. Main already used close-on-exec. The probe detected an intentionally inherited fd in a separate positive control. advisor_loop_service.rs:1584 checks activity and numeric age in the persisted third-failure alert for both service variants. Final lane job j20261124T110913362-2-0 executed four tests, all passed.
+    Probes: audited all production admission.lock call sites, PR/MR key normalization, multiple members and both service directories. Fixed-size records overwrite shorter activity strings. Missing, malformed or future-dated records leave timing unknown. Flock and verified controller identity remain authoritative; the last recorded activity can change concurrently and legacy holders may lack metadata. No tests weakened. Fixed the Linux test annotation and replaced lock-file truncation after local gate findings. Store writer inventory reconciled.
+  created_at: 2026-11-24T11:12:33.294106996Z
+  modified_at: 2026-11-24T11:12:33.294106996Z
+  session_id: 01a20d3383bf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20d25-45d0-7f43-9465-17218e2f731c
   author: joe

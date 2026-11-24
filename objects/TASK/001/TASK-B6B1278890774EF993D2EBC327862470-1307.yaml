@@ -89,6 +89,15 @@ comments:
   modified_at: 2026-11-24T10:56:33.826138340Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20d40-36ba-78b2-9204-4e8a05df30b6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b88ebf7c81a6ade0d834a2f5ff711c353e5ba7d5 plus native working diff. AC1: [evidence: manual-inspection] git log confirms Joe Mooney authored 657d344388 and HEAD contains origin/integration c1b877d32a including H1. AC2: [evidence: behavioral-test] all five review_prepare::tests passed in lane job j20261124T110129680-2-0, including option-like refs, write confinement, Git errors and malformed TOML (review_prepare.rs:790,800,832,883). Preparation propagates config errors before registry construction at line 126. Checked path spelling, absent vs malformed config, zero/multiple rules, and error propagation. Ratchet manifest includes the added test. No untracked additions. Regression directly exercises the preparation loader. All 48 FAST source gates passed; aggregate ratchet run still in progress.
+  created_at: 2026-11-24T11:10:40.770333895Z
+  modified_at: 2026-11-24T11:10:40.770333895Z
+  session_id: 01a20d367944
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
   author: joe
@@ -134,6 +143,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20d37-8fe2-7320-9cf2-0e4a7dd53392
+  author: dirtlab
+  timestamp: 2026-11-24T11:01:14.850734906Z
+  session_id: 01a20d367944
+  harness_version: codex-cli 0.167.0
+  changes: []
 - id: 01a20d41-6d3a-74f2-b22a-89b5a220882f
   author: joe
   timestamp: 2026-11-24T11:12:01.338653478Z
