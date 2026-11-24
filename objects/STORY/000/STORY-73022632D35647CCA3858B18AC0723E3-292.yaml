@@ -1,0 +1,32 @@
+id: 01a20fa0-493b-7d40-b9f3-a23be54ffcee
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-292
+title: 'Review PR-4540: [AI:codex] fix(launch): retain reservations for recovery ancestors with holder evidence (BUG-2747)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f58`) for branch `bug-b6b1278890774ef993d2ebc327862470-508`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4540>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-508` → `main`
+
+  ## Covers
+
+  - BUG-2747
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4540` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T22:14:52.475949047Z
+modified_at: 2026-11-24T22:14:52.475949047Z
+req_type: Story
+filed_at:
+  code_sha: 5665f7c661c7b100b06434132c000715144387e7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5665f7c661
+  session: 01a20f580b4d
