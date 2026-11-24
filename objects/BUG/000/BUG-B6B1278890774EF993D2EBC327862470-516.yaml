@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-24T20:43:18.918403677Z
+modified_at: 2026-11-24T20:56:26.118965371Z
 req_type: Bug
 tags:
 - leases
@@ -31,6 +31,19 @@ comments:
   content: 'Raised to MEDIUM (advisor-122 13:42): blocks TASK-3211 (lease 01a2078e7236 owns TASK-3211 canonical TASK-…-1190).'
   created_at: 2026-11-24T20:38:10.953828797Z
   modified_at: 2026-11-24T20:38:10.953828797Z
+- id: 01a20f58-7ca3-79e0-91b7-4acf6ed2dafd
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 95eaccf328557402d176c0b41983afe1b677965f plus native working diff. Merge-base diff empty, three modified files, no untracked additions.
+    AC1: [evidence: behavioral-test] doctor_cmd_story_462_doctor_tests.rs:4611 verifies missing tree, mount refusal, lease removal and reported reason.
+    AC2: [evidence: behavioral-test] same file:4627 verifies mode-000 tree retains lease. EIO follows the same non-ENOENT refusal and was not separately injected.
+    AC3: [evidence: behavioral-test] same file:4640 verifies dirty work and mail retain the lease, then clean unbound clone survives lease release. Launcher ran all three, 3 passed. The fixture now restores its original permissions after the fast fixture ratchet flagged a hardcoded mode. Ratchet rerun passed.
+    Probes covered canonical paths, symlinks, mount parsing, zero/nonzero mailbox entries, failed reads, holder checks and sandbox-only Git probes. The new path releases only lease resources. Mount evidence is local to the heal process namespace. Live repro lease untouched. No PR-head CI available in native lane.
+  created_at: 2026-11-24T20:56:26.118965371Z
+  modified_at: 2026-11-24T20:56:26.118965371Z
+  session_id: 01a20f4bcfc3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
