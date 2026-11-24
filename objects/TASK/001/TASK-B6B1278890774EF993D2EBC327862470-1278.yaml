@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T04:58:24.185412060Z
+modified_at: 2026-11-24T05:13:06.874987560Z
 req_type: Task
 tags:
 - doctor
@@ -175,6 +175,17 @@ comments:
   modified_at: 2026-11-24T04:52:42.312038Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20bf8-d916-7742-a19b-b413a75c88d6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b664d79afa9da55b00d3463d6ef9991941915c41 plus the native working-tree diff on int30-task-3851. No untracked additions.
+    R3(a,b): [evidence: behavioral-test] mailbox_logical.rs:983 checks the retained open error before granting ACK eligibility. mailbox_logical_tests.rs:1113 exercises an oversized per-ID file alongside a visible live delivery, then a non-directory inventory entry. The live record remains ACK-certified in the first case and AckPlan::prepare returns Partial in the second. The launcher ran all three task3851_ tests successfully.
+    R3(c): [evidence: manual-inspection] mailbox_view.rs:416 preserves the open error in partial coverage codes and reports OverBudget for an incomplete per-ID inventory. The empty requested-ID path skips opening the inventory. No receipt-anchor error is synthesized. Deep-pass traced the shared gate through ACK preparation, checked zero/multiple candidates and filesystem error handling, and retained the existing isolation assertions. CLI partial-code rendering was inspected. Exact published-head CI is pending host publication.
+  created_at: 2026-11-24T05:13:06.874987560Z
+  modified_at: 2026-11-24T05:13:06.874987560Z
+  session_id: 01a20bea6036
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
   author: joe
