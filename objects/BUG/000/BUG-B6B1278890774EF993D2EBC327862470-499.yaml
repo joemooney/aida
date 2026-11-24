@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-24T01:05:35.411816078Z
+modified_at: 2026-11-24T01:06:30.703332593Z
 req_type: Bug
 tags:
 - leases
@@ -25,6 +25,21 @@ comments:
   content: Filed Approved per advisor-122 ruling 2026-11-23 18:08 (strict, drive; advisor gates it). Root cause of BUG-2728's flip found by the BUG-2736 lane.
   created_at: 2026-11-24T01:05:35.411816078Z
   modified_at: 2026-11-24T01:05:35.411816078Z
+- id: 01a20b17-45c7-7931-bd7f-4ee89b9010d0
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:06):
+    # BUG-2738: a CR must not shelve a Completed / merged spec (advisor-122 ruling 2026-11-23 18:08; product-15). Lane: CODEX. Track: MAIN. STRICT review (leases.rs). Mode drive. New branch, new PR. SMALL.
+
+    Read `aida show BUG-2738`. In leases::shelve_spec_on_failure / shelve_status_flip (aida-cli-lib/src/leases.rs), reached from review_commands.rs on a request-changes verdict:
+    - AC1: if the spec is already COMPLETED, or its PR is MERGED/CLOSED, do NOT flip status; still record the verdict in the gate ledger and add a spec comment naming the writer and the verdict. Test: a CR on a Completed spec leaves it Completed, with a ledger entry plus a comment.
+    - AC2: a live In Progress spec still shelves exactly as today. Test.
+    No other change to shelving. NOTE: BUG-2736 (also main) adds writer-naming comments to the same shelve path; whichever lands second rebases, so keep the comment helper shared if both exist.
+    <=300 lines. Add `// trace:BUG-2738 | ai:codex`. Commit `[AI:codex] fix(leases): ... (BUG-2738)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-24T01:06:30.703332593Z
+  modified_at: 2026-11-24T01:06:30.703332593Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
