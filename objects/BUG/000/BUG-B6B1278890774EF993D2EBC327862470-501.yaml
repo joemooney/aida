@@ -17,13 +17,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T02:26:30.731169338Z
+modified_at: 2026-11-24T02:27:36.872445456Z
 req_type: Bug
 tags:
 - admission
 - deadlock
 - lanes
 - store
+history:
+- id: 01a20b61-5185-7250-a25b-1093eea784e1
+  author: joe
+  timestamp: 2026-11-24T02:27:36.965654212Z
+  changes: []
+execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
   branch: main
