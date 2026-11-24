@@ -207,6 +207,8 @@ pub mod registry;
 #[cfg(feature = "native")]
 pub mod report;
 pub mod review_config;
+// trace:STORY-3076 | ai:antigravity
+pub mod review_engine;
 pub mod secret_screen;
 // trace:BUG-626 | ai:claude
 pub mod rollup;
