@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T14:11:24.932289609Z
+modified_at: 2026-11-24T14:11:36.000410429Z
 req_type: Bug
 tags:
 - integration
@@ -140,6 +140,20 @@ comments:
   modified_at: 2026-11-24T02:42:13.740938395Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20de5-d52e-77d3-8630-1bcb7ee994a4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4475):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 93fd84ca0a2d
+    Recorded: 2026-11-24T02:11:43.933624642+00:00
+    Findings:
+    1. The shelve can still regress the stored status without a comment. aida-cli-lib/src/leases.rs:3756 reads the requirement outside the write lock, lines 3792–3797 decide whether to annotate that snapshot, and line 3800 saves the entire snapshot. If shelving reads NeedsAttention and a concurrent triage write moves the spec to InProgress before the save, shelving reverts the stored InProgress status to NeedsAttention without recording the writer or reason. Make the guarded transition, comment and failure-reason update together against the current requirement using the existing atomic per-spec update. Add a regression for the stale-snapshot interleaving.
+    2. The test at aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:1788 starts in InProgress, so it would miss a change that only silences the incident's Done-to-NeedsAttention transition. It would also pass if shelving appended a misleading comment on a retry that leaves the status unchanged. Add a Done refusal fixture and a second call to verify the persisted comment count stays at one.
+    3. Record the stale-refusal follow-up requested in the BUG-2736 brief. aida-cli-lib/src/review_commands.rs:3227 validates the verdict against its own PR head, and the call at line 3659 passes no PR or head association to the shelving writer. A refusal for a still-current older PR can therefore shelve a Done spec whose Done state was earned by another change. Document this in the PR body and track a separate fix that binds shelving to the change that earned Done.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T14:11:35.854622401Z
+  modified_at: 2026-11-24T14:11:35.854622401Z
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
