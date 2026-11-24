@@ -1914,6 +1914,66 @@ fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
     )
 }
 
+// trace:TASK-3154 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn bug_2684_headless_pickup_returns_disk_refusal_and_records_its_receipt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    ambient.set_key("AIDA_AGENT_CMD", "/bin/false");
+    ambient.set_key(crate::orchestrator::PHASE_ENV, "");
+    ambient.set_key(crate::orchestrator::AUTO_COMPLETE_ENV, "");
+
+    // Host readiness precedes the disk check. Answer only its availability
+    // probe so the regression also runs on hosts without user namespaces.
+    let bin = fx.root.join("probe-bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("bwrap"),
+        r#"#!/bin/sh
+test "$*" = "--ro-bind / / --proc /proc --dev /dev --tmpfs /tmp true"
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let mut paths = vec![bin];
+    paths.extend(std::env::split_paths(
+        environment.get("PATH").unwrap_or_default(),
+    ));
+    ambient.set_key("PATH", std::env::join_paths(paths).unwrap());
+
+    let user = crate::test_env::HERMETIC_TEST_USER;
+    let scope = "BUG-2451";
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, scope);
+    let _disk = crate::machine_readiness::test_lane_available_bytes(0);
+    let error = headless_pickup(&storage).unwrap_err();
+    let refusal = crate::lane_disk_deferral::refusal(&error)
+        .unwrap_or_else(|| panic!("expected the pickup's disk refusal: {error:#}"));
+    assert_eq!(
+        crate::exit_code_for_error(&error),
+        crate::lane_disk_deferral::EXIT_CODE
+    );
+    let rows = storage.queue_list(user, true).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].note.as_deref(), Some(refusal.reason().as_str()));
+    assert!(crate::list_leases(&fx.main).is_empty());
+
+    let mut receipts = std::fs::read_dir(fx.main.join(".aida/lane-results")).unwrap();
+    let path = receipts.next().unwrap().unwrap().path();
+    assert!(receipts.next().is_none());
+    let receipt: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(receipt["spec"], scope);
+    assert_eq!(receipt["started"], false);
+    assert_eq!(receipt["result"], "refused-before-start");
+    assert_eq!(receipt["reason_code"], "disk-deferred");
+}
+
 // A foreign clone seat leased on `branch`, dirty when asked.
 // trace:BUG-2607 | ai:claude
 fn foreign_clone_on(fx: &super::tests::Fixture, branch: &str, dirty: bool) -> std::path::PathBuf {

@@ -5,12 +5,14 @@ Run: python3 tests/test_pr_ship_preflight.py --aida /path/to/aida
 trace:TASK-1606 | ai:codex
 """
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import time
+import uuid
 
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -22,7 +24,7 @@ head = os.environ['SHIP_HEAD']
 if args[:2] == ['pr', 'merge']:
     sys.exit('unexpected merge')
 if args[:2] == ['pr', 'checks']:
-    if case not in ('timeout', 'registration', 'red', 'postflight', 'definition_override'):
+    if case not in ('timeout', 'registration', 'red', 'postflight'):
         sys.exit('unexpected CI read before refusal')
     if '--watch' in args: sys.exit('unexpected unbounded watch')
     if '--json' in args:
@@ -52,7 +54,7 @@ else: print('{}')
 
 def check(binary):
     cases = {'conflict':22, 'approval':23, 'corpus':23, 'definition':24,
-             'hold':25, 'marker':25, 'definition_override':21, 'timeout':21, 'registration':21, 'red':20, 'postflight':23}
+             'hold':25, 'marker':25, 'definition_override':24, 'timeout':21, 'registration':21, 'red':20, 'postflight':23}
     for case, expected in cases.items():
         with tempfile.TemporaryDirectory(prefix='ship-preflight-') as temp:
             root = Path(temp)
@@ -84,14 +86,36 @@ def check(binary):
                 git('add', '.'); git('commit', '-qm', 'stricter workflow')
             git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'))
             git('checkout', '-q', 'topic')
-            git('remote', 'add', 'origin', 'https://github.com/test/repo.git')
-            if case in ('approval', 'corpus'):
+            git('remote', 'add', 'origin', 'git@github.com:test/repo.git')
+            # trace:TASK-3849 | ai:codex
+            remote = root / 'origin.git'
+            git('clone', '--bare', '.', str(remote))
+            # Keep a forge-shaped origin for label reads, with local-only Git transport.
+            ssh = bins / 'ssh'
+            ssh.write_text('#!/bin/sh\nexec git-upload-pack "$SHIP_REMOTE"\n')
+            ssh.chmod(0o755)
+            env.update(GIT_SSH_COMMAND=str(ssh), GIT_SSH_VARIANT='ssh', SHIP_REMOTE=str(remote))
+            if case != 'conflict':
                 directory = root/'.aida/review-verdicts'
                 directory.mkdir()
-                verdict = {'verdict':'approved', 'reviewed_sha':env['SHIP_HEAD'] if case == 'corpus' else 'b'*40,
-                           'recorded_by':'reviewer', 'recorded_at':'2026-10-06T00:00:00Z'}
+                verdict = {'verdict':'approved', 'reviewed_sha':'b'*40 if case == 'approval' else env['SHIP_HEAD'],
+                           'recorded_by':'reviewer', 'recorded_at':datetime.now(timezone.utc).isoformat()}
+                receipt_id = str(uuid.uuid4())
+                identity = ['session:fixture-reviewer']
+                sha = verdict['reviewed_sha']
+                receipts = home / '.aida/review-receipts'
+                receipts.mkdir(parents=True)
+                (receipts / f'{receipt_id}.json').write_text(json.dumps({
+                    'id': receipt_id, 'subject': 'PR-7', 'sha': sha,
+                    'identity': identity, 'recorded_at': verdict['recorded_at'],
+                }))
+                verdict['recorder_attestation'] = {
+                    'receipt_id': receipt_id, 'human_at_tty': True,
+                    'identity': identity, 'sha': sha,
+                }
                 if case == 'corpus':
-                    verdict['rounds'] = [{'verdict':'approved', 'reviewed_sha':env['SHIP_HEAD']}]
+                    # The current approval is valid, but the retained round lacks provenance.
+                    verdict['rounds'] = [{'verdict': 'approved', 'reviewed_sha': sha}, dict(verdict)]
                 (directory/'PR-7.json').write_text(json.dumps(verdict))
             if case == 'marker':
                 directory = root/'.aida/merge-holds'
@@ -105,8 +129,10 @@ def check(binary):
             elapsed = time.monotonic() - started
             calls = [json.loads(line) for line in (root/'calls').read_text().splitlines()]
             assert result.returncode == expected, (case, result.returncode, result.stdout, result.stderr, calls)
+            if case == 'corpus':
+                assert 'retained round has no recorded_by provenance' in result.stdout + result.stderr, result.stdout
             assert not any(c[:2] == ['pr','merge'] for c in calls), calls
-            if case in ('conflict','approval','corpus','definition','hold','marker'):
+            if case in ('conflict','approval','corpus','definition','definition_override','hold','marker'):
                 assert not any(c[:2] == ['pr','checks'] for c in calls), (case, calls)
                 assert 'step 2: watching' not in result.stderr
             if case in ('timeout', 'registration'):
