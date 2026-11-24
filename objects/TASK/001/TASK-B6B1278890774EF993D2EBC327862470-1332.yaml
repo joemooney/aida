@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T17:27:58.486810258Z
+modified_at: 2026-11-24T17:40:38.503750783Z
 req_type: Task
 tags:
 - review
@@ -118,6 +118,18 @@ comments:
   modified_at: 2026-11-24T16:21:37.546099936Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ea5-48a8-70a2-9c2a-fe488c598434
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b064ece55d59fed45c0fdf23787d915df5e5bc97 plus native worktree. Reviewed origin/main...HEAD, git diff HEAD, and status (no untracked files).
+    AC1: [evidence: behavioral-test] aida-core/src/review_engine.rs h2a_digest_frames_paths, h2a_duplicates_are_ambiguous, h2a_token_overflow cover framing, duplicate rows/IDs, and estimation/packing overflow.
+    AC2: [evidence: behavioral-test] aida-core/src/review_engine.rs:1297 h2a_budget_is_a_cap checks mixed oversize/exact-cap files, exact reason, coverage and remaining batch. h2a_single_bracket_citations covers both syntaxes. All 17 core engine tests passed in j20261124T172842803-2-0. H2b deferred to TASK-3872.
+    Probes: classification precedes trace reads, digest includes exclusion reason, existing exclusions take precedence, report uses the classifier's prefix, exact cap is inclusive, zero cap excludes all reviewable candidates. Missing reviewable ledger rows still fail. Corrected docs inventory of reasons. No authority changes. rustfmt and diff checks pass. PR #4523 body now maps all five items. FAST passed at d3d1825931 only. Native revision awaits host publication.
+  created_at: 2026-11-24T17:40:38.503750783Z
+  modified_at: 2026-11-24T17:40:38.503750783Z
+  session_id: 01a20e981a7e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20cd4-4160-7d93-a028-44fad8a0f0dd
   author: joe
