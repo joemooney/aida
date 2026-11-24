@@ -239,79 +239,23 @@ pub(crate) fn draft_only_specs_in(records: &[ShipGateSpecRecord]) -> Vec<String>
         .collect()
 }
 
-/// Carries the initial ship decision across CI to the merge boundary.
-// trace:STORY-3038.AC1 | ai:codex
-#[derive(Default)]
-pub(crate) struct ShipDefaultAdmission(Vec<String>);
-
-impl ShipDefaultAdmission {
-    pub(crate) fn classify(
-        mut records: Vec<ShipGateSpecRecord>,
-        allowed: bool,
-        paths: impl FnOnce() -> Option<Vec<String>>,
-    ) -> (Vec<(String, String)>, Self) {
-        let mut ids = Vec::new();
-        if !allowed {
-            withdraw_unset_defaults(&mut records, paths);
-            for (id, _, mode) in &records {
-                if matches!(
-                    mode.source,
-                    crate::gate::unset_mode::ModeSource::ProjectDefault {
-                        safe_paths: Some(_),
-                        ..
-                    }
-                ) {
-                    ids.push(id.clone());
-                }
-            }
-            ids.sort();
-            ids.dedup();
-        }
-        let mut holds = supervised_specs_in(records, allowed);
-        holds.sort();
-        holds.dedup();
-        (holds, Self(ids))
+/// The specs behind the commits about to ship whose `execution_mode` holds
+/// the auto-merge, as `(spec-id, mode-label)` pairs — the supervised-merge
+/// gate's input. Empty when the merge may proceed (all specs are `drain`, or
+/// the caller is an interactive human at a TTY). STORY-2884: `change_paths`
+/// (the files the PR changes) is read only when a spec takes the project's
+/// unset-mode default, which a protected path withdraws.
+// trace:BUG-727 trace:STORY-2884 | ai:claude
+pub(crate) fn supervised_specs_for_ship(
+    project_root: &std::path::Path,
+    interactive_tty: bool,
+    change_paths: impl FnOnce() -> Option<Vec<String>>,
+) -> Vec<(String, String)> {
+    let mut records = ship_gate_spec_records(project_root);
+    if !interactive_tty {
+        withdraw_unset_defaults(&mut records, change_paths);
     }
-
-    pub(crate) fn merge<T>(
-        &self,
-        root: &std::path::Path,
-        paths: impl FnOnce() -> Option<Vec<String>>,
-        merge: impl FnOnce() -> T,
-    ) -> anyhow::Result<T> {
-        recheck_defaulted_specs(root, &self.0, paths)?;
-        Ok(merge())
-    }
-}
-
-/// Re-read the specs admitted by default before CI, including their current path policy.
-// trace:STORY-3038.AC1 | ai:codex
-pub(crate) fn recheck_defaulted_specs(
-    root: &std::path::Path,
-    ids: &[String],
-    paths: impl FnOnce() -> Option<Vec<String>>,
-) -> anyhow::Result<()> {
-    if ids.is_empty() {
-        return Ok(());
-    }
-    let mut records = ship_gate_spec_records_for_ids(root, ids.to_vec());
-    withdraw_unset_defaults(&mut records, paths);
-    for id in ids {
-        let allowed = records
-            .iter()
-            .any(|(found, _, mode)| found == id && !mode.requires_supervision());
-        if !allowed {
-            let reason = records
-                .iter()
-                .find(|(found, _, _)| found == id)
-                .map(|(_, _, mode)| mode.label())
-                .unwrap_or_else(|| "spec unavailable".into());
-            return Err(crate::gate::ship::ShipRefusal::Review.error(format!(
-                "{id} no longer qualifies for unattended landing ({reason})"
-            )));
-        }
-    }
-    Ok(())
+    supervised_specs_in(records, interactive_tty)
 }
 
 /// STORY-2884: withdraw the project's unset-mode drain default from `records`

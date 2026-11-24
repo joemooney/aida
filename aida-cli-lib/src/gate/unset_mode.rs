@@ -252,8 +252,13 @@ impl UnsetModePolicy {
     /// commit, so a default branch other than `main` is read consistently.
     // trace:STORY-2884 | ai:claude
     pub(crate) fn load(root: &Path) -> Self {
-        let policy =
-            Self::from_body(crate::trusted_config::read_trusted_config_toml_local(root).as_deref());
+        let base = crate::trusted_config::local_trusted_default_branch_sha(root);
+        Self::load_at(root, base.as_deref())
+    }
+
+    fn load_at(root: &Path, base: Option<&str>) -> Self {
+        let body = base.and_then(|sha| crate::trusted_config::read_config_at_sha(root, sha));
+        let policy = Self::from_body(body.as_deref());
         if !policy.drains_any() {
             return policy;
         }
@@ -291,6 +296,14 @@ impl UnsetModePolicy {
         gating: Option<ExecutionMode>,
         req: &Requirement,
     ) -> EffectiveMode {
+        // Landing remains supervised until each forge attempt revalidates approved-small.
+        if self.default == UnsetDefault::ApprovedSmall {
+            return EffectiveMode::from(gating);
+        }
+        self.classify(gating, req)
+    }
+
+    fn classify(&self, gating: Option<ExecutionMode>, req: &Requirement) -> EffectiveMode {
         if gating.is_some() {
             return EffectiveMode::from(gating);
         }
@@ -300,18 +313,18 @@ impl UnsetModePolicy {
         let word = type_word(&req.req_type);
         // trace:STORY-3038 | ai:codex
         let small_policy = self.default == UnsetDefault::ApprovedSmall;
+        let tagged = |name: &str| {
+            req.tags
+                .iter()
+                .any(|tag| tag.trim().eq_ignore_ascii_case(name))
+        };
         let withheld = if small_policy
-            && (!approved_for_publication(req)
-                || !req
-                    .tags
-                    .iter()
-                    .any(|t| t.trim().eq_ignore_ascii_case("small"))
-                || req.tags.iter().any(|tag| {
-                    matches!(
-                        tag.trim().to_ascii_lowercase().as_str(),
-                        "strict" | "strict-tier" | "tier:strict"
-                    )
-                })) {
+            && (req.status != aida_core::RequirementStatus::Approved
+                || !tagged("small")
+                || ["strict", "strict-tier", "tier:strict", "review:draft-only"]
+                    .into_iter()
+                    .any(tagged))
+        {
             Err("the project default requires an approved small standard-tier spec".into())
         } else if !small_policy && !self.drain_types.contains(&req.req_type) {
             Err(format!(
@@ -359,7 +372,8 @@ pub(crate) fn show_label(
     if req.execution_mode.is_some() {
         return None;
     }
-    let policy = UnsetModePolicy::load(root);
+    let base = crate::trusted_config::local_trusted_default_branch_sha(root)?;
+    let policy = UnsetModePolicy::load_at(root, Some(&base));
     if !policy.drains_any() {
         return None;
     }
@@ -368,17 +382,46 @@ pub(crate) fn show_label(
         .iter()
         .any(|r| r.rel_type == aida_core::RelationshipType::SupersededBy);
     let unset_label = || {
-        let mut mode = policy.resolve(None, req);
+        let mut mode = policy.classify(None, req);
         if policy.default == UnsetDefault::ApprovedSmall && mode.is_project_default() {
-            // Only the spec's own remote work branch supplies approval-time evidence.
+            // Local and origin evidence must identify one branch at one commit.
             let paths = req.spec_id.as_ref().and_then(|id| {
                 if !aida_core::object_store::valid_spec_id_format(id) {
                     return None;
                 }
-                let base = crate::trusted_config::local_trusted_default_branch_sha(root)?;
-                let branch = format!("refs/remotes/origin/{}", id.to_ascii_lowercase());
-                let head = crate::trusted_config::rev_parse_commit(root, &branch)?;
-                changed_paths(root, &base, &head)
+                let mut git = aida_core::git_ops::host_git_command(root);
+                git.args([
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname)",
+                    "refs/heads",
+                    "refs/remotes/origin",
+                ]);
+                let out = crate::forge_lookup::deadline_output(git, std::process::Command::output)
+                    .ok()?;
+                if !out.status.success() {
+                    return None;
+                }
+                let mut candidate = None;
+                for line in std::str::from_utf8(&out.stdout).ok()?.lines() {
+                    let (reference, sha) = line.split_once(' ')?;
+                    let branch = reference
+                        .strip_prefix("refs/heads/")
+                        .or_else(|| reference.strip_prefix("refs/remotes/origin/"))?;
+                    if [Some(id.as_str()), req.agreed_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|id| crate::pr_lookup::branch_name_references_spec(branch, id))
+                    {
+                        if candidate
+                            .replace((branch, sha))
+                            .is_some_and(|prior| prior != (branch, sha))
+                        {
+                            return None;
+                        }
+                    }
+                }
+                let (_, head) = candidate?;
+                changed_paths(root, &base, head)
             });
             mode.withdraw_for_change(paths.as_deref());
         }
@@ -417,136 +460,13 @@ fn sensitive_class(req: &Requirement) -> Option<String> {
         .or_else(|| crate::gate::mandate::excluded_class(req))
 }
 
-// trace:STORY-3038 | ai:codex
-fn approved_for_publication(req: &Requirement) -> bool {
-    if req.status != aida_core::RequirementStatus::Done {
-        return req.status == aida_core::RequirementStatus::Approved;
-    }
-    let mut transitions = req.history.iter().rev().flat_map(|entry| {
-        entry
-            .changes
-            .iter()
-            .rev()
-            .filter(|change| change.field_name == "status")
-            .map(move |change| {
-                (
-                    entry.author.as_str(),
-                    change.old_value.as_str(),
-                    change.new_value.as_str(),
-                )
-            })
-    });
-    match transitions.next() {
-        Some((aida_core::conflict::PUBLICATION_DONE_AUTHOR, "Approved", "Done")) => true,
-        Some((aida_core::conflict::PUBLICATION_DONE_AUTHOR, "InProgress", "Done")) => matches!(
-            transitions.next(),
-            Some((
-                aida_core::conflict::SESSION_START_AUTHOR,
-                "Approved",
-                "InProgress"
-            ))
-        ),
-        _ => false,
-    }
-}
-
-// ADR-75/76 surfaces. Entries match a repository path or its descendants.
-// trace:STORY-3038.AC1 | ai:codex
+// Protect enforcement source trees as units so new checks inherit supervision.
 const STRICT_PATHS: &[&str] = &[
     ".githooks",
     ".github/workflows",
-    "aida-cli-lib/src/admission_owner.rs",
-    "aida-cli-lib/src/advisor_code_gate.rs",
-    "aida-cli-lib/src/team_cmd.rs",
-    "aida-cli-lib/src/approvals_cmd.rs",
-    "aida-cli-lib/src/ci_gate.rs",
-    "aida-cli-lib/src/claim.rs",
-    "aida-cli-lib/src/claude_trust.rs",
-    "aida-cli-lib/src/codex_native_sandbox.rs",
-    "aida-cli-lib/src/contained_boundary.rs",
-    "aida-cli-lib/src/containment",
-    "aida-cli-lib/src/deputy_shell",
-    "aida-cli-lib/src/dispatch_flow.rs",
-    "aida-cli-lib/src/drain_gate.rs",
-    "aida-cli-lib/src/gate",
-    "aida-cli-lib/src/grant_keyring.rs",
-    "aida-cli-lib/src/identity_gate.rs",
-    "aida-cli-lib/src/identity_guard.rs",
-    "aida-cli-lib/src/landing_policy.rs",
-    "aida-cli-lib/src/lane_job.rs",
-    "aida-cli-lib/src/launch",
-    "aida-cli-lib/src/launch_permission_profile.rs",
-    "aida-cli-lib/src/leases.rs",
-    "aida-cli-lib/src/locking_gate.rs",
-    "aida-cli-lib/src/mandate.rs",
-    "aida-cli-lib/src/mandate_drive.rs",
-    "aida-cli-lib/src/mandate_gates.rs",
-    "aida-cli-lib/src/mandate_history_index.rs",
-    "aida-cli-lib/src/mcp_claim.rs",
-    "aida-cli-lib/src/merge_hold.rs",
-    "aida-cli-lib/src/merge_hold_cmd.rs",
-    "aida-cli-lib/src/merge_lock.rs",
-    "aida-cli-lib/src/mirror_guard.rs",
-    "aida-cli-lib/src/orchestrator_leases.rs",
-    "aida-cli-lib/src/pending_approval.rs",
-    "aida-cli-lib/src/permissions.rs",
-    "aida-cli-lib/src/pr_claim_surface.rs",
-    "aida-cli-lib/src/pr_cmd",
-    "aida-cli-lib/src/pr_emergency_land.rs",
-    "aida-cli-lib/src/pr_head_guard.rs",
-    "aida-cli-lib/src/pr_lease_takeover.rs",
-    "aida-cli-lib/src/pr_merge_gate.rs",
-    "aida-cli-lib/src/pr_service.rs",
-    "aida-cli-lib/src/pr_ship.rs",
-    "aida-cli-lib/src/pr_ship_batch.rs",
-    "aida-cli-lib/src/pr_train.rs",
-    "aida-cli-lib/src/pr_train_check.rs",
-    "aida-cli-lib/src/pr_train_verified.rs",
-    "aida-cli-lib/src/proc_broker",
-    "aida-cli-lib/src/publication_completion.rs",
-    "aida-cli-lib/src/queue_role_fallback.rs",
-    "aida-cli-lib/src/relay_grant.rs",
-    "aida-cli-lib/src/review_blocking.rs",
-    "aida-cli-lib/src/review_gates.rs",
-    "aida-cli-lib/src/review_implementer_gate.rs",
-    "aida-cli-lib/src/reviewer_preflight.rs",
-    "aida-cli-lib/src/role.rs",
-    "aida-cli-lib/src/role_cmd.rs",
-    "aida-cli-lib/src/role_file_helpers.rs",
-    "aida-cli-lib/src/role_renew_parent.rs",
-    "aida-cli-lib/src/runaway_seats.rs",
-    "aida-cli-lib/src/sandbox_cmd.rs",
-    "aida-cli-lib/src/sandbox_config_lock.rs",
-    "aida-cli-lib/src/scoped_lease.rs",
-    "aida-cli-lib/src/scratch_reclaim.rs",
-    "aida-cli-lib/src/seat_clone.rs",
-    "aida-cli-lib/src/seat_occupancy",
-    "aida-cli-lib/src/seat_rotation.rs",
-    "aida-cli-lib/src/seat_target_overlay.rs",
-    "aida-cli-lib/src/seats.rs",
-    "aida-cli-lib/src/session/containment.rs",
-    "aida-cli-lib/src/session/lease_lock.rs",
-    "aida-cli-lib/src/shift.rs",
-    "aida-cli-lib/src/ship.rs",
-    "aida-cli-lib/src/ship_from_seat.rs",
-    "aida-cli-lib/src/store_mutation_entry.rs",
-    "aida-cli-lib/src/supervisor.rs",
-    "aida-cli-lib/src/triage_lease.rs",
-    "aida-cli-lib/src/trusted_config.rs",
-    "aida-cli-lib/src/worktree_lease.rs",
-    "aida-cli-lib/src/worktree_reclaim.rs",
-    "aida-core/src/allocation_authority.rs",
-    "aida-core/src/git_ops/remote_credentials.rs",
-    "aida-core/src/liveness.rs",
-    "aida-core/src/lock.rs",
-    "aida-core/src/mailbox_identity.rs",
-    "aida-core/src/mailbox_lifecycle",
-    "aida-core/src/proc_identity.rs",
-    "aida-core/src/seat_clone_detect.rs",
-    "aida-core/src/secret_screen.rs",
-    "aida-core/src/transport_policy.rs",
-    "aida-core/src/vendors",
-    "aida-core/src/worktree_pool.rs",
+    ".gitlab-ci.yml",
+    "aida-cli-lib/src",
+    "aida-core/src",
     "aida-core/templates/hooks",
     "aida-mcp/src",
     "aida-server/src/web_auth.rs",
@@ -640,22 +560,7 @@ impl EffectiveMode {
         else {
             return;
         };
-        let strict_path = if safe_paths.is_some() {
-            paths.and_then(|paths| {
-                paths.iter().find(|p| {
-                    STRICT_PATHS
-                        .iter()
-                        .any(|strict| Path::new(p).starts_with(strict))
-                })
-            })
-        } else {
-            None
-        };
-        if let Some(path) = strict_path {
-            self.withdraw(format!(
-                "not defaulted, the change touches strict-tier path {path}"
-            ));
-        } else if let Some(why) = protected_path_reason(paths, protected) {
+        if let Some(why) = protected_path_reason(paths, protected) {
             self.withdraw(why);
         } else if let (Some(patterns), Some(paths)) = (safe_paths, paths) {
             let options = glob::MatchOptions {
@@ -664,11 +569,15 @@ impl EffectiveMode {
             };
             if paths.is_empty() {
                 self.withdraw("not defaulted, the change is empty".into());
-            } else if let Some(path) = paths
-                .iter()
-                .find(|p| !patterns.iter().any(|g| g.matches_with(p, options)))
-            {
-                self.withdraw(format!("not defaulted, {path} is outside drain_safe_paths"));
+            } else if let Some(path) = paths.iter().find(|p| {
+                STRICT_PATHS
+                    .iter()
+                    .any(|strict| Path::new(p).starts_with(strict))
+                    || !patterns.iter().any(|g| g.matches_with(p, options))
+            }) {
+                self.withdraw(format!(
+                    "not defaulted, {path} is strict-tier or outside drain_safe_paths"
+                ));
             }
         }
     }

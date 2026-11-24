@@ -607,15 +607,15 @@ pub(crate) fn dispatch_ship_checkpoint(
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
     at: ShipCheckpoint,
 ) -> Result<()> {
+    let Some(ctx) = crate::gate::dispatch_auth::carried(dispatch_ctx, "pr ship")? else {
+        return Ok(());
+    };
     #[cfg(test)]
     TEST_SHIP_CHECKPOINT_OBSERVER.with(|cell| {
         if let Some(observe) = cell.borrow_mut().as_mut() {
             observe(at);
         }
     });
-    let Some(ctx) = crate::gate::dispatch_auth::carried(dispatch_ctx, "pr ship")? else {
-        return Ok(());
-    };
     ctx.reverify_now(true)
 }
 

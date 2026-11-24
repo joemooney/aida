@@ -1017,8 +1017,8 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     let interactive_tty = ship_interactive_tty();
     // trace:STORY-2884 | ai:claude
     let unset_default_heads = crate::gate::unset_mode::CheckedHeads::default();
-    let (supervised, admission) = if already_merged {
-        (Vec::new(), ShipDefaultAdmission::default())
+    let supervised = if already_merged {
+        Vec::new()
     } else {
         // STORY-1698: an advisor covered by an active mandate is the explicit
         // advisor merge this gate waits for (operator-only specs never are:
@@ -1036,11 +1036,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &head,
             )
         };
-        let mut records = ship_gate_spec_records(&project_root);
-        if !allowed && pr_number > 0 {
-            records.extend(ship_gate_spec_records_for_ids(&project_root, mandate_ids()));
+        let mut holds = supervised_specs_for_ship(&project_root, allowed, change_paths);
+        if pr_number > 0 && !allowed {
+            let mut records = ship_gate_spec_records_for_ids(&project_root, mandate_ids());
+            withdraw_unset_defaults(&mut records, change_paths);
+            holds.extend(supervised_specs_in(records, false));
+            holds.sort();
+            holds.dedup();
         }
-        ShipDefaultAdmission::classify(records, allowed, change_paths)
+        holds
     };
     if !supervised.is_empty() {
         for (id, label) in &supervised {
@@ -1355,14 +1359,6 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         );
         let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
         merged_head_sha = head_sha.clone();
-        let live_paths = || {
-            let change = open_change_by_number(&project_root, pr_number)?;
-            if change.branch != ship_branch || change.base != retarget_base {
-                return None;
-            }
-            let base = remote_head_sha(&project_root, &change.base)?;
-            crate::gate::unset_mode::changed_paths(&project_root, &base, head_sha.as_deref()?)
-        };
         // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
         // before touching holds or merging.
         // trace:STORY-1663 | ai:antigravity
@@ -1371,7 +1367,6 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             preflight_head_sha.as_deref(),
             head_sha.as_deref(),
         ) {
-            admission.merge(&project_root, live_paths, || ())?;
             log_ship_activity(
                 &main_worktree,
                 Some(pr_number),
@@ -2016,33 +2011,24 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
             }
         }
-        // CI may have waited while the spec was withdrawn or resized.
-        // trace:STORY-3038.AC1 | ai:codex
+        // The landing re-checks, after every wait and immediately before the
+        // merge: merger authority, and the no-train stacked proof against the
+        // target as it is now. trace:STORY-2897 | ai:claude
         let mut merge_sink = crate::network_retry::StderrSink;
-        let merge_attempt = admission.merge(
+        let merge_attempt = crate::gate::landing_merge::merge(
+            crate::forge::forge_for(&project_root).as_ref(),
             &project_root,
-            // Re-read the base after any hold-release wait.
-            live_paths,
-            || {
-                // The landing re-checks, after every wait and immediately before the
-                // merge: merger authority, and the no-train stacked proof against the
-                // target as it is now. trace:STORY-2897 | ai:claude
-                crate::gate::landing_merge::merge(
-                    crate::forge::forge_for(&project_root).as_ref(),
-                    &project_root,
-                    crate::gate::landing_merge::Caller::Ship,
-                    &crate::gate::landing_merge::Entry {
-                        policy: landing_entry.clone(),
-                        floor: floor_authority,
-                    },
-                    &change_ref,
-                    &mandate_ids(),
-                    &merge_opts,
-                    &mut merge_sink,
-                    &crate::pr_train::pr_head_pin_journals,
-                )
+            crate::gate::landing_merge::Caller::Ship,
+            &crate::gate::landing_merge::Entry {
+                policy: landing_entry.clone(),
+                floor: floor_authority,
             },
-        )?;
+            &change_ref,
+            &mandate_ids(),
+            &merge_opts,
+            &mut merge_sink,
+            &crate::pr_train::pr_head_pin_journals,
+        );
         if let Err(crate::gate::landing_merge::MergeError::Refused(kind, refusal)) = &merge_attempt
         {
             let (kind, refusal) = (*kind, refusal.clone());

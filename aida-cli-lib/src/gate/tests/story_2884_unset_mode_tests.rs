@@ -570,10 +570,11 @@ fn show_label_follows_the_superseding_carrier() {
 fn approved_small_default_requires_approval_size_and_standard_tier() {
     let enabled = policy("[gate.unset_mode]\ndefault = 'approved-small' # opt in");
     let mut req = spec(RequirementType::Story, "Fix Shift key handling", &["Small"]);
-    assert!(enabled.resolve(None, &req).requires_supervision());
+    assert!(enabled.classify(None, &req).requires_supervision());
     req.status = aida_core::RequirementStatus::Approved;
-    assert!(policy("").resolve(None, &req).requires_supervision());
-    let mode = enabled.resolve(None, &req);
+    assert!(policy("").classify(None, &req).requires_supervision());
+    assert!(enabled.resolve(None, &req).requires_supervision());
+    let mode = enabled.classify(None, &req);
     assert_eq!(
         at_change(mode.clone(), paths(&["docs/cli/02-specs.md"])).mode,
         Some(ExecutionMode::Drain)
@@ -585,13 +586,11 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
         let policy = policy(&format!(
             "[gate.unset_mode]\ndefault='approved-small'\ndrain_safe_paths={invalid}"
         ));
-        assert!(
-            at_change(policy.resolve(None, &req), paths(&["docs/cli/02-specs.md"]))
-                .requires_supervision()
-        );
+        let mode = policy.classify(None, &req);
+        assert!(at_change(mode, paths(&["docs/cli/02-specs.md"])).requires_supervision());
     }
     let broad = policy("[gate.unset_mode]\ndefault='approved-small'\ndrain_safe_paths=['**']");
-    assert!(!at_change(broad.resolve(None, &req), paths(&["src/new.rs"])).requires_supervision());
+    assert!(!at_change(broad.classify(None, &req), paths(&["src/new.rs"])).requires_supervision());
     for path in [
         "aida-cli-lib/src/advisor_code_gate.rs",
         "aida-cli-lib/src/team_cmd.rs",
@@ -604,24 +603,42 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
         "aida-core/src/lock.rs",
         "aida-cli-lib/src/seat_occupancy/runtime.rs",
         "aida-core/src/git_ops/remote_credentials.rs",
+        ".gitlab-ci.yml",
+        "aida-cli-lib/src/commit.rs",
         ".githooks/pre-commit",
     ] {
-        assert!(
-            at_change(
-                broad.resolve(None, &req),
-                paths(&["docs/cli/02-specs.md", path])
-            )
-            .requires_supervision(),
-            "{path}"
-        );
+        let mode = broad.classify(None, &req);
+        let mixed = paths(&["docs/cli/02-specs.md", path]);
+        assert!(at_change(mode, mixed).requires_supervision(), "{path}");
     }
     assert!(at_change(mode, None).requires_supervision());
     assert_eq!(
-        enabled.resolve(Some(ExecutionMode::Guided), &req).mode,
+        enabled.classify(Some(ExecutionMode::Guided), &req).mode,
         Some(ExecutionMode::Guided)
     );
     req.tags.insert("strict-tier".into());
-    assert!(enabled.resolve(None, &req).requires_supervision());
+    assert!(enabled.classify(None, &req).requires_supervision());
     req.tags.clear();
-    assert!(enabled.resolve(None, &req).requires_supervision());
+    assert!(enabled.classify(None, &req).requires_supervision());
+}
+
+#[test]
+fn approved_small_approval_and_show_label_use_unique_work_branch() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
+    let repo = repo_on("main", "[gate.unset_mode]\ndefault='approved-small'");
+    let root = repo.path();
+    let mut req = spec(RequirementType::Story, "Docs", &["small"]);
+    req.spec_id = Some("STORY-42".into());
+    req.status = aida_core::RequirementStatus::Approved;
+    let label = || show_label(root, &req, || None).unwrap();
+    assert!(label().contains("supervised"));
+    git_in(root, &["checkout", "-qb", "story-42-work"]);
+    std::fs::create_dir_all(root.join("docs/cli")).unwrap();
+    std::fs::write(root.join("docs/cli/test.md"), "docs").unwrap();
+    git_in(root, &["add", "."]);
+    git_in(root, &["commit", "-qm", "docs"]);
+    assert!(label().starts_with("drain"));
+    git_in(root, &["branch", "story-42-alternate"]);
+    assert!(label().contains("supervised"));
 }

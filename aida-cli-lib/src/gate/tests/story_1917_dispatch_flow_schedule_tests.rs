@@ -2292,10 +2292,6 @@ fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
     let pre_merge = body.find("ShipCheckpoint::PreMerge)").unwrap();
     assert!(pre_merge > body.find("wait_hold_gate_green(").unwrap());
     assert!(pre_merge < body.find("landing_merge::merge(").unwrap());
-    // The live spec-store check must follow the last wait, inside the merge lease.
-    // trace:STORY-3038.AC1 | ai:codex
-    let recheck = body.find("admission.merge(").unwrap();
-    assert!(pre_merge < recheck && recheck < body.find("landing_merge::merge(").unwrap());
     // Unheld PRs are never told to re-place a hold they never had.
     let window = &body[pre_merge..body.find("landing_merge::merge(").unwrap()];
     assert!(window.contains("if mandate_release.is_some() {"));
@@ -3257,26 +3253,17 @@ sys.exit(1)
         /// head read (its default check) sees H1 while every later one sees H2.
         /// Returns the fixture and `(H1, PR head)`.
         fn new(protected_h1: bool, moved: bool) -> (Self, String, String) {
-            Self::with_default(protected_h1, moved, "drain")
-        }
-
-        fn with_default(protected_h1: bool, moved: bool, default: &str) -> (Self, String, String) {
             let mut f = native_fixture(true);
             let mut bug = plain_req("BUG-100");
             bug.req_type = aida_core::RequirementType::Bug;
             bug.execution_mode = None;
-            if default == "approved-small" {
-                bug.tags.insert("small".into());
-            }
             write_spec(&f.store, "BUG-100", &bug);
             git(&f.store, &["add", "-A"]);
             git(&f.store, &["commit", "-qm", "BUG-100"]);
             std::fs::write(
                 f.root.join(".aida/config.toml"),
-                format!(
-                    "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n\n\
-                 [gate.unset_mode]\ndefault = \"{default}\"\ndrain_types = [\"bug\", \"task\"]\n"
-                ),
+                "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n\n\
+                 [gate.unset_mode]\ndefault = \"drain\"\ndrain_types = [\"bug\", \"task\"]\n",
             )
             .unwrap();
             std::fs::create_dir_all(f.root.join(".github/workflows")).unwrap();
@@ -3293,8 +3280,6 @@ sys.exit(1)
                     "aida-cli-lib/src/gate/relaxed.rs",
                     "// trace:BUG-100\nfn relaxed() {}\n",
                 )
-            } else if default == "approved-small" {
-                commit_file(&f, "docs/cli/02-specs.md", "manual")
             } else {
                 commit_file(&f, "code.rs", "// trace:BUG-100\nfn x() {}\n")
             };
@@ -3388,45 +3373,6 @@ sys.exit(1)
                 .filter(|l| l.starts_with("pr merge "))
                 .count()
         }
-    }
-
-    // trace:STORY-3038.AC1 | ai:codex
-    #[test]
-    fn approved_small_unattended_ship_refuses_size_withdrawal_after_ci() {
-        if crate::test_env::run_path_isolated_test() {
-            return;
-        }
-        let (s, _, _) = UnsetShip::with_default(false, false, "approved-small");
-        assert!(!crate::gate::role_authority::has_integrity_floor_authority());
-        let store = s.f.store.clone();
-        crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER.with(|cell| {
-            *cell.borrow_mut() = Some(Box::new(move |at| {
-                if at == crate::pr_cmd::ShipCheckpoint::PostCiWait {
-                    let path = store
-                        .join(aida_core::object_store::relative_object_path("BUG-100").unwrap());
-                    let mut req: aida_core::Requirement =
-                        serde_yaml::from_slice(&std::fs::read(path).unwrap()).unwrap();
-                    assert!(req.tags.remove("small"));
-                    write_spec(&store, "BUG-100", &req);
-                    git(&store, &["commit", "-qam", "withdraw small classification"]);
-                }
-            }));
-        });
-        let result = s.ship();
-        crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER.with(|cell| *cell.borrow_mut() = None);
-        let err = result.expect_err("ship must refuse the resized bug");
-        assert_eq!(
-            err.downcast_ref::<crate::gate::ship::ShipFailure>()
-                .map(|f| f.reason),
-            Some(crate::gate::ship::ShipRefusal::Review),
-            "{err:#}"
-        );
-        assert!(
-            format!("{err:#}").contains("BUG-100 no longer qualifies for unattended landing"),
-            "{err:#}"
-        );
-        assert!(s.calls().lines().any(|line| line.starts_with("pr checks ")));
-        assert_eq!(s.merges(), 0);
     }
 
     /// Control: with the head unchanged, the unset bug takes the drain default
