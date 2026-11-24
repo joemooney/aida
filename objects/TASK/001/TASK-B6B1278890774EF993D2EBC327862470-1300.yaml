@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: main_watch tells a gh AUTHENTICATION failure apart from pending CI. With expired or missing gh auth, red-main-watch currently reads as Pending and exits 0, so CronJobFailed never fires. It must exit NON-ZERO with a clear auth cause. Test with a fake gh that fails auth.
   - AC2: The routed CronJobFailed trip keeps a COMPACT failed-step + cause summary, not just stderr's last line. Test.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:05:02.248297583Z
-modified_at: 2026-11-24T07:07:25.111164735Z
+modified_at: 2026-11-24T09:46:15.705790250Z
 req_type: Task
 tags:
 - main-watch
 - schedule
 - small
-- track:integration
 comments:
 - id: 01a20c29-73dc-7da1-9d49-20984ccb3495
   author: joe
@@ -88,6 +87,22 @@ history:
   timestamp: 2026-11-24T07:06:17.267969730Z
   session_id: 01a20c31ca41
   changes: []
+- id: 01a20cf2-e8d4-7452-b164-bf36a5041721
+  author: aida-auto-bump
+  timestamp: 2026-11-24T09:46:15.636685509Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20cf2-e919-71d0-8267-15447569e553
+  timestamp: 2026-11-24T09:46:15.705787614Z
+  agent: aida
+  commit_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  summary: 'Advisor (delegated authority): promotion 32, linear on main 103bb2ed7ea + 6 cherry-picks; per-commit patch-ids match approved integration squashes (2d1970e3, e19440f4, 965a6dd2, edbd4bf8, 35c6d45f, 1af1d426); combined 559b487a51cc; no protected paths; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -96,3 +111,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T09:46:15.636677542Z
+  completion_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
