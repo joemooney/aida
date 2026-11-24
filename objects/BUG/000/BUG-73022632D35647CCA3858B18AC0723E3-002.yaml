@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-24T18:09:32.990916759Z
+modified_at: 2026-11-24T19:01:22.102388782Z
 req_type: Bug
 tags:
 - bwrap
@@ -165,6 +165,17 @@ comments:
   modified_at: 2026-11-24T17:16:07.893314097Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20eef-2213-7740-b100-4ee0fef86c4b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 99016f2bd4fe2b3edf78a6f69dd6cb5dd260a313 plus the native working-tree change. Reviewed origin/main...HEAD, git diff HEAD and untracked files.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs:118 and :147 exercise an exit-zero executable with required-live enabled. Returning false fails the child assertion. The parent requires the post-assertion marker, including when a child accidentally matches zero tests. The same matrix retains missing, broken, signalled and denied executable cases. Each fixture runs serially with a child-local PATH. This tests probe selection, with actual namespace behavior covered separately by live CI.
+    Lane job j20261124T181418255-2-0 executed one test and passed. make check-ci-fast exited 0. No additional findings.
+  created_at: 2026-11-24T19:01:22.102388782Z
+  modified_at: 2026-11-24T19:01:22.102388782Z
+  session_id: 01a20ebf6a2e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
