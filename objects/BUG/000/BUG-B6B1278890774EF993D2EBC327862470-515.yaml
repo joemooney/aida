@@ -12,12 +12,24 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T18:48:49.864469968Z
-modified_at: 2026-11-24T19:31:20.370184125Z
+modified_at: 2026-11-24T20:07:39.582745023Z
 req_type: Bug
 tags:
 - ci
 - lanes
 - small
+comments:
+- id: 01a20f2b-d47d-76d1-b0bf-7f7de8390dce
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358 plus native working diff. Merge-base diff empty, three modified files, no untracked additions.
+    AC1: [evidence: behavioral-test] lane_job.rs:2632 submits the gate through ordinary seat validation with every ambient Cargo option set. fast_gate_dispatch_receives_lane_target_seed executed and passed (1 test). Real sandbox make check-ci-fast exited 0 in j20261124T193215399-2-0. Runner reported overlay-stale at teardown. No PR-head CI yet.
+    Probes: lane_cmd.rs:75 matches the same exact two argv elements as lane_job.rs:606. Empty, mixed-case, extra arguments and shell forms cannot select this exception. Explicit overrides on wire requests still refuse. Ordinary Cargo jobs retain existing profile and environment validation, covered by allow_list_refuses_other_argv and runner_refuses_non_allow_listed_argv_and_never_runs_it. standalone_implementer.rs:140 supplies the exact command. No new authority or shell execution. rustfmt and git diff --check passed.
+  created_at: 2026-11-24T20:07:39.582745023Z
+  modified_at: 2026-11-24T20:07:39.582745023Z
+  session_id: 01a20f083acf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20ee4-26c0-76d2-a90f-556b56718ec2
   author: joe
