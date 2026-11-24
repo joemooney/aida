@@ -63,6 +63,7 @@ fn approval() -> Approval {
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
+    landing: crate::landing_policy::LandingPolicy,
     stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
     review: Option<String>,
@@ -75,6 +76,7 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
+            landing: Default::default(),
             stale_policy: Default::default(),
             approval: Ok(approval()),
             review: None,
@@ -86,6 +88,12 @@ impl Fake {
 }
 
 impl Evidence for Fake {
+    fn latest_ci_run(&self, _: &str) -> Result<(String, String, u64)> {
+        Ok(("ci".into(), "23".into(), 1))
+    }
+    fn clean_merge_train(&self) -> bool {
+        self.landing.clean_merge_train()
+    }
     fn approval(&self, _: &forge::Change) -> std::result::Result<Approval, String> {
         self.approval.clone()
     }
@@ -101,8 +109,12 @@ impl Evidence for Fake {
     fn required_checks(&self) -> Result<Vec<String>> {
         Ok(vec![CI_AGGREGATOR_CHECK.to_string()])
     }
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
-        Ok((change.behind.unwrap(), change.overlap.unwrap()))
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
+        Ok((
+            change.behind.unwrap(),
+            change.overlap.unwrap(),
+            change.conflict,
+        ))
     }
     fn clean_stale_overlap(&self, change: &forge::Change) -> Result<bool> {
         if self.stale_policy == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap {
@@ -886,7 +898,7 @@ impl Evidence for Required {
     fn required_checks(&self) -> Result<Vec<String>> {
         self.1.clone().map_err(|e| anyhow::anyhow!(e))
     }
-    fn base(&self, c: &forge::Change) -> Result<(u64, bool)> {
+    fn base(&self, c: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
         self.0.base(c)
     }
     fn head(&self, c: &forge::Change) -> Result<String> {
@@ -1230,7 +1242,7 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
         Some(description.clone())
     );
     assert!(
-        matches!(select_with_coverage(&store, &c, None, 2, || Some(description.clone())).unwrap(), Action::Skip(why) if why == description)
+        matches!(select_with_coverage(&store, &c, None, 2, || Some(description.clone())).unwrap().0, Action::Skip(why) if why == description)
     );
     assert!(store
         .load()
@@ -1262,7 +1274,9 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
         None
     );
     assert!(matches!(
-        select_with_coverage(&other, &c, None, 2, || None).unwrap(),
+        select_with_coverage(&other, &c, None, 2, || None)
+            .unwrap()
+            .0,
         Action::Dispatch(_)
     ));
 }
@@ -1481,7 +1495,7 @@ fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
                 .is_some(),
             !strict
         );
-        let action = select_with_coverage(&store, &c, None, 2, coverage).unwrap();
+        let (action, _) = select_with_coverage(&store, &c, None, 2, coverage).unwrap();
         let verdict = fixture::approval(&approved);
         let policy = fixture::policy(&verdict);
         let site = carry::CarryOverSite::read_only(root, Some("main"));
@@ -1696,4 +1710,61 @@ fn stale_overlap_live_evidence_reads_project_policy() {
     )
     .unwrap();
     assert!(live.clean_stale_overlap(&c).is_err());
+}
+
+// trace:BUG-2725 | ai:codex
+#[test]
+fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
+    let mut evidence = Fake::ready();
+    let mut c = change(2, false);
+    c.conflict = Some(false);
+    assert_eq!(
+        ready::evaluate(&c, &evidence).0,
+        Readiness::ReadyAfterUpdateBranch { behind: 2 }
+    );
+    evidence.landing.ci_base_freshness = crate::landing_policy::CiBaseFreshness::CleanMerge;
+    assert!(not_ready_with(&evidence, &c).contains("full-tier"));
+    c.gitlab = true;
+    assert_eq!(
+        ready::evaluate(&c, &evidence).0,
+        Readiness::ReadyAfterUpdateBranch { behind: 2 }
+    );
+    c.gitlab = false;
+    let rows = &mut evidence.ci.as_mut().unwrap().checks;
+    rows.push(check("ci-tier: fast", CheckOutcome::Passed));
+    for row in rows.iter_mut() {
+        row.run_id = Some("22".into());
+    }
+    for name in [CI_AGGREGATOR_CHECK, "ci-tier: full"] {
+        let mut other = check(name, CheckOutcome::Passed);
+        other.workflow_id = Some("other".into());
+        other.run_id = Some("99".into());
+        rows.push(other);
+    }
+    assert!(not_ready_with(&evidence, &c).contains("full-tier"));
+    let rows = &mut evidence.ci.as_mut().unwrap().checks;
+    rows.retain(|row| row.workflow_id.as_deref() == Some("ci") && row.name != "ci-tier: fast");
+    rows.push(check("ci-tier: full", CheckOutcome::Passed));
+    for row in rows {
+        row.run_id = Some("23".into());
+        row.run_attempt = Some(1);
+    }
+    for overlap in [true, false] {
+        c.overlap = Some(overlap);
+        c.conflict = Some(false);
+        let (decision, approval) = ready::evaluate(&c, &evidence);
+        assert_eq!(decision, Readiness::ReadyForTrain);
+        let wake = ready::wake_message("repo", &c, &decision, &approval.unwrap());
+        assert!(wake.body.contains("`aida pr train 7`"));
+        assert!(!wake.body.contains("aida pr ship"));
+        c.conflict = Some(true);
+        assert!(not_ready_with(&evidence, &c).contains("conflict"));
+    }
+    c.overlap = Some(true);
+    c.conflict = Some(false);
+    evidence.ci.as_mut().unwrap().checks[1].run_in_progress = true;
+    assert!(not_ready_with(&evidence, &c).contains("unsettled"));
+    evidence.ci.as_mut().unwrap().checks[1].run_in_progress = false;
+    evidence.landing.mode = crate::landing_policy::LandingMode::ReviewGated;
+    assert!(not_ready_with(&evidence, &c).contains("overlapping paths"));
 }

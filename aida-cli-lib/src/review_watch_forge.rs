@@ -109,7 +109,7 @@ fn merge_conflicts(root: &Path, base: &str, head: &str) -> Option<bool> {
         _ => None,
     }
 }
-fn git(root: &Path, args: &[&str]) -> Result<String> {
+pub(super) fn git(root: &Path, args: &[&str]) -> Result<String> {
     String::from_utf8(output(root, "git", args)?).context("non-UTF8 Git probe output")
 }
 // Resolve the initial root with the same bounded, sanitized Git probes as all
@@ -471,7 +471,12 @@ impl Repository {
             };
             let overlap = paths_overlap(&names(&base)?, &names(&head)?);
             // trace:STORY-2821 | ai:claude
-            let conflict = overlap
+            // trace:BUG-2725 | ai:codex
+            let verify_merge = overlap
+                || (!change.gitlab
+                    && change.base == "main"
+                    && crate::landing_policy::load(root).clean_merge_train());
+            let conflict = verify_merge
                 .then(|| merge_conflicts(root, &base, &head))
                 .flatten();
             Ok((overlap, behind, conflict))

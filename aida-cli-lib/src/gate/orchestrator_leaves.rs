@@ -117,6 +117,8 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::events::GATE_STALE_APPROVAL",
             "crate::events::record_gate_held",
             "crate::forge::forge_for",
+            "crate::forge::forge_for_kind",
+            "crate::forge::peek_forge_kind",
             // Typed secondary reads distinguish unavailable evidence from refusal.
             // trace:STORY-2401 | ai:codex
             "crate::forge_observed::Observed",
@@ -169,6 +171,9 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::events::emit",
             "crate::forge::ChangeRef",
             "crate::forge::forge_for",
+            "crate::forge::peek_forge_kind",
+            "crate::forge_lookup::deadline_output",
+            "crate::forge_lookup::forge_lookup_deadline",
             "crate::forge::resolve_forge_kind",
             "crate::forge::resolve_open_change_forge_kind",
             "crate::glyph",

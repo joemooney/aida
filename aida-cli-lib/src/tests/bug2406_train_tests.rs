@@ -75,6 +75,10 @@ if a[:2]==['pr','create']:
     s['prs']['77']=dict(number=77,url='https://github.com/fixture/train/pull/77',state='OPEN',title=opt('--title'),body=opt('--body'),headRefName=branch,headRefOid=sha,baseRefName='main',isDraft=False,isCrossRepository=False,labels=[])
     (r/'transport.json').write_text(json.dumps(s)); print(s['prs']['77']['url']); sys.exit(0)
 if a[:2]==['pr','view']:
+    if 'fail_labels_after' in s and 'url,state,headRefOid,labels' in a:
+        if s['fail_labels_after']==0: sys.exit(1)
+        s['fail_labels_after']-=1
+        (r/'transport.json').write_text(json.dumps(s))
     v=meta(a[2])
     if '-q' in a or '--jq' in a:
         q=a[a.index('-q')+1] if '-q' in a else a[a.index('--jq')+1]
@@ -85,6 +89,7 @@ if a[:2]==['pr','view']:
             if '.state' in q: print('OPEN\tMERGEABLE\tAPPROVED\t'+v['headRefOid']); sys.exit(0)
     emit(v)
 if a[:2]==['pr','list']:
+    if 'number,headRefName,body' in a: emit([])
     if '--state' in a and a[a.index('--state')+1]=='open':
         for n in ['11','12']:
             v=meta(n)
@@ -1514,7 +1519,7 @@ fn supervised_member_lands(held: bool) {
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     mandate.include_supervised = true;
     crate::gate::mandate::write_private(&path, &serde_json::to_vec(&mandate).unwrap()).unwrap();
-    let gate = |request_full| {
+    let gate = |read_only, request_full| {
         gate_member_with(
             &mut LiveChecks {
                 project_root: f.root(),
@@ -1522,7 +1527,7 @@ fn supervised_member_lands(held: bool) {
                 forge: &forge,
                 base: "main",
                 named: true,
-                read_only: false,
+                read_only,
                 actor_probe: None,
                 request_full,
                 released_member: None,
@@ -1531,8 +1536,107 @@ fn supervised_member_lands(held: bool) {
             11,
         )
     };
-    let planned = gate(false).expect("dry-run admission");
-    let member = gate(true).expect("live admission");
+    if !held {
+        use crate::pr_train::check::{collect_report, render_json, CheckOptions};
+        use std::time::{Duration, Instant};
+
+        let report = |timeout| {
+            let opts = CheckOptions {
+                prs: &[11],
+                all_open: false,
+                skip_full_check: false,
+                json: true,
+                timeout,
+            };
+            let (base, rows) =
+                collect_report(&opts, || Ok((f.root().into(), f.root().into()))).unwrap();
+            render_json(base.as_deref(), &rows)["prs"][0].clone()
+        };
+        let config = f.root().join(".aida/config.toml");
+        let stale = FIXTURE_CONFIG.replace("github", "pure-git");
+        fs::write(&config, &stale).unwrap();
+        mandate.include_supervised = false;
+        crate::gate::mandate::write_private(&path, &serde_json::to_vec(&mandate).unwrap()).unwrap();
+        let index = store_root.join(".git/aida/mandate-history-index.json");
+        let evidence = || {
+            [
+                crate::gate::mandate::mandate_dir()
+                    .unwrap()
+                    .join("exclusions.jsonl"),
+                ledger::store_root(f.root())
+                    .unwrap()
+                    .join(".aida/gate-ledger/PR-11.jsonl"),
+                crate::gate::merge_hold_core::hold_path(f.root(), 11),
+                crate::events::events_path(f.root()),
+                index.clone(),
+                index.with_extension("lock"),
+            ]
+            .map(|p| match fs::read(p) {
+                Ok(bytes) => Some(bytes),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => panic!("reading fixture evidence: {e}"),
+            })
+        };
+        let before = evidence();
+        assert_eq!(&before[4..], &[None, None]);
+        let row = report(Duration::from_secs(60));
+        assert_eq!(row["evidence"], "read", "{row}");
+        assert!(
+            row["reason"]
+                .as_str()
+                .unwrap()
+                .contains("--include-supervised"),
+            "{row}"
+        );
+        assert_eq!(fs::read(&config).unwrap(), stale.as_bytes());
+        assert_eq!(evidence(), before);
+        let mut failing = state.clone();
+        // The member label gate succeeds before the mandate reads the pinned head.
+        failing["fail_labels_after"] = json!(1);
+        save(f.root(), &failing);
+        let row = report(Duration::from_secs(60));
+        assert_eq!(row["evidence"], "unavailable", "{row}");
+        assert!(
+            row["reason"].as_str().unwrap().contains("pinned labels"),
+            "{row}"
+        );
+        assert_eq!(evidence(), before);
+        save(f.root(), &state);
+        assert!(gate(false, false)
+            .unwrap_err()
+            .contains("--include-supervised"));
+        assert_ne!(
+            evidence()[3],
+            before[3],
+            "recording gate must audit the refusal"
+        );
+
+        let git = f.root().join("bin/git");
+        let original = fs::read_to_string(&git).unwrap();
+        for (action, expected, budget) in [
+            ("exit 1", "unavailable", 60),
+            ("sleep 30", "not-checked", 8),
+        ] {
+            let marker = f.root().join("mandate-query");
+            crate::test_exec::write_executable(&git, original.replacen("#!/bin/sh", &format!(
+                "#!/bin/sh\ncase \"$*\" in *'check-ref-format refs/remotes/origin/main'*) touch '{}'; {action};; esac", marker.display()), 1));
+            let start = Instant::now();
+            let row = report(Duration::from_secs(budget));
+            assert!(marker.exists(), "mandate query was never attempted: {row}");
+            assert_eq!(row["evidence"], expected, "{row}");
+            assert!(start.elapsed() < Duration::from_secs(budget + 3));
+            fs::remove_file(marker).unwrap();
+        }
+        crate::test_exec::write_executable(&git, original);
+        fs::write(config, FIXTURE_CONFIG).unwrap();
+        mandate.include_supervised = true;
+        crate::gate::mandate::write_private(&path, &serde_json::to_vec(&mandate).unwrap()).unwrap();
+    }
+    // trace:TASK-3115 | ai:codex
+    let checked = gate(true, false).expect("read-only train check admission");
+    let planned = gate(false, false).expect("dry-run admission");
+    let member = gate(false, true).expect("live admission");
+    assert_eq!(checked, planned);
     assert_eq!(planned, member);
     assert_eq!(member.release.is_some(), held);
     assert_eq!(member.live_cover().unwrap().supervised_by_mode, !held);
@@ -1545,8 +1649,9 @@ fn supervised_member_lands(held: bool) {
         let mut label_only = state.clone();
         label_only["prs"]["11"]["labels"] = json!([{"name": "aida:merge-hold"}]);
         save(f.root(), &label_only);
-        assert!(gate(false).is_err());
-        assert!(gate(true).is_err());
+        assert!(gate(true, false).is_err());
+        assert!(gate(false, false).is_err());
+        assert!(gate(false, true).is_err());
         save(f.root(), &state);
     }
     let mut rails = ForgeRails::new(&mut live, "bug-2666".into());
