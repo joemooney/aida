@@ -187,7 +187,7 @@ fn bug_1694_unreadable_repository_state_declines_registration_clear() {
     let not_a_repo = tmp.path().join("not-a-repo");
     std::fs::create_dir_all(&not_a_repo).unwrap();
     let missing = tmp.path().join("missing-wt");
-    let outcome = clear_missing_worktree_registration(&not_a_repo, &missing, || {}, || {});
+    let outcome = clear_missing_worktree_registration(&not_a_repo, &missing, None, || {}, || {});
     assert_eq!(outcome, RegistrationClearOutcome::Declined);
 }
 
@@ -198,6 +198,31 @@ fn bug_1694_unreadable_repository_state_declines_registration_clear() {
 fn bug_1694_absent_worktrees_dir_reports_no_registration() {
     let (tmp, root) = create_fixture_repo();
     let missing = tmp.path().join("missing-wt");
-    let outcome = clear_missing_worktree_registration(&root, &missing, || {}, || {});
+    let outcome = clear_missing_worktree_registration(&root, &missing, None, || {}, || {});
     assert_eq!(outcome, RegistrationClearOutcome::NoRegistration);
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_missing_checkout_preserves_registered_index() {
+    let (tmp, root) = create_fixture_repo();
+    let wt = tmp.path().join("linked");
+    git(&root, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+    let tip = git(&wt, &["rev-parse", "HEAD"]);
+    std::fs::write(wt.join("staged-only"), "unique content").unwrap();
+    git(&wt, &["add", "staged-only"]);
+    let admin = root.join(".git/worktrees/linked");
+    let index = admin.join("index");
+    let staged = std::fs::read(&index).unwrap();
+    std::fs::remove_dir_all(&wt).unwrap();
+    let clear = || clear_missing_worktree_registration(&root, &wt, Some(&tip), || {}, || {});
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert_eq!(std::fs::read(&index).unwrap(), staged);
+    assert!(!wt.exists());
+
+    std::fs::write(&index, "corrupt index").unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    std::fs::remove_file(index).unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert!(admin.exists());
 }

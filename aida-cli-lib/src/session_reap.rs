@@ -1286,12 +1286,13 @@ fn reap_one_with_clear_hooks(
         if clear_missing_worktree_registration(
             project_root,
             &lease.worktree_path,
+            checked_tip,
             before_missing_worktree_clear,
             after_final_registration_check,
         ) == RegistrationClearOutcome::Declined
         {
-            return "reaped — lease released (worktree path reappeared or could not be \
-                    confirmed unoccupied; registration kept)"
+            return "reaped — lease released (worktree path reappeared or safe removal of its \
+                    registered index could not be confirmed; registration kept)"
                 .to_string();
         }
     }
@@ -1677,7 +1678,7 @@ pub(crate) fn release_gone_worktree_lease(
     if !gone_worktree_lease_releasable(lease, recovery) {
         return false;
     }
-    if clear_missing_worktree_registration(project_root, &lease.worktree_path, || {}, || {})
+    if clear_missing_worktree_registration(project_root, &lease.worktree_path, None, || {}, || {})
         == RegistrationClearOutcome::Declined
     {
         return false;
@@ -1839,6 +1840,7 @@ pub(crate) enum RegistrationClearOutcome {
 pub(crate) fn clear_missing_worktree_registration(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
+    pinned_tip: Option<&str>,
     before_clear: impl FnOnce(),
     after_final_check: impl FnOnce(),
 ) -> RegistrationClearOutcome {
@@ -1898,11 +1900,12 @@ pub(crate) fn clear_missing_worktree_registration(
             if std::fs::create_dir(worktree_path).is_err() {
                 return RegistrationClearOutcome::Declined;
             }
-            let removed = std::fs::remove_dir_all(admin_dir);
+            let removed = registered_index_matches_tip(&admin_dir, pinned_tip)
+                && std::fs::remove_dir_all(admin_dir).is_ok();
             // Release the claim on both outcomes; non-recursive, so a creator
             // that already populated the empty directory keeps it (ENOTEMPTY).
             let _ = std::fs::remove_dir(worktree_path);
-            return if removed.is_ok() {
+            return if removed {
                 RegistrationClearOutcome::Cleared
             } else {
                 RegistrationClearOutcome::Declined
@@ -1910,6 +1913,49 @@ pub(crate) fn clear_missing_worktree_registration(
         }
     }
     RegistrationClearOutcome::NoRegistration
+}
+
+// The linked checkout can disappear while its index still holds staged work.
+// Callers without a previously pinned branch tip use the registration's own HEAD.
+// trace:BUG-2749 | ai:codex
+fn registered_index_matches_tip(admin: &std::path::Path, pinned_tip: Option<&str>) -> bool {
+    if !std::fs::symlink_metadata(admin.join("index")).is_ok_and(|m| m.is_file()) {
+        return false;
+    }
+    let git = || {
+        let mut cmd = std::process::Command::new("git");
+        cmd.current_dir(admin).env_clear().args([
+            "--no-replace-objects",
+            "--git-dir=.",
+            "--work-tree=.",
+        ]);
+        cmd
+    };
+    let Ok(head) = git()
+        .args(["rev-parse", "--verify", "HEAD^{commit}"])
+        .output()
+    else {
+        return false;
+    };
+    let Ok(tip) = std::str::from_utf8(&head.stdout) else {
+        return false;
+    };
+    let tip = tip.trim();
+    head.status.success()
+        && !tip.is_empty()
+        && pinned_tip.is_none_or(|pinned| pinned == tip)
+        && git()
+            .args([
+                "diff-index",
+                "--cached",
+                "--quiet",
+                "--ita-visible-in-index",
+                "--ignore-submodules=none",
+                tip,
+                "--",
+            ])
+            .output()
+            .is_ok_and(|out| out.status.success())
 }
 
 // Windows' Git for Windows and `std::fs::canonicalize` can spell the same

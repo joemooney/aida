@@ -2196,11 +2196,9 @@ fn log_registration_clear(
 ) {
     if outcome == crate::session_reap::RegistrationClearOutcome::Declined {
         eprintln!(
-            "  {} kept the git worktree registration for {} — the path could not be \
-             confirmed absent; if the add below refuses, check that path and remove the \
-             registration with `git worktree remove --force {}`",
+            "  {} kept the git worktree registration for {} — inspect the checkout path and its \
+             registered index for recoverable work before retrying",
             crate::glyph(crate::glyphs::Glyph::Warning),
-            path.display(),
             path.display()
         );
     }
@@ -2336,6 +2334,7 @@ pub(crate) fn ensure_spec_worktree(
                         crate::session_reap::clear_missing_worktree_registration(
                             &main_root,
                             &lease.worktree_path,
+                            None,
                             || {},
                             || {},
                         ),
@@ -2382,6 +2381,7 @@ pub(crate) fn ensure_spec_worktree(
             crate::session_reap::clear_missing_worktree_registration(
                 &main_root,
                 &default_path,
+                None,
                 || {},
                 || {},
             ),

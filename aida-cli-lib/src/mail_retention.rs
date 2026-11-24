@@ -276,6 +276,7 @@ pub(crate) fn prune_removed_sources(
                 match crate::session_reap::clear_missing_worktree_registration(
                     project_root,
                     &source.path,
+                    None,
                     || {},
                     || {},
                 ) {
