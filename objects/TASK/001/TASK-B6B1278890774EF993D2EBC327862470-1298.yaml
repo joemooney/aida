@@ -1,0 +1,31 @@
+id: 01a20bf2-db08-77e2-943a-851ba494d14e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1298
+title: 'Review follow-up: aida-cli-lib/src/standalone_implementer.rs:1572–1583 — The early reservation also moves th'
+description: |-
+  From BUG-2740
+  Reviewed sha: f034f939cb8611b4fc7c8aa5039c58ec82e2495a
+
+  aida-cli-lib/src/standalone_implementer.rs:1572–1583 — The early reservation also moves the only memory-floor reading ahead of store sync and worktree setup. The final handoff rechecks disk and accepts an existing reservation without rechecking memory. If RAM plus free swap falls below the configured floor during that setup, a normal pickup can spawn without the reasoned memory override that the previous late admission would have required. Recheck memory against the held reservation at launch and preserve override auditing.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T05:06:34.888985595Z
+modified_at: 2026-11-24T05:06:34.888985595Z
+req_type: Task
+tags:
+- carried-from:BUG-2740
+- finding-hash:e2350cb7
+- from-review:BUG-2740
+relationships:
+- rel_type: References
+  target_id: 01a20b60-4ecb-7e80-9a09-9680dfdf97d5
+  created_at: 2026-11-24T05:06:48.627275184Z
+filed_at:
+  code_sha: f034f939cb8611b4fc7c8aa5039c58ec82e2495a
+  branch: pr-4481
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
+  session: 01a20bef0bb4
