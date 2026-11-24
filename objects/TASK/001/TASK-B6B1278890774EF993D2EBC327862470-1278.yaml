@@ -147,6 +147,13 @@ comments:
   created_at: 2026-11-24T04:50:05.750671504Z
   modified_at: 2026-11-24T04:50:05.750671504Z
   session_id: 01a20bb47d43
+- id: 01a20be5-1ff4-7941-832a-9d416340d896
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 22:00): PR-4480 @ 8cf50d92e3 meets the ACs, with ONE judgment point for the advisor. +201/-20, merges CLEAN. AC1/AC2: mail_backlog runs inspect_seat_sidecars BEFORE RecipientDirectory::load, so a registry failure keeps the missing/UNVERIFIED IDs plus the incomplete flag and sets all=true (test with a failing load); a MailboxContext resolve failure sets seat_inventory_incomplete, so it''s never silent. Folded items: the hint prints ''aida mailbox read -- <id>'' for IDs starting with ''-''; check_retained_deadline runs between retained generation opens and after the final probe (tests: oversized sidecar, final-probe deadline). JUDGMENT (r2 ''isolate retained sidecar failures from receipt evidence''): a RetainedDeliveries::open failure used to set anchor.error; it now sets a separate retained_inventory_incomplete. complete() and relay_run completeness still go false, but LogicalSnapshot::ack_eligible() (mailbox_logical.rs ~977) checks anchor_error and NOT the new flag. So explicit-ACK planning is now ALLOWED when the retained store can''t be opened, where it used to be refused (fail-open direction on an ACK gate). Probably safe, because messages with unresolved sidecars are gated NotOwned and never projected or acked, but it''s an ACK-eligibility change the reviewer should rule on. Nit: mailbox_view.rs:419''s partial-coverage codes don''t include the new flag, so a partial view can show no reason.'
+  created_at: 2026-11-24T04:51:22.022969361Z
+  modified_at: 2026-11-24T04:51:22.022969361Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20be4-fd71-7603-9c2d-16c1d7a048d9
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int30-task-3851` at head `8cf50d92e37842701bbab1bfed05e9dbade983a7`.'
