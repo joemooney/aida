@@ -1,0 +1,31 @@
+id: 01a20c6f-7d40-73c3-acac-3692587839bc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1309
+agreed_id: TASK-3864
+title: 'STORY-3076 S4: review-engine showcase, docs and Marp presentation (no pptx)'
+description: |
+  Slice S4 of STORY-3076 (Joe's review engine; advisor-122 ruling 2026-11-24 00:30; filed by product-15). Source: branch story-3076-review-engine @ 0fdac177513 (Joe's reference commit, left untouched).
+  Files: docs/showcase/code-review.html, docs/showcase/index.html, executive-brief.html, search-data.js, trust.html, docs/*.md links, docs/internal/presentation/aida-code-review-engine.md + build.sh/README registration.
+  S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
+  Ordering: independent.
+
+  ## Acceptance
+  - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
+  - AC2: S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T07:22:42.880980293Z
+modified_at: 2026-11-24T07:22:42.880980293Z
+req_type: Task
+tags:
+- review
+- story-3076
+- track:integration
+filed_at:
+  code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0d3a0ae222
+  vendor: claude
