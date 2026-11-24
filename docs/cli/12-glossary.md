@@ -602,6 +602,14 @@ The short ID a spec keeps for good: its type and a number, such as
 `TASK-<number>`. It is unique across every clone of the project, because each
 number is handed out once from a shared range. See [Support for air-gapped development](../advanced/air-gapped-development.md).
 
+### Autoland (aida land)
+
+Automatic landing moves ready changes toward the default branch. In CI-gated mode, `aida land run` boards ready changes onto the train. In review-gated mode it can ship them individually when authorized. See [Landing modes](../advanced/landing.md).
+
+### Bisect
+
+When a test or gate fails on a merge train, AIDA splits the group into smaller trains and checks them separately. This helps isolate a failing change while allowing other changes to land. See [Merge train operation](../cli/04-git-lifecycle.md).
+
 ### Block
 
 A small range of spec numbers set aside for one clone. The clone gives new
@@ -623,6 +631,10 @@ seat. Your session can hand out only the seats you listed when you entered
 your own seat, and a child grant cannot be passed on again. See
 [Entering seats and delegating child seats](../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats).
 
+### ci:full
+
+A pull request label that requests the full set of continuous integration checks. Ordinary pull requests get the fast checks by default. See [CI tiers](../internal/testing/ci-test-shards.md).
+
 ### Commit trailer
 
 The spec ID in parentheses at the end of a commit subject, as in
@@ -636,6 +648,10 @@ The part of AIDA that decides whether work may move forward and reports what
 is in flight: the queue, seats, leases, reviews, merge holds and the status
 views. The spec records themselves are the data it acts on, not part of it.
 
+### Delta review
+
+A reviewer inspects what changed after an earlier approval, for example how an author resolved a merge conflict. The resolution needs review before the updated change can land. See [Review handoffs](../cli/06-roles-sessions.md).
+
 ### Deputy
 
 A helper you start in your own terminal that runs work other sessions hand
@@ -644,6 +660,10 @@ it, under your seat grant. There are two kinds. The command deputy
 (`aida deputy shell`) runs whole scripts from the advisor, one at a time, at
 your terminal and as you. Both record each job and tell the submitting
 session the result. See [Deputies: command vs script](../advanced/deputies.md).
+
+### Deputy shell
+
+An operator holding an advisor grant can start a script runner in their terminal. An authorized advisor can submit a whole script, which runs with the operator’s authority. See [Running the script deputy](../cli/06-roles-sessions.md).
 
 ### Grant
 
@@ -665,6 +685,10 @@ A Git server that the requirement store syncs through, such as GitHub, GitLab
 or a repository on an internal host. A mirror that only copies another hub
 counts as the same hub. See
 [Support for air-gapped development](../advanced/air-gapped-development.md#the-parts).
+
+### Include gate paths (--include-gate-paths)
+
+An operator can use this mandate option to let ships and trains handle changes to protected files, including the merge rules themselves. The change still needs approval and must satisfy the remaining gates. See [Mandate options](../cli/04-git-lifecycle.md).
 
 ### Local ID
 
@@ -699,6 +723,10 @@ AIDA releases it in the narrow cases it allows, such as under a
 [mandate](#mandate). See
 [What is AIDA](../what-is-aida.md).
 
+### Merge train
+
+AIDA stacks approved pull requests on the default branch and tests their combined changes. If the checks pass and the base still matches, the train can land the group together. See [Train checks](../cli/04-git-lifecycle.md).
+
 ### Operator-only
 
 A tag that keeps a spec in human hands. No [mandate](#mandate) covers it, so
@@ -712,6 +740,14 @@ A range of one spec type's numbers given to one hub. Clones that sync through
 that hub take their [blocks](#block) from it, so two hubs never hand out the
 same number. See
 [Support for air-gapped development](../advanced/air-gapped-development.md#the-parts).
+
+### Post-train pull
+
+After a train lands, run `aida pull` to bring the merged commits into your checkout. AIDA reads their completion trailers to update the corresponding specs. See [Pull and merge trains](../cli/04-git-lifecycle.md).
+
+### Ratchet
+
+A check that sets a limit on an existing exception, such as the number of places still using an older interface. Removing an exception can tighten the limit so later changes cannot quietly add it back. See [CI checks](../internal/testing/ci-test-shards.md).
 
 ### Ref
 
@@ -733,6 +769,10 @@ One trip back to the implementer after a reviewer asks for changes.
 `aida rework` returns the spec to active work with the reviewer's reasons, and
 the implementer pushes fixes to the same pull request for another review. See
 [`aida rework`](../cli/04-git-lifecycle.md#aida-rework).
+
+### Rider
+
+A pull request traveling on a [merge train](#merge-train). If the train lands, the member pull request closes with a pointer to its commit. See [Merge train operation](../cli/04-git-lifecycle.md).
 
 ### Role
 

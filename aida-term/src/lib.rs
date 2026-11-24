@@ -1,5 +1,8 @@
 //! Terminal rendering, telemetry and process utilities independent of CLI parsing.
 // trace:TASK-3783 | ai:codex
+// trace:TASK-3840 | ai:codex
+#[cfg(test)]
+#[deny(unused_macros)]
 macro_rules! print {
     ($($arg:tt)*) => { $crate::cache_output::print_tracked(::std::format_args!($($arg)*)) };
 }
