@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the merge is fully resolved and snapshot regeneration fails, the host STILL commits and pushes the resolved merge, and reports "snapshot regeneration failed: <cause>; CI will verify", instead of refusing.
   - AC2: The regeneration error is recorded on the spec (comment). A test with a failing regeneration command.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-24T20:55:28.180464684Z
+modified_at: 2026-11-24T21:56:34.263341411Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -136,6 +136,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20f8f-8757-7ed1-ac24-c1f596ee8d99
+  author: aida-session-start
+  timestamp: 2026-11-24T21:56:34.263336819Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
