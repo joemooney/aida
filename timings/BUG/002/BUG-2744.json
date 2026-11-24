@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2744",
+  "publishes": [
+    {
+      "at": "2026-11-24T11:15:15.296567828Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T08:21:58.302735400Z",
+      "spec": "BUG-2744",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4503,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ea821ddd34be72fe4f36d7ad25ca50577df3ff66"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:22:26.054577812Z",
+      "spec": "BUG-2744",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the full two-file diff for PR-4503 at ea821ddd34be72fe4f36d7ad25ca50577df3ff66 against the generated worksheet. The PR claims completion of BUG-2744 (BUG-b6b1278890774ef993d2ebc327862470-505).\n\nBUG-b6b1278890774ef993d2ebc327862470-505.AC1 — verified by .github/workflows/ci.yml:164-165 setting the install timeout to 15 and the new exact-value AptBounds assertion at tests/test_self_hosted_runner.py:653-655 (covered by python3 -m unittest tests/test_self_hosted_runner.py). This addresses the supplied untraced criterion in the diff. The implementer reported a focused pass, and the hosted install finished in 32 seconds.\nBUG-b6b1278890774ef993d2ebc327862470-505.AC2 — unverified. The workflow diff is limited to the requested cache and timeout, with the separately authorized timeout fixture change. GitHub Actions run 45352759793, attempt 1, saved a 19,020,560-byte archive under refs/pull/4503/merge. The 32-second install used a cold cache. No warm-run evidence was available, the diff has no test of warm reuse, and the PR body omits the required timing.\n\nCI was pending at review time. The exact-head fast source gates and workspace check passed, and the fast compile job's ratchet set was still running. Reviewed source and existing CI evidence only. The head is seven commits behind origin/integration at 9435f22c422. Base history touched ci.yml outside the reviewed logic, and the current base workflow blob matches the merge-base blob. All findings apply to the pinned head independently of base movement.",
+        "recovery_hint": "address the review findings, move BUG-2744 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:13:38.929289837Z",
+      "spec": "BUG-2744",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4503,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c76d24debac756340e3be04c8dcd2bf550afd9a1"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:14:33.526252110Z",
+      "spec": "BUG-2744",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4503,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c76d24debac756340e3be04c8dcd2bf550afd9a1"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:53:52.385813360Z",
+      "spec": "BUG-2744",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4508,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b1f3fcf37d0d8bcbee2972d7d4b7b158e9eaff55"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:06:21.212149858Z",
+      "spec": "BUG-2744",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4508
+      }
+    },
+    {
+      "ts": "2026-11-24T11:15:15.072466128Z",
+      "spec": "BUG-2744",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6c832e0d3a8b189ff57b0665563aafb822a7a71d",
+        "pr": 4508,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
