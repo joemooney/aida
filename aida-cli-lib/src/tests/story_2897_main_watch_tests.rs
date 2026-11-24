@@ -1422,3 +1422,64 @@ fn git_timeout_at_call_ceiling_observes_pass_deadline() {
         assert_eq!(error.is::<PassDeadline>(), retry);
     }
 }
+
+// trace:TASK-3859 | ai:codex
+#[test]
+fn task_3859_watch_propagates_gh_auth_errors_but_waits_on_transient_reads() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for args in [
+        &["init", "-q", "-b", "main"][..],
+        &[
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.org",
+            "commit",
+            "-qm",
+            "seed",
+            "--allow-empty",
+        ],
+        &["remote", "add", "origin", "."],
+    ] {
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let gh = root.join("gh");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TEST_GH_BINARY", gh.to_str())]);
+    let mut live = Live {
+        pinned_tip: None,
+        root: root.into(),
+        forge: crate::forge::forge_for_kind(root, crate::forge::ForgeKind::GitHub),
+        call_timeout: CALL_TIMEOUT,
+    };
+    for (status, diagnostic) in [
+        (1, "gh: Bad credentials (HTTP 401)"),
+        (4, "login required"),
+        (
+            1,
+            "To get started with GitHub CLI, please run: gh auth login",
+        ),
+    ] {
+        crate::test_exec::write_executable(
+            &gh,
+            format!("#!/bin/sh\necho '{diagnostic}' >&2\nexit {status}\n"),
+        );
+        let error = pass(root, &required(), WINDOW, &mut live).unwrap_err();
+        assert!(format!("{error:#}").contains("GitHub CLI authentication failed"));
+    }
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\necho 'HTTP 503' >&2\nexit 1\n");
+    pass(root, &required(), WINDOW, &mut live).unwrap();
+    let status = status_line(root).unwrap();
+    assert!(
+        status.contains("pending") && status.contains("503"),
+        "{status}"
+    );
+}
