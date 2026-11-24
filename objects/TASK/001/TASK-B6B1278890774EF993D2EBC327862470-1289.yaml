@@ -1,5 +1,6 @@
 id: 01a20bbc-4973-7dc1-861b-0bd3abb9df04
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1289
+agreed_id: TASK-3317
 title: 'Review follow-up: aida-cli-lib/src/lane_admission.rs:405 and aida-cli-lib/src/queue_cmd/work.rs:5153. Early '
 description: |-
   From BUG-2740
@@ -25,6 +26,12 @@ history:
 - id: 01a20be9-efd6-7e30-a1e2-8e68d56ac8a9
   author: joe
   timestamp: 2026-11-24T04:56:50.390233127Z
+  changes: []
+- id: 01a20c10-6f4f-7433-95c2-72a391ee30c5
+  author: joe
+  timestamp: 2026-11-24T05:38:53.391729184Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 833284c12f44606b5f680b675adc6d851eceb167

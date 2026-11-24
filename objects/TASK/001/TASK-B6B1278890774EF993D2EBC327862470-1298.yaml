@@ -1,5 +1,6 @@
 id: 01a20bf2-db08-77e2-943a-851ba494d14e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1298
+agreed_id: TASK-3316
 title: 'Review follow-up: aida-cli-lib/src/standalone_implementer.rs:1572–1583 — The early reservation also moves th'
 description: |-
   From BUG-2740
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20b60-4ecb-7e80-9a09-9680dfdf97d5
   created_at: 2026-11-24T05:06:48.627275184Z
+history:
+- id: 01a20c10-3cb7-7b81-ba61-87a18d9d4726
+  author: joe
+  timestamp: 2026-11-24T05:38:40.439329956Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f034f939cb8611b4fc7c8aa5039c58ec82e2495a
   branch: pr-4481
