@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T16:07:04.689532926Z
+modified_at: 2026-11-24T16:19:24.389128723Z
 req_type: Bug
 tags:
 - integration
@@ -175,6 +175,15 @@ comments:
   modified_at: 2026-11-24T14:15:43.131600296Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e5a-dbd8-7d10-9f4e-b0540a565090
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3fa25e66cfc87828e873f682d3a2f53adcf1d7ed plus the native worktree diff. F1: [evidence: behavioral-test] real_phase_driver_wiring_tests.rs:1805 injects InProgress after the NeedsAttention lookup. The real reviewer failure path persisted NeedsAttention, the exact writer/reason comment and the failure reason. Launcher job j20261124T160835216-2-0 executed the test: 1 passed. leases.rs:3792 applies the guard to the locked record, and deletion returns before ledger activity. Reviewed the merge-base diff, local edits and untracked list. The comment uses the existing author and phase/kind strings. The atomic helper checks UUID identity and propagates errors. No grant or verdict checks changed. Corrected the store-writer inventory entry found by FAST. F2 deferred: Done plus no-op retry coverage. F3 deferred: an older PR refusal can still shelve Done earned by another change. Both are recorded in PR 4475.
+  created_at: 2026-11-24T16:19:24.389128723Z
+  modified_at: 2026-11-24T16:19:24.389128723Z
+  session_id: 01a20e4f3409
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
