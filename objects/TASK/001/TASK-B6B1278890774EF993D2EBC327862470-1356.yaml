@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:00:31.801480938Z
-modified_at: 2026-11-24T19:30:21.030235516Z
+modified_at: 2026-11-24T19:31:49.845183359Z
 req_type: Task
 tags:
 - review
@@ -92,6 +92,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T18:42:05.838113415Z
   modified_at: 2026-11-24T18:42:05.838113415Z
+- id: 01a20f0b-03d5-7513-82d4-1ed6ea998fb9
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int36-task-3872` at head `5bfd563d17524057405b4489f97fa8a0b647c94d`.'
+  created_at: 2026-11-24T19:31:49.845177403Z
+  modified_at: 2026-11-24T19:31:49.845177403Z
+  session_id: 01a20f07e72e
 history:
 - id: 01a20e13-15d8-7192-8c48-006617c031fe
   author: joe
