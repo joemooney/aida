@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T11:17:07.353676794Z
-modified_at: 2026-11-24T12:30:29.697962707Z
+modified_at: 2026-11-24T12:30:48.623357931Z
 req_type: Task
 tags:
 - carried-from:BUG-2729
@@ -23,6 +23,12 @@ relationships:
 - rel_type: References
   target_id: 01a207dd-4395-70a2-8265-932cc529c679
   created_at: 2026-11-23T11:17:20.644961937Z
+comments:
+- id: 01a20d89-8f2f-75f0-9d73-de2381a48b89
+  author: joe
+  content: 'Draft to Approved (advisor-122 05:38): one docs lane for TASK-3282/3266.'
+  created_at: 2026-11-24T12:30:48.623357931Z
+  modified_at: 2026-11-24T12:30:48.623357931Z
 history:
 - id: 01a20838-dd87-7f91-a3ee-de1bfdc2aac4
   author: joe
