@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   - AC1: Lane admission waits (cold-start limit, memory/disk headroom, any queue wait) do NOT hold the store write lock. The lock is taken only around the actual store mutation and released before waiting. Test: a launch blocked on the cold-start limit doesn't hold store-write.lock, and a concurrent store write succeeds.
   - AC2: A store-lock timeout error names the HOLDER (pid plus command line) so this is diagnosable without /proc/locks. Test.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T04:53:30.886009733Z
+modified_at: 2026-11-24T05:07:01.760313671Z
 req_type: Bug
 tags:
 - admission
@@ -200,6 +200,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20bf3-4400-7292-a294-55f418f2c61b
+  author: aida-orchestrator
+  timestamp: 2026-11-24T05:07:01.760328649Z
+  session_id: 01a20bef0bb4
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -215,16 +223,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: |-
-    Request changes on BUG-2740 after reviewing all five changed files and both completing criteria in the generated worksheet.
-
-    BUG-b6b1278890774ef993d2ebc327862470-501.AC1 — unverified
-    The pinned source moves standalone cold-start admission ahead of the store pull and rejects same-thread reentry while a write lock is held. The new fixture (cargo test -p aida-cli-lib bug_2740_store_writer_completes_during_cold_start_wait) exercises the admission helper and a concurrent file write, leaving the production pickup ordering untested.
-
-    BUG-b6b1278890774ef993d2ebc327862470-501.AC2 — unverified
-    The same-namespace timeout fixture (cargo test -p aida-cli-lib bug_2740_store_timeout_names_the_other_process_and_its_arguments) covers an independent visible holder. The bounded writer timeout omits the holder entirely, and the ordinary timeout cannot identify a live holder hidden from the waiter's procfs.
-
-    GitHub FAST gates, test compilation, the aggregate Ubuntu Build and merge-hold-gate passed. The implementer's AIDA self-review reports both focused tests passed in lane job j20261124T025142633-2-0 before publication. FAST CI skipped test execution and I ran no local tests. The original PR head is one commit behind main. I reviewed its landed tree eebf748343eb19d34c650b9fe8ea3e364a72dc8d against protected base e5e3711c9f9fdd4617a00cefb897e8b493269c47, and no finding depends on a code change in that intervening base commit.
+  detail: BUG-2740 AC1 PASS on the lock-order criterion. Standalone admission precedes store sync and setup, nested admission refuses, and the production-path regression exercises an independent writer during the wait. The startup timer is armed after pickup setup and new-work WIP is rechecked after a slot wait. AC2 PASS for visible holders. Ordinary and bounded timeouts include PID and command in the applicable diagnostic, the mediated response keeps its Busy code, and the source includes an external-holder regression. The advisor deferred cross-namespace and unreadable-command coverage. The round-two disk-deferral requirement is PARTIAL for explicit unqueued pickups, and the early wait introduces a stale supervised-track decision. The FAST source gates passed and compile CI was pending at review time. No local tests were run. Reviewed the full pinned landing diff against aaeb386bf51117822caa1d0179ce1f6425ad619f. None of the findings depends on code changed by the intervening protected-base commit.
   recovery_hint: address the review findings, move BUG-2740 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-24T04:08:42.632446825Z
+  shelved_at: 2026-11-24T05:07:01.760313671Z
