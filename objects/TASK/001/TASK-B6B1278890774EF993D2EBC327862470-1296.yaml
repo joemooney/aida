@@ -1,0 +1,31 @@
+id: 01a20be8-816e-7011-b453-f35f4346a150
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1296
+title: 'Review follow-up: aida-cli-lib/src/seat_clone.rs:1623 and aida-cli-lib/src/tests/task_2053_seat_clone_lifecy'
+description: |-
+  From BUG-2742
+  Reviewed sha: 1dc839b00db4fb4c4be42959f1e2796389da719a
+
+  aida-cli-lib/src/seat_clone.rs:1623 and aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:2637–2645. An existing clean Claude seat whose only extra file is its empty sandbox-created .gitmodules now becomes dirty if its originating checkout did not add an ignore rule. The previous dispatch and reap paths explicitly recognized that placeholder. The old end-to-end regression now adds /.gitmodules to the parent excludes, a rule absent from the project’s tracked .gitignore and optional for existing seats. Preserve recognition of the known generated stand-in or reliably install the intended ignore policy for existing seats while retaining user-created .gitmodules content. Cover the original fixture conditions.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T04:55:16.590710616Z
+modified_at: 2026-11-24T04:55:16.590710616Z
+req_type: Task
+tags:
+- carried-from:BUG-2742
+- finding-hash:006dabef
+- from-review:BUG-2742
+relationships:
+- rel_type: References
+  target_id: 01a20b98-35f8-7b01-9f98-bc1e520d84bb
+  created_at: 2026-11-24T04:55:29.210833174Z
+filed_at:
+  code_sha: 1dc839b00db4fb4c4be42959f1e2796389da719a
+  branch: pr-4487
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
+  session: 01a20be40b11
