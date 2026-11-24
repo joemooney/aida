@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T09:09:46.127412981Z
+modified_at: 2026-11-24T09:10:53.307171998Z
 req_type: Story
 tags:
 - admission
@@ -164,6 +164,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T09:09:45.977188220Z
   modified_at: 2026-11-24T09:09:45.977188220Z
+- id: 01a20cd2-b8aa-71f1-8389-ed96fcbe2073
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:10):
+    # STORY-3080 / PR #4502 r3 (round 3 of 4), SCOPE-CUT (advisor-122 ruling 2026-11-24 02:13 at a45d28c7; strict, MAIN; product-15). Lane: CODEX. Existing branch. <=120 lines.
+
+    MUST:
+    (F3) A REGRESSION this PR introduced: a fresh pickup clears the host/seat punt/hold markers BEFORE the WIP/spec checks, so a refusal ERASES a publication veto. Consume or clear those markers only AFTER every revalidation check passes, and RESTORE them on any refusal path. TEST: an existing veto plus a refused launch -> the veto SURVIVES.
+    (F4, minimal) A WIRING TEST: drive queue-work's REAL pickup with a fake launcher, set a hold on the spec BEFORE the BeforeSpawn hook runs, and assert the refusal. The test must FAIL if the production callback at queue_cmd/work.rs:6784 is replaced by a no-op. A controlled cold-start wait is NOT required.
+    DEFERRED (do NOT implement): F1 (holding the store writer guard from final revalidation through run.release() on the contained path) and F2 (file-backed/SQLite stores' writer exclusion); product files a strict follow-up.
+    If blocked, it should be on test fidelity only: say so precisely in your exit summary.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4502). COMMIT your work.
+  created_at: 2026-11-24T09:10:53.307171998Z
+  modified_at: 2026-11-24T09:10:53.307171998Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
