@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Set `timeout-minutes: 15` on the "Install compile dependencies" step.
   - AC2: Cache the apt packages (actions/cache over the apt archive, or a preinstalled-deps step if that's cheap), so a warm run skips most downloads. Show a warm-run timing in the PR body. Keep the diff minimal: the advisor reviews the ci.yml hunk line by line.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T07:00:08.387837602Z
+modified_at: 2026-11-24T07:06:21.225095361Z
 req_type: Bug
 tags:
 - ci
@@ -70,6 +70,15 @@ history:
   session_id: 01a20c596317
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c60-85e5-7161-97d3-dcf2d04b0bdd
+  author: dirtlab
+  timestamp: 2026-11-24T07:06:22.053422367Z
+  session_id: 01a20c596317
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -78,3 +87,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: May this PR also update tests/test_self_hosted_runner.py:654 to require exactly 15 minutes for fast-compile / Install compile dependencies? make check-ci-fast fails because the existing test caps this step at five minutes, and the integration brief permits only ci.yml edits.
+  lean: Add the one named exception and retain the existing bounds for every other step.
+  raised_by: implementer
+  raised_at: 2026-11-24T07:06:21.225095361Z
