@@ -12,12 +12,13 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T12:30:02.067329502Z
+modified_at: 2026-11-24T12:30:04.044482354Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
 - finding-hash:bb67e327
 - from-review:BUG-2728
+- track:integration
 relationships:
 - rel_type: References
   target_id: 01a2076d-6c65-73b0-afbc-67157b3446e2
@@ -40,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-24T12:30:02.207989473Z
   changes: []
+- id: 01a20d88-e10c-76d1-bbed-a32286a5cea1
+  author: joe
+  timestamp: 2026-11-24T12:30:04.044481723Z
+  changes:
+  - field_name: tags
+    old_value: carried-from:BUG-2728, finding-hash:bb67e327, from-review:BUG-2728
+    new_value: carried-from:BUG-2728, finding-hash:bb67e327, from-review:BUG-2728, track:integration
 execution_mode: drain
 filed_at:
   code_sha: ccb9ea51cc5064223378a2022840f02a89b4f561
