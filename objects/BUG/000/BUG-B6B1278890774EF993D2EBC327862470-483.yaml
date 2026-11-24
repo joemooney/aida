@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728Z
-modified_at: 2026-11-24T16:46:36.791033297Z
+modified_at: 2026-11-24T16:48:50.224960035Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -270,6 +270,18 @@ comments:
     `make check-ci-fast`, then push on the existing branch. In the PR body, say what the extra test was and which fix you chose. COMMIT your work.
   created_at: 2026-11-23T10:40:37.326986799Z
   modified_at: 2026-11-23T10:40:37.326986799Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e75-fe72-7fd0-83cb-4f42fb1dbb6d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:48):
+    # BUG-2722 / PR #4403 CI-FIX ROUND (advisor-122 ruling 2026-11-24 09:50; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4403 was approved at 960f8410, but its head is now cb4bc39b and FAST CI is RED (gates + Build). Likely cause: the live-bwrap expected-count gate ("56 of 55", .github/workflows/ci.yml ~lines 707-737).
+    FIX: make the bwrap count gate pass by DERIVING or UPDATING the expected count correctly, WITHOUT weakening the gate (no removals, no wider filters, no skips). First read the actual failing CI log (`gh run list -R joemooney/aida --branch <branch>` then `gh run view --log-failed`) and fix EVERY red gate's real cause, plus the Build failure. Merge current origin/main if needed. `make check-ci-fast` must pass. Push to #4403. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:48:50.224960035Z
+  modified_at: 2026-11-24T16:48:50.224960035Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
