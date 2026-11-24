@@ -200,6 +200,12 @@ fn admit(
     over: bool,
     mut on_wait: impl FnMut(),
 ) -> Result<Admitted> {
+    // A caller inside a store transaction cannot safely suspend that transaction.
+    // Refuse before any host wait or override. trace:BUG-2740 | ai:codex
+    anyhow::ensure!(
+        !aida_core::db::any_store_write_lock_held(),
+        "lane admission refused while holding the store write lock"
+    );
     loop {
         let slot = reserve(settings, prefix)?;
         let mut overridden = Vec::new();
@@ -446,6 +452,88 @@ impl Drop for Startup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2740 | ai:codex
+    #[test]
+    fn bug_2740_store_writer_completes_during_cold_start_wait() {
+        let store = tempfile::tempdir().unwrap();
+        let root = store.path();
+        let prefix = TestHost::prefix();
+        let mut occupied = Some(TestHost::hold(&prefix, 0));
+        let written = root.join("writer");
+        let path = written.clone();
+        let store_path = root.to_owned();
+        TEST_HOST.with(|h| {
+            *h.borrow_mut() = Some(TestHost {
+                prefix,
+                max_concurrent_cold_starts: 1,
+                min_memory_headroom_gib: 1,
+                memory_gib: std::rc::Rc::new(std::cell::Cell::new(8)),
+                on_wait: Box::new(move || {
+                    if occupied.is_some() {
+                        thread::scope(|scope| {
+                            scope
+                                .spawn(|| {
+                                    aida_core::db::with_store_write_lock_bounded(
+                                        &store_path,
+                                        || Ok(fs::write(&path, "written")?),
+                                    )
+                                    .unwrap()
+                                })
+                                .join()
+                                .unwrap()
+                        });
+                        occupied.take();
+                    }
+                }),
+            });
+        });
+        let _startup = Startup::acquire(root, None, None).unwrap();
+        TEST_HOST.with(|h| h.borrow_mut().take());
+        assert_eq!(fs::read_to_string(written).unwrap(), "written");
+
+        aida_core::db::with_store_write_lock(root, || {
+            let err = Startup::acquire(root, None, None)
+                .err()
+                .expect("nested admission");
+            assert!(err.to_string().contains("holding the store write lock"));
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    // trace:BUG-2740 | ai:codex
+    #[test]
+    fn bug_2740_store_timeout_names_the_other_process_and_its_arguments() {
+        use std::io::{BufRead, BufReader};
+        use std::process::{Command, Stdio};
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let _timeout = crate::test_env::EnvVarGuard::set("AIDA_STORE_LOCK_TIMEOUT_SECS", "0");
+        let store = tempfile::tempdir().unwrap();
+        let path = aida_core::db::store_write_lock_path(store.path());
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut holder = Command::new("python3")
+            .args(["-c", "import fcntl,sys; f=open(sys.argv[1],'w'); fcntl.flock(f,fcntl.LOCK_EX); print('ready',flush=True); sys.stdin.read()"])
+            .arg(path)
+            .arg("holder argument")
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        let mut ready = String::new();
+        BufReader::new(holder.stdout.take().unwrap())
+            .read_line(&mut ready)
+            .unwrap();
+        assert_eq!(ready.trim(), "ready");
+        let error = aida_core::db::with_store_write_lock(store.path(), || Ok(())).unwrap_err();
+        drop(holder.stdin.take());
+        assert!(holder.wait().unwrap().success());
+        let message = error.to_string();
+        assert!(
+            message.contains(&format!("holder pid={} ", holder.id())),
+            "{message}"
+        );
+        assert!(message.contains("holder argument"), "{message}");
+    }
 
     #[test]
     fn bug_2682_queues_until_first_build_releases_slot() {

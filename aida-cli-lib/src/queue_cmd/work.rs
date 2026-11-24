@@ -5058,6 +5058,7 @@ pub(crate) fn handle_queue_work(
         });
 
         let mut _standalone_slot = None;
+        let mut startup = None;
         if !list_sessions {
             eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
             // trace:STORY-2749 | ai:claude
@@ -5146,6 +5147,13 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &plan.scope,
                         crate::standalone_implementer::configured_cap(&project_root)?,
+                    )?);
+                    // Wait before the pickup pulls or mutates the shared store.
+                    // trace:BUG-2740 | ai:codex
+                    startup = Some(crate::lane_admission::Startup::acquire(
+                        &project_root,
+                        Some(&plan.scope),
+                        crate::lane_admission::HostOverride::from_env()?.as_ref(),
                     )?);
                 }
                 // trace:BUG-2548 | ai:codex — refuse conflicts before store I/O.
@@ -6772,6 +6780,7 @@ pub(crate) fn handle_queue_work(
                             child_grant,
                             host_main: host_main.as_deref(),
                         },
+                        startup,
                         attempt.as_ref(),
                         Some(&|| agent.starting()),
                         on_brief_delivery,

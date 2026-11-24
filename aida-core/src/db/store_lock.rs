@@ -134,6 +134,52 @@ fn ensure_lock_excluded(root: &Path) {
     }
 }
 
+/// Diagnostic only. Match the open file's device and inode, skipping queued
+/// waiters. A holder can exit or be invisible in this PID namespace.
+// trace:BUG-2740 | ai:codex
+fn holder_description(file: &File) -> String {
+    use std::io::Read;
+    use std::os::unix::fs::MetadataExt;
+
+    let holder = (|| {
+        let meta = file.metadata().ok()?;
+        let key = format!(
+            "{:02x}:{:02x}:{}",
+            libc::major(meta.dev()),
+            libc::minor(meta.dev()),
+            meta.ino()
+        );
+        let locks = std::fs::read_to_string("/proc/locks").ok()?;
+        let pid = locks.lines().find_map(|line| {
+            let mut fields = line.split_whitespace().skip(1);
+            if fields.next()? != "FLOCK"
+                || fields.next()? != "ADVISORY"
+                || fields.next()? != "WRITE"
+            {
+                return None;
+            }
+            let pid = fields.next()?.parse::<u32>().ok()?;
+            (fields.next()? == key).then_some(pid)
+        })?;
+        let mut args = Vec::new();
+        let command = File::open(format!("/proc/{pid}/cmdline"))
+            .and_then(|file| file.take(4096).read_to_end(&mut args))
+            .ok()
+            .filter(|&len| len > 0)
+            .map(|_| {
+                args.strip_suffix(&[0])
+                    .unwrap_or(&args)
+                    .split(|&byte| byte == 0)
+                    .map(|arg| format!("{:?}", String::from_utf8_lossy(arg)))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .unwrap_or_else(|| "<unavailable>".into());
+        Some(format!("holder pid={pid} command={command}"))
+    })();
+    holder.unwrap_or_else(|| "holder unavailable".into())
+}
+
 /// Acquire the store write lock for the git store rooted at `root`.
 // trace:BUG-1612 | ai:claude
 pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
@@ -234,17 +280,19 @@ fn acquire_until(
                     // not stuck: say so. trace:BUG-HOME-041 | ai:claude
                     if let Some(disk) = crate::io_pressure::observe_disk_saturation(None) {
                         anyhow::bail!(
-                            "Timed out after {}s waiting for the store write lock {}: {}.",
+                            "Timed out after {}s waiting for the store write lock {} ({}): {}.",
                             limit.as_secs(),
                             path.display(),
+                            holder_description(&file),
                             disk.describe()
                         );
                     }
                     anyhow::bail!(
-                        "Timed out after {}s waiting for the store write lock {}. \
+                        "Timed out after {}s waiting for the store write lock {} ({}). \
                          Another AIDA command is writing the store; retry when it finishes.",
                         limit.as_secs(),
-                        path.display()
+                        path.display(),
+                        holder_description(&file)
                     );
                 }
                 // trace:BUG-HOME-041 | ai:claude
@@ -264,10 +312,11 @@ fn acquire_until(
                     ) {
                         anyhow::bail!(
                             "Gave up waiting for the store write lock {} at the {}s fail-fast \
-                             deadline: {}. Retry when IO pressure drops.",
+                             deadline: {} ({}). Retry when IO pressure drops.",
                             path.display(),
                             crate::io_pressure::FAIL_FAST_LOCK_BUDGET.as_secs(),
-                            blocked.describe()
+                            blocked.describe(),
+                            holder_description(&file)
                         );
                     }
                 }

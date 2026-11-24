@@ -6226,6 +6226,7 @@ fn run_refused_launch(
             child_grant: &grant,
             host_main: Some(&launch.fx.main),
         },
+        None,
         attempt,
         None,
         None,
