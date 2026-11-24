@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T23:20:48.244751409Z
+modified_at: 2026-11-24T23:20:50.972573065Z
 req_type: Bug
 tags:
 - hygiene
@@ -180,6 +180,13 @@ comments:
   content: Reference merge `71bb63b62b39af8acab3724b1ec8d938c651df11` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-24T23:20:48.244734835Z
   modified_at: 2026-11-24T23:20:48.244734835Z
+- id: 01a20fdc-b01c-74a1-bcfc-1bec92ae78c7
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 71bb63b62b39
+    A reference merge (commit 71bb63b62b39, `(Refs BUG-2742)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-24T23:20:50.972562567Z
+  modified_at: 2026-11-24T23:20:50.972562567Z
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
