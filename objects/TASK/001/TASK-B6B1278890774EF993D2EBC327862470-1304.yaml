@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T06:29:50.947699590Z
-modified_at: 2026-11-24T06:29:50.947699590Z
+modified_at: 2026-11-24T12:31:00.064444810Z
 req_type: Task
 tags:
 - carried-from:TASK-3856
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20bc9-3ae1-72a2-90e2-73f6c26a6ddf
   created_at: 2026-11-24T06:30:05.993364643Z
+comments:
+- id: 01a20d89-bbe0-7cd3-9c87-8303d1bde086
+  author: joe
+  content: 'REJECTED (advisor-122 2026-11-24 05:38, citing the 23:35 ruling on TASK-3856): the coverage ratchet guards accidental miswiring; condition spelling and exclude-key handling are adversarial-completeness items with no follow-up. A real miswiring that slips past the ratchet reopens this.'
+  created_at: 2026-11-24T12:31:00.064444810Z
+  modified_at: 2026-11-24T12:31:00.064444810Z
 history:
 - id: 01a20c84-79c3-7490-991e-254bbfeb5773
   author: joe
