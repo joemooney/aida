@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: AIDA's own forge pollers (review-watch, auto-train, main-watch, and any seat watcher AIDA ships) check the remaining core budget (`gh api rate_limit` or the response headers) and BACK OFF when below 20% remaining. Landing-critical calls (train CI reads) get priority over watchers. The back-off is reported, not silent.
   - AC2: `aida doctor` (or `aida land status`) shows the remaining core budget and which pollers consumed it, so a seat can see when its own polling is starving the train. Test with a fake rate_limit response below the threshold.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T18:47:36.639215658Z
+modified_at: 2026-11-24T21:04:15.978547373Z
 req_type: Bug
 tags:
 - forge
@@ -197,6 +197,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-496` at head `unavailable`.'
   created_at: 2026-11-24T18:47:36.639202880Z
   modified_at: 2026-11-24T18:47:36.639202880Z
+- id: 01a20f5f-a46a-7663-aa51-5418bd121785
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: PR #4464 merge repair is present in aida-cli-lib/src/tests/task_1993_review_watch_tests.rs. Both parent tests were preserved, markers cleared and 97 module tests passed. Required make check-ci-fast cannot finish under the lane-only Cargo rule: its shard tooling invokes cargo metadata, which the launcher rejects. Host fast validation is needed before publication. Findings 6-9 remain outside the conflict-only pickup.. No triage reason was given.'
+  created_at: 2026-11-24T21:04:15.978534513Z
+  modified_at: 2026-11-24T21:04:15.978534513Z
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
@@ -277,6 +282,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20f5f-a46a-7663-aa51-5408dfc5a4f7
+  author: joe
+  timestamp: 2026-11-24T21:04:15.978520155Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
@@ -285,8 +297,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f1a50179e5a
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: 'PR #4464 merge repair is present in aida-cli-lib/src/tests/task_1993_review_watch_tests.rs. Both parent tests were preserved, markers cleared and 97 module tests passed. Required make check-ci-fast cannot finish under the lane-only Cargo rule: its shard tooling invokes cargo metadata, which the launcher rejects. Host fast validation is needed before publication. Findings 6-9 remain outside the conflict-only pickup.'
-  raised_by: implementer
-  raised_at: 2026-11-24T18:39:25.044915822Z
