@@ -333,7 +333,7 @@
           <h1>Beyond "vibe-check"<br /><span>AI code review.</span></h1>
           <p class="hero-lead">
             General-purpose coding agents cut corners on large diffs, hallucinate line numbers, fluctuate across prompt phrasing, and inspect code without knowing the requirement it was built to satisfy.
-            Upcoming (lands with the CLI/skills slices): S2 adds <code>aida review prepare</code> and S3 integrates it into <code>/aida-review</code> and <code>/aida-code-review</code>.
+            Both <code>/aida-review</code> and <code>/aida-code-review</code> use <code>aida review prepare</code> to build their file inventories.
           </p>
           <div class="meta-strip">
             <div><strong>CRATES:</strong> <code>aida_core::review_engine</code> + <code>aida_cli_lib::review_prepare</code></div>
@@ -710,7 +710,7 @@
           <h2>AIDA Native Review Engine vs. Standalone Review Binaries</h2>
         </div>
         <p class="section-desc">
-          This qualitative feature matrix compares the upcoming <code>aida review prepare</code> against standalone external AI code review CLI tools (such as OpenCodeReview / <code>ocr</code>) and raw prompt skills.
+          This qualitative feature matrix compares <code>aida review prepare</code> with standalone external AI code review CLI tools (such as OpenCodeReview / <code>ocr</code>) and raw prompt skills.
         </p>
       </div>
 
@@ -781,10 +781,10 @@
       <div class="section-head">
         <div>
           <div class="section-num">06 / WORKFLOW &amp; CLI REFERENCE</div>
-          <h2>Upcoming integration with <code>/aida-review</code>, <code>/aida-code-review</code> &amp; the CLI</h2>
+          <h2>Integration with <code>/aida-review</code>, <code>/aida-code-review</code> &amp; the CLI</h2>
         </div>
         <p class="section-desc">
-          Upcoming (lands with the CLI/skills slices): S2 adds <code>aida review prepare</code> and S3 integrates it into <code>/aida-review</code> and <code>/aida-code-review</code>.
+          Both <code>/aida-review</code> and <code>/aida-code-review</code> use <code>aida review prepare</code> to build their file inventories.
         </p>
       </div>
 

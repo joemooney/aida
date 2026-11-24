@@ -44,7 +44,14 @@ cargo machete 2>&1 || echo "install: cargo install cargo-machete"
 
 # Lines of code per file (complexity indicator)
 tokei --sort code 2>&1 | head -20 || find . -name "*.rs" -exec wc -l {} \; | sort -rn | head -20
+
+# Deterministic full-file inventory, token-budgeted batches, and language/security playbooks (STORY-3076)
+aida review prepare --scan --write .aida/code-review-prepare.md
 ```
+
+Use the generated batches and playbooks to guide the manual review. Add `--path <directory>` to scope the inventory for a narrower audit. Running `aida review prepare` requires an AIDA CLI that includes the command; if it is unavailable (for example, “unexpected argument”), continue with the manual audit.
+
+<!-- trace:TASK-3863 | ai:codex -->
 
 Record all warnings and errors — these are the baseline issues.
 
