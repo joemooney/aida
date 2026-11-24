@@ -3406,7 +3406,7 @@ fn prepare_rework_merge_with_base(
                 pr,
                 original_head: head,
             });
-            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only)
+            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only, None)
         },
         || {
             // trace:BUG-2603 | ai:codex
@@ -3590,6 +3590,7 @@ fn regenerate_repair_outputs(
     identity: &[(&'static str, std::ffi::OsString)],
     parent: &aida_core::exec_context::Environment,
     restore_only: bool,
+    publication_lane: Option<&str>,
 ) -> Result<()> {
     use std::ffi::OsStr;
     // Repositories without registered outputs need no generator (including
@@ -3686,6 +3687,13 @@ fn regenerate_repair_outputs(
             .stdin(std::process::Stdio::null());
         match crate::command_output_with_timeout_capped(cmd, timeout, PROBE_OUTPUT_CAP) {
             crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+            // Only the embedded publication driver returns 75 after restoring the
+            // golden and passing the remaining output checks. trace:BUG-2756 | ai:codex
+            crate::BoundedCommandOutput::Completed(out)
+                if publication_lane.is_some() && out.status.code() == Some(75) =>
+            {
+                record_snapshot_warning(main, publication_lane.unwrap(), &out.stderr)
+            }
             crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
                 "repair regeneration refused: {}",
                 String::from_utf8_lossy(&out.stderr)
@@ -3801,11 +3809,41 @@ fn regenerate_repair_outputs(
             OsStr::new("-c"),
             OsStr::new(driver),
             OsStr::new(base),
-            OsStr::new("generate"),
+            OsStr::new(if publication_lane.is_some() {
+                "publish"
+            } else {
+                "generate"
+            }),
             OsStr::new(&pack_outputs),
             OsStr::new(&budget),
         ],
         REPAIR_GENERATION_TIMEOUT,
+    )
+}
+
+// trace:BUG-2756 | ai:codex
+fn record_snapshot_warning(main: &Path, lane: &str, stderr: &[u8]) -> Result<()> {
+    let stderr = String::from_utf8_lossy(stderr);
+    let warning = stderr
+        .lines()
+        .last()
+        .context("missing snapshot diagnostic")?;
+    anyhow::ensure!(
+        warning.starts_with("snapshot regeneration failed: ")
+            && warning.ends_with("; CI will verify"),
+        "invalid snapshot diagnostic"
+    );
+    eprintln!("{warning}");
+    let lease = crate::list_leases(main)
+        .into_iter()
+        .find(|lease| lease.id == lane)
+        .context("missing publication lease for snapshot comment")?;
+    crate::comment_cmd::add_comment_cli(
+        &crate::lane_recovery::storage_for(main)?,
+        &lease.scope,
+        warning,
+        Some("host repair"),
+        None,
     )
 }
 
@@ -4676,6 +4714,15 @@ mod rework_merge_tests {
             assert_eq!(g(&["rev-parse", "HEAD"]), head);
             assert_eq!(g(&["rev-parse", "MERGE_HEAD"]), merge_head);
         }
+        // Marker-free bytes do not resolve unmerged index entries. trace:BUG-2756 | ai:codex
+        std::fs::write(fx.main.join(path), "resolved bytes\n").unwrap();
+        assert!(
+            refuse_pending_conflict_markers(&execute, Some(&original_paths))
+                .unwrap_err()
+                .to_string()
+                .contains("unresolved index entries")
+        );
+        std::fs::write(fx.main.join(path), ">>>>>>> main\n").unwrap();
         // A failed prior host commit may have staged the resolution: scan it
         // on retry as well, rather than trusting absence of unmerged entries.
         g(&["add", "--", path]);
@@ -5565,6 +5612,7 @@ fn commit_pending_with(
                 &identity,
                 &aida_core::exec_context::Environment::capture(),
                 false,
+                repair.as_ref().map(|(_, lane, _)| lane.as_str()),
             )?;
             // Registered generators can reintroduce markers into a resolved
             // original conflict. Refuse before staging or recording success.
@@ -5849,6 +5897,12 @@ fn refuse_pending_conflict_markers(
         matches.split(|b| *b == 0).filter(|p| !p.is_empty())
             .map(|p| format!("{:?}", String::from_utf8_lossy(p)))
             .collect::<Vec<_>>().join(", ")
+    );
+    // git add -A would silently resolve outstanding index stages.
+    // trace:BUG-2756 | ai:codex
+    anyhow::ensure!(
+        execute("git", &["ls-files".as_ref(), "--unmerged".as_ref()])?.is_empty(),
+        "refusing to publish: unresolved index entries in repair merge"
     );
     Ok(())
 }

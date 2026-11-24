@@ -777,6 +777,30 @@ pub(crate) fn seat_with_publication_pending(
     clone
 }
 
+// trace:BUG-2756 | ai:codex
+#[test]
+fn bug_2756_snapshot_warning_is_recorded_on_leased_spec() {
+    let fx = fixture();
+    let lane = "c0ffee002756";
+    seat_with_publication_pending(&fx, "snapshot-warning", lane, "feat");
+    let warning = "snapshot regeneration failed: cargo exited with status 23; CI will verify";
+    crate::seat_clone::record_snapshot_warning(&fx.main, lane, warning.as_bytes()).unwrap();
+    let store = crate::lane_recovery::storage_for(&fx.main)
+        .unwrap()
+        .load()
+        .unwrap();
+    assert_eq!(
+        store
+            .get_requirement_by_spec_id("BUG-1")
+            .unwrap()
+            .comments
+            .last()
+            .unwrap()
+            .content,
+        warning
+    );
+}
+
 /// A commit step that must never run.
 // trace:TASK-2712 | ai:claude
 fn commit_never(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
@@ -4974,6 +4998,7 @@ if '--write-ledger' in sys.argv:
             &[],
             &aida_core::exec_context::Environment::default(),
             false,
+            None,
         )
         .unwrap();
         if let Some(config) = original_config {
@@ -5009,6 +5034,7 @@ if '--write-ledger' in sys.argv:
                     &[],
                     &aida_core::exec_context::Environment::default(),
                     false,
+                    None,
                 )
                 .unwrap();
                 // The trusted overlay must hide, rather than repair or replace,
@@ -5314,6 +5340,7 @@ fn story_2710_cargo_backed_regeneration_disables_wrapper_and_uses_seat_target() 
         &[],
         &aida_core::exec_context::Environment::capture(),
         false,
+        None,
     )
     .unwrap_or_else(|e| panic!("cargo-backed regeneration: {e:#}"));
     assert_eq!(

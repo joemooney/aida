@@ -296,6 +296,7 @@ def main(base, phase, pack_outputs=(), budget=100.0):
     contents = {}
     before = snapshot(contents)
     deadline = time.monotonic() + budget
+    warning = None
     try:
         for name, products, _, argv in REGISTRY:
             if name == "templates":
@@ -310,7 +311,25 @@ def main(base, phase, pack_outputs=(), budget=100.0):
                 ):
                     raise RuntimeError("CLI help golden must be a regular file: " + str(golden))
             # Stay inside the host's bound so a slow generator is rolled back here.
-            run_generator(argv, max(0.01, deadline - time.monotonic()))
+            # trace:BUG-2756 | ai:codex
+            if phase == "publish" and name == "cli-help" and golden.is_file():
+                previous = snapshot()
+                original = golden.read_bytes()
+                try:
+                    # Leave time for the final exec-context ledger check.
+                    reserve = min(30.0, budget / 4) if EXEC_CONTEXT_LEDGER in outputs else 0
+                    run_generator(argv, max(0.01, deadline - time.monotonic() - reserve))
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                    current = snapshot()
+                    changed = {p for p in current.keys() | previous.keys()
+                               if current.get(p) != previous.get(p)}
+                    if changed - {CLI_HELP_GOLDEN}:
+                        raise RuntimeError("failed snapshot command changed other files") from error
+                    if roll_back(previous, current, {CLI_HELP_GOLDEN: original}):
+                        raise RuntimeError("could not restore CLI help golden") from error
+                    warning = f"snapshot regeneration failed: {error}; CI will verify"
+            else:
+                run_generator(argv, max(0.01, deadline - time.monotonic()))
         after = snapshot()
         unexpected = sorted(
             p for p in before.keys() | after.keys()
@@ -335,8 +354,12 @@ def main(base, phase, pack_outputs=(), budget=100.0):
         if kept:
             note += "; not restorable from the snapshot: " + repr(kept)
         raise RuntimeError(f"{error}{note}") from error
+    return warning
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else (),
+    warning = main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else (),
          float(sys.argv[4]) if len(sys.argv) > 4 else 100.0)
+    if warning:
+        print("\n" + warning, file=sys.stderr)
+        sys.exit(75)
