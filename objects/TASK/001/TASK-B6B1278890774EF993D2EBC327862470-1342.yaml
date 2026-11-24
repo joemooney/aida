@@ -1,0 +1,28 @@
+id: 01a20d45-c623-7ba1-800e-6896d25abcc3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1342
+agreed_id: TASK-3869
+title: 'STORY-3076: review prepare hardening II (pinned-root confinement, rename churn, pathspec scope, gitlinks, anchoring render, spec IDs, non-UTF-8, no-textconv)'
+description: |
+  Deferred from the STORY-3076 S2 (#4511, TASK-3862) review (advisor-122 ruling 2026-11-24 04:14; filed by product-15). Standard, LOW, after S3 (TASK-3863). "review prepare hardening II".
+
+  ## Acceptance
+  - AC1: Pinned-root confinement under concurrent reparenting for BOTH writes and reads (2)(6); rename-aware churn (8); consistent pathspec scoping (9); non-regular entries and gitlinks handled (10).
+  - AC2: Rendering of anchoring outcomes (11); store ID resolution for --specs (12); lossless non-UTF-8 paths with escaping (13); --no-textconv on content reads (14). Tests for each; split into II-a/II-b if over ~300 lines.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T11:16:46.243073402Z
+modified_at: 2026-11-24T11:16:46.243073402Z
+req_type: Task
+tags:
+- review
+- story-3076
+- track:integration
+filed_at:
+  code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91c070eb012
+  vendor: claude
