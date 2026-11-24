@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T23:03:32.522118252Z
+modified_at: 2026-11-24T23:06:57.006354307Z
 req_type: Bug
 tags:
 - data-loss
@@ -182,6 +182,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2749 FAIL. Reviewed the full pinned landing diff against protected main 5665f7c661c7b100b06434132c000715144387e7 and attested the original head. The original head is two commits behind. Neither base commit changed the code any finding depends on.. It was punted on: design-fork: Round 2 CI instruction conflicts with the exact-count TASK-2143 ratchet. The guarded fixes for findings 1 and 2 remove raw Git builders: session_reap.rs now 6 (ledger 7), worktree_gc.rs now 12 (ledger 13). The executed guard requires lowering both counts, but the brief forbids any ratchet ledger edit. I dispute the CI requirement that the ledger can remain unchanged with these removals. No data-loss finding is disputed.. No triage reason was given.'
   created_at: 2026-11-24T23:04:21.574267731Z
   modified_at: 2026-11-24T23:04:21.574267731Z
+- id: 01a20fd0-2b40-70b1-b776-6893296d8e47
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:06):
+    # BUG-2749 / PR #4537 r2 (advisor-122 ruling 2026-11-24 14:48 at 5203d57d; STRICT, data-loss; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. ONE round. Each MUST with a test.
+    (F1) NO repository-wide `git worktree prune` anywhere (session end, session gc INCLUDING --dry-run). Replace it with PER-WORKTREE pruning, only after that worktree passes the staged-index retention check. --dry-run must NEVER mutate.
+    (F2) An existing per-worktree index.lock (or any in-flight writer evidence) means RETAIN (fail closed).
+    (F3) Index evidence must be INTEGRITY-VERIFIED (validate the trailing checksum, e.g. a checksum-verifying read); a mismatch or unverifiable index means RETAIN. Add a fixture with a valid header and a BAD checksum.
+    (F4, only if it fits in the budget) mailbox-retention prune --dry-run applies the same eligibility check (or reports "uncertain"), so preview == apply. Otherwise skip it (a LOW follow-up).
+    ALSO (CI): your head fails the ratchet aida-ci-guards task_2143_clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read: route that git read through the existing clone-git helper; do NOT edit any ratchet ledger.
+    Run `cargo test -p aida-ci-guards --lib task_2143` plus your targeted tests, then make check-ci-fast, then push to #4537. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+
+    RESUME (product-15 16:05): your r2 work (guarded fixes for F1-F3) is COMMITTED and pushed on the branch (889fabb7c6). Continue from it.
+    RATCHET CLARIFICATION (overrides the "no ledger edit" line above): you MAY LOWER the TASK-2143 exact counts in the ratchet ledger to match the raw-git builders you REMOVED (session_reap.rs 7->6, worktree_gc.rs 13->12). Lowering = tightening, which is allowed. Never RAISE a count or add a new site. Still route any NEW lease-tree git read through the clone-git helper.
+  created_at: 2026-11-24T23:06:57.006354307Z
+  modified_at: 2026-11-24T23:06:57.006354307Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
