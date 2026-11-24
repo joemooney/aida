@@ -62,6 +62,13 @@ comments:
   created_at: 2026-11-24T05:49:23.135026463Z
   modified_at: 2026-11-24T05:49:23.135026463Z
   session_id: 01a20bdf8589
+- id: 01a20c1c-79e0-7d91-a0cf-a4e30f4538d9
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 22:58): PR-4490 @ 9291039591 PASSES. +111/-10 in status_prs.rs, merges CLEAN, standard tier (reads leases only for scanning; no lease or claim logic). AC1(a): a legacy ''deferred:<date>'' tag counts as deferred (test task_3857_legacy_tag_quiets_branch_until_removed). AC1(b): private-clone lease rows go through scan_unshipped_clones with an is_deferred check on lease.scope (test task_3857_private_clone_respects_deferral). AC2(c): statuses are keyed by BOTH spec_id (origin) and agreed_id (display); within a snapshot the display ID wins an alias collision, and across snapshots the store overrides caller summaries (test task_3857_resolves_commit_origin_id_on_candidate_branch). Note: clone_unshipped_work_items(_bounded) became #[cfg(test)] wrappers, and fast compile confirms there are no non-test callers.'
+  created_at: 2026-11-24T05:51:49.805902500Z
+  modified_at: 2026-11-24T05:51:49.805902500Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bd4-271a-78c3-b285-2b0a41dee5b4
   author: joe
