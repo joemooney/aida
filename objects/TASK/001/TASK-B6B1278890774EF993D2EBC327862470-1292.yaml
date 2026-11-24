@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T05:02:20.001957394Z
+modified_at: 2026-11-24T05:04:40.744259377Z
 req_type: Task
 tags:
 - ci
@@ -26,6 +26,15 @@ comments:
   content: Filed Approved per advisor-122 ruling 2026-11-23 21:22 (#4479 follow-up; drain, integration filler).
   created_at: 2026-11-24T04:21:51.765055945Z
   modified_at: 2026-11-24T04:21:51.765055945Z
+- id: 01a20bf1-1eb4-71c0-a345-bfda8b270c20
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fa7e9a9c25594b897de1ea13a6aa7eedc59c4866 plus native working diff. AC1: [evidence: behavioral-test] scripts/discover-python-tests.py:43 filters both build and step conditions before matching commands. AC2: [evidence: behavioral-test] tests/test_python_discovery.py:58 reproduced four false credits on the integration base. Both discovery tests now pass with disabled, enabled and absent-shard cases. Format probe found YAML 1.1 coercion of on; switched to scalar text and tested it. Compared old/new discovery against integration ci.yml: same 44 dedicated files. Empty, single and multiple invocations inspected. Unknown condition spellings conservatively receive no credit. No authority changes, weakened tests or untracked additions. No PR-head CI yet.
+  created_at: 2026-11-24T05:04:40.744259377Z
+  modified_at: 2026-11-24T05:04:40.744259377Z
+  session_id: 01a20beec6d4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bc9-e27b-7140-82f7-88ad645d2195
   author: joe
@@ -38,6 +47,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20bef-6e83-70a1-9494-a2bdb1d8d2bf
+  author: dirtlab
+  timestamp: 2026-11-24T05:02:50.499461392Z
+  session_id: 01a20beec6d4
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
