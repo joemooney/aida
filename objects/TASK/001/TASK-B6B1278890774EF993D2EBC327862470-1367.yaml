@@ -1,0 +1,31 @@
+id: 01a20efb-934f-7f71-bdc6-2b7fd920756a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1367
+title: 'Review follow-up: config_cmd.rs:1746–1747 and 1783–1785. The new auto-commit can absorb unrelated edits made'
+description: |-
+  From BUG-2752
+  Reviewed sha: d4a4583e95c8cf22a43aa1b9ad40fa5c177b838c
+
+  config_cmd.rs:1746–1747 and 1783–1785. The new auto-commit can absorb unrelated edits made after the clean check and before the initial read, or after save_edit_doc and before Git reads the working file. The prompt-time string comparison does not cover either interval, and finish_config_change checks only whether the path is dirty before committing its live contents. Bind auto-commit to the verified starting config and the intended output, or leave the change for deliberate commit when concurrent edits prevent that proof.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T19:14:57.999351329Z
+modified_at: 2026-11-24T19:14:57.999351329Z
+req_type: Task
+tags:
+- carried-from:BUG-2752
+- finding-hash:9992297e
+- from-review:BUG-2752
+relationships:
+- rel_type: References
+  target_id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
+  created_at: 2026-11-24T19:15:11.671224527Z
+filed_at:
+  code_sha: d4a4583e95c8cf22a43aa1b9ad40fa5c177b838c
+  branch: pr-4529
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
+  session: 01a20ef8170a

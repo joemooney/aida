@@ -1,0 +1,31 @@
+id: 01a20efb-5c6a-77c3-b09b-c447d4ebd25f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1366
+title: 'Review follow-up: init_cmd.rs:5326–5333. Propagating the optional native prompt error with ? converts an exi'
+description: |-
+  From BUG-2752
+  Reviewed sha: d4a4583e95c8cf22a43aa1b9ad40fa5c177b838c
+
+  init_cmd.rs:5326–5333. Propagating the optional native prompt error with ? converts an existing warning into a partial-init failure after storage and scaffolding have already succeeded. For example, an initialized project with a valid inline root contained table is readable by the policy loader but rejected by offer_init_codex_native before consent. Interactive init now exits before role setup, registry registration and other remaining setup. Preserve a clear opt-in error and continue the independent init steps as the previous caller did.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T19:14:43.946911956Z
+modified_at: 2026-11-24T19:14:43.946911956Z
+req_type: Task
+tags:
+- carried-from:BUG-2752
+- finding-hash:3f86806b
+- from-review:BUG-2752
+relationships:
+- rel_type: References
+  target_id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
+  created_at: 2026-11-24T19:14:57.596233047Z
+filed_at:
+  code_sha: d4a4583e95c8cf22a43aa1b9ad40fa5c177b838c
+  branch: pr-4529
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
+  session: 01a20ef8170a
