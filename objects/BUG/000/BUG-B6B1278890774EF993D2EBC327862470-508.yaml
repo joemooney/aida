@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-24T20:58:39.450918566Z
+modified_at: 2026-11-24T21:15:27.954322044Z
 req_type: Bug
 tags:
 - launch
@@ -83,6 +83,17 @@ comments:
   modified_at: 2026-11-24T15:38:36.005236955Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f69-e958-76b2-827f-a0f80e26f0e9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 95eaccf328557402d176c0b41983afe1b677965f plus the native working diff. No committed branch delta or untracked additions.
+    AC1: [evidence: behavioral-test] codex_bg_receipt.rs:259 and agent_codex_background.rs:2229. Same synthetic ancestor with exact environment value returned Clear on HEAD and Occupied after fix. Recovery and unknown retirement require Clear before release. Supervisor exit retains its own exclusion.
+    AC2: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:1388. Isolated rustc fixture passed recovery argv, longer token, exact environment, independent worker argv, group, session and unreadable evidence assertions. Self-review tightened argv exemption for independent worker arguments. Checked byte-exact environment value boundaries, empty/multiple entries, status handling and release call sites. Existing tests intact. Lane cargo job j20261124T210010064-2-0 timed out compiling at 900s before executing the test. No PR-head CI evidence. This slice detects existing holder evidence and does not introduce a new launch token.
+  created_at: 2026-11-24T21:15:27.954322044Z
+  modified_at: 2026-11-24T21:15:27.954322044Z
+  session_id: 01a20f580b4d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-134f-7401-800a-606c9060db24
   author: joe

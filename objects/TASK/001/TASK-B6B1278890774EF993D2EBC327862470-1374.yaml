@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-24T20:48:59.556023187Z
+modified_at: 2026-11-24T21:27:38.076684996Z
 req_type: Task
 tags:
 - launch
@@ -36,6 +36,15 @@ comments:
     Reviewed HEAD: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0 plus native working changes. AC1: [evidence: behavioral-test] session/inline_tests.rs:7 and gate/tests/task_3820_grant_renewal_tests.rs:582 passed under held locks with typed TimedOut. AC2: [evidence: behavioral-test] containment/tests/launch_tests.rs:4710 passed, verifying return and a recovery record naming the child. Lane job j20261124T203940175-2-0 executed all three. Fixed helper lookup, reconciled writer inventory preserving upstream caller coverage, and classified the live-child fixture for FULL. The last make check-ci-fast reached the structural-selection check. After fixing its finding, all seven structural-selection tests passed; aggregate fast target incomplete. No PR-head CI yet. Recovery file persistence depends on host temporary storage. No launch admission or grant mutation policy changes.
   created_at: 2026-11-24T20:48:59.556023187Z
   modified_at: 2026-11-24T20:48:59.556023187Z
+  session_id: 01a20f356c20
+  harness_version: codex-cli 0.167.0
+- id: 01a20f75-0d4e-7ad2-a49f-448ce81c2c51
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8659375ce9c78c4ba31f63089e921f230c83ec24 plus uncommitted fast-gate fix. Both deadline callers now share gate/kernel_deps.rs:16. Linux lock contention retries only WouldBlock; expired deadlines return TimedOut and other errors propagate. AC1: [evidence: behavioral-test] contended lease and grant tests passed. AC2: [evidence: behavioral-test] unreaped child recovery test passed. The entire story_1888_gate_paths_tests suite passed (52/52), including gate_kernels_reach_outside_only_through_listed_leaves. Gate dependency and writer inventories passed. No gate exemptions or test changes. Aggregate host fast check awaits publication workflow.
+  created_at: 2026-11-24T21:27:38.076684996Z
+  modified_at: 2026-11-24T21:27:38.076684996Z
   session_id: 01a20f356c20
   harness_version: codex-cli 0.167.0
 history:
