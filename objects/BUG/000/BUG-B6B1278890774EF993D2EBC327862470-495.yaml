@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-24T04:20:03.301984480Z
+modified_at: 2026-11-24T04:57:35.383713729Z
 req_type: Bug
 tags:
 - ci
@@ -161,6 +161,13 @@ comments:
   content: 'INTEGRATION PRE-CHECK r2 (integration-30, 21:22): PR-4479 @ 5a670b9f PASSES the 20:32 ruling, in scope. The rework commit 5a670b9fc7d sets KNOWN_FAILING = {}, adds test_cache_refresh_outputs.py, test_pr_ship_preflight.py and test_seat_takeover_lifecycle.py to the CLI set, and adds contracts-shard invocations matching each script''s argv: ''--aida target/debug/aida'' for the first two, and ''"$PWD/target/debug/aida"'' for the sys.argv[1] script. The other hunks come from its integration merge. Merges CLEAN. PROOF still required: the contracts shard runs only in the FULL tier, so the integration seat adds ci:full after FAST and reads that shard''s log for all three scripts passing.'
   created_at: 2026-11-24T04:18:51.012238832Z
   modified_at: 2026-11-24T04:18:51.012238832Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20bea-d7bf-7953-b1ac-7bf3642a3476
+  author: joe
+  content: 'PROOF (integration-30, 22:00): full CI run 45326576057 at PR-4479 head 5a670b9f is SUCCESS. The contracts job 138217536267 (bash -e -o pipefail) ran all three restored CLI suites: test_cache_refresh_outputs.py (PASS deferred/writer_busy/worker_running on 8 tolerant surfaces; graph/history/digest cache contract; advisory zero wait), test_pr_ship_preflight.py (PASS for every case, definition_override exit 24, plus the help exit-code table), and test_seat_takeover_lifecycle.py (role current = orchestrator; ''PASS: refused without transfer/demotion''). The advisor''s r2 proof condition is met.'
+  created_at: 2026-11-24T04:57:35.383713729Z
+  modified_at: 2026-11-24T04:57:35.383713729Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
