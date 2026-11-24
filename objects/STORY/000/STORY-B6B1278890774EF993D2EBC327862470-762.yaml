@@ -59,6 +59,13 @@ comments:
   created_at: 2026-11-24T00:18:32.091686468Z
   modified_at: 2026-11-24T00:18:32.091686468Z
   session_id: 01a20ab97aac
+- id: 01a20af6-956d-77f1-82ee-01c5ffc0e4b9
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 17:35): PR-4467 @ dd0f71497a9 PASSES (slice 1, Refs). Docs-only, +262/-2: ten delivery/authority terms (Autoland, Bisect, ci:full, Delta review, Deputy shell, --include-gate-paths, Merge train, Post-train pull, Ratchet, Rider) added to the product-glossary template master; mirror identical (make sync-templates), plus docs/cli/12-glossary.md and the showcase glossary/search index. Definitions checked against two-seat-protocol.md (train bisect, riders closing with a pointer, ci:full tiering, landing modes): accurate. tests/test_showcase_build.py pins each term to one search row and one glossary anchor.'
+  created_at: 2026-11-24T00:30:48.167698488Z
+  modified_at: 2026-11-24T00:30:48.167698488Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
