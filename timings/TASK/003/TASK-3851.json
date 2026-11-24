@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3851",
+  "publishes": [
+    {
+      "at": "2026-11-24T09:46:28.813231247Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T03:52:55.764597743Z",
+      "spec": "TASK-3851",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4480,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "e94099b539b9cd19d00f797a8dd872a305a5d623"
+      }
+    },
+    {
+      "ts": "2026-11-24T03:53:06.051450067Z",
+      "spec": "TASK-3851",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-b6b1278890774ef993d2ebc327862470-1278 (TASK-3851), Round 1. Both numbered worksheet criteria pass. The folded deadline validation is partial, and the retained-error change affects unrelated mail.\n\nAC1 — verified by aida-cli-lib/src/mail_backlog.rs:349 and the failing-registry fixture in cargo test -p aida-cli-lib story2767_retired_sender_preserves_seat_delivery_ownership. Doctor inventories sidecars before loading the registry, then preserves both the missing-sidecar finding and the all-recipients unknown finding on error.\nAC2 — verified by cargo test -p aida-cli-lib story2767_retired_sender_preserves_seat_delivery_ownership, which replaces the registry directory with a regular file and asserts both the load error and the doctor findings.\nFolded option terminator — verified by the same fixture's exact dash-leading hint assertion and its existing ordinary-ID assertion.\nFolded deadline checkpoints — verified by source inspection and cargo test -p aida-core task3851_retained_deadline_rejects_late_generation_and_final_probe, which checks expiry between generation opens and after the final probe.\nFolded deadline outcome (UNEXAMINED and incomplete inventory) — unverified.\n\nReviewed all six files in the pinned PR diff. Integration had advanced six commits to be227b8e5ad. The flagged stale-base paths have no net content change between the merge base and that integration tip, so neither finding depends on code superseded by the base. The implementer reported both named tests passing in launcher job j20261124T024944162-2-0. No local tests were run in this review. Pinned FAST gates and merge-hold-gate passed, FAST compile was pending, and FULL behavioral shards were skipped. The separate review claim command was refused.",
+        "recovery_hint": "address the review findings, move TASK-3851 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T05:43:37.711581956Z",
+      "spec": "TASK-3851",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4480,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "8cf50d92e37842701bbab1bfed05e9dbade983a7"
+      }
+    },
+    {
+      "ts": "2026-11-24T05:43:42.895401904Z",
+      "spec": "TASK-3851",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3851 AC1 PASS: doctor inventories seat sidecars before loading the recipient registry, and preserves those findings on registry failure. AC2 PASS: the CLI regression forces registry load failure and checks the sidecar hint and unknown backlog finding. The leading-dash hint, final retained-probe deadline and per-ID ACK/relay isolation pass source review and have focused regressions. The whole-inventory ACK refusal, its regression test, and partial-coverage reason required by the latest advisor brief fail on this head. Integration advanced four commits, none affecting the finding paths. Fast gates passed. Fast compile timed out after five minutes in Install compile dependencies before Rust compilation, and the aggregate Build check propagated that failure. Implementer-reported targeted results were reviewed as supporting evidence. The explicit review claim command refused.",
+        "recovery_hint": "address the review findings, move TASK-3851 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:21:04.538721963Z",
+      "spec": "TASK-3851",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4480,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ec99bae57bce2446943871b3b4d1babd39075e69"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:21:55.747639076Z",
+      "spec": "TASK-3851",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3851 AC1 and AC2 PASS. Doctor inventories seat sidecars before loading the recipient directory and the broken-registry fixture asserts the missing-message finding and the generic unknown finding. The same fixture covers the leading-dash read hint. Folded deadline criteria PASS by source and fixture inspection, including deterministic final-probe expiry through inspect_seat_sidecars. Round 3 ACK and partial-coverage criteria PASS. A retained inventory open failure vetoes AckPlan::prepare, while a per-ID oversized sidecar leaves an unrelated record ACK-eligible. Round 2 F1 relay notice test criterion FAILS because its oversized sidecar is outside the ending run's audience, so the test never exercises the claimed failure path. The head is six commits behind origin/integration. Neither finding depends on code changed in those commits. Exact-head fast gates passed and fast compile was pending at review time. No local builds or tests were run.",
+        "recovery_hint": "address the review findings, move TASK-3851 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T06:25:41.778410426Z",
+      "spec": "TASK-3851",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4480,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ec99bae57bce2446943871b3b4d1babd39075e69"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:31:41.048908967Z",
+      "spec": "TASK-3851",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4505,
+        "verdict": "APPROVED",
+        "reviewed_sha": "277b219ea9bae2c8213970dac31731ede9950f7c"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:36:32.899956209Z",
+      "spec": "TASK-3851",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4505
+      }
+    },
+    {
+      "ts": "2026-11-24T09:46:28.601862667Z",
+      "spec": "TASK-3851",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "91c070eb012a63da0770c0f5d76cd883dda414af",
+        "pr": 4505,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
