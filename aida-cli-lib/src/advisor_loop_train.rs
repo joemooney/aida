@@ -183,14 +183,16 @@ pub(super) fn run_passes(
             {
                 eprintln!("auto-train: existing train owns the journal; leaving it alone");
             }
-            Ok(Err(error)) => {
-                let reason = format!("{error:#}");
-                eprintln!("auto-train: pass failed: {reason}");
-                train_service::record_failure(root, Some(&reason))?;
-            }
+            Ok(Err(error)) => record_pass_failure(root, error)?,
         }
         idle(root, idle_seconds, &mut admission)?;
     }
+}
+
+pub(super) fn record_pass_failure(root: &Path, error: anyhow::Error) -> Result<()> {
+    let reason = format!("{error:#}");
+    eprintln!("auto-train: pass failed: {reason}");
+    train_service::record_failure(root, Some(&reason))
 }
 
 /// Check heartbeat and grant once a second while idle, so rotation does not

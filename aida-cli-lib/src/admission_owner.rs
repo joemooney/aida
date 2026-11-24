@@ -131,7 +131,7 @@ fn serial_holder(path: &Path) -> String {
 /// `/proc/locks` lists them: `N: FLOCK ADVISORY WRITE <pid> <maj>:<min>:<ino> ...`
 /// with major/minor in hex. Blocked waiters (`N: -> FLOCK ...`) are skipped.
 // trace:BUG-2703 | ai:claude
-fn flock_holders(locks: &str, dev: u64, ino: u64) -> Vec<u32> {
+pub(crate) fn flock_holders(locks: &str, dev: u64, ino: u64) -> Vec<u32> {
     let major = ((dev >> 8) & 0xfff) | ((dev >> 32) & !0xfff);
     let minor = (dev & 0xff) | ((dev >> 12) & 0xffff_ff00);
     let mut pids = Vec::new();
