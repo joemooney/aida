@@ -1,0 +1,26 @@
+id: 01a20f51-08dd-7550-a206-81ef30a8225f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1377
+agreed_id: TASK-3886
+title: 'STORY-3038 deferred: classify the <id>-work branch at approval; paginate open_change_by_number'
+description: |
+  Deferred from #4532 STORY-3038 r1 (advisor-122 2026-11-24 13:52; filed by product-15). LOW; both fail safe.
+
+  ## Acceptance
+  - AC1: (F3) approval-time drain classification also resolves the <id>-work branch (brief.rs:413-417), not only refs/remotes/origin/<id>. Test.
+  - AC2: (F4) open_change_by_number does not miss PRs beyond gh pr list's 30-item default (paginate or query by number). Test.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T20:48:18.653463174Z
+modified_at: 2026-11-24T20:48:18.653463174Z
+req_type: Task
+tags:
+- gate
+filed_at:
+  code_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba5
+  vendor: claude
