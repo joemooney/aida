@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T10:55:26.287316995Z
+modified_at: 2026-11-24T10:56:33.826138340Z
 req_type: Task
 tags:
 - review
@@ -75,6 +75,19 @@ comments:
   created_at: 2026-11-24T10:55:07.494975998Z
   modified_at: 2026-11-24T10:55:07.494975998Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20d33-81b5-7e91-b2f5-f5cb3109de4d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:56):
+    # TASK-3862 / PR #4511 r2: SEMANTIC-CONFLICT fix with H1 (integration-30 pre-check 03:55; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3862). TINY.
+
+    H1 (#4510, now in integration f1f2503d) changed `ProjectReviewRulesConfig::load_from_root` to return `anyhow::Result<Self>`, but S2's aida-cli-lib/src/review_prepare.rs:121 still uses it as a plain value (`rules_cfg.rules` / `.exclude` / ...), so the merged tree won't compile. S2's green FAST ran on the pre-H1 base.
+    DO: merge origin/integration (>= f1f2503d) into int32-task-3862. Change review_prepare.rs:121 to `ProjectReviewRulesConfig::load_from_root(&project_root).context("load .aida/review-rules.toml")?`, so an invalid or unreadable config FAILS `aida review prepare` (H1 AC d). Add ONE test asserting that an invalid review-rules.toml errors (register it in scripts/ratchet-set.json if required: same-PR entry only).
+    NOTHING ELSE. Targeted test + `make check-ci-fast`; push to #4511. COMMIT your work.
+  created_at: 2026-11-24T10:56:33.826138340Z
+  modified_at: 2026-11-24T10:56:33.826138340Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
