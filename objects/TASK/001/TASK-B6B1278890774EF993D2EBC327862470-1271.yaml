@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: tests/test_cache_refresh_outputs.py passes under CI discovery (fix the test or the code it covers; if the test is obsolete, delete it with a reason).
   - AC2: Remove its entry from the BUG-2734 known-failing list in the same PR.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:18:34.370466098Z
-modified_at: 2026-11-24T02:44:13.077256965Z
+modified_at: 2026-11-24T02:44:15.102220845Z
 req_type: Task
 tags:
 - ci
 - from-bug-2734
 - tests
-- track:integration
 comments:
 - id: 01a20ab7-e275-75b1-8836-c67dc2b7f495
   author: joe
@@ -112,6 +111,20 @@ history:
   author: joe
   timestamp: 2026-11-24T02:44:13.202717406Z
   changes: []
+- id: 01a20b70-8bff-7672-9c0b-e6485dcadb68
+  author: joe
+  timestamp: 2026-11-24T02:44:14.975653447Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a20b70-8c7e-7f00-bc3a-89327c55ea3f
+  author: joe
+  timestamp: 2026-11-24T02:44:15.102218367Z
+  changes:
+  - field_name: tags
+    old_value: ci, from-bug-2734, tests, track:integration
+    new_value: ci, from-bug-2734, tests
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
@@ -120,3 +133,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4e140498bc8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T02:44:14.975592144Z
