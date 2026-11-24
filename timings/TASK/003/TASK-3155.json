@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3155",
+  "publishes": [
+    {
+      "at": "2026-11-24T19:40:47.862429521Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T17:23:50.469553344Z",
+      "spec": "TASK-3155",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4443,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "88676489367163ed29d983aa2fdef1e6b3c25c0d"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:24:00.421630484Z",
+      "spec": "TASK-3155",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "FAIL — TASK-3155 claims completion. Full pinned diff reviewed against main ef906ec7464cf1b3100c4383085280c203722941 and landed tree 403f9345a4c52f12043cdacb60facdc5817f61e3. The PR head is four commits behind the base. None of these findings depends on a change made by those base commits.\nTASK-b6b1278890774ef993d2ebc327862470-1116.ac26a714 unverified\nTASK-b6b1278890774ef993d2ebc327862470-1116.acedb911 unverified\nThe two criteria identified by the supplied untraced list both have newly added source assertions in cargo test -p aida-cli-lib task_3155_interleaved_queue_edit_and_removal. The fixture checks marker replacement, a simple operator note, metadata, removal and an absent requirement across Git and SQLite. It misses both data cases above and does not detect a stale read followed by an upsert. The exact-head FAST source gates and merge-hold check passed. FAST compile was pending at review time. Focused test execution was unavailable in the reviewed CI evidence.",
+        "recovery_hint": "address the review findings, move TASK-3155 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:46:39.876986631Z",
+      "spec": "TASK-3155",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4443,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "dd2f0e4489eb9e78f3c21585a2e63d0875a08965"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:46:43.218966958Z",
+      "spec": "TASK-3155",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3155 AC1 PARTIAL — the note transform preserves unrelated text and the matching-row update uses the Git writer lock or SQLite immediate transaction, but Git discovery can still lose a persisted file's identity. AC2 PARTIAL — the regression checks the surviving metadata, absence of removed or never-queued rows, and exclusion of a competing writer during the callback, but allows a stale preflight snapshot to be reused under lock. Reviewed the full landed diff against pinned main 4e140498bc8d425330633234bec803e5f8584ca0 (tree cbcb86b5587bc9a1e4020366b275e87904e8f49f). The PR head is one commit behind that base. The intervening main-watch change is unrelated to both findings. GitHub FAST gates passed and FAST compile was pending at review time. Source review and existing evidence only.",
+        "recovery_hint": "address the review findings, move TASK-3155 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T18:28:01.702851828Z",
+      "spec": "TASK-3155",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4443,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1a0794093536a7bb10b295666088eb76fe20d30d"
+      }
+    },
+    {
+      "ts": "2026-11-24T19:28:57.599119173Z",
+      "spec": "TASK-3155",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4443
+      }
+    },
+    {
+      "ts": "2026-11-24T19:40:47.658120749Z",
+      "spec": "TASK-3155",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0",
+        "pr": 4443,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
