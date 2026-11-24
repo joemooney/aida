@@ -67,6 +67,11 @@ comments:
   modified_at: 2026-11-24T00:31:04.149690967Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20af8-1149-7d30-9330-63dc9ab09e3b
+  author: joe
+  content: 'RE-SCOPE (advisor-122 ruling 2026-11-23 17:40): #4468 merges as a Refs regression test (lane-recovery already sees integration-base PRs). NEW scope: find the SILENT Done->NeedsAttention flip of BUG-2728 at 21:15Z (aida history event 930883d1; candidate writers: supervisor.rs / zen_drive.rs). AC: every AUTOMATED status regression leaves a comment naming its writer (module plus reason); test that a regression write without one is refused or auto-annotated.'
+  created_at: 2026-11-24T00:32:39.240890150Z
+  modified_at: 2026-11-24T00:32:39.240890150Z
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
