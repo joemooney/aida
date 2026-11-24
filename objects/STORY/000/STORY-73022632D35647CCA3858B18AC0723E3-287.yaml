@@ -1,5 +1,6 @@
 id: 01a20f44-d035-7b50-a9bb-9f0fe3373aeb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-287
+agreed_id: STORY-3105
 title: 'Review PR-4532: [AI:codex] fix(gate): require reviewed paths for approved-small drain (STORY-3038)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20eec`) for branch `story-b6b1278890774ef993d2ebc327862470-820`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T20:35:14.726167866Z
   session_id: 01a20eec0c39
+  changes: []
+- id: 01a20f61-f2bf-7192-b569-455664c369a7
+  author: joe
+  timestamp: 2026-11-24T21:06:47.103228157Z
   changes: []
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0

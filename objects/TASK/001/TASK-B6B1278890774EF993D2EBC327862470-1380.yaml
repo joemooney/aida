@@ -1,5 +1,6 @@
 id: 01a20f59-eec0-7df3-8162-367f05a94fcd
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1380
+agreed_id: TASK-3380
 title: 'Review follow-up: Deferred follow-up TASK-3881 (prior F6). aida-cli-lib/src/config_cmd.rs:1744–1758,1805–181'
 description: |-
   From BUG-2752
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
   created_at: 2026-11-24T20:58:15.996029085Z
+history:
+- id: 01a20f61-f085-72a2-85a9-759f3af96ebc
+  author: joe
+  timestamp: 2026-11-24T21:06:46.533203299Z
+  changes: []
 filed_at:
   code_sha: 35f4bef36bbebb0bc4f842951486de67b6bfcd93
   branch: pr-4529

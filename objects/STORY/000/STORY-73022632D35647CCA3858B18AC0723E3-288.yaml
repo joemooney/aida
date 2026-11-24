@@ -1,5 +1,6 @@
 id: 01a20f49-b69f-7b71-b8a7-07bc06ff0faa
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-288
+agreed_id: STORY-3104
 title: 'Review PR-4533: [AI:codex] fix(repair): publish resolved merges after snapshot regeneration failure (BUG-2756)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f18`) for branch `bug-b6b1278890774ef993d2ebc327862470-517`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T20:40:34.553375578Z
   session_id: 01a20f1888e6
+  changes: []
+- id: 01a20f61-f2bc-7082-a561-46188143f2aa
+  author: joe
+  timestamp: 2026-11-24T21:06:47.100352524Z
   changes: []
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
