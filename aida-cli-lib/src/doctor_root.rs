@@ -1891,6 +1891,11 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2347 | ai:codex
     (&["codex-mail-wake"], "codex-mail-wake"),
+    // trace:TASK-3847 | ai:codex
+    (
+        &[crate::forge::CORE_BUDGET_CATEGORY],
+        crate::forge::CORE_BUDGET_CATEGORY,
+    ),
     // trace:STORY-2630 | ai:codex
     (&["codegraph", "code-graph"], "codegraph"),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
