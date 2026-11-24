@@ -4,10 +4,7 @@
 //! path-scoped playbook grouping, semantic file batching, file-coverage verification,
 //! and snippet-anchored line positioning.
 
-use crate::{
-    detect_forge_from_origin, extract_acceptance_section, find_project_root, git_log_messages,
-    Storage,
-};
+use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
     anchor_findings_with, bundle_review_batches, classify_diff_inventory, verify_coverage_ledger,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
@@ -293,6 +290,16 @@ fn write_output(root: &Path, path: &Path, text: &str) -> Result<()> {
         !path.components().any(|c| c.as_os_str() == ".git"),
         "--write refuses Git metadata"
     );
+    let destination = root.canonicalize()?.join(relative);
+    for flag in ["--absolute-git-dir", "--git-common-dir"] {
+        let output = git_text(root, &["rev-parse", "--path-format=absolute", flag])?;
+        let metadata = Path::new(output.strip_suffix('\n').context("invalid git directory")?)
+            .canonicalize()?;
+        anyhow::ensure!(
+            !destination.starts_with(metadata),
+            "--write refuses Git metadata"
+        );
+    }
     let mut dir = std::fs::File::open(root)?;
     let pinned =
         |file: &std::fs::File| PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
@@ -375,8 +382,13 @@ fn resolve_comparison_endpoints(
 
     if let Some(pr_n) = args.pr {
         let forge = detect_forge_from_origin(project_root).context("cannot resolve PR forge")?;
-        let meta = crate::forge::forge_for_kind(project_root, forge.forge_kind())
-            .change_metadata(pr_n, &mut crate::network_retry::NoopSink)?;
+        let reader: Box<dyn crate::forge::Forge> = match forge.forge_kind() {
+            crate::forge::ForgeKind::GitHub => {
+                Box::new(crate::forge::GitHubForge::for_review(project_root)?)
+            }
+            kind => crate::forge::forge_for_kind(project_root, kind),
+        };
+        let meta = reader.change_metadata(pr_n, &mut crate::network_retry::NoopSink)?;
         let (head, mb) = pr_comparison(project_root, &meta.base_ref, &meta.head_sha)?;
         return Ok(("range".into(), Some(meta.base_ref), Some(head), Some(mb)));
     }
@@ -402,40 +414,15 @@ fn pr_comparison(root: &Path, base: &str, head: &str) -> Result<(String, String)
     Ok((resolved, mb))
 }
 
-fn git_rev_parse(project_root: &Path, rev: &str) -> Result<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args([
-            "rev-parse",
-            "--verify",
-            crate::git_arg_guard::END_OF_OPTIONS,
-            rev,
-        ])
-        .output()
-        .context("failed to run git rev-parse")?;
-    if !out.status.success() {
-        anyhow::bail!("git rev-parse --verify {} failed", rev);
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+// trace:TASK-3862 | ai:codex
+fn git_rev_parse(root: &Path, rev: &str) -> Result<String> {
+    let value = git_text(root, &["rev-parse", "--verify", "--end-of-options", rev])?;
+    Ok(value.trim_end().to_owned())
 }
 
-fn git_merge_base(project_root: &Path, base: &str, head: &str) -> Result<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args([
-            "merge-base",
-            crate::git_arg_guard::END_OF_OPTIONS,
-            base,
-            head,
-        ])
-        .output()
-        .context("failed to run git merge-base")?;
-    if !out.status.success() {
-        anyhow::bail!("git merge-base {} {} failed", base, head);
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+fn git_merge_base(root: &Path, base: &str, head: &str) -> Result<String> {
+    let value = git_text(root, &["merge-base", "--end-of-options", base, head])?;
+    Ok(value.trim_end().to_owned())
 }
 
 // trace:STORY-3076 | ai:antigravity
@@ -513,6 +500,7 @@ fn collect_git_diff_entries(
 
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     let out = Command::new("git")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .current_dir(root)
         .args(args)
         .output()
@@ -645,7 +633,14 @@ fn resolve_linked_specs(
                 &["show", "-s", "--format=%B", head, "--"],
             )?]
         } else {
-            git_log_messages(project_root, mb, head)?
+            let range = format!("{mb}..{head}");
+            git_text(
+                project_root,
+                &["log", "-z", "--format=%B", "--end-of-options", &range, "--"],
+            )?
+            .split_terminator('\0')
+            .map(str::to_owned)
+            .collect()
         };
         let cov = crate::review_gates::review_coverage_from_commits(&messages);
         spec_ids.extend(cov.delivered);
@@ -862,10 +857,14 @@ mod tests {
         std::fs::write(&outside, "original").unwrap();
         std::os::unix::fs::symlink(temp.path(), root.join("link")).unwrap();
         std::os::unix::fs::symlink(&outside, root.join("leaf")).unwrap();
-        std::fs::write(root.join(".git"), "gitdir: ../metadata").unwrap();
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::rename(root.join(".git"), root.join("metadata")).unwrap();
+        std::fs::write(root.join(".git"), "gitdir: metadata").unwrap();
         for path in [
             Path::new(".git"),
             Path::new("new/.git/config"),
+            Path::new("metadata"),
+            Path::new("metadata/config"),
             Path::new("../outside"),
             &outside,
             Path::new("link/outside"),
@@ -876,7 +875,7 @@ mod tests {
         assert!(!root.join("new").exists());
         assert_eq!(
             std::fs::read_to_string(root.join(".git")).unwrap(),
-            "gitdir: ../metadata"
+            "gitdir: metadata"
         );
         assert_eq!(std::fs::read_to_string(outside).unwrap(), "original");
         write_output(&root, Path::new("nested/report"), "ok").unwrap();
@@ -894,9 +893,12 @@ mod tests {
         let path = " tab\tand newline\n.rs";
         std::fs::write(root.join(path), "fn main() {}\n").unwrap();
         git_text(root, &["add", "--", path]).unwrap();
-        crate::test_git::commit_fixture(root);
+        let original = crate::test_git::commit_fixture(root);
+        git_text(root, &["rm", "--", path]).unwrap();
+        let replacement = crate::test_git::commit_fixture(root);
+        git_text(root, &["replace", &original, &replacement]).unwrap();
         let args = ReviewPrepareArgs {
-            commit: Some("HEAD".into()),
+            commit: Some(original),
             ..Default::default()
         };
         let (mode, _, head, base) = resolve_comparison_endpoints(root, &args).unwrap();
@@ -979,7 +981,7 @@ mod tests {
             &glab,
             &format!("#!/bin/sh\nprintf '%s\\n' '{metadata}'\n"),
         );
-        let _env = crate::test_env::EnvVarsGuard::set(&[(
+        let mut env = crate::test_env::EnvVarsGuard::set(&[(
             "AIDA_TEST_GLAB_BINARY",
             glab.to_str().unwrap(),
         )]);
@@ -990,6 +992,32 @@ mod tests {
         let (_, _, selected, mb) = resolve_comparison_endpoints(root, &pr).unwrap();
         assert_eq!((selected, mb), (Some(head.clone()), Some(base)));
         assert!(pr_comparison(root, "base", &"f".repeat(40)).is_err());
+        git_text(
+            root,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "https://github.com/fixture/repo.git",
+            ],
+        )
+        .unwrap();
+        let gh = root.join("gh");
+        crate::test_exec::write_executable(
+            &gh,
+            &format!(
+                r#"#!/bin/sh
+[ -z "${{GH_REPO+x}}" ] && [ "$6 $7" = "-R fixture/repo" ] || exit 1
+echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
+"#
+            ),
+        );
+        env.set_key("GH_REPO", "wrong/repo");
+        env.set_key("AIDA_TEST_GH_BINARY", &gh);
+        assert_eq!(
+            resolve_comparison_endpoints(root, &pr).unwrap().2,
+            Some(head.clone())
+        );
         let clone = temp.path().join("shallow");
         git_text(
             root,
