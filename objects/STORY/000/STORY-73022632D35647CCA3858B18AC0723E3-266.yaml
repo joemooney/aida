@@ -1,0 +1,32 @@
+id: 01a20c28-7ea8-7da1-acd0-a18ee5b3df5f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-266
+title: 'Review PR-4492: [AI:codex] fix(ci): exclude disabled steps from Python test wiring (TASK-3856)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20bee`) for branch `int31-task-3856`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4492>
+  - Branch: `int31-task-3856` → `integration`
+
+  ## Covers
+
+  - TASK-3856
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4492` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T06:05:10.184048879Z
+modified_at: 2026-11-24T06:05:10.184048879Z
+req_type: Story
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf5
+  session: 01a20beec6d4
