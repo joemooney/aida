@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T18:02:03.776988918Z
+modified_at: 2026-11-24T18:08:55.669893787Z
 req_type: Bug
 tags:
 - store
@@ -145,6 +145,11 @@ comments:
   created_at: 2026-11-24T18:02:03.776978865Z
   modified_at: 2026-11-24T18:02:03.776978865Z
   session_id: 01a20e87b17f
+- id: 01a20ebf-1d75-7160-949a-d427c2d296f9
+  author: joe
+  content: 'SPLIT (advisor-122 2026-11-24 11:10): this spec = slice A (bounded lock-free fetch-only pre-pass + stalled-lock regression test; the fetched ref is read-only and makes NO admission decisions; <=150). Slice B = BUG-2753 (strict, <=200): refusal-union wiring + tests (a)-(e); launches after A merges.'
+  created_at: 2026-11-24T18:08:55.669893787Z
+  modified_at: 2026-11-24T18:08:55.669893787Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
