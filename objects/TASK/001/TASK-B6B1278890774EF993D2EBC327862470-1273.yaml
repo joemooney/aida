@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:19:15.482224561Z
-modified_at: 2026-11-23T23:59:22.661322778Z
+modified_at: 2026-11-24T00:00:18.506570523Z
 req_type: Task
 tags:
 - ci
@@ -45,6 +45,17 @@ comments:
   modified_at: 2026-11-23T23:24:42.024174545Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ada-77aa-7d23-bbaf-b210dada3f34
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 13bcf6bd6715439e9fdb4769e36b0551f2d27921. Reviewed origin/main...HEAD, local diff and untracked inventory. Branch equals origin/integration.
+    AC1: [evidence: behavioral-test] tests/test_seat_takeover_lifecycle.py:42 uses the existing namespace-aware process token for both fixture grants. Reproduced empty role before repair. With the installed CLI the expired request was refused at generation 1 and control transferred. Both run in a noninitial PID namespace. Verified token spelling and ancestor identity against tests/test_mcp_stdio.py:195. All refusal assertions preserved. CI discovery itself is pending BUG-2734.
+    AC2: [evidence: configuration-validation] Deferred. scripts/discover-python-tests.py and its exclusion list are absent at the assigned base. BUG-2734 remains Approved. Its owner must omit or remove this suite from the pending exclusions. No PR-head CI yet.
+  created_at: 2026-11-24T00:00:18.506570523Z
+  modified_at: 2026-11-24T00:00:18.506570523Z
+  session_id: 01a20abfb86e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20ab8-154e-7660-9b6c-b3bf520e2e62
   author: joe

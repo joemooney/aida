@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-23T23:29:48.774618395Z
+modified_at: 2026-11-24T00:09:53.373820784Z
 req_type: Task
 tags:
 - doctor
@@ -122,6 +122,19 @@ comments:
   modified_at: 2026-11-23T23:29:48.774618395Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ae3-3ced-72a0-9115-c89846677f94
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 27f29098d20f90deb49c0b9951c824f62c953130 plus native working-tree edits. Reviewed origin/main...HEAD and git diff HEAD. No untracked additions.
+    AC1: [evidence: behavioral-test] mailbox_view.rs:223 formats the count, exact ID command and observed path. mail_backlog.rs:350 retains inventory completeness independently of reader count.
+    AC2: [evidence: behavioral-test] story_1843_mailbox_view_tests.rs:1394 ran and passed (1 test). It retains ownership and binding checks, checks a corrupt sidecar with the seat unstaffed and unrelated readers present, and exhausts a one-probe allowance on a miss before three unexamined IDs.
+    Probes: examined normalized seat envelopes, duplicate and deleted replicas, zero and multiple candidates, malformed JSON, pinned file reads, and snapshot-wide deadline/attempt accounting. Diagnostic paths provide no delivery or acknowledgement grant. A filesystem operation already in progress can outlast the deadline. F3 remains deferred by ruling.
+    make check-ci-fast stopped in shard tooling because cargo metadata is outside the native lane job runner command set. Host FAST validation remains outstanding.
+  created_at: 2026-11-24T00:09:53.373820784Z
+  modified_at: 2026-11-24T00:09:53.373820784Z
+  session_id: 01a20ac0c2a2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a5f-1ffd-7a60-89c4-efc8c7468411
   author: joe
