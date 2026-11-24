@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T12:30:04.044482354Z
+modified_at: 2026-11-24T12:30:46.805936098Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
@@ -23,6 +23,12 @@ relationships:
 - rel_type: References
   target_id: 01a2076d-6c65-73b0-afbc-67157b3446e2
   created_at: 2026-11-23T21:15:06.062053845Z
+comments:
+- id: 01a20d89-8815-7543-8156-761c54e729e1
+  author: joe
+  content: 'Draft to Approved (advisor-122 05:38): one CI-wiring lane for TASK-3296/3286/3293/3321.'
+  created_at: 2026-11-24T12:30:46.805936098Z
+  modified_at: 2026-11-24T12:30:46.805936098Z
 history:
 - id: 01a20a71-33e0-7fb0-bef6-36f004672540
   author: joe
