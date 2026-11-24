@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T10:44:20.505889039Z
-modified_at: 2026-11-24T10:44:20.505889039Z
+modified_at: 2026-11-24T10:45:12.090307930Z
 req_type: Task
 tags:
 - ci
 - host
 - runner
 - small
+comments:
+- id: 01a20d28-df1a-7c93-aae1-0635640123fc
+  author: joe
+  content: 'Approved per advisor-122 2026-11-24 03:48 (standard). HOLD FOR JOE: host/ops change (runner nextest thread cap or no full-workspace CI on imac while seats run; move /ci-cache to the NVMe sdb). Not laned.'
+  created_at: 2026-11-24T10:45:12.090307930Z
+  modified_at: 2026-11-24T10:45:12.090307930Z
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
   branch: main
