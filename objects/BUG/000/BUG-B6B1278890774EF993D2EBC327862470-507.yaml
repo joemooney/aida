@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A reviewer-launch reservation holds admission.lock ONLY for the reservation write, not across the launch. Test: while a reviewer launch is blocked or slow, train admission still succeeds.
   - AC2: The auto-train's "admission.lock busy" alert names the holder's ACTIVITY (e.g. "review-watch launching reviewer for PR-4502") and its AGE. Test.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T10:43:39.790419311Z
+modified_at: 2026-11-24T10:57:10.451360561Z
 req_type: Bug
 tags:
 - admission
@@ -87,6 +87,13 @@ history:
   author: joe
   timestamp: 2026-11-24T10:43:34.383931086Z
   changes: []
+- id: 01a20d33-d533-75f0-a0f5-50326eaef7d5
+  author: aida-session-start
+  timestamp: 2026-11-24T10:57:10.451358008Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
