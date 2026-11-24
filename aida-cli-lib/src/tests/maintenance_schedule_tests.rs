@@ -2756,6 +2756,68 @@ fn bug_1655_only_the_failing_guards_route_comes_due_with_its_own_evidence() {
     );
 }
 
+// trace:TASK-3218 | ai:codex
+#[test]
+fn red_main_watch_routes_only_its_failed_passes_to_advisor() {
+    let shipped = load_config(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap())
+        .unwrap()
+        .unwrap();
+    let job = |name: &str| {
+        shipped
+            .tasks
+            .iter()
+            .find(|t| t.name == name)
+            .unwrap()
+            .clone()
+    };
+    let watch = job("red-main-watch");
+    let route = job("red-main-watch-route");
+    assert_eq!(route.seats, ["advisor"]);
+    for (status, diagnostic) in [
+        (0, ""),
+        (1, "history: git fetch failed"),
+        (TIMEOUT_EXIT_STATUS, "timed out: land watch was killed"),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        tick_with_executor(
+            tmp.path(),
+            config(vec![watch.clone(), job("hub-drift-guard")]),
+            &mut ScheduleState::default(),
+            at(12),
+            false,
+            |_, cmd| {
+                let (status, line) = if cmd.display == "land watch" {
+                    (status, diagnostic)
+                } else {
+                    (1, "unrelated drift")
+                };
+                Ok(TaskOutcome {
+                    status,
+                    stdout: String::new(),
+                    stderr: format!("progress\n{line}\n"),
+                })
+            },
+        )
+        .unwrap();
+        let events = events::read_all(tmp.path());
+        bug_1655_route(tmp.path(), vec![route.clone()], &events);
+        let ledger = schedule_ledger::load(&store_root(tmp.path()), &route.name);
+        if status == 0 {
+            assert!(ledger.is_none_or(|l| l.due_since.is_none() && l.due_failure.is_none()));
+        } else {
+            let ledger = ledger.unwrap();
+            assert!(ledger.due_since.is_some());
+            let failure = ledger.due_failure.unwrap();
+            assert_eq!(failure.job.as_deref(), Some("red-main-watch"));
+            assert!(failure.trip_id.starts_with("red-main-watch@"));
+            assert_eq!(
+                failure.error.unwrap(),
+                format!("exit {status}: {diagnostic}")
+            );
+        }
+    }
+}
+
 #[test]
 fn bug_1655_unbound_trigger_keeps_matching_any_job_failure() {
     let tmp = tempfile::tempdir().unwrap();
