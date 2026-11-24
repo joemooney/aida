@@ -119,6 +119,13 @@ comments:
   created_at: 2026-11-24T23:49:11.656816256Z
   modified_at: 2026-11-24T23:49:11.656816256Z
   session_id: 01a20fc2545c
+- id: 01a20ff8-2945-7621-9b63-5cfce26440d1
+  author: joe
+  content: 'INTEGRATION PRE-CHECK PR-4545 @ 4cee424702 (integration-30): PASS. Docs-only (+30/-21, two files). Checked each claim against .github/workflows/ci.yml on the branch: pull_request types are opened/synchronize/reopened/labeled (no unlabeled), so ''removing a label triggers no workflow'' is accurate. A ci:full labeled event uses concurrency group full-<PR>, separate from the FAST group <PR>, so FAST continues and reapplying ci:full supersedes only an earlier label-triggered FULL. Other labels go to group label-<run_id> with skipped ''label event (...)'' jobs. The approved-head-full-ci job exists (.aida/config.toml, every 2m, review --promote-approved-heads). This resolves the BUG-2729 review finding (no doc still says label addition cancels the running workflow). The TASK-3266 trace tags the existing wait-before-retoggle paragraph; it does not complete TASK-3266 (that needs a focused assertion), so the title correctly completes TASK-3282 only. merge-tree vs integration: clean. No code, no security surface. READY follows once FAST is green.'
+  created_at: 2026-11-24T23:50:37.354998456Z
+  modified_at: 2026-11-24T23:50:37.354998456Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20838-dd87-7f91-a3ee-de1bfdc2aac4
   author: joe
