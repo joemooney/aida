@@ -1,0 +1,30 @@
+id: 01a20daf-5601-77e3-a5be-46b1add3993d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1352
+agreed_id: TASK-3870
+title: Lane ship declaration accepts a multi-ID completing trailer for folded specs (one-spec-per-lane until then)
+description: |
+  Found 2026-11-24 (product-15; advisor-122 ruling 06:14). A lane that folds several specs into one PR can't publish: the lane's ship declaration rejected the completing trailer "(TASK-3296 TASK-3286 TASK-3293 TASK-3321)" because the launcher accepts a single spec ID. The lane punted and product had to publish #4516 from the host.
+
+  ## Acceptance
+  - AC1: The launcher / lane ship declaration accepts a multi-ID completing trailer `(ID-A ID-B ...)` when every listed spec is approved and assigned to that lane's PR, and refuses unknown or unassigned IDs with a clear message.
+  - AC2: Test: a folded lane publishes a PR whose title carries all listed IDs, and landing completes all of them.
+  Until this lands: ONE spec per lane (related specs as Refs only).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T13:12:04.353826526Z
+modified_at: 2026-11-24T13:12:04.353826526Z
+req_type: Task
+tags:
+- lanes
+- ship
+- small
+- track:integration
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d58
+  vendor: claude
