@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-24T14:30:35.293640193Z
+modified_at: 2026-11-24T15:18:54.242002415Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -146,6 +146,25 @@ comments:
     Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
   created_at: 2026-11-24T14:30:35.293640193Z
   modified_at: 2026-11-24T14:30:35.293640193Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e23-a7c6-7ca0-b05f-4955e8ae3eb7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:18):
+    # TASK-3211 / PR #4420 rework (advisor-122 stalled-CR ruling 2026-11-24 07:30; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 80 lines. NOTE: TEST-ONLY (mutation-kill + untested-path); zero production changes, else punt.
+
+    BLANKET RULING (advisor-122 07:20/07:30): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major regression this PR introduced; DEFER minor/p2 unmet-claimed-AC and test-strength items (list them in the PR body as deferred). Per finding, list fixed or deferred.
+
+    CR at d7b559f9. Findings:
+
+    F1. [major/untested-path/blocking] aida-cli-lib/src/admission_owner.rs:1170 and :1220: Preserve behavioral coverage at wait_secs = 1 for BUG-2703 ac336622. Both ship_admission fixtures now configure 10 seconds. The 100 ms poll_step assertion checks only a helper; a regression that sleeps away the one-second budget after intent registration and returns the first busy result would still pass both revised tests and can miss a successful handoff or report the departed holder. Exercise the same ship admission loop at a logical one-second bound with controlled time or synchronization that avoids a sub-second wall-clock scheduling dependency. Assert both acquisition after intent registration and current-holder reporting on expiry.
+
+    F2. [major/mutation-kill/blocking] aida-cli-lib/src/admission_owner.rs:1663: Make the registration/deadline fixture prove it reached the post-registration retry path and returned at the original deadline. The consumed BEFORE_INTENT hook only proves registration was about to start. If registration times out on receipts.lock, the serializer refusal has the same AdmissionBusy type and bound text asserted here, and there is no intent to clean up, so the test passes without exercising the target path. A late busy return before the shared holder drops also passes because the fixture never checks when the call returned. Observe successful intent registration, require the refusal to name the shared holder, and verify deadline ordering with controlled time or a synchronized holder release.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T15:18:54.242002415Z
+  modified_at: 2026-11-24T15:18:54.242002415Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
