@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T07:03:29.967514618Z
+modified_at: 2026-11-24T07:04:35.415535345Z
 req_type: Task
 tags:
 - hygiene
@@ -97,6 +97,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full sweep of the three-file diff for completing TASK-3858 (origin ID TASK-b6b1278890774ef993d2ebc327862470-1297). The output-only slice carries scan refusals into both hygiene summaries and preserves reap eligibility and advisor routing.. It was punted on: design-fork: On fa7e9a9c255 the production dispatch script reports ahead=0 and empty status for both a stash-only clone and a clone with one unique commit on side. Hygiene emits no salvage advice for either. The separate reap scan can skip these leases, but hygiene omits scan-skipped rows in both dry and applied runs. Should TASK-3858 expose those existing reap-scan refusals in hygiene output, or wait for a dispatch classification change? The cited #4487 finding concerns classification explicitly reverted in its r2 scope.. No triage reason was given.'
   created_at: 2026-11-24T07:03:29.967502226Z
   modified_at: 2026-11-24T07:03:29.967502226Z
+- id: 01a20c5f-1d9e-7e13-8852-390a52db7fca
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:04):
+    # TASK-3858 / PR #4496 r2, REMOVE rather than patch (advisor-122 ruling 2026-11-24 00:05: F1 UPHELD at cd7112f3; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int31-task-3858). <=80 lines.
+
+    F1 is real: the new hints tell an operator to run RAW GIT in a private seat clone from a host terminal. That exposes them to seat-controlled git config (core.pager etc.) and breaks the private-clone rule (seat_clone.rs:12-17).
+    r2: DROP EVERY raw git command from the hints. Keep only the PLAIN REASON, e.g. "stash present (N entries)" / "unpushed commits on branch <name>", and, where it exists, point to the SUPPORTED sandboxed path that the existing docs name (docs/cli/06-roles-sessions.md around :938). Do NOT invent a new command.
+    TEST: one test through the REAL hygiene summary path with a stash-only private-clone fixture, asserting the reason text AND that no "git " command appears in the output.
+    F2/F3 (stash-entry attribution, per-branch counted set): DEFERRED, no follow-up; the reason text replaces those hints. Nothing else in scope.
+    One targeted run, then `make check-ci-fast`, then push on the existing branch (#4496). COMMIT your work.
+  created_at: 2026-11-24T07:04:35.415535345Z
+  modified_at: 2026-11-24T07:04:35.415535345Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
