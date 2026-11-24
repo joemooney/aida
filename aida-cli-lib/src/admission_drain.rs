@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 // directory, which every admission reads as a holder.
 const FILE: &str = "loops-drain.journal";
 const LOCK: &str = "drain.lock";
+const MAX_TEXT_BYTES: usize = 512;
+const RECOVERY_PREFIX: &str = "recovered unreadable journal by ";
 const MAX_EVENTS: usize = 256;
 const LIMIT: u64 = 256 * 1024;
 /// A drain without `--for` lasts an hour; none may outlast a day.
@@ -90,7 +92,9 @@ fn directory(root: &Path) -> PathBuf {
 }
 
 fn valid_text(value: &str) -> bool {
-    !value.trim().is_empty() && value.len() <= 512 && !value.chars().any(char::is_control)
+    !value.trim().is_empty()
+        && value.len() <= MAX_TEXT_BYTES
+        && !value.chars().any(char::is_control)
 }
 
 fn load(root: &Path) -> Result<Journal> {
@@ -199,8 +203,7 @@ fn try_lock(root: &Path) -> Result<Locked> {
 }
 
 // Callers hold the drain lock. Expiry is recorded once, at its deadline.
-fn observe_locked(root: &Path, now: DateTime<Utc>) -> Result<Journal> {
-    let mut journal = load(root)?;
+fn observe_locked(root: &Path, mut journal: Journal, now: DateTime<Utc>) -> Result<Journal> {
     if let Some(receipt) = journal.active().filter(|r| r.expires_at <= now) {
         journal.push(Event::Expired {
             at: receipt.expires_at,
@@ -233,7 +236,7 @@ fn active_at(root: &Path, now: DateTime<Utc>) -> Result<Option<Drained>> {
     // Best effort and never a wait: admission callers carry a bound, so a
     // busy drain lock defers the audit to a later reader (BUG-2703 round 2).
     // trace:BUG-2703 | ai:claude
-    if let Err(error) = try_lock(root).and_then(|_lock| observe_locked(root, now)) {
+    if let Err(error) = try_lock(root).and_then(|_lock| observe_locked(root, load(root)?, now)) {
         eprintln!("advisor loops drain expiry not yet recorded: {error:#}");
     }
     Ok(None)
@@ -281,7 +284,31 @@ fn change(
     let _lock = lock(root)?;
     let (actor, now) = authority()?;
     anyhow::ensure!(valid_text(&actor), "invalid advisor loops control actor");
-    let mut journal = observe_locked(root, now)?;
+    // Only an explicit, authorized resume may replace unreadable history.
+    // trace:TASK-3246 | ai:codex
+    let mut journal = match load(root) {
+        Ok(journal) => observe_locked(root, journal, now)?,
+        Err(error) if drain.is_none() => {
+            // Version 1 rejects extra event kinds and fields. Qualify the
+            // already validated actor in the existing resume audit.
+            let budget = MAX_TEXT_BYTES - RECOVERY_PREFIX.len();
+            let actor = if actor.len() > budget {
+                let end = actor.floor_char_boundary(budget - '…'.len_utf8());
+                format!("{RECOVERY_PREFIX}{}…", &actor[..end])
+            } else {
+                format!("{RECOVERY_PREFIX}{actor}")
+            };
+            let mut replacement = Journal {
+                version: 1,
+                events: vec![Event::Resume { actor, at: now }],
+            };
+            save(root, &mut replacement).context("could not replace unreadable drain journal")?;
+            return Ok(format!(
+                "Advisor loops resumed. Replaced unreadable drain journal: {error:#}"
+            ));
+        }
+        Err(error) => return Err(error),
+    };
     let message = match drain {
         Some((reason, seconds)) => {
             let reason = reason.trim();
@@ -374,6 +401,30 @@ mod tests {
         std::fs::create_dir_all(directory(temp.path())).unwrap();
         std::fs::write(directory(temp.path()).join(FILE), b"{broken").unwrap();
         assert!(active(temp.path()).is_err());
+    }
+
+    // trace:TASK-3246 | ai:codex
+    #[test]
+    fn recovery_with_maximum_length_actor_fits_v1_resume_limit() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let actor = "é".repeat(256);
+        assert_eq!(actor.len(), 512);
+        fixture_drain(root, &actor, "maintenance", 60, Utc::now()).unwrap();
+        assert_eq!(active(root).unwrap().unwrap().actor, actor);
+
+        std::fs::write(directory(root).join(FILE), b"{broken").unwrap();
+        assert!(active(root).is_err());
+        assert!(fixture_resume(root, &actor)
+            .unwrap()
+            .contains("Replaced unreadable"));
+        assert_eq!(active(root).unwrap(), None);
+        assert!(matches!(
+            load(root).unwrap().events.as_slice(),
+            [Event::Resume { actor: audit, .. }]
+                if audit.len() <= 512
+                    && audit == &format!("recovered unreadable journal by {}…", "é".repeat(238))
+        ));
     }
 
     /// Review round 4, finding 4: every journal the writer emits is one the
@@ -681,5 +732,26 @@ mod tests {
         drain(&root, "land #4324", None).unwrap();
         let drained = active(&root).unwrap().unwrap();
         assert!(drained.actor.contains("(advisor "), "{}", drained.actor);
+
+        // trace:TASK-3246 | ai:codex
+        for damaged in [&b"{broken"[..], &[0xff][..]] {
+            let path = directory(&root).join(FILE);
+            std::fs::write(&path, damaged).unwrap();
+            assert!(active(&root).is_err());
+            env.unset_key(GRANT_ENV);
+            assert!(resume(&root).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), damaged);
+            env.set_key(GRANT_ENV, &advisor);
+            assert!(drain(&root, "land #4324", None).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), damaged);
+            assert!(active(&root).is_err());
+            assert!(resume(&root).unwrap().contains("Replaced unreadable"));
+            assert_eq!(active(&root).unwrap(), None);
+            assert!(matches!(
+                load(&root).unwrap().events.as_slice(),
+                [Event::Resume { actor, .. }]
+                    if actor == &format!("recovered unreadable journal by {}", drained.actor)
+            ));
+        }
     }
 }
