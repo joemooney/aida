@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-24T16:39:44.793133674Z
+modified_at: 2026-11-24T16:42:06.024892659Z
 req_type: Bug
 tags:
 - mass-change
@@ -212,6 +212,17 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-473` at head `unavailable`.'
   created_at: 2026-11-23T03:10:54.685404278Z
   modified_at: 2026-11-23T03:10:54.685404278Z
+- id: 01a20e6f-d48d-7e33-ab98-049b2b3c28f3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:42):
+    # BUG-2712 / PR #4396 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 09:45; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4396 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4396. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:42:06.024892659Z
+  modified_at: 2026-11-24T16:42:06.024892659Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
