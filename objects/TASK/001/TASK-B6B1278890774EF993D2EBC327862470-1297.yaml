@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The refusal names WHICH stash entries or WHICH other branches (with their unique commit counts) hold the work, and gives a correct command to inspect or publish each one.
   - AC2: Tests: a stash-only clone and an other-branch-only clone each produce the specific guidance.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T05:14:43.122590526Z
+modified_at: 2026-11-24T05:27:00.254886700Z
 req_type: Task
 tags:
 - hygiene
@@ -70,6 +70,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20c04-07e7-7670-ab99-8c9dc731bdec
+  author: dirtlab
+  timestamp: 2026-11-24T05:25:20.487540768Z
+  session_id: 01a20bf9f09e
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20c05-90fe-7de3-8e2d-fae485ad605c
+  author: dirtlab
+  timestamp: 2026-11-24T05:27:01.118543089Z
+  session_id: 01a20bf9f09e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -78,3 +93,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'On fa7e9a9c255 the production dispatch script reports ahead=0 and empty status for both a stash-only clone and a clone with one unique commit on side. Hygiene emits no salvage advice for either. The separate reap scan can skip these leases, but hygiene omits scan-skipped rows in both dry and applied runs. Should TASK-3858 expose those existing reap-scan refusals in hygiene output, or wait for a dispatch classification change? The cited #4487 finding concerns classification explicitly reverted in its r2 scope.'
+  raised_by: implementer
+  raised_at: 2026-11-24T05:27:00.254886700Z

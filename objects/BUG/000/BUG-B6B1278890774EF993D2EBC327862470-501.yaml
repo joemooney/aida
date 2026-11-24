@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T05:13:11.850359096Z
+modified_at: 2026-11-24T05:26:23.456581450Z
 req_type: Bug
 tags:
 - admission
@@ -179,6 +179,18 @@ comments:
   modified_at: 2026-11-24T05:09:40.663625617Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c05-013e-7f23-9a89-0c2a81535754
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: eb2482ba84082359cf8a844f830a5236bf47f0da plus the native working diff. Reviewed origin/main...HEAD and git diff HEAD. Four changed files this round, no untracked additions.
+    AC1: [evidence: behavioral-test] lane_admission.rs:196 refuses admission under the current thread’s store write guard. Standalone admission is back at standalone_implementer.rs:1576 after setup. At bug_2451_pickup_entry_tests.rs:2020 an independent writer updates the selected spec during a full-slot wait and the production pickup refuses its new operator track. Both queued and unqueued explicit low-disk cases check the persisted retry note and typed refusal. Memory and override audit run at admission.
+    AC2: [evidence: behavioral-test] lane_admission.rs:473 checks the normal and five-second bounded timeouts against an external holder PID and argument. store_lock.rs:140 excludes waiters and matches device and inode. Mediated clients retain Busy. Hidden holders remain a diagnostic limitation.
+    Adversarial pass covered full and empty capacity, overrides, multiple member identities, stale or missing requirements, command arguments with spaces and lock identity. After a pull and at late handoff the working diff resolves the selected UUIDs and reapplies track policy. Lane job j20261124T051516065-2-0 passed 5 tests. FAST source checks and portability passed. Final targeted repeat and aggregate ratchets are running. Across the full branch the patch exceeds the 150-added-line target.
+  created_at: 2026-11-24T05:26:23.456581450Z
+  modified_at: 2026-11-24T05:26:23.456581450Z
+  session_id: 01a20bf89a2f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
