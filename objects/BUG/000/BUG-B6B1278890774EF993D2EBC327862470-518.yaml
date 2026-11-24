@@ -1,0 +1,28 @@
+id: 01a20f1e-62b5-7ab2-a411-c2901671838a
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-518
+agreed_id: BUG-2757
+title: Review-watch occupied-worktree recheck runs git probes while holding the global admission and train-member locks (admission starvation)
+description: |
+  Raised from #4413 BUG-2720 deferred F2 (advisor-122 2026-11-24 12:55; filed by product-15). MEDIUM. This is the admission-starvation class seen 2026-11-24 (trains blocked by long lock holders).
+
+  ## Acceptance
+  - AC1: The occupied-worktree recheck in review_watch.rs (~:1699, :1836) runs its git probes OUTSIDE the global admission and train-member locks, then REVALIDATES the probed state cheaply inside the lock (refuse/retry if it changed). Test: a slow probe does not hold the admission lock (another admission proceeds meanwhile).
+  - AC2: Test: a worktree state that changes between probe and revalidation is detected and not admitted on stale evidence.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T19:52:59.317891783Z
+modified_at: 2026-11-24T19:52:59.317891783Z
+req_type: Bug
+tags:
+- admission
+- review-watch
+- throughput
+filed_at:
+  code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
