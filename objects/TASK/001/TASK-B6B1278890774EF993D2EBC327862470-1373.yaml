@@ -13,15 +13,23 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T19:52:30.579150419Z
-modified_at: 2026-11-24T19:52:56.613270074Z
+modified_at: 2026-11-24T22:14:49.968924372Z
 req_type: Task
 tags:
+- integration
 - review-watch
 history:
 - id: 01a20f1e-587a-78c0-8541-32b33964f26d
   author: joe
   timestamp: 2026-11-24T19:52:56.698044445Z
   changes: []
+- id: 01a20fa0-3f70-7141-9b53-d085eec1899c
+  author: joe
+  timestamp: 2026-11-24T22:14:49.968923787Z
+  changes:
+  - field_name: tags
+    old_value: review-watch
+    new_value: integration, review-watch
 execution_mode: drain
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
