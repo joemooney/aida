@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3860",
+  "publishes": [
+    {
+      "at": "2026-11-24T11:15:16.436445286Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T07:35:23.626953834Z",
+      "spec": "TASK-3860",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4500,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b1eb63071069ea7d1cf13e7ae59021ae3f4aa872"
+      }
+    },
+    {
+      "ts": "2026-11-24T07:35:27.131961195Z",
+      "spec": "TASK-3860",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "FAIL — completing spec TASK-b6b1278890774ef993d2ebc327862470-1301 (TASK-3860). Both worksheet criteria remain unmet.\nTASK-b6b1278890774ef993d2ebc327862470-1301.AC1 — unverified — numeric keys cover the primary map and joins, but branch parsing, node aliases, authoritative summary precedence, and verdict resolution have counterexamples detailed in the findings.\nTASK-b6b1278890774ef993d2ebc327862470-1301.AC2 — unverified — source review of cargo test -p aida-cli-lib task_3860_detector_joins_branch_lease_and_forge_aliases and the changed TASK-3857 fixtures shows partial coverage of candidate admission, live leases, commit fallback, clone deferral, and one verdict lookup. Forge suppression and merged/carrier decisions lack end-to-end identity coverage.\nReviewed the complete pinned diff. The head is eight commits behind origin/integration. The intervening base changes do not affect the source paths these findings depend on. Exact-head FAST gates and merge-hold checks passed, FAST compilation was pending, and full test shards were skipped. No local tests were run under reviewer policy.",
+        "recovery_hint": "address the review findings, move TASK-3860 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:51:11.578756982Z",
+      "spec": "TASK-3860",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4500,
+        "verdict": "APPROVED",
+        "reviewed_sha": "415457c4d04532a4419200489e1282d44b6d2a84"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:53:36.628443930Z",
+      "spec": "TASK-3860",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4508,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b1f3fcf37d0d8bcbee2972d7d4b7b158e9eaff55"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:06:21.212080912Z",
+      "spec": "TASK-3860",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4508
+      }
+    },
+    {
+      "ts": "2026-11-24T11:15:16.213894479Z",
+      "spec": "TASK-3860",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6c832e0d3a8b189ff57b0665563aafb822a7a71d",
+        "pr": 4508,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
