@@ -1,0 +1,27 @@
+id: 01a20e45-d7f7-7aa0-81bb-272cc4c9cec6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1359
+agreed_id: TASK-3875
+title: 'BUG-2730 deferred: throughput-guard coverage/cache/routing-memory/fairness/contention/default-branch fallback minors'
+description: |
+  Deferred follow-up for #4457 BUG-2730 (throughput-guard bounded reads), advisor-122 rulings 2026-11-24 07:20 and 09:00; filed by product-15. LOW. All minor/p2 items from the CRs (F2-F7 at 9f84897e).
+
+  ## Acceptance
+  - AC1: land_stalls.rs: coverage/phase timings survive a listing deadline exhaustion (1552); the red-detail cache prunes only entries invalidated by confirmed inventory/observations (1289); a partial pass still reconciles routing memory for covered PRs (1887).
+  - AC2: Scheduled passes resume skipped work or prioritise least-recently-covered changes (1516); a brief overlap with another landing fetch retries within the remaining budget instead of counting unknown rows as covered (land.rs:851); restore the GitHub metadata fallback for the default branch when no local origin/HEAD exists (1574). A test for each.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T15:56:28.023504035Z
+modified_at: 2026-11-24T15:56:28.023504035Z
+req_type: Task
+tags:
+- small
+- throughput
+filed_at:
+  code_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9cc76437f4f
+  vendor: claude
