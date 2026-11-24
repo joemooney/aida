@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S3 is the templates. Run make sync-templates and make check-templates in the same PR.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:06.238132894Z
-modified_at: 2026-11-24T07:22:41.499819399Z
+modified_at: 2026-11-24T14:01:09.965451545Z
 req_type: Task
 tags:
 - review
@@ -27,6 +27,13 @@ history:
   author: joe
   timestamp: 2026-11-24T07:22:41.585495991Z
   changes: []
+- id: 01a20ddc-484d-7e11-8bd0-a9695363f9f9
+  author: aida-session-start
+  timestamp: 2026-11-24T14:01:09.965450466Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
