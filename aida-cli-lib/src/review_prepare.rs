@@ -6,10 +6,10 @@
 
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
-    anchor_findings_with, bundle_review_batches, classify_diff_inventory, verify_coverage_ledger,
-    ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
-    PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
-    ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
+    anchor_findings_with, bundle_review_batches, classify_with_exclusions, verify_coverage_ledger,
+    ClassifiedInventory, CoverageLedger, CoverageVerificationReport, ExclusionRules,
+    FileChangeKind, PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding,
+    ResolvedPlaybook, ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -126,6 +126,9 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let mut excludes = rules_cfg.exclude.clone();
     excludes.extend(args.exclude.iter().cloned());
 
+    let excludes = ExclusionRules::new(&excludes);
+    excludes.validate()?;
+
     // 1. Resolve comparison mode and git endpoints.
     let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
 
@@ -149,7 +152,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let target_rev = head_ref.as_deref();
     let mut content_cache: BTreeMap<String, String> = BTreeMap::new();
     let mut read_error = None;
-    let inventory = classify_diff_inventory(&raw_entries, &registry, &excludes, |rel_path| {
+    let inventory = classify_with_exclusions(&raw_entries, &registry, &excludes, |rel_path| {
         match read_file_at_revision(&project_root, target_rev, rel_path) {
             Ok(Some(content)) => {
                 let has_trace = content.contains("trace:");
@@ -253,9 +256,10 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     if let Some(cov) = &bundle.coverage_verification {
         if !cov.passed {
             anyhow::bail!(
-                "file coverage verification failed ({}% accounted; missing: {:?}, skipped without reason: {:?})",
+                "file coverage verification failed ({}% accounted; missing: {:?}, ambiguous: {:?}, skipped without reason: {:?})",
                 cov.coverage_rate_pct,
                 cov.unaccounted_files,
+                cov.ambiguous_files,
                 cov.skipped_without_reason
             );
         }
@@ -431,7 +435,7 @@ fn collect_git_diff_entries(
     mode: &str,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
-    excludes: &[String],
+    excludes: &ExclusionRules<'_>,
 ) -> Result<Vec<RawDiffEntry>> {
     let range = match (mode, merge_base, head_ref) {
         ("commit" | "range", Some(base), Some(head)) => format!("{base}..{head}"),
@@ -480,7 +484,7 @@ fn collect_git_diff_entries(
             additions,
             deletions,
             is_binary,
-            patch_bytes: (additions + deletions) * 48,
+            patch_bytes: additions.saturating_add(deletions).saturating_mul(48),
         });
     }
     if mode == "workspace" {
@@ -532,7 +536,7 @@ fn path_matches_any_scope(candidate: &str, scopes: &[String]) -> bool {
 fn collect_git_scan_entries(
     project_root: &Path,
     paths: &[String],
-    excludes: &[String],
+    excludes: &ExclusionRules<'_>,
 ) -> Result<Vec<RawDiffEntry>> {
     for p in paths {
         crate::git_arg_guard::reject_option_like("--path", p)?;
@@ -563,7 +567,7 @@ fn worktree_entries(
     root: &Path,
     paths: &str,
     kind: FileChangeKind,
-    excludes: &[String],
+    excludes: &ExclusionRules<'_>,
 ) -> Result<Vec<RawDiffEntry>> {
     let mut entries = Vec::new();
     for path in paths.split_terminator('\0').collect::<BTreeSet<_>>() {
@@ -580,7 +584,7 @@ fn worktree_entries(
             is_binary: false,
             patch_bytes: 0,
         };
-        if aida_core::review_engine::classify_exclusion(&entry, excludes).is_none() {
+        if excludes.classify(&entry).is_none() {
             let Some(bytes) = read_workspace_file(root, path)? else {
                 continue;
             };
@@ -781,6 +785,12 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
             "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
             cov.passed, cov.coverage_rate_pct, cov.total_reviewable
         ));
+        if !cov.ambiguous_files.is_empty() {
+            out.push_str(&format!(
+                "- **Ambiguous ledger rows**: `{}`\n",
+                cov.ambiguous_files.join(", ")
+            ));
+        }
         if !cov.unaccounted_files.is_empty() {
             out.push_str(&format!(
                 "- **Unaccounted files**: `{}`\n",
@@ -902,8 +912,14 @@ mod tests {
             ..Default::default()
         };
         let (mode, _, head, base) = resolve_comparison_endpoints(root, &args).unwrap();
-        let entries =
-            collect_git_diff_entries(root, &mode, base.as_deref(), head.as_deref(), &[]).unwrap();
+        let entries = collect_git_diff_entries(
+            root,
+            &mode,
+            base.as_deref(),
+            head.as_deref(),
+            &ExclusionRules::new(&[]),
+        )
+        .unwrap();
         let store = Storage::new(root.join("requirements.yaml"));
         assert!(
             resolve_linked_specs(root, &store, &args, base.as_deref(), head.as_deref()).is_ok()
@@ -1045,11 +1061,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let root = temp.path();
         for (result, operation) in [
             (
-                collect_git_diff_entries(root, "workspace", None, None, &[]).map(|_| ()),
+                collect_git_diff_entries(root, "workspace", None, None, &ExclusionRules::new(&[]))
+                    .map(|_| ()),
                 "diff",
             ),
             (
-                collect_git_scan_entries(root, &[], &[]).map(|_| ()),
+                collect_git_scan_entries(root, &[], &ExclusionRules::new(&[])).map(|_| ()),
                 "ls-files",
             ),
             (

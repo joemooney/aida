@@ -200,8 +200,8 @@ pub struct PlaybookFacet {
 /// Clean-room registry of built-in and project-defined path-scoped review playbooks.
 #[derive(Debug, Clone)]
 pub struct PlaybookRegistry {
-    custom_rules: Vec<CustomPathRule>,
-    builtin_rules: Vec<ResolvedPlaybook>,
+    custom_rules: Vec<(CompiledGlob, CustomPathRule)>,
+    builtin_rules: Vec<(CompiledGlob, ResolvedPlaybook)>,
     default_playbook: ResolvedPlaybook,
 }
 
@@ -318,8 +318,14 @@ impl PlaybookRegistry {
         };
 
         Self {
-            custom_rules,
-            builtin_rules,
+            custom_rules: custom_rules
+                .into_iter()
+                .map(|rule| (CompiledGlob::new(&rule.pattern), rule))
+                .collect(),
+            builtin_rules: builtin_rules
+                .into_iter()
+                .map(|rule| (CompiledGlob::new(&rule.pattern), rule))
+                .collect(),
             default_playbook,
         }
     }
@@ -329,11 +335,12 @@ impl PlaybookRegistry {
         let builtin = self
             .builtin_rules
             .iter()
-            .find(|r| glob_matches(&r.pattern, rel_path))
+            .find(|(glob, _)| glob.matches(rel_path))
+            .map(|(_, rule)| rule)
             .unwrap_or(&self.default_playbook);
 
-        for custom in &self.custom_rules {
-            if glob_matches(&custom.pattern, rel_path) {
+        for (glob, custom) in &self.custom_rules {
+            if glob.matches(rel_path) {
                 if custom.merge_builtin {
                     return ResolvedPlaybook {
                         id: format!("{}+{}", builtin.id, custom.id),
@@ -494,37 +501,53 @@ pub fn detect_rust_content_facets(samples: &[&str]) -> Vec<PlaybookFacet> {
 /// Matching is case-insensitive on ASCII path characters and normalizes path separators to `/`.
 // trace:STORY-3076 | ai:antigravity
 pub fn glob_matches(pattern: &str, candidate: &str) -> bool {
-    let norm_candidate = candidate.replace('\\', "/").to_ascii_lowercase();
-    for expanded in expand_braces(pattern) {
-        let norm_pat = expanded.replace('\\', "/").to_ascii_lowercase();
-        let regex_str = glob_to_regex(&norm_pat);
-        if let Ok(re) = Regex::new(&regex_str) {
-            if re.is_match(&norm_candidate) {
-                return true;
-            }
-        }
-    }
-    false
+    CompiledGlob::new(pattern).matches(candidate)
 }
 
-fn expand_braces(pattern: &str) -> Vec<String> {
-    let Some(open) = pattern.find('{') else {
-        return vec![pattern.to_string()];
-    };
-    let Some(rel_close) = pattern[open..].find('}') else {
-        return vec![pattern.to_string()];
-    };
-    let close = open + rel_close;
-    let prefix = &pattern[..open];
-    let suffix = &pattern[close + 1..];
-    pattern[open + 1..close]
-        .split(',')
-        .map(|alt| format!("{prefix}{}{suffix}", alt.trim()))
-        .collect()
+// trace:TASK-3867 | ai:codex
+#[derive(Debug, Clone)]
+struct CompiledGlob(Option<Regex>);
+
+impl CompiledGlob {
+    fn new(pattern: &str) -> Self {
+        let pattern = pattern.replace('\\', "/").to_ascii_lowercase();
+        // Bound expansion before copying shared prefixes/suffixes. Expand first
+        // so wildcard tokens spanning a brace boundary retain their semantics.
+        let expression = if let Some((prefix, rest)) = pattern.split_once('{') {
+            if let Some((alts, suffix)) = rest.split_once('}') {
+                let count = alts.split(',').count();
+                if count > 256
+                    || (prefix.len() + suffix.len())
+                        .saturating_mul(count)
+                        .saturating_add(alts.len())
+                        > 1024 * 1024
+                {
+                    return Self(None);
+                }
+                let alternatives = alts
+                    .split(',')
+                    .map(|alt| glob_to_regex(&format!("{prefix}{}{suffix}", alt.trim())))
+                    .collect::<Vec<_>>()
+                    .join("|");
+                format!("(?:{alternatives})")
+            } else {
+                glob_to_regex(&pattern)
+            }
+        } else {
+            glob_to_regex(&pattern)
+        };
+        Self(Regex::new(&format!("^{expression}$")).ok())
+    }
+
+    fn matches(&self, candidate: &str) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|re| re.is_match(&candidate.replace('\\', "/").to_ascii_lowercase()))
+    }
 }
 
 fn glob_to_regex(pat: &str) -> String {
-    let mut out = String::from("^");
+    let mut out = String::new();
     let chars: Vec<char> = pat.chars().collect();
     let mut i = 0;
     while i < chars.len() {
@@ -551,14 +574,13 @@ fn glob_to_regex(pat: &str) -> String {
             i += 1;
         }
     }
-    out.push('$');
     out
 }
 
 /// Estimate review token weight from patch byte count and line churn.
 pub fn estimate_file_tokens(patch_bytes: usize, additions: usize, deletions: usize) -> usize {
-    let from_bytes = (patch_bytes + 3) / 4;
-    let from_lines = (additions + deletions) * 12;
+    let from_bytes = patch_bytes.div_ceil(4);
+    let from_lines = additions.saturating_add(deletions).saturating_mul(12);
     from_bytes.max(from_lines).max(32)
 }
 
@@ -567,20 +589,40 @@ pub fn classify_exclusion(
     entry: &RawDiffEntry,
     user_excludes: &[String],
 ) -> Option<ExclusionReason> {
-    if entry.is_binary {
-        return Some(ExclusionReason::BinaryFile);
-    }
-    if entry.kind == FileChangeKind::Deleted {
-        return Some(ExclusionReason::PureDeletion);
-    }
-
-    // trace:TASK-3866 | ai:codex
-    std::iter::once(entry.path.as_str())
-        .chain(entry.old_path.as_deref())
-        .find_map(|path| classify_path_exclusion(path, user_excludes))
+    ExclusionRules::new(user_excludes).classify(entry)
 }
 
-fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<ExclusionReason> {
+pub struct ExclusionRules<'a>(Vec<(&'a str, CompiledGlob)>);
+
+impl<'a> ExclusionRules<'a> {
+    pub fn new(patterns: &'a [String]) -> Self {
+        Self(
+            patterns
+                .iter()
+                .map(|p| (p.as_str(), CompiledGlob::new(p)))
+                .collect(),
+        )
+    }
+
+    pub fn classify(&self, entry: &RawDiffEntry) -> Option<ExclusionReason> {
+        if entry.is_binary {
+            return Some(ExclusionReason::BinaryFile);
+        }
+        if entry.kind == FileChangeKind::Deleted {
+            return Some(ExclusionReason::PureDeletion);
+        }
+
+        // trace:TASK-3866 | ai:codex
+        std::iter::once(entry.path.as_str())
+            .chain(entry.old_path.as_deref())
+            .find_map(|path| classify_path_exclusion(path, &self.0))
+    }
+}
+
+fn classify_path_exclusion(
+    path: &str,
+    user_excludes: &[(&str, CompiledGlob)],
+) -> Option<ExclusionReason> {
     let norm = path.replace('\\', "/");
     let file_name = Path::new(&norm)
         .file_name()
@@ -623,9 +665,9 @@ fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<Exclu
     }
 
     // Check user/project configured exclusion patterns.
-    for pat in user_excludes {
-        if glob_matches(pat, &norm) {
-            return Some(ExclusionReason::UserExcludedPattern(pat.clone()));
+    for (pat, glob) in user_excludes {
+        if glob.0.is_none() || glob.matches(&norm) {
+            return Some(ExclusionReason::UserExcludedPattern((*pat).to_owned()));
         }
     }
 
@@ -657,11 +699,37 @@ pub fn classify_diff_inventory<F>(
     entries: &[RawDiffEntry],
     registry: &PlaybookRegistry,
     user_excludes: &[String],
-    mut trace_detector: F,
+    trace_detector: F,
 ) -> ClassifiedInventory
 where
     F: FnMut(&str) -> bool,
 {
+    classify_with_exclusions(
+        entries,
+        registry,
+        &ExclusionRules::new(user_excludes),
+        trace_detector,
+    )
+}
+
+impl ExclusionRules<'_> {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        for (pattern, glob) in &self.0 {
+            anyhow::ensure!(
+                glob.0.is_some(),
+                "exclusion glob exceeds compilation limits: {pattern}"
+            );
+        }
+        Ok(())
+    }
+}
+
+pub fn classify_with_exclusions(
+    entries: &[RawDiffEntry],
+    registry: &PlaybookRegistry,
+    excludes: &ExclusionRules<'_>,
+    mut trace_detector: impl FnMut(&str) -> bool,
+) -> ClassifiedInventory {
     let mut reviewable_files = Vec::new();
     let mut excluded_files = Vec::new();
 
@@ -670,14 +738,16 @@ where
 
     let mut hasher = Sha256::new();
 
+    let mut frame = |fields: &[&str]| {
+        for field in fields {
+            hasher.update((field.len() as u64).to_be_bytes());
+            hasher.update(field.as_bytes());
+        }
+    };
     for entry in &sorted_entries {
-        if let Some(reason) = classify_exclusion(entry, user_excludes) {
+        if let Some(reason) = excludes.classify(entry) {
             let reason_str = reason.label();
-            hasher.update(b"excluded:");
-            hasher.update(entry.path.as_bytes());
-            hasher.update(b":");
-            hasher.update(reason_str.as_bytes());
-            hasher.update(b"\n");
+            frame(&["excluded", &entry.path, &reason_str]);
             excluded_files.push(ExcludedFile {
                 path: entry.path.clone(),
                 kind: entry.kind,
@@ -688,13 +758,7 @@ where
             let estimated_tokens =
                 estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
             let has_trace_comment = trace_detector(&entry.path);
-            hasher.update(b"reviewable:");
-            hasher.update(entry.path.as_bytes());
-            hasher.update(b":");
-            hasher.update(entry.kind.as_str().as_bytes());
-            hasher.update(b":");
-            hasher.update(playbook.id.as_bytes());
-            hasher.update(b"\n");
+            frame(&["reviewable", &entry.path, entry.kind.as_str(), &playbook.id]);
             reviewable_files.push(ReviewableFile {
                 path: entry.path.clone(),
                 old_path: entry.old_path.clone(),
@@ -805,8 +869,10 @@ pub fn bundle_review_batches(
 
     for (stem, group) in by_stem {
         if group.len() > 1 && group.len() <= file_cap {
-            let sum_tokens: usize = group.iter().map(|f| f.estimated_tokens).sum();
-            if sum_tokens <= token_cap {
+            let sum_tokens = group
+                .iter()
+                .try_fold(0usize, |sum, f| sum.checked_add(f.estimated_tokens));
+            if sum_tokens.is_some_and(|sum| sum <= token_cap) {
                 raw_batches.push((format!("module:{stem}"), group));
                 continue;
             }
@@ -827,8 +893,8 @@ pub fn bundle_review_batches(
 
         for f in group {
             let would_exceed_files = current.len() >= file_cap;
-            let would_exceed_tokens =
-                !current.is_empty() && current_tokens + f.estimated_tokens > token_cap;
+            let would_exceed_tokens = !current.is_empty()
+                && f.estimated_tokens > token_cap.saturating_sub(current_tokens);
             if would_exceed_files || would_exceed_tokens {
                 raw_batches.push((
                     format!("playbook:{playbook_id}#{}", part),
@@ -837,7 +903,7 @@ pub fn bundle_review_batches(
                 current_tokens = 0;
                 part += 1;
             }
-            current_tokens += f.estimated_tokens;
+            current_tokens = current_tokens.saturating_add(f.estimated_tokens);
             current.push(f);
         }
         if !current.is_empty() {
@@ -860,7 +926,7 @@ pub fn bundle_review_batches(
             for m in members {
                 playbooks.insert(m.playbook_id.clone());
                 paths.push(m.path.clone());
-                estimated_tokens += m.estimated_tokens;
+                estimated_tokens = estimated_tokens.saturating_add(m.estimated_tokens);
             }
             ReviewBatch {
                 batch_index: idx + 1,
@@ -903,6 +969,8 @@ pub struct CoverageVerificationReport {
     pub total_reviewable: usize,
     pub reviewed_count: usize,
     pub skipped_count: usize,
+    #[serde(default)]
+    pub ambiguous_files: Vec<String>,
     pub unaccounted_files: Vec<String>,
     pub skipped_without_reason: Vec<String>,
     pub coverage_rate_pct: usize,
@@ -916,8 +984,11 @@ pub fn verify_coverage_ledger(
     ledger: &CoverageLedger,
 ) -> CoverageVerificationReport {
     let mut by_path: BTreeMap<&str, &FileCoverageEntry> = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
     for entry in &ledger.files {
-        by_path.insert(entry.path.as_str(), entry);
+        if by_path.insert(entry.path.as_str(), entry).is_some() {
+            ambiguous.insert(entry.path.clone());
+        }
     }
 
     let mut reviewed_count = 0usize;
@@ -926,6 +997,9 @@ pub fn verify_coverage_ledger(
     let mut skipped_without_reason = Vec::new();
 
     for req_file in &inventory.reviewable_files {
+        if ambiguous.contains(&req_file.path) {
+            continue;
+        }
         match by_path.get(req_file.path.as_str()) {
             Some(entry) => match entry.status {
                 FileCoverageStatus::Reviewed => {
@@ -957,13 +1031,15 @@ pub fn verify_coverage_ledger(
         (accounted * 100) / total_reviewable
     };
 
-    let passed = unaccounted_files.is_empty() && skipped_without_reason.is_empty();
+    let passed =
+        ambiguous.is_empty() && unaccounted_files.is_empty() && skipped_without_reason.is_empty();
 
     CoverageVerificationReport {
         passed,
         total_reviewable,
         reviewed_count,
         skipped_count,
+        ambiguous_files: ambiguous.into_iter().collect(),
         unaccounted_files,
         skipped_without_reason,
         coverage_rate_pct,
@@ -986,80 +1062,62 @@ pub struct AnchoredSpan {
 /// `hint_line` wins. First tries exact line matching, then falls back to
 /// trimmed-whitespace matching (ignoring leading/trailing indentation drift).
 // trace:STORY-3076 | ai:antigravity
-pub fn anchor_snippet_lines(
-    file_content: &str,
-    snippet: &str,
+pub fn anchor_snippet_lines<'a>(
+    file_content: &'a str,
+    snippet: &'a str,
     hint_line: Option<usize>,
 ) -> Option<AnchoredSpan> {
-    let snippet_trimmed = snippet.trim_matches('\n').trim_matches('\r');
-    if snippet_trimmed.trim().is_empty() {
+    let snippet = snippet.trim_matches(['\r', '\n']);
+    if snippet.trim().is_empty() {
         return None;
     }
-
-    let file_lines: Vec<&str> = file_content.lines().collect();
-    let needle_lines: Vec<&str> = snippet_trimmed.lines().collect();
-    if needle_lines.is_empty() || needle_lines.len() > file_lines.len() {
-        return None;
-    }
-
-    // Pass 1: exact line-by-line match.
-    let mut exact_candidates = Vec::new();
-    let window = needle_lines.len();
-    for start_idx in 0..=(file_lines.len() - window) {
-        let matches_exact = (0..window).all(|offset| {
-            file_lines[start_idx + offset].trim_end_matches('\r')
-                == needle_lines[offset].trim_end_matches('\r')
-        });
-        if matches_exact {
-            exact_candidates.push((start_idx + 1, start_idx + window));
+    for trimmed in [false, true] {
+        let normalize = |line: &'a str| if trimmed { line.trim() } else { line };
+        let needle: Vec<_> = snippet.lines().map(normalize).collect();
+        // KMP prefix lengths retain overlapping matches without rescanning the file.
+        let mut prefix = vec![0; needle.len()];
+        let mut matched = 0;
+        for i in 1..needle.len() {
+            while matched > 0 && needle[i] != needle[matched] {
+                matched = prefix[matched - 1];
+            }
+            if needle[i] == needle[matched] {
+                matched += 1;
+            }
+            prefix[i] = matched;
+        }
+        matched = 0;
+        let mut best = None;
+        for (i, line) in file_content.lines().map(normalize).enumerate() {
+            while matched > 0 && line != needle[matched] {
+                matched = prefix[matched - 1];
+            }
+            if line == needle[matched] {
+                matched += 1;
+            }
+            if matched == needle.len() {
+                let start = i + 2 - matched;
+                let hint = hint_line.unwrap_or(1);
+                if best.is_none_or(|prev: usize| start.abs_diff(hint) < prev.abs_diff(hint)) {
+                    best = Some(start);
+                }
+                matched = prefix[matched - 1];
+            }
+        }
+        if let Some(start_line) = best {
+            return Some(AnchoredSpan {
+                start_line,
+                end_line: start_line + needle.len() - 1,
+                match_kind: if trimmed {
+                    "trimmed_whitespace"
+                } else {
+                    "exact"
+                }
+                .into(),
+            });
         }
     }
-
-    if let Some((start_line, end_line)) = pick_closest_span(&exact_candidates, hint_line) {
-        return Some(AnchoredSpan {
-            start_line,
-            end_line,
-            match_kind: "exact".to_string(),
-        });
-    }
-
-    // Pass 2: whitespace-normalized match (skipping leading/trailing whitespace differences).
-    let norm_needle: Vec<&str> = needle_lines.iter().map(|l| l.trim()).collect();
-    // Guard against matching a single blank or brace-only line everywhere.
-    if norm_needle.iter().all(|l| l.is_empty()) {
-        return None;
-    }
-
-    let mut trimmed_candidates = Vec::new();
-    for start_idx in 0..=(file_lines.len() - window) {
-        let matches_trimmed =
-            (0..window).all(|offset| file_lines[start_idx + offset].trim() == norm_needle[offset]);
-        if matches_trimmed {
-            trimmed_candidates.push((start_idx + 1, start_idx + window));
-        }
-    }
-
-    pick_closest_span(&trimmed_candidates, hint_line).map(|(start_line, end_line)| AnchoredSpan {
-        start_line,
-        end_line,
-        match_kind: "trimmed_whitespace".to_string(),
-    })
-}
-
-fn pick_closest_span(
-    candidates: &[(usize, usize)],
-    hint_line: Option<usize>,
-) -> Option<(usize, usize)> {
-    if candidates.is_empty() {
-        return None;
-    }
-    let Some(hint) = hint_line else {
-        return Some(candidates[0]);
-    };
-    candidates
-        .iter()
-        .copied()
-        .min_by_key(|(start, _)| start.abs_diff(hint))
+    None
 }
 
 /// Recorded tool or diff observation during a review investigation (`[[obs-000001]]`).
@@ -1080,6 +1138,8 @@ pub struct CitationVerification {
     pub valid: bool,
     pub cited_ids: Vec<String>,
     pub unknown_ids: Vec<String>,
+    #[serde(default)]
+    pub ambiguous_ids: Vec<String>,
     pub errored_ids: Vec<String>,
 }
 
@@ -1100,8 +1160,13 @@ pub fn verify_observation_citations(
         }
     }
 
-    let obs_map: BTreeMap<&str, &ReviewObservation> =
-        observations.iter().map(|o| (o.id.as_str(), o)).collect();
+    let mut obs_map = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
+    for obs in observations {
+        if obs_map.insert(obs.id.as_str(), obs).is_some() {
+            ambiguous.insert(obs.id.clone());
+        }
+    }
 
     let mut cited_ids = Vec::new();
     let mut unknown_ids = Vec::new();
@@ -1109,6 +1174,9 @@ pub fn verify_observation_citations(
 
     for id in cited_set {
         cited_ids.push(id.clone());
+        if ambiguous.contains(&id) {
+            continue;
+        }
         match obs_map.get(id.as_str()) {
             None => unknown_ids.push(id),
             Some(obs) if obs.has_error => errored_ids.push(id),
@@ -1116,11 +1184,12 @@ pub fn verify_observation_citations(
         }
     }
 
-    let valid = unknown_ids.is_empty() && errored_ids.is_empty();
+    let valid = ambiguous.is_empty() && unknown_ids.is_empty() && errored_ids.is_empty();
     CitationVerification {
         valid,
         cited_ids,
         unknown_ids,
+        ambiguous_ids: ambiguous.into_iter().collect(),
         errored_ids,
     }
 }
@@ -1141,11 +1210,12 @@ pub struct RawReviewFinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_line: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_span: Option<AnchoredSpan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor_status: Option<String>,
 }
 
-/// Anchor a batch of findings against a file-content provider, updating `start_line`,
-/// `end_line`, and `anchor_status` (`"exact"`, `"trimmed_whitespace"`, `"unanchored"`, or `"no_snippet"`).
+/// Anchor a batch of findings against a file-content provider, updating `resolved_span` and `anchor_status` (`"exact"`, `"trimmed_whitespace"`, `"unanchored"`, or `"no_snippet"`).
 // trace:STORY-3076 | ai:antigravity
 pub fn anchor_findings_with<F>(
     findings: &[RawReviewFinding],
@@ -1157,12 +1227,12 @@ where
     let mut out = Vec::with_capacity(findings.len());
     for f in findings {
         let mut cloned = f.clone();
+        cloned.resolved_span = None;
         if let Some(snippet) = f.existing_code.as_deref() {
             if let Some(content) = read_file(&f.path) {
                 if let Some(span) = anchor_snippet_lines(&content, snippet, f.start_line) {
-                    cloned.start_line = Some(span.start_line);
-                    cloned.end_line = Some(span.end_line);
-                    cloned.anchor_status = Some(span.match_kind);
+                    cloned.anchor_status = Some(span.match_kind.clone());
+                    cloned.resolved_span = Some(span);
                 } else {
                     cloned.anchor_status = Some("unanchored".to_string());
                 }
@@ -1258,6 +1328,11 @@ mod tests {
 
     #[test]
     fn test_glob_matches_with_braces_and_doublestar() {
+        assert!(ExclusionRules::new(&[format!("{{{}z}}", "x,".repeat(256))])
+            .validate()
+            .is_err());
+        assert!(glob_matches("*{*,x}/foo", "a/b/foo"));
+        assert!(!glob_matches(&format!("{{{}z}}", "x,".repeat(256)), "z"));
         assert!(glob_matches("**/*.rs", "aida-core/src/lib.rs"));
         assert!(glob_matches("**/*.rs", "lib.rs"));
         assert!(glob_matches(
@@ -1272,6 +1347,22 @@ mod tests {
     #[test]
     fn test_classify_diff_inventory_and_exclusions() {
         let registry = PlaybookRegistry::default();
+        let binary = |path: &str| RawDiffEntry {
+            path: path.into(),
+            kind: FileChangeKind::Modified,
+            old_path: None,
+            additions: 0,
+            deletions: 0,
+            is_binary: true,
+            patch_bytes: 0,
+        };
+        let digest = |entries: &[RawDiffEntry]| {
+            classify_diff_inventory(entries, &registry, &[], |_| false).inventory_sha256
+        };
+        assert_ne!(
+            digest(&[binary("a"), binary("b")]),
+            digest(&[binary("a:binary_file\nexcluded:b")])
+        );
         let entries = vec![
             RawDiffEntry {
                 path: "aida-core/src/review_engine.rs".to_string(),
@@ -1486,6 +1577,11 @@ mod tests {
         assert_eq!(batches[1].files, vec!["src/alpha.rs".to_string()]);
         assert_eq!(batches[2].files, vec!["src/beta.rs".to_string()]);
 
+        assert_eq!(estimate_file_tokens(usize::MAX, usize::MAX, 1), usize::MAX);
+        let mut oversized = vec![files[0].clone(); 2];
+        oversized[0].estimated_tokens = usize::MAX;
+        assert_eq!(bundle_review_batches(&oversized, usize::MAX, 2).len(), 2);
+
         // Verify generic stems (`lib.rs`, `mod.rs`) across different crates do not collide
         assert_ne!(
             canonical_module_stem("aida-core/src/lib.rs"),
@@ -1556,6 +1652,12 @@ mod tests {
                 },
             ],
         };
+        let mut duplicated = complete_ledger.clone();
+        duplicated.files.push(duplicated.files[0].clone());
+        let ambiguous = verify_coverage_ledger(&inv, &duplicated);
+        assert!(!ambiguous.passed);
+        assert_eq!(ambiguous.ambiguous_files, ["src/a.rs"]);
+        assert_eq!(ambiguous.coverage_rate_pct, 50);
         let rep_ok = verify_coverage_ledger(&inv, &complete_ledger);
         assert!(rep_ok.passed);
         assert_eq!(rep_ok.coverage_rate_pct, 100);
@@ -1575,6 +1677,13 @@ fn beta() {
     }
 }
 ";
+        let finding = serde_json::from_value(serde_json::json!({"path":"a", "severity":"low", "category":"test","message":"m","existing_code":"\r\nx\r\nx\r\n\r\n","start_line":9})).unwrap();
+        let anchored = anchor_findings_with(&[finding], |_| Some("x\nx\nx".into()));
+        assert_eq!(anchored[0].start_line, Some(9));
+        assert_eq!(anchored[0].resolved_span.as_ref().unwrap().start_line, 2);
+        assert!(anchor_findings_with(&anchored, |_| None)[0]
+            .resolved_span
+            .is_none());
         // Exact match
         let span = anchor_snippet_lines(
             source,
@@ -1624,6 +1733,10 @@ fn beta() {
         assert!(res_ok.valid);
         assert_eq!(res_ok.cited_ids, vec!["obs-000001".to_string()]);
 
+        let duplicate =
+            verify_observation_citations(good_report, &vec![observations[0].clone(); 2]);
+        assert!(!duplicate.valid);
+        assert_eq!(duplicate.ambiguous_ids, ["obs-000001"]);
         let bad_report =
             "Checked [[obs-000001]], errored [[obs-000002]], and hallucinated [[obs-999999]].";
         let res_bad = verify_observation_citations(bad_report, &observations);
