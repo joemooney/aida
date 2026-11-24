@@ -14,12 +14,12 @@ description: |
 
   - Route a failed red-main-watch invocation to the advisor seat with the failed job name and existing trip evidence. Include scheduler timeouts through the same route. Point the recipient to the failed step and preserve its diagnostic within the existing display bounds.
   - Check that the route qualifies exactly for red-main-watch failures and that a successful pass produces no failure item. Use existing scheduler cadence and deduplication, and preserve other jobs' routes.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.173596810Z
-modified_at: 2026-11-24T05:49:57.178228913Z
+modified_at: 2026-11-24T06:04:26.454148119Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -214,6 +214,14 @@ history:
   timestamp: 2026-11-24T05:48:37.184118373Z
   session_id: 01a20be5080b
   changes: []
+- id: 01a20c27-d3d6-7d81-bf30-393e5632ec4d
+  author: aida-orchestrator
+  timestamp: 2026-11-24T06:04:26.454315708Z
+  session_id: 01a20c2512cb
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
@@ -223,3 +231,18 @@ filed_at:
   aida_build_sha: 719aa4947d0
   vendor: claude
   session: 01a1faec8fa5
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Round 1 full sweep of PR-4491 at 0560b3407e7b2727aae0f78f763ab1ae69330427. Reviewed both changed files and the production watch, scheduler, and advisor delivery paths. The generated worksheet listed TASK-3218 by its origin ID and omitted its acceptance section. The criteria below come from the full AIDA requirement.
+
+    - TASK-3218 AC1 — Route watch failures and scheduler timeouts to the advisor with the job, trip, and bounded failed-step diagnostic — unverified. Nonzero exit and scheduler timeout reach the correct seat with trip evidence. Expired GitHub credentials can still result in a successful scheduler status, and a multiline fetch failure can lose the failed step and cause in the routed diagnostic.
+    - TASK-3218 AC2 — Match only red-main-watch failures, leave successful passes clear, and preserve cadence, deduplication, and other routes — verified by the exact event-kind and source-job comparison, the unchanged five-minute cadence and scheduler cursor/due-marker logic, and source inspection of the success and unrelated-failure cases in the added regression.
+    - Shared scope constraint — Keep the observation pass independent of requirement-store writes — verified by source inspection. The added seat route uses the scheduler's existing separate ledger, and the observation command is unchanged.
+
+    The head is two commits behind integration at fa7e9a9c2559. Neither finding depends on behavior changed by those commits. CI was pending at review time. Fast gates and merge-hold-gate passed, and fast compile was running. The implementer reported a passing targeted test with injected outcomes. No local tests or builds were run during review.
+  recovery_hint: address the review findings, move TASK-3218 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T06:04:26.454148119Z
