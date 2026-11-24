@@ -2,21 +2,28 @@ id: 01a20c6f-7d40-73c3-acac-3692587839bc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1309
 agreed_id: TASK-3864
 title: 'STORY-3076 S4: review-engine showcase, docs and Marp presentation (no pptx)'
-description: |
-  Slice S4 of STORY-3076 (Joe's review engine; advisor-122 ruling 2026-11-24 00:30; filed by product-15). Source: branch story-3076-review-engine @ 0fdac177513 (Joe's reference commit, left untouched).
+description: 'Slice S4 of STORY-3076 (Joe''s review engine; advisor-122 ruling 2026-11-24 00:30; filed by product-15). Source: branch story-3076-review-engine @ 0fdac177513 (Joe''s reference commit, left untouched).
+
   Files: docs/showcase/code-review.html, docs/showcase/index.html, executive-brief.html, search-data.js, trust.html, docs/*.md links, docs/internal/presentation/aida-code-review-engine.md + build.sh/README registration.
+
   S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
+
   Ordering: independent.
 
+
   ## Acceptance
-  - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
+
+  - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe''s authorship (git commit --author from the original commit).
+
   - AC2: S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
+
+  '
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-24T07:22:42.880980293Z
-modified_at: 2026-11-24T08:26:29.577720508Z
+created_at: 2026-11-24 07:22:42.880980+00:00
+modified_at: 2026-11-24 08:26:29.577720+00:00
 req_type: Task
 tags:
 - review
@@ -26,88 +33,112 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a20c97-12ac-7461-8e06-f5cfe4619f49
-  created_at: 2026-11-24T08:06:16.900684978Z
+  created_at: 2026-11-24 08:06:16.900684+00:00
   created_by: dirtlab
 comments:
 - id: 01a20c71-d746-7020-b652-b39047d5d756
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:25):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:25):
+
     # TASK-3864 (STORY-3076 slice; advisor-122 ruling 2026-11-24 00:30; product-15). Lane: CODEX. Base: INTEGRATION (branch `int32-task-3864`, cut from origin/integration 965a6dd2b2c). PR base MUST be `integration`.
 
-    SOURCE: Joe's reference commit 0fdac177513 on branch story-3076-review-engine (git fetch origin story-3076-review-engine). Do NOT modify that branch.
-    CHERRY-PICK AS A FILE SUBSET: `git checkout 0fdac177513 -- <files>` (and hand-apply only this slice's hunks to shared files such as lib.rs). KEEP Joe's authorship: commit with `--author="Joe Mooney <joe.mooney@gmail.com>"`.
+
+    SOURCE: Joe''s reference commit 0fdac177513 on branch story-3076-review-engine (git fetch origin story-3076-review-engine). Do NOT modify that branch.
+
+    CHERRY-PICK AS A FILE SUBSET: `git checkout 0fdac177513 -- <files>` (and hand-apply only this slice''s hunks to shared files such as lib.rs). KEEP Joe''s authorship: commit with `--author="Joe Mooney <joe.mooney@gmail.com>"`.
+
     SLICE S4 = docs only: docs/showcase/code-review.html, docs/showcase/index.html, docs/showcase/executive-brief.html, docs/showcase/search-data.js, docs/showcase/trust.html, the docs/*.md link edits (product-capabilities.md, trust-and-evidence.md, review-process.md), docs/internal/presentation/aida-code-review-engine.md + its build.sh/README registration. DROP docs/showcase/aida-deterministic-code-review.pptx and the docs/showcase/publish.py .pptx change; remove or adjust the .pptx download button/link in code-review.html; keep the Marp source and the showcase HTML. Run `python3 docs/showcase/build.py --check`. Commit `[AI:codex] docs(review): review-engine showcase and presentation (TASK-3864)`. If a doc page refers to `aida review prepare`, note in the PR body that the command arrives in S2.
-    Add `// trace:TASK-3864 | ai:codex` only where you add code. One targeted test run, then `make check-ci-fast`, then ship the PR INTO integration. COMMIT your work.
-  created_at: 2026-11-24T07:25:04.567861295Z
-  modified_at: 2026-11-24T07:25:04.567861295Z
+
+    Add `// trace:TASK-3864 | ai:codex` only where you add code. One targeted test run, then `make check-ci-fast`, then ship the PR INTO integration. COMMIT your work.'
+  created_at: 2026-11-24 07:25:04.567861+00:00
+  modified_at: 2026-11-24 07:25:04.567861+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20c7c-3267-70a0-a4a6-b8cf37e581e0
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 965a6dd2b2c440989d5096c440ea670fc18acdde plus native unstaged and untracked S4 files.
-    AC1: [evidence: manual-inspection] Compared all 12 files against Joe Mooney's 0fdac177513. Eleven are identical. docs/showcase/code-review.html differs only by removing the three PPTX links. origin/main...HEAD contains inherited integration changes; origin/integration...HEAD is empty. Host publication must preserve Joe Mooney <joe.mooney@gmail.com> as author and target integration.
-    AC2: [evidence: documentation-inspection] Six slide sections in docs/showcase/code-review.html:300 onward; Marp source registered at docs/internal/presentation/build.sh:26 and README.md:10. Checked all 11 showcase links, unique IDs, no PPTX link, no PPTX or publisher change. Generated capabilities.html fixed drift and matches reference. python3 docs/showcase/build.py --check and bash -n docs/internal/presentation/build.sh pass. No authority changes. Interactive rendering and PR-head CI unverified. PR body should note aida review prepare arrives in S2.
-  created_at: 2026-11-24T07:36:34.797159672Z
-  modified_at: 2026-11-24T07:36:34.797159672Z
+
+    AC1: [evidence: manual-inspection] Compared all 12 files against Joe Mooney''s 0fdac177513. Eleven are identical. docs/showcase/code-review.html differs only by removing the three PPTX links. origin/main...HEAD contains inherited integration changes; origin/integration...HEAD is empty. Host publication must preserve Joe Mooney <joe.mooney@gmail.com> as author and target integration.
+
+    AC2: [evidence: documentation-inspection] Six slide sections in docs/showcase/code-review.html:300 onward; Marp source registered at docs/internal/presentation/build.sh:26 and README.md:10. Checked all 11 showcase links, unique IDs, no PPTX link, no PPTX or publisher change. Generated capabilities.html fixed drift and matches reference. python3 docs/showcase/build.py --check and bash -n docs/internal/presentation/build.sh pass. No authority changes. Interactive rendering and PR-head CI unverified. PR body should note aida review prepare arrives in S2.'
+  created_at: 2026-11-24 07:36:34.797159+00:00
+  modified_at: 2026-11-24 07:36:34.797159+00:00
   session_id: 01a20c7a4e51
   harness_version: codex-cli 0.167.0
 - id: 01a20c96-978d-75b0-acda-180b2f6f178a
   author: aida-publication-done
   content: Implementer push 417ba689a6ea declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-24T08:05:25.517791564Z
-  modified_at: 2026-11-24T08:05:25.517791564Z
+  created_at: 2026-11-24 08:05:25.517791+00:00
+  modified_at: 2026-11-24 08:05:25.517791+00:00
   session_id: 01a20c7a4e51
 - id: 01a20c98-54b2-7742-934b-f9b81b11cd61
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int32-task-3864` at head `417ba689a6ea369ed6664055289418bb0e2c3c5c`.'
-  created_at: 2026-11-24T08:07:19.474995932Z
-  modified_at: 2026-11-24T08:07:19.474995932Z
+  created_at: 2026-11-24 08:07:19.474995+00:00
+  modified_at: 2026-11-24 08:07:19.474995+00:00
   session_id: 01a20c7a4e51
 - id: 01a20c9a-fb37-7601-a2b5-cf7217bad4fe
   author: joe
-  content: 'INTEGRATION FIDELITY PRE-CHECK (integration-30, 01:15): PR-4504 @ 417ba689a6 (STORY-3076 S4) vs source 0fdac177513. Author: Joe Mooney (kept). 11 of 12 slice files are byte-identical in change to the source (patch-id MATCH): presentation README/.md/build.sh, product-capabilities.md, review-process.md, trust-and-evidence.md, and showcase capabilities/executive-brief/index.html/search-data.js/trust.html. docs/showcase/code-review.html DIFFERS ONLY by removing the three ''.pptx'' download links (lines 269/289/827 of the source), consistent with dropping the pptx. publish.py is dropped, consistent (its only change added ''.pptx'' to PUBLISHED_SUFFIXES). ONE GAP: docs/showcase/README.md is also dropped, but the source''s single added line indexes BOTH code-review.html (''interactive presentation and technical deep-dive ... aida review prepare'') and the pptx. Dropping the line loses the README entry for the new page. The faithful slice keeps it, minus the '', or download the companion ... .pptx ... slide deck'' clause (1 line). Merges CLEAN; lane fast_gate=pass.'
-  created_at: 2026-11-24T08:10:00.651561104Z
-  modified_at: 2026-11-24T08:10:00.651561104Z
+  content: 'INTEGRATION FIDELITY PRE-CHECK (integration-30, 01:15): PR-4504 @ 417ba689a6 (STORY-3076 S4) vs source 0fdac177513. Author: Joe Mooney (kept). 11 of 12 slice files are byte-identical in change to the source (patch-id MATCH): presentation README/.md/build.sh, product-capabilities.md, review-process.md, trust-and-evidence.md, and showcase capabilities/executive-brief/index.html/search-data.js/trust.html. docs/showcase/code-review.html DIFFERS ONLY by removing the three ''.pptx'' download links (lines 269/289/827 of the source), consistent with dropping the pptx. publish.py is dropped, consistent (its only change added ''.pptx'' to PUBLISHED_SUFFIXES). ONE GAP: docs/showcase/README.md is also dropped, but the source''s single added line indexes BOTH code-review.html (''interactive presentation and technical deep-dive ... aida review prepare'') and the pptx. Dropping the line loses the README entry for the new page. The faithful slice keeps it, minus the '', or download the companion
+    ... .pptx ... slide deck'' clause (1 line). Merges CLEAN; lane fast_gate=pass.'
+  created_at: 2026-11-24 08:10:00.651561+00:00
+  modified_at: 2026-11-24 08:10:00.651561+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20c9c-b569-76a3-98fc-9ffe66e3e678
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:11):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:11):
+
     # TASK-3864 / PR #4504 r2: in-PR ONE-LINE docs fix (advisor-122 ruling 2026-11-24 01:12; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3864). Docs only, NO other change.
 
-    Restore Joe's docs/showcase/README.md line that indexes code-review.html (from 0fdac177513), MINUS the .pptx clause. Joe's original line was:
-    - Open [code-review.html](code-review.html) for the interactive presentation and technical deep-dive on AIDA's deterministic Rust code review engine (`aida review prepare`), or download the companion [aida-deterministic-code-review.pptx](aida-deterministic-code-review.pptx) PowerPoint slide deck.
+
+    Restore Joe''s docs/showcase/README.md line that indexes code-review.html (from 0fdac177513), MINUS the .pptx clause. Joe''s original line was:
+
+    - Open [code-review.html](code-review.html) for the interactive presentation and technical deep-dive on AIDA''s deterministic Rust code review engine (`aida review prepare`), or download the companion [aida-deterministic-code-review.pptx](aida-deterministic-code-review.pptx) PowerPoint slide deck.
+
     Keep the sentence up to the code-review.html description, and drop the "or download the companion ... .pptx" part (the .pptx is not shipped). Keep Joe as --author if amending his commit; otherwise a normal commit `[AI:codex] docs(review): index code-review.html in the showcase README (TASK-3864)`.
-    Run `python3 docs/showcase/build.py --check`, then push to #4504's branch. COMMIT your work.
-  created_at: 2026-11-24T08:11:53.619127704Z
-  modified_at: 2026-11-24T08:11:53.619127704Z
+
+    Run `python3 docs/showcase/build.py --check`, then push to #4504''s branch. COMMIT your work.'
+  created_at: 2026-11-24 08:11:53.619127+00:00
+  modified_at: 2026-11-24 08:11:53.619127+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ca5-cbb4-7631-a8a9-c01b6b82c6fe
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: a7db8c410a6c3f67f56196d61cec84e8d9bb1787 plus native working-tree diff.
+
+    AC1: [evidence: manual-inspection] Integration branch history retains Joe Mooney on 417ba689a6. README.md:7 restores the original position and wording from 0fdac177513 up to the download clause.
+
+    AC2: [evidence: documentation-inspection] docs/showcase/README.md:7 links once to the tracked code-review.html. Neither file references pptx. The revision adds one line, with no untracked files. Checked spelling, relative path, Markdown delimiters and duplicate links. No authority changes. python3 docs/showcase/build.py --check and git diff --check passed. Host publication and CI remain pending.'
+  created_at: 2026-11-24 08:22:01.526991+00:00
+  modified_at: 2026-11-24 08:22:01.526991+00:00
+  session_id: 01a20ca4ad12
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
-  timestamp: 2026-11-24T07:23:02.454478621Z
+  timestamp: 2026-11-24 07:23:02.454478+00:00
   changes: []
 - id: 01a20c7a-9b0c-7e01-9d06-55a96ce773ca
   author: aida-session-start
-  timestamp: 2026-11-24T07:34:51.404285591Z
+  timestamp: 2026-11-24 07:34:51.404285+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a20c7b-2b76-7ff3-89b6-8f866288a91b
   author: dirtlab
-  timestamp: 2026-11-24T07:35:28.374294212Z
+  timestamp: 2026-11-24 07:35:28.374294+00:00
   session_id: 01a20c7a4e51
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a20c96-978d-75b0-acda-17fe387b51f9
   author: aida-publication-done
-  timestamp: 2026-11-24T08:05:25.517789744Z
+  timestamp: 2026-11-24 08:05:25.517789+00:00
   session_id: 01a20c7a4e51
   changes:
   - field_name: status
@@ -115,19 +146,28 @@ history:
     new_value: Done
 - id: 01a20c97-67bb-70c2-b670-5846454b071d
   author: dirtlab
-  timestamp: 2026-11-24T08:06:18.811613523Z
+  timestamp: 2026-11-24 08:06:18.811613+00:00
   session_id: 01a20c7a4e51
   changes: []
 - id: 01a20c9b-4073-7751-a92f-0456627f0f22
   author: joe
-  timestamp: 2026-11-24T08:10:30.899355362Z
+  timestamp: 2026-11-24 08:10:30.899355+00:00
   changes:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a20ca5-793f-7292-8962-094f904ebb06
+  author: dirtlab
+  timestamp: 2026-11-24 08:21:40.799220+00:00
+  session_id: 01a20ca4ad12
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: InProgress
 - id: 01a20ca9-e149-7d33-8fc6-e47ecc2ace9d
   author: aida-orchestrator
-  timestamp: 2026-11-24T08:26:29.577856172Z
+  timestamp: 2026-11-24 08:26:29.577856+00:00
   session_id: 01a20ca288f6
   changes:
   - field_name: status
@@ -145,12 +185,15 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: |-
-    TASK-3864 (origin ID below) is the sole completing spec in the generated worksheet. Round 1 full sweep of all 12 changed paths at 417ba689a6ea369ed6664055289418bb0e2c3c5c.
-    TASK-b6b1278890774ef993d2ebc327862470-1309.AC1 — unverified. Git and forge verify the integration target, matching author, and source provenance for all 12 submitted paths. Eleven blobs match 0fdac177513 and the showcase differs only by three PowerPoint link removals. The advisor's required README index line is missing from the slice.
+  detail: 'TASK-3864 (origin ID below) is the sole completing spec in the generated worksheet. Round 1 full sweep of all 12 changed paths at 417ba689a6ea369ed6664055289418bb0e2c3c5c.
+
+    TASK-b6b1278890774ef993d2ebc327862470-1309.AC1 — unverified. Git and forge verify the integration target, matching author, and source provenance for all 12 submitted paths. Eleven blobs match 0fdac177513 and the showcase differs only by three PowerPoint link removals. The advisor''s required README index line is missing from the slice.
+
     TASK-b6b1278890774ef993d2ebc327862470-1309.AC2 — verified by the pinned Git tree and full diff. All changes are under docs/; the build script change only registers the retained Marp source. The showcase HTML remains, both excluded paths are unchanged or absent, and all three HTML download links were removed.
+
     The supplied untraced list names both criteria. The exact-head fast source gates passed, including the showcase drift guard, but the diff adds no criterion-traced check for the Git/forge provenance or the selective PowerPoint removal. The implementer reported a showcase drift check and a shell syntax check. Local test, build and rendering commands were not run by the reviewer.
-    The forge's integration tip 9435f22c422 is six commits ahead of the PR's merge base. The six commits do not change the reviewed documentation, showcase generator or review command registration and do not add the engine. None of the findings depends on behavior changed by those commits. Fast compile was pending at review time.
+
+    The forge''s integration tip 9435f22c422 is six commits ahead of the PR''s merge base. The six commits do not change the reviewed documentation, showcase generator or review command registration and do not add the engine. None of the findings depends on behavior changed by those commits. Fast compile was pending at review time.'
   recovery_hint: address the review findings, move TASK-3864 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-24T08:26:29.577720508Z
+  shelved_at: 2026-11-24 08:26:29.577720+00:00
