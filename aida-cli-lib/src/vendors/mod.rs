@@ -436,7 +436,7 @@ pub(crate) fn review_pickup_cmd(
 pub(crate) mod native_setup {
     pub const KEY: &str = "codex";
     pub const PROMPT: &str = "  Opt Codex into its native sandbox? This is weaker than AIDA containment (native sandbox, not AIDA-contained). Write [contained.vendors] codex = \"native\"? [y/N]: ";
-    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Commit .aida/config.toml to the trusted default branch before launching; native sandbox, not AIDA-contained.";
+    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Codex uses its native sandbox, not AIDA containment, once .aida/config.toml is committed on the trusted default branch.";
     pub const FIX: &str = "aida init --agent codex (interactive opt-in for missing policy), or edit .aida/config.toml to set and commit [contained.vendors] codex = \"native\" to the trusted default branch";
     pub const OTHER_FIX: &str = "use a supported vendor: aida agent new claude";
 }

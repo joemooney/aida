@@ -1742,6 +1742,8 @@ pub(crate) fn offer_init_codex_native(
         return Ok(false);
     }
     let path = crate::config_path_for_project(project_root);
+    // trace:BUG-2752 | ai:codex
+    let was_clean = crate::config_commit::config_is_clean(project_root);
     let mut doc = load_edit_doc(&path)?;
     if let Some(contained) = doc.get("contained") {
         anyhow::ensure!(
@@ -1766,6 +1768,10 @@ pub(crate) fn offer_init_codex_native(
     if !consent()? {
         return Ok(false);
     }
+    anyhow::ensure!(
+        load_edit_doc(&path)?.to_string() == doc.to_string(),
+        "project config changed during the native sandbox prompt; rerun init"
+    );
     let contained = ensure_root_table(&mut doc, "contained");
     if !contained.contains_key("vendors") {
         contained.insert("vendors", Item::Table(Table::new()));
@@ -1776,6 +1782,7 @@ pub(crate) fn offer_init_codex_native(
         .insert(crate::vendors::native_setup::KEY, value("native"));
     save_edit_doc(&path, &doc)?;
     eprintln!("  {}", crate::vendors::native_setup::WRITTEN);
+    crate::config_commit::finish_init_refresh(project_root, was_clean);
     Ok(true)
 }
 

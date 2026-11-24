@@ -5320,6 +5320,18 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             Some(init_footprint),
         )?;
     }
+    // Settle an explicit native opt-in while the scaffold commit is still
+    // clean, before unrelated setup prompts can edit the same config.
+    // trace:BUG-2752 | ai:codex
+    if !*no_agent_config && init_selection.is_some_and(|selection| selection.codex) {
+        let root = statusline_project_root();
+        config_cmd::offer_init_codex_native(
+            &root,
+            true,
+            std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
+            || crate::prompt_yes_no(crate::vendors::native_setup::PROMPT, false),
+        )?;
+    }
     // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
     // ready out of the box — consistent with how init already scaffolds
     // skills / hooks / discipline-pack. Idempotent + non-destructive
@@ -5370,16 +5382,6 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
                 "Note:".dimmed(),
                 e
             );
-        }
-        // trace:BUG-2513 | ai:codex
-        let root = statusline_project_root();
-        if let Err(e) = config_cmd::offer_init_codex_native(
-            &root,
-            init_selection.is_some_and(|selection| selection.codex),
-            std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
-            || crate::prompt_yes_no(crate::vendors::native_setup::PROMPT, false),
-        ) {
-            eprintln!("  Native sandbox opt-in skipped: {e}");
         }
         if let Err(e) = config_cmd::maybe_offer_permission_posture_fix(&statusline_project_root()) {
             eprintln!(

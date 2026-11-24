@@ -507,3 +507,41 @@ fn containment_agy_refusal_names_supported_vendors_and_stays_closed() {
             .unwrap();
     }
 }
+
+// trace:BUG-2752 | ai:codex
+#[test]
+fn bug_2752_codex_only_init_consent_supplies_trusted_seat_policy() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    policy(root.path(), "");
+    let error = session::containment_posture_in(root.path(), "codex", true)
+        .unwrap_err()
+        .to_string();
+    for detail in [
+        "aida init --agent codex",
+        "[contained.vendors] codex = \"native\"",
+        ".aida/config.toml",
+        "trusted default branch",
+    ] {
+        assert!(error.contains(detail), "{error}");
+    }
+    assert!(!error.contains("--vendor claude"), "{error}");
+
+    crate::config_commit::mark_init_scaffold_committed();
+    assert!(
+        crate::config_cmd::offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap()
+    );
+    // Remote-backed launches trust the published tip. Local writes alone
+    // must still refuse until the default branch receives the init commit.
+    assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
+    git(
+        root.path(),
+        &["update-ref", "refs/remotes/origin/main", "main"],
+    );
+    assert_eq!(
+        session::containment_posture_in(root.path(), "codex", true).unwrap(),
+        ContainmentPosture::Native
+    );
+}
