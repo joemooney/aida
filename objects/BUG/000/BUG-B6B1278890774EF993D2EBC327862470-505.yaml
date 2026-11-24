@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T07:08:34.929455730Z
+modified_at: 2026-11-24T07:23:10.230582861Z
 req_type: Bug
 tags:
 - ci
@@ -74,6 +74,18 @@ comments:
   content: 'Scope answer (product-15 2026-11-24 00:13): the lane may also update tests/test_self_hosted_runner.py:654 (it pins the 5-minute cap this spec raises to 15). Nothing else outside ci.yml.'
   created_at: 2026-11-24T07:12:16.000230055Z
   modified_at: 2026-11-24T07:12:16.000230055Z
+- id: 01a20c6f-e991-7e73-bce2-ccbb2871b6f3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cad5acb81270d2bb8f61ddcc1bbde32e75c72257 plus uncommitted timeout pin. Compared origin/main and integration merge bases, inspected git diff HEAD and checked for untracked additions.
+    AC1: [evidence: behavioral-test] ci.yml:165 and tests/test_self_hosted_runner.py:653. Reproduced the old assertion and passed both AptBounds tests after requiring exactly 15 for the named job and step. Other bounds and fetch-timeout assertions are preserved.
+    AC2: [evidence: configuration-validation] ci.yml:153-177. Restore and save use the same key and archive glob, APT uses that directory, and a miss proceeds through ordinary installation. No hosted run was listed for this branch, so warm timing remains unverified.
+    Probes checked exact job/step spelling, YAML numeric equality, per-step matching across jobs, and hit/miss handling. No gate or grant changes. Existing punt is still visible.
+  created_at: 2026-11-24T07:23:10.230582861Z
+  modified_at: 2026-11-24T07:23:10.230582861Z
+  session_id: 01a20c6ec678
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
