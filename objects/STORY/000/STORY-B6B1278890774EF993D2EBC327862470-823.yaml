@@ -23,8 +23,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:23:04.907255821Z
+modified_at: 2026-11-24T07:23:07.623752447Z
 req_type: Story
+tags:
+- track:integration
 comments:
 - id: 01a20c6c-4a4a-7591-b135-7e709b8ac7f7
   author: joe
@@ -36,6 +38,13 @@ history:
   author: joe
   timestamp: 2026-11-24T07:23:05.040989747Z
   changes: []
+- id: 01a20c6f-dde7-7bb2-8a7c-3fa9b164be98
+  author: joe
+  timestamp: 2026-11-24T07:23:07.623751961Z
+  changes:
+  - field_name: tags
+    old_value: ''
+    new_value: track:integration
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
