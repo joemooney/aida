@@ -3788,7 +3788,13 @@ pub(crate) fn shelve_spec_on_failure(
     // never reached InProgress (a phase-0 setup failure) still record the
     // FailureReason so the operator sees it, but skip the status flip so
     // we don't fight the guard.
-    shelve_status_flip(&mut req);
+    // trace:BUG-2736 | ai:codex
+    if shelve_status_flip(&mut req) {
+        req.add_comment(aida_core::Comment::new(
+            aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR.to_string(),
+            format!("Shelved by leases::shelve_spec_on_failure during {phase_slug}: {kind_slug}"),
+        ));
+    }
     req.failure_reason = Some(fr.clone());
     req.modified_at = now;
     backend.update_requirement(&req)?;
