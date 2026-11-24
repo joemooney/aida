@@ -1,0 +1,28 @@
+id: 01a20dfa-a39b-7fc2-9ca4-159d6908881b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-826
+agreed_id: STORY-3095
+title: 'Stalled-review detector: report and escalate open PRs with request-changes at their current head and no rework queued (plus approved-but-not-landing)'
+description: |
+  Found 2026-11-24 (product-15; Joe asked whether this check is part of AIDA or a temporary script). Overnight 2026-11-23/24, sixteen main-track PRs sat with a request-changes verdict at their CURRENT head and no rework queued, some for ~10 hours. They included throughput-critical BUG-2739. Nothing in AIDA flagged it. STORY-1699's stall escalation and the review-watch did not; the seats only noticed via a manual sweep and an ad-hoc script (.aida/tmp/stalled-cr.sh: an open PR whose latest ledger verdict is request-changes at its current head, with no lane or rework queued for its spec).
+
+  ## Acceptance
+  - AC1: AIDA ships a "stalled review" detector (an `aida doctor` check, plus an advisor-loop or night-shift job) that lists open PRs whose latest verdict is request-changes AT THEIR CURRENT HEAD with no rework lane running or queued for the spec, with the PR, spec, verdict age and finding counts; and an "approved but not landing" list (approved at head, not on a train, with the blocking reason).
+  - AC2: When an item stays stalled longer than a configurable threshold (default 60 min), it raises a routed alert to the advisor role, not silently. Tests: a stalled CR is reported; one with a queued rework is not; a re-pushed head clears it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T14:34:19.419008267Z
+modified_at: 2026-11-24T14:34:19.419008267Z
+req_type: Story
+tags:
+- doctor
+- review
+- throughput
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d58
+  vendor: claude
