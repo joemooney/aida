@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The status_prs unshipped-work detector uses aida_core::id_identity for ALL status keys and lookups, including zero-padding equivalence (TASK-1-097 == TASK-1-97) and consistent branch-identity resolution across the detector's other checks.
   - AC2: Tests: padded vs unpadded IDs and alias forms resolve to the same spec in every detector check.
-status: Done
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T07:32:48.834511132Z
+modified_at: 2026-11-24T07:35:25.746323003Z
 req_type: Task
 tags:
 - small
@@ -93,6 +93,14 @@ history:
   timestamp: 2026-11-24T07:18:23.316947844Z
   session_id: 01a20c31cd32
   changes: []
+- id: 01a20c7b-2132-74b0-acf6-c91d9ab03cd4
+  author: aida-orchestrator
+  timestamp: 2026-11-24T07:35:25.746447928Z
+  session_id: 01a20c781e9b
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -101,3 +109,15 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    FAIL — completing spec TASK-b6b1278890774ef993d2ebc327862470-1301 (TASK-3860). Both worksheet criteria remain unmet.
+    TASK-b6b1278890774ef993d2ebc327862470-1301.AC1 — unverified — numeric keys cover the primary map and joins, but branch parsing, node aliases, authoritative summary precedence, and verdict resolution have counterexamples detailed in the findings.
+    TASK-b6b1278890774ef993d2ebc327862470-1301.AC2 — unverified — source review of cargo test -p aida-cli-lib task_3860_detector_joins_branch_lease_and_forge_aliases and the changed TASK-3857 fixtures shows partial coverage of candidate admission, live leases, commit fallback, clone deferral, and one verdict lookup. Forge suppression and merged/carrier decisions lack end-to-end identity coverage.
+    Reviewed the complete pinned diff. The head is eight commits behind origin/integration. The intervening base changes do not affect the source paths these findings depend on. Exact-head FAST gates and merge-hold checks passed, FAST compilation was pending, and full test shards were skipped. No local tests were run under reviewer policy.
+  recovery_hint: address the review findings, move TASK-3860 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T07:35:25.746323003Z
