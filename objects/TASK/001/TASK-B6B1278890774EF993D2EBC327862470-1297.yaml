@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T07:09:09.063596145Z
+modified_at: 2026-11-24T07:14:16.252558671Z
 req_type: Task
 tags:
 - hygiene
@@ -111,6 +111,13 @@ comments:
   created_at: 2026-11-24T07:04:35.415535345Z
   modified_at: 2026-11-24T07:04:35.415535345Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20c67-f483-7cb2-bb9f-80c9ed03a1a1
+  author: joe
+  content: 'INTEGRATION SEAT CORRECTION (integration-30, 00:16): my 23:58 PASS missed reviewer F1, which the advisor UPHELD at 00:05. The new skip-reason hints tell the operator to run raw git (''git stash list --stat'', ''git log ... --branches'') INSIDE a private seat clone from the host. That clone''s git config is seat-controlled (e.g. core.pager, core.fsmonitor, aliases), so the hint invites the operator to execute seat-chosen commands with host authority. Do not merge cd7112f3. r2 (<=80 lines) drops every git command and states plain reasons only. I''ll pre-check r2 with a SECURITY lens: no runnable command that executes inside a seat-controlled checkout.'
+  created_at: 2026-11-24T07:14:16.252558671Z
+  modified_at: 2026-11-24T07:14:16.252558671Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
