@@ -1,0 +1,28 @@
+id: 01a20c2a-f277-78b1-a651-5fcbb13d5e19
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1301
+agreed_id: TASK-3860
+title: status_prs unshipped-work detector uses aida_core::id_identity for all status keys and lookups (zero-padding, branch identity); final detector follow-up
+description: |
+  Final follow-up on the unshipped-work detector (advisor-122 ruling 2026-11-23 23:10 on #4490 TASK-3857, overridden to APPROVE; relayed by integration-30; filed by product-15). The advisor says this is the LAST follow-up on this detector: no further split-offs.
+
+  ## Acceptance
+  - AC1: The status_prs unshipped-work detector uses aida_core::id_identity for ALL status keys and lookups, including zero-padding equivalence (TASK-1-097 == TASK-1-97) and consistent branch-identity resolution across the detector's other checks.
+  - AC2: Tests: padded vs unpadded IDs and alias forms resolve to the same spec in every detector check.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T06:07:50.903555094Z
+modified_at: 2026-11-24T06:07:50.903555094Z
+req_type: Task
+tags:
+- small
+- track:integration
+- watcher
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
