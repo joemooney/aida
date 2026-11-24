@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The ratchet credits only CI steps that can run. An invocation inside a step whose `if:` is always false (e.g. `if: false`, `if: ${{ false }}`) or that is otherwise disabled does not count as wiring, so that test is reported as unwired.
   - AC2: Regression cases: a disabled step's invocation does not satisfy the ratchet, and an enabled step's does.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T05:04:40.744259377Z
+modified_at: 2026-11-24T06:04:43.936875434Z
 req_type: Task
 tags:
 - ci
@@ -35,6 +35,12 @@ comments:
   modified_at: 2026-11-24T05:04:40.744259377Z
   session_id: 01a20beec6d4
   harness_version: codex-cli 0.167.0
+- id: 01a20c28-1820-7d23-aa02-8b64d9151aac
+  author: aida-publication-done
+  content: Implementer push 328f196e4982 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T06:04:43.936874238Z
+  modified_at: 2026-11-24T06:04:43.936874238Z
+  session_id: 01a20beec6d4
 history:
 - id: 01a20bc9-e27b-7140-82f7-88ad645d2195
   author: joe
@@ -53,6 +59,14 @@ history:
   session_id: 01a20beec6d4
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c28-1820-7d23-aa02-8b5241f6f102
+  author: aida-publication-done
+  timestamp: 2026-11-24T06:04:43.936870920Z
+  session_id: 01a20beec6d4
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
