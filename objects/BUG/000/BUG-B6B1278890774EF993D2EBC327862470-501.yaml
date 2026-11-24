@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T05:08:17.397154498Z
+modified_at: 2026-11-24T05:09:40.663625617Z
 req_type: Bug
 tags:
 - admission
@@ -161,6 +161,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T05:08:17.250820816Z
   modified_at: 2026-11-24T05:08:17.250820816Z
+- id: 01a20bf5-e363-7373-93ae-560c9efa0323
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:09):
+    # BUG-2740 / PR #4481 r3 (round 3 of 4), REMOVE RATHER THAN PATCH (advisor-122 ruling 2026-11-23 22:12: CR UPHELD at f034f939, r2 FALLBACK applies; strict; product-15). Lane: CODEX. MAIN, existing branch. Target <=150 lines.
+
+    Keeping the reorder keeps producing gate regressions (track:operator can change during the wait = an authority bypass; the explicit-pickup disk deferral is lost; the memory floor is not rechecked), and r2 is +318, over the cap.
+    (1) REVERT ALL reordering. Pickup order is EXACTLY main's: disk preflight -> queue-row persist -> WIP -> track/headless policy -> admission.
+    (2) The ONLY behaviour change: at its ORIGINAL position, the cold-start slot wait must NOT hold the store write lock. Either release the lock before blocking and re-acquire it after (then RE-READ state), or wait before taking the lock. Everything after the wait runs against FRESH state.
+    (3) KEEP the production-path test: with a full slot, an independent writer mutates the same store while the pickup waits.
+    (4) KEEP AC2: holder pid/cmd on the 5s timeout.
+    ALSO fix the r2 lane's own CI failure: the Rust test portability ratchet flagged aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs:1977 (tmp literal `--tmpfs /tmp`). Put it behind #[cfg(target_os = "linux")] or make it portable (if the revert removes that test change, it goes away).
+    If r3 is blocked on anything besides the lock-hold, the next step is PARK plus an operator-side mitigation (max_concurrent_cold_starts sized to the lane cap).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4481). COMMIT your work.
+  created_at: 2026-11-24T05:09:40.663625617Z
+  modified_at: 2026-11-24T05:09:40.663625617Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
