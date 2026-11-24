@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: An end-notice planning test with a SYNTHETIC SEAT audience that demonstrably hits the per-ID OverBudget path, asserting the unrelated notice survives. The existing relay test never reaches it because the relay audience has no seat role.
   - AC2: Update the stale delivery_gates doc comment to match r3's behaviour (ACK veto on retained-open failure via AckError::Partial; per-ID isolation otherwise).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:22:27.948675396Z
-modified_at: 2026-11-24T06:23:10.283914921Z
+modified_at: 2026-11-24T06:32:58.417102455Z
 req_type: Task
 tags:
 - mailbox
@@ -31,6 +31,13 @@ history:
   author: joe
   timestamp: 2026-11-24T06:23:08.195559987Z
   changes: []
+- id: 01a20c41-f331-7a60-9b0a-f7555b06d829
+  author: aida-session-start
+  timestamp: 2026-11-24T06:32:58.417098752Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
