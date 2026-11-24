@@ -1,0 +1,32 @@
+id: 01a20f50-095b-7991-b2bd-8c8191fed292
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-289
+title: 'Review PR-4535: [AI:codex] fix(lane): submit the fast gate without inherited Cargo overrides (BUG-2754)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f08`) for branch `bug-b6b1278890774ef993d2ebc327862470-515`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4535>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-515` → `main`
+
+  ## Covers
+
+  - BUG-2754
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4535` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T20:47:13.243303853Z
+modified_at: 2026-11-24T20:47:13.243303853Z
+req_type: Story
+filed_at:
+  code_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 95eaccf328
+  session: 01a20f083acf
