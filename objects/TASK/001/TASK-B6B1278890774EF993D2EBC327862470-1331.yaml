@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (a) credential-directory exclusion matches `.aws` / `.ssh` path COMPONENTS at ANY depth, including the repo root; (b) a rename evaluates BOTH sides (old and new path) for exclusion.
   - AC2: (c) .aida runtime exclusions match EXACT components (`.aida/cache-policy.toml` stays eligible); (d) a present-but-invalid or unreadable project config (.aida/review-rules.toml) gives a contextual ERROR, defaulting only when the file is ABSENT. One test for each of (a)-(d).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:21.678180988Z
-modified_at: 2026-11-24T10:04:29.587668321Z
+modified_at: 2026-11-24T10:27:42.648165482Z
 req_type: Task
 tags:
 - review
@@ -93,6 +93,12 @@ comments:
   modified_at: 2026-11-24T10:04:29.587668321Z
   session_id: 01a20cf84b20
   harness_version: codex-cli 0.167.0
+- id: 01a20d18-dbb8-7042-a457-fe7fb69512c4
+  author: aida-publication-done
+  content: Implementer push 8adbd6e00a43 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T10:27:42.648160166Z
+  modified_at: 2026-11-24T10:27:42.648160166Z
+  session_id: 01a20cf84b20
 history:
 - id: 01a20cd4-39e1-7bc0-b0bc-022cffae235a
   author: joe
@@ -140,6 +146,14 @@ history:
   session_id: 01a20cf84b20
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20d18-dbb8-7042-a457-fe64374b561b
+  author: aida-publication-done
+  timestamp: 2026-11-24T10:27:42.648157318Z
+  session_id: 01a20cf84b20
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
