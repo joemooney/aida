@@ -510,7 +510,7 @@ fn containment_agy_refusal_names_supported_vendors_and_stays_closed() {
 
 // trace:BUG-2752 | ai:codex
 #[test]
-fn bug_2752_codex_only_init_consent_supplies_trusted_seat_policy() {
+fn bug_2752_remote_policy_refuses_until_published() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -529,10 +529,10 @@ fn bug_2752_codex_only_init_consent_supplies_trusted_seat_policy() {
     }
     assert!(!error.contains("--vendor claude"), "{error}");
 
-    crate::config_commit::mark_init_scaffold_committed();
     assert!(
         crate::config_cmd::offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap()
     );
+    git(root.path(), &["commit", "-qam", "local native policy"]);
     // Remote-backed launches trust the published tip. Local writes alone
     // must still refuse until the default branch receives the init commit.
     assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
