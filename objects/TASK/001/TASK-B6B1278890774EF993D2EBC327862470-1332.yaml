@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T14:48:34.293305239Z
+modified_at: 2026-11-24T14:52:04.750649961Z
 req_type: Task
 tags:
 - review
@@ -37,6 +37,13 @@ comments:
   created_at: 2026-11-24T14:48:34.293299225Z
   modified_at: 2026-11-24T14:48:34.293299225Z
   session_id: 01a20de05086
+- id: 01a20e0b-17c6-7bc1-b879-b4c0e6741795
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 07:55): PR-4519 @ e573a0c7e6 (STORY-3076 H2) does NOT meet the ACs; recommend rework or a split. Merges CLEAN; Joe-authored; ''(Refs TASK-3867)''; +294/-164 = ~458 changed lines in review_engine.rs + review_prepare.rs (the lane''s fast_gate=pass, so existing tests still pass). Gaps: (1) NO NEW TESTS. The diff adds or changes no #[test] function, while AC2 requires ''Tests for each item''. Robustness items visibly touched (saturating/checked arithmetic x8, CRLF trim, globs compiled once via a matcher type, an exclusion-classifier type, anchor_snippet_lines lifetime/matcher changes) are all untested. (2) Over the ~300-line threshold without the AC''s H2a/H2b split. (3) The PR body lists nothing done or deferred (publish boilerplate only), so which AC1/AC2 items (length-framed digest, duplicate ledger/observation IDs, bounded brace expansion, resolved-vs-hint anchor coords, same-stem batching scope, budget cap/TASK-3319, single-bracket citations, language-keyed Rust facets) are DONE can''t be verified. Suggested path: split into H2a (AC1 robustness, <=300 lines, a test per item) and H2b (AC2 behaviour), with each PR body listing its items and their tests.'
+  created_at: 2026-11-24T14:52:04.750649961Z
+  modified_at: 2026-11-24T14:52:04.750649961Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20cd4-4160-7d93-a028-44fad8a0f0dd
   author: joe
