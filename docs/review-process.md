@@ -282,6 +282,23 @@ What the opt-in does, and its limits:
 This is a separate, durable setting. It is unrelated to `aida solo`, which
 sets a short-lived presence for the advisor code gate.
 
+## Deterministic review preparation (`aida review prepare`) — trace:STORY-3076 | ai:antigravity
+
+Whether the reviewer is an interactive advisor session or a headless `reviewer` phase inside `aida queue work --auto-complete`, raw diff reading suffers from context-window skimming on large pull requests, line-number drift, and vague checklist prompts. `aida review prepare` provides a deterministic Rust preparation and verification layer (`aida_core::review_engine` + `aida_cli_lib::review_prepare`) alongside `aida review prompt`:
+
+1. **SHA-256-Sealed Inventory & 100% File Coverage (`--verify-coverage <ledger.json>`)**:
+   - Classifies every changed or scanned file into `reviewable_files` vs `excluded_files` (with explicit exclusion reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, or `user_excluded:<glob>`).
+   - Seals the scope with `inventory_sha256` and verifies whether each file carries an inline `trace:<SPEC-ID>` comment.
+   - When `--verify-coverage` is passed, `aida review prepare` fails closed unless 100% of `reviewable_files` are explicitly marked `reviewed` or `skipped` (with a non-empty reason).
+2. **Zero-LLM Token-Budgeted Semantic Batching**:
+   - Pairs implementation files with their companion test files (`<stem>.rs` + `<stem>_test.rs` / `tests/<stem>_test.rs`, qualifying generic entry-point stems like `lib.rs` and `mod.rs` by parent directory so unrelated crates never collide) and packs remaining files by shared playbook within a 12,000-token / 8-file ceiling.
+3. **Core Playbooks + Zero-Overhead Diff-Triggered Security Facets**:
+   - Matches files against built-in language playbooks (`rust`, `cargo_toml`, `go`, `typescript_js`, `python`, `shell`, `sql`, `config_data`) layered beneath optional project rules in `.aida/review-rules.toml`.
+   - For Rust files, injects an always-on core checklist (~250 tokens mapped directly to AIDA's finding classes: `fail-open`, `absent-evidence-reads-as-good`, `perf`, `portability`, `contract-drift`, `incomplete-fix`, `untested-path`) and appends conditional facets (`rust_unsafe_ffi`, `rust_async_concurrency`, `rust_io_subprocess_security`, `rust_macros` distilled from the Rust API Guidelines, ANSSI Secure Rust, and Tokio) **only** when those constructs appear in the reviewed files.
+4. **Two-Pass Snippet Line-Anchoring (`--anchor-findings <findings.json>`) & Observation Citations**:
+   - Resolves quoted `existing_code` snippets to exact 1-based `(start_line, end_line)` spans against the pinned target git revision (`git show <sha>:<path>`), and validates `[[obs-NNNNNN]]` evidence citations.
+   - Also supports full-directory audits without a git diff via `aida review prepare --scan --path <dir>` for `/aida-code-review`.
+
 ## Related
 
 - [`docs/lifecycle.md`](lifecycle.md) — the spec states and the Done→Completed merge transition this review gates.

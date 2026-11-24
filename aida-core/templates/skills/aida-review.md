@@ -440,13 +440,14 @@ aida review claim --pr <N> --spec <SPEC>
 
 This is only needed here for entry points that don't already hold the marker themselves: `aida queue work PR-N --role reviewer` (standalone or orchestrated) and the drain's own reviewer phase hold it automatically for the life of the session, so `aida review claim` is a no-op safety net in those cases, not a duplicate claim. `aida review record` (step 6a) clears the marker as part of recording the verdict — no separate release needed on the happy path. If you abandon the review without recording a verdict, release it explicitly: `aida review claim --pr <N> --release`. The claim also expires on its own (`--ttl-mins`, capped at 1440/24h) so an abandoned review never wedges a PR indefinitely.
 
-### 2. Generate the per-spec checklist (STORY-67)
+### 2. Generate the per-spec checklist (STORY-67) & deterministic review preparation (STORY-3076)
 
 ```bash
 aida review prompt --pr <N> --write .aida/review-prompt-pr-<N>.md
+aida review prepare --pr <N> --write .aida/review-prepare-pr-<N>.md
 ```
 
-`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. Read the generated file; that's the worksheet.
+`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. `aida review prepare` deterministically classifies every changed file (`reviewable` vs `excluded` with reasons), bundles related source + test files into token-budgeted batches, injects path-scoped language playbooks (plus diff-triggered security/concurrency facets), and supports `--verify-coverage <ledger.json>` (100% file accountability) and `--anchor-findings <findings.json>` (exact line-number anchoring for quoted `existing_code` snippets). Read both generated files as your review worksheet.
 
 **Dim already-Completed specs — but only when they weren't subject of a commit in this PR.** Before walking the checklist, check each spec's current status AND whether it's the subject of a commit in `<base>..HEAD`:
 

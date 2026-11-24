@@ -30,7 +30,7 @@ SHOWCASE = "docs/showcase"
 OVERVIEW_SOURCE = "docs/what-is-aida.html"
 DEFAULT_REPO_URL = "https://github.com/joemooney/aida"
 DEFAULT_BLOB_PREFIX = DEFAULT_REPO_URL + "/blob/main/"
-PUBLISHED_SUFFIXES = (".html", ".css", ".js", ".svg", ".png", ".jpg", ".webp", ".ico")
+PUBLISHED_SUFFIXES = (".html", ".css", ".js", ".svg", ".png", ".jpg", ".webp", ".ico", ".pptx")
 EXCLUDED_NAMES = {"build.py", "publish.py", "publication.json", "README.md"}
 LINK_RE = re.compile(r'(\b(?:href|src)=")([^"]*)(")')
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")

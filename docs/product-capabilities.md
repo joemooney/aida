@@ -16,7 +16,7 @@ The [autonomy guide](selectable-autonomy.md) explains operator, guided, drive an
 
 ## Inspect evidence and return later
 
-Trace comments connect source to intent. History records how specs change; review verdicts identify the commit they assessed. Reporting helps find work waiting on a person or another agent. The [Metrics guide](metrics-guide.md) explains what recorded usage can and cannot establish. AIDA does not infer customer outcomes, financial return or complete attribution from missing evidence.
+Trace comments connect source to intent. History records how specs change; review verdicts identify the commit they assessed. Deterministic review preparation (`aida review prepare`) classifies changed or scanned files into a SHA-256-sealed inventory, pairs source and test files into token-budgeted batches, injects path-scoped language playbooks and diff-triggered security/concurrency facets, anchors quoted code snippets to exact line numbers, and verifies 100% file coverage. Reporting helps find work waiting on a person or another agent. The [Metrics guide](metrics-guide.md) explains what recorded usage can and cannot establish. AIDA does not infer customer outcomes, financial return or complete attribution from missing evidence.
 
 A colleague or future agent can start with the requirement, inspect its decisions and linked implementation, and update the acceptance criteria as the product evolves. The store, source history, derived cache and local operational evidence have different retention and recovery properties; the [trust guide](trust-and-evidence.md) explains those limits.
 
