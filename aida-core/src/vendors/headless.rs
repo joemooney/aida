@@ -6,6 +6,13 @@ use super::{LaunchVendor, VendorProfile};
 use anyhow::Result;
 
 impl VendorProfile {
+    pub fn manages_headless_model(&self) -> bool {
+        match self.vendor {
+            LaunchVendor::Claude | LaunchVendor::Codex => true,
+            LaunchVendor::Agy => false,
+        }
+    }
+
     /// `None` preserves legacy bypass syntax. `Some(flags)` means the caller
     /// resolved a contained/native posture, including its exact write boundary.
     /// Supplying flags does not grant admission or applied-containment credit.

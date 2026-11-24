@@ -108,6 +108,7 @@ pub(crate) fn resolve_exclusion_specs(
     store_root: &std::path::Path,
     named: &[String],
     traced: std::collections::BTreeSet<String>,
+    publish_index: bool,
 ) -> Vec<crate::gate::mandate::ShipSpec> {
     let mut history_keys_of: Vec<Vec<String>> = Vec::new();
     let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
@@ -176,7 +177,7 @@ pub(crate) fn resolve_exclusion_specs(
         .filter(|spec| spec.current.is_none())
         .map(|spec| spec.id.clone())
         .collect();
-    let alias_search = crate::mandate::store_history_alias_map(store_root, &deleted);
+    let alias_search = crate::mandate::store_history_alias_map(store_root, &deleted, publish_index);
     for (spec, keys) in specs.iter_mut().zip(history_keys_of.iter_mut()) {
         if spec.current.is_some() {
             continue;
@@ -198,7 +199,7 @@ pub(crate) fn resolve_exclusion_specs(
         }
     }
     let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
-    let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys);
+    let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys, publish_index);
     let code_root = store_root
         .file_name()
         .filter(|name| *name == ".aida-store")
@@ -349,7 +350,17 @@ fn collect_on_stable_store<S, T>(
                 }),
             );
         }
-        std::thread::sleep(backoff * attempt);
+        let delay = backoff * attempt;
+        if crate::forge_lookup::forge_lookup_deadline().is_some_and(|deadline| {
+            deadline.saturating_duration_since(std::time::Instant::now()) <= delay
+        }) {
+            return Err(
+                crate::gate::mandate::MandateRefusal::TraceEvidenceUnreadable(
+                    "insufficient time to retry mandate store collection".into(),
+                ),
+            );
+        }
+        std::thread::sleep(delay);
     }
 }
 
@@ -731,6 +742,7 @@ fn collect_mandate_cover(
                 &store_root,
                 &ids,
                 trace_evidence.ids.clone(),
+                record_exclusions,
             );
             // STORY-1698: every excluded class seen in any version goes into the
             // append-only ledger first, then the ledger is read back as the first
@@ -814,7 +826,7 @@ fn collect_mandate_cover(
             let labels = || {
                 crate::merge_hold::fetch_pinned_change(
                     project_root,
-                    crate::forge::resolve_forge_kind(project_root),
+                    crate::forge::peek_forge_kind(project_root),
                     pr,
                 )
                 .map_err(|e| e.to_string())
@@ -825,9 +837,20 @@ fn collect_mandate_cover(
             } else if supervised? {
                 if hold_reason.is_some()
                     || crate::gate::merge_hold_core::recorded_clearance(hold_root, pr).is_some()
-                    || !matches!(labels(), Ok(Some(c))
-                        if c.is_open()
-                            && !c.hold_label && !c.recorded_label && !c.cleared_label)
+                {
+                    return Err(MandateRefusal::MarkerMissing);
+                }
+                let change = labels()
+                    .map_err(MandateRefusal::LabelsUnreadable)?
+                    .ok_or_else(|| {
+                        MandateRefusal::LabelsUnreadable(
+                            "no pinned label evidence for the checked head".into(),
+                        )
+                    })?;
+                if !change.is_open()
+                    || change.hold_label
+                    || change.recorded_label
+                    || change.cleared_label
                 {
                     return Err(MandateRefusal::MarkerMissing);
                 }
@@ -1123,27 +1146,20 @@ pub(crate) fn have_ship_refs_locally(
     head_oid: &str,
     base_ref: &str,
 ) -> bool {
-    let have_head = !head_oid.is_empty()
-        && std::process::Command::new("git")
-            .arg("-C")
-            .arg(main_worktree)
-            .args(["cat-file", "-e", &format!("{}^{{commit}}", head_oid)])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    let have_base = std::process::Command::new("git")
-        .arg("-C")
-        .arg(main_worktree)
-        .args([
+    let exists = |args: &[&str]| {
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C").arg(main_worktree).args(args);
+        crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
+            .is_ok_and(|out| out.status.success())
+    };
+    !head_oid.is_empty()
+        && exists(&["cat-file", "-e", &format!("{head_oid}^{{commit}}")])
+        && exists(&[
             "rev-parse",
             "--verify",
             "--quiet",
-            &format!("refs/remotes/origin/{}^{{commit}}", base_ref),
+            &format!("refs/remotes/origin/{base_ref}^{{commit}}"),
         ])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    have_head && have_base
 }
 
 #[cfg(test)]
