@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T05:08:27.519004769Z
+modified_at: 2026-11-24T05:08:29.309442442Z
 req_type: Task
 tags:
 - hygiene
 - sessions
 - small
 - track:integration
+comments:
+- id: 01a20bf4-99fd-7c70-bd86-d972e1437a7b
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 22:10 (standard, guidance text only, drain, integration filler).'
+  created_at: 2026-11-24T05:08:29.309442442Z
+  modified_at: 2026-11-24T05:08:29.309442442Z
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
