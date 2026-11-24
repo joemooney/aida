@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T19:55:36.357538895Z
+modified_at: 2026-11-24T20:11:01.336984876Z
 req_type: Bug
 tags:
 - codex
@@ -104,6 +104,19 @@ comments:
   modified_at: 2026-11-24T19:20:50.048310785Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f2e-e837-7d40-a51e-4aa3576a2db9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 99dcb9aa0f64371e1fa3346dd8d4117f2e5c8a9c plus native worktree diff and both untracked integration fixture files.
+    AC1: [evidence: behavioral-test] aida-cli/tests/support/codex_init.py:55 verifies affirmative Codex-only real init, its explanation, committed main TOML and controlled advisor launch with workspace-write argv. The same test checks topic refusal, clean re-init and continued role setup after inline-table opt-in failure. Final lane job j20261124T200733037-2-0 executed 1 test and passed.
+    AC2: [evidence: behavioral-test] task_2631_containment_tests.rs:513 checks the full default-branch remedy and remote publication boundary. bug_2144_2146_containment_refusal_tests.rs:19 checks vendor-specific recovery and preserves Claude and Agy expectations. These unit assertions were inspected, not run locally in this integration-test selection.
+    Deep pass: default branch selection uses the guard resolver. Ordinary re-init is distinguished from adopted/clone bootstrap, dirty configs refuse before editing, optional failures warn, and explicit publication names the destination ref. Runtime authority remains the committed trusted policy. F6 concurrent config edits between verification and commit are deferred per the pickup brief.
+    Validation: rustfmt and git diff --check passed. make check-ci-fast passed six gates then stopped at four shard-tooling fixtures requiring cargo metadata, which the lane runner refuses. No exact-head CI evidence for the unpublished changes.
+  created_at: 2026-11-24T20:11:01.336984876Z
+  modified_at: 2026-11-24T20:11:01.336984876Z
+  session_id: 01a20f20163e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
