@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T12:49:47.324911244Z
+modified_at: 2026-11-24T13:12:11.569081251Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
@@ -72,6 +72,13 @@ comments:
   created_at: 2026-11-24T12:49:47.324906651Z
   modified_at: 2026-11-24T12:49:47.324906651Z
   session_id: 01a20d8f0a70
+- id: 01a20daf-a44b-7151-a551-2a8a41fe5087
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 06:15): PR-4516 @ 68e921d985 (TASK-3296 + TASK-3286 + TASK-3293 + TASK-3321) PASSES. +7 in 2 files, merges CLEAN. ci.yml''s gates-shard step adds one explicit ''python3 -m unittest tests/test_build_git_stamp.py tests/test_duration_cap_inventory.py tests/test_closeout_audit_wording.py'' line, with TASK-3296/3286/3293 traces. TASK-3321 adds trace links only, in tests/test_python_discovery.py (keeps TASK-3856''s trace). Context: since BUG-2734 (promotion 30) the gates shard''s discovery step already runs every tests/test_*.py, and these three already ran and passed in p30''s full CI. The explicit line makes them ''dedicated'' (discover-python-tests.py''s UNIT regex accepts multi-file lines, and the step''s ''matrix.shard == gates'' condition is credited), so discovery skips them. That''s the same coverage made explicit, with no double run. Note: the commit is authored by aida-product-15 (the product seat host-published the lane''s work after a one-spec ship-declaration limit punted it); the advisor isn''t an author.'
+  created_at: 2026-11-24T13:12:11.569081251Z
+  modified_at: 2026-11-24T13:12:11.569081251Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a71-33e0-7fb0-bef6-36f004672540
   author: joe
