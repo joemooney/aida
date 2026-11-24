@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-24T00:36:16.615303392Z
+modified_at: 2026-11-24T00:38:13.651107657Z
 req_type: Task
 tags:
 - doctor
@@ -141,6 +141,13 @@ comments:
   created_at: 2026-11-24T00:36:16.615299931Z
   modified_at: 2026-11-24T00:36:16.615299931Z
   session_id: 01a20ac0c2a2
+- id: 01a20afd-64c5-7962-946c-9be265288c00
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 17:50): PR-4463 @ 7a31a16a PASSES against reviewer 2574ef32''s F1/F2/F4 and the 16:26 ruling. The rework commit 7a31a16aab5 is +129/-34 (under the 150 cap); 27f29098d20 is only an integration merge. F2: retained lookup errors become SeatSidecarIssue{reason:''UNVERIFIED''}, and mail_backlog now carries seat_inventory_incomplete = !complete regardless of reader coverage, so doctor says ''N seat messages hidden or UNVERIFIED (observed count only; inventory incomplete)'' rather than staying silent. Test: a corrupt retained sidecar with the only live reader on an unrelated seat produces the UNVERIFIED doctor finding. F4: RetainedDeliveries::lookup checks the deadline and a new ReadLimits.max_retained_probes (16384) budget per directory probe INCLUDING misses, and the remaining ids are reported ''UNEXAMINED''. Test: max_retained_probes=1 gives 1 ''delivery sidecar missing'' and 3 UNEXAMINED. F1: each line names ''aida mailbox read <id> (source <path>)''; the test asserts the canonical path. F3 is untouched (deferred). The merge hold stays until a fresh independent APPROVE at this head. Next bundle (after tonight''s 18:00 cutoff).'
+  created_at: 2026-11-24T00:38:13.651107657Z
+  modified_at: 2026-11-24T00:38:13.651107657Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a5f-1ffd-7a60-89c4-efc8c7468411
   author: joe
