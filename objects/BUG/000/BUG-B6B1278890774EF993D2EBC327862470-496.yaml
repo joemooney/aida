@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T16:39:03.840702035Z
+modified_at: 2026-11-24T16:41:33.419749581Z
 req_type: Bug
 tags:
 - forge
@@ -161,6 +161,17 @@ comments:
   content: PR-4464 at 1bfff1d02c2761fc37d2ae76e544f4d2136e5ec3 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-24T15:36:52.820254680Z
   modified_at: 2026-11-24T15:36:52.820254680Z
+- id: 01a20e6f-5424-71e2-be24-32904ae72061
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:41):
+    # BUG-2735 / PR #4464 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 09:45; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4464 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4464. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:41:33.419749581Z
+  modified_at: 2026-11-24T16:41:33.419749581Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
