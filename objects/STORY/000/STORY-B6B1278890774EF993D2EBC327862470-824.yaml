@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T19:42:21.661362709Z
+modified_at: 2026-11-24T19:56:52.558622252Z
 req_type: Story
 tags:
 - admission
@@ -335,6 +335,15 @@ comments:
   modified_at: 2026-11-24T18:52:59.780776414Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f21-ffa9-7330-9978-ba190a7190d6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: af86ff2ff9c85e82891712b8a9ea0ad44b233dc7 (short ref af86ff2ff9) and native fixture diff. AC1: [evidence: manual-inspection] incomplete. Lease and grant binding take blocking locks and wrapper teardown waits synchronously. Design fork recorded. AC2: [evidence: behavioral-test] BUG-2139 contained-parent fixture at aida-cli/tests/bug_2139_headless_child_grant.rs:371 commits trusted inputs and checks actual grant and lease. Targeted job j20261124T194147692-2-0 executed one passing test. No new production barrier or deadline evidence. No untracked additions.
+  created_at: 2026-11-24T19:56:52.558622252Z
+  modified_at: 2026-11-24T19:56:52.558622252Z
+  session_id: 01a20f080a6c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
