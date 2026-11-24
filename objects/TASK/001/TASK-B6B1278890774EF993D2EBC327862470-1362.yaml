@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-24T17:39:42.199157011Z
+modified_at: 2026-11-24T17:40:08.688798674Z
 req_type: Task
 tags:
 - review
@@ -24,6 +24,12 @@ comments:
   content: 'advisor-122 APPROVED 2026-11-24 09:50 (HIGH, standard, drain, integration) with a condition: SKIP PRs whose spec has a retained reservation or a dead-lane lease; report those as ''blocked: reservation repair needed''. Tests for both cases.'
   created_at: 2026-11-24T16:46:34.589229165Z
   modified_at: 2026-11-24T16:46:34.589229165Z
+- id: 01a20ea4-c370-7cd3-b162-b1a113fd91ed
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1362` at head `289cc394a334ee2760c79067fd871bbe66f9c5a9`.'
+  created_at: 2026-11-24T17:40:08.688792414Z
+  modified_at: 2026-11-24T17:40:08.688792414Z
+  session_id: 01a20ea33d91
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
