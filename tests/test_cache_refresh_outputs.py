@@ -226,6 +226,33 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
             assert "cache-label-new" in result.stdout, mode
             assert "note: showing results cached at" not in result.stderr, mode
 
+        # TASK-1527 (#2349) replaced the pre-C deferral with a detached
+        # request. Explicit machine formats retain that policy on a real TTY.
+        # trace:TASK-3853 | ai:codex
+        detach_env = dict(env, AIDA_CACHE_NO_DETACH="0")
+        for mode in ("json", "toon"):
+            with sqlite3.connect(baseline) as source, sqlite3.connect(cache) as dest:
+                source.backup(dest)
+            with sqlite3.connect(cache) as conn:
+                conn.execute("DELETE FROM cache_meta WHERE key='source_head_sha'")
+            # A fast worker can finish before list renders its cache label.
+            # Observe this invocation's worker completion in the append-only log.
+            log = Path(str(cache) + ".refresh.log")
+            offset = log.stat().st_size if log.exists() else 0
+            result = require(run_tty([binary, "list", "--format", mode], root, detach_env))
+            if mode == "json":
+                assert isinstance(json.loads(result.stdout), list), result.stdout
+            else:
+                assert "cache:\n" in result.stdout, result.stdout
+            deadline = time.monotonic() + 30
+            while True:
+                output = log.read_bytes()[offset:] if log.exists() else b""
+                if b"refresh worker: Refreshed at " in output:
+                    break
+                assert time.monotonic() < deadline, (mode, output, result.stderr)
+                time.sleep(0.05)
+        print("PASS explicit JSON/TOON request detached refresh at a TTY", flush=True)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
