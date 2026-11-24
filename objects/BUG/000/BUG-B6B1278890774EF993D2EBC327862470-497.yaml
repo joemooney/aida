@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T00:20:00.067872590Z
+modified_at: 2026-11-24T00:37:50.868894607Z
 req_type: Bug
 tags:
 - integration
@@ -72,6 +72,26 @@ comments:
   content: 'RE-SCOPE (advisor-122 ruling 2026-11-23 17:40): #4468 merges as a Refs regression test (lane-recovery already sees integration-base PRs). NEW scope: find the SILENT Done->NeedsAttention flip of BUG-2728 at 21:15Z (aida history event 930883d1; candidate writers: supervisor.rs / zen_drive.rs). AC: every AUTOMATED status regression leaves a comment naming its writer (module plus reason); test that a regression write without one is refused or auto-annotated.'
   created_at: 2026-11-24T00:32:39.240890150Z
   modified_at: 2026-11-24T00:32:39.240890150Z
+- id: 01a20afd-0b7c-70d0-99fa-754894656b11
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:37):
+    # BUG-2736: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2736` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2736 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2736)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE p30 (advisor-122 ruling 17:40; product-15): branch `int30-bug-2736`, cut from origin/integration 13bcf6bd671. PR base MUST be `integration`. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.
+
+    RE-SCOPED (advisor 17:40), IGNORE the original AC1/AC2: find the SILENT Done->NeedsAttention flip of BUG-2728 at 21:15Z on 2026-11-23 (`aida history` event 930883d1; candidate writers supervisor.rs / zen_drive.rs). AC: every AUTOMATED status regression leaves a spec comment naming its writer (module plus reason). Test: an automated regression write produces that comment. Do NOT change WHEN regressions happen, only make them non-silent. If the writer is in a strict path, STOP and punt naming it.
+  created_at: 2026-11-24T00:37:50.868894607Z
+  modified_at: 2026-11-24T00:37:50.868894607Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
