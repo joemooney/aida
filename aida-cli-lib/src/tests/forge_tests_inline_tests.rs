@@ -2139,7 +2139,7 @@ fn glab_mr_approvals_derive_review_decision() {
     assert!(parse_glab_mr_approvals("nope").is_err());
 }
 
-// trace:TASK-3852 | ai:codex
+// trace:TASK-3852.AC1 | ai:codex
 #[test]
 fn task_3852_budget_uses_probe_binary_and_land_origin() {
     if crate::test_env::run_path_isolated_test() {

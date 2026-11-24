@@ -2552,12 +2552,36 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         );
     };
 
+    // The full store snapshot includes parked work and takes precedence over
+    // caller summaries when both identify the same spec. trace:BUG-2741 | ai:codex
     let mut status_by_spec = std::collections::HashMap::new();
-    insert_summary_statuses(&mut status_by_spec, summaries);
-    insert_summary_statuses(
-        &mut status_by_spec,
-        &all_requirement_summaries(project_root),
-    );
+    // Resolve origin IDs (spec_id) as well as display IDs. Within a
+    // snapshot an explicit display ID wins an alias collision.
+    // trace:TASK-3857 | ai:codex
+    for snapshot in [summaries, &all_requirement_summaries(project_root)] {
+        let mut display_statuses = Vec::new();
+        for summary in snapshot {
+            let status = if summary.deferred
+                || summary
+                    .tags
+                    .iter()
+                    .any(|tag| tag.trim().to_ascii_lowercase().starts_with("deferred:"))
+            {
+                "deferred".to_owned()
+            } else {
+                summary.status.to_ascii_lowercase()
+            };
+            if let Some(id) = summary.spec_id.as_deref().filter(|id| !id.is_empty()) {
+                status_by_spec.insert(id.to_ascii_uppercase(), status.clone());
+            }
+            if let Some(id) = summary.agreed_id.as_deref().filter(|id| !id.is_empty()) {
+                display_statuses.push((id.to_ascii_uppercase(), status));
+            }
+        }
+        status_by_spec.extend(display_statuses);
+    }
+    let excluded =
+        |status: &str| matches!(status, "deferred" | "completed" | "rejected" | "superseded");
 
     let live = process_probe::probe_live_claude_sessions();
     let now = chrono::Utc::now();
@@ -2597,15 +2621,12 @@ pub(crate) fn collect_unshipped_work_items_bounded(
     // carry real unshipped commits under, before the commit/patch probe ever
     // ran. The bound this exists for is "don't probe every stale ref in the
     // repo" (301+ of them), not "only probe two statuses" — so the gate is
-    // an EXCLUDE-list of the terminal statuses instead: everything that
-    // isn't Completed/Rejected/Superseded is still eligible for the probe.
-    // The exclusion set intentionally mirrors the terminal-status check
-    // applied to the resolved branch spec_id further below in this
-    // function, so a branch is never filtered here for a reason that
-    // wouldn't also filter it there. trace:BUG-1288 | ai:claude
+    // an EXCLUDE-list. Parked (deferred) specs are also quiet until resumed.
+    // Recheck the resolved spec below for candidates admitted by a recorded lease.
+    // trace:BUG-1288 | ai:claude
     let active_prefixes: Vec<String> = status_by_spec
         .iter()
-        .filter(|(_, status)| !matches!(status.as_str(), "completed" | "rejected" | "superseded"))
+        .filter(|(_, status)| !excluded(status))
         .map(|(spec, _)| spec.to_ascii_lowercase())
         .collect();
     let lease_branches: std::collections::HashSet<&str> =
@@ -2746,11 +2767,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         if live_scopes.contains(&spec_key) || live_branches.contains(&short_branch) {
             continue;
         }
-        if status_by_spec
-            .get(&spec_key)
-            .map(|status| matches!(status.as_str(), "completed" | "rejected" | "superseded"))
-            .unwrap_or(false)
-        {
+        if status_by_spec.get(&spec_key).is_some_and(|s| excluded(s)) {
             continue;
         }
         // BUG-1756: one candidate gets at most UNSHIPPED_PROBE_SLICE (and
@@ -3111,7 +3128,11 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         })
         .collect();
     let mut items = items;
-    let (clones, clone_scan) = clone_unshipped_work_items_bounded(project_root, deadline);
+    let (clones, clone_scan) = scan_unshipped_clones(project_root, &leases, deadline, |scope| {
+        status_by_spec
+            .get(&scope.to_ascii_uppercase())
+            .is_some_and(|status| status == "deferred")
+    });
     items.extend(clones);
     (
         items,
@@ -3131,6 +3152,7 @@ pub(crate) fn collect_unshipped_work_items_bounded(
 /// count, never dropped. Pushed work already reaches the scan above through
 /// its `origin/` ref.
 // trace:TASK-2053 | ai:claude
+#[cfg(test)]
 pub(crate) fn clone_unshipped_work_items(
     project_root: &std::path::Path,
 ) -> Vec<awaiting_you::UnshippedWorkItem> {
@@ -3138,9 +3160,25 @@ pub(crate) fn clone_unshipped_work_items(
 }
 
 // trace:TASK-2053 | ai:codex
+#[cfg(test)]
 pub(crate) fn clone_unshipped_work_items_bounded(
     project_root: &std::path::Path,
     deadline: Option<std::time::Instant>,
+) -> (
+    Vec<awaiting_you::UnshippedWorkItem>,
+    awaiting_you::UnshippedScanStatus,
+) {
+    scan_unshipped_clones(project_root, &list_leases(project_root), deadline, |_| {
+        false
+    })
+}
+
+// trace:TASK-3857 | ai:codex
+fn scan_unshipped_clones(
+    project_root: &std::path::Path,
+    leases: &[SessionLease],
+    deadline: Option<std::time::Instant>,
+    is_deferred: impl Fn(&str) -> bool,
 ) -> (
     Vec<awaiting_you::UnshippedWorkItem>,
     awaiting_you::UnshippedScanStatus,
@@ -3152,8 +3190,9 @@ pub(crate) fn clone_unshipped_work_items_bounded(
         scanned: 0,
         candidates: 0,
     };
-    for lease in crate::list_leases(project_root) {
+    for lease in leases {
         if lease.tree_kind != crate::seat_clone::TreeKind::Clone
+            || is_deferred(&lease.scope)
             || !std::fs::symlink_metadata(&lease.worktree_path).is_ok_and(|m| m.is_dir())
         {
             continue;
@@ -3418,6 +3457,92 @@ mod story_1043_unshipped_work_tests {
             completed_at: None, // trace:TASK-1474 | ai:claude
             yaml_path: String::new(),
         }
+    }
+
+    // trace:BUG-2741 | ai:codex
+    #[test]
+    fn detector_skips_deferred_branch_until_deferral_is_lifted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        let branch = "bug-2688-journal-loop";
+        branch_with_commit(root, branch, "BUG-2688");
+        let mut spec = summary("BUG-2688", "Approved");
+        spec.deferred = true;
+
+        let scan = |spec| collect_unshipped_work_items(root, &[spec], true, false);
+        assert!(scan(spec.clone()).is_empty());
+        spec.deferred = false;
+        let rows = scan(spec);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch, branch);
+    }
+
+    // trace:TASK-3857 | ai:codex
+    #[test]
+    fn task_3857_legacy_tag_quiets_branch_until_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "task-3857-work", "TASK-3857");
+        let mut spec = summary("TASK-3857", "Approved");
+        spec.tags.push("deferred:2026-11-23".into());
+        assert!(collect_unshipped_work_items(root, &[spec.clone()], true, false).is_empty());
+        spec.tags.clear();
+        assert_eq!(
+            collect_unshipped_work_items(root, &[spec], true, false).len(),
+            1
+        );
+    }
+
+    // trace:TASK-3857 | ai:codex
+    #[test]
+    fn task_3857_private_clone_respects_deferral() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        write_live_lease(root, "TASK-3857", "private-work");
+        let path = lease_path(root, "live1043");
+        let mut lease: SessionLease =
+            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        lease.tree_kind = crate::seat_clone::TreeKind::Clone;
+        lease.worktree_path = root.join("unreadable-clone");
+        std::fs::create_dir(&lease.worktree_path).unwrap();
+        std::fs::write(path, toml::to_string(&lease).unwrap()).unwrap();
+        let mut spec = summary("TASK-3857", "Approved");
+        spec.deferred = true;
+        assert!(collect_unshipped_work_items(root, &[spec.clone()], true, false).is_empty());
+        spec.deferred = false;
+        assert_eq!(
+            collect_unshipped_work_items(root, &[spec], true, false).len(),
+            1
+        );
+    }
+
+    // trace:TASK-3857 | ai:codex
+    #[test]
+    fn task_3857_resolves_commit_origin_id_on_candidate_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "wip", "TASK-1-097");
+        write_live_lease(root, "other", "wip");
+        let path = lease_path(root, "live1043");
+        let mut lease: SessionLease =
+            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        lease.active_pid = None;
+        lease.active_pid_start_time = None;
+        lease.hostname = "absent-host".into();
+        lease.started_at = chrono::Utc::now() - chrono::Duration::days(30);
+        std::fs::write(path, toml::to_string(&lease).unwrap()).unwrap();
+        let mut spec = summary("TASK-3857", "Approved");
+        spec.spec_id = Some("task-1-097".into());
+        spec.deferred = true;
+        assert!(collect_unshipped_work_items(root, &[spec.clone()], true, false).is_empty());
+        spec.deferred = false;
+        let rows = collect_unshipped_work_items(root, &[spec], true, false);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch, "wip");
     }
 
     // BUG-1288: stale refs must not enlarge the expensive probe set. This is
