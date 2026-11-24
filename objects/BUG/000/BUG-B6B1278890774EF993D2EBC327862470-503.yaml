@@ -1,0 +1,27 @@
+id: 01a20b98-35f8-7b01-9f98-bc1e520d84bb
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-503
+agreed_id: BUG-2742
+title: Session hygiene flags a clean stale seat clone as uncommitted work (likely counts ignored .aida/* files)
+description: |
+  Found 2026-11-23 (advisor-122; filed by product-15). The hourly session-hygiene check failed all evening on a stale TASK-2708 seat clone (session 01a1abbf, dead 31h), flagging it as "uncommitted work". The clone was CLEAN: 0 unique commits on any branch, 0 stashes, everything on origin. It was moved to ~/salvage/task-2708-seat-clone-658-2026-11-23 on imac (reversible). Likely cause: the dirty check counts ignored .aida/* files (compare BUG-2728, where untracked files caused a +dirty build stamp).
+
+  ## Acceptance
+  - AC1: session-hygiene's "uncommitted work" check ignores git-ignored files (and AIDA's own .aida/* state), and reports dirty only for tracked changes, unique unpushed commits or stashes. Test: a clone whose only difference is ignored .aida/* files is NOT flagged; a clone with a tracked edit IS.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T03:27:34.392401441Z
+modified_at: 2026-11-24T03:27:34.392401441Z
+req_type: Bug
+tags:
+- hygiene
+- sessions
+- small
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
