@@ -11,17 +11,16 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S2 is the CLI. BLOCKING tests: an option-injection attempt (a ref starting with -), a --write path escaping the repo, fail-closed handling of git errors.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T13:47:10.757534534Z
+modified_at: 2026-11-24T15:53:32.511582254Z
 req_type: Task
 tags:
 - review
 - story-3076
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -355,6 +354,27 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20e43-2a15-7f90-89ed-a292152277c3
+  author: aida-auto-bump
+  timestamp: 2026-11-24T15:53:32.437337909Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a20e43-2a5f-7a31-8cd3-233897e2ad56
+  timestamp: 2026-11-24T15:53:32.511579199Z
+  agent: aida
+  commit_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
+  summary: 'Advisor (delegated authority): promotion 35, linear on main 8dfad228d58 + 2 cherry-picks; per-commit patch-ids match approved integration squashes (e718bc07, 88d8f9c4); 11 files +1273; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  punted:
+  - 'punted: Round 1 full sweep for PR-4511 at 657d34438854ca176e867083c1dd1ed17f388050. TASK-b6b1278890774ef993d2ebc327862470-1307 (TASK-3862) — FAIL. The generated worksheet lists one completing spec and two applicable criteria. TASK-b6b1278890774ef993d2ebc327862470-1307.AC1: verified by comparing 0fdac177513 and the PR patch, matching Joe Mooney''s author metadata, and confirming the forge target is integration. The three wiring hunks match the reference, the CLI handler is derived from it with safety and test changes, and the remaining files are CLI help/audit and test/writer inventories. TASK-b6b1278890774ef993d2ebc327862470-1307.AC2: unverified. The untraced-criterion list was checked against the diff. Hosted FAST compile/ratchet job 138384036559 ran and passed the four review_prepare tests on the merge of the reviewed head into 3e0fa1c4351. The leading-dash and static write-escape cases have direct behavioral evidence. The Git-error test covers diff, ls-files and show helper failures, while the CLI still accepts missing comparison/criteria evidence in paths identified below. The write test also omits a concurrent directory move. No local builds or tests were run. Reviewed all eight changed files. The current local origin/integration is six commits ahead of the pinned head''s merge base. Both overlapping inventory edits are additive. Finding 1 depends on H1 in the newer base, and finding 7 concerns exclusion behavior H1 already corrects in core. The other findings apply to the pinned CLI itself. The green FAST run predates H1.'
+  - 'punted: TASK-3862 AC1 passes. PR 4511 targets integration, preserves Joe Mooney’s authorship, and the three CLI wiring hunks match the reference patch. AC2 is partial. The leading-dash ref, output traversal, and diff/ls-files/show error tests are present. The handler propagates malformed H1 config errors, but the widened TASK-3862 brief still requires CLI-level regression tests, Git metadata protection, fail-closed history and exact PR-head lookup. CI pending at review time. FAST source gates passed and FAST compile was running. No local tests or builds were run. The reviewed head is two commits behind origin/integration. scripts/ratchet-set.json is the reported overlap, and none of the findings depends on the intervening base changes.'
+  - 'punted: TASK-3862 AC1 PASS: the PR targets integration, the original and implementation commits credit Joe Mooney, and the registration hunks match the original stable patch ID. AC2 PARTIAL: source includes leading-dash, traversal and Git-error regressions, with round-two coverage for invalid rules, the .git pointer, missing shallow parent, forge head versus stale local branch, and credential exclusions before revision-content reads. Git metadata protection and exact PR evidence remain incomplete in the cases below. The findings do not depend on intervening base changes to scripts/ratchet-set.json or scripts/store-writers.toml. Fast source gates passed at the pinned head. Fast compile and merge-hold clearance were pending at review time. Review used source and existing evidence without local builds or tests.'
+  - 'punted: TASK-3862 AC1 PASS. PR targets integration, the original and initial implementation commits credit Joe Mooney, and the CLI registration hunks have matching stable patch IDs. AC2 PARTIAL. Source includes the required leading-dash, output-traversal, and Git-command error regressions. The source also propagates invalid rules and an unavailable shallow parent, excludes the credential paths in the committed fixture, protects the alternate Git metadata directory, and disables replacement objects on preparation''s Git data reads. Exact PR/MR evidence remains unfulfilled because the GitHub hostname and GitLab project are still subject to ambient routing. Existing deferred hardening is tracked in TASK-3869. The one newer integration commit changes CI and Python test discovery only. Neither finding depends on it. At the last exact-head check, FAST source gates passed, FAST compile was running, and merge-hold status was pending. Review used source and existing CI evidence.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -365,12 +385,6 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
+  completed_at: 2026-11-24T15:53:32.437330906Z
+  completion_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
   reopened_at_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: TASK-3862 AC1 PASS. PR targets integration, the original and initial implementation commits credit Joe Mooney, and the CLI registration hunks have matching stable patch IDs. AC2 PARTIAL. Source includes the required leading-dash, output-traversal, and Git-command error regressions. The source also propagates invalid rules and an unavailable shallow parent, excludes the credential paths in the committed fixture, protects the alternate Git metadata directory, and disables replacement objects on preparation's Git data reads. Exact PR/MR evidence remains unfulfilled because the GitHub hostname and GitLab project are still subject to ambient routing. Existing deferred hardening is tracked in TASK-3869. The one newer integration commit changes CI and Python test discovery only. Neither finding depends on it. At the last exact-head check, FAST source gates passed, FAST compile was running, and merge-hold status was pending. Review used source and existing CI evidence.
-  recovery_hint: address the review findings, move TASK-3862 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T13:47:10.757534534Z
