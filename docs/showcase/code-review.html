@@ -222,7 +222,7 @@
       font-family: var(--mono); font-size: 11px; padding: 8px 13px; cursor: pointer;
       transition: all 0.15s;
     }
-    .facet-btn.active, .facet-btn:hover {
+    .facet-btn[aria-selected="true"], .facet-btn:hover {
       background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
     }
     .facet-panel { display: none; }
@@ -253,8 +253,33 @@
 
     footer { padding: 40px 0 90px; font-family: var(--mono); font-size: 11px; color: var(--ink-secondary); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
     @media (max-width: 1080px) { .hero-grid, .grid-2, .grid-4 { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(3, 1fr); } .kpi-cell { border-bottom: 1px solid var(--line); } }
-    @media (max-width: 680px) { .shell { width: calc(100% - 32px); } .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media print { .topbar, .pres-dock { display: none !important; } body { background: #fff; color: #000; } .card { box-shadow: none; break-inside: avoid; } }
+    @media (max-width: 1080px) {
+      .topbar { position: static; }
+      .topbar-inner { height: auto; padding-block: 12px; }
+      .hero-grid, .grid-2, .grid-4 { grid-template-columns: minmax(0, 1fr); }
+      .shell { overflow-wrap: anywhere; }
+    }
+    @media (max-width: 680px) {
+      .shell { width: calc(100% - 32px); }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pres-dock {
+        position: static; transform: none; flex-wrap: wrap;
+        justify-content: center; gap: 8px;
+      }
+      .pres-status { min-width: 0; white-space: normal; }
+      .pres-dock > span { display: none; }
+    }
+    @media print {
+      .topbar, .pres-dock, .facet-tabs, .facet-instructions { display: none; }
+      body.deck-mode .slide-section, body.deck-mode .slide-section.active-slide,
+      .facet-panel { display: block; min-height: 0; padding-block: 0; animation: none; }
+      body { background: #fff; color: #000; }
+      .card { box-shadow: none; break-inside: avoid; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .table-wrap { overflow: visible; }
+      table { table-layout: fixed; overflow-wrap: anywhere; }
+      th { white-space: normal; }
+    }
   </style>
 </head>
 <body>
@@ -515,21 +540,21 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">Interactive Playbook &amp; Conditional Facet Explorer</h3>
-            <p class="card-subtitle">CLICK EACH TAB TO INSPECT THE ALWAYS-ON CORE AND WHOLE-FILE SUBSTRING CONDITIONAL FACETS</p>
+            <p class="card-subtitle facet-instructions">CLICK EACH TAB TO INSPECT THE ALWAYS-ON CORE AND WHOLE-FILE SUBSTRING CONDITIONAL FACETS</p>
           </div>
           <span class="badge badge-elite">Zero Token Overhead When Absent</span>
         </div>
 
-        <div class="facet-tabs" role="tablist">
-          <button class="facet-btn active" type="button" onclick="showFacet('core', this)">Always-On Rust Core (~250 tok)</button>
-          <button class="facet-btn" type="button" onclick="showFacet('io', this)">Facet 1: I/O, Subprocess &amp; Serde (ANSSI)</button>
-          <button class="facet-btn" type="button" onclick="showFacet('async', this)">Facet 2: Async, Locks &amp; Atomics (Tokio)</button>
-          <button class="facet-btn" type="button" onclick="showFacet('unsafe', this)">Facet 3: Unsafe &amp; FFI (ANSSI / Rustonomicon)</button>
-          <button class="facet-btn" type="button" onclick="showFacet('macros', this)">Facet 4: Macro Hygiene</button>
-          <button class="facet-btn" type="button" onclick="showFacet('polyglot', this)">Polyglot &amp; Custom TOML Rules</button>
+        <div class="facet-tabs" role="tablist" aria-label="Review facets">
+          <button class="facet-btn" type="button" role="tab" id="tab-core" aria-controls="facet-core" aria-selected="true" tabindex="0">Always-On Rust Core (~250 tok)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-io" aria-controls="facet-io" aria-selected="false" tabindex="-1">Facet 1: I/O, Subprocess &amp; Serde (ANSSI)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-async" aria-controls="facet-async" aria-selected="false" tabindex="-1">Facet 2: Async, Locks &amp; Atomics (Tokio)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-unsafe" aria-controls="facet-unsafe" aria-selected="false" tabindex="-1">Facet 3: Unsafe &amp; FFI (ANSSI / Rustonomicon)</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-macros" aria-controls="facet-macros" aria-selected="false" tabindex="-1">Facet 4: Macro Hygiene</button>
+          <button class="facet-btn" type="button" role="tab" id="tab-polyglot" aria-controls="facet-polyglot" aria-selected="false" tabindex="-1">Polyglot &amp; Custom TOML Rules</button>
         </div>
 
-        <div class="facet-panel active" id="facet-core">
+        <div class="facet-panel active" id="facet-core" role="tabpanel" aria-labelledby="tab-core" tabindex="0">
           <p><strong>Trigger:</strong> Always active on <code>**/*.rs</code>. Maps directly to AIDA's <code>aida review record --finding-class</code> taxonomy:</p>
           <ul>
             <li><strong>Anti-noise &amp; evidence floor:</strong> Do not duplicate diagnostics that <code>rustc</code>, the borrow checker, <code>cargo clippy</code>, or <code>rustfmt</code> catch reliably. Verify reachable call sites, trait bounds, and input boundaries before flagging.</li>
@@ -540,7 +565,7 @@
           </ul>
         </div>
 
-        <div class="facet-panel" id="facet-io">
+        <div class="facet-panel" id="facet-io" role="tabpanel" aria-labelledby="tab-io" tabindex="0">
           <p><strong>Triggered only when reviewed files contain:</strong> <code>Command::new</code>, <code>std::fs::</code>, <code>OpenOptions</code>, <code>Path::new</code>, <code>PathBuf</code>, <code>serde_json::</code>, <code>serde_yaml::</code>, or <code>toml::</code>.</p>
           <ul>
             <li><strong>Subprocess option injection:</strong> Never build commands via shell string interpolation; validate user/ref inputs with <code>reject_option_like</code> and pass <code>--end-of-options</code> (<code>END_OF_OPTIONS</code>) or <code>--</code> before positional refs/paths.</li>
@@ -549,7 +574,7 @@
           </ul>
         </div>
 
-        <div class="facet-panel" id="facet-async">
+        <div class="facet-panel" id="facet-async" role="tabpanel" aria-labelledby="tab-async" tabindex="0">
           <p><strong>Triggered only when reviewed files contain:</strong> <code>async fn</code>, <code>.await</code>, <code>tokio::</code>, <code>Mutex</code>, <code>RwLock</code>, <code>Atomic</code>, <code>std::thread</code>, or <code>select!</code>.</p>
           <ul>
             <li><strong>Locks across <code>.await</code> &amp; blocking in async:</strong> Never hold a synchronous <code>std::sync::Mutex</code>/<code>RwLock</code> guard across <code>.await</code>, and do not run blocking filesystem/subprocess I/O on async worker threads.</li>
@@ -558,7 +583,7 @@
           </ul>
         </div>
 
-        <div class="facet-panel" id="facet-unsafe">
+        <div class="facet-panel" id="facet-unsafe" role="tabpanel" aria-labelledby="tab-unsafe" tabindex="0">
           <p><strong>Triggered only when reviewed files contain:</strong> <code>unsafe </code>, <code>unsafe{</code>, <code>extern "C"</code>, <code>MaybeUninit</code>, <code>transmute</code>, <code>from_raw_parts</code>, or <code>libc::</code>.</p>
           <ul>
             <li><strong>Minimality &amp; proof:</strong> Every <code>unsafe</code> block, <code>unsafe fn</code>, or <code>unsafe impl Send/Sync</code> must be as narrow as possible and carry an explicit <code>// SAFETY:</code> comment proving the invariant.</li>
@@ -567,7 +592,7 @@
           </ul>
         </div>
 
-        <div class="facet-panel" id="facet-macros">
+        <div class="facet-panel" id="facet-macros" role="tabpanel" aria-labelledby="tab-macros" tabindex="0">
           <p><strong>Triggered only when reviewed files contain:</strong> <code>macro_rules!</code>, <code>proc_macro</code>, <code>proc_macro_attribute</code>, or <code>proc_macro_derive</code>.</p>
           <ul>
             <li><strong>Single evaluation:</strong> Bind <code>$x:expr</code> arguments to a <code>let</code> once inside the macro expansion so caller side effects do not execute multiple times.</li>
@@ -575,7 +600,7 @@
           </ul>
         </div>
 
-        <div class="facet-panel" id="facet-polyglot">
+        <div class="facet-panel" id="facet-polyglot" role="tabpanel" aria-labelledby="tab-polyglot" tabindex="0">
           <p><strong>Built-in Polyglot Playbooks + Project <code>.aida/review-rules.toml</code> Overrides:</strong></p>
           <ul>
             <li>Built-in playbooks cover <code>rust</code> (<code>**/*.rs</code>), <code>cargo_toml</code> (<code>**/Cargo.toml</code>), <code>go</code> (<code>**/*.go</code>), <code>typescript_js</code> (<code>**/*.{ts,tsx,js,jsx,mjs,cjs}</code>), <code>python</code> (<code>**/*.py</code>), <code>shell</code> (<code>**/*.sh</code>), <code>sql</code> (<code>**/*.sql</code>), and <code>config_data</code> (<code>**/*.{toml,yaml,yml,json}</code>).</li>
@@ -840,13 +865,34 @@ checklist = """
     if (themeLabel) themeLabel.textContent = isDark ? 'Terminal Mode' : 'Paper Mode';
   });
 
-  // Facet explorer tabs
-  function showFacet(id, btn) {
-    document.querySelectorAll('.facet-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.facet-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('facet-' + id)?.classList.add('active');
-    btn?.classList.add('active');
+  // trace:TASK-3865 | ai:codex
+  const facetTabs = Array.from(document.querySelectorAll('.facet-tabs [role="tab"]'));
+  function selectFacet(selected) {
+    for (const tab of facetTabs) {
+      const active = tab === selected;
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+      document.getElementById(tab.getAttribute('aria-controls')).classList.toggle('active', active);
+    }
   }
+
+  facetTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => selectFacet(tab));
+    tab.addEventListener('keydown', event => {
+      let next;
+      switch (event.key) {
+        case 'ArrowLeft': next = (index + facetTabs.length - 1) % facetTabs.length; break;
+        case 'ArrowRight': next = (index + 1) % facetTabs.length; break;
+        case 'Home': next = 0; break;
+        case 'End': next = facetTabs.length - 1; break;
+        default: return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      selectFacet(facetTabs[next]);
+      facetTabs[next].focus();
+    });
+  });
 
   // Slide deck presentation mode
   const slides = Array.from(document.querySelectorAll('.slide-section'));
