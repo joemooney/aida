@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: session-hygiene's "uncommitted work" check ignores git-ignored files (and AIDA's own .aida/* state), and reports dirty only for tracked changes, unique unpushed commits or stashes. Test: a clone whose only difference is ignored .aida/* files is NOT flagged; a clone with a tracked edit IS.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T04:56:27.424891864Z
+modified_at: 2026-11-24T04:57:01.635022151Z
 req_type: Bug
 tags:
 - hygiene
@@ -89,6 +89,11 @@ comments:
   modified_at: 2026-11-24T04:56:27.424891864Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a20bea-1bc3-7082-978b-97a78c1fb68b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep of PR #4487 against main e5e3711c9f9fdd4617a00cefb897e8b493269c47 and landing tree 495263104c5ca0f6192980f0bde697d7c5da78a5. Six findings. The source and the generated worksheet were reviewed. CI fast gates passed and fast compile was pending at review time. No local behavioral tests were run.. No triage reason was given.'
+  created_at: 2026-11-24T04:57:01.635012034Z
+  modified_at: 2026-11-24T04:57:01.635012034Z
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
@@ -135,6 +140,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20bea-1bc2-7393-b454-8537335f4deb
+  author: joe
+  timestamp: 2026-11-24T04:57:01.635002124Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
@@ -143,16 +155,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1 full sweep of PR #4487 against main e5e3711c9f9fdd4617a00cefb897e8b493269c47 and landing tree 495263104c5ca0f6192980f0bde697d7c5da78a5. Six findings. The source and the generated worksheet were reviewed. CI fast gates passed and fast compile was pending at review time. No local behavioral tests were run.
-
-    BUG-b6b1278890774ef993d2ebc327862470-503.AC1 — unverified. The prelisted missing test is present in the diff as cargo test -p aida-cli-lib task_2053_bwrap_bug_2742_bwrap_ignored_state_and_tracked_edits. It checks ignored .aida state and a tracked edit through both probes, and the implementer reported a focused pass. The full criterion fails source review because known shipped commits can be reported as uncommitted work, and the named incident is not covered.
-
-    BUG-2742.AC2 (advisor addition) — unverified. The diff adds separate untracked-file, other-local-branch and stash regressions, runnable with cargo test -p aida-cli-lib task_2053_bwrap_bug_2742_bwrap_. The untracked-file case also exercises KeepUnshipped destruction and checks the file’s bytes. The tests do not establish that branch work is truly unpublished or cover the new submodule inspection path.
-  recovery_hint: address the review findings, move BUG-2742 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T04:55:46.996604878Z
