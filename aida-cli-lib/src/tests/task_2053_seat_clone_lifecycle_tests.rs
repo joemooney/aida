@@ -59,7 +59,7 @@ fn write_clone_lease(main: &Path, clone: &Path, id: &str) {
 
 // trace:BUG-2722 | ai:codex
 #[test]
-fn bug_2722_task_2053_bwrap_unpushed_count_on_complete_branch() {
+fn task_2053_bwrap_bug_2722_unpushed_count_on_complete_branch() {
     if !bwrap_live() {
         return;
     }
