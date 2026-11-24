@@ -7,18 +7,17 @@ description: |-
   Reviewed sha: ccb9ea51cc5064223378a2022840f02a89b4f561
 
   The new stamp regression has no CI entry point. .github/workflows/ci.yml selects Python tests by name and the full test shards use nextest. Move the standalone regression into the existing shared-stamp Rust test suite or register python3 -m unittest tests/test_build_git_stamp.py in CI so the tracked/untracked contract keeps running.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:14:52.415505548Z
-modified_at: 2026-11-24T13:12:11.569081251Z
+modified_at: 2026-11-24T15:53:21.469547481Z
 req_type: Task
 tags:
 - carried-from:BUG-2728
 - finding-hash:bb67e327
 - from-review:BUG-2728
-- track:integration
 relationships:
 - rel_type: References
   target_id: 01a2076d-6c65-73b0-afbc-67157b3446e2
@@ -132,6 +131,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20e42-fef7-7661-ba29-465bbfd8d23d
+  author: aida-auto-bump
+  timestamp: 2026-11-24T15:53:21.399943578Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a20e42-ff3d-7f81-ace0-1a0240ccc416
+  timestamp: 2026-11-24T15:53:21.469544881Z
+  agent: aida
+  commit_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
+  summary: 'Advisor (delegated authority): promotion 35, linear on main 8dfad228d58 + 2 cherry-picks; per-commit patch-ids match approved integration squashes (e718bc07, 88d8f9c4); 11 files +1273; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: ccb9ea51cc5064223378a2022840f02a89b4f561
@@ -141,6 +156,10 @@ filed_at:
   aida_build_sha: f1a50179e5a
   vendor: claude
   session: 01a20a4056c3
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T15:53:21.399936222Z
+  completion_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
 attention_reason:
   category: blocked-dependency
   detail: The required native ship declaration ending (TASK-3296 TASK-3286 TASK-3293 TASK-3321) was rejected because the launcher accepts one spec ID. Can the host publish int35-task-3296 to integration with the required four-ID title?
