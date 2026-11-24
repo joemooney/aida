@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061Z
-modified_at: 2026-11-23T07:50:41.187829Z
+modified_at: 2026-11-24T14:26:51.099715741Z
 req_type: Bug
 tags:
 - recovery
@@ -247,6 +247,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-482` at head `b9364510fb871268e5500e28afc5a3959e36cf5d`.'
   created_at: 2026-11-23T08:27:03.504572Z
   modified_at: 2026-11-23T08:27:03.504572Z
+- id: 01a20df3-cc5b-7e41-b15e-c5b8f328a7a0
+  author: joe
+  content: 'PARKED (advisor-122 2026-11-24 07:30): #4402 closed unmerged after 5 rounds (branch kept). Re-specced as two strict slices: BUG-2747 (ancestry exemption) and BUG-2748 (partial receipt fails closed).'
+  created_at: 2026-11-24T14:26:51.099715741Z
+  modified_at: 2026-11-24T14:26:51.099715741Z
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
