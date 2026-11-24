@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-24T21:54:10.090266950Z
+modified_at: 2026-11-24T21:56:04.967191800Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -142,6 +142,11 @@ comments:
   created_at: 2026-11-23T16:13:15.137368307Z
   modified_at: 2026-11-23T16:13:15.137368307Z
   session_id: 01a208e6d3f2
+- id: 01a20f8f-14e7-72f0-a8e1-b17104161785
+  author: joe
+  content: 'advisor-122 OVERRIDE->APPROVE #4411 @c871fba3 (2026-11-24 15:05) on FAST green: the 2 p2s fail closed. Follow-up TASK-3889 (MEDIUM). Strict/supervised: Joe''s loop trains #4411 after full CI.'
+  created_at: 2026-11-24T21:56:04.967191800Z
+  modified_at: 2026-11-24T21:56:04.967191800Z
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
   author: aida-session-start
