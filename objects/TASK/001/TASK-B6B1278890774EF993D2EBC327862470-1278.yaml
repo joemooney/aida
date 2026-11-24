@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T00:57:39.877416855Z
+modified_at: 2026-11-24T00:57:56.366598762Z
 req_type: Task
 tags:
 - doctor
@@ -51,6 +51,12 @@ comments:
   content: 'Lane exit evidence: retained branch `int30-task-3851` at head `3e8f586ad41e57c38138e843fb68bdd4ef94afa1`.'
   created_at: 2026-11-24T00:57:39.877411995Z
   modified_at: 2026-11-24T00:57:39.877411995Z
+  session_id: 01a20b0d78d6
+- id: 01a20b0f-378e-74c1-ae6e-44f901018e91
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `int30-task-3851` at head `3e8f586ad41e57c38138e843fb68bdd4ef94afa1`.'
+  created_at: 2026-11-24T00:57:56.366595368Z
+  modified_at: 2026-11-24T00:57:56.366595368Z
   session_id: 01a20b0d78d6
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
