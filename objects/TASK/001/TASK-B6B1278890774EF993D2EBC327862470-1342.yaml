@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-24T13:47:30.127497107Z
+modified_at: 2026-11-24T13:47:31.726452380Z
 req_type: Task
 tags:
 - review
 - story-3076
 - track:integration
+comments:
+- id: 01a20dcf-cc0e-7681-b88c-0ad902ec57f3
+  author: joe
+  content: 'ADDED (advisor-122 2026-11-24 06:50, from the #4511 r3 CR; the S2 cycle ended with approval): (a) PIN THE GITHUB HOST: pass host/owner/repo for the PR metadata call and CLEAR GH_HOST for it (a hostless -R otherwise inherits GH_HOST); (b) PIN THE GITLAB PROJECT to origin for MR metadata. A test for each. Priority raised to MEDIUM.'
+  created_at: 2026-11-24T13:47:31.726452380Z
+  modified_at: 2026-11-24T13:47:31.726452380Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
