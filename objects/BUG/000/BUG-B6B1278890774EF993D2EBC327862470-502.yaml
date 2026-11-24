@@ -12,10 +12,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T03:27:05.669804177Z
-modified_at: 2026-11-24T03:29:12.824313492Z
+modified_at: 2026-11-24T03:29:15.164255375Z
 req_type: Bug
 tags:
 - small
+- track:integration
 - watcher
 history:
 - id: 01a20b99-adf0-7950-aee0-2bcd6fbf00a2
@@ -29,6 +30,13 @@ history:
   author: joe
   timestamp: 2026-11-24T03:29:12.952018242Z
   changes: []
+- id: 01a20b99-bf9c-77d0-b020-72abfa532e7a
+  author: joe
+  timestamp: 2026-11-24T03:29:15.164254800Z
+  changes:
+  - field_name: tags
+    old_value: small, watcher
+    new_value: small, track:integration, watcher
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
