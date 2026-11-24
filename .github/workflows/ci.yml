@@ -621,6 +621,10 @@ jobs:
         if: matrix.shard == 'gates'
         run: |
           python3 -m unittest tests/test_test_touched.py
+          # trace:TASK-3296 | ai:codex
+          # trace:TASK-3286 | ai:codex
+          # trace:TASK-3293 | ai:codex
+          python3 -m unittest tests/test_build_git_stamp.py tests/test_duration_cap_inventory.py tests/test_closeout_audit_wording.py
           # trace:BUG-2734 | ai:codex
           python3 scripts/discover-python-tests.py
 
