@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S2 is the CLI. BLOCKING tests: an option-injection attempt (a ref starting with -), a --write path escaping the repo, fail-closed handling of git errors.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T13:05:32.684215294Z
+modified_at: 2026-11-24T13:34:26.814401641Z
 req_type: Task
 tags:
 - review
@@ -195,6 +195,12 @@ comments:
   modified_at: 2026-11-24T13:05:32.684215294Z
   session_id: 01a20d9f542d
   harness_version: codex-cli 0.167.0
+- id: 01a20dc3-d1fe-7dd2-8228-fcf7e79691b7
+  author: aida-publication-done
+  content: Implementer push 49c0e73f5144 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T13:34:26.814401134Z
+  modified_at: 2026-11-24T13:34:26.814401134Z
+  session_id: 01a20d9f542d
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
   author: joe
@@ -320,6 +326,14 @@ history:
   session_id: 01a20d9f542d
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20dc3-d1fe-7dd2-8228-fcef4412f166
+  author: aida-publication-done
+  timestamp: 2026-11-24T13:34:26.814399595Z
+  session_id: 01a20d9f542d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
