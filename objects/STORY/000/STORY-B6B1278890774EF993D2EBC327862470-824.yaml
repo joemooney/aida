@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T06:42:47.589646205Z
+modified_at: 2026-11-24T06:44:17.441231055Z
 req_type: Story
 tags:
 - admission
@@ -26,6 +26,24 @@ comments:
   content: Filed Approved per advisor-122 ruling 2026-11-23 23:46 (strict, MAIN, drive, <=200 lines). BUG-2740 lands on top of this.
   created_at: 2026-11-24T06:42:47.589646205Z
   modified_at: 2026-11-24T06:42:47.589646205Z
+- id: 01a20c4c-80ef-7332-92d2-b90682286df3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:44):
+    # STORY-3080: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show STORY-3080` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:STORY-3080 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (STORY-3080)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    ROUTING (advisor-122 23:46): MAIN, STRICT review (launch authority), mode drive, <=200 lines. Read BUG-2740 and closed PR #4481 for context, but do NOT change the store-lock handling here: BUG-2740 lands on top of this afterwards. ONE before_spawn revalidation function; tests (a) a hold placed during the wait, (b) track:operator set after admission, (c) a pull that flips the track.
+  created_at: 2026-11-24T06:44:17.441231055Z
+  modified_at: 2026-11-24T06:44:17.441231055Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
