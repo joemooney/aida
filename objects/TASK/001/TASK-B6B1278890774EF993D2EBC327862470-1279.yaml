@@ -93,6 +93,13 @@ comments:
   created_at: 2026-11-24T03:18:52.776851228Z
   modified_at: 2026-11-24T03:18:52.776851228Z
   session_id: 01a20b60b88b
+- id: 01a20b91-ad71-7890-9689-8ffee36a92f8
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 20:25): PR-4478 @ a2f048d7d0c PASSES the folded scope (advisor 17:50). +203/-20 in 3 files; merges CLEAN on integration baefe725cc4. (a) github_core_budget resolves review_watch::forge::main_root plus Repository::load and calls repo.pin_command, the same main-repo identity and host pin as land discovery; non-GitHub or unresolvable repos print nothing, as before. (c) the binary comes from kernel::resolve_gh_binary_for_probe() (the AIDA_TEST_GH_BINARY / AIDA_DEBUG_GH seam), and the 5s bound now runs through forge_lookup''s shared deadline. (b) aida-cli/tests/task_3852_core_budget.rs: a fake gh asserts cwd == main root, GH_HOST pinned to github.com despite GH_HOST=other.invalid and GH_REPO=other/repo in the env, GH_REPO cleared, and exact args ''api rate_limit --cache 60s''. It runs both ''aida doctor check github-core-budget'' and ''aida land status'' and asserts the <20% WARNING text, plus inline unit tests in forge_tests_inline_tests.rs. Fast CI pending.'
+  created_at: 2026-11-24T03:20:13.866623308Z
+  modified_at: 2026-11-24T03:20:13.866623308Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20af8-f8c0-7502-a9b7-4065638fe1c1
   author: joe
