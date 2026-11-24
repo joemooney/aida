@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T08:29:39.955140044Z
+modified_at: 2026-11-24T08:47:38.411586912Z
 req_type: Story
 tags:
 - track:integration
@@ -154,6 +154,12 @@ comments:
   content: 'NOTE FOR JOE (product-15 2026-11-24, per advisor-122 ruling 01:30 on #4504): the published docs/showcase claims were TONED DOWN to match the reference implementation (0fdac177513). Changed wording, so you can restore any you have evidence for: F3 the coverage ledger is described as optional CLI file accountability, not merge-gate enforcement; F4 12k tokens is an estimated target, oversized files get their own batch, pairing is a same-stem heuristic; F5 facets come from whole-file substring matching, not diff-triggered; F6 the trace: flag is a marker check, not verification; F7 the CLI anchors snippets, the citation verifier is library-only for now; F8 Git is required, with per-mode inputs listed; F9/F10 the six-defect comparison, the 100% anchoring figure and the OpenCodeReview comparison are labelled an illustrative case study / feature matrix rather than a measured benchmark, and the API-key claim is dropped unless cited. Also the .pptx is not shipped (generate on demand from the Marp source).'
   created_at: 2026-11-24T08:29:39.955140044Z
   modified_at: 2026-11-24T08:29:39.955140044Z
+- id: 01a20cbd-3dab-7ce3-ad03-2cd16f7fe26a
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int32-story-3076-s1` at head `82c928f6096bd2c4a805ddfc27dba8a366d09e3e`.'
+  created_at: 2026-11-24T08:47:38.411582538Z
+  modified_at: 2026-11-24T08:47:38.411582538Z
+  session_id: 01a20c9a45fd
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
