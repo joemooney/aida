@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-498
 agreed_id: BUG-2737
 title: Review risk classifier tags integration-base PRs STRICT from integration's own diff vs main
 description: 'Gate-ledger verdicts on #4463 and #4470 (base=integration) carry risk.tier=STRICT with reason ''sensitive path: scripts/ci-structural-exclusions.json''. Neither PR touches that file; it changed on integration. The classifier diffs base_tip=main..head instead of the PR''s actual base (integration). Result: reviewers apply ADR-76 strict blocking to standard-tier test/diagnostic PRs, forcing extra rework rounds. AC1: classifier uses the PR''s base ref (merge-base with the PR base) for integration-base PRs; regression with an integration branch carrying a sensitive-path change the PR does not touch.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T01:01:29.185101735Z
+modified_at: 2026-11-24T01:01:32.110728339Z
 req_type: Bug
 comments:
 - id: 01a20b07-5cd1-7631-8b48-a439402e24e5
@@ -46,6 +46,11 @@ comments:
   created_at: 2026-11-24T00:56:37.436109405Z
   modified_at: 2026-11-24T00:56:37.436109405Z
   session_id: 01a20b0c47f5
+- id: 01a20b12-824e-71f0-9e71-a81ae8eb8614
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: May the lane change aida-cli-lib/src/gate/ledger/event.rs to pass a verified PR base tip to the risk classifier? The only production caller is in the protected floor and currently supplies the default-branch tip.. No triage reason was given.'
+  created_at: 2026-11-24T01:01:32.110718426Z
+  modified_at: 2026-11-24T01:01:32.110718426Z
 history:
 - id: 01a20b07-3d37-7d11-b94a-d087427bce06
   author: joe
@@ -98,6 +103,13 @@ history:
   author: joe
   timestamp: 2026-11-24T01:01:29.317298658Z
   changes: []
+- id: 01a20b12-824e-71f0-9e71-a805e1488662
+  author: joe
+  timestamp: 2026-11-24T01:01:32.110706151Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -108,8 +120,3 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: May the lane change aida-cli-lib/src/gate/ledger/event.rs to pass a verified PR base tip to the risk classifier? The only production caller is in the protected floor and currently supplies the default-branch tip.
-  raised_by: implementer
-  raised_at: 2026-11-24T00:55:55.203895241Z
