@@ -12,6 +12,11 @@
       "tests": [
         "config_defaults_only_when_absent",
         "credential_components_at_any_depth",
+        "h2a_budget_is_a_cap",
+        "h2a_digest_frames_paths",
+        "h2a_duplicates_are_ambiguous",
+        "h2a_single_bracket_citations",
+        "h2a_token_overflow",
         "rename_excludes_either_path",
         "runtime_prefix_requires_exact_components",
         "test_anchor_snippet_lines_exact_and_whitespace_tolerant",
