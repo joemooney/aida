@@ -644,19 +644,29 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
-    // Diagnostic only. Keep the permanent flock inode and describe the last
-    // recorded acquisition, since ownership may change while an alert is read.
     // trace:BUG-2746 | ai:codex
     fn admission_lock(&self, activity: &str) -> Result<RuntimeLock> {
+        self.admission_lock_with(|file| {
+            let pid = std::process::id();
+            let identity = aida_core::proc_identity::ProcIdentity::capture(pid)
+                .map_err(std::io::Error::other)?;
+            writeln!(
+                file,
+                "{pid} {} {} {activity}",
+                identity.starttime,
+                chrono::Utc::now().timestamp()
+            )
+        })
+    }
+
+    fn admission_lock_with(
+        &self,
+        record: impl FnOnce(&mut File) -> std::io::Result<()>,
+    ) -> Result<RuntimeLock> {
         let mut lock = self.lock("admission.lock")?;
-        // Pad each bounded ASCII record so a shorter activity overwrites the
-        // previous one in full on the already locked descriptor.
-        let record = format!("{} {activity}", chrono::Utc::now().timestamp());
-        anyhow::ensure!(
-            record.is_ascii() && record.len() <= 255,
-            "invalid lock activity"
-        );
-        writeln!(lock.0, "{record:<255}")?;
+        if lock.0.set_len(0).is_ok() && record(&mut lock.0).is_err() {
+            let _ = lock.0.set_len(0);
+        }
         Ok(lock)
     }
 
@@ -668,7 +678,7 @@ impl Directory {
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(RuntimeLock(file)),
+                Ok(()) => return Ok(RuntimeLock(file, name == "admission.lock")),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -681,7 +691,25 @@ impl Directory {
                         .take(256)
                         .read_to_string(&mut record)
                         .ok()
-                        .and_then(|_| record.strip_suffix('\n')?.trim_end().split_once(' '))
+                        .and_then(|_| {
+                            let mut fields = record.strip_suffix('\n')?.splitn(4, ' ');
+                            let pid = fields.next()?.parse().ok()?;
+                            let start: u64 = fields.next()?.parse().ok()?;
+                            let at = fields.next()?;
+                            let meta = file.metadata().ok()?;
+                            let locks = std::fs::read_to_string("/proc/locks").ok()?;
+                            let holders = crate::admission_owner::flock_holders(
+                                &locks,
+                                meta.dev(),
+                                meta.ino(),
+                            );
+                            (holders == [pid]
+                                && aida_core::proc_identity::ProcIdentity::capture(pid)
+                                    .ok()?
+                                    .starttime
+                                    == start)
+                                .then_some((at, fields.next()?))
+                        })
                         .and_then(|(at, activity)| {
                             let age = chrono::Utc::now()
                                 .timestamp()
@@ -705,9 +733,12 @@ impl Directory {
 // the same open file description. End ownership at the transaction boundary,
 // even when a child has not yet exec'd (Rust opens files with CLOEXEC).
 // trace:TASK-3809 | ai:codex
-pub(crate) struct RuntimeLock(File);
+pub(crate) struct RuntimeLock(File, bool);
 impl Drop for RuntimeLock {
     fn drop(&mut self) {
+        if self.1 {
+            let _ = self.0.set_len(0);
+        }
         if let Err(error) = FileExt::unlock(&self.0) {
             eprintln!("review-watch runtime unlock failed: {error}");
         }
@@ -1729,7 +1760,7 @@ fn select_with_coverage(
         }
         // End ownership even if a concurrent fork retains the descriptor.
         // trace:BUG-2650 | ai:codex
-        let _member = RuntimeLock(member);
+        let _member = RuntimeLock(member, false);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews

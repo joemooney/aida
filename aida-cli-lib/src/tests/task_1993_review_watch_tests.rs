@@ -5703,3 +5703,48 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
     assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
     assert!(!leaked().is_empty());
 }
+
+// trace:BUG-2746 | ai:codex
+#[test]
+fn bug2746_unrecorded_takeover_and_failed_record() {
+    use std::io::{BufRead, BufReader};
+    let (_temp, store) = fixture();
+    let path = store.dir.path().join("admission.lock");
+    let held = store
+        .dir
+        .admission_lock("review-watch updating PR-2")
+        .unwrap();
+    let stale = std::fs::read(&path).unwrap();
+    drop(held);
+    assert!(std::fs::read(&path).unwrap().is_empty());
+    std::fs::write(&path, stale).unwrap();
+    let mut child = Command::new("flock")
+        .arg("-F")
+        .arg(_temp.path().join(".aida/review-watch/admission.lock"))
+        .args(["sh", "-c", "echo held; cat >/dev/null"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    assert_eq!(line, "held\n");
+    let unknown = || {
+        let err = store
+            .dir
+            .admission_lock("train selecting members")
+            .err()
+            .unwrap();
+        assert!(is_busy(&err) && err.to_string().contains("activity and age unknown"));
+    };
+    unknown();
+    drop(child.stdin.take());
+    assert!(child.wait().unwrap().success());
+    let _held = store
+        .dir
+        .admission_lock_with(|_| Err(std::io::Error::from_raw_os_error(libc::ENOSPC)))
+        .unwrap();
+    unknown();
+}
