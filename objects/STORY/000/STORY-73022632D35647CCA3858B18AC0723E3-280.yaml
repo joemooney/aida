@@ -1,5 +1,6 @@
 id: 01a20e06-21f1-7362-911e-2e9cc93be9bb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-280
+agreed_id: STORY-3096
 title: 'Review PR-4519: [AI:codex] fix(review): harden inventory, coverage and anchoring (Refs TASK-3867)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20de0`) for branch `int32-task-3867`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T14:47:26.730999307Z
   session_id: 01a20de05086
+  changes: []
+- id: 01a20e09-1c3e-7203-953c-37add209a2fb
+  author: joe
+  timestamp: 2026-11-24T14:50:07.806657361Z
   changes: []
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
