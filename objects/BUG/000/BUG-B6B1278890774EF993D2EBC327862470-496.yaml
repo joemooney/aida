@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-24T14:11:21.763911474Z
+modified_at: 2026-11-24T14:14:23.076241265Z
 req_type: Bug
 tags:
 - forge
@@ -99,6 +99,39 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:11:21.606049742Z
   modified_at: 2026-11-24T14:11:21.606049742Z
+- id: 01a20de8-954a-7e43-a13f-63925be73c47
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:14):
+    # BUG-2735 / PR #4464 rework (advisor-122 stalled-CR sweep 2026-11-24 07:20; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 200 lines. Note: 5 major; <=200 lines.
+
+    BLANKET RULING (advisor-122 2026-11-24 07:20 stalled-CR sweep): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major that is a behaviour REGRESSION this PR introduced. DEFER minor/p2 unmet-claimed-AC and test-strength items (mass-change): do NOT fix them; list them in the PR body as deferred. In your exit summary and PR body, list EACH finding as fixed or deferred.
+
+    CR at 9b167d9e. Findings:
+
+    F1. [major/unmet-claimed-ac/blocking] BUG-2735.AC1. The auto-train's startup monitor checks the budget, but advisor_loop_train.rs:150-173 still invokes the automatic train pass after it reports a low budget. That pass uses --all-ready, inventories open PRs on every tick (pr_train.rs:5017-5025), and proceeds into candidate evaluation. Separate background discovery from active train recovery and exact-head CI, so the automatic poller reports a skip below 20% while already selected trains can still read CI.
+
+    F2. [major/unmet-claimed-ac/blocking] BUG-2735.AC1. The drain's per-PR CI watcher only consults the budget after CI is observed running. Fresh PRs with no checks instead enter the registration loop at phase_driver_trait.rs:1581-1607, issuing gh pr checks every 10 seconds even below 20% (ci_gate.rs:445-468). The same seat's red-refinement path at phase_driver_trait.rs:1687 also polls check rows without the budget gate (ci_gate.rs:491-531). Gate the seat's repeating reads at those entry points and keep landing-critical callers eligible.
+
+    F3. [major/unmet-claimed-ac/blocking] BUG-2735.AC1. The unpinned rate-limit check uses the CLI's default API host (forge.rs:2329-2335). The interactive gh run list/watch commands infer a repository (or take GH_REPO), so a GHES checkout can be measured against github.com's budget or vice versa. A high reading or auth failure on the default host then lets polling continue while the watched host is below 20%. Use the same resolved host and routing for the budget request and the watched operation, and add a two-host regression. https://github.com/cli/cli/blob/v2.105.0/pkg/cmd/api/api.go#L383-L400
+
+    F4. [major/unmet-claimed-ac/blocking] BUG-2735.AC1. watcher_backoff only spawns a bare gh from PATH (forge.rs:2329-2343). The main watch, startup monitor, and interactive CI watcher can run the real probe through the resolver's absolute-path fallbacks (kernel.rs:418-452). With gh installed in /usr/bin or ~/.local/bin but omitted from a seat's PATH, the budget check silently falls through while these pollers continue to issue requests. Use the actual watcher's executable through bounded resolution. The new fixture places one fake gh in both resolution paths and cannot catch this.
+
+    F5. [major/unmet-claimed-ac/blocking] BUG-2735.AC1. The streaming loop checks the budget only while gh run watch is alive, then unconditionally starts another forge probe once the child exits (ci_watch.rs:60-86). If the child completes or errors after polling past the threshold and before the next budget check, this final request bypasses back-off. Route the completion probe through the same budget gate, and exercise a budget drop while the child is running.
+
+    F6. [minor/p2/deferred] ci_watch.rs:64-70 kills the interactive gh child with SIGKILL after printing the budget message. On terminals where gh enabled the alternate screen, that bypasses its screen restoration and leaves subsequent AIDA output on the alternate screen. Use bounded graceful cancellation that restores the terminal before printing the back-off. GitHub CLI handles SIGINT for that purpose. https://github.com/cli/cli/blob/v2.105.0/pkg/iostreams/iostreams.go#L361-L388
+
+    F7. [minor/p2/deferred] ci_probe.rs:661-670 counts the intentional budget pause toward the no-progress timer and returns NoSignal on idle expiry. A running check that normally re-arms that timer can complete during the pause and still cause phase 2 to stop with CiUnavailable (phase_driver_trait.rs:1776-1783) before the next budget reset. Keep the absolute deadline and distinguish throttled time from observed CI inactivity so the waiter can resume after the budget recovers.
+
+    F8. [minor/p2/deferred] At the retired-grant cap, recover_closed_reviews forwards the expected low-budget condition as a recovery error (advisor_loop_service.rs:1177-1186). settle records it as a service failure (lines 821-829), and the third occurrence can send a repeated-service-failure alert (lines 1426-1446). Make the expected throttle a reported skip without counting it as a service failure. Keep actual discovery errors on the existing failure path.
+
+    F9. [minor/test-gap/deferred] The fake budget fixture at lines 5660-5725 covers the repository discovery helper, a main-watch pass, and a direct commit_checks call. It does not run the review-watch worker, auto-train discovery or startup monitor, the seat CI waits, or supervisor recovery. The direct commit reader also does not prove that an active train still reaches that reader under low budget. Add low-budget entry-point coverage which checks the reported skip, absence of watcher requests, and continued CI reads for an active train.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T14:14:23.076241265Z
+  modified_at: 2026-11-24T14:14:23.076241265Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
