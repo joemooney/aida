@@ -133,7 +133,7 @@ fn serial_holder(path: &Path) -> String {
 // trace:BUG-2703 | ai:claude
 fn flock_holders(locks: &str, dev: u64, ino: u64) -> Vec<u32> {
     let major = ((dev >> 8) & 0xfff) | ((dev >> 32) & !0xfff);
-    let minor = (dev & 0xff) | ((dev >> 12) & !0xff);
+    let minor = (dev & 0xff) | ((dev >> 12) & 0xffff_ff00);
     let mut pids = Vec::new();
     for line in locks.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
@@ -516,6 +516,7 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -> R
 
 /// Only a land controller's direct train child gets its cooperative handoff.
 /// This conveys no grant or merge authority.
+#[cfg(test)]
 pub(crate) fn train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
     train_mode(root, automatic, Mode::Exclusive, Duration::ZERO)
 }
@@ -523,18 +524,19 @@ pub(crate) fn train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
 // Manual merge trains alone opt into member-scoped review coexistence. Direct
 // ship retains its existing exclusive/quiescent admission policy.
 // trace:BUG-2650 | ai:codex
+#[cfg(test)]
 pub(crate) fn cooperative_train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
     train_mode(root, automatic, Mode::CooperativeTrain, Duration::ZERO)
 }
 
-/// `aida pr ship`'s admission: [`train`], waiting up to the configured bound
+/// Exclusive admission for `aida pr ship`, waiting up to the configured bound
 /// (`[admission] wait_secs`) while shared holders yield.
 // trace:BUG-2703 | ai:claude
 pub(crate) fn ship_admission(root: &Path) -> Result<Option<Claim>> {
     train_mode(root, false, Mode::Exclusive, wait_bound(root)?)
 }
 
-/// A manual `aida pr train`'s admission: [`cooperative_train`], waiting up
+/// Cooperative admission for `aida pr train`, waiting up
 /// to the configured bound while the auto-train yields between its passes.
 /// The auto-train's own trains never wait: they run on their own claim.
 // trace:BUG-2703 | ai:claude
@@ -1840,6 +1842,14 @@ mod tests {
         assert_eq!(flock_holders(locks, dev, 77), vec![4242]);
         assert!(flock_holders(locks, dev, 79).is_empty());
     }
+    // trace:TASK-3243 | ai:codex
+    #[test]
+    fn task3243_flock_holders_matches_high_major_and_minor() {
+        let dev = libc::makedev(0x1000, 0x101);
+        let locks = "1: FLOCK ADVISORY WRITE 4242 1000:101:77 0 EOF";
+        assert_eq!(flock_holders(locks, dev, 77), vec![4242]);
+    }
+
     // trace:BUG-2650 | ai:codex
     #[test]
     fn bug2650_cooperative_trains_serialize_and_refuse_orphan_runs() {

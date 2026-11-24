@@ -227,17 +227,23 @@ mod tests {
 
     #[test]
     fn origin_prompt_refuses_secrets_oversize_invalid_and_nonregular_input() {
-        for text in [
-            "-----BEGIN RSA PRIVATE KEY-----",
-            "api_key=abcdefghijklmnop",
-            "ghp_abcdefghijklmnopqrstuvwxyz1234",
-            "sk-proj-abcdefghijklmnopqrstuvwxyz",
-            "xoxb-abcdefghijklmnopqrstuvwxyz",
-            "gho_abcdefghijklmnopqrstuvwxyz",
-            "https://example.test/ghp_abcdefghijklmnopqrstuvwxyz1234",
-            "quoted-sk-proj-abcdefghijklmnopqrstuvwxyz",
-            "AKIA1234567890123456",
+        // trace:TASK-3839 | ai:codex
+        for (prefix, suffix) in [
+            ("-----BEGIN RSA ", "PRIVATE KEY-----"),
+            ("api_key=", "abcdefghijklmnop"),
+            ("ghp_", "abcdefghijklmnopqrstuvwxyz1234"),
+            ("sk-proj-", "abcdefghijklmnopqrstuvwxyz"),
+            ("xoxb-", "abcdefghijklmnopqrstuvwxyz"),
+            ("gho_", "abcdefghijklmnopqrstuvwxyz"),
+            (
+                "https://example.test/ghp_",
+                "abcdefghijklmnopqrstuvwxyz1234",
+            ),
+            ("quoted-sk-proj-", "abcdefghijklmnopqrstuvwxyz"),
+            ("AKIA", "1234567890123456"),
         ] {
+            let fixture = format!("{prefix}{suffix}");
+            let text = fixture.as_str();
             let error = OriginPrompt::reviewed(text.into(), true)
                 .unwrap_err()
                 .to_string();

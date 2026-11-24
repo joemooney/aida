@@ -1873,6 +1873,7 @@ pub(crate) fn stage_bundle(
 /// Import a recorded seat's branch into main's quarantine: bundle it in the
 /// seat sandbox, verify it, fetch it. Returns the quarantine ref and the tip.
 // trace:BUG-HOME-038 | ai:claude
+#[cfg(test)]
 pub(crate) fn import_seat_branch(
     seat: &HostRecordedClone,
     branch: &str,

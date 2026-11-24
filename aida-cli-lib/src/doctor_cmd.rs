@@ -965,7 +965,25 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         runaway_seats = Some(coverage);
     }
 
+    // trace:TASK-3847 | ai:codex
+    let mut budget_info = None;
+    if doctor_category_selected(opts.category.as_deref(), crate::forge::CORE_BUDGET_CATEGORY)? {
+        if let Some((summary, low)) = crate::forge::github_core_budget(&project_root) {
+            if low {
+                findings.push(DoctorFinding {
+                    category: crate::forge::CORE_BUDGET_CATEGORY.into(),
+                    id: "core".into(),
+                    summary,
+                    action: "Reduce watcher polling until the reset.".into(),
+                    safe_heal: false,
+                });
+            } else {
+                budget_info = Some(summary);
+            }
+        }
+    }
     let mut report = DoctorReport::from_findings(findings);
+    report.github_core_budget = budget_info;
     report.codex_token_lifetime = codex_token_lifetime(
         &aida_core::exec_context::Environment::capture(),
         opts.category.as_deref(),

@@ -405,7 +405,6 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
         &execute,
         &orphan.branch,
         true,
-        |_| panic!("failed preparation cannot publish"),
         |_, restore_only| {
             assert!(!restore_only, "failed generation requires a full retry");
             anyhow::bail!("generation still fails")
@@ -438,7 +437,6 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             &execute,
             &orphan.branch,
             true,
-            |_| panic!("pending conflicts cannot publish"),
             |input, restore_only| {
                 assert_eq!(input, base);
                 assert!(!restore_only, "successor must retry the failed generator");

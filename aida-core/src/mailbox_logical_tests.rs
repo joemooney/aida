@@ -1066,3 +1066,101 @@ fn bug2449_inventory_gap_preserves_independently_readable_mail() {
     assert!(!snapshot.ack_eligible());
     assert_eq!(snapshot.caught_up(), None);
 }
+
+// trace:TASK-3851 | ai:codex
+#[test]
+fn task3851_retained_deadline_rejects_late_generation_and_final_probe() {
+    let root = tempfile::tempdir().unwrap();
+    let key = root.path().join("aida/mail-lifecycle/retained/key");
+    for generation in ["first", "second"] {
+        std::fs::create_dir_all(key.join(generation).join("data").join(DELIVERIES_DIR)).unwrap();
+    }
+    let mut budget = Budget::new(&ReadLimits::explicit_read());
+    budget.expire_at_retained_checkpoint = Some(1);
+    assert!(matches!(
+        RetainedDeliveries::open_generations(root.path(), &mut budget),
+        Err(SourceErrorCode::OverBudget)
+    ));
+
+    let mut budget = Budget::new(&ReadLimits::explicit_read());
+    let retained = RetainedDeliveries::open(root.path(), &mut budget).unwrap();
+    budget.expire_at_retained_checkpoint = Some(0);
+    let before = budget.retained_probes_left;
+    assert!(matches!(
+        retained.lookup("absent", &mut budget),
+        Err(SourceErrorCode::OverBudget)
+    ));
+    assert_eq!(before - budget.retained_probes_left, 2);
+}
+
+// trace:TASK-3851 | ai:codex
+#[test]
+fn task3851_inspection_expires_on_the_final_retained_probe() {
+    let r = repo();
+    put(&r.main, &message("last", "t", "seat:advisor", 1));
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    let mut limits = ReadLimits::explicit_read();
+    // Opening the empty retained inventory succeeds. Its sole lookup expires on return.
+    limits.expire_at_retained_checkpoint = Some(1);
+    let (complete, issues) = inspect_seat_sidecars(&ctx, &limits);
+    assert!(!complete);
+    assert_eq!(issues.len(), 1);
+    assert_eq!((&*issues[0].id, issues[0].reason), ("last", "UNEXAMINED"));
+}
+
+// trace:TASK-3851 | ai:codex
+#[test]
+fn task3851_oversized_retained_sidecar_isolates_ack_and_relay_evidence() {
+    let r = repo();
+    let label = "seat:advisor";
+    let run = RecipientUuid::parse("12345678-1234-1234-1234-123456789abc").unwrap();
+    for id in ["bad", "good"] {
+        put(&r.main, &message(id, "t", label, 1));
+    }
+    let retained = r
+        .main
+        .join(".git/aida/mail-lifecycle/retained/k/g/data")
+        .join(DELIVERIES_DIR);
+    std::fs::create_dir_all(&retained).unwrap();
+    std::fs::File::create(retained.join("bad.json"))
+        .unwrap()
+        .set_len(DELIVERY_FILE_CAP + 1)
+        .unwrap();
+    let live = r.main.join(".aida/mailbox").join(DELIVERIES_DIR);
+    std::fs::create_dir_all(&live).unwrap();
+    std::fs::write(
+        live.join("good.json"),
+        serde_json::to_vec(&DeliverySidecar::relay("good", &run)).unwrap(),
+    )
+    .unwrap();
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    let limits = ReadLimits::explicit_read();
+    let snapshot = logical_snapshot(
+        &ctx,
+        &relay_run_audience(label, &run).unwrap(),
+        &Query::Inbox,
+        &limits,
+    );
+    assert!(!snapshot.complete());
+    assert_eq!(snapshot.inspection_unknown_ids, ["bad"]);
+    assert_eq!(ids(&snapshot), ["good"]);
+    assert!(snapshot.record_ack_complete(&snapshot.records[0]));
+    let relay = relay_run_unread_deliveries(&ctx, label, &run, &limits);
+    assert!(!relay.complete);
+    assert!(!relay.receipts_unknown);
+    assert_eq!(relay.unread.len(), 1);
+    assert_eq!(relay.unread[0].message_id, "good");
+
+    // A failed inventory open vetoes explicit ACK even for the live sidecar.
+    use crate::mailbox_lifecycle::ack::{AckError, AckPlan};
+    let common = r.main.join(".git");
+    std::fs::File::create(common.join("aida/mail-lifecycle/retained/k2")).unwrap();
+    let audience = relay_run_audience(label, &run).unwrap();
+    let failed = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    assert!(failed.retained_open_error.is_some());
+    assert_eq!(ids(&failed), ["good"]);
+    assert!(matches!(
+        AckPlan::prepare(&failed, Some(&common), &audience, &[&failed.records[0]]),
+        Err(AckError::Partial)
+    ));
+}
