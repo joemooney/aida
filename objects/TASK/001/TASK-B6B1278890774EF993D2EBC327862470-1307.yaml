@@ -144,6 +144,13 @@ comments:
   created_at: 2026-11-24T12:34:34.371699626Z
   modified_at: 2026-11-24T12:34:34.371699626Z
   session_id: 01a20d67501f
+- id: 01a20d8e-843e-7cc0-9cb0-1f7250995adb
+  author: joe
+  content: 'INTEGRATION PRE-CHECK widened r2 (integration-30, 05:40): PR-4511 @ 820a6146bf PASSES. The branch contains H1 f1f2503d, merges CLEAN, and is Joe-authored. Fidelity vs 0fdac177513: lib.rs, review_cmd.rs and review_cmd_args.rs patch-id MATCH; review_prepare.rs differs only by the required hardening; extras are the CLI help golden, the json-audit row, ratchet-set and store-writers. Items: (1) load_review_rules(...)? propagates an invalid config, now tested through handle_review_prepare (the CLI path). (3) --write refuses any ''.git'' component, tested with the ''.git'' gitfile untouched and ''new/.git/config'' never created. (4) git log and linked-spec git errors propagate. (15) The commit-mode parent comes from ''show --format=raw'' and is resolved with <parent>^{commit}, so a shallow, unavailable parent errors (''commit parent unavailable'') instead of diffing against the empty tree. (5) PR mode uses the forge change_metadata head_sha (full SHA required), ''check-ref-format refs/remotes/origin/<base>'', and an exact local-resolve match (''forge head SHA mismatch''). (7) prepare_excludes_credentials_before_revision_reads drives the real prepare over committed non-UTF-8 .aws and .ssh files, including a rename out of .aws, so it only passes if they''re excluded before any revision read. The advisor independently PASSED this head at 05:40. Waiting on FAST at this head.'
+  created_at: 2026-11-24T12:36:00.849396440Z
+  modified_at: 2026-11-24T12:36:00.849396440Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20d8e-56a0-7143-a8a6-d9fc006f2b53
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int32-task-3862` at head `820a6146bf7b6fa24cfff4fbfe5e5566a3e0b3c5`.'
