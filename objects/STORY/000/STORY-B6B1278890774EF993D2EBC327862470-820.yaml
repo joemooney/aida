@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T21:43:35.756275349Z
+modified_at: 2026-11-24T21:48:11.203178650Z
 req_type: Story
 tags:
 - autonomy
@@ -611,6 +611,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20f87-dde3-77d2-b08c-b49b7b5e4abf
+  author: dirtlab
+  timestamp: 2026-11-24T21:48:12.131820354Z
+  session_id: 01a20f835529
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
@@ -619,3 +628,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: Size-limited split. Slice 2 = ship/train live recheck (F1/F5/F6). The per-attempt policy, eligibility, draft-only and path rechecks and production unattended-ship regression remain open. Slice 1 keeps landing supervised and removes F4's final list lookup.
+  raised_by: implementer
+  raised_at: 2026-11-24T21:48:11.203178650Z
