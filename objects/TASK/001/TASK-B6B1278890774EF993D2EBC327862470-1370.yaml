@@ -1,0 +1,31 @@
+id: 01a20f1c-249c-77a0-a9b0-0eda00b2a1c3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1370
+title: 'Review follow-up: Deferred follow-up from the prior review (F2), aida-cli-lib/src/review_watch.rs:1699 and :'
+description: |-
+  From BUG-2720
+  Reviewed sha: 9fdf2f785ab41789129b76b62dab12d0c87a5b70
+
+  Deferred follow-up from the prior review (F2), aida-cli-lib/src/review_watch.rs:1699 and :1836. The occupied-worktree recheck starts Git subprocesses while holding global admission and train-member locks. A slow probe holds up unrelated reviews and train admission. Probe outside the lock and revalidate the receipt, head, and deadline before reserving.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T19:50:32.348754176Z
+modified_at: 2026-11-24T19:50:32.348754176Z
+req_type: Task
+tags:
+- carried-from:BUG-2720
+- finding-hash:715734fe
+- from-review:BUG-2720
+relationships:
+- rel_type: References
+  target_id: 01a205a9-7715-7ce3-a532-cf8c3ffde338
+  created_at: 2026-11-24T19:50:46.374837582Z
+filed_at:
+  code_sha: 9fdf2f785ab41789129b76b62dab12d0c87a5b70
+  branch: pr-4413
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
+  session: 01a20f18badb
