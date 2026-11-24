@@ -1,0 +1,27 @@
+id: 01a20f45-220f-7280-9a5c-9c028f3ce08b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1375
+agreed_id: TASK-3885
+title: Enforce completing vs Refs trailers in the ship path from the lane declared slice status (TASK-3876 slice 2)
+description: |
+  Follow-up from #4531 TASK-3876 (advisor-122 OVERRIDE->APPROVE as prompt-level slice 1, 2026-11-24 13:24; filed by product-15). LOW.
+
+  ## Acceptance
+  - AC1: ship_from_seat / native_publication take the lane's declared slice status (from the brief or the exit summary): a claim of "all ACs" yields the completing "(SPEC)" trailer; "Refs SPEC" only for a declared slice. Enforced in code, not only the prompt.
+  - AC2: An end-to-end test through the real ship path for both cases.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T20:35:18.671247984Z
+modified_at: 2026-11-24T20:35:18.671247984Z
+req_type: Task
+tags:
+- lanes
+- ship
+filed_at:
+  code_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba5
+  vendor: claude
