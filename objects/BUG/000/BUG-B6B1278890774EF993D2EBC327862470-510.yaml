@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T21:47:52.894409356Z
+modified_at: 2026-11-24T21:49:43.249993044Z
 req_type: Bug
 tags:
 - data-loss
@@ -136,6 +136,22 @@ comments:
     TITLE TRAILER: keep the existing PR title unchanged.
   created_at: 2026-11-24T21:47:52.894409356Z
   modified_at: 2026-11-24T21:47:52.894409356Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20f89-7863-7393-baa6-8a858a1cf02a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:49):
+    # BUG-2749 / PR #4537 r2 (advisor-122 ruling 2026-11-24 14:48 at 5203d57d; STRICT, data-loss; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. ONE round. Each MUST with a test.
+    (F1) NO repository-wide `git worktree prune` anywhere (session end, session gc INCLUDING --dry-run). Replace it with PER-WORKTREE pruning, only after that worktree passes the staged-index retention check. --dry-run must NEVER mutate.
+    (F2) An existing per-worktree index.lock (or any in-flight writer evidence) means RETAIN (fail closed).
+    (F3) Index evidence must be INTEGRITY-VERIFIED (validate the trailing checksum, e.g. a checksum-verifying read); a mismatch or unverifiable index means RETAIN. Add a fixture with a valid header and a BAD checksum.
+    (F4, only if it fits in the budget) mailbox-retention prune --dry-run applies the same eligibility check (or reports "uncertain"), so preview == apply. Otherwise skip it (a LOW follow-up).
+    ALSO (CI): your head fails the ratchet aida-ci-guards task_2143_clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read: route that git read through the existing clone-git helper; do NOT edit any ratchet ledger.
+    Run `cargo test -p aida-ci-guards --lib task_2143` plus your targeted tests, then make check-ci-fast, then push to #4537. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T21:49:43.249993044Z
+  modified_at: 2026-11-24T21:49:43.249993044Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
