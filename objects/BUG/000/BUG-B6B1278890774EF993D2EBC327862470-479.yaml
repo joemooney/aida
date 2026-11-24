@@ -9,12 +9,12 @@ description: |
   - AC1: An approval recorded under a change key (PR-N / MR-N) releases a rework hold recorded under the change's spec key, and vice versa, when both name the same change and head.
   - AC2: merge-hold auto-release reports which key it read and why it refused, naming the approval it found under the other key if there is one.
   - AC3: A regression test records an approval with spec None under PR-N while the hold sits under SPEC, and asserts the hold auto-releases.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T16:13:15.137373076Z
+modified_at: 2026-11-24T21:54:10.090266950Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -201,6 +201,14 @@ history:
   timestamp: 2026-11-23T16:12:01.346152966Z
   session_id: 01a208e6d3f2
   changes: []
+- id: 01a20f8d-542a-7390-8538-13c3b8482036
+  author: aida-orchestrator
+  timestamp: 2026-11-24T21:54:10.090281080Z
+  session_id: 01a20f8accbc
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -208,3 +216,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2718 AC1 is partial: a valid signed cross-key approval can still leave the hold in place when the local branch ref lags the forge. AC2 fails when the other key has an approval at the wrong head. AC3 is covered by the added spec-less PR approval regression. The generated worksheet scopes this review to AC1–AC3. At review time, FAST CI passed for the original head and full test shards were skipped. No local tests were run. Reviewed landed tree 462552089a6d87f21986a724f9524d7ff60ffef9 against protected main 841efeba1bc48f093c15d9ef5f362b0b5027f738. The original head was 30 commits behind. Both findings reproduce from the pinned source without relying on the intervening base edit to approval.rs.'
+  recovery_hint: address the review findings, move BUG-2718 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T21:54:10.090266950Z
