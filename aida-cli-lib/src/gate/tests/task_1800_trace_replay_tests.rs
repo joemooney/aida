@@ -113,8 +113,13 @@ fn resolve_all(
     use crate::gate::mandate::MandateRefusal;
     let backend = aida_core::GitBackend::new(store).unwrap();
     let current = aida_core::DatabaseBackend::load(&backend).unwrap();
-    let specs =
-        crate::gate::mandate_ship::resolve_exclusion_specs(Some(&current), store, &[], ids.clone());
+    let specs = crate::gate::mandate_ship::resolve_exclusion_specs(
+        Some(&current),
+        store,
+        &[],
+        ids.clone(),
+        true,
+    );
     specs
         .into_iter()
         .map(|spec| {

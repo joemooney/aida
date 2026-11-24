@@ -497,10 +497,9 @@ verdicts, the commit message, and spec policy. Named PRs are judged as
 `aida pr train N` would judge them, and `--all-open` as `--all-ready` would.
 Nothing is changed: no CI request, label, hold, journal, gate-ledger entry
 or event is written, and an expired review claim is left in place (the check does fetch,
-so remote-tracking refs are refreshed). One difference follows from that:
-when a fire-fighting mandate is active and a PR's answer depends on its
-cover, the check reports `no` at the `mandate` gate instead of asking,
-because asking records evidence; `aida pr train N --dry-run` asks. `--json`
+so remote-tracking refs are refreshed). For a PR that depends on an active mandate,
+the check evaluates the same coverage rules in memory and reports the reason
+for any refusal. `--json`
 prints `{base, eligible, prs: [{pr, eligible, head, gate, reason, remedy,
 evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
 fails counts as not eligible (`evidence: unavailable`). `--all-open` uses an

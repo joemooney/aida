@@ -60,13 +60,16 @@ pub(crate) fn refusal(error: &anyhow::Error) -> Option<&LaneSpaceRefused> {
 /// `prior` with its deferral replaced by `reason`. Any other note text the
 /// row carried is kept after it.
 pub(crate) fn deferral_note(prior: Option<&str>, reason: &str) -> String {
+    let Some(prior) = prior.filter(|text| !text.trim().is_empty()) else {
+        return reason.to_owned();
+    };
     let mut note = reason.to_owned();
-    for part in prior
-        .unwrap_or_default()
-        .split(NOTE_SEPARATOR)
-        .map(str::trim)
-        .filter(|part| !part.is_empty() && !part.starts_with(NOTE_PREFIX))
-    {
+    for part in prior.split(NOTE_SEPARATOR).filter(|part| {
+        let text = part.trim();
+        !text
+            .strip_prefix(NOTE_PREFIX)
+            .is_some_and(|at| chrono::DateTime::parse_from_rfc3339(at).is_ok())
+    }) {
         note.push_str(NOTE_SEPARATOR);
         note.push_str(part);
     }
@@ -81,19 +84,24 @@ pub(crate) fn annotate_queue_rows(
     requirement_ids: &[uuid::Uuid],
     reason: &str,
 ) -> Result<usize> {
-    let mut annotated = 0;
-    for id in requirement_ids {
-        for (_, mut entry) in storage.queue_entries_for_requirement(id)? {
-            let note = deferral_note(entry.note.as_deref(), reason);
-            if entry.note.as_deref() == Some(note.as_str()) {
-                continue;
-            }
-            entry.note = Some(note);
-            storage.queue_add(entry)?;
-            annotated += 1;
-        }
+    if requirement_ids.is_empty() {
+        return Ok(0);
     }
-    Ok(annotated)
+    annotate_selected(storage, requirement_ids, &|prior| {
+        deferral_note(prior, reason)
+    })
+}
+
+// The backend discovers persisted queues and transforms the current
+// row under the same lock used for queue edits and removals.
+// trace:TASK-3155 | ai:codex
+fn annotate_selected(
+    storage: &aida_core::Storage,
+    requirement_ids: &[uuid::Uuid],
+    update: &dyn Fn(Option<&str>) -> String,
+) -> Result<usize> {
+    let requirement_ids = requirement_ids.iter().copied().collect();
+    storage.queue_update_notes(&requirement_ids, update)
 }
 
 /// The pickup's result after a disk-floor refusal rolled its setup back:
@@ -119,7 +127,7 @@ pub(crate) fn defer(
              admits it once the disk guard or `aida worktree gc --apply` frees space"
         ),
         Err(why) => {
-            format!("{scope} stays queued, but its queue row could not record the reason: {why:#}")
+            format!("could not record the queue deferral for {scope}: {why:#}")
         }
     };
     // trace:TASK-3154 | ai:codex
@@ -133,6 +141,161 @@ pub(crate) fn defer(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3155 | ai:codex
+    #[test]
+    fn task_3155_interleaved_queue_edit_and_removal() {
+        let root = tempfile::tempdir().unwrap();
+        for path in [root.path().to_owned(), root.path().join("queue.db")] {
+            check_interleaved_annotation(aida_core::Storage::new(path));
+        }
+    }
+
+    fn check_interleaved_annotation(storage: aida_core::Storage) {
+        let id = uuid::Uuid::new_v4();
+        let entry = aida_core::models::QueueEntry {
+            user_id: "alice".into(),
+            requirement_id: id,
+            position: 1000,
+            added_by: "alice".into(),
+            note: Some(format!("{NOTE_PREFIX}2026-11-19T05:00:00Z")),
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        storage.queue_add(entry.clone()).unwrap();
+        let mut removed = entry.clone();
+        removed.user_id = "bob".into();
+        storage.queue_add(removed).unwrap();
+
+        let mut edited = entry;
+        edited.position = 42;
+        edited.added_by = "operator".into();
+        if !storage.is_sqlite() {
+            edited.for_role = Some("reviewer".into());
+        }
+        edited.note = Some(format!("{NOTE_PREFIX}2026-11-19T05:00:00Z ·  keep me  "));
+        storage.queue_add(edited.clone()).unwrap();
+        storage.queue_remove("bob", &id).unwrap();
+
+        let reason = &format!("{NOTE_PREFIX}2026-11-19T06:00:00Z");
+        assert_eq!(
+            annotate_selected(&storage, &[id], &|prior| {
+                // At the read/modify/write boundary, a second writer must be excluded.
+                // The old list + queue_add implementation renders the note unlocked.
+                if storage.is_sqlite() {
+                    let competitor = rusqlite::Connection::open(storage.path()).unwrap();
+                    competitor.busy_timeout(std::time::Duration::ZERO).unwrap();
+                    let err = competitor.execute_batch("BEGIN IMMEDIATE").unwrap_err();
+                    assert_eq!(
+                        err.sqlite_error_code(),
+                        Some(rusqlite::ErrorCode::DatabaseBusy)
+                    );
+                } else {
+                    let file =
+                        std::fs::File::open(aida_core::db::store_write_lock_path(storage.path()))
+                            .unwrap();
+                    assert_eq!(
+                        fs2::FileExt::try_lock_exclusive(&file).unwrap_err().kind(),
+                        std::io::ErrorKind::WouldBlock
+                    );
+                }
+                deferral_note(prior, reason)
+            })
+            .unwrap(),
+            1
+        );
+        edited.note = Some(format!("{reason} ·  keep me  "));
+        let remaining = storage.queue_entries_for_requirement(&id).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].1, edited);
+        let absent = uuid::Uuid::new_v4();
+        assert_eq!(annotate_queue_rows(&storage, &[absent], reason).unwrap(), 0);
+        assert!(storage
+            .queue_entries_for_requirement(&absent)
+            .unwrap()
+            .is_empty());
+
+        if !storage.is_sqlite() {
+            storage.queue_add(edited.clone()).unwrap();
+            let mut sibling = edited.clone();
+            sibling.user_id = "bob".into();
+            storage.queue_add(sibling).unwrap();
+            std::fs::write(
+                storage.path().join("registry/aliases.toml"),
+                "[aliases]\nbob = 'alice'\n",
+            )
+            .unwrap();
+            let queues = storage.path().join("registry/queues");
+            for name in ["ops%41", "opsA"] {
+                std::fs::copy(
+                    queues.join("alice.yaml"),
+                    queues.join(format!("{name}.yaml")),
+                )
+                .unwrap();
+            }
+            assert_eq!(annotate_queue_rows(&storage, &[id], "fresh").unwrap(), 4);
+            for owner in ["alice", "bob", "ops%41", "opsA"] {
+                let bytes =
+                    std::fs::read(storage.path().join(format!("registry/queues/{owner}.yaml")))
+                        .unwrap();
+                let rows: Vec<aida_core::models::QueueEntry> =
+                    serde_yaml::from_slice(&bytes).unwrap();
+                assert_eq!(rows[0].note.as_deref(), Some("fresh ·  keep me  "));
+            }
+            check_git_locked_reread(&storage, &edited);
+            // Matching rows require this lock. An unrelated requirement can
+            // still report zero when a writer cannot open it.
+            let lock = aida_core::db::store_write_lock_path(storage.path());
+            std::fs::remove_file(&lock).unwrap();
+            std::fs::create_dir(lock).unwrap();
+            assert!(annotate_queue_rows(&storage, &[id], reason).is_err());
+            assert_eq!(annotate_queue_rows(&storage, &[absent], reason).unwrap(), 0);
+        }
+    }
+
+    // Only the race queue contains these IDs. Contention signals that its unlocked
+    // preflight matched and the annotator is waiting to re-read that same file.
+    fn check_git_locked_reread(
+        storage: &aida_core::Storage,
+        edited: &aida_core::models::QueueEntry,
+    ) {
+        use aida_core::db::{hold_store_write, store_write_lock_contended_for};
+        let mut old = edited.clone();
+        old.user_id = "race".into();
+        old.requirement_id = uuid::Uuid::new_v4();
+        let mut removed = old.clone();
+        removed.requirement_id = uuid::Uuid::new_v4();
+        storage.queue_add(old.clone()).unwrap();
+        storage.queue_add(removed.clone()).unwrap();
+        let lock = hold_store_write(storage.path()).unwrap();
+        let before = store_write_lock_contended_for(storage.path());
+        let ids = [old.requirement_id, removed.requirement_id];
+        let root = storage.path().to_owned();
+        let worker = std::thread::spawn(move || {
+            annotate_queue_rows(&aida_core::Storage::new(root), &ids, "new")
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while store_write_lock_contended_for(storage.path()) == before {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "annotator never reached the writer lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        old.position = 91;
+        old.note = Some("intervening edit".into());
+        storage.queue_add(old.clone()).unwrap();
+        storage
+            .queue_remove("race", &removed.requirement_id)
+            .unwrap();
+        drop(lock);
+        assert_eq!(worker.join().unwrap().unwrap(), 1);
+        old.note = Some("new · intervening edit".into());
+        assert_eq!(storage.queue_list("race", true).unwrap(), vec![old]);
+    }
 
     fn refused() -> anyhow::Error {
         anyhow::Error::new(LaneSpaceRefused {
@@ -163,6 +326,11 @@ mod tests {
         assert_eq!(
             deferral_note(Some("operator note"), reason),
             format!("{reason} · operator note")
+        );
+        let consecutive = format!("ops ·  · {NOTE_PREFIX}2026-11-19T05:00:00Z · later");
+        assert_eq!(
+            deferral_note(Some(&consecutive), reason),
+            format!("{reason} · ops ·  · later")
         );
         let earlier = "deferred: disk below floor at 2026-11-19T05:00:00Z · operator note";
         assert_eq!(

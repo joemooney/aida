@@ -55,6 +55,9 @@ class Discovery(unittest.TestCase):
             self.assertIn("test_show_latency.py: missing standalone CI invocation", unwired.stderr)
 
     # trace:TASK-3856 | ai:codex
+    # trace:TASK-3321 | ai:codex
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-1292.AC1 | ai:codex
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-1292.AC2 | ai:codex
     def test_only_runnable_steps_supply_dedicated_invocations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

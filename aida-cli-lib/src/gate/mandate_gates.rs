@@ -209,18 +209,16 @@ const CONFIG_PATH: &str = ".aida/config.toml";
 /// cannot be read; a ref whose tree has no config file is an empty layer.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn committed_layer(project_root: &Path) -> Result<GateLayer> {
-    let has_ref = aida_core::git_ops::host_git_command(project_root)
-        .args(["rev-parse", "--verify", "--quiet"])
-        .arg(format!("{COMMITTED_REF}^{{commit}}"))
-        .output()
-        .context("git failed to run")?;
+    let mut cmd = aida_core::git_ops::host_git_command(project_root);
+    cmd.args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{COMMITTED_REF}^{{commit}}"));
+    let has_ref = crate::gate::kernel_deps::local_output(cmd).context("git failed to run")?;
     if !has_ref.status.success() {
         bail!("no {COMMITTED_REF} ref to read the committed gate layer from");
     }
-    let listed = aida_core::git_ops::host_git_command(project_root)
-        .args(["ls-tree", "--name-only", COMMITTED_REF, "--", CONFIG_PATH])
-        .output()
-        .context("git failed to run")?;
+    let mut cmd = aida_core::git_ops::host_git_command(project_root);
+    cmd.args(["ls-tree", "--name-only", COMMITTED_REF, "--", CONFIG_PATH]);
+    let listed = crate::gate::kernel_deps::local_output(cmd).context("git failed to run")?;
     if !listed.status.success() {
         bail!(
             "cannot list {COMMITTED_REF}:{CONFIG_PATH}: {}",

@@ -84,7 +84,8 @@ class CiTiers(unittest.TestCase):
     def test_event_and_job_wiring(self):
         triggers = WORKFLOW.get('on', WORKFLOW.get(True))
         self.assertEqual(triggers['push']['branches'], ['main'])  # trace:BUG-2581 | ai:claude
-        self.assertTrue({'labeled', 'unlabeled', 'synchronize'} <= set(triggers['pull_request']['types']))
+        self.assertTrue({'labeled', 'synchronize'} <= set(triggers['pull_request']['types']))
+        self.assertNotIn('unlabeled', triggers['pull_request']['types'])
         for event in ('merge_group', 'schedule', 'workflow_dispatch'):
             self.assertIn(event, triggers)
         # Full runs for different PRs never share a group, so they run side by
@@ -117,10 +118,10 @@ class CiTiers(unittest.TestCase):
         concurrency = WORKFLOW['concurrency']
         self.assertEqual(concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}")
         group = concurrency['group']
-        # Pushes and ci:full label changes share the PR's group, so they
-        # cancel the run they supersede.
+        # Label promotion cannot displace either a pending or a running FAST run.
         for action, label in TIER_EVENTS:
-            self.assertEqual(render(group, action=action, label=label), 'CI-7', (action, label))
+            expected = 'CI-full-7' if action == 'labeled' else 'CI-7'
+            self.assertEqual(render(group, action=action, label=label), expected, (action, label))
         # Every other label event is alone in its group: it can neither
         # cancel the PR's running CI nor be cancelled into restarting it.
         for action, label in LABEL_EVENTS:
