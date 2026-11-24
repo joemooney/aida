@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-24T16:42:06.024892659Z
+modified_at: 2026-11-24T16:51:59.631318953Z
 req_type: Bug
 tags:
 - mass-change
@@ -221,6 +221,17 @@ comments:
     TITLE TRAILER: keep the existing PR title unchanged.
   created_at: 2026-11-24T16:42:06.024892659Z
   modified_at: 2026-11-24T16:42:06.024892659Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e78-e270-7933-85bc-2c5cc6dc689b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:51):
+    # BUG-2712 / PR #4396 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 09:45; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4396 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4396. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:51:59.631318953Z
+  modified_at: 2026-11-24T16:51:59.631318953Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
