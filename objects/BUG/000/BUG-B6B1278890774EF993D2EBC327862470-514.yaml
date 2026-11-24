@@ -1,0 +1,39 @@
+id: 01a20ebd-a217-7411-96ed-876bd1e3ecb7
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-514
+agreed_id: BUG-2753
+title: 'BUG-2750 slice B: route verdict selection, signature revalidation and final-preflight spec policy through the refusal union (no fetched mandate authority)'
+description: |
+  Slice B of BUG-2750 (advisor-122 SPLIT ruling 2026-11-24 11:10; filed by product-15). STRICT, drive, <=200 lines. Launches AFTER slice A (BUG-2750: the bounded lock-free fetch-only pre-pass, read-only, no admission decisions) merges.
+
+  Route verdict selection, signature/identity revalidation, and the final train preflight's spec-policy reload through the REFUSAL UNION, with NO fetched mandate authority. Today all three resolve LOCAL HEAD / local policy; wiring only one would leave a strict-tier authority gap, so all three move together.
+
+  DESIGN RULING (advisor-122 2026-11-24 08:15, VERBATIM; answers your punt):
+  "Evaluate train admission against BOTH the local canonical store and the freshly fetched store ref. REFUSALS are the UNION: a hold, veto, revocation, shelve, operator track, deferral or request-changes found in EITHER snapshot blocks the member, and refusal always wins. PERMITS are also the union: required approval or mandate evidence may come from EITHER snapshot, but only if no refusal applies in either. A refusal lifted upstream but still present locally keeps blocking until the local store incorporates it; disagreement never widens authority. If the fetch times out or fails, use the local snapshot only and log 'store refresh unavailable'."
+  REQUIRED TESTS: (a) an approval only in the fetched ref ADMITS; (b) a hold only in the fetched ref BLOCKS; (c) a hold only locally BLOCKS; (d) a fetch timeout -> local snapshot only (plus the log line).
+
+  AMENDMENT (advisor-122 2026-11-24 08:26, VERBATIM; answers your second punt):
+  "Mandate authority is NEVER taken from the fetched ref. Mandate coverage comes only from the active mandate validated locally (private direct-human grants and stop tombstones stay local, per gate/mandate.rs). The fetched ref contributes ONLY git-canonical evidence: review/approval verdict records, spec status/execution mode/track, and every refusal, which is still unioned and still wins. A grant, mandate or tombstone appearing only in the fetched ref is ignored for permits. A fetched refusal of any kind still blocks."
+  ADD TEST (e): a mandate-like grant present ONLY in the fetched ref does NOT admit.
+
+  TEST (b) RULING (advisor-122 09:00, answering your 3rd punt): use a fetched-only SIGNED REQUEST-CHANGES refusal for test (b), a refusal the fetched ref really carries. Merge-hold transport is OUT OF SCOPE, tracked as a separate strict follow-up.
+
+  ## Acceptance
+  - AC1: verdict selection, signature/identity revalidation and the final-preflight spec-policy reload all use the union of local + fetched refusals (refusals always win); permits are unioned only without a refusal; NO mandate authority from the fetched ref.
+  - AC2: tests (a)-(e) as specified above, each through the real train admission path.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T18:07:18.551803503Z
+modified_at: 2026-11-24T18:07:18.551803503Z
+req_type: Bug
+tags:
+- strict
+- train
+filed_at:
+  code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 289cc394a33
+  vendor: claude
