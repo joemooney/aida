@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:21:18.746748841Z
-modified_at: 2026-11-24T12:49:48.677414963Z
+modified_at: 2026-11-24T12:51:34.306902102Z
 req_type: Task
 tags:
 - review
@@ -168,6 +168,20 @@ comments:
   created_at: 2026-11-24T12:49:48.677414963Z
   modified_at: 2026-11-24T12:49:48.677414963Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20d9c-c2c4-79d0-be66-887e9f6711dc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:51):
+    # TASK-3862 / PR #4511 r3, FINAL micro-round (advisor-122 ruling 2026-11-24 05:52 at 820a6146; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3862). <=60 lines.
+    THIS IS THE LAST ROUND. After it, any remaining findings go to the hardening II follow-up (TASK-3869) with NO further round.
+    (F1) Resolve `git rev-parse --absolute-git-dir` and `--git-common-dir` ONCE, and REFUSE any --write destination AT or BENEATH either one, in addition to the literal `.git` component check. TEST: a gitfile pointing to an ordinarily named directory inside the checkout.
+    (F2) Set GIT_NO_REPLACE_OBJECTS=1 on EVERY git invocation in review_prepare.rs (one helper/env). TEST: a replace ref does NOT change the diff.
+    (F3) Bind the GitHub metadata query to the SAME repository as origin: pass the origin slug explicitly (`-R owner/repo`) and CLEAR GH_REPO for that call. TEST: a mismatched GH_REPO.
+    Nothing else. Register any new test in scripts/ratchet-set.json (same-PR entries only). Targeted tests + `make check-ci-fast`; push to #4511. COMMIT your work.
+  created_at: 2026-11-24T12:51:34.306902102Z
+  modified_at: 2026-11-24T12:51:34.306902102Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6e-e873-75a0-93a5-b2ba68d3ee64
