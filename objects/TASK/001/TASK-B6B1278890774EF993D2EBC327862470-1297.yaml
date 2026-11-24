@@ -1,0 +1,28 @@
+id: 01a20beb-523e-7ed1-be05-0186560f17fd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1297
+agreed_id: TASK-3858
+title: 'Session hygiene: stash- and other-branch-specific reap refusal guidance (split from BUG-2742)'
+description: |
+  Follow-up split from BUG-2742 / #4487 (advisor-122 ruling 2026-11-23 22:03, finding 3; filed by product-15). When session hygiene refuses to reap because of stashes or unique commits on another local branch, its guidance must be specific and correct.
+
+  ## Acceptance
+  - AC1: The refusal names WHICH stash entries or WHICH other branches (with their unique commit counts) hold the work, and gives a correct command to inspect or publish each one.
+  - AC2: Tests: a stash-only clone and an other-branch-only clone each produce the specific guidance.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T04:58:21.118647007Z
+modified_at: 2026-11-24T04:58:21.118647007Z
+req_type: Task
+tags:
+- hygiene
+- sessions
+- small
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
