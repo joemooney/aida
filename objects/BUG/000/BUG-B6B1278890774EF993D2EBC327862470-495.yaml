@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: CI runs every tests/test_*.py, either via one discovery step ('python3 -m unittest discover -s tests -p "test_*.py"') or a ratchet that fails when a tests/test_*.py file is not referenced by a CI step. Tests that need tools CI lacks are skipped explicitly with a reason, not left unwired.
   - AC2: Any currently-unwired test that fails when wired is fixed, or skipped with a linked follow-up spec, in the same PR (the small-PR rule applies; split the fix-ups if over 300 lines).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-24T03:25:44.858183948Z
+modified_at: 2026-11-24T03:30:09.897106191Z
 req_type: Bug
 tags:
 - ci
@@ -207,6 +207,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a20b9a-9569-7380-958f-aac1dc222be0
+  author: aida-session-start
+  timestamp: 2026-11-24T03:30:09.897103741Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
