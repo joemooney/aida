@@ -166,6 +166,8 @@ fn refresh_guard(path: &Path) -> Result<std::fs::File, String> {
         .open(path.with_extension("lock"))
         .map_err(|e| format!("history refresh lock: {e}"))?;
     let deadline = std::time::Instant::now() + super::store_history_timeout();
+    let deadline =
+        crate::forge_lookup::forge_lookup_deadline().map_or(deadline, |d| d.min(deadline));
     loop {
         match file.try_lock_exclusive() {
             Ok(()) => return Ok(file),
@@ -184,13 +186,13 @@ impl HistoryIndex {
     /// The index, brought up to date with every ref of the store repository.
     /// `Err` when any git call fails or outlives its deadline (the gate then
     /// refuses); never an answer from a stale or partial index.
-    pub(crate) fn current(store_root: &Path) -> Result<Self, String> {
+    pub(crate) fn current(store_root: &Path, publish_index: bool) -> Result<Self, String> {
         let path = index_path(store_root)?;
         // trace:BUG-2572 | ai:codex
-        // Lock before reading either refs or the index; a waiter must consume
-        // the preceding refresher's publication instead of repeating its walk.
-        // The permanent sidecar is never renamed or unlinked.
-        let _refresh = refresh_guard(&path)?;
+        // Writers lock before reading refs and the index. A preview reads an
+        // atomically published snapshot and refreshes it only in memory.
+        // trace:TASK-3115 | ai:codex
+        let _refresh = publish_index.then(|| refresh_guard(&path)).transpose()?;
         let tips = current_tips(store_root)?;
         let stored = std::fs::read(&path)
             .ok()
@@ -245,6 +247,9 @@ impl HistoryIndex {
                 index
             }
         };
+        if !publish_index {
+            return Ok(index);
+        }
         // Best effort: an unwritable git dir still answers from this build.
         if let Some(dir) = path.parent() {
             if std::fs::create_dir_all(dir).is_ok() {
