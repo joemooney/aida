@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-24T02:26:45.127398137Z
+modified_at: 2026-11-24T02:40:03.355736411Z
 req_type: Bug
 tags:
 - ci
@@ -83,6 +83,17 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: AC2 requires product-filed follow-up IDs for test_cache_refresh_outputs.py, test_pr_ship_preflight.py and test_seat_takeover_lifecycle.py. Product mailbox refused delivery. Missing IDs fail discovery. Edits and test evidence are preserved for resume.. No triage reason was given.'
   created_at: 2026-11-23T23:19:25.523267687Z
   modified_at: 2026-11-23T23:19:25.523267687Z
+- id: 01a20b6c-bdcb-71a0-9795-088fe82c4658
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 43b65012e518c8c77fe66fd05953404c94034506 plus the native worktree diff. Reviewed origin/main...HEAD, git diff HEAD and untracked inventory. Three scoped files, 173 changed lines.
+    AC1: [evidence: behavioral-test] CI invokes discovery at .github/workflows/ci.yml:623. tests/test_python_discovery.py:13 passed for empty inventory, new suites, zero collection, propagated failure, and wrong standalone invocation. Fixed a unittest invocation incorrectly qualifying as standalone wiring. Checked literal patterns, duplicate paths, malformed/import failures and exact-file exclusions.
+    AC2: [evidence: configuration-validation] scripts/discover-python-tests.py:25 lists the three 2026-11-23 failures with TASK-3848 through TASK-3850. Discovery printed all three mappings and passed. All 48 fast source gates passed, including the ExecContext ratchet with zero additions. The remaining make ratchet build is in progress. PR-head CI and the two post-land regression executions await host publication and integration.
+  created_at: 2026-11-24T02:40:03.355736411Z
+  modified_at: 2026-11-24T02:40:03.355736411Z
+  session_id: 01a20b6055af
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
   author: joe
