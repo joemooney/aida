@@ -1,0 +1,33 @@
+id: 01a20e9b-44a0-7063-8b3b-32a5a231ea0f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-827
+agreed_id: STORY-3099
+title: 'Codex can hold the advisor seat: host-executor route, delegated store/.git writes, advisor gates accept codex, self-wake (weekend 42h no-landing)'
+description: |
+  Make a CODEX agent able to hold the AIDA advisor seat (Joe can't use Claude at work). Over 2026-11-20..22 a codex advisor ran with workspace-write + approval_policy=never + read-only .git; once the deputy refused its grant session key (TASK-3143), every privileged path closed, and main had no landing for ~42h. Full evidence catalogue + advisor duty checklist (22 duties): docs/plans/2026-11-24-codex-advisor-lab.md. Filed by product-15 2026-11-24 at Joe's request.
+
+  Approach: a throwaway lab project (~/ai/aida-advisor-lab) runs a scripted advisor-duty checklist with a codex apprentice; each failure becomes a slice here, fixed in the real repo by codex lanes.
+
+  ## Acceptance
+  - AC1: A codex advisor seat ALWAYS has a working route to an unsandboxed host executor: the deputy accepts a seat-bound credential, or grant renewal extends the session key (TASK-3143). Proven in the lab after a grant renewal.
+  - AC2: Store and primary .git writes from a codex seat are host-delegated (queued, not failed); no stale index.lock is left on refusal.
+  - AC3: `aida review record`, `gh pr merge --match-head-commit` (integration), `aida pr train --dry-run` and Draft→Approved dispositions all succeed from a codex advisor seat in the lab.
+  - AC4: Codex seats get a self-wake loop (external watch/cron re-prompt), so a "blocked" advisor resumes when its blocker clears.
+  - AC5: The lab checklist (docs/plans/2026-11-24-codex-advisor-lab.md, sections A-F) passes end to end with a codex advisor, unassisted.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T17:29:46.400294853Z
+modified_at: 2026-11-24T17:29:46.400294853Z
+req_type: Story
+tags:
+- advisor
+- codex
+- seats
+filed_at:
+  code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1ee
+  vendor: claude
