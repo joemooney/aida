@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T15:11:37.853255883Z
+modified_at: 2026-11-24T15:17:51.276865978Z
 req_type: Bug
 tags:
 - store
@@ -106,6 +106,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20e22-7e2c-79d1-940f-2b5771385475
+  author: aida-session-start
+  timestamp: 2026-11-24T15:17:51.276861865Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
