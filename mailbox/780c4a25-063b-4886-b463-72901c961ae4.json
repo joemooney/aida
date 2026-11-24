@@ -1,0 +1,18 @@
+{
+  "id": "780c4a25-063b-4886-b463-72901c961ae4",
+  "thread_id": "780c4a25-063b-4886-b463-72901c961ae4",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795548700435,
+  "body": "- [STUCK-MERGE-RED] #4408 is approved at 252353bb but its CI is red (Build (ubuntu-latest), CI (lib-0); base not fresh: CI run 45448934302 tested base f2a1ab1e1eec, current base is 8a4c9ba4ba59), for 123 min; failing tests: not named; cause undetermined: the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (lib-0)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway)\n  -> read the failed job on #4408: rerun it once if the failure is unrelated to the change, otherwise route rework\n- [STUCK-REVIEW] #4403 at c19adae5 has had no verdict and no reviewer for 67 min\n  -> launch a reviewer for #4403 at c19adae5\n- [STUCK-CONFLICT] #4525 at 5bfd563d conflicts with its base and nobody owns it, for 56 min\n  -> route a lane to resolve the conflict on #4525\n\n18 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 3 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
