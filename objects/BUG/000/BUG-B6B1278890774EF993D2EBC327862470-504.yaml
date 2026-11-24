@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T06:42:57.313083162Z
+modified_at: 2026-11-24T06:52:02.760339135Z
 req_type: Bug
 tags:
 - flaky
@@ -76,6 +76,13 @@ comments:
   created_at: 2026-11-24T06:42:57.313070528Z
   modified_at: 2026-11-24T06:42:57.313070528Z
   session_id: 01a20c196274
+- id: 01a20c53-9bd9-7463-bc59-b6e8162fc5d8
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 23:58): PR-4495 @ 6a84668f1d PASSES, test-only (+17/-12 in deputy_shell/supervisor.rs mod tests), merges CLEAN. The signal test now waits (up to its 8s deadline) for child.pid to hold a PARSEABLE PID, not merely to exist, and pre-creates an EMPTY child.pid so every run deterministically exercises the empty-file race that redded train #4488. The child''s ''>'' redirection truncates it, so pre-creation is safe. Fast-track: it prevents promotion-train flakes.'
+  created_at: 2026-11-24T06:52:02.760339135Z
+  modified_at: 2026-11-24T06:52:02.760339135Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c14-b9eb-72e1-a1e3-9c482909bb69
   author: joe
