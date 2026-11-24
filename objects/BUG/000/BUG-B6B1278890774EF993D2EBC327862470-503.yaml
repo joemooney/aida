@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T04:00:30.252701171Z
+modified_at: 2026-11-24T04:29:03.216245983Z
 req_type: Bug
 tags:
 - hygiene
@@ -57,6 +57,13 @@ comments:
   modified_at: 2026-11-24T04:00:30.252701171Z
   session_id: 01a20b9fc4f8
   harness_version: codex-cli 0.167.0
+- id: 01a20bd0-b74f-7433-a22c-73b21bc2a1fd
+  author: joe
+  content: 'Repro evidence (advisor, 2026-11-23 21:30): session 01a1abbf''s seat clone /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-658 has a clean tree, 0 unique commits on any branch and 0 stashes, yet hygiene reports ''salvageable uncommitted work'' every hour (cron failing hourly). Moving it aside only changed the error to ''seat clone .git is not a real directory'', and the registry row stays. I restored the clone in place. The fix must let hygiene reap this exact clone (use it as the regression fixture).'
+  created_at: 2026-11-24T04:29:03.216245983Z
+  modified_at: 2026-11-24T04:29:03.216245983Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
