@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   - AC1: Lane admission waits (cold-start limit, memory/disk headroom, any queue wait) do NOT hold the store write lock. The lock is taken only around the actual store mutation and released before waiting. Test: a launch blocked on the cold-start limit doesn't hold store-write.lock, and a concurrent store write succeeds.
   - AC2: A store-lock timeout error names the HOLDER (pid plus command line) so this is diagnosable without /proc/locks. Test.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T04:11:03.510444182Z
+modified_at: 2026-11-24T04:14:32.794293333Z
 req_type: Bug
 tags:
 - admission
@@ -161,6 +161,13 @@ history:
   timestamp: 2026-11-24T04:08:59.105204127Z
   session_id: 01a20bb89728
   changes: []
+- id: 01a20bc3-375a-7073-af22-c02c58f51b16
+  author: aida-session-start
+  timestamp: 2026-11-24T04:14:32.794291885Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
