@@ -1,0 +1,34 @@
+id: 01a20b02-a499-7d83-8b39-454aea92deb1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-253
+title: 'Review PR-4472: [AI:codex] fix(tests): restore PR ship preflight fixture coverage (Refs TASK-3849)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20abe`) for branch `int29-task-3849`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4472>
+  - Branch: `int29-task-3849` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3849
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4472` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T00:44:12.313461316Z
+modified_at: 2026-11-24T00:44:12.313461316Z
+req_type: Story
+filed_at:
+  code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac22ab7f54
+  session: 01a20abec8e2
