@@ -1,5 +1,6 @@
 id: 01a20e1a-349a-77a3-8714-7b3be3866f8f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-281
+agreed_id: STORY-3097
 title: 'Review PR-4520: [AI:codex] docs(skills): wire aida review prepare into review skills (TASK-3863)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ddc`) for branch `int32-task-3863`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T15:09:17.747140139Z
   session_id: 01a20ddc1582
+  changes: []
+- id: 01a20e3f-02c7-7551-a567-61c1a7ea37b9
+  author: joe
+  timestamp: 2026-11-24T15:49:00.231246496Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
