@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980Z
-modified_at: 2026-11-24T08:50:32.971253254Z
+modified_at: 2026-11-24T08:54:51.383669348Z
 req_type: Task
 tags:
 - review
@@ -104,6 +104,11 @@ comments:
   created_at: 2026-11-24T08:50:32.971250227Z
   modified_at: 2026-11-24T08:50:32.971250227Z
   session_id: 01a20ca4ad12
+- id: 01a20cc3-d8f7-7f93-8090-c49f6ca2afaf
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3864 (origin ID below) is the sole completing spec in the generated worksheet. Round 1 full sweep of all 12 changed paths at 417ba689a6ea369ed6664055289418bb0e2c3c5c.. No triage reason was given.'
+  created_at: 2026-11-24T08:54:51.383662432Z
+  modified_at: 2026-11-24T08:54:51.383662432Z
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
@@ -159,6 +164,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20cc3-d8f7-7f93-8090-c48f5388ec2f
+  author: joe
+  timestamp: 2026-11-24T08:54:51.383652374Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -167,16 +179,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0d3a0ae222
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    TASK-3864 (origin ID below) is the sole completing spec in the generated worksheet. Round 1 full sweep of all 12 changed paths at 417ba689a6ea369ed6664055289418bb0e2c3c5c.
-    TASK-b6b1278890774ef993d2ebc327862470-1309.AC1 — unverified. Git and forge verify the integration target, matching author, and source provenance for all 12 submitted paths. Eleven blobs match 0fdac177513 and the showcase differs only by three PowerPoint link removals. The advisor's required README index line is missing from the slice.
-    TASK-b6b1278890774ef993d2ebc327862470-1309.AC2 — verified by the pinned Git tree and full diff. All changes are under docs/; the build script change only registers the retained Marp source. The showcase HTML remains, both excluded paths are unchanged or absent, and all three HTML download links were removed.
-    The supplied untraced list names both criteria. The exact-head fast source gates passed, including the showcase drift guard, but the diff adds no criterion-traced check for the Git/forge provenance or the selective PowerPoint removal. The implementer reported a showcase drift check and a shell syntax check. Local test, build and rendering commands were not run by the reviewer.
-    The forge's integration tip 9435f22c422 is six commits ahead of the PR's merge base. The six commits do not change the reviewed documentation, showcase generator or review command registration and do not add the engine. None of the findings depends on behavior changed by those commits. Fast compile was pending at review time.
-  recovery_hint: address the review findings, move TASK-3864 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T08:26:29.577720Z
