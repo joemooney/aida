@@ -1,0 +1,31 @@
+id: 01a20c6e-ee1e-7e72-b38c-31cb5480a943
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1308
+agreed_id: TASK-3863
+title: 'STORY-3076 S3: skill templates wire aida review prepare (masters + sync-templates)'
+description: |
+  Slice S3 of STORY-3076 (Joe's review engine; advisor-122 ruling 2026-11-24 00:30; filed by product-15). Source: branch story-3076-review-engine @ 0fdac177513 (Joe's reference commit, left untouched).
+  Files: aida-core/templates/skills/aida-review.md and aida-code-review.md (masters only).
+  S3 is the templates. Run make sync-templates and make check-templates in the same PR.
+  Ordering: after S2.
+
+  ## Acceptance
+  - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
+  - AC2: S3 is the templates. Run make sync-templates and make check-templates in the same PR.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T07:22:06.238132894Z
+modified_at: 2026-11-24T07:22:06.238132894Z
+req_type: Task
+tags:
+- review
+- story-3076
+- track:integration
+filed_at:
+  code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0d3a0ae222
+  vendor: claude
