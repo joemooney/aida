@@ -1574,6 +1574,7 @@ pub(crate) enum MandateRefusal {
     TraceEvidenceUnreadable(String),
     AlwaysHuman { spec: String, class: String },
     LedgerUnreadable(String),
+    LabelsUnreadable(String),
     NoHoldMarker,
     MarkerMissing,
     HoldNotReleasable { kind: String },
@@ -1628,6 +1629,7 @@ impl MandateRefusal {
             Self::NoHoldMarker => {
                 "the PR has no typed merge-hold marker or mandate coverage for its execution mode; a human can ship it".to_string()
             }
+            Self::LabelsUnreadable(why) => format!("could not read pinned labels for #{pr} ({why})"),
             Self::MarkerMissing => format!(
                 "the PR's merge-hold marker is missing without a recorded clearance ({}); a human must run `aida merge-hold clear`",
                 crate::gate::merge_hold_core::MARKER_MISSING_REASON

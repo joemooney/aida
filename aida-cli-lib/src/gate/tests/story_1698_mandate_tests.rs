@@ -2345,7 +2345,7 @@ fn bug_2179_batched_history_matches_the_per_spec_walk() {
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let batch = StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    let batch = StoreHistoryBatch::read(store.path(), &ids, true).unwrap();
     for id in ["TASK-1", "TASK-2", "TASK-3", "TASK-4", "TASK-6"] {
         let got: Vec<String> = batch
             .versions(id)
@@ -2361,7 +2361,7 @@ fn bug_2179_batched_history_matches_the_per_spec_walk() {
         batch.versions("TASK-9").is_err(),
         "an ID not read is never `no history`"
     );
-    assert!(StoreHistoryBatch::read(tempfile::tempdir().unwrap().path(), &ids).is_err());
+    assert!(StoreHistoryBatch::read(tempfile::tempdir().unwrap().path(), &ids, true).is_err());
 }
 
 // trace:BUG-2179 | ai:claude
@@ -2373,7 +2373,7 @@ fn bug_2179_batched_history_still_refuses_an_excluded_earlier_version() {
         "TASK-2".to_string(),
         "TASK-6".to_string(),
     ];
-    let batch = StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    let batch = StoreHistoryBatch::read(store.path(), &ids, true).unwrap();
     // TASK-1 is plain now; only its middle version carried `security`.
     let mut c = Case::ok();
     c.specs = ids
@@ -2426,7 +2426,7 @@ fn bug_2179_alias_map_matches_the_per_id_search() {
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let map = store_history_alias_map(root, &ids).unwrap();
+    let map = store_history_alias_map(root, &ids, true).unwrap();
     assert_eq!(map["TASK-176"], vec!["TASK-1-152".to_string()]);
     assert_eq!(map["TASK-177"], vec!["TASK-1-153".to_string()]);
     assert!(map["TASK-3"].is_empty(), "its own object is not an alias");
@@ -2438,7 +2438,7 @@ fn bug_2179_alias_map_matches_the_per_id_search() {
             "{id}"
         );
     }
-    assert!(store_history_alias_map(root, &["TASK 1;".to_string()]).is_err());
+    assert!(store_history_alias_map(root, &["TASK 1;".to_string()], true).is_err());
 }
 
 // trace:BUG-2179 | ai:claude
@@ -2471,9 +2471,9 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     );
     let _guard = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
     let ids: Vec<String> = (1..=40).map(|n| format!("TASK-{n}")).collect();
-    let batch = StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    let batch = StoreHistoryBatch::read(store.path(), &ids, true).unwrap();
     assert_eq!(batch.versions("TASK-1").unwrap().len(), 3);
-    store_history_alias_map(store.path(), &ids).unwrap();
+    store_history_alias_map(store.path(), &ids, true).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
     let walks = calls.lines().filter(|l| l.contains(" log ")).count();
     // BUG-2554: the first read builds the store-history index with one
@@ -2498,8 +2498,8 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     );
     // A later gate over an unchanged store walks no history at all.
     std::fs::write(&log, "").unwrap();
-    StoreHistoryBatch::read(store.path(), &ids).unwrap();
-    store_history_alias_map(store.path(), &ids).unwrap();
+    StoreHistoryBatch::read(store.path(), &ids, true).unwrap();
+    store_history_alias_map(store.path(), &ids, true).unwrap();
     let calls = std::fs::read_to_string(&log).unwrap();
     assert!(!calls.lines().any(|l| l.contains(" log ")), "{calls}");
 }
@@ -2536,7 +2536,7 @@ fn task_1951_store_history_walk_times_out_as_unreadable() {
         ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
     ]);
     let started = std::time::Instant::now();
-    let err = store_history_alias_map(store.path(), &["TASK-1".to_string()]).unwrap_err();
+    let err = store_history_alias_map(store.path(), &["TASK-1".to_string()], true).unwrap_err();
     assert!(err.to_string().contains("timed out"), "{err}");
     // TASK-2141: the refusal names the override. trace:TASK-1951 trace:TASK-2141 | ai:claude
     assert!(
@@ -2641,7 +2641,7 @@ fn task_2238_store_history_ignores_replace_objects() {
         "the replacement is live for an ordinary git read"
     );
 
-    let versions = StoreHistoryBatch::read(root, &["TASK-2".to_string()])
+    let versions = StoreHistoryBatch::read(root, &["TASK-2".to_string()], true)
         .unwrap()
         .versions("TASK-2")
         .unwrap();
@@ -3023,6 +3023,7 @@ fn task_2168_unreadable_store_for_operator_only_trace_still_excludes() {
         root,
         &["TASK-1".into()],
         ["TASK-963".into()].into_iter().collect(),
+        true,
     );
     assert_eq!(c.decide(), Ok(active(true).id));
 
@@ -3035,6 +3036,7 @@ fn task_2168_unreadable_store_for_operator_only_trace_still_excludes() {
         root,
         &[],
         ["TASK-963".into()].into_iter().collect(),
+        true,
     );
     assert_eq!(unresolved_traced.len(), 1);
     assert!(unresolved_traced[0].current.is_none());
@@ -3332,6 +3334,7 @@ fn task_2314_completed_without_shipped_commit_still_excludes() {
             root,
             &["TASK-1".into()],
             [traced_id.into()].into_iter().collect(),
+            true,
         );
         let traced_spec = specs.iter().find(|s| s.id == traced_id).unwrap();
         assert!(
@@ -3402,6 +3405,7 @@ fn task_2314_completed_and_shipped_on_main_expires() {
         root,
         &["TASK-1".into()],
         ["TASK-963".into(), "TASK-964".into()].into_iter().collect(),
+        true,
     );
     for id in ["TASK-963", "TASK-964"] {
         let s = specs.iter().find(|s| s.id == id).unwrap();
@@ -3659,7 +3663,7 @@ fn bug_2554_ids(rounds: usize) -> Vec<String> {
 }
 
 fn bug_2554_assert_index_equals_full_walk(root: &Path, ids: &[String]) {
-    let indexed = StoreHistoryBatch::read(root, ids).unwrap();
+    let indexed = StoreHistoryBatch::read(root, ids, true).unwrap();
     let walked = StoreHistoryBatch::read_full_walk(root, ids).unwrap();
     // Versions and aliases are judged as sets ("any version"); git orders
     // commits with equal timestamps differently in a full and a ranged walk.
@@ -3681,7 +3685,7 @@ fn bug_2554_assert_index_equals_full_walk(root: &Path, ids: &[String]) {
         assert_eq!(yaml(&indexed, id), yaml(&walked, id), "versions of {id}");
     }
     assert_eq!(
-        sorted(store_history_alias_map(root, ids).unwrap()),
+        sorted(store_history_alias_map(root, ids, true).unwrap()),
         sorted(crate::mandate::store_history_alias_map_full_walk(root, ids).unwrap()),
         "aliases"
     );
@@ -3704,7 +3708,7 @@ fn bug_2554_history_index_equals_the_full_walk_and_refreshes_incrementally() {
     bug_2554_assert_index_equals_full_walk(root, &bug_2554_ids(40));
     assert_eq!(take().first(), Some(&Refresh::Rebuild));
     // The deleted spec named by its agreed ID resolves to its object.
-    let map = store_history_alias_map(root, &["TASK-201".to_string()]).unwrap();
+    let map = store_history_alias_map(root, &["TASK-201".to_string()], true).unwrap();
     assert_eq!(map["TASK-201"], vec!["TASK-1-101".to_string()]);
     assert_eq!(
         take(),
@@ -3791,7 +3795,7 @@ fn bug_2554_a_detached_worktree_commit_refreshes_a_warm_index() {
     // HEAD only: no ref of the shared ref namespace moves.
     bug_2554_grow_store(&wt, 13, 14);
     REFRESHES.with(|r| r.borrow_mut().clear());
-    let map = store_history_alias_map(root, &["TASK-213".to_string()]).unwrap();
+    let map = store_history_alias_map(root, &["TASK-213".to_string()], true).unwrap();
     assert_eq!(map["TASK-213"], vec!["TASK-1-113".to_string()]);
     assert_eq!(
         REFRESHES.with(|r| r.borrow().first().copied()),
@@ -3818,7 +3822,7 @@ fn bug_2554_a_deleted_ref_collected_after_a_refresh_rebuilds() {
     // stay indexed, stricter than the walk, so no equality check here).
     bug_2554_grow_store(root, 12, 14);
     REFRESHES.with(|r| r.borrow_mut().clear());
-    HistoryIndex::current(root).unwrap();
+    HistoryIndex::current(root, true).unwrap();
     assert_eq!(
         REFRESHES.with(|r| r.borrow().first().copied()),
         Some(Refresh::Incremental)
@@ -3874,8 +3878,8 @@ fn bug_2554_a_failing_start_point_probe_refuses_not_reuses() {
     let (_shim, path) =
         bug_2554_git_shim("*rev-list*--all*) echo 'fatal: bad object HEAD' >&2; exit 128;;");
     let _guard = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
-    assert!(StoreHistoryBatch::read(root, &ids).is_err());
-    assert!(store_history_alias_map(root, &["TASK-201".to_string()]).is_err());
+    assert!(StoreHistoryBatch::read(root, &ids, true).is_err());
+    assert!(store_history_alias_map(root, &["TASK-201".to_string()], true).is_err());
 }
 
 /// BUG-2554 review: the anchor check a warm read runs keeps the
@@ -3899,7 +3903,7 @@ fn bug_2554_a_stalled_anchor_check_times_out() {
         ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
     ]);
     let started = std::time::Instant::now();
-    let err = store_history_alias_map(root, &["TASK-201".to_string()]).unwrap_err();
+    let err = store_history_alias_map(root, &["TASK-201".to_string()], true).unwrap_err();
     assert!(err.contains("timed out"), "{err}");
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }
@@ -3918,7 +3922,7 @@ fn bug_2572_concurrent_refreshes_walk_once() {
             let barrier = barrier.clone();
             std::thread::spawn(move || {
                 barrier.wait();
-                HistoryIndex::current(&root).unwrap();
+                HistoryIndex::current(&root, true).unwrap();
                 REFRESHES.with(|r| r.borrow().clone())
             })
         })
@@ -3948,14 +3952,14 @@ fn bug_2572_stalled_batch_read_times_out() {
     git(tmp.path(), &["init", "-q", "-b", "main"]);
     bug_2554_grow_store(tmp.path(), 0, 6);
     let ids = bug_2554_ids(6);
-    StoreHistoryBatch::read(tmp.path(), &ids).unwrap();
+    StoreHistoryBatch::read(tmp.path(), &ids, true).unwrap();
     let (_shim, path) = bug_2554_git_shim("*cat-file*--batch*) exec /bin/sleep 30;;");
     let _guard = crate::test_env::EnvVarsGuard::apply(&[
         ("PATH", Some(&path)),
         ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
     ]);
     let started = std::time::Instant::now();
-    let err = StoreHistoryBatch::read(tmp.path(), &ids).unwrap_err();
+    let err = StoreHistoryBatch::read(tmp.path(), &ids, true).unwrap_err();
     assert!(err.contains("timed out"), "{err}");
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }
