@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T18:51:58.492354786Z
+modified_at: 2026-11-24T18:52:59.780776414Z
 req_type: Story
 tags:
 - admission
@@ -318,6 +318,21 @@ comments:
     One targeted cargo run (the story_3080 / bug_2451 / bug_2139 tests), then make check-ci-fast. Open a NEW PR to main with "(STORY-3080)" only if all ACs are met, else "Refs STORY-3080" and declare the slice. COMMIT your work.
   created_at: 2026-11-24T18:26:49.870278888Z
   modified_at: 2026-11-24T18:26:49.870278888Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20ee7-aa99-7221-91f1-8b62c002e38a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:52):
+    # STORY-3080 IMPLEMENTATION SLICE 1, the store-writer critical section (advisor-122 SIGNED the sketch 2026-11-24 11:31 WITH 3 BINDING CONDITIONS; product-15). Lane: CODEX. MAIN. STRICT. <=200 lines. Start from the parked #4502 branch (story-b6b1278890774ef993d2ebc327862470-824), merge current origin/main, and keep r3's passing pieces (resume data-loss guard, first-spawn-only WIP rule, fresh open-change count, the real queue-pickup wiring test) plus the bug_2139 fix.
+    Implement the signed sketch (`aida show STORY-3080 --comments`, "SKETCH (codex design lane): Keep the final decision and the actual release in one store-writer critical section…", 2026-11-24 18:11Z), steps 1, 2 and 4 + tests.
+    BINDING CONDITIONS:
+    (1) The writer guard is held ONLY across bounded ops with a TOTAL deadline <= the helper acceptance window, acquired AFTER any cold-start wait, NEVER across a fetch or vendor completion. TEST: a stalled receipt releases the guard at the deadline.
+    (2) The vendor-start acknowledgement has a TIMEOUT that keeps BOTH veto generations (fail closed). (If step 3 is split out, its slice must carry this.)
+    (3) <=200 lines. If over, SPLIT: this slice = the critical section (steps 1, 2, 4); step 3 (generation-specific marker turnover) becomes its OWN later slice. Say so in the PR body.
+    One targeted cargo run (the story_3080 / bug_2451 / bug_2139 tests), then make check-ci-fast. Open a NEW PR to main with "(STORY-3080)" only if all ACs are met, else "Refs STORY-3080" and declare the slice. COMMIT your work.
+  created_at: 2026-11-24T18:52:59.780776414Z
+  modified_at: 2026-11-24T18:52:59.780776414Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
