@@ -1,0 +1,31 @@
+id: 01a20baf-2edf-70d0-8884-22f9488cce67
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1287
+title: 'Review follow-up: aida-core/src/mailbox_logical.rs:2326 promotes every retained lookup OverBudget error to a'
+description: |-
+  From TASK-3851
+  Reviewed sha: e94099b539b9cd19d00f797a8dd872a305a5d623
+
+  aida-core/src/mailbox_logical.rs:2326 promotes every retained lookup OverBudget error to a receipt-anchor error. The same code is returned for a single oversized retained sidecar at :2517 and for running out of retained-probe slots at :2501 or :2516, even while the deadline and receipt reads are healthy. An unrelated, independently observed record then loses ACK eligibility at :972, and a relay snapshot can report receipts_unknown at :816, suppressing all end notices in aida-cli-lib/src/relay_mail_outbox.rs:291. Preserve per-ID isolation for lookup failures and carry retained discovery incompleteness separately from receipt-anchor health. Add a mixed fixture with a failed retained lookup and an independently readable delivery.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T03:52:39.903213603Z
+modified_at: 2026-11-24T03:52:39.903213603Z
+req_type: Task
+tags:
+- carried-from:TASK-3851
+- finding-hash:b04df797
+- from-review:TASK-3851
+relationships:
+- rel_type: References
+  target_id: 01a20abc-01fd-76f1-ac21-75a3cd1d36db
+  created_at: 2026-11-24T03:52:52.673228976Z
+filed_at:
+  code_sha: e94099b539b9cd19d00f797a8dd872a305a5d623
+  branch: pr-4480
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
+  session: 01a20bac94a0
