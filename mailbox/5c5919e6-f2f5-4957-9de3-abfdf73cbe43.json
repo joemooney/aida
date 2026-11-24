@@ -1,0 +1,18 @@
+{
+  "id": "5c5919e6-f2f5-4957-9de3-abfdf73cbe43",
+  "thread_id": "5c5919e6-f2f5-4957-9de3-abfdf73cbe43",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795516794019,
+  "body": "- [STUCK-MERGE] #4449 is approved at d697b21c and has not landed for 750 min (approved at d697b21cee8a)\n  -> land #4449 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4508 is approved at b1f3fcf3 and has not landed for 46 min (approved at b1f3fcf37d0d)\n  -> land #4508 (the reconciler shows READY: add to next train)\n- [STUCK-REVIEW] #4411 at c871fba3 has had no verdict and no reviewer for 1151 min\n  -> launch a reviewer for #4411 at c871fba3\n- [STUCK-REVIEW] #4419 at e1b40027 has had no verdict and no reviewer for 1113 min\n  -> launch a reviewer for #4419 at e1b40027\n- [STUCK-REVIEW] #4435 at d2e995e7 has had no verdict and no reviewer for 751 min\n  -> launch a reviewer for #4435 at d2e995e7\n- [STUCK-REVIEW] #4502 at 907701f8 has had no verdict and no reviewer for 52 min\n  -> launch a reviewer for #4502 at 907701f8\n- [STUCK-REVIEW] #4509 at 13e7a417 has had no verdict and no reviewer for 40 min\n  -> launch a reviewer for #4509 at 13e7a417\n- [STUCK-REVIEW] #4510 at 8adbd6e0 has had no verdict and no reviewer for 35 min\n  -> launch a reviewer for #4510 at 8adbd6e0\n- [STUCK-REWORK] #4432 has changes requested at 4848978e (round 3) and no lane or session on it for 730 min\n  -> route rework of #4432 to a lane\n- [STUCK-REWORK] #4443 has changes requested at dd2f0e44 (round 2) and no lane or session on it for 713 min\n  -> route rework of #4443 to a lane\n- [STUCK-REWORK] #4448 has changes requested at 227141c5 (round 2) and no lane or session on it for 705 min\n  -> route rework of #4448 to a lane\n- [STUCK-REWORK] #4454 has changes requested at 9e251dbc (round 1) and no lane or session on it for 814 min\n  -> route rework of #4454 to a lane\n- [STUCK-REWORK] #4457 has changes requested at bcb264c9 (round 1) and no lane or session on it for 794 min\n  -> route rework of #4457 to a lane\n- [STUCK-REWORK] #4458 has changes requested at 8bb20de2 (round 1) and no lane or session on it for 781 min\n  -> route rework of #4458 to a lane\n- [STUCK-REWORK] #4464 has changes requested at 9b167d9e (round 1) and no lane or session on it for 673 min\n  -> route rework of #4464 to a lane\n- [STUCK-REWORK] #4475 has changes requested at 93fd84ca (round 1) and no lane or session on it for 508 min\n  -> route rework of #4475 to a lane\n- [STUCK-REWORK] #4477 has changes requested at 8bbdc636 (round 1) and no lane or session on it for 490 min\n  -> route rework of #4477 to a lane\n- [STUCK-REWORK] #4482 has changes requested at 4a5d76cd (round 1) and no lane or session on it for 367 min\n  -> route rework of #4482 to a lane\n- [STUCK-CONFLICT] #4413 at 2fcffa99 conflicts with its base and nobody owns it, for 942 min\n  -> route a lane to resolve the conflict on #4413\n- [STUCK-CONFLICT] #4416 at ba014d8f conflicts with its base and nobody owns it, for 63 min\n  -> route a lane to resolve the conflict on #4416\n- [STUCK-CONFLICT] #4487 at 05a17b1e conflicts with its base and nobody owns it, for 63 min\n  -> route a lane to resolve the conflict on #4487\n\n35 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 21 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
