@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T02:34:59.749414154Z
+modified_at: 2026-11-24T02:35:39.615231564Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -38,6 +38,13 @@ comments:
   content: 'CONFIRMED 19:35 MST (live process on imac): --id does NOT narrow the scan. `aida doctor heal stale-leases --id shared-207c3564-…` runs for-each-ref over all refs/heads, then a serial `gh pr view N --json state` for each open PR, then the same per-branch `gh pr list --head <branch> --state merged` loop as the global run. So the targeted heal also takes ~80 min before acting. AC0 (highest value): with --id, resolve only that lease or claim and query only its own branch/PR. It''s also why TASK-3851''s stale shared claim can''t practically be healed.'
   created_at: 2026-11-24T02:34:32.638555397Z
   modified_at: 2026-11-24T02:34:32.638555397Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+- id: 01a20b68-df8c-7c00-9015-01d690516862
+  author: joe
+  content: 'CORRECTION 19:40 MST: Joe''s timed run of the targeted heal (--id shared-207c3564-…) on imac FINISHED in 1m22s (real; user 30s, sys 14s), returning ''no eligible stale lease finding''. It does still run the full ref/PR scan, but on this pass it finished in ~80s, not ~80 min. The global run''s long tail was the per-branch merged-PR loop plus the 41 applies. AC0 still holds: --id should skip the global scan, and an 80s refusal is too slow. Lower severity than first stated.'
+  created_at: 2026-11-24T02:35:39.615231564Z
+  modified_at: 2026-11-24T02:35:39.615231564Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
 history:
