@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-24T12:30:52.503399712Z
+modified_at: 2026-11-24T12:30:54.231142676Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -98,6 +98,11 @@ comments:
   modified_at: 2026-11-23T09:53:32.855929314Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20d89-a517-7b23-91ee-5201f91c1afc
+  author: joe
+  content: 'advisor-122 05:38: STANDARD only if test-only (admission_owner.rs tests'' deadline/margin/polling, zero production changes); else punt and re-tier strict.'
+  created_at: 2026-11-24T12:30:54.231142676Z
+  modified_at: 2026-11-24T12:30:54.231142676Z
 history:
 - id: 01a1fcf0-ccab-7c51-aaa4-eaba556471cb
   author: joe
