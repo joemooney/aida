@@ -186,6 +186,13 @@ comments:
   modified_at: 2026-11-24T05:13:06.874987560Z
   session_id: 01a20bea6036
   harness_version: codex-cli 0.167.0
+- id: 01a20c2b-a029-71a3-a946-440f95162c05
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r3 (integration-30, 23:10): PR-4480 @ ec99bae57b PASSES the 21:53 micro-round ruling. The rework commit ec99bae57bc adds LogicalSnapshot.retained_open_error (set only when RetainedDeliveries::open fails, before any per-ID lookup). ack_eligible() now also requires retained_open_error.is_none(), so ACK is REFUSED when the retained store can''t be opened, while per-ID lookup failures stay isolated (NotOwned/UNVERIFIED) as the ruling required, with a regression in mailbox_logical_tests.rs. mailbox_view''s partial-coverage codes list retained_open_error, or OverBudget when the inventory is incomplete without an open error, so a partial view always names its reason. The other files in the delta come from its integration merge (b664d79afa9). Merges CLEAN.'
+  created_at: 2026-11-24T06:08:17.035004619Z
+  modified_at: 2026-11-24T06:08:17.035004619Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20c2b-ccaa-7770-9241-13c29f5d2ab6
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int30-task-3851` at head `ec99bae57bce2446943871b3b4d1babd39075e69`.'
