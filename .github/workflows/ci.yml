@@ -150,11 +150,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install ratchet runner dependencies
         run: python3 -m pip install PyYAML
+      # trace:BUG-2744 | ai:codex
       - name: Install compile dependencies
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: |
           sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 \
+            install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile-fast-check
