@@ -1,0 +1,27 @@
+id: 01a20e37-4360-7032-b27a-aeebf29c0b1b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1357
+agreed_id: TASK-3873
+title: Approved-small drain default recognised on the SubagentStart lease-hook and completing-publication paths (deferred F2 from STORY-3038)
+description: |
+  Deferred from #4448 STORY-3038 r3 CR (advisor-122 ruling 2026-11-24 08:41; filed by product-15). LOW. Missing it fails SAFE (the spec stays supervised), so it is not a bypass.
+
+  ## Acceptance
+  - AC1: The approved-small drain default is also recognised (approval-preserving) on the SubagentStart lease-hook path and the completing-publication path, consistent with the main landing path.
+  - AC2: Tests for both paths.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T15:40:32.480918297Z
+modified_at: 2026-11-24T15:40:32.480918297Z
+req_type: Task
+tags:
+- gate
+- small
+filed_at:
+  code_sha: 9cc76437f4f2054f6c97da341ed1b482c60c221d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9cc76437f4f
+  vendor: claude
