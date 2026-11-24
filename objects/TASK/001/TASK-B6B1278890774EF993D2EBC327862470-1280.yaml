@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:33:42.356470431Z
-modified_at: 2026-11-24T00:42:54.153454730Z
+modified_at: 2026-11-24T00:45:58.677081202Z
 req_type: Task
 tags:
 - small
@@ -41,6 +41,15 @@ comments:
   modified_at: 2026-11-24T00:37:22.064472525Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20b04-457e-7e50-929f-a049f7d740c4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 13bcf6bd6715439e9fdb4769e36b0551f2d27921 plus native working tree. AC1: [evidence: behavioral-test] tests/test_cache_refresh_outputs.py:229-254 exercises explicit list JSON and TOON on a PTY with detaching enabled, and observes a new completed worker refresh for each format. The full Python acceptance script passed against main binary ac22ab7f54. TASK-1527 (#2349) introduced this behavior. Probes checked flag spelling, output shapes, both formats independently and worker timing. Fixed a race in the proposed assertion by observing worker completion instead of requiring stale output. No production or authority changes. Exact PR-head CI awaits host publication.
+  created_at: 2026-11-24T00:45:58.677081202Z
+  modified_at: 2026-11-24T00:45:58.677081202Z
+  session_id: 01a20b00bd28
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
