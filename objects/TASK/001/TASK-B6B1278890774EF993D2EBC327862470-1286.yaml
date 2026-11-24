@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T03:41:03.472804465Z
-modified_at: 2026-11-24T03:42:01.341321518Z
+modified_at: 2026-11-24T03:43:05.258317307Z
 req_type: Task
 tags:
 - forge
@@ -25,6 +25,24 @@ comments:
   content: Filed Approved per advisor-122 ruling 2026-11-23 20:45 (drain, integration filler).
   created_at: 2026-11-24T03:42:01.341321518Z
   modified_at: 2026-11-24T03:42:01.341321518Z
+- id: 01a20ba6-9a36-75c1-be0d-ee45d167add2
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:43):
+    # TASK-3854: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3854` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3854 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3854)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE (advisor-122 ruling 20:45; product-15): branch `int31-task-3854`, cut from origin/integration be227b8e5ad (includes #4478 be227b8e). PR base MUST be `integration`. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.
+  created_at: 2026-11-24T03:43:05.258317307Z
+  modified_at: 2026-11-24T03:43:05.258317307Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20ba5-66be-7a31-bcaa-958dd2e9ad20
   author: joe
