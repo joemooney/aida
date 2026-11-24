@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T16:18:59.946214768Z
+modified_at: 2026-11-24T16:19:15.037970882Z
 req_type: Story
 tags:
 - admission
@@ -248,6 +248,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3080 AC1 FAIL: the contained helper can time out before eligible final admission completes, and a failed release can discard an existing publication veto. AC2 PASS by source review for the three specified mutation cases: real queue pickup drives the final callback after a controlled cold-start wait with a hold, an operator-track edit and a Git-canonical pull, checks that the fake vendor was never started, and retains the host veto on policy refusal. The real contained release still lacks a boundary regression. Reviewed the complete landing diff for tree 4d312d9a68c67ef39cec0bcb327df6bb104f4f65 on pinned main ea4cace77f021f44f0adedbbaf9a5c46803f00c7. The head is three commits behind and the findings apply on both the original head and the pinned landing tree. The overlapping store-writer inventory entry is correctly renamed in the landing tree. Exact-head FAST source gates passed, compilation was pending, and full test shards were skipped. No local tests or builds were run.. No triage reason was given.'
   created_at: 2026-11-24T16:18:59.946208950Z
   modified_at: 2026-11-24T16:18:59.946208950Z
+- id: 01a20e5a-b346-7372-8318-792c862d12d5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3080):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: af86ff2ff9c8
+    Recorded: 2026-11-24T16:16:29.874947106+00:00
+    Findings:
+    1. STORY-3080 AC1 / round 4: Slow final admission now outlives the contained helper's acceptance deadline even when the pickup is eligible. session/headless.rs:2785 and :2803 start the helper and obtain its receipt before the hook runs. The helper gives that hook at most 10 seconds to release the barrier (containment/contained_host.py:762–769), but a live GitHub WIP lookup in the hook allows 60 seconds (forge.rs:2549), and even an exempt pickup can wait for the store writer lock for up to 120 seconds by default (aida-core/src/db/store_lock.rs:28–31, :367). For example, a new pickup whose live count returns under the limit after 12 seconds cannot reach vendor exec, even with no hold or track restriction. Coordinate slow admission work and the helper's bounded acceptance protocol while preserving the lock through release. Exercise a delayed but otherwise eligible contained pickup.
+    2. STORY-3080 round 3 F3: A failed contained release can still erase a previous publication veto without starting a vendor. standalone_implementer.rs:1766–1773 clears the host and seat markers after validation, before the barrier write at session/headless.rs:2803 (launch/contained.rs:2303). If the helper has already timed out, the hook can still clear the markers and then get BrokenPipe on release. The pre-start rollback in queue_cmd/work.rs:7443–7458 restores setup resources but does not restore the independent host marker used by ship_from_seat.rs:941–955. Retain or restore the pre-existing markers on a release or spawn failure and cover that failure with a prior veto.
+    3. The contained exec boundary lacks a regression test that detects release outside the store writer hold. story_3080_writer_excluded_until_vendor_release (tests/bug_2451_pickup_entry_tests.rs:2374) runs with_spawn_authority around a locally supplied closure. The real-pickup fake launcher invokes the callback itself and returns before run_vendor_headless_child (session/headless.rs:2605–2609). The child-grant integration fixture uses the default Claude-native path and checks only successful launches. Moving the production contained release at session/headless.rs:2803 outside the guard would therefore leave these tests green. Drive the actual contained release branch with a controllable helper and verify that a late store write either precedes the final decision and prevents exec, or remains excluded through barrier release.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T16:19:14.886492263Z
+  modified_at: 2026-11-24T16:19:14.886492263Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
