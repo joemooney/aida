@@ -1844,6 +1844,26 @@ pub(crate) fn clear_missing_worktree_registration(
     before_clear: impl FnOnce(),
     after_final_check: impl FnOnce(),
 ) -> RegistrationClearOutcome {
+    inspect_missing_registration(
+        project_root,
+        worktree_path,
+        pinned_tip,
+        false,
+        false,
+        before_clear,
+        after_final_check,
+    )
+}
+
+pub(crate) fn inspect_missing_registration(
+    project_root: &std::path::Path,
+    worktree_path: &std::path::Path,
+    pinned_tip: Option<&str>,
+    dry_run: bool,
+    include_locked: bool,
+    before_clear: impl FnOnce(),
+    after_final_check: impl FnOnce(),
+) -> RegistrationClearOutcome {
     if !worktree_path.is_absolute() {
         return RegistrationClearOutcome::Declined;
     }
@@ -1858,9 +1878,7 @@ pub(crate) fn clear_missing_worktree_registration(
     // Unreadable repository state cannot establish that no registration names
     // this path — decline loudly rather than fall through to branch deletion.
     // trace:BUG-1694 | ai:claude
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    let output = aida_core::git_ops::host_git_command(project_root)
         .args(["rev-parse", "--git-common-dir"])
         .output();
     let Ok(output) = output else {
@@ -1887,21 +1905,48 @@ pub(crate) fn clear_missing_worktree_registration(
         }
         Err(_) => return RegistrationClearOutcome::Declined,
     };
-    for entry in entries.flatten() {
+    for entry in entries {
+        let Ok(entry) = entry else {
+            return RegistrationClearOutcome::Declined;
+        };
         let admin_dir = entry.path();
         let Ok(gitdir) = std::fs::read_to_string(admin_dir.join("gitdir")) else {
-            continue;
+            return RegistrationClearOutcome::Declined;
         };
         if worktree_gitdir_matches(gitdir.trim(), &expected_gitdir) {
             if worktree_path.exists() {
                 return RegistrationClearOutcome::Declined;
             }
+            let absent = |name| matches!(std::fs::symlink_metadata(admin_dir.join(name)), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
+            if !include_locked && !absent("locked") {
+                return RegistrationClearOutcome::Declined;
+            }
+            if dry_run {
+                return if absent("index.lock")
+                    && registered_index_matches_tip(&admin_dir, pinned_tip)
+                {
+                    RegistrationClearOutcome::Cleared
+                } else {
+                    RegistrationClearOutcome::Declined
+                };
+            }
             after_final_check();
             if std::fs::create_dir(worktree_path).is_err() {
                 return RegistrationClearOutcome::Declined;
             }
-            let removed = registered_index_matches_tip(&admin_dir, pinned_tip)
-                && std::fs::remove_dir_all(admin_dir).is_ok();
+            let lock = admin_dir.join("index.lock");
+            let removed = std::fs::File::create_new(&lock).is_ok_and(|_writer_guard| {
+                // Rename the whole locked directory first. Recursive removal alone
+                // could unlink index.lock while the old registration still exists.
+                let retired = registered_index_matches_tip(&admin_dir, pinned_tip)
+                    && tempfile::tempdir_in(&common_dir).is_ok_and(|quarantine| {
+                        std::fs::rename(&admin_dir, quarantine.path().join("registration")).is_ok()
+                    });
+                if !retired {
+                    let _ = std::fs::remove_file(lock);
+                }
+                retired
+            });
             // Release the claim on both outcomes; non-recursive, so a creator
             // that already populated the empty directory keeps it (ENOTEMPTY).
             let _ = std::fs::remove_dir(worktree_path);
@@ -1920,6 +1965,18 @@ pub(crate) fn clear_missing_worktree_registration(
 // trace:BUG-2749 | ai:codex
 fn registered_index_matches_tip(admin: &std::path::Path, pinned_tip: Option<&str>) -> bool {
     if !std::fs::symlink_metadata(admin.join("index")).is_ok_and(|m| m.is_file()) {
+        return false;
+    }
+    // Preserve split indexes (including shared snapshots) for manual recovery.
+    if !std::fs::read_dir(admin).is_ok_and(|mut entries| {
+        entries.all(|entry| {
+            entry.is_ok_and(|e| {
+                !e.file_name()
+                    .as_encoded_bytes()
+                    .starts_with(b"sharedindex.")
+            })
+        })
+    }) {
         return false;
     }
     let git = || {
@@ -1945,8 +2002,20 @@ fn registered_index_matches_tip(admin: &std::path::Path, pinned_tip: Option<&str
         return false;
     };
     let tip = tip.trim();
+    let algorithm = match tip.len() {
+        40 => &ring::digest::SHA1_FOR_LEGACY_USE_ONLY,
+        64 => &ring::digest::SHA256,
+        _ => return false,
+    };
+    let Ok(index) = std::fs::read(admin.join("index")) else {
+        return false;
+    };
+    let Some(body_len) = index.len().checked_sub(algorithm.output_len()) else {
+        return false;
+    };
+    let (body, checksum) = index.split_at(body_len);
     head.status.success()
-        && !tip.is_empty()
+        && ring::digest::digest(algorithm, body).as_ref() == checksum
         && pinned_tip.is_none_or(|pinned| pinned == tip)
         && git()
             .args([

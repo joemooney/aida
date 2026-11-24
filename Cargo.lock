@@ -88,6 +88,7 @@ dependencies = [
  "pulldown-cmark",
  "regex",
  "reqwest",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",

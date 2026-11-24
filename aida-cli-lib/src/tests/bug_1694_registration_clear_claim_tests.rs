@@ -209,6 +209,7 @@ fn bug_2749_missing_checkout_preserves_registered_index() {
     let wt = tmp.path().join("linked");
     git(&root, &["worktree", "add", "-q", wt.to_str().unwrap()]);
     let tip = git(&wt, &["rev-parse", "HEAD"]);
+    let clean = std::fs::read(root.join(".git/worktrees/linked/index")).unwrap();
     std::fs::write(wt.join("staged-only"), "unique content").unwrap();
     git(&wt, &["add", "staged-only"]);
     let admin = root.join(".git/worktrees/linked");
@@ -220,6 +221,31 @@ fn bug_2749_missing_checkout_preserves_registered_index() {
     assert_eq!(std::fs::read(&index).unwrap(), staged);
     assert!(!wt.exists());
 
+    for preview in [true, false] {
+        let rows = crate::mail_retention::prune_removed_sources(&root, false, preview).unwrap();
+        assert_eq!(rows[0].1, crate::mail_retention::PruneOutcome::Declined);
+    }
+    let sibling = tmp.path().join("clean-sibling");
+    git(&root, &["worktree", "add", "-q", sibling.to_str().unwrap()]);
+    std::fs::remove_dir_all(sibling).unwrap();
+    crate::worktree_gc::session_gc_at(root.clone(), true, false).unwrap();
+    assert!(root.join(".git/worktrees/clean-sibling/index").is_file());
+    crate::worktree_gc::lossless_prune_worktrees(&root);
+    assert!(!root.join(".git/worktrees/clean-sibling").exists());
+    assert_eq!(std::fs::read(&index).unwrap(), staged);
+
+    std::fs::write(&index, &clean).unwrap();
+    let lock = admin.join("index.lock");
+    std::fs::write(&lock, &staged).unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert_eq!(std::fs::read(&lock).unwrap(), staged);
+    std::fs::remove_file(lock).unwrap();
+
+    let mut damaged = clean;
+    *damaged.last_mut().unwrap() ^= 1;
+    std::fs::write(&index, &damaged).unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert_eq!(std::fs::read(&index).unwrap(), damaged);
     std::fs::write(&index, "corrupt index").unwrap();
     assert_eq!(clear(), RegistrationClearOutcome::Declined);
     std::fs::remove_file(index).unwrap();

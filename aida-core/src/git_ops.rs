@@ -3986,13 +3986,6 @@ pub fn create_store_worktree(
         .map(|r| r.success)
         .unwrap_or(false);
 
-    // BUG-39: drop any stale worktree registrations before trying to add
-    // a fresh one. `git worktree prune` is a no-op when nothing's stale,
-    // so always-running it is safe and avoids the cryptic "missing but
-    // already registered worktree" error users hit after manually
-    // deleting the worktree directory. trace:BUG-39 | ai:claude
-    let _ = git(repo_root, &["worktree", "prune"]);
-
     if branch_exists {
         // Branch exists (e.g., from a clone) — just add the worktree
         let result = git_config_writer(repo_root, &["worktree", "add", worktree_dir, branch_name])?;
@@ -4287,8 +4280,6 @@ mod bug2188_publish_fallback_tests {
 // expected admin directory before add; a failed hook cannot leave a pool orphan.
 // trace:BUG-2188 | ai:codex
 pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Result<()> {
-    // Preserve stale-registration cleanup before allocating a new pool tree.
-    let _ = git(repo_root, &["worktree", "prune"]);
     anyhow::ensure!(
         matches!(std::fs::symlink_metadata(path), Err(ref e) if e.kind() == std::io::ErrorKind::NotFound),
         "pool worktree path {} already exists or is unreadable",
@@ -4825,6 +4816,7 @@ fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
     // trace:TASK-1952 | trace:TASK-2146 | ai:claude
     let out = host_git_command(&top)
         .args(["-c", "core.quotePath=true"])
+        .arg("--no-optional-locks")
         .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status")?;
@@ -4961,6 +4953,7 @@ fn submodule_has_changes(work_tree: &Path, git_dir: &Path, depth: usize) -> Resu
     let out = host_git_command(work_tree)
         .arg(format!("--git-dir={}", git_dir.display()))
         .arg(format!("--work-tree={}", work_tree.display()))
+        .arg("--no-optional-locks")
         .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status in a submodule")?;
@@ -5048,6 +5041,7 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
         contained_safety_scan(worktree_path)?.0
     } else {
         let out = host_git_command(worktree_path)
+            .arg("--no-optional-locks")
             .args(["status", "--porcelain", "--ignore-submodules=none"])
             .output()
             .context("run git status")?;

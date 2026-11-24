@@ -2290,13 +2290,7 @@ pub(crate) fn session_end_with_discard_unpushed(
         );
     }
 
-    // BUG-614: lossless prune of administrative worktree entries whose
-    // directories are already gone. `git worktree prune` ONLY removes the
-    // bookkeeping for worktrees whose on-disk dir no longer exists — it never
-    // touches a live worktree — so it is always safe and cheap. Running it on
-    // session-end keeps `.git/worktrees/` from accumulating stale entries
-    // (which scale the per-worktree git spawns `aida status` makes). Quiet,
-    // best-effort: a failure here never fails the session teardown.
+    // Retire missing registrations only after checking their indexes.
     // trace:BUG-614 | ai:claude
     lossless_prune_worktrees(&project_root);
 

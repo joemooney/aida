@@ -13,8 +13,7 @@ use std::path::Path;
 use crate::gate::dispatch_io::{read_bounded_regular_file, MAX_BRIEF_BYTES};
 
 /// Preserve `rev_wt`'s merge-hold marker for `pr_scope` into the main
-/// worktree, then remove `rev_wt` with `git worktree remove --force`
-/// (pruning when removal fails). Any preservation failure aborts before the
+/// worktree, then remove `rev_wt` with `git worktree remove --force`. Any preservation failure aborts before the
 /// removal, so a hold is never lost.
 // trace:STORY-1889 trace:STORY-1917 | ai:claude
 pub(crate) fn remove_reviewer_worktree_preserving_hold(
@@ -37,11 +36,6 @@ pub(crate) fn remove_reviewer_worktree_preserving_hold(
         {
             bail!("refusing to clean up reviewer worktree: {e:#}");
         }
-    }
-    if removed.is_err() && rev_wt.exists() {
-        let _ = aida_core::git_ops::host_git_command(main_worktree)
-            .args(["worktree", "prune"])
-            .output();
     }
     Ok(())
 }
