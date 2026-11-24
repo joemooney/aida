@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2720",
+  "publishes": [
+    {
+      "at": "2026-11-24T21:10:49.280508727Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T06:54:03.188229729Z",
+      "spec": "BUG-2720",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4413,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "2fcffa9987591527cab7610b758675e6fe3844a7"
+      }
+    },
+    {
+      "ts": "2026-11-23T06:54:31.113824099Z",
+      "spec": "BUG-2720",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2720 (BUG-b6b1278890774ef993d2ebc327862470-481) — partial. Reviewed the complete landed diff on protected base a16f3592f015. No finding depends on the intervening readiness-test edit. CI pending at review time (fast compile). Source and existing evidence only.\nAC1 — unverified. Worktree ownership is rechecked, but a persistent busy lock can consume the entire retry budget before it clears. The new test exercises the worktree case only.\nAC2 — verified by the exited-attempt selection assertions, the pass accumulation in run_with_program and the shared status/log rendering exercised by cargo test -p aida-cli-lib bug2720_pass_summary_names_skipped_heads.\nAC3 — verified by source inspection of cargo test -p aida-cli-lib bug2720_exited_pickup_retries_after_worktree_release. It produces an exited receipt from real Git worktree occupancy, substitutes a dead dispatcher identity, advances the deadline, removes the worktree and asserts dispatch for the original head.\nAdditional AC4 from the spec comment — verified by the round-cap skip classification in skipped_admission and select_with_coverage, plus the capped PR name assertion in the summary test.\nBUG-2720 (bug protocol): the PR touches at least one test file — met.",
+        "recovery_hint": "address the review findings, move BUG-2720 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T19:51:19.202124987Z",
+      "spec": "BUG-2720",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4413,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "9fdf2f785ab41789129b76b62dab12d0c87a5b70"
+      }
+    },
+    {
+      "ts": "2026-11-24T19:51:42.234150099Z",
+      "spec": "BUG-2720",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2720 is partial. AC1 fails at the live queue-child diagnostic boundary, even though the direct lock-probe regression exercises preserving the retry budget while held. AC2 passes for named exited-attempt skips, AC3 has a linked-worktree regression at the reservation layer, and AC4 passes through named round-cap skips. The earlier three minor findings remain deferred follow-ups. Reviewed the complete landed diff against protected base 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0. No finding depends on the intervening base commit. FAST source gates passed and FAST compile was pending at review time. Source and existing CI evidence only.",
+        "recovery_hint": "address the review findings, move BUG-2720 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T19:55:59.276707113Z",
+      "spec": "BUG-2720",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4413,
+        "verdict": "APPROVED",
+        "reviewed_sha": "9fdf2f785ab41789129b76b62dab12d0c87a5b70"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:06:28.672282804Z",
+      "spec": "BUG-2720",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4413
+      }
+    },
+    {
+      "ts": "2026-11-24T21:10:49.059033883Z",
+      "spec": "BUG-2720",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5665f7c661c7b100b06434132c000715144387e7",
+        "pr": 4413,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
