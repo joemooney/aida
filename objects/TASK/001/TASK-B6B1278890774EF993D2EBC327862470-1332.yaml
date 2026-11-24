@@ -96,6 +96,13 @@ comments:
   created_at: 2026-11-24T16:18:08.722001121Z
   modified_at: 2026-11-24T16:18:08.722001121Z
   session_id: 01a20e2cff8a
+- id: 01a20e5a-4872-7cb0-8ccb-ada459ca1d52
+  author: joe
+  content: 'INTEGRATION PRE-CHECK H2a (integration-30, 09:22): PR-4523 @ d3d1825931 PASSES the split ruling''s test requirement. +170/-43 in 6 files (<=250), Joe-authored ''(Refs TASK-3867)'', merges CLEAN, lane fast_gate=pass. Five items, five tests (also in ratchet-set.json): length-framed inventory digest (AC1) -> h2a_digest_frames_paths; duplicate ledger/observation IDs ambiguous (AC1) -> h2a_duplicates_are_ambiguous; checked/saturating token arithmetic (AC1) -> h2a_token_overflow; budget cap honoured or rejected, TASK-3319 (AC2) -> h2a_budget_is_a_cap; single-bracket citations (AC2) -> h2a_single_bracket_citations. Left for H2b (TASK-3872): compiled/bounded globs, CRLF trim, resolved-vs-hint anchor coordinates, the linear anchoring matcher, same-stem batch scoping, language-keyed Rust facets. JUDGMENT for the advisor: the budget becomes a hard CAP. A single file over the configured token cap now makes ''aida review prepare'' FAIL (it used to get its own batch); the docs (review-process.md, code-review.html, presentation) are updated to say so. That''s allowed by AC2 (''honored or rejected''), but one large generated file now blocks the whole preparation. Nit: the PR body lacks the promised item->test map (boilerplate only).'
+  created_at: 2026-11-24T16:18:34.237189077Z
+  modified_at: 2026-11-24T16:18:34.237189077Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20cd4-4160-7d93-a028-44fad8a0f0dd
   author: joe
