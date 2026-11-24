@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-24T20:56:26.118965371Z
+modified_at: 2026-11-24T21:36:03.930252475Z
 req_type: Bug
 tags:
 - leases
@@ -42,6 +42,13 @@ comments:
     Probes covered canonical paths, symlinks, mount parsing, zero/nonzero mailbox entries, failed reads, holder checks and sandbox-only Git probes. The new path releases only lease resources. Mount evidence is local to the heal process namespace. Live repro lease untouched. No PR-head CI available in native lane.
   created_at: 2026-11-24T20:56:26.118965371Z
   modified_at: 2026-11-24T20:56:26.118965371Z
+  session_id: 01a20f4bcfc3
+  harness_version: codex-cli 0.167.0
+- id: 01a20f7c-c57d-71a0-85b0-7c26db043de9
+  author: dirtlab
+  content: 'Self-review addendum for HEAD 95eaccf328557402d176c0b41983afe1b677965f and final native edits: isolated AC3 fixture in a one-test child after a direct test binary run in a separate PID namespace exercised the holder-scan refusal. Namespace trust is scoped to this temporary test checkout and child. Final launcher job j20261124T212517112-2-0 executed all three tests, all passed.'
+  created_at: 2026-11-24T21:36:03.930252475Z
+  modified_at: 2026-11-24T21:36:03.930252475Z
   session_id: 01a20f4bcfc3
   harness_version: codex-cli 0.167.0
 history:
