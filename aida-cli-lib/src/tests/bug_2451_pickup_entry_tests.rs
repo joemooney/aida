@@ -2180,3 +2180,56 @@ fn story_2690_queue_work_admits_a_done_spec_onto_its_open_change() {
         );
     }
 }
+
+// trace:BUG-2736 | ai:codex
+#[test]
+fn bug_2736_open_lane_pr_into_integration_prevents_prless_recovery() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = recovery_forge_fixture(&fx.main, &fx.root);
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    // Spec discovery misses the PR. Only the open-head query can find it.
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'gh test'; exit 0; fi
+[ "$1 $2" = 'pr list' ] || exit 1
+head= base= state=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --head|-H) shift; head=$1 ;;
+        --base|-B) shift; base=$1 ;;
+        --state|-s) shift; state=$1 ;;
+    esac
+    shift
+done
+if [ "$head" = bundle-lane ] && [ "$state" = open ] &&
+   { [ -z "$base" ] || [ "$base" = integration ]; }; then
+    printf '4455\tLane fix\thttps://example.invalid/pull/4455\tbundle-lane\n'
+fi
+"#,
+    );
+    let (storage, set_status) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    set_status(aida_core::RequirementStatus::InProgress);
+    crate::lane_recovery::reconcile_observed(&fx.main, "BUG-2451", "bundle-lane", Some("abc"))
+        .unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert_eq!(req.status, aida_core::RequirementStatus::InProgress);
+    assert!(!req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("no open PR")));
+
+    crate::lane_recovery::reconcile_observed(&fx.main, "BUG-2451", "other-lane", Some("abc"))
+        .unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2451").unwrap();
+    assert!(req.comments.iter().any(|c| c
+        .content
+        .contains("no open PR; retained branch `other-lane`")));
+}
