@@ -120,6 +120,25 @@ fn mail_to_a_relay_label_is_recorded_as_a_delivery_to_its_run() {
 fn ending_a_run_tells_each_sender_once_and_never_bounces_a_bounce() {
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path();
+    // trace:TASK-3851 | ai:codex
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q"])
+        .current_dir(project)
+        .status()
+        .unwrap()
+        .success());
+    crate::mailbox_store::write_message_with_deliveries(
+        project,
+        &message("oversized", "other", "seat:advisor"),
+        None,
+    )
+    .unwrap();
+    let retained = project.join(".git/aida/mail-lifecycle/retained/key/gen/data/.deliveries");
+    std::fs::create_dir_all(&retained).unwrap();
+    std::fs::File::create(retained.join("oversized.json"))
+        .unwrap()
+        .set_len(aida_core::mailbox_delivery::DELIVERY_FILE_CAP + 1)
+        .unwrap();
     let sender = reader(project, "sender-x", "implementer");
     let (run, cap, _lock) = bind_live(project, "relay-a");
     let run_uuid = RecipientUuid::parse(&run).unwrap();
