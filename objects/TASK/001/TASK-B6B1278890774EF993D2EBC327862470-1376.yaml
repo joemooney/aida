@@ -1,0 +1,31 @@
+id: 01a20f50-3491-7f60-bb18-4a4deab056f7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1376
+title: 'Review follow-up: The new decisive path recheck at pr_cmd/mod.rs:1358 calls open_change_by_number, which sca'
+description: |-
+  From STORY-3038
+  Reviewed sha: 369406b8ee12c6cbac47b88395cf315cce12b5ef
+
+  The new decisive path recheck at pr_cmd/mod.rs:1358 calls open_change_by_number, which scans list_changes (pr_cmd/shipping.rs:887–900). GitHub's implementation at forge.rs:3527 leaves gh pr list at its 30-item default. A branch-resolved PR outside that page can pass initial classification and all CI, then fail with unknown paths solely because the new final lookup did not include it. Use an exact-number metadata read for the live PR and require its branch, base and head to match the evidence being evaluated. This is an additional failure point beyond the known initial numbered-ship list limitation.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T20:47:24.305215314Z
+modified_at: 2026-11-24T20:47:24.305215314Z
+req_type: Task
+tags:
+- carried-from:STORY-3038
+- finding-hash:e672f9a0
+- from-review:STORY-3038
+relationships:
+- rel_type: References
+  target_id: 01a20929-0c83-76f1-9a54-2d96d1a5a92c
+  created_at: 2026-11-24T20:47:38.389073089Z
+filed_at:
+  code_sha: 369406b8ee12c6cbac47b88395cf315cce12b5ef
+  branch: pr-4532
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba5
+  vendor: claude
+  session: 01a20f4c0335
