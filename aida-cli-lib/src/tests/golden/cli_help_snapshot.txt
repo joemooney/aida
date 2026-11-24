@@ -55679,6 +55679,11 @@ Working on aida itself
         "help": "Skip the reviewer-agent analysis: just locate + report the review surface and the recommended next command. Useful in non-interactive contexts or when you only want the diff pointer"
       },
       {
+        "name": "promote-approved-heads",
+        "takes_value": false,
+        "help": "Apply recorded approvals whose FAST runs have finished"
+      },
+      {
         "name": "target-branch",
         "takes_value": true,
         "help": "Explicit base branch to target when AC-5 offers to open a change from a branch with no open PR/MR. Always wins over any base saved from a previous offer (`.aida/mr-recovery/<spec>.json`) — use this to correct a stuck recovery, e.g. when a GitLab project's default branch became the feature branch itself because remote `main` was never pushed"

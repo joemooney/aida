@@ -55,6 +55,10 @@ pub(crate) struct ReviewArgs {
     #[clap(long, value_name = "BRANCH")]
     pub target_branch: Option<String>,
 
+    /// Apply recorded approvals whose FAST runs have finished.
+    #[arg(long, hide = true, exclusive = true)]
+    promote_approved_heads: bool,
+
     #[clap(subcommand)]
     pub cmd: Option<crate::cli::ReviewCommand>,
 }
@@ -66,6 +70,14 @@ fn run_review(
     use crate::handle_review_spec;
     use aida_core::Storage;
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    if args.promote_approved_heads {
+        anyhow::ensure!(
+            args.cmd.is_none(),
+            "promotion cannot be combined with a review command"
+        );
+        crate::review_watch::promote_approved_heads(&crate::find_project_root()?)?;
+        return Ok(crate::cmdkit::Flow::Return);
+    }
     match &ctx.store {
         // A reviewer's draft validation reads only the launch
         // directory it is given: it runs before project discovery, so it
@@ -92,6 +104,7 @@ fn run_review(
                     allow_stale_base,
                     target_branch,
                     cmd,
+                    ..
                 } => {
                     // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
                     // human-decision review of a held spec (the dual of `aida queue
@@ -132,6 +145,7 @@ fn run_review(
                     allow_stale_base,
                     target_branch,
                     cmd,
+                    ..
                 } => {
                     // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
                     // human-decision review; `prompt` / `assemble` stay the helper

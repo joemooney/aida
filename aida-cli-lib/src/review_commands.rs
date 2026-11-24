@@ -2544,15 +2544,8 @@ pub(crate) fn handle_review_record(
     no_carry: bool,
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
-    // trace:TASK-3814 | ai:codex — CI sees the same dispositions as recording.
-    // trace:TASK-3814 | ai:claude — positional classes join before dispositions.
-    // trace:STORY-2913 | ai:claude — one read of the default-branch policy
-    // (and one fail-closed warning) decides the recorded findings, the
-    // inherited ones and the full-tier CI request alike; the recorder applies
-    // this same snapshot to the raw findings itself.
-    let policy = crate::gate::kernel_deps::review_blocking::effective_warned(&project_root);
-    handle_review_record_context_with_policy_at(
-        project_root.clone(),
+    handle_review_record_context_at(
+        project_root,
         spec,
         verdict,
         sha,
@@ -2564,63 +2557,7 @@ pub(crate) fn handle_review_record(
         no_carry,
         fetch_review_record_head,
         None,
-        Some(&policy),
-    )?;
-    let policy_findings =
-        crate::gate::kernel_deps::review_blocking::apply_policy(&policy, findings, finding_classes);
-    let findings = policy_findings.as_slice();
-    request_full_ci_after_approval(
-        &project_root,
-        verdict,
-        findings,
-        pr,
-        crate::full_tier::request_full_ci,
-    );
-    Ok(())
-}
-
-/// An approval recorded on a PR head starts the full-tier CI run a merge
-/// train requires on that head. Best-effort: the verdict is already durable,
-/// and a train asks again for an approved head that still has no run.
-// trace:STORY-2809 | ai:claude
-pub(crate) fn request_full_ci_after_approval(
-    project_root: &std::path::Path,
-    verdict: &str,
-    findings: &[String],
-    pr: Option<u64>,
-    request: impl FnOnce(&std::path::Path, u64) -> std::result::Result<bool, String>,
-) {
-    let Some(n) = pr else { return };
-    request_full_ci_for_disposition(
-        project_root,
-        crate::gate::review_verdict::incoming_disposition(verdict, findings),
-        n,
-        request,
-    );
-}
-
-// trace:BUG-2729 | ai:codex
-pub(crate) fn request_full_ci_for_disposition(
-    project_root: &std::path::Path,
-    disposition: crate::gate::review_verdict::VerdictKind,
-    n: u64,
-    request: impl FnOnce(&std::path::Path, u64) -> std::result::Result<bool, String>,
-) {
-    if disposition != crate::gate::review_verdict::VerdictKind::Approved {
-        return;
-    }
-    match request(project_root, n) {
-        Ok(true) => println!(
-            "  {} full-tier CI requested on PR-{n}'s head (label `{}`); a merge train admits it once that run is green",
-            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-            crate::full_tier::FULL_LABEL
-        ),
-        Ok(false) => {}
-        Err(err) => eprintln!(
-            "  {} full-tier CI not requested on PR-{n}: {err} — `aida pr train` requests it again",
-            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-        ),
-    }
+    )
 }
 
 // trace:BUG-2517 | ai:codex

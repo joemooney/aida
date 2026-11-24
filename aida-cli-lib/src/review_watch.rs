@@ -3547,6 +3547,108 @@ fn watch_change(
     admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
 }
 
+// Both recorders persist the PR and attested SHA in the verdict. Remember
+// a consumed intent while GitHub registers the FULL run.
+// trace:BUG-2729 | ai:codex
+pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
+    use crate::full_tier::{bounded, request_full_ci_with};
+    use crate::gate::review_verdict::read_recorded_verdict;
+    let repo = forge::Repository::load(root)?;
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))?;
+    let promote = |change: forge::Change| -> Result<()> {
+        let pr = change.id;
+        let key = change.key();
+        let receipt = format!("{key}.full-ci");
+        let _lock = receipts.lock(&format!("{receipt}.lock"))?;
+        let Some(v) = read_recorded_verdict(root, &key) else {
+            return Ok(());
+        };
+        let Some(head) = v.reviewed_sha.as_deref() else {
+            return Ok(());
+        };
+        if !v.kind.approves()
+            || v.is_closed()
+            || v.attestation.as_ref().is_none_or(|a| a.sha != head)
+            || receipts.read(&receipt)?.as_deref() == Some(head.as_bytes())
+        {
+            return Ok(());
+        }
+        if head != change.head {
+            eprintln!("{key}: discarding FULL request for superseded head {head}");
+            return receipts.write(&receipt, head.as_bytes());
+        }
+        let rows = repo.commit_checks(root, head)?.checks;
+        let mut fast = rows.iter().filter(|c| c.name == "ci-tier: fast");
+        let incomplete =
+            |c: &crate::forge::CommitCheck| c.workflow_id.is_none() || c.run_in_progress;
+        if fast.clone().next().is_none() || fast.any(incomplete) {
+            return Ok(());
+        }
+        let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
+            if repo.change(root, pr).map_err(|e| e.to_string())?.head != head {
+                return Err(format!("{key} moved from reviewed head {head}"));
+            }
+            bounded(root, cli, args)
+        })
+        .map_err(anyhow::Error::msg)?;
+        if edited {
+            receipts.write(&receipt, head.as_bytes())?;
+        }
+        Ok(())
+    };
+    let mut failures = Vec::new();
+    for change in repo.discover(root)?.into_iter().filter(|c| !c.gitlab) {
+        if let Err(error) = promote(change) {
+            failures.push(error.to_string());
+        }
+    }
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, record: impl FnOnce()) {
+    use serde_json::json;
+    let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
+    let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
+    let script = format!(
+        r#"#!/bin/sh
+state=$(cat state)
+case "$*" in
+  *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
+  *"pr list"*) echo '[{change}]';;
+  *statusCheckRollup*) case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/";;
+  *check-runs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"check_runs":[]}}'; else echo '{{"total_count":1,"check_runs":[{marker}]}}'; fi;;
+  *actions/runs*) printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","status":"%s"}}' "$state";;
+  *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
+  *"pr edit"*) echo "$*" >> edits;;
+  *) exit 1;;
+esac"#
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    forge::git(root, &["remote", "add", "origin", "git@github.com:o/r.git"]).unwrap();
+    let write = |name, value: &str| std::fs::write(root.join(name), value).unwrap();
+    write("state", "absent");
+    record();
+    assert!(!root.join("edits").exists());
+    let replacement = "a".repeat(40);
+    for state in ["absent", "queued", "in_progress", "moved", "done", "again"] {
+        let moved = state == "moved";
+        let completed = matches!(state, "done" | "again");
+        let settled = completed || moved;
+        write("state", if settled { "completed" } else { state });
+        write("current", if moved { &replacement } else { head });
+        let result = promote_approved_heads(root);
+        assert_eq!(result.is_err(), moved, "{result:?}");
+        assert_eq!(root.join("edits").exists(), completed);
+    }
+    let edits = std::fs::read_to_string(root.join("edits")).unwrap();
+    let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
+    assert_eq!(edits.trim(), expected);
+}
+
 // trace:TASK-1993 | ai:claude
 // trace:BUG-2674 | ai:claude
 #[allow(clippy::too_many_arguments)]

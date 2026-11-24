@@ -1566,7 +1566,7 @@ mod standalone_review_verdict_parent_tests {
         if crate::test_env::run_path_isolated_test() {
             return;
         }
-        let f = Fixture::new();
+        let mut f = Fixture::new();
         let launch = LaunchDraft::prepare_local(&f.root, 59, f.head.clone()).unwrap();
         let refused = ra::with_identity_source(ra::IdentitySource::default(), || {
             f.record("approved", &[], None)
@@ -1596,8 +1596,18 @@ mod standalone_review_verdict_parent_tests {
         assert!(child.wait().unwrap().success());
         let draft = launch.read().unwrap();
         let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
-        f.record(&draft.verdict, &draft.findings, Some(&reviewer))
-            .unwrap();
+        f._env
+            .set_key("PATH", format!("{}:/usr/bin:/bin", f.root.display()));
+        crate::review_watch::test_apply_recorded_full_ci(&f.root, 59, &f.head, || {
+            let subject = crate::ReviewPrSubject {
+                head_ref: "feature".into(),
+                commit_subjects: vec!["change (STORY-77)".into()],
+            };
+            crate::with_review_pr_subject(subject, || {
+                crate::record_reviewer_draft(f.root.clone(), "STORY-77", &draft, &reviewer)
+            })
+            .unwrap()
+        });
         let checks = crate::queue_cmd::StandaloneVerdictChecks {
             project_root: &f.root,
             pr: 59,
@@ -1608,20 +1618,14 @@ mod standalone_review_verdict_parent_tests {
         let sidecar = f.root.join(".aida/review-verdicts/STORY-77.json");
         std::fs::write(&sidecar, serde_json::json!({"verdict":"approved","reviewed_sha":f.head,"summary":"unstamped sidecar"}).to_string()).unwrap();
         // trace:BUG-2729 | ai:codex
-        let mut requested = None;
-        let collected = checks
-            .finish_recorded_draft(
-                &rv::verdict_path(&f.root, "PR-59"),
-                &["STORY-77".into()],
-                f.since,
-                |root, pr| {
-                    assert_eq!(root, f.root);
-                    requested = Some(pr);
-                    Ok(true)
-                },
-            )
-            .unwrap();
-        assert_eq!(requested, Some(59));
+        let collected = rv::verify_recorded_draft(
+            &f.root,
+            &rv::verdict_path(&f.root, "PR-59"),
+            &["STORY-77".into()],
+            f.since,
+            &checks,
+        )
+        .unwrap();
         assert_eq!(
             collected.verdict.summary.as_deref(),
             Some("complete child rationale")
