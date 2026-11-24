@@ -158,6 +158,13 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# trace:BUG-2729 | ai:codex
+[[schedule.jobs]]
+name = "approved-head-full-ci"
+command = "review --promote-approved-heads"
+every = "2m"
+enabled = true
+
 # Catch up an existing enabled history index; disabled/missing/busy is a no-op.
 # trace:STORY-1661 | ai:codex
 [[schedule.jobs]]
