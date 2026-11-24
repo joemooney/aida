@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Lane-recovery treats an OPEN PR from the lane's branch into ANY base (including `integration` / promote branches) as the lane's PR: no "no open PR" needs-attention while it's open. Test with an integration-base PR fixture.
   - AC2: When a landing's completion trailer names a spec in needs-attention whose PR is landed, it completes the spec (or reports clearly why not). Test.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T00:52:09.793552102Z
+modified_at: 2026-11-24T00:52:42.857403431Z
 req_type: Bug
 tags:
 - integration
@@ -137,6 +137,15 @@ history:
   session_id: 01a20b0965d6
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20b0a-718c-7303-b24c-16355769c5ad
+  author: dirtlab
+  timestamp: 2026-11-24T00:52:43.532030595Z
+  session_id: 01a20b0965d6
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
@@ -145,3 +154,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4e140498bc8
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: Event 930883d1 records Done -> NeedsAttention with no comment and failure_reason.kind verdict:request-changes. review_commands.rs calls leases::shelve_spec_on_failure, which applies shelve_status_flip and persists the spec in aida-cli-lib/src/leases.rs. The brief requires a strict-path stop. Will product route BUG-2736 to a lane authorized to change the shelving writer in leases.rs?
+  raised_by: implementer
+  raised_at: 2026-11-24T00:52:42.857403431Z
