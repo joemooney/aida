@@ -936,3 +936,11 @@
   added_at: 2026-11-24T08:44:02.955153556Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a20cbc-0717-7bc2-8efe-d597f3fd4a73
+  position: 1166000
+  added_by: dirtlab
+  note: auto-queued by `aida pr` (01a20c9a); covers 0 specs
+  added_at: 2026-11-24T08:46:41.138373063Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
