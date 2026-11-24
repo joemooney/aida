@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T15:30:07.417074667Z
+modified_at: 2026-11-24T15:33:25.544054044Z
 req_type: Task
 tags:
 - review
@@ -72,6 +72,17 @@ comments:
   modified_at: 2026-11-24T15:03:39.413452649Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e30-c168-7312-943d-7b689c832acf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 88d8f9c4b01ab4c1858eb6447d08fac412a00171 plus native working diff. PR base integration. No untracked additions. H2a partial slice.
+    AC1: [evidence: behavioral-test] aida-core/src/review_engine.rs:1231 digest delimiter collision and stable ordering, :1241 duplicate ledger paths and observation IDs refuse credit, :1270 maximum token estimates and overflowing pair sums.
+    AC2: [evidence: behavioral-test] review_engine.rs:1281 sub-256, exact and oversized caps, :1293 single and double brackets with repeated and bare IDs. All five executed and passed in j20261124T153112997-2-0. Ratchet manifest tests 7/7. Reviewed CLI error propagation, sorted duplicate diagnostics, serde defaults, length framing, zero/one/many entries and budget boundary arithmetic. Corrected stale oversized-file documentation. No existing test weakened. Remaining glob, CRLF, anchor, same-stem scope and Rust facet criteria deferred by H2b scope. Existing digest values change for nonempty inventories. Host CI pending.
+  created_at: 2026-11-24T15:33:25.544054044Z
+  modified_at: 2026-11-24T15:33:25.544054044Z
+  session_id: 01a20e2cff8a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20cd4-4160-7d93-a028-44fad8a0f0dd
   author: joe
