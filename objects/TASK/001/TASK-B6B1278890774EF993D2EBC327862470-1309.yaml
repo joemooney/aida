@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980293Z
-modified_at: 2026-11-24T07:36:34.797159672Z
+modified_at: 2026-11-24T08:05:25.517792110Z
 req_type: Task
 tags:
 - review
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-24T07:36:34.797159672Z
   session_id: 01a20c7a4e51
   harness_version: codex-cli 0.167.0
+- id: 01a20c96-978d-75b0-acda-180b2f6f178a
+  author: aida-publication-done
+  content: Implementer push 417ba689a6ea declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T08:05:25.517791564Z
+  modified_at: 2026-11-24T08:05:25.517791564Z
+  session_id: 01a20c7a4e51
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
@@ -66,6 +72,14 @@ history:
   session_id: 01a20c7a4e51
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c96-978d-75b0-acda-17fe387b51f9
+  author: aida-publication-done
+  timestamp: 2026-11-24T08:05:25.517789744Z
+  session_id: 01a20c7a4e51
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
