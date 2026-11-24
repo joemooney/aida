@@ -1,0 +1,32 @@
+id: 01a20c94-6f7c-7de0-a59f-c6cc37f2542f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-273
+title: 'Review PR-4503: [AI:codex] fix(ci): allow 15 minutes and cache apt archives for fast compile (BUG-2744)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c6e`) for branch `int32-bug-2744`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4503>
+  - Branch: `int32-bug-2744` → `integration`
+
+  ## Covers
+
+  - BUG-2744
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4503` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T08:03:04.188853957Z
+modified_at: 2026-11-24T08:03:04.188853957Z
+req_type: Story
+filed_at:
+  code_sha: dd141d1a42e6f2450b54a345df6ee14e51c80fec
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd141d1a42
+  session: 01a20c6ec678
