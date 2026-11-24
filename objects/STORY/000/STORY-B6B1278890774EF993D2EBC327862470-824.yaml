@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: ONE function, called in the FINAL before_spawn hook, reloads the anchor and members FRESH and re-applies the hold gate, the track/headless policy and the WIP limit, refusing BEFORE spawn on any violation. No other site re-checks authority piecemeal.
   - AC2: Tests: (a) a hold placed during the wait refuses the spawn; (b) track:operator set after admission refuses the spawn; (c) a pull that flips the track refuses the spawn.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T19:29:01.169328831Z
+modified_at: 2026-11-24T19:42:21.661362709Z
 req_type: Story
 tags:
 - admission
@@ -500,6 +500,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20f14-a9ae-7ea0-96bc-e633b873b056
+  author: dirtlab
+  timestamp: 2026-11-24T19:42:22.126957614Z
+  session_id: 01a20f080a6c
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -508,3 +517,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: I dispute signed step 2's assumption that existing worker binding can run inside the ten-second total writer deadline. session/lease_lock.rs:55 and gate/seat_authority.rs:189 both take blocking exclusive locks; contained.rs:2312 synchronously waits during error unwinding. Even a timely helper receipt can therefore strand a competing store writer. Splitting marker turnover leaves these waits in slice 1. May we stage the inert helper and worker bindings outside the store guard, after live WIP discovery, and redesign the final authority check plus release around a shared deadline, or split deadline-aware lock, store-read and cleanup primitives into a prerequisite?
+  lean: Split deadline-aware primitives first if the writer must cover helper startup and binding. Preserve the publication veto until barrier contention and stalled-receipt tests pass.
+  raised_by: implementer
+  raised_at: 2026-11-24T19:42:21.661362709Z
