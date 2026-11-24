@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: The lane runner allows the read-only `cargo metadata` invocation (or check-ci-fast uses a lane-safe path that doesn't need it), without widening the lane cargo rule to builds/tests. A test shows a lane-run `make check-ci-fast` completes.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T18:48:49.864469968Z
-modified_at: 2026-11-24T18:49:22.800991616Z
+modified_at: 2026-11-24T19:29:10.852871053Z
 req_type: Bug
 tags:
 - ci
@@ -23,6 +23,13 @@ history:
   author: joe
   timestamp: 2026-11-24T18:49:22.880519353Z
   changes: []
+- id: 01a20f08-96c4-76e0-91c6-ca390749c731
+  author: aida-session-start
+  timestamp: 2026-11-24T19:29:10.852859159Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
