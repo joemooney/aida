@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T02:55:58.575172883Z
+modified_at: 2026-11-24T03:14:26.536120673Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -70,6 +70,26 @@ comments:
   modified_at: 2026-11-24T02:47:27.259794116Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20b85-4398-7301-a46b-fc1933947537
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e5e3711c9f9fdd4617a00cefb897e8b493269c47 plus native working diff. Merge-base diff empty, no untracked additions.
+    AC0: [evidence: behavioral-test] Before edits, an absent shared ID timed out silently (rc 124). doctor_cmd.rs:339 and doctor_root.rs:836 now dispatch directly to exact local-lease or shared-generation eligibility. coordination.rs:2172 covers present, absent and duplicate generations and lock contention. Test execution pending in the launcher.
+    AC1: [evidence: behavioral-test] Partial. The targeted doctor path reports eligibility and bounds shared-claim store lock acquisition. Overall forge, network and session hygiene deadlines remain deferred.
+    AC2: [evidence: behavioral-test] The shared-heal regression holds the actual store lock and checks the error and preserved claim. Session hygiene coverage deferred.
+    Probes: exact case-sensitive identity at both lookup sites, malformed local IDs refused, ambiguous shared IDs refused; reused existing locked receipt and death checks. Fixed duplicate-ID disagreement on the second lookup and moved liveness reads behind ownership. Liveness ratchet and writer inventory passed. No PR-head CI available.
+  created_at: 2026-11-24T03:06:50.101296850Z
+  modified_at: 2026-11-24T03:06:50.101296850Z
+  session_id: 01a20b762f9e
+  harness_version: codex-cli 0.167.0
+- id: 01a20b8c-3211-7531-af26-56fa7dbd4eb5
+  author: dirtlab
+  content: 'Final-tree behavioral validation: launcher job j20261124T030313084-2-0 executed bug2739_targeted_shared_heal_reports_held_store_lock, 1 passed in 5.20 s. It verified exact and missing generations, duplicate refusal, named contention failure and claim preservation. Partial publication declaration accepted.'
+  created_at: 2026-11-24T03:14:26.536120673Z
+  modified_at: 2026-11-24T03:14:26.536120673Z
+  session_id: 01a20b762f9e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe

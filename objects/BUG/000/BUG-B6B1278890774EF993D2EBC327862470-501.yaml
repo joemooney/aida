@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T02:48:15.966876302Z
+modified_at: 2026-11-24T03:14:49.358200031Z
 req_type: Bug
 tags:
 - admission
@@ -55,6 +55,13 @@ comments:
     Deep pass covered zero/full slots, the shared drain check, scoped release on error, override audit and timeout refusal, procfs waiter rows and escaped arguments. The host override cannot bypass the store-lock guard. An exited or namespace-hidden holder can be unavailable. The admission fixture exercises the shared wait boundary rather than replaying the full production queue command. No reviewer verdict recorded.
   created_at: 2026-11-24T02:48:15.966876302Z
   modified_at: 2026-11-24T02:48:15.966876302Z
+  session_id: 01a20b651a11
+  harness_version: codex-cli 0.167.0
+- id: 01a20b8c-8b4d-7d40-9a83-14308c51c20c
+  author: dirtlab
+  content: 'Implementer self-review validation update for ac22ab7f548b4d4088ad68fd66dbf68f17880b81 and the final native diff. Fixed the ExecContext ratchet finding by using the scoped EnvVarGuard in the isolated timeout test. Lane job j20261124T025142633-2-0 reran both behavioral tests: 2 passed. All FAST source guards, Rust ratchets and CLI build passed. make check-ci-fast exited 2 at its final manual check because the delegated executable was outside the visible target directory. The manual verifier passed separately against that exact lane overlay executable, memoizing repeated identifier extraction. Publication declaration accepted.'
+  created_at: 2026-11-24T03:14:49.358200031Z
+  modified_at: 2026-11-24T03:14:49.358200031Z
   session_id: 01a20b651a11
   harness_version: codex-cli 0.167.0
 history:

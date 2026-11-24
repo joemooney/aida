@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T02:55:51.639929199Z
+modified_at: 2026-11-24T03:12:10.312808819Z
 req_type: Task
 tags:
 - doctor
@@ -74,6 +74,13 @@ comments:
     Deep pass covered exact ID formatting, empty and multiple generations, corrupt or absent sidecars, deadline precedence and failed recipient enumeration. Late probes fail closed as OverBudget, mapping to UNEXAMINED and incomplete coverage. No change to authority grants or send/ACK paths. Deadline checks bound acceptance of results, not syscall duration. rustfmt and git diff --check passed. Host CI pending publication.
   created_at: 2026-11-24T02:55:51.639929199Z
   modified_at: 2026-11-24T02:55:51.639929199Z
+  session_id: 01a20b6dfa0b
+  harness_version: codex-cli 0.167.0
+- id: 01a20b8a-1f6b-71a2-84b0-60db5a1c2b4e
+  author: dirtlab
+  content: 'Self-review validation addendum: FAST required classifying the new runtime regression in scripts/ci-structural-exclusions.json:500. After that fix all seven structural selection tests passed, all Rust ratchet groups passed, and the launcher built the CLI. The final dynamic manual verifier could not access the executable from the lane target overlay. Host FAST verification remains outstanding. Six changed files, 98 insertions and seven deletions. Completing publication declaration recorded for int30-task-3851 targeting integration.'
+  created_at: 2026-11-24T03:12:10.312808819Z
+  modified_at: 2026-11-24T03:12:10.312808819Z
   session_id: 01a20b6dfa0b
   harness_version: codex-cli 0.167.0
 history:
