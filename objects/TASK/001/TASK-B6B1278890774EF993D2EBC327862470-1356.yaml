@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:00:31.801480938Z
-modified_at: 2026-11-24T17:18:59.016730345Z
+modified_at: 2026-11-24T17:19:38.993945949Z
 req_type: Task
 tags:
 - review
@@ -52,12 +52,13 @@ comments:
   modified_at: 2026-11-24T16:01:07.949424177Z
   session_id: 01a20e3d38ce
   harness_version: codex-cli 0.167.0
-- id: 01a20e91-63c8-76d2-9585-7fd6d13f18f3
-  author: lane-recovery
-  content: 'Lane exit evidence: retained branch `int36-task-3872` at head `5bfd563d17524057405b4489f97fa8a0b647c94d`.'
-  created_at: 2026-11-24T17:18:59.016724949Z
-  modified_at: 2026-11-24T17:18:59.016724949Z
-  session_id: 01a20e3d38ce
+- id: 01a20e92-3ddf-7892-b487-05c51bc3c29d
+  author: joe
+  content: 'INTEGRATION PRE-CHECK H2b (integration-30, 10:22): PR-4525 @ 5bfd563d17 is CONTENT-OK but CONFLICTS with H2a. Content: +196/-54 = 250 changed lines (at the cap), Joe-authored ''(Refs TASK-3872)'', merges CLEAN on CURRENT integration. The PR body maps four AC1 items to four registered tests: bounded brace expansion + compiled glob reuse -> h2b_compiled_globs_bound_expansion; CRLF-normalized snippet padding -> h2b_crlf_padding; resolved coordinates separate from submitted hints -> h2b_resolved_span_preserves_hints; linear line anchoring -> h2b_linear_repeated_prefix. AC2 is explicitly DEFERRED: directory/package-scoped same-stem batching and language-keyed Rust facets still need a follow-up spec (H2c). BLOCKER: H2a (#4523, int36-task-3867, in its r2) and H2b both edit review_engine.rs and ratchet-set.json; ''git merge-tree int36-task-3867 int36-task-3872'' CONFLICTS in both. Order: merge H2a (after its r2) first, then a codex rebase round on H2b onto integration, then re-pre-check.'
+  created_at: 2026-11-24T17:19:38.993945949Z
+  modified_at: 2026-11-24T17:19:38.993945949Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e13-15d8-7192-8c48-006617c031fe
   author: joe
