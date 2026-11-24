@@ -1,0 +1,26 @@
+id: 01a20f1d-f273-7951-b8ed-7f69ab2c7d00
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1373
+agreed_id: TASK-3883
+title: 'BUG-2720 follow-up: persist full queue-work failure for reviewer launches; capped-pickup projection; omit zero pickup_retries'
+description: |
+  Follow-up from #4413 BUG-2720 (advisor-122 OVERRIDE->APPROVE 2026-11-24 12:55 at 9fdf2f78; filed by product-15). LOW.
+
+  ## Acceptance
+  - AC1: (F1, diagnostic fidelity) the live review-watch dispatcher persists the full relevant queue-work failure (not only the last nonempty line) for reviewer launches (review_watch.rs:1668/1706/2668/2773). Test.
+  - AC2: (F3) a capped pickup projects retry_backoff=false/retry_exhausted=true so reconciliation stops re-observing a head that needs operator release (review_watch.rs:4686); (F4) ordinary reservations omit pickup_retries=0 so mixed-version readers with deny_unknown_fields still accept them (review_watch.rs:330/370). A test each.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T19:52:30.579150419Z
+modified_at: 2026-11-24T19:52:30.579150419Z
+req_type: Task
+tags:
+- review-watch
+filed_at:
+  code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ee2e6d830ff
+  vendor: claude
