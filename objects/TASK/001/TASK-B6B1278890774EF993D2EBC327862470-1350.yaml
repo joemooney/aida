@@ -1,0 +1,31 @@
+id: 01a20d6a-4e3e-7091-b756-f54468f4e683
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1350
+title: 'Review follow-up: Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:435–439,592–595: add '
+description: |-
+  From TASK-3862
+  Reviewed sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
+
+  Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:435–439,592–595: add explicit --no-textconv to the Git inspection boundaries so preparation consistently uses raw Git evidence.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T11:56:40.382658353Z
+modified_at: 2026-11-24T11:56:40.382658353Z
+req_type: Task
+tags:
+- carried-from:TASK-3862
+- finding-hash:7c4be30e
+- from-review:TASK-3862
+relationships:
+- rel_type: References
+  target_id: 01a20c6e-349a-7a03-85b7-b2542be0f9bd
+  created_at: 2026-11-24T11:56:53.161897768Z
+filed_at:
+  code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
+  branch: pr-4511
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91c070eb012
+  vendor: claude
+  session: 01a20d6619d2

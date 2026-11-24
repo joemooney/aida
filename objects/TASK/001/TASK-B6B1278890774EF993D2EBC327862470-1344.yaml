@@ -1,0 +1,31 @@
+id: 01a20d69-1985-7bd2-8bf6-727089dea273
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1344
+title: 'Review follow-up: Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:441–478: stats use --'
+description: |-
+  From TASK-3862
+  Reviewed sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
+
+  Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:441–478: stats use --no-renames while inventory uses --find-renames, so a pure rename can be reported with the full destination file as additions and an inflated token estimate.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T11:55:21.349258987Z
+modified_at: 2026-11-24T11:55:21.349258987Z
+req_type: Task
+tags:
+- carried-from:TASK-3862
+- finding-hash:b81016ef
+- from-review:TASK-3862
+relationships:
+- rel_type: References
+  target_id: 01a20c6e-349a-7a03-85b7-b2542be0f9bd
+  created_at: 2026-11-24T11:55:34.152976211Z
+filed_at:
+  code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
+  branch: pr-4511
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91c070eb012
+  vendor: claude
+  session: 01a20d6619d2

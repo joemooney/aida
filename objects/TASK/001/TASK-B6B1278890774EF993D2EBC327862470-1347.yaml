@@ -1,0 +1,31 @@
+id: 01a20d69-b3d4-7043-b5ba-0bd04289dee1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1347
+title: 'Review follow-up: Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:218–229,244–248,760–7'
+description: |-
+  From TASK-3862
+  Reviewed sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
+
+  Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:218–229,244–248,760–781: --anchor-findings computes results, but the default Markdown renderer omits the anchor outcomes and spans. JSON exposes them.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T11:56:00.852558282Z
+modified_at: 2026-11-24T11:56:00.852558282Z
+req_type: Task
+tags:
+- carried-from:TASK-3862
+- finding-hash:4a49a539
+- from-review:TASK-3862
+relationships:
+- rel_type: References
+  target_id: 01a20c6e-349a-7a03-85b7-b2542be0f9bd
+  created_at: 2026-11-24T11:56:13.610505454Z
+filed_at:
+  code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
+  branch: pr-4511
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91c070eb012
+  vendor: claude
+  session: 01a20d6619d2
