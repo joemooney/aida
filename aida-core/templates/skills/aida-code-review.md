@@ -49,7 +49,7 @@ tokei --sort code 2>&1 | head -20 || find . -name "*.rs" -exec wc -l {} \; | sor
 aida review prepare --scan --write .aida/code-review-prepare.md
 ```
 
-Use the generated batches and playbooks to guide the manual review. Add `--path <directory>` to scope the inventory for a narrower audit.
+Use the generated batches and playbooks to guide the manual review. Add `--path <directory>` to scope the inventory for a narrower audit. Running `aida review prepare` requires an AIDA CLI that includes the command; if it is unavailable (for example, “unexpected argument”), continue with the manual audit.
 
 <!-- trace:TASK-3863 | ai:codex -->
 

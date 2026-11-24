@@ -447,7 +447,7 @@ aida review prompt --pr <N> --write .aida/review-prompt-pr-<N>.md
 aida review prepare --pr <N> --write .aida/review-prepare-pr-<N>.md
 ```
 
-`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. `aida review prepare` deterministically classifies every changed file (`reviewable` vs `excluded` with reasons), bundles related source + test files into token-budgeted batches, injects path-scoped language playbooks (plus security/concurrency facets selected from file contents), and supports `--verify-coverage <ledger.json>` (100% file accountability) and `--anchor-findings <findings.json>` (exact line-number anchoring for quoted `existing_code` snippets). Use the preparation file to plan the review and record verdicts in the prompt worksheet.
+`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. `aida review prepare` deterministically classifies every changed file (`reviewable` vs `excluded` with reasons), bundles related source + test files into token-budgeted batches, injects path-scoped language playbooks (plus security/concurrency facets selected from file contents), and supports `--verify-coverage <ledger.json>` (100% file accountability) and `--anchor-findings <findings.json>` (exact line-number anchoring for quoted `existing_code` snippets). Use the preparation file to plan the review and record verdicts in the prompt worksheet. Running `aida review prepare` requires an AIDA CLI that includes the command; if it is unavailable (for example, “unexpected argument”), continue with the existing prompt worksheet.
 
 <!-- trace:TASK-3863 | ai:codex -->
 
