@@ -233,9 +233,11 @@ pub(crate) fn missing_seat_sidecar_note(
     }
     for issue in issues {
         use std::fmt::Write;
+        // trace:TASK-3851 | ai:codex
+        let separator = if issue.id.starts_with('-') { "-- " } else { "" };
         let _ = write!(
             note,
-            "\n{} — aida mailbox read {} (source {:?})",
+            "\n{} — aida mailbox read {separator}{} (source {:?})",
             issue.reason, issue.id, issue.source
         );
     }
@@ -410,7 +412,11 @@ fn snapshot_view(
                 _ => None,
             })
             .collect();
-        if snapshot.history_truncated {
+        // trace:TASK-3851 | ai:codex
+        codes.extend(snapshot.retained_open_error);
+        if snapshot.history_truncated
+            || (snapshot.retained_inventory_incomplete && snapshot.retained_open_error.is_none())
+        {
             codes.push(SourceErrorCode::OverBudget);
         }
         codes.extend(snapshot.inventory_error);

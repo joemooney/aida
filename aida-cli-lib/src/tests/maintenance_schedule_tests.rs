@@ -2758,7 +2758,8 @@ fn bug_1655_only_the_failing_guards_route_comes_due_with_its_own_evidence() {
 
 // trace:TASK-3218 | ai:codex
 #[test]
-fn red_main_watch_routes_only_its_failed_passes_to_advisor() {
+// trace:TASK-3859 | ai:codex
+fn task_3859_red_main_watch_routes_only_its_failed_passes_to_advisor() {
     let shipped = load_config(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap())
         .unwrap()
         .unwrap();
@@ -2771,6 +2772,10 @@ fn red_main_watch_routes_only_its_failed_passes_to_advisor() {
             .clone()
     };
     let watch = job("red-main-watch");
+    assert_eq!(
+        watch.command.as_ref().unwrap().args,
+        ["land", "watch", "--format", "human"]
+    );
     let route = job("red-main-watch-route");
     assert_eq!(route.seats, ["advisor"]);
     for (status, diagnostic) in [
@@ -2794,7 +2799,9 @@ fn red_main_watch_routes_only_its_failed_passes_to_advisor() {
                 Ok(TaskOutcome {
                     status,
                     stdout: String::new(),
-                    stderr: format!("progress\n{line}\n"),
+                    stderr: format!(
+                        "progress\nError: red-main watch: read history\nCaused by:\n{line}\n"
+                    ),
                 })
             },
         )
@@ -2812,7 +2819,7 @@ fn red_main_watch_routes_only_its_failed_passes_to_advisor() {
             assert!(failure.trip_id.starts_with("red-main-watch@"));
             assert_eq!(
                 failure.error.unwrap(),
-                format!("exit {status}: {diagnostic}")
+                format!("exit {status}: Error: red-main watch: read history | {diagnostic}")
             );
         }
     }
