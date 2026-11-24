@@ -1,0 +1,28 @@
+id: 01a20bbe-30ba-7313-a9e1-c49d94db9b6d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1291
+agreed_id: TASK-3855
+title: Store-lock holder diagnostics across PID namespaces, with a fallback for unreadable cmdline (deferred from BUG-2740)
+description: |
+  Deferred from the BUG-2740 / #4481 r2 review (advisor-122 ruling 2026-11-23 21:10; filed by product-15). BUG-2740 AC2 makes store-lock timeouts name the holder PID + command when visible. Two gaps were deferred.
+
+  ## Acceptance
+  - AC1: Holder diagnostics work across PID namespaces (a lock holder inside a lane sandbox/bwrap is named correctly from the host and vice versa), or explicitly say "holder in another PID namespace: <ns id>".
+  - AC2: When the holder's /proc/<pid>/cmdline can't be read, fall back to the comm/exe name, or "holder unavailable" with the PID. Tests for both.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T04:09:03.418936684Z
+modified_at: 2026-11-24T04:09:03.418936684Z
+req_type: Task
+tags:
+- diagnostics
+- small
+- store
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f9
+  vendor: claude
