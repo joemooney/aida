@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-24T15:47:02.057762455Z
+modified_at: 2026-11-24T15:59:24.621452852Z
 req_type: Bug
 tags:
 - bwrap
@@ -104,6 +104,19 @@ comments:
   modified_at: 2026-11-24T14:15:26.316188739Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e48-8d68-7183-a489-4215254d9119
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 89638d6139d407f10ec29d67dfaf1592358a383c plus the native worktree diff. No untracked additions.
+    AC1: [evidence: behavioral-test] F1 fixed. bug_2169_contained_clone_bwrap_tests.rs:114 exercises the real probe in exact child tests. Lane j20261124T154825758-2-0 executed one passing regression. Final helper cleanup recheck submitted.
+    AC2: [evidence: configuration-validation] F2 fixed. Line 109 emits the literal matched by .github/workflows/ci.yml:739. The parent captures intentional child skips so the live gate sees only actual skips.
+    AC3: [evidence: behavioral-test] F3 fixed. Lines 65 and 90 refuse broken interpreters, misleading stderr, nonstandard exits and signals. PATH inspection covers all entries and retains dangling symlinks as evidence of presence. This classifier only gates tests. Existing confinement assertions remain intact.
+    No deferred findings. Rustfmt, diff hygiene and the executable-fixture and ExecContext ratchets passed. Full FAST validation remains outstanding because the lane job interface refused cargo metadata. Hosted live namespace validation remains pending.
+  created_at: 2026-11-24T15:59:24.621452852Z
+  modified_at: 2026-11-24T15:59:24.621452852Z
+  session_id: 01a20e3cd4dc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
