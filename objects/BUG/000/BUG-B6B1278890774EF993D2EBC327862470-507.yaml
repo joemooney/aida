@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T12:08:28.003589466Z
+modified_at: 2026-11-24T12:10:14.312461206Z
 req_type: Bug
 tags:
 - admission
@@ -109,6 +109,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T12:08:27.838699986Z
   modified_at: 2026-11-24T12:08:27.838699986Z
+- id: 01a20d76-eb25-7ee2-99ad-5f01f82fc93b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:10):
+    # BUG-2746 / PR #4514 r2 (advisor-122 ruling 2026-11-24 05:10 at 372c046e; strict, MAIN; product-15). Lane: CODEX. Existing branch. <=80 lines.
+    AC1 (brief lock hold + no fd inheritance) is NOT challenged: keep it as is. Fix the AC2 diagnostics:
+    (F3, MUST, regression) Recording diagnostics must NEVER gate admission. If writing the activity record fails (ENOSPC etc.), KEEP the acquired guard and treat the record as unknown. Test with an INJECTED write failure.
+    (F1) A stale record must not be reported: truncate/clear the activity record BEFORE unlock, and stamp it with the holder PID + START TIME. The busy reader reports activity/age ONLY if that pid+start is the LIVE flock holder; otherwise it reports "unknown". Test a stale record left by a released lock.
+    (F2) ONE regression on the REAL train path: train admission via select_train_members contends with a review-watch reservation on .aida/review-watch/admission.lock, and the recorded failure carries the holder's activity and age.
+    If still blocked only on diagnostics, the advisor scope-cuts AC2 to "unknown" and ships AC1: say clearly in your exit summary what's done.
+    One targeted cargo run, then `make check-ci-fast`, then push to #4514. COMMIT your work.
+  created_at: 2026-11-24T12:10:14.312461206Z
+  modified_at: 2026-11-24T12:10:14.312461206Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d25-45d0-7f43-9465-17218e2f731c
   author: joe
