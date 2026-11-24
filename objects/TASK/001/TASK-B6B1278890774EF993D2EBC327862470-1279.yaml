@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T00:33:40.461597773Z
+modified_at: 2026-11-24T00:37:05.929085786Z
 req_type: Task
 tags:
 - small
@@ -23,6 +23,24 @@ comments:
   content: Filed Approved per advisor-122 ruling 2026-11-23 17:40 (relayed by integration-30). Drain, p30 integration bundle.
   created_at: 2026-11-24T00:33:40.461597773Z
   modified_at: 2026-11-24T00:33:40.461597773Z
+- id: 01a20afc-5990-7bc3-ae67-d9857d96655d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:37):
+    # TASK-3852: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3852` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3852 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3852)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE p30 (advisor-122 ruling 17:40; product-15): branch `int30-task-3852`, cut from origin/integration 13bcf6bd671. PR base MUST be `integration`. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.
+  created_at: 2026-11-24T00:37:05.929085786Z
+  modified_at: 2026-11-24T00:37:05.929085786Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20af8-f8c0-7502-a9b7-4065638fe1c1
   author: joe
