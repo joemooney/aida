@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T00:49:18.997669380Z
+modified_at: 2026-11-24T00:49:21.617766504Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a20b07-5cd1-7631-8b48-a439402e24e5
+  author: joe
+  content: 'Draft to Approved + drain: advisor-122 ruling 2026-11-23 17:52 (relayed by integration-30); next integration bundle. Product note: if the classifier lives under aida-cli-lib/src/gate/ (protected floor), the lane must punt to main/strict.'
+  created_at: 2026-11-24T00:49:21.617766504Z
+  modified_at: 2026-11-24T00:49:21.617766504Z
 history:
 - id: 01a20b07-3d37-7d11-b94a-d087427bce06
   author: joe
