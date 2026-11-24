@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-24T17:14:07.673134395Z
+modified_at: 2026-11-24T17:14:17.292228356Z
 req_type: Bug
 tags:
 - bwrap
@@ -141,6 +141,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2701 is partial. The pinned landing diff fixes the prior findings by exercising the real probe on failure, restoring the CI skip sentinel, and refusing broken executables and unexpected probe errors. The success arm still lacks a regression that prevents silent loss of live containment coverage (ADR-76). Reviewed the full landing diff against main at 289cc394a334ee2760c79067fd871bbe66f9c5a9. The finding applies equally to the original PR head and the pinned landing tree. CI pending at review time. The fast source gates passed and fast compilation was running. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-24T17:14:07.673127852Z
   modified_at: 2026-11-24T17:14:07.673127852Z
+- id: 01a20e8d-16bb-7cc0-af61-2066a01a58f7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2701):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c1617cf590fb
+    Recorded: 2026-11-24T17:11:14.744429900+00:00
+    Findings:
+    1. BUG-2701 — The regression at lines 114–151 only expects bwrap_live() to return false or panic. If the successful probe arm at line 62 returned false, every case in the new regression would still pass. Live tests such as the clone Git test at lines 1415–1418 would then return early without emitting the skip sentinel, and the pinned FULL workflow would count their libtest success records as live coverage. Add a required-live child case with a successful executable that asserts bwrap_live() returns true.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T17:14:17.147523894Z
+  modified_at: 2026-11-24T17:14:17.147523894Z
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
