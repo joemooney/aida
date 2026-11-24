@@ -1,0 +1,27 @@
+id: 01a20f55-e454-74c0-9fe2-989cb13a6bf4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1379
+agreed_id: TASK-3887
+title: 'BUG-2756 deferred: capture the real compiler diagnostic in the regeneration warning; real failing command in the Rust fixture'
+description: |
+  Deferred from #4533 BUG-2756 r1 (advisor-122 2026-11-24 13:57; filed by product-15). LOW.
+
+  ## Acceptance
+  - AC1: (F4) the snapshot-regeneration fallback warning records the actual compiler/Cargo diagnostic (captured stderr tail), not only argv + exit status. Test.
+  - AC2: (F7) the Rust seat-publish fixture drives a real failing regeneration command instead of a fabricated warning. Test.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T20:53:36.980920917Z
+modified_at: 2026-11-24T20:53:36.980920917Z
+req_type: Task
+tags:
+- conflict-repair
+- lanes
+filed_at:
+  code_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba5
+  vendor: claude
