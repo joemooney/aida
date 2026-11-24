@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-24T14:11:11.173900519Z
+modified_at: 2026-11-24T14:15:59.914095625Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -144,6 +144,29 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:11:11.020316174Z
   modified_at: 2026-11-24T14:11:11.020316174Z
+- id: 01a20dea-1508-74c0-b273-81104cc75c91
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:15):
+    # BUG-2710 / PR #4458 rework (advisor-122 stalled-CR sweep 2026-11-24 07:20; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 150 lines. Note: TEST ONLY (4 p2 test-gap findings); no production change.
+
+    BLANKET RULING (advisor-122 2026-11-24 07:20 stalled-CR sweep): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major that is a behaviour REGRESSION this PR introduced. DEFER minor/p2 unmet-claimed-AC and test-strength items (mass-change): do NOT fix them; list them in the PR body as deferred. In your exit summary and PR body, list EACH finding as fixed or deferred.
+
+    CR at 8bb20de2. Findings:
+
+    F1. [p2/unmet-claimed-ac/blocking] BUG-2710: A single stalled session still reproduces the scheduled exit 124 indefinitely. At session_reap.rs:2619–2641 and :2656–2667, a session admitted just before expiry runs classification and teardown synchronously, including timeout-free git status for ordinary worktrees (session_reap.rs:649–661) and potentially a synchronous pre_destroy hook (aida-core/src/worktree_hooks.rs:40–50). The next deadline check cannot run and shift never saves or reports a cursor if the child is killed. Bound or defer slow session work at safe boundaries and make a stalled session yield with its ID available to the next tick. Preserve the requirement to finish an in-flight mutation. Add a regression exercising the slow session through the scheduler deadline path.
+
+    F2. [p2/unmet-claimed-ac/blocking] BUG-2710: Shared reap work bypasses the deadline even when no lease remains to visit. session_reap.rs:2612–2615 runs registry GC and reads every lease before the first check, and :2643–2644 starts an unrestricted orphan-pin sweep after the last session even if it exhausted the budget. Each orphan removal can relist all leases (seat_clone.rs:6322–6346). The last completed lease can therefore consume the budget and the pin sweep can still cause exit 124 before shift receives the result. Bound or defer shared maintenance at safe boundaries, including the empty-list and final-lease-overrun cases.
+
+    F3. [p2/unmet-claimed-ac/blocking] BUG-2710: Scheduled night-shift outcomes drop the partial reap report. shift.rs:3473–3477 prints the count and next session to stdout. maintenance_schedule.rs:3981–3989 captures stdout, but the success log at :4295–4323 writes only stderr, and the shift-specific handling at :4019–4026 keeps only timing on success. A scheduled yield therefore has no diagnostic with the stopped-at session and count, and the cursor in shift state can be overwritten by subsequent ticks. Carry the partial reap fields into the scheduled outcome log and cover that path.
+
+    F4. [p2/unmet-claimed-ac/blocking] BUG-2710: The required decision-equivalence regression at bug_home_024_finished_lease_tests.rs:541–562 gives both leases deleted worktrees. Its only successful reap goes through gone_tree_releaser, so it would still pass if the budgeted lease_scanner-to-reap_one path never reaped an eligible existing worktree or seat clone. Compare the actual reap and keep decisions of the budgeted and unbounded paths on present trees, including an eligible finished tree and a tree protected by the existing safety decisions.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T14:15:59.914095625Z
+  modified_at: 2026-11-24T14:15:59.914095625Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
