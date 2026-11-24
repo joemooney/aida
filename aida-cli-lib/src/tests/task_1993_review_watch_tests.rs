@@ -5669,7 +5669,14 @@ fn bug2735_watchers_yield_core_budget_to_train_ci() {
         r#"#!/bin/sh
 [ "$1" = --version ] || echo "$*" >> calls
 case "$*" in
-    'api rate_limit --cache 60s') cat budget ;;
+    'api rate_limit --cache 60s')
+        case "$GH_HOST" in
+            github.com|enterprise.example) /bin/cat budget ;;
+            *) echo '{"resources":{"core":{"limit":5000,"remaining":5000}}}' ;;
+        esac ;;
+    'run list '*) echo '[{"databaseId":42}]' ;;
+    'run watch 42') echo "$GH_REPO" > watched
+        echo '{"resources":{"core":{"limit":5000,"remaining":1}}}' > budget ;;
     --version) echo 'gh version 2.60.0' ;;
     *check-runs*) echo '{"total_count":0,"check_runs":[]}' ;;
     *'/status?'*) cat status ;;
@@ -5679,10 +5686,15 @@ esac
 "#,
     );
     let path = format!("{}:/usr/bin:/bin", root.display());
-    let _env = crate::test_env::AmbientGuard::hermetic_and(
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
         root,
         None,
-        &[("PATH", Some(&path)), ("AIDA_TEST_GH_BINARY", gh.to_str())],
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_TEST_GH_BINARY", None),
+            ("GH_REPO", None),
+            ("GH_HOST", Some("github.com")),
+        ],
     );
     for args in [
         vec!["init", "-q"],
@@ -5723,4 +5735,23 @@ esac
     assert_eq!(train_forge.commit_checks(&sha).unwrap().sha, sha);
     budget(1000);
     assert!(repo.discover_for_watch(root).unwrap().is_empty());
+    // Only the bounded resolver can find this gh. The default API host
+    // has ample budget, but the watched host drops below threshold in watch.
+    let bin = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink("/usr/bin/git", bin.path().join("git")).unwrap();
+    env.set_key("PATH", bin.path());
+    env.set_key("AIDA_TEST_FORGE_FALLBACK_DIRS", root);
+    env.set_key("GH_HOST", "default.example");
+    env.set_key("GH_REPO", "enterprise.example/org/repo");
+    std::fs::write(root.join("calls"), "").unwrap();
+    assert!(crate::ci_watch::stream_ci(Some(root), "topic").is_none());
+    assert_eq!(
+        std::fs::read_to_string(root.join("watched"))
+            .unwrap()
+            .trim(),
+        "enterprise.example/org/repo"
+    );
+    let calls = std::fs::read_to_string(root.join("calls")).unwrap();
+    assert_eq!(calls.matches("api rate_limit").count(), 2);
+    assert!(!calls.contains("pr list"));
 }

@@ -5014,7 +5014,15 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
     let journal_dir = main_worktree.join(".aida/train");
     // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
-    let mut candidates: Vec<u64> = if opts.all_ready {
+    let backoff = if opts.all_ready && ADVISOR_LOOP.with(std::cell::Cell::get) {
+        crate::forge::watcher_backoff(&project_root, kind, None)
+    } else {
+        None
+    };
+    let mut candidates: Vec<u64> = if let Some(reason) = &backoff {
+        eprintln!("auto-train: skipping candidate discovery: {reason}");
+        Vec::new()
+    } else if opts.all_ready {
         let mut ids: Vec<u64> = forge
             .list_changes(crate::forge::ChangeFilter {
                 base: Some(base.clone()),
@@ -5036,9 +5044,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         let _recovery_lock = journal::lock(&journal_dir)?;
         // Recovery may publish the retained train before fresh selection.
         // trace:BUG-2650 | ai:codex
+        let requested = backoff.is_none().then_some(candidates.as_slice());
         let recovery_members: Vec<u64> = journal::entries(&journal_dir)?
             .into_iter()
-            .filter(|entry| entry.step != journal::Step::Done && entry.matches(&candidates))
+            .filter(|entry| {
+                entry.step != journal::Step::Done && requested.is_none_or(|prs| entry.matches(prs))
+            })
             .flat_map(|entry| entry.train.cars.into_iter().map(|car| car.member.pr))
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
@@ -5067,7 +5078,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         .for_recovery(opts);
         ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir)
-            .resume_for(Some(&candidates))?
+            .resume_for(requested)?
     };
     if report_automatic_idle(
         opts.all_ready,

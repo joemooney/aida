@@ -438,6 +438,33 @@ pub(crate) fn job_id_from_check_link(link: &str) -> Option<u64> {
     job.parse::<u64>().ok().filter(|id| *id != 0)
 }
 
+#[derive(Debug)]
+pub(crate) struct WatcherThrottled(String);
+
+impl std::fmt::Display for WatcherThrottled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for WatcherThrottled {}
+
+pub(crate) fn seat_budget(
+    root: &Path,
+    kind: crate::forge::ForgeKind,
+) -> impl Fn(Instant, Duration) -> anyhow::Result<()> + '_ {
+    move |deadline, interval| {
+        while let Some(reason) = crate::forge::watcher_backoff(root, kind, None) {
+            eprintln!("CI watcher: {reason}");
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(WatcherThrottled(reason).into());
+            }
+            std::thread::sleep(interval.min(remaining));
+        }
+        Ok(())
+    }
+}
+
 /// STORY-1166: wait until the forge has registered CI checks for `change`
 /// (a freshly pushed PR whose workflows have not started yet), bounded by
 /// `timeout`. `NoCi` returns immediately — nothing to wait on.
@@ -447,10 +474,12 @@ pub(crate) fn wait_for_checks_to_register(
     change: &crate::forge::ChangeRef,
     timeout: Duration,
     poll_interval: Duration,
+    before_read: impl Fn(Instant, Duration) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     use crate::forge::CheckRegistration;
     let deadline = Instant::now() + timeout;
     loop {
+        before_read(deadline, poll_interval)?;
         match forge.checks_registered(change)? {
             CheckRegistration::Registered | CheckRegistration::NoCi => return Ok(()),
             CheckRegistration::NotYet => {}
@@ -479,6 +508,7 @@ pub(crate) fn wait_for_checks_to_register(
 /// turn that ambiguity into a real red failure for a supervised hold.
 // trace:STORY-1166 | ai:claude (forge-routed; was gh-only under BUG-1180)
 // trace:BUG-1265 | ai:codex
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn refine_red(
     project_root: &Path,
     forge: &dyn crate::forge::Forge,
@@ -487,13 +517,16 @@ pub(crate) fn refine_red(
     hold_label_present: bool,
     settle_timeout: Duration,
     poll_interval: Duration,
+    before_read: impl Fn(Instant, Duration) -> anyhow::Result<()>,
 ) -> anyhow::Result<RedRefinement> {
     let cfg = read_ci_gate_config(project_root);
-    let required = forge.required_check_names(change);
     let deadline = Instant::now() + settle_timeout;
+    before_read(deadline, poll_interval)?;
+    let required = forge.required_check_names(change);
     let supervised_hold = hold_marker_present || hold_label_present;
     let mut row_read_failures = 0usize;
     loop {
+        before_read(deadline, poll_interval)?;
         let rows = match forge.check_rows(change) {
             Ok(rows) => rows,
             Err(error) if supervised_hold && row_read_failures < 2 => {
@@ -1084,6 +1117,7 @@ mod tests {
                 label,
                 Duration::ZERO,
                 Duration::ZERO,
+                |_, _| Ok(()),
             )
             .unwrap();
             assert!(refined.hold_gate_is_the_hold);
@@ -1475,12 +1509,15 @@ mod tests {
         use crate::forge::CheckRegistration as R;
         let ms = Duration::from_millis(1);
         let f = fake(&[R::NotYet, R::NotYet, R::Registered], None);
-        wait_for_checks_to_register(&f, &change(), Duration::from_secs(5), ms).unwrap();
+        wait_for_checks_to_register(&f, &change(), Duration::from_secs(5), ms, |_, _| Ok(()))
+            .unwrap();
         let f = fake(&[R::NoCi], None);
-        wait_for_checks_to_register(&f, &change(), Duration::from_secs(5), ms).unwrap();
+        wait_for_checks_to_register(&f, &change(), Duration::from_secs(5), ms, |_, _| Ok(()))
+            .unwrap();
         let f = fake(&[R::NotYet], None);
         let err =
-            wait_for_checks_to_register(&f, &change(), Duration::from_millis(5), ms).unwrap_err();
+            wait_for_checks_to_register(&f, &change(), Duration::from_millis(5), ms, |_, _| Ok(()))
+                .unwrap_err();
         assert!(err.to_string().contains("PR-42"), "{err}");
     }
 
@@ -1516,6 +1553,7 @@ mod tests {
             false,
             Duration::from_secs(1),
             ms,
+            |_, _| Ok(()),
         )
         .unwrap();
         assert!(!r.is_real() && r.hold_gate_is_the_hold);
@@ -1531,6 +1569,7 @@ mod tests {
             false,
             Duration::from_secs(1),
             ms,
+            |_, _| Ok(()),
         )
         .is_err());
         assert_eq!(f.row_reads.get(), 3, "a supervised hold retries row reads");
@@ -1554,6 +1593,7 @@ mod tests {
                 false,
                 Duration::from_millis(3),
                 Duration::from_millis(1),
+                |_, _| Ok(()),
             )
             .unwrap();
             assert_eq!(r.pending, vec!["Build"]);
@@ -1574,6 +1614,7 @@ mod tests {
             false,
             Duration::from_secs(1),
             Duration::from_millis(1),
+            |_, _| Ok(()),
         )
         .is_err());
         assert_eq!(
