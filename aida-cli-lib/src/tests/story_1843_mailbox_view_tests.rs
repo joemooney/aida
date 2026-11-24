@@ -1388,3 +1388,151 @@ fn story2745_codex_prompt_hook_runs_the_binding_notice() {
         "the notice verb changed"
     );
 }
+
+// trace:STORY-2767 | ai:codex
+#[test]
+fn story2767_retired_sender_preserves_seat_delivery_ownership() {
+    let r = mail_repo();
+    let _env = d1_env();
+    let send = |body: &str, queue_for_role| {
+        crate::mailbox_cmd::handle_mailbox_command(
+            &crate::cli::MailboxCommand::Send {
+                to: Some("Seat:Integration".into()),
+                broadcast: false,
+                body: Some(body.into()),
+                subject: None,
+                body_file: None,
+                stdin: false,
+                thread: None,
+                in_reply_to: None,
+                from: Some("sender".into()),
+                urgent: false,
+                intent: "fyi".into(),
+                relayed_from: None,
+                allow_second_person: false,
+                queue_for_role,
+            },
+            &r.sib.join(".aida-store"),
+        )
+        .unwrap();
+    };
+    let seat_reader = |root: &Path| {
+        register_self_as_reviewer(root);
+        for (_, mut entry) in crate::agent_registry::load_entries(root) {
+            entry.seat = Some("integration".into());
+            crate::agent_registry::write_entry(root, &entry).unwrap();
+        }
+        own_audience_in(root)
+            .narrowed_to("seat:integration")
+            .unwrap()
+    };
+    std::fs::create_dir_all(r.sib.join(".aida/handoff/integration")).unwrap();
+    send("for the next holder", true);
+    // Session identity reads the main checkout's registry. Give the sending
+    // worktree the same routing rows for the duration of the original seat.
+    let original = seat_reader(&r.main);
+    std::os::unix::fs::symlink(
+        crate::agent_registry::agents_dir(&r.main),
+        crate::agent_registry::agents_dir(&r.sib),
+    )
+    .unwrap();
+    send("for the original cohort", false);
+    send("missing sidecar", false);
+    let retained = r
+        .main
+        .join(".git/aida/mail-lifecycle/retained/sender/1/data/.deliveries");
+    std::fs::create_dir_all(&retained).unwrap();
+    let sent = crate::mailbox_store::read_local_messages(&r.sib).unwrap();
+    assert_eq!(sent.len(), 3);
+    let missing_id = sent
+        .iter()
+        .find(|m| m.body == "missing sidecar")
+        .unwrap()
+        .id
+        .clone();
+    for m in sent {
+        put_canonical(&r.store, &m);
+        if m.body != "missing sidecar" {
+            let file = format!("{}.json", m.id);
+            std::fs::copy(
+                crate::mailbox_store::mailbox_dir(&r.sib)
+                    .join(".deliveries")
+                    .join(&file),
+                retained.join(file),
+            )
+            .unwrap();
+        }
+    }
+    git(
+        &r.main,
+        &["worktree", "remove", "--force", r.sib.to_str().unwrap()],
+    );
+    std::fs::remove_dir_all(crate::agent_registry::agents_dir(&r.main)).unwrap();
+    let successor = seat_reader(&r.main);
+    assert_ne!(original.recipient(), successor.recipient());
+    let bodies = |view: OwnMail| {
+        view.records()
+            .iter()
+            .map(|r| r.message.body.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        bodies(view_from(&r.main, &r.store, &original)),
+        ["for the original cohort"]
+    );
+    // trace:TASK-3846 | ai:codex
+    let view = view_from(&r.main, &r.store, &successor);
+    assert!(view.records().is_empty());
+    let note = view.missing_sidecar_note().unwrap();
+    assert!(note.contains("1 seat messages hidden or UNVERIFIED"));
+    assert!(note.contains(&format!(
+        "delivery sidecar missing — aida mailbox read {missing_id}"
+    )));
+    let path = crate::mailbox_store::canonical_dir(&r.store).join(format!("{missing_id}.json"));
+    assert!(note.contains(&format!("{path:?}")));
+    assert!(crate::mail_backlog::scan(&r.main)
+        .iter()
+        .any(|finding| Some(&finding.summary) == view.missing_sidecar_note().as_ref()));
+    let bound = read_own_mail_binding(
+        &r.main,
+        &r.store,
+        &successor,
+        &explicit_limits(),
+        BindWait::Explicit,
+    );
+    assert_eq!(bodies(bound), ["for the next holder"]);
+
+    for (_, mut entry) in crate::agent_registry::load_entries(&r.main) {
+        entry.seat = Some("unrelated".into());
+        crate::agent_registry::write_entry(&r.main, &entry).unwrap();
+    }
+    std::fs::write(retained.join(format!("{missing_id}.json")), b"invalid").unwrap();
+    assert!(crate::mail_backlog::scan(&r.main).iter().any(|f| f
+        .summary
+        .contains("1 seat messages hidden or UNVERIFIED")
+        && f.summary
+            .contains(&format!("UNVERIFIED — aida mailbox read {missing_id}"))));
+
+    let mut first: Message = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    first.id = "-first-miss".into();
+    put_canonical(&r.store, &first);
+    let ctx = aida_core::mailbox_logical::MailboxContext::resolve_or_local(&r.main, Some(&r.store))
+        .unwrap();
+    let mut limits = explicit_limits();
+    limits.max_retained_probes = 1;
+    let (_, issues) = aida_core::mailbox_logical::inspect_seat_sidecars(&ctx, &limits);
+    assert_eq!(issues.len(), 4);
+    assert_eq!(issues[0].reason, "delivery sidecar missing");
+    assert!(issues[1..].iter().all(|issue| issue.reason == "UNEXAMINED"));
+
+    // trace:TASK-3851 | ai:codex
+    let registry = crate::agent_registry::agents_dir(&r.main);
+    std::fs::remove_dir_all(&registry).unwrap();
+    std::fs::write(registry, b"not a directory").unwrap();
+    assert!(crate::mailbox_resolver::RecipientDirectory::load(&r.main, &r.store).is_err());
+    let findings = crate::mail_backlog::scan(&r.main);
+    assert!(findings.iter().any(|f| f
+        .summary
+        .contains("delivery sidecar missing — aida mailbox read -- -first-miss (source")));
+    assert!(findings.iter().any(|f| f.id == "mail-backlog:unknown"));
+}

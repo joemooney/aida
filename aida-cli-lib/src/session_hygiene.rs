@@ -111,6 +111,8 @@ pub(crate) struct KeepItem {
 pub(crate) struct HygieneOutcome {
     /// `(session, outcome)` per lease the reap touched, as `reap_one` words it.
     pub reap: Vec<(String, String)>,
+    // trace:TASK-3858 | ai:codex
+    pub scan_skipped: Vec<crate::session_reap::ReapRow>,
     /// Agent-registry rows removed, or why gc failed.
     pub agent_gc: Option<Result<usize, String>>,
     /// Caches deleted (or, on a dry run, that would be).
@@ -216,6 +218,9 @@ pub(crate) fn render_summary(outcome: &HygieneOutcome, dry_run: bool) -> String 
         if !line.starts_with("reaped") {
             out.push_str(&format!("  {session}  {line}\n"));
         }
+    }
+    for row in &outcome.scan_skipped {
+        out.push_str(&format!("  {}  skipped — {}\n", row.session, row.reason));
     }
     match &outcome.agent_gc {
         Some(Ok(n)) => out.push_str(&format!(
@@ -380,13 +385,16 @@ pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
                 .map(|r| r.removed_count())
                 .map_err(|e| format!("{e:#}")),
         );
-        outcome.reap = crate::session_reap::scan_reapable(&project_root)
+        let report = crate::session_reap::scan_reapable(&project_root);
+        outcome.scan_skipped = report.skipped;
+        outcome.reap = report
             .reapable
             .into_iter()
             .map(|row| (row.session, format!("reaped (dry run) — {}", row.reason)))
             .collect();
     } else {
-        let quiet = crate::session_reap::reap_quiet_outcomes(&project_root);
+        let (quiet, skipped) = crate::session_reap::reap_quiet_with_skips(&project_root);
+        outcome.scan_skipped = skipped;
         outcome.agent_gc = Some(quiet.agent_gc);
         outcome.reap = quiet.leases;
     }
