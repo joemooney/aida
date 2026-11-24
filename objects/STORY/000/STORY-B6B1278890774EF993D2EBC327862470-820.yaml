@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T15:41:00.121919481Z
+modified_at: 2026-11-24T15:42:38.526359761Z
 req_type: Story
 tags:
 - autonomy
@@ -226,6 +226,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T15:40:59.967761916Z
   modified_at: 2026-11-24T15:40:59.967761916Z
+- id: 01a20e39-637b-71b3-80b0-b0d3a34cfe12
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:42):
+    # STORY-3038 / PR #4448 r4 FINAL (advisor-122 ruling 2026-11-24 08:41 at 612bb701; gate/authority; product-15). Lane: CODEX. MAIN, existing branch. <=100 lines. If still blocked on F1/F3, the PR is PARKED.
+    MUST:
+    (F1, authority bypass) Add aida-cli-lib/src/admission_owner.rs to BOTH the strict inventory (aida-cli-lib/src/gate/unset_mode.rs) AND the built-in protected floor (aida-cli-lib/src/gate/mandate_gates.rs GATE_PROTECTED_PATHS), plus a test that a change touching it is NEVER defaulted to drain.
+    (F3, mutation-kill) A test through the UNATTENDED SHIP entry point: a spec loses approved-small eligibility during the CI wait (e.g. it's edited to touch a strict path or exceed the size limit), and the ship REFUSES.
+    DEFERRED (do NOT implement): F2 (approval-preserving recognition on the SubagentStart lease-hook and completing-publication paths); missing it fails safe.
+    Note: GATE_PROTECTED_PATHS is on the protected floor, so this PR needs a human/advisor merge. One targeted cargo run, then `make check-ci-fast`, then push to #4448. COMMIT your work.
+  created_at: 2026-11-24T15:42:38.526359761Z
+  modified_at: 2026-11-24T15:42:38.526359761Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
