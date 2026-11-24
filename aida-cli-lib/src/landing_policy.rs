@@ -56,6 +56,14 @@ pub(crate) enum PromoteFrom {
     NoNewFailures,
 }
 
+// trace:BUG-2725 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum CiBaseFreshness {
+    #[default]
+    Strict,
+    CleanMerge,
+}
+
 macro_rules! setting_enum {
     ($ty:ident, $key:literal, [$($variant:ident => $word:literal),+ $(,)?]) => {
         impl $ty {
@@ -85,6 +93,7 @@ macro_rules! setting_enum {
 }
 
 setting_enum!(LandingMode, "mode", [CiGated => "ci-gated", ReviewGated => "review-gated"]);
+setting_enum!(CiBaseFreshness, "ci_base_freshness", [Strict => "strict", CleanMerge => "clean-merge"]);
 setting_enum!(Merger, "merger", [AnyNonAuthor => "any-non-author", Advisor => "advisor"]);
 setting_enum!(PromoteFrom, "promote_live_binary_from", [CleanMain => "clean-main", GreenMain => "green-main", NoNewFailures => "no-new-failures"]);
 
@@ -102,6 +111,7 @@ pub(crate) const DEFAULT_RED_MAIN_FIX_WINDOW: std::time::Duration =
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LandingPolicy {
     pub(crate) mode: LandingMode,
+    pub(crate) ci_base_freshness: CiBaseFreshness,
     pub(crate) merger: Merger,
     pub(crate) promote_from: PromoteFrom,
     /// `required_checks.ci_gated`: the forge's required checks in CI-gated
@@ -134,6 +144,7 @@ impl Default for LandingPolicy {
     fn default() -> Self {
         Self {
             mode: LandingMode::default(),
+            ci_base_freshness: Default::default(),
             merger: Merger::default(),
             promote_from: PromoteFrom::default(),
             ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
@@ -151,6 +162,10 @@ fn owned(names: &[&str]) -> Vec<String> {
 }
 
 impl LandingPolicy {
+    pub(crate) fn clean_merge_train(&self) -> bool {
+        self.mode == LandingMode::CiGated && self.ci_base_freshness == CiBaseFreshness::CleanMerge
+    }
+
     /// Parse the `[landing]` section of a config body. Never fails: a bad
     /// value keeps its default and records a warning.
     // trace:STORY-2897 | ai:claude
@@ -201,6 +216,7 @@ impl LandingPolicy {
                     .to_string(),
             );
         }
+        read!(ci_base_freshness, CiBaseFreshness, "ci_base_freshness");
         read!(merger, Merger, "merger");
         read!(promote_from, PromoteFrom, "promote_live_binary_from");
         // trace:STORY-2897 | ai:claude
