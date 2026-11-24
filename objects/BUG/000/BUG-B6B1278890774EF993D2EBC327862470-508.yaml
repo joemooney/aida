@@ -1,0 +1,28 @@
+id: 01a20df2-a0a7-7a40-a0c1-ad86be768bb8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-508
+agreed_id: BUG-2747
+title: 'BUG-2721 slice a: recovery ancestry exemption must still count a descendant carrying the exact attempt token'
+description: |
+  Slice (a) re-spec from parked #4402 BUG-2721 (advisor-122 ruling 2026-11-24 07:30; filed by product-15). STRICT, drive, <=150 lines. Source finding F1 (p1, security-authority-bypass) at aida-cli-lib/src/codex_bg_receipt.rs:218: the invocation-ancestry exemption skips every occupancy check for ancestor PIDs, so a surviving descendant in the recovery caller ancestry is ignored even when its environment carries the exact attempt token or it matches the recorded group or session. Recovery or unknown-receipt retirement can then release the reservation while the descendant is active. Branch of #4402 (closed unmerged) kept for reference.
+
+  ## Acceptance
+  - AC1: The ancestry exemption applies only to the recovery-invocation argv itself; a descendant carrying the EXACT attempt token, or matching the recorded group/session, still counts as an occupant and blocks release.
+  - AC2: Tests: an ancestor with independent holder evidence blocks release; a plain recovery invocation does not.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T14:25:34.375254361Z
+modified_at: 2026-11-24T14:25:34.375254361Z
+req_type: Bug
+tags:
+- launch
+- receipts
+- strict
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d58
+  vendor: claude
