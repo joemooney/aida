@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T01:37:59.446293283Z
+modified_at: 2026-11-24T01:38:01.644005624Z
 req_type: Bug
+comments:
+- id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
+  author: joe
+  content: 'Draft to Approved + drive: advisor-122 disposition 2026-11-23 18:38 (small, standard tier); set by product-15 before grant expiry. Evidence: heal stale-leases on dell1 rc=124 at 120s with zero output (shared-207c3564..., TASK-3851 claim).'
+  created_at: 2026-11-24T01:38:01.644005624Z
+  modified_at: 2026-11-24T01:38:01.644005624Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
