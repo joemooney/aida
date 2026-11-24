@@ -16,12 +16,24 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:06.238132894Z
-modified_at: 2026-11-24T14:01:49.753293888Z
+modified_at: 2026-11-24T14:12:44.702578012Z
 req_type: Task
 tags:
 - review
 - story-3076
 - track:integration
+comments:
+- id: 01a20de6-e51f-7490-ab5c-7b58747d5522
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 88d8f9c4b01ab4c1858eb6447d08fac412a00171 plus the native worktree diff. The HEAD is origin/integration. The origin/main merge-base delta contains the preceding CLI implementation. No untracked additions.
+    AC1: [evidence: manual-inspection] Compared the two master hunks from Joe Mooney’s 0fdac177513 against aida-core/templates/skills/aida-review.md:447 and aida-core/templates/skills/aida-code-review.md:49. Confirmed PR and scan arguments against review_prepare.rs. Removed the hard-coded src filter for zero/one/multiple-crate layouts, corrected whole-file facet wording and kept verdicts in the prompt worksheet. Host publication must target integration and preserve Joe Mooney <joe.mooney@gmail.com> as author.
+    AC2: [evidence: configuration-validation] Native make sync-templates reached the read-only .agents path. Ran make sync-templates and make check-templates successfully in a writable temporary checkout of the same HEAD and both edited masters. The generated pack matched and added no tracked mirror changes. In-lane make check-templates and python3 docs/showcase/build.py --check passed. Checked stale slice labels in showcase pages, search index, and presentation source. No authority changes. prepare_excludes_credentials_before_revision_reads executed and passed. All 48 FAST source gates passed. Remaining ratchets and host publication are separate validation steps.
+  created_at: 2026-11-24T14:12:44.702578012Z
+  modified_at: 2026-11-24T14:12:44.702578012Z
+  session_id: 01a20ddc1582
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c6f-7831-71b0-b9fa-5f3500ee061c
   author: joe
