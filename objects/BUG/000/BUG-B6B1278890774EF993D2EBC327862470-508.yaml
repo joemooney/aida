@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The ancestry exemption applies only to the recovery-invocation argv itself; a descendant carrying the EXACT attempt token, or matching the recorded group/session, still counts as an occupant and blocks release.
   - AC2: Tests: an ancestor with independent holder evidence blocks release; a plain recovery invocation does not.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-24T21:15:27.954322044Z
+modified_at: 2026-11-24T22:14:30.331369960Z
 req_type: Bug
 tags:
 - launch
@@ -94,6 +94,12 @@ comments:
   modified_at: 2026-11-24T21:15:27.954322044Z
   session_id: 01a20f580b4d
   harness_version: codex-cli 0.167.0
+- id: 01a20f9f-f2bb-7921-b9c6-81276970d7da
+  author: aida-publication-done
+  content: Implementer push 490b4f038373 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T22:14:30.331366961Z
+  modified_at: 2026-11-24T22:14:30.331366961Z
+  session_id: 01a20f580b4d
 history:
 - id: 01a20df3-134f-7401-800a-606c9060db24
   author: joe
@@ -116,6 +122,14 @@ history:
   session_id: 01a20f580b4d
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20f9f-f2bb-7921-b9c6-81124df6d131
+  author: aida-publication-done
+  timestamp: 2026-11-24T22:14:30.331363905Z
+  session_id: 01a20f580b4d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
