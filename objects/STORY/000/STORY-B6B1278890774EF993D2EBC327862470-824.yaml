@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T06:42:45.146844182Z
+modified_at: 2026-11-24T06:42:47.589646205Z
 req_type: Story
 tags:
 - admission
 - authority
 - launch
 - strict
+comments:
+- id: 01a20c4a-f0a5-7b33-9c18-feafda1629be
+  author: joe
+  content: Filed Approved per advisor-122 ruling 2026-11-23 23:46 (strict, MAIN, drive, <=200 lines). BUG-2740 lands on top of this.
+  created_at: 2026-11-24T06:42:47.589646205Z
+  modified_at: 2026-11-24T06:42:47.589646205Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
