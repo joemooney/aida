@@ -28,12 +28,14 @@ fn stall(
 }
 
 pub(crate) fn scan(
-    root: &Path,
+    exec: &aida_core::exec_context::ExecContext,
     store: &aida_core::RequirementsStore,
 ) -> Result<Vec<DoctorFinding>> {
-    let minutes = std::env::var("AIDA_STALLED_REVIEW_MINUTES")
-        .ok()
-        .map(|s| s.parse::<i64>())
+    let root = exec.project_root();
+    let minutes = exec
+        .environment()
+        .get("AIDA_STALLED_REVIEW_MINUTES")
+        .map(|s| -> Result<i64> { Ok(s.to_str().context("non-Unicode stall threshold")?.parse()?) })
         .transpose()?
         .unwrap_or(60);
     let threshold = TimeDelta::try_minutes(minutes)
@@ -78,7 +80,7 @@ pub(crate) fn scan(
             }
         }
     }
-    let now = Utc::now();
+    let now = DateTime::<Utc>::from(exec.clock().wall_now());
     let ownership = crate::ownership::reader::LeaseReader::new(root);
     let active: Vec<_> = crate::list_leases(root)
         .into_iter()
