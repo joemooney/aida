@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:06.238132894Z
-modified_at: 2026-11-24T15:15:23.718733994Z
+modified_at: 2026-11-24T15:16:10.301693539Z
 req_type: Task
 tags:
 - review
@@ -58,6 +58,19 @@ comments:
   created_at: 2026-11-24T15:11:37.612725302Z
   modified_at: 2026-11-24T15:11:37.612725302Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e21-2670-78d2-980c-397cdfa97310
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:15):
+    # TASK-3863 / PR #4520 r2: 2-LINE micro-round (advisor-122 ruling 2026-11-24 08:18; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3863). Docs only.
+    Make these two lines PRESENT TENSE (the CLI and skills have landed), NO other changes:
+    - docs/showcase/executive-brief.html:9 -> "Rust review preparation (`aida review prepare`) ..." (present tense; drop any "upcoming"/future wording)
+    - docs/showcase/index.html:107 -> "Review preparation helps ..." (present tense)
+    Run `python3 docs/showcase/build.py --check` (regenerate search data if it requires), then push to #4520. COMMIT your work.
+  created_at: 2026-11-24T15:16:10.301693539Z
+  modified_at: 2026-11-24T15:16:10.301693539Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-7831-71b0-b9fa-5f3500ee061c
