@@ -1,5 +1,6 @@
 id: 01a20d69-4d20-7770-ae6e-84d8d38d625e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1345
+agreed_id: TASK-3358
 title: 'Review follow-up: Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:147–148,511–523,531–5'
 description: |-
   From TASK-3862
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20c6e-349a-7a03-85b7-b2542be0f9bd
   created_at: 2026-11-24T11:55:47.339326859Z
+history:
+- id: 01a20d80-befd-7b40-b3d3-c525315715f0
+  author: joe
+  timestamp: 2026-11-24T12:21:11.037857705Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
   branch: pr-4511
