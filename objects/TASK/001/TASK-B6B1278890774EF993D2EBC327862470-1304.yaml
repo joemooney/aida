@@ -1,0 +1,31 @@
+id: 01a20c3f-16e3-7bd2-8fde-e05ae2a0e37c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1304
+title: 'Review follow-up: scripts/discover-python-tests.py:65 discards every shard route when the matrix contains an'
+description: |-
+  From TASK-3856
+  Reviewed sha: 328f196e4982242add799a3686bb4e0455f5b1e6
+
+  scripts/discover-python-tests.py:65 discards every shard route when the matrix contains any exclude key. Adding an exclusion for just lib-0 to the existing matrix leaves gates and contracts runnable, but the scanner then reports their standalone suites missing. Derive availability per surviving matrix row, including include entries that supply or restore a shard, and test an unrelated exclusion alongside one that removes all rows for a shard.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T06:29:50.947699590Z
+modified_at: 2026-11-24T06:29:50.947699590Z
+req_type: Task
+tags:
+- carried-from:TASK-3856
+- finding-hash:404ff5da
+- from-review:TASK-3856
+relationships:
+- rel_type: References
+  target_id: 01a20bc9-3ae1-72a2-90e2-73f6c26a6ddf
+  created_at: 2026-11-24T06:30:05.993364643Z
+filed_at:
+  code_sha: 328f196e4982242add799a3686bb4e0455f5b1e6
+  branch: pr-4492
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
+  session: 01a20c3c4ff1
