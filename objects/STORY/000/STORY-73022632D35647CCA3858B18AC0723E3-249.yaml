@@ -1,0 +1,34 @@
+id: 01a20aeb-633b-7273-be61-04f813a07749
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-249
+title: 'Review PR-4468: [AI:codex] fix(lane-recovery): cover open integration-base PRs (Refs BUG-2736)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ab3`) for branch `int29-bug-2736`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4468>
+  - Branch: `int29-bug-2736` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2736
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4468` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T00:18:48.251151304Z
+modified_at: 2026-11-24T00:18:48.251151304Z
+req_type: Story
+filed_at:
+  code_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c78b5f8acd
+  session: 01a20ab3f410
