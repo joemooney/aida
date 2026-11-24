@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T07:56:46.127538484Z
+modified_at: 2026-11-24T07:56:53.010993084Z
 req_type: Story
 tags:
 - admission
@@ -86,6 +86,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES for STORY-3080. Reviewed all four changed files in the landed tree 4e1d445db1b2ad2a006e4e9aadbb745451994b49 on protected main dd141d1a42e6f2450b54a345df6ee14e51c80fec. The attested PR head is one commit behind; the intervening maintenance schedule change affects none of the findings.. No triage reason was given.'
   created_at: 2026-11-24T07:56:46.127530021Z
   modified_at: 2026-11-24T07:56:46.127530021Z
+- id: 01a20c8e-c4fc-7342-8897-c16b470006b2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3080):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c6130afcb2f0
+    Recorded: 2026-11-24T07:55:31.992106660+00:00
+    Findings:
+    1. A refusal on automatic resume or FAST-fix resume can erase work from the first child. standalone_implementer.rs:1776 tags every revalidation error RefusedBeforeSpawn, even when resume is true and on_spawn already marked the pickup started. queue_cmd/work.rs:7346 and :7438 honor that marker even after a child ran, invoking SessionStartCleanup. Its private-clone path can remove the clone recursively (session_start.rs:1725), including unpublished work. Only mark a refusal rollback-eligible before the first child has started. Exercise a late hold on resume and assert that no new child starts and the existing checkout, work and lease survive.
+    2. AC1: the validator reads hold and track authority before potentially blocking forge WIP discovery (standalone_implementer.rs:1486–1508), and fresh launches still provision filesystem signals before spawn (:1776–1778). When an authority write or pull completes after the read while discovery is blocked, the hook can return success on the old spec data and spawn. Finish slow preparation before the final spec read and establish a short coherent check-to-spawn boundary with store writers. Test a hold or track change during the delayed final check.
+    3. AC1: wip_limit.rs:188 uses open_changes (:104), which can reuse the same snapshot at intake and launch for up to 600 seconds. If another change fills the last slot while the launcher waits and the snapshot is not refreshed, final admission still accepts the old under-limit count. Obtain a fresh launch-time count or equivalent authoritative evidence. The test at :372 currently rewrites the snapshot itself, so it misses this case.
+    4. AC1: queue work invokes session_start_with_receipt after the pre-pickup pull (queue_cmd/work.rs:5204 and :6237), and session_start.rs:2476 independently reloads the store and enforces the anchor's hold alone. This remains a piecemeal post-admission authority recheck on the standalone path. Preserve the setup preflight and direct session-start protection while consolidating standalone launch revalidation as specified.
+    5. AC2: queue_work_tests.rs:5549 invokes revalidate_before_spawn directly on a YAML fixture and calls its local closure before and after saves and git pull. No launch waits, no production BeforeSpawn hook runs, and nothing asserts that the vendor-spawn sentinel stays untouched. Deleting the production callback at standalone_implementer.rs:1776 would leave all three cases green. Drive the standalone launch path with a controlled wait and a fake child, covering a hold during the wait, an operator-track edit after admission, and a track change delivered by the pre-pickup pull. Use the production Git-canonical path for the pull case.
+    6. WIP continuation exemptions regress. queue_cmd/work.rs:6790 captures Pickup::New once, and standalone_implementer.rs:1776 reapplies it on automatic and FAST-fix resumes of the same lane. Once the project reaches the cap, that can block the continuation of an already-started lane. Also, wip_limit.rs:185–201 propagates a count lookup failure for Pickup::Branch before reaching the existing-branch exemption, so an unavailable forge can block an explicitly exempt branch pickup. Preserve the original classification for the first spawn and use continuation semantics for resumes. Keep count evidence for branch auditing without making it a prerequisite to the exemption.
+    7. WIP audit events say the spec 'is started anyway' at initial admission (queue_cmd/work.rs:5036) and can emit the same override again at the final hook (wip_limit.rs:189 and :216), even though another gate or the spawn itself may still refuse. Make intake and launch evidence distinguishable or emit the override once per actual launch decision.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T07:56:52.860891621Z
+  modified_at: 2026-11-24T07:56:52.860891621Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
