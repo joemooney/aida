@@ -9,11 +9,11 @@ description: |
   - AC1: Pinned-root confinement under concurrent reparenting for BOTH writes and reads (2)(6); rename-aware churn (8); consistent pathspec scoping (9); non-regular entries and gitlinks handled (10).
   - AC2: Rendering of anchoring outcomes (11); store ID resolution for --specs (12); lossless non-UTF-8 paths with escaping (13); --no-textconv on content reads (14). Tests for each; split into II-a/II-b if over ~300 lines.
 status: Approved
-priority: Low
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-24T11:16:56.344972585Z
+modified_at: 2026-11-24T13:47:30.127497107Z
 req_type: Task
 tags:
 - review
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-24T11:16:56.427933965Z
   changes: []
+- id: 01a20dcf-c5cf-7f91-b057-defef896d04c
+  author: joe
+  timestamp: 2026-11-24T13:47:30.127496440Z
+  changes:
+  - field_name: priority
+    old_value: Low
+    new_value: Medium
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
