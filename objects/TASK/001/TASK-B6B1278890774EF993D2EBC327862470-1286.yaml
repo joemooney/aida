@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:41:03.472804465Z
-modified_at: 2026-11-24T04:03:48.424000127Z
+modified_at: 2026-11-24T04:13:32.843828064Z
 req_type: Task
 tags:
 - forge
@@ -53,6 +53,15 @@ comments:
     Lane job j20261124T040324639-2-0: 1 passed, 0 failed. Formatting and git diff --check clean. Reviewed path interpretation, subprocess working directories, missing and expired evidence, repeat probes, and existing timeout caps. No authority edits. Residual validation: make check-ci-fast stopped in shard tooling because cargo metadata is unsupported by the lane runner. Host fast validation outstanding.
   created_at: 2026-11-24T04:03:48.424000127Z
   modified_at: 2026-11-24T04:03:48.424000127Z
+  session_id: 01a20baa19b8
+  harness_version: codex-cli 0.167.0
+- id: 01a20bc2-4ec4-7fb1-a357-cbe1326407da
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 780f16a0a1d402110c0323c6adf9baf250e2d457 plus uncommitted fast-gate fix at forge.rs:1909. The host ratchet classified the generic binary variable as an additional launch site. The resolved GitHub CLI now uses the existing gh_bin spelling. No ledger or authority change. AC1: [evidence: behavioral-test] slow origin discovery and AC2: [evidence: behavioral-test] relative PATH exercised by the linked-worktree budget regression, 1 passed. Structural ratchets: all 51 passed including launch_sites_outside_the_launcher_match_the_ledger. Formatting and diff checks passed. Host full fast-gate rerun pending.
+  created_at: 2026-11-24T04:13:32.843828064Z
+  modified_at: 2026-11-24T04:13:32.843828064Z
   session_id: 01a20baa19b8
   harness_version: codex-cli 0.167.0
 history:
