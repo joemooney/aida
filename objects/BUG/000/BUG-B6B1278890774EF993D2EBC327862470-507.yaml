@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T10:28:40.029171670Z
-modified_at: 2026-11-24T12:08:20.016899817Z
+modified_at: 2026-11-24T12:08:28.003589466Z
 req_type: Bug
 tags:
 - admission
@@ -95,6 +95,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing BUG-2746 (origin BUG-b6b1278890774ef993d2ebc327862470-507).. No triage reason was given.'
   created_at: 2026-11-24T12:08:20.016889628Z
   modified_at: 2026-11-24T12:08:20.016889628Z
+- id: 01a20d75-19be-7d41-b0ff-5fc42b38db2f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2746):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 372c046ed782
+    Recorded: 2026-11-24T12:07:19.943951561+00:00
+    Findings:
+    1. BUG-2746 AC2: The alert can show an unrelated acquisition's activity and age. In aida-cli-lib/src/review_watch.rs:650-696, the permanent inode retains a timestamp and label after unlock, while the busy reader has no evidence tying those bytes to the contended acquisition. For example, after a new binary releases a lock, an already-running pre-upgrade service can take that inode without refreshing the record. A later auto-train refusal then reports the old PR's activity and age alongside the current refusal. Correlate the record with the contended acquisition and report unknown when that correlation is missing. Cover a takeover by a holder that leaves the prior record untouched.
+    2. BUG-2746 AC2: The supplied untraced criterion still lacks a regression for the reported train path. The test at aida-cli-lib/src/advisor_loop_service.rs:1584 holds that supervisor variant's own service-directory lock and passes a supervisor tick to settle. Its auto-train instance therefore contends on .aida/auto-train/admission.lock. The train pass that contends with a review-watch reservation takes .aida/review-watch/admission.lock through select_train_members and records failures through advisor_loop_train.rs:186-189. Removing propagation of activity and age from that path would leave the new test green. Hold the review-watch lock with a PR-specific activity and a known acquisition time, drive auto-train's member-selection failure through its alert path, and assert the emitted activity and elapsed age.
+    3. Diagnostic I/O now gates admission in aida-cli-lib/src/review_watch.rs:659. A metadata write failure such as ENOSPC on an existing empty lock file returns an error after flock succeeds, so even the read-only controller or quiescence check refuses. Keep the successfully acquired guard usable when recording the optional diagnostic fails, and make any unusable activity evidence fall back to unknown.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T12:08:27.838699986Z
+  modified_at: 2026-11-24T12:08:27.838699986Z
 history:
 - id: 01a20d25-45d0-7f43-9465-17218e2f731c
   author: joe
