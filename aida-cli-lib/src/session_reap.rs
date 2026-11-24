@@ -1343,19 +1343,8 @@ pub(crate) fn classify_clone_reap(
     }
     if facts.unpushed > 0 {
         // trace:TASK-3858 | ai:codex
-        let mut advice = String::new();
-        let mut refs = facts
-            .unpushed_refs
-            .iter()
-            .filter_map(|line| line.split_once(" commit(s) on ").map(|(_, name)| name));
-        if refs.clone().any(|name| name == "refs/stash") {
-            advice.push_str(" — inspect stash entries in the clone with git stash list --stat");
-        }
-        if refs.any(|name| name.starts_with("refs/heads/")) {
-            advice.push_str(" — inspect local branch commits in the clone with git log --oneline --decorate --branches --not --remotes=origin");
-        }
         return ReapVerdict::Skip(format!(
-            "seat clone holds {} commit(s) origin does not have ({}){advice}",
+            "seat clone holds {} commit(s) origin does not have ({})",
             facts.unpushed,
             facts.unpushed_refs.join("; ") // trace:BUG-2224 | ai:claude
         ));
@@ -1393,7 +1382,7 @@ fn clone_reap_branch(
 /// Scan one `clone` lease. The row's `branch_tip` is the HEAD the probe saw;
 /// [`reap_one_clone`] removes the clone only while HEAD is still there.
 // trace:TASK-2053 | ai:claude
-fn scan_clone_lease(
+pub(crate) fn scan_clone_lease(
     project_root: &std::path::Path,
     lease: &SessionLease,
     spec_finished: bool,

@@ -241,10 +241,7 @@ fn scan_skipped_clone_guidance_survives_both_hygiene_summaries() {
     use crate::seat_clone::{Probe, ProbeFacts};
     use crate::session_reap::{classify_clone_reap, ReapRow, ReapVerdict};
 
-    for (name, command) in [
-        ("refs/stash", "git stash list --stat"),
-        ("refs/heads/side", "git log --oneline --decorate --branches"),
-    ] {
+    for name in ["refs/stash", "refs/heads/side"] {
         let detail = format!("1 commit(s) on {name}");
         let facts = ProbeFacts {
             branch: Some("seat".into()),
@@ -276,7 +273,7 @@ fn scan_skipped_clone_guidance_survives_both_hygiene_summaries() {
             let summary = render_summary(&outcome, dry_run);
             assert!(summary.contains("session-one  skipped"), "{summary}");
             assert!(summary.contains(&detail), "{summary}");
-            assert!(summary.contains(command), "{summary}");
+            assert!(!summary.contains("git "), "{summary}");
             assert!(summary.contains("0 session(s)"), "{summary}");
         }
     }
