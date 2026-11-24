@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:34.392401441Z
-modified_at: 2026-11-24T04:57:14.360197901Z
+modified_at: 2026-11-24T04:59:33.844073618Z
 req_type: Bug
 tags:
 - hygiene
@@ -111,6 +111,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T04:57:14.211100610Z
   modified_at: 2026-11-24T04:57:14.211100610Z
+- id: 01a20bec-a706-7e81-b19d-991500eeefda
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:59):
+    # BUG-2742 / PR #4487 r2, SCOPE CUT (advisor-122 ruling 2026-11-23 22:03: CR UPHELD at 1dc839b0; strict, destructive path; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. REMOVE rather than patch.
+
+    The PR grew beyond the bug and added regressions (submodule recursion, the 120s probe outside the deadline, the .gitmodules placeholder now reading dirty, wrong stash/branch guidance).
+    r2 scope, ONLY:
+    (1) The dirty-worktree probe ignores GITIGNORED paths: an ignored-only clone reads CLEAN; a tracked edit OR an untracked NON-ignored file reads DIRTY. Two tests.
+    (2) REVERT everything else to main's behaviour: stash/other-branch classification, the submodule status mode, the extra probe_run, and the dispatch shipped-head changes. Keep the existing .gitmodules placeholder recognition and its regression EXACTLY as on main; do NOT edit parent excludes.
+    DROP the incident fixture (session 01a1abbf: its branch is published, but PR #3449 closed UNMERGED, so that reap refusal is correct conservatism, not this bug).
+    Never force-reap a dirty tree. If r2 is still blocked, the PR is PARKED.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4487). COMMIT your work.
+  created_at: 2026-11-24T04:59:33.844073618Z
+  modified_at: 2026-11-24T04:59:33.844073618Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b99-cf98-7ea3-b662-57045c2fa236
   author: joe
