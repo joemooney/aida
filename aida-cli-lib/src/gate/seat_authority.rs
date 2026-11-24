@@ -168,6 +168,16 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
 // trace:BUG-1934 | ai:claude
 fn update_grant(
     id: &str,
+    change: impl FnMut(&mut SeatGrant) -> bool,
+    applied: impl Fn(&SeatGrant) -> bool,
+) -> Result<bool> {
+    update_grant_until(id, None, change, applied)
+}
+
+// trace:TASK-3884 | ai:codex
+fn update_grant_until(
+    id: &str,
+    deadline: Option<std::time::Instant>,
     mut change: impl FnMut(&mut SeatGrant) -> bool,
     applied: impl Fn(&SeatGrant) -> bool,
 ) -> Result<bool> {
@@ -186,8 +196,11 @@ fn update_grant(
             .write(true)
             .open(locks.join(format!("{id}.lock")))
             .context("cannot open the session grant lock")?;
-        lock.lock_exclusive()
-            .context("cannot lock the session grant record")?;
+        match deadline {
+            Some(end) => aida_core::file_lock::lock_exclusive_until(&lock, end),
+            None => lock.lock_exclusive(),
+        }
+        .context("cannot lock the session grant record")?;
         let mut grant = read_grant(id)?;
         let changed = change(&mut grant);
         if changed {

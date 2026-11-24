@@ -1,4 +1,5 @@
 use std::io::{Error, ErrorKind};
+use std::time::{Duration, Instant};
 
 /// Classify a failed `fs2` try-lock without assuming that every platform maps
 /// its native contention code to `WouldBlock`.
@@ -13,6 +14,24 @@ fn is_lock_contended_against(error: &Error, contended: &Error) -> bool {
             .raw_os_error()
             .zip(contended.raw_os_error())
             .is_some_and(|(actual, expected)| actual == expected)
+}
+
+/// Acquire an exclusive lock before the caller's absolute deadline.
+// trace:TASK-3884 | ai:codex
+pub fn lock_exclusive_until(file: &std::fs::File, deadline: Instant) -> std::io::Result<()> {
+    use fs2::FileExt;
+    loop {
+        if Instant::now() >= deadline {
+            return Err(ErrorKind::TimedOut.into());
+        }
+        match file.try_lock_exclusive() {
+            Err(err) if is_lock_contended(&err) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                std::thread::sleep(remaining.min(Duration::from_millis(2)));
+            }
+            result => return result,
+        }
+    }
 }
 
 #[cfg(test)]

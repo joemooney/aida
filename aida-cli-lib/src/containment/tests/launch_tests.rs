@@ -4704,3 +4704,20 @@ fn task_3736_contained_codex_refuses_profile_flags() {
         );
     }
 }
+
+// trace:TASK-3884 | ai:codex
+#[test]
+fn task_3884_unreaped_child_records_recovery() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = Command::new("sleep").arg("2").spawn().unwrap();
+    let start = Instant::now();
+    reap_or_record(&mut child, start + Duration::from_millis(20), dir.path()).unwrap();
+    let elapsed = start.elapsed();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(elapsed < Duration::from_secs(1));
+    let mut entries = std::fs::read_dir(dir.path()).unwrap();
+    let path = entries.next().unwrap().unwrap().path();
+    let record = std::fs::read_to_string(path).unwrap();
+    assert!(record.contains(&format!("pid={} reason=wait deadline elapsed", child.id())));
+}

@@ -576,3 +576,16 @@ fn task_3820_marker_dropped_before_the_locked_write_refuses() {
         now + Duration::hours(1)
     );
 }
+
+// trace:TASK-3884 | ai:codex
+#[test]
+fn task_3884_contended_grant_times_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env =
+        crate::gate::test_support::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let id = Uuid::new_v4().to_string();
+    let path = grant_lock_dir().unwrap().join(format!("{id}.lock"));
+    crate::test_env_base::assert_lock_timeout(&path, |end| {
+        update_grant_until(&id, Some(end), |_| false, |_| true)
+    });
+}
