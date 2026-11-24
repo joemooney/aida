@@ -6,6 +6,24 @@ use anyhow::Result;
 use chrono::Utc;
 use std::path::Path;
 
+// trace:BUG-2739 | ai:codex
+pub(crate) fn doctor_lease_liveness(
+    lease: &crate::leases::SessionLease,
+    sessions: &std::cell::OnceCell<Vec<crate::process_probe::LiveSession>>,
+    now: chrono::DateTime<Utc>,
+) -> (crate::LeaseState, bool) {
+    let live = sessions.get_or_init(crate::process_probe::probe_live_claude_sessions);
+    let state = crate::leases::lease_state_for(lease, live, now);
+    let dead = lease.creator_pid.is_some_and(|pid| {
+        local_claim_process_is_dead(
+            pid,
+            lease.creator_pid_start_time.as_deref(),
+            lease.pid_namespace,
+        )
+    });
+    (state, dead)
+}
+
 /// Compatibility death observation for shared-claim creators and headless
 /// workers. Callers bind the recorded process to a local-host claim or a child
 /// they launched; a foreign/unknown PID view cannot supply death evidence.

@@ -775,25 +775,41 @@ fn salvage_exited_claim(holder: &Claim) -> Result<()> {
 // trace:BUG-2655 | ai:codex
 pub(crate) fn heal_exited_claim(store_root: &Path, expected: &Claim) -> Result<bool> {
     let branch = aida_core::git_ops::current_branch(store_root)?;
-    let sha = aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
-        if let Err(error) = refresh_store(store_root, &branch)? {
-            anyhow::bail!("cannot refresh shared claim: {error}");
-        }
-        if read_claim(&claim_path(store_root, &expected.scope)).as_ref() != Some(expected)
-            || !exited_holder_is_dead(expected, Utc::now())
-        {
-            return Ok(None);
-        }
-        salvage_exited_claim(expected)?;
-        if !exited_holder_is_dead(expected, Utc::now()) {
-            return Ok(None);
-        }
-        if delete_claim_receipt_locked(store_root, expected)? {
-            Ok(Some(aida_core::git_ops::head_sha(store_root)?))
-        } else {
-            Ok(None)
-        }
-    })?;
+    // trace:BUG-2739 | ai:codex
+    eprintln!(
+        "Healing shared claim {} (store write lock, refresh and salvage)",
+        expected.scope
+    );
+    let sha =
+        aida_core::db::with_store_write_lock_bounded(store_root, || -> Result<Option<String>> {
+            if let Err(error) = refresh_store(store_root, &branch)? {
+                anyhow::bail!("cannot refresh shared claim: {error}");
+            }
+            if read_claim(&claim_path(store_root, &expected.scope)).as_ref() != Some(expected)
+                || !exited_holder_is_dead(expected, Utc::now())
+            {
+                return Ok(None);
+            }
+            salvage_exited_claim(expected)?;
+            if !exited_holder_is_dead(expected, Utc::now()) {
+                return Ok(None);
+            }
+            if delete_claim_receipt_locked(store_root, expected)? {
+                Ok(Some(aida_core::git_ops::head_sha(store_root)?))
+            } else {
+                Ok(None)
+            }
+        })
+        .map_err(|e| {
+            if e.to_string() == "Busy" {
+                anyhow::anyhow!(
+                    "timed out waiting for store write lock at {}",
+                    store_root.display()
+                )
+            } else {
+                e
+            }
+        })?;
     if let Some(sha) = sha {
         if !aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch)? {
             anyhow::bail!("shared claim released locally; push rejected; run `aida pull`");
@@ -1571,6 +1587,19 @@ pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
     out
 }
 
+// trace:BUG-2739 | ai:codex
+pub(crate) fn claim_by_generation(store_root: &Path, generation: &str) -> Result<Option<Claim>> {
+    let mut matches = list_claims(store_root)
+        .into_iter()
+        .filter(|claim| claim.claim_id.as_deref() == Some(generation));
+    let claim = matches.next();
+    anyhow::ensure!(
+        matches.next().is_none(),
+        "ambiguous shared claim ID shared-{generation}"
+    );
+    Ok(claim)
+}
+
 /// List the per-repo process-lock claims (drain + solo) currently recorded on
 /// the store. Returns the live `Claim` records — empty when neither lock is
 /// held. Surfaced alongside the lease claims by the `aida status` cross-clone
@@ -2136,6 +2165,46 @@ mod tests {
         let branch = aida_core::git_ops::current_branch(&store).unwrap();
         assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
         (store, holder)
+    }
+
+    #[test]
+    // trace:BUG-2739 | ai:codex
+    fn bug2739_targeted_shared_heal_reports_held_store_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2655_fixture(dir.path());
+        let id = format!("shared-{}", holder.claim_id.as_deref().unwrap());
+        let finding = crate::doctor_root::targeted_stale_finding(dir.path(), &id)
+            .unwrap()
+            .expect("eligible shared claim without a local lease");
+        assert_eq!(finding.id, id);
+        assert!(
+            crate::doctor_root::targeted_stale_finding(dir.path(), "shared-other")
+                .unwrap()
+                .is_none()
+        );
+        std::fs::create_dir_all(store.join(".aida")).unwrap();
+        let lock = std::fs::File::create(aida_core::db::store_write_lock_path(&store)).unwrap();
+        fs2::FileExt::lock_exclusive(&lock).unwrap();
+        let error = heal_exited_claim(&store, &holder).unwrap_err().to_string();
+        assert!(
+            error.contains("timed out waiting for store write lock"),
+            "{error}"
+        );
+        assert_eq!(
+            read_claim(&claim_path(&store, &holder.scope)).as_ref(),
+            Some(&holder)
+        );
+        let mut duplicate = holder;
+        duplicate.scope = "other-scope".into();
+        std::fs::write(
+            claim_path(&store, &duplicate.scope),
+            toml::to_string(&duplicate).unwrap(),
+        )
+        .unwrap();
+        assert!(crate::doctor_root::targeted_stale_finding(dir.path(), &id)
+            .unwrap_err()
+            .to_string()
+            .contains("ambiguous shared claim ID"));
     }
 
     #[test]

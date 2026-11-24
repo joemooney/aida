@@ -1432,9 +1432,8 @@ pub(super) fn heal_doctor_lease(
     if let Some(id) = finding.id.strip_prefix("shared-") {
         let root = aida_core::store_locate::detect_distributed_store_from(project_root)
             .ok_or_else(|| anyhow::anyhow!("shared store unavailable"))?;
-        let claim = crate::coordination::list_claims(&root)
-            .into_iter()
-            .find(|c| c.claim_id.as_deref() == Some(id));
+        // trace:BUG-2739 | ai:codex
+        let claim = crate::coordination::claim_by_generation(&root, id)?;
         let removed = match claim {
             Some(claim) => crate::coordination::heal_exited_claim(&root, &claim)?,
             None => false,
