@@ -1,0 +1,27 @@
+id: 01a20f5f-71db-7ce1-bfae-697c98b6530e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1381
+agreed_id: TASK-3888
+title: 'BUG-2735 deferred: graceful throttle stop, throttle time excluded from CI inactivity, distinct throttle state, real-path fixture'
+description: |
+  Deferred from #4464 BUG-2735 (advisor-122 2026-11-24 14:07; filed by product-15). LOW.
+
+  ## Acceptance
+  - AC1: (F4) throttling restores the terminal with a bounded graceful stop before SIGKILL of the interactive gh child (ci_watch.rs:62); (F5) intentionally throttled time does not count toward CI inactivity (ci_probe.rs:658). Tests.
+  - AC2: (F6) a throttle is reported as a distinct throttle state, not a generic discovery error (advisor_loop_service.rs:1183, review_watch.rs:2988); (F7) the review-watch fixture exercises the real throttled discovery path end to end (task_1993_review_watch_tests.rs:5709). Tests.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T21:04:03.035149773Z
+modified_at: 2026-11-24T21:04:03.035149773Z
+req_type: Task
+tags:
+- forge
+- throughput
+filed_at:
+  code_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4c9ba4ba5
+  vendor: claude
