@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-24T17:31:55.021117480Z
+modified_at: 2026-11-24T17:47:12.376943341Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -211,6 +211,17 @@ comments:
   modified_at: 2026-11-24T17:27:21.267191972Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20eab-3cd3-7a90-a24b-ed18ace6e252
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ae8edf857550c4d531f9d9fdfea46d5ebebdc596 plus the native worktree changes. Reviewed the merge-base diff, local diff and untracked listing.
+    AC1: [evidence: behavioral-test] session_reap.rs:2619 snapshots initial missing-tree eligibility. bug_home_024_finished_lease_tests.rs:577 exercises a later unfinished claim sharing the completed session tree. Both passes removed the completed session, retained the claim and preserved the dirty sibling. Targeted launcher test executed and passed (1/1).
+    Checked path representation, empty paths, lookup errors, shared paths and the live reread before gone-tree release. Scope is a single pass. Slow individual operations, shared maintenance budgeting and scheduled stderr reporting are deferred by the pickup ruling. Formatting and diff checks passed. FAST stopped in shard tooling because its cargo metadata invocation is unsupported by the native job runner.
+  created_at: 2026-11-24T17:47:12.376943341Z
+  modified_at: 2026-11-24T17:47:12.376943341Z
+  session_id: 01a20e9cd224
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
