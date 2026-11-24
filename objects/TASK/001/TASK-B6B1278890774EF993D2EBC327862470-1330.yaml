@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: Mobile layout works at narrow widths (no horizontal overflow) and tabs are keyboard and screen-reader accessible (roles, aria-selected, focus order).
   - AC2: Print scope prints the content, not the slide/tab chrome.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T08:29:09.068197586Z
-modified_at: 2026-11-24T10:23:27.213086364Z
+modified_at: 2026-11-24T12:26:49.033786774Z
 req_type: Task
 tags:
 - docs
 - showcase
 - small
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -88,6 +87,22 @@ history:
   timestamp: 2026-11-24T10:22:26.535164048Z
   session_id: 01a20cf16203
   changes: []
+- id: 01a20d85-e705-7cb3-a467-12b1ce0d59c6
+  author: aida-auto-bump
+  timestamp: 2026-11-24T12:26:48.965233037Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20d85-e749-75b3-89ae-564290521338
+  timestamp: 2026-11-24T12:26:49.033783157Z
+  agent: aida
+  commit_sha: 8dfad228d5897828a20168a919294468baab8452
+  summary: 'Advisor (delegated authority): promotion 34, linear on main 6c832e0d3a8 + 3 cherry-picks; per-commit patch-ids match approved integration squashes (3e0fa1c4, f1f2503d, c1b877d3); combined 4268d24bcc7f; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
@@ -96,3 +111,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: dd141d1a42e
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T12:26:48.965225253Z
+  completion_sha: 8dfad228d5897828a20168a919294468baab8452
