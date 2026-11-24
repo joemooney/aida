@@ -1,0 +1,27 @@
+id: 01a20e71-b96a-79b3-8452-d24f9bbeca75
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1362
+agreed_id: TASK-3878
+title: 'Stalled-review detector slice 2: flag open PRs that conflict with their base and queue a conflict-repair rework'
+description: |
+  Slice 2 of the stalled-review detector (STORY-3095; filed by product-15 2026-11-24 after Joe flagged #4487 BUG-2742 sitting in a merge conflict for hours unseen until train #4524 dropped it). A 09:45 sweep found 6 open PRs conflicting with main with no lane running (#4487, #4464, #4416, #4401, #4396, #4376).
+
+  ## Acceptance
+  - AC1: `aida doctor check stalled-reviews` also reports every open PR whose GitHub mergeable state is CONFLICTING (with the base) and has no active implementer lane or queued rework, showing PR, spec and head, and how long it has conflicted where known. Approved PRs that conflict are flagged first (they block landing).
+  - AC2: For a conflicting PR with no lane, the detector queues ONE conflict-repair rework for the implementer (merge the base, resolve, no scope change) and notifies the advisor, deduplicated per (PR, head, base tip). Tests for detection and dedup.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T16:44:23.786790901Z
+modified_at: 2026-11-24T16:44:23.786790901Z
+req_type: Task
+tags:
+- review
+- throughput
+filed_at:
+  code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1ee
+  vendor: claude
