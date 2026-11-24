@@ -1,0 +1,29 @@
+id: 01a20d28-1599-7ae2-a758-f1c0b6a8f3f4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1334
+agreed_id: TASK-3868
+title: 'Self-hosted CI runner on imac: cap nextest threads (or keep full-workspace CI off imac while seats run) and put /ci-cache on the NVMe'
+description: |
+  Found 2026-11-24 03:30 MST (product-15 diagnosis; advisor-122 03:38). A self-hosted CI job on imac (containerised `cargo-nextest nextest run --workspace --profile ci --no-fail-fast` against /ci-cache/target-v2-1) saturated imac's disk. imac's root FS is a spinning HDD (sda, APPLE HDD ST1000DM003): /proc/pressure/io full avg60 ~56%, load 17, writeback kworkers and every store/git operation in D state for 15+ min. It starved the seats (a reviewer-launch db sync --pull stuck ~18 min) and the auto-train (admission busy x6; p33 #4508 couldn't board). A 512GB NVMe (sdb) is idle on the host.
+
+  ## Acceptance
+  - AC1: The self-hosted runner on imac runs nextest with a capped thread count (e.g. NEXTEST_TEST_THREADS / --test-threads sized for the HDD), OR full-workspace CI is not scheduled on imac while seats are active (documented runner label/schedule). The config change is in the runner setup checked into the repo.
+  - AC2: /ci-cache (the runner's cargo target) lives on the NVMe (sdb), not the HDD root FS, with the runner setup docs updated; an operator step for Joe is acceptable.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T10:44:20.505889039Z
+modified_at: 2026-11-24T10:44:20.505889039Z
+req_type: Task
+tags:
+- ci
+- host
+- runner
+- small
+filed_at:
+  code_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 91c070eb012
+  vendor: claude
