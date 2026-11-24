@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T22:54:49.373736989Z
+modified_at: 2026-11-24T14:10:28.191240658Z
 req_type: Story
 tags:
 - autonomy
@@ -146,6 +146,11 @@ comments:
   created_at: 2026-11-23T22:44:08.946852542Z
   modified_at: 2026-11-23T22:44:08.946852542Z
   session_id: 01a20a50c62f
+- id: 01a20de4-ccdf-7623-a31c-5f9f69d2bee9
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3038 AC1 FAIL: completing publications after normal pickup lose approved-small eligibility, and the strict-path inventory omits commit-lock enforcement. The direct-ship recheck also lacks behavioral coverage at the ship entry point. AC2 PASS on source inspection: the traced off/on, strict-tier and explicit-mode cases and the config registry are present. Reviewed the landed tree 5968021b754b0741b30361483bc8de2111d213ce against main 4e140498bc8d425330633234bec803e5f8584ca0 and attest the original PR head. The head is one commit behind, and the base-only main-watch changes do not affect these findings. Exact-head FAST gates passed and FAST compile was pending. No local builds or tests were run.. No triage reason was given.'
+  created_at: 2026-11-24T14:10:28.191232840Z
+  modified_at: 2026-11-24T14:10:28.191232840Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
@@ -222,6 +227,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20de4-ccdf-7623-a31c-5f83a67e30fa
+  author: joe
+  timestamp: 2026-11-24T14:10:28.191224293Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
@@ -230,11 +242,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STORY-3038 AC1 FAIL: completing publications after normal pickup lose approved-small eligibility, and the strict-path inventory omits commit-lock enforcement. The direct-ship recheck also lacks behavioral coverage at the ship entry point. AC2 PASS on source inspection: the traced off/on, strict-tier and explicit-mode cases and the config registry are present. Reviewed the landed tree 5968021b754b0741b30361483bc8de2111d213ce against main 4e140498bc8d425330633234bec803e5f8584ca0 and attest the original PR head. The head is one commit behind, and the base-only main-watch changes do not affect these findings. Exact-head FAST gates passed and FAST compile was pending. No local builds or tests were run.'
-  recovery_hint: address the review findings, move STORY-3038 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T22:54:49.373736989Z
