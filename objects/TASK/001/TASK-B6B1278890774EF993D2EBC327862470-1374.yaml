@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-24T20:33:11.567891003Z
+modified_at: 2026-11-24T20:48:59.556023187Z
 req_type: Task
 tags:
 - launch
@@ -27,6 +27,15 @@ comments:
     Reviewed HEAD: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0 plus native working diff. Merge-base diff empty, no untracked additions. AC1: [evidence: behavioral-test] task_3884_contended_lease_times_out and task_3884_contended_grant_times_out require typed io::ErrorKind::TimedOut on independently held production lock files. AC2: [evidence: behavioral-test] containment/tests/launch_tests.rs:4710 holds a helper alive past the deadline and checks the recorded PID and reason. Execution pending. Cross-references: both opt-ins use file_lock.rs:20, and grant retries reuse the absolute deadline. Format and multiplicity: recovery uses unique temporary files, one line per attempt. Ordinary exits reap without recording. Authority: grant UUID validation and mutation under lock preserved; missing/unreadable locks propagate errors; timeout precedes mutation. No existing tests weakened. Fixed the dependency guard finding by moving the lease test to its owning module. Recovery records are host-temporary diagnostic evidence, with stderr fallback on write failure; elapsed bounds cover polling, not stalled filesystem I/O.
   created_at: 2026-11-24T20:33:11.567891003Z
   modified_at: 2026-11-24T20:33:11.567891003Z
+  session_id: 01a20f356c20
+  harness_version: codex-cli 0.167.0
+- id: 01a20f51-aa47-7440-b715-d79f3354dcdb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0 plus native working changes. AC1: [evidence: behavioral-test] session/inline_tests.rs:7 and gate/tests/task_3820_grant_renewal_tests.rs:582 passed under held locks with typed TimedOut. AC2: [evidence: behavioral-test] containment/tests/launch_tests.rs:4710 passed, verifying return and a recovery record naming the child. Lane job j20261124T203940175-2-0 executed all three. Fixed helper lookup, reconciled writer inventory preserving upstream caller coverage, and classified the live-child fixture for FULL. The last make check-ci-fast reached the structural-selection check. After fixing its finding, all seven structural-selection tests passed; aggregate fast target incomplete. No PR-head CI yet. Recovery file persistence depends on host temporary storage. No launch admission or grant mutation policy changes.
+  created_at: 2026-11-24T20:48:59.556023187Z
+  modified_at: 2026-11-24T20:48:59.556023187Z
   session_id: 01a20f356c20
   harness_version: codex-cli 0.167.0
 history:
