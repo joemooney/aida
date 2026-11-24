@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-73022632D35647CCA3858B18AC0723E3-002",
+  "publishes": [
+    {
+      "at": "2026-11-24T21:54:56.662703560Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T19:38:36.370198540Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-002",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:10:39.953107885Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-002",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:10:39.984108462Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-002",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T17:14:11.298302332Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-002",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T17:14:11.323020135Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-002",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:54:51.598346139Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-002",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "841efeba1bc48f093c15d9ef5f362b0b5027f738",
+        "pr": 4454,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
