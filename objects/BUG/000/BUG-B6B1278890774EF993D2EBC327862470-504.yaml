@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T06:41:30.418112479Z
+modified_at: 2026-11-24T06:42:57.313083162Z
 req_type: Bug
 tags:
 - flaky
@@ -69,6 +69,12 @@ comments:
   content: Implementer push 6a84668f1deb declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T06:40:44.540392503Z
   modified_at: 2026-11-24T06:40:44.540392503Z
+  session_id: 01a20c196274
+- id: 01a20c4b-16a1-73f2-a723-485881cee734
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int31-bug-2743` at head `6a84668f1deb149b800c0483d14afefea561c1d8`.'
+  created_at: 2026-11-24T06:42:57.313070528Z
+  modified_at: 2026-11-24T06:42:57.313070528Z
   session_id: 01a20c196274
 history:
 - id: 01a20c14-b9eb-72e1-a1e3-9c482909bb69
