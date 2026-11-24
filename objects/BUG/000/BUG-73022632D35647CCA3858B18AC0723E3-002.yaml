@@ -4,12 +4,12 @@ agreed_id: BUG-2701
 title: Nested Bubblewrap Git fixtures fail under the dell1 lane job wrapper
 description: |
   TASK-3133 baseline on unmodified origin/main at b82066836029b7ef323861eb91d1dbd4967a3096, dell1 lane job j20261119T175135035-2-0, reproduced failures in the live BUG-2169 nested Bubblewrap tests for clone Git operations, origin HEAD and tags, and the fixture's historical-layout positive controls. Diagnostics include Git alternates and repository discovery failures. This is separate from the TASK-2712 case already owned by BUG-2676. Compare the effective fixture environment on a direct host and in a lane job. Preserve live denial and positive-control assertions. Full job output is under .aida/lane-jobs/01a1f4ece859 on dell1.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-24T19:01:22.102388782Z
+modified_at: 2026-11-24T19:43:41.474480600Z
 req_type: Bug
 tags:
 - bwrap
@@ -176,6 +176,12 @@ comments:
   modified_at: 2026-11-24T19:01:22.102388782Z
   session_id: 01a20ebf6a2e
   harness_version: codex-cli 0.167.0
+- id: 01a20f15-dfa2-7ff0-a205-5cac45039bfa
+  author: aida-publication-done
+  content: Implementer push e2e2a50f37e7 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T19:43:41.474477312Z
+  modified_at: 2026-11-24T19:43:41.474477312Z
+  session_id: 01a20ebf6a2e
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
@@ -268,6 +274,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20f15-dfa2-7ff0-a205-5c9d2f9a3475
+  author: aida-publication-done
+  timestamp: 2026-11-24T19:43:41.474475630Z
+  session_id: 01a20ebf6a2e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5b78d27e1
