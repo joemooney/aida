@@ -7,18 +7,17 @@ description: |-
   Reviewed sha: 9af5afb76bd7628acba2280bba7f642a33952305
 
   tests/test_duration_cap_inventory.py:9 adds a standalone regression that neither GitHub CI nor make check-ci-fast runs. The existing config-trust ratchet checks the classes of entries that are present and does not require these two specific entries, so removing either duration-cap entry can leave the normal checks green. Register the Python test with a routine gate or add the two assertions to the existing config-trust ratchet.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T13:46:58.715415909Z
-modified_at: 2026-11-24T12:30:37.253770037Z
+modified_at: 2026-11-24T15:53:10.659707090Z
 req_type: Task
 tags:
 - carried-from:TASK-3126
 - finding-hash:7dd307bb
 - from-review:TASK-3126
-- track:integration
 relationships:
 - rel_type: References
   target_id: 01a1dbde-c245-7ed1-b86b-daaa48159ead
@@ -54,6 +53,22 @@ history:
   - field_name: tags
     old_value: carried-from:TASK-3126, finding-hash:7dd307bb, from-review:TASK-3126
     new_value: carried-from:TASK-3126, finding-hash:7dd307bb, from-review:TASK-3126, track:integration
+- id: 01a20e42-d4be-7e43-8c04-02e87997297f
+  author: aida-auto-bump
+  timestamp: 2026-11-24T15:53:10.590638216Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a20e42-d503-7d23-a318-3a79e5df32e1
+  timestamp: 2026-11-24T15:53:10.659704126Z
+  agent: aida
+  commit_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
+  summary: 'Advisor (delegated authority): promotion 35, linear on main 8dfad228d58 + 2 cherry-picks; per-commit patch-ids match approved integration squashes (e718bc07, 88d8f9c4); 11 files +1273; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 9af5afb76bd7628acba2280bba7f642a33952305
@@ -63,3 +78,7 @@ filed_at:
   aida_build_sha: ff524ebd21f
   vendor: claude
   session: 01a208a677fe
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T15:53:10.590630606Z
+  completion_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
