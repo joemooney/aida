@@ -1799,12 +1799,11 @@ impl Storage {
     // trace:TASK-3155 | ai:codex
     pub fn queue_update_notes(
         &self,
-        user_id: &str,
         requirement_ids: &std::collections::HashSet<uuid::Uuid>,
         update: &dyn Fn(Option<&str>) -> String,
     ) -> Result<usize> {
         self.queue_backend()?
-            .queue_update_notes(user_id, requirement_ids, update)
+            .queue_update_notes(requirement_ids, update)
     }
 
     /// Add an entry to a user's queue

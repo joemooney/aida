@@ -519,7 +519,6 @@ pub trait DatabaseBackend: Send + Sync {
     // trace:TASK-3155 | ai:codex
     fn queue_update_notes(
         &self,
-        _user_id: &str,
         _requirement_ids: &std::collections::HashSet<uuid::Uuid>,
         _update: &dyn Fn(Option<&str>) -> String,
     ) -> Result<usize> {

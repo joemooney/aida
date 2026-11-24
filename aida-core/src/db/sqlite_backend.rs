@@ -1877,43 +1877,46 @@ impl DatabaseBackend for SqliteBackend {
     // trace:TASK-3155 | ai:codex
     fn queue_update_notes(
         &self,
-        user_id: &str,
         requirement_ids: &std::collections::HashSet<uuid::Uuid>,
         update: &dyn Fn(Option<&str>) -> String,
     ) -> Result<usize> {
-        if !self
-            .queue_list(user_id, true)?
-            .iter()
-            .any(|row| requirement_ids.contains(&row.requirement_id))
-        {
-            return Ok(0);
-        }
-        let mut conn = self.conn.lock().unwrap();
-        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        let mut matched = 0;
-        for requirement_id in requirement_ids {
-            let id = requirement_id.to_string();
-            let prior: Option<Option<String>> = tx
-                .query_row(
-                    "SELECT note FROM queue_entries WHERE user_id = ?1 AND requirement_id = ?2",
-                    params![user_id, id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if let Some(prior) = prior {
-                matched += 1;
-                let note = update(prior.as_deref());
-                if prior.as_ref() != Some(&note) {
-                    tx.execute(
-                        "UPDATE queue_entries SET note = ?3
+        let mut total = 0;
+        for user_id in self.queue_users()? {
+            if !self
+                .queue_list(&user_id, true)?
+                .iter()
+                .any(|row| requirement_ids.contains(&row.requirement_id))
+            {
+                continue;
+            }
+            let mut conn = self.conn.lock().unwrap();
+            let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            let mut matched = 0;
+            for requirement_id in requirement_ids {
+                let id = requirement_id.to_string();
+                let prior: Option<Option<String>> = tx
+                    .query_row(
+                        "SELECT note FROM queue_entries WHERE user_id = ?1 AND requirement_id = ?2",
+                        params![user_id, id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if let Some(prior) = prior {
+                    matched += 1;
+                    let note = update(prior.as_deref());
+                    if prior.as_ref() != Some(&note) {
+                        tx.execute(
+                            "UPDATE queue_entries SET note = ?3
                          WHERE user_id = ?1 AND requirement_id = ?2",
-                        params![user_id, id, note],
-                    )?;
+                            params![user_id, id, note],
+                        )?;
+                    }
                 }
             }
+            tx.commit()?;
+            total += matched;
         }
-        tx.commit()?;
-        Ok(matched)
+        Ok(total)
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {

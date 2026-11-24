@@ -2251,12 +2251,10 @@ impl DatabaseBackend for CachedGitBackend {
     // trace:TASK-3155 | ai:codex
     fn queue_update_notes(
         &self,
-        user_id: &str,
         requirement_ids: &std::collections::HashSet<uuid::Uuid>,
         update: &dyn Fn(Option<&str>) -> String,
     ) -> Result<usize> {
-        self.inner
-            .queue_update_notes(user_id, requirement_ids, update)
+        self.inner.queue_update_notes(requirement_ids, update)
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {

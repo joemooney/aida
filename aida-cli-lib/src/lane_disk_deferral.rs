@@ -87,26 +87,21 @@ pub(crate) fn annotate_queue_rows(
     if requirement_ids.is_empty() {
         return Ok(0);
     }
-    annotate_selected(storage, storage.queue_users()?, requirement_ids, &|prior| {
+    annotate_selected(storage, requirement_ids, &|prior| {
         deferral_note(prior, reason)
     })
 }
 
-// Discover queue owners only. The backend reads and transforms the current
+// The backend discovers persisted queues and transforms the current
 // row under the same lock used for queue edits and removals.
 // trace:TASK-3155 | ai:codex
 fn annotate_selected(
     storage: &aida_core::Storage,
-    users: Vec<String>,
     requirement_ids: &[uuid::Uuid],
     update: &dyn Fn(Option<&str>) -> String,
 ) -> Result<usize> {
     let requirement_ids = requirement_ids.iter().copied().collect();
-    let mut annotated = 0;
-    for user in users {
-        annotated += storage.queue_update_notes(&user, &requirement_ids, update)?;
-    }
-    Ok(annotated)
+    storage.queue_update_notes(&requirement_ids, update)
 }
 
 /// The pickup's result after a disk-floor refusal rolled its setup back:
@@ -174,8 +169,6 @@ mod tests {
         let mut removed = entry.clone();
         removed.user_id = "bob".into();
         storage.queue_add(removed).unwrap();
-        let users = storage.queue_users().unwrap();
-        let stale_rows = storage.queue_entries_for_requirement(&id).unwrap();
 
         let mut edited = entry;
         edited.position = 42;
@@ -189,7 +182,7 @@ mod tests {
 
         let reason = &format!("{NOTE_PREFIX}2026-11-19T06:00:00Z");
         assert_eq!(
-            annotate_selected(&storage, users, &[id], &|prior| {
+            annotate_selected(&storage, &[id], &|prior| {
                 // At the read/modify/write boundary, a second writer must be excluded.
                 // The old list + queue_add implementation renders the note unlocked.
                 if storage.is_sqlite() {
@@ -225,14 +218,6 @@ mod tests {
             .unwrap()
             .is_empty());
 
-        // Negative control: replay the same interleaving through the former
-        // snapshot/upsert path and observe both the lost edit and resurrection.
-        for (_, mut stale) in stale_rows {
-            stale.note = Some(deferral_note(stale.note.as_deref(), reason));
-            storage.queue_add(stale).unwrap();
-        }
-        assert_eq!(storage.queue_list("alice", true).unwrap()[0].position, 1000);
-        assert_eq!(storage.queue_list("bob", true).unwrap().len(), 1);
         if !storage.is_sqlite() {
             storage.queue_add(edited.clone()).unwrap();
             let mut sibling = edited.clone();
@@ -243,8 +228,16 @@ mod tests {
                 "[aliases]\nbob = 'alice'\n",
             )
             .unwrap();
-            assert_eq!(annotate_queue_rows(&storage, &[id], "fresh").unwrap(), 2);
-            for owner in ["alice", "bob"] {
+            let queues = storage.path().join("registry/queues");
+            for name in ["ops%41", "opsA"] {
+                std::fs::copy(
+                    queues.join("alice.yaml"),
+                    queues.join(format!("{name}.yaml")),
+                )
+                .unwrap();
+            }
+            assert_eq!(annotate_queue_rows(&storage, &[id], "fresh").unwrap(), 4);
+            for owner in ["alice", "bob", "ops%41", "opsA"] {
                 let bytes =
                     std::fs::read(storage.path().join(format!("registry/queues/{owner}.yaml")))
                         .unwrap();
@@ -252,6 +245,7 @@ mod tests {
                     serde_yaml::from_slice(&bytes).unwrap();
                 assert_eq!(rows[0].note.as_deref(), Some("fresh ·  keep me  "));
             }
+            check_git_locked_reread(&storage, &edited);
             // Matching rows require this lock. An unrelated requirement can
             // still report zero when a writer cannot open it.
             let lock = aida_core::db::store_write_lock_path(storage.path());
@@ -260,6 +254,47 @@ mod tests {
             assert!(annotate_queue_rows(&storage, &[id], reason).is_err());
             assert_eq!(annotate_queue_rows(&storage, &[absent], reason).unwrap(), 0);
         }
+    }
+
+    // Only the race queue contains these IDs. Contention signals that its unlocked
+    // preflight matched and the annotator is waiting to re-read that same file.
+    fn check_git_locked_reread(
+        storage: &aida_core::Storage,
+        edited: &aida_core::models::QueueEntry,
+    ) {
+        use aida_core::db::{hold_store_write, store_write_lock_contended_for};
+        let mut old = edited.clone();
+        old.user_id = "race".into();
+        old.requirement_id = uuid::Uuid::new_v4();
+        let mut removed = old.clone();
+        removed.requirement_id = uuid::Uuid::new_v4();
+        storage.queue_add(old.clone()).unwrap();
+        storage.queue_add(removed.clone()).unwrap();
+        let lock = hold_store_write(storage.path()).unwrap();
+        let before = store_write_lock_contended_for(storage.path());
+        let ids = [old.requirement_id, removed.requirement_id];
+        let root = storage.path().to_owned();
+        let worker = std::thread::spawn(move || {
+            annotate_queue_rows(&aida_core::Storage::new(root), &ids, "new")
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while store_write_lock_contended_for(storage.path()) == before {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "annotator never reached the writer lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        old.position = 91;
+        old.note = Some("intervening edit".into());
+        storage.queue_add(old.clone()).unwrap();
+        storage
+            .queue_remove("race", &removed.requirement_id)
+            .unwrap();
+        drop(lock);
+        assert_eq!(worker.join().unwrap().unwrap(), 1);
+        old.note = Some("new · intervening edit".into());
+        assert_eq!(storage.queue_list("race", true).unwrap(), vec![old]);
     }
 
     fn refused() -> anyhow::Error {
