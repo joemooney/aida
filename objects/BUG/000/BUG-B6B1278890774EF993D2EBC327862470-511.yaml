@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T14:50:53.527487548Z
+modified_at: 2026-11-24T14:52:36.319706665Z
 req_type: Bug
 tags:
 - store
@@ -41,6 +41,15 @@ comments:
   modified_at: 2026-11-24T14:43:13.267172205Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e0b-4f09-7692-99cb-31256132e495
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8dfad228d5897828a20168a919294468baab8452. Merge-base diff, working diff and untracked additions empty. AC1: [evidence: behavioral-test] unmet. No pre-pass refresh in pr_train.rs:5014. A two-repository Git fixture retained a local refusal at HEAD after fetching a remote approval. mandate_ship.rs:693 snapshots the working store and review_publication.rs:255 resolves HEAD. Selecting remote evidence alone risks dropping local refusals. AC2: [evidence: behavioral-test] unmet. No stalled-fetch regression or CI result for this change. Strict-tier authority fork referred to product.
+  created_at: 2026-11-24T14:52:30.907022020Z
+  modified_at: 2026-11-24T14:52:30.907022020Z
+  session_id: 01a20e0977b7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -53,6 +62,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20e0a-5e64-7c63-bbb7-92d24eab87e1
+  author: dirtlab
+  timestamp: 2026-11-24T14:51:30.276561848Z
+  session_id: 01a20e0977b7
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20e0b-645c-7271-8f81-a078aa74f089
+  author: dirtlab
+  timestamp: 2026-11-24T14:52:37.340710598Z
+  session_id: 01a20e0977b7
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -61,3 +85,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: When a successful fetch and the canonical store disagree, should train admission require both snapshots to permit the member, or refuse admission until the local store incorporates the fetched tip? A fetched approval can coexist with a local refusal, and the timeout rule only specifies cached fallback.
+  lean: Refuse admission on divergent histories and preserve the local dirty-evidence checks. Split pinned-ref support for the mandate and approval readers from the bounded fetch.
+  raised_by: implementer
+  raised_at: 2026-11-24T14:52:36.319706665Z
