@@ -1,0 +1,32 @@
+id: 01a20d63-6d65-7883-a5dd-9f557d5b4381
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-279
+title: 'Review PR-4514: [AI:codex] fix(admission): report lock activity and age on contention (BUG-2746)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20d33`) for branch `bug-b6b1278890774ef993d2ebc327862470-507`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4514>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-507` → `main`
+
+  ## Covers
+
+  - BUG-2746
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4514` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T11:49:09.605165849Z
+modified_at: 2026-11-24T11:49:09.605165849Z
+req_type: Story
+filed_at:
+  code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c832e0d3a
+  session: 01a20d3383bf
