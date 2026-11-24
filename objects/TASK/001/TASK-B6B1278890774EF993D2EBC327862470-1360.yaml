@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: The lane ship step titles the PR with the completing "(X)" trailer when the lane's exit summary claims every acceptance criterion of X, and uses "Refs X" ONLY when the brief or the exit summary declares a partial slice.
   - AC2: Tests for both cases: an all-AC-claimed exit produces "(X)"; a declared-slice exit produces "Refs X".
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:31:16.499980191Z
-modified_at: 2026-11-24T16:33:02.482293959Z
+modified_at: 2026-11-24T19:10:44.568516090Z
 req_type: Task
 tags:
 - lanes
@@ -41,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-24T16:31:42.307068903Z
   changes: []
+- id: 01a20ef7-b558-72b3-b1f4-e9178a0e3d49
+  author: aida-session-start
+  timestamp: 2026-11-24T19:10:44.568514512Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
