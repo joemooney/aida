@@ -4,42 +4,32 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-/// Return the object ID reported by this fetch. Reading the shared tracking
-/// ref afterwards could pick up a different concurrent fetch.
-pub(super) fn fetch_tip(
-    store: &Path,
-    remote: &str,
-    branch: &str,
-    budget: Duration,
-) -> anyhow::Result<String> {
+pub(super) fn refresh(store: &Path, budget: Duration) -> anyhow::Result<()> {
     let deadline = Instant::now() + budget;
-    anyhow::ensure!(
-        !remote.is_empty() && !remote.starts_with('-') && !remote.contains(['/', ':', '@']),
-        "invalid store remote name"
-    );
-    let source = format!("refs/heads/{branch}");
-    let mut validate = aida_core::git_ops::host_git_command(store);
-    validate.args(["check-ref-format", &source]);
-    anyhow::ensure!(
-        crate::gate::kernel_deps::output_before(validate, Some(deadline))?
-            .status
-            .success(),
-        "invalid store branch"
-    );
+    anyhow::ensure!(store.join(".git").exists(), "missing store checkout");
+    let mut branch = aida_core::git_ops::host_git_command(store);
+    branch.args(["symbolic-ref", "--quiet", "HEAD"]);
+    let head = crate::gate::kernel_deps::output_before(branch, Some(deadline))
+        .map_err(|_| anyhow::anyhow!("store refresh timed out"))?;
+    anyhow::ensure!(head.status.success(), "store branch unavailable");
+    let source = std::str::from_utf8(&head.stdout)?.trim_end_matches('\n');
+    let branch = source
+        .strip_prefix("refs/heads/")
+        .ok_or_else(|| anyhow::anyhow!("unexpected store HEAD"))?;
     let mut cmd = aida_core::git_ops::with_config_read_deadline(Some(deadline), || {
-        aida_core::git_ops::host_remote_git_command(store, remote)
+        aida_core::git_ops::host_remote_git_command(store, "origin")
     });
-    let destination = format!("refs/remotes/{remote}/{branch}");
+    let destination = format!("refs/remotes/origin/{branch}");
     cmd.args([
         "fetch",
-        "--porcelain",
-        "--verbose",
+        "--quiet",
+        "--no-prune",
         "--no-write-fetch-head",
         "--no-tags",
         "--no-recurse-submodules",
         "--no-auto-maintenance",
         "--refmap=",
-        remote,
+        "origin",
         &format!("+{source}:{destination}"),
     ])
     .env("GIT_TERMINAL_PROMPT", "0")
@@ -57,17 +47,7 @@ pub(super) fn fetch_tip(
         crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("store refresh unavailable"),
     };
     anyhow::ensure!(output.status.success(), "store refresh unavailable");
-    let row = std::str::from_utf8(&output.stdout)?.trim_end();
-    // Git uses a space as the fast-forward flag. Skip the flag and its separator.
-    let fields: Vec<_> = row.get(2..).unwrap_or_default().split(' ').collect();
-    anyhow::ensure!(
-        fields.len() == 3
-            && fields[2] == destination
-            && matches!(fields[1].len(), 40 | 64)
-            && fields[1].bytes().all(|b| b.is_ascii_hexdigit()),
-        "store refresh unavailable: unexpected git fetch result"
-    );
-    Ok(fields[1].to_owned())
+    Ok(())
 }
 
 #[cfg(test)]
@@ -100,13 +80,19 @@ mod tests {
             "-m",
             "fixture",
         ]);
-        let tip = fetch_tip(store, "origin", "aida-store", Duration::from_secs(5)).unwrap();
+        refresh(store, Duration::from_secs(5)).unwrap();
         let head = crate::test_git::git_command()
             .current_dir(store)
-            .args(["rev-parse", "HEAD"])
+            .args([
+                "rev-list",
+                "--left-right",
+                "--count",
+                "HEAD...refs/remotes/origin/aida-store",
+            ])
             .output()
             .unwrap();
-        assert_eq!(tip, String::from_utf8(head.stdout).unwrap().trim());
+        assert!(head.status.success());
+        assert_eq!("0\t0", String::from_utf8(head.stdout).unwrap().trim());
         assert!(!store.join(".git/FETCH_HEAD").exists());
         let upload = store.join("upload");
         std::fs::write(&upload, "#!/bin/sh\nflock -n .aida/store-write.lock touch observed-unlocked || exit 1\nexec sleep 20\n").unwrap();
@@ -118,7 +104,7 @@ mod tests {
             upload.to_str().unwrap(),
         ]);
         let start = Instant::now();
-        let error = fetch_tip(store, "origin", "aida-store", Duration::from_secs(2)).unwrap_err();
+        let error = refresh(store, Duration::from_secs(2)).unwrap_err();
         assert!(start.elapsed() < Duration::from_secs(5));
         assert!(store.join("observed-unlocked").exists());
         assert!(error.to_string().contains("store refresh timed out"));

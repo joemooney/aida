@@ -5033,6 +5033,15 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);
     }
+    // trace:BUG-2750 | ai:codex
+    if !opts.dry_run {
+        if let Some(store) = aida_core::store_locate::detect_distributed_store_from(&main_worktree)
+        {
+            if let Err(error) = store_refresh::refresh(&store, std::time::Duration::from_secs(5)) {
+                eprintln!("train: {error}; continuing with cached store");
+            }
+        }
+    }
     let forge = crate::forge::forge_for(&project_root);
     let base = crate::gate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
