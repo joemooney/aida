@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T06:48:36.965019115Z
+modified_at: 2026-11-24T07:02:27.092359886Z
 req_type: Story
 tags:
 - admission
@@ -44,6 +44,18 @@ comments:
   modified_at: 2026-11-24T06:44:17.441231055Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c5c-f1b2-7063-b85d-d69300da5e86
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c plus the native worktree diff. The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] standalone_implementer.rs:1474 reloads the bound anchor and member UUIDs. Its mandatory callback at line 1776 runs on first spawn and resume. Both contained and ordinary child spawn sites propagate hook errors (session/headless.rs:2762 and 2818). Missing authority refuses. wip_limit.rs:372 exercises a changed WIP count with the original pickup classification.
+    AC2: [evidence: behavioral-test] tests/queue_work_tests.rs:5549 admits a cluster then exercises a held member, an operator-track anchor and a fast-forward pull that moves the member to the operator track. Final-tree lane job j20261124T065854175-2-0 executed both STORY-3080 tests successfully.
+    Probes: checked zero, duplicate-anchor and multiple-member iteration, UUID identity across pulls, error propagation, original WIP exemptions/override, native and wrapped spawns. Fixed relative store path resolution before launch changes cwd. Test fixture callbacks are confined to tests. No existing assertions weakened. Regression drives the authority function with a real pull, while hook placement was inspected. Existing WIP snapshot freshness and BUG-2740 lock lifecycle remain applicable. No published-head CI exists yet.
+  created_at: 2026-11-24T07:02:27.092359886Z
+  modified_at: 2026-11-24T07:02:27.092359886Z
+  session_id: 01a20c4fa138
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
