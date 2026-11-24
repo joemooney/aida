@@ -1,0 +1,26 @@
+id: 01a20af8-20fa-7e32-9eaf-838b3b1af49c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1279
+agreed_id: TASK-3852
+title: forge::github_core_budget honours the gh test/debug seam (resolve_gh_binary_for_probe) (follow-up to TASK-3847)
+description: |
+  Follow-up to TASK-3847 / #4470 (advisor-122 ruling 2026-11-23 17:40; filed by product-15). forge::github_core_budget spawns Command::new("gh") directly, bypassing the test/debug seam, so AIDA_TEST_GH_BINARY / AIDA_DEBUG_GH are ignored there.
+
+  ## Acceptance
+  - AC1: forge::github_core_budget resolves gh via crate::kernel::resolve_gh_binary_for_probe() (one line), so the seam is honoured. A test uses the fake gh (AIDA_TEST_GH_BINARY) and asserts the budget reading comes from it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T00:32:43.258391737Z
+modified_at: 2026-11-24T00:32:43.258391737Z
+req_type: Task
+tags:
+- small
+- track:integration
+filed_at:
+  code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5db0b2b1b17
+  vendor: claude
