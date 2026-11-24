@@ -771,24 +771,35 @@ fn scan_history(
     let now = ports.now();
     let recent = ports.recent(BATCH)?;
     let mut verdicts: BTreeMap<String, Verdict> = BTreeMap::new();
-    let mut judged = |ports: &mut dyn Ports, commit: &Commit| -> Verdict {
-        verdicts
-            .entry(commit.sha.clone())
-            .or_insert_with(|| {
-                if pass_budget_spent() {
-                    return Verdict::Pending("pass deadline reached".into());
+    let mut judged = |ports: &mut dyn Ports, commit: &Commit| -> Result<Verdict> {
+        if let Some(verdict) = verdicts.get(&commit.sha) {
+            return Ok(verdict.clone());
+        }
+        let verdict = if pass_budget_spent() {
+            Verdict::Pending("pass deadline reached".into())
+        } else {
+            // trace:TASK-3859 | ai:codex
+            let checks = match ports.checks(&commit.sha) {
+                Err(err) if err.is::<crate::forge::WatchAuthenticationFailed>() => {
+                    return Err(err);
                 }
-                judge(ports.checks(&commit.sha), required, commit.at, now)
-            })
-            .clone()
+                other => other,
+            };
+            judge(checks, required, commit.at, now)
+        };
+        verdicts.insert(commit.sha.clone(), verdict.clone());
+        Ok(verdict)
     };
 
     // First pass: anchor at the newest green commit read, or the oldest.
     if state.cursor.is_none() && state.first_candidate.is_none() {
-        let green = recent
-            .iter()
-            .find(|c| judged(ports, c) == Verdict::Green)
-            .cloned();
+        let mut green = None;
+        for commit in &recent {
+            if judged(ports, commit)? == Verdict::Green {
+                green = Some(commit.clone());
+                break;
+            }
+        }
         if let Some(anchor) = green {
             state.last_green = Some(anchor.sha.clone());
             state.cursor = Some(anchor.sha.clone());
@@ -838,7 +849,7 @@ fn scan_history(
             body: String::new(),
             at: episode.source_at.unwrap_or(episode.opened_at),
         };
-        match judged(ports, &red) {
+        match judged(ports, &red)? {
             Verdict::Green => {
                 state.cursor = Some(red.sha.clone());
                 state.last_green = Some(red.sha.clone());
@@ -870,14 +881,16 @@ fn scan_history(
     if batch.is_empty() && state.episode.is_none() {
         if let Some(tip) = recent.first() {
             if state.cursor.as_ref() == Some(&tip.sha)
-                && matches!(judged(ports, tip), Verdict::Red { .. })
+                && matches!(judged(ports, tip)?, Verdict::Red { .. })
             {
                 if state.last_green.as_ref() == Some(&tip.sha) {
-                    state.last_green = recent
-                        .iter()
-                        .skip(1)
-                        .find(|c| judged(ports, c) == Verdict::Green)
-                        .map(|c| c.sha.clone());
+                    state.last_green = None;
+                    for commit in recent.iter().skip(1) {
+                        if judged(ports, commit)? == Verdict::Green {
+                            state.last_green = Some(commit.sha.clone());
+                            break;
+                        }
+                    }
                 }
                 batch.push(tip.clone());
             }
@@ -885,7 +898,7 @@ fn scan_history(
     }
 
     for commit in batch {
-        let verdict = judged(ports, &commit);
+        let verdict = judged(ports, &commit)?;
         if !matches!(verdict, Verdict::Pending(_) | Verdict::Green) {
             state.first_candidate = None;
             state.cursor = Some(commit.sha.clone());
@@ -936,7 +949,7 @@ fn scan_history(
     }
     // The tip, reported apart from the last green commit.
     if let Some(tip) = recent.first().filter(|_| !pass_budget_spent()) {
-        let text = verdict_text(&judged(ports, tip));
+        let text = verdict_text(&judged(ports, tip)?);
         if state.tip.as_ref() != Some(&(tip.sha.clone(), text.clone())) {
             state.tip = Some((tip.sha.clone(), text));
             write_state(land, state)?;
