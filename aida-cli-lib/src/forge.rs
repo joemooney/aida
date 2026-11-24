@@ -1895,27 +1895,43 @@ fn describe_core_budget(body: &[u8]) -> Option<(String, bool)> {
 // trace:TASK-3847 | ai:codex
 pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
     use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
-    if peek_forge_kind(root) != ForgeKind::GitHub {
-        return None;
-    }
-    let mut command = Command::new("gh");
-    command
-        .current_dir(root)
-        .args(["api", "rate_limit", "--cache", "60s"])
-        .stdin(std::process::Stdio::null());
-    if let BoundedCommandOutput::Completed(out) =
-        command_output_with_timeout_capped(command, std::time::Duration::from_secs(5), 65536)
-    {
-        if out.status.success() {
-            if let Some(reading) = describe_core_budget(&out.stdout) {
-                return Some(reading);
+    use crate::review_watch::forge::{main_root, Repository};
+    use std::time::Duration;
+
+    // Use the same main-repository identity and host pin as land discovery.
+    // trace:TASK-3852 | ai:codex
+    // trace:TASK-3854 | ai:codex
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
+        let root = main_root(root).ok()?;
+        let repo = Repository::load(&root).ok()?;
+        repo.github_slug()?;
+        let reading = (|| {
+            let gh_bin = std::path::absolute(crate::kernel::resolve_gh_binary_for_probe()?).ok()?;
+            let mut command = Command::new(gh_bin);
+            repo.pin_command(&mut command);
+            command
+                .current_dir(&root)
+                .args(["api", "rate_limit", "--cache", "60s"])
+                .stdin(std::process::Stdio::null());
+            let remaining = crate::forge_lookup::forge_lookup_deadline()?
+                .checked_duration_since(std::time::Instant::now())?;
+            let BoundedCommandOutput::Completed(out) =
+                command_output_with_timeout_capped(command, remaining, 65536)
+            else {
+                return None;
+            };
+            if !out.status.success() {
+                return None;
             }
-        }
-    }
-    Some((
-        "GitHub core REST budget: unknown. Top consumers since last reset: unknown.".into(),
-        false,
-    ))
+            describe_core_budget(&out.stdout)
+        })();
+        Some(reading.unwrap_or_else(|| {
+            (
+                "GitHub core REST budget: unknown. Top consumers since last reset: unknown.".into(),
+                false,
+            )
+        }))
+    })
 }
 
 #[test]
@@ -2154,6 +2170,7 @@ pub(crate) fn required_checks_from_output(
 }
 
 pub struct GitHubForge {
+    metadata_repo: Option<String>,
     project_root: PathBuf,
 }
 
@@ -2258,9 +2275,21 @@ impl GitHubForge {
         })
     }
 
+    // trace:TASK-3862 | ai:codex
+    pub(crate) fn for_review(root: &Path) -> Result<Self> {
+        let pin = crate::merge_hold::resolve_pinned_repo(root, ForgeKind::GitHub)
+            .map_err(anyhow::Error::msg)?
+            .context("missing origin")?;
+        Ok(Self {
+            metadata_repo: Some(pin.repo_arg()),
+            ..Self::new(root)
+        })
+    }
+
     pub fn new(project_root: &Path) -> Self {
         Self {
             project_root: project_root.to_path_buf(),
+            metadata_repo: None,
         }
     }
 
@@ -2553,7 +2582,8 @@ impl GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        let mut api =
+            |endpoint: &str| commit_ci_api_read(&gh, &self.project_root, endpoint, verify_jobs);
         // `gh api` fills `{owner}/{repo}` from this checkout's repository.
         github_checks_with_attempts("{owner}/{repo}", sha, &mut api, verify_jobs)
     }
@@ -3129,6 +3159,9 @@ impl Forge for GitHubForge {
                     "--json",
                     "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
                 ]);
+                if let Some(repo) = &self.metadata_repo {
+                    c.env_remove("GH_REPO").args(["-R", repo]);
+                }
                 crate::forge_lookup::deadline_output(
                     c,
                     crate::process_retry::command_output_retrying_etxtbsy,
@@ -5862,6 +5895,28 @@ pub(crate) fn commit_ci_api_tail(
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
 fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    commit_ci_api_read(cli, root, endpoint, false)
+}
+
+// trace:TASK-3859 | ai:codex
+#[derive(Debug)]
+pub(crate) struct WatchAuthenticationFailed;
+
+impl std::fmt::Display for WatchAuthenticationFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "GitHub CLI authentication failed while reading commit CI; refresh gh credentials",
+        )
+    }
+}
+impl std::error::Error for WatchAuthenticationFailed {}
+
+fn commit_ci_api_read(
+    cli: &Path,
+    root: &Path,
+    endpoint: &str,
+    watch_github: bool,
+) -> Result<Vec<u8>> {
     // The verified train gate reads check-run pages and commit statuses here,
     // independently of the ordinary PR checks runner. Each request needs its
     // own durable checkpoint. Outside an active train this is a no-op.
@@ -5879,6 +5934,22 @@ fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
                 cli.display()
             )
         })?;
+    if watch_github && !out.status.success() {
+        let diagnostic = String::from_utf8_lossy(&out.stderr).to_ascii_lowercase();
+        if out.status.code() == Some(4)
+            || [
+                "http 401",
+                "bad credentials",
+                "to get started with github cli",
+                "gh_token environment variable",
+                "authentication required",
+            ]
+            .iter()
+            .any(|marker| diagnostic.contains(marker))
+        {
+            return Err(WatchAuthenticationFailed.into());
+        }
+    }
     anyhow::ensure!(
         out.status.success(),
         "`{} api {endpoint}` failed ({}): {}",
@@ -7024,6 +7095,32 @@ pub(crate) fn pr_state_batch(
     anyhow::ensure!(rows.len() < 1000, "PR state snapshot truncated at 1000 PRs");
     Ok(rows)
 }
+/// Pin the advisory risk comparison to origin's PR at the reviewed head.
+// trace:BUG-2737 | ai:codex
+pub(crate) fn review_risk_pr_base(root: &Path, number: u64, head: &str) -> Option<String> {
+    let (host, project) = pr_state_repository(root).ok()?;
+    let mut cmd = forge_read_command(&crate::resolve_gh_binary_for_probe()?);
+    pr_state_pin(&mut cmd, root, &host);
+    cmd.args([
+        "pr",
+        "view",
+        &number.to_string(),
+        "--repo",
+        &format!("{host}/{project}"),
+        "--json",
+        "headRefOid,baseRefOid",
+    ]);
+    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))?;
+    if !out.status.success() {
+        return None;
+    }
+    let row: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    if !row["headRefOid"].as_str()?.eq_ignore_ascii_case(head) {
+        return None;
+    }
+    Some(row["baseRefOid"].as_str()?.to_owned())
+}
+
 // trace:STORY-2688 | ai:codex
 fn pr_state_repository(root: &Path) -> Result<(String, String)> {
     let mut git = Command::new("git");

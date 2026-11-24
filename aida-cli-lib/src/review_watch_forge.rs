@@ -65,8 +65,21 @@ fn output(root: &Path, program: &str, args: &[&str]) -> Result<Vec<u8>> {
     let mut command = Command::new(program);
     command.current_dir(root).args(args).stdin(Stdio::null());
     clear_routing(&mut command);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
-        .with_context(|| format!("review-watch {program} probe failed or exceeded 30 seconds"))?;
+    // trace:TASK-3854 | ai:codex
+    let cap = std::time::Duration::from_secs(30);
+    let timeout = crate::forge_lookup::forge_lookup_deadline()
+        .map(|deadline| {
+            deadline
+                .saturating_duration_since(std::time::Instant::now())
+                .min(cap)
+        })
+        .unwrap_or(cap);
+    anyhow::ensure!(
+        !timeout.is_zero(),
+        "review-watch {program} deadline expired"
+    );
+    let out = crate::command_output_with_timeout(command, timeout)
+        .with_context(|| format!("review-watch {program} probe failed or exceeded {timeout:?}"))?;
     anyhow::ensure!(
         out.status.success(),
         "review-watch {program} probe failed ({})",
@@ -458,7 +471,12 @@ impl Repository {
             };
             let overlap = paths_overlap(&names(&base)?, &names(&head)?);
             // trace:STORY-2821 | ai:claude
-            let conflict = overlap
+            // trace:BUG-2725 | ai:codex
+            let verify_merge = overlap
+                || (!change.gitlab
+                    && change.base == "main"
+                    && crate::landing_policy::load(root).clean_merge_train());
+            let conflict = verify_merge
                 .then(|| merge_conflicts(root, &base, &head))
                 .flatten();
             Ok((overlap, behind, conflict))

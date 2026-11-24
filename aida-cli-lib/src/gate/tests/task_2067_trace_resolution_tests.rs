@@ -98,7 +98,7 @@ fn a_renumbered_stem_is_found_whatever_the_rename_config() {
     for config in CONFIGS {
         let store = renumbered_store(config);
         let ids = vec!["BUG-1-040".to_string(), "BUG-1-051".to_string()];
-        let map = store_history_alias_map(store.path(), &ids).unwrap();
+        let map = store_history_alias_map(store.path(), &ids, true).unwrap();
         assert_eq!(map["BUG-1-040"], vec!["BUG-26".to_string()], "{config:?}");
         assert_eq!(map["BUG-1-051"], vec!["BUG-21".to_string()], "{config:?}");
     }
@@ -110,8 +110,13 @@ fn a_renumbered_stem_is_found_whatever_the_rename_config() {
 fn a_renumbered_trace_id_is_judged_by_its_new_stem() {
     for config in CONFIGS {
         let store = renumbered_store(config);
-        let specs =
-            resolve_exclusion_specs(None, store.path(), &[], ["BUG-1-040".to_string()].into());
+        let specs = resolve_exclusion_specs(
+            None,
+            store.path(),
+            &[],
+            ["BUG-1-040".to_string()].into(),
+            true,
+        );
         let [spec] = &specs[..] else {
             panic!("{specs:?}")
         };
@@ -133,7 +138,8 @@ fn an_unreadable_version_of_the_renamed_to_stem_refuses() {
         let root = store.path();
         std::fs::write(object(root, "BUG-26"), "{ not: [yaml\n").unwrap();
         git(root, &["commit", "-qam", "corrupt"]);
-        let specs = resolve_exclusion_specs(None, root, &[], ["BUG-1-040".to_string()].into());
+        let specs =
+            resolve_exclusion_specs(None, root, &[], ["BUG-1-040".to_string()].into(), true);
         let refusal = judge_exclusion_spec(&specs[0], &Default::default(), true);
         assert!(
             matches!(refusal, Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "BUG-1-040"),
@@ -162,7 +168,7 @@ fn a_removed_line_at_a_non_canonical_old_path_refuses() {
         root,
         &["commit", "-qm", "drop the agreed id while moving it"],
     );
-    let err = store_history_alias_map(root, &["BUG-1-040".to_string()]).unwrap_err();
+    let err = store_history_alias_map(root, &["BUG-1-040".to_string()], true).unwrap_err();
     assert!(err.contains("outside a canonical object path"), "{err}");
     assert!(err.contains("objects/BUG/BUG-1-040.yaml"), "{err}");
 }
@@ -194,6 +200,7 @@ fn bug_056_an_agreed_id_named_spec_scopes_its_canonical_object() {
         root,
         &["BUG-26".to_string()],
         Default::default(),
+        true,
     );
     let [spec] = &specs[..] else {
         panic!("{specs:?}")
