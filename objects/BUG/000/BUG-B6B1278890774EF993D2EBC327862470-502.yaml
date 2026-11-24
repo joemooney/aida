@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:05.669804177Z
-modified_at: 2026-11-24T03:35:02.355090932Z
+modified_at: 2026-11-24T03:49:45.781795980Z
 req_type: Bug
 tags:
 - small
@@ -42,6 +42,16 @@ comments:
   modified_at: 2026-11-24T03:30:18.720301241Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20bac-89ce-7671-a251-2c7d51b90785
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: baefe725cc44fc9a4995d01dbd3d6c1e73ed00e2 plus native working diff. Reviewed origin/main merge-base diff (two inherited integration fixtures), git diff HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/status_prs.rs:3430 ran against the original detector and failed the deferred assertion. After the fix, one test passed including detection after lifting deferral. Candidate and resolved-spec filters use one exclusion predicate at line 2571. Checked ID case normalization, suffixed branch names, missing and duplicate summaries, and store snapshot precedence. Reporting only. No actionable findings. Rustfmt and git diff --check passed. Residual validation: make check-ci-fast stopped when four shard-tooling tests required cargo metadata, which the lane job runner does not accept. Host fast validation pending.
+  created_at: 2026-11-24T03:49:45.781795980Z
+  modified_at: 2026-11-24T03:49:45.781795980Z
+  session_id: 01a20b9e6c1c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b99-adf0-7950-aee0-2bcd6fbf00a2
   author: joe
