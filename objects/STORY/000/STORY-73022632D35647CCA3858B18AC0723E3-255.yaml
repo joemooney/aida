@@ -1,0 +1,31 @@
+id: 01a20b5c-7d62-7700-876f-a240bb101ff7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-255
+title: 'Review PR-4477: [AI:codex] fix(review): classify risk against the verified PR base (Refs BUG-2737)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a20b18`) for branch `bug-b6b1278890774ef993d2ebc327862470-498`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4477>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-498` → `main`
+
+  ## Covers
+
+  - BUG-2737
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4477` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T02:22:20.514187590Z
+modified_at: 2026-11-24T02:22:20.514187590Z
+req_type: Story
+filed_at:
+  code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ac22ab7f54
