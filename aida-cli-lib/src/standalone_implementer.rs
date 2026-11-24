@@ -106,6 +106,7 @@ a design fork, run `aida punt`; to push the branch but hold the PR for a manual 
 /// recorded lease still vouches for the work. This overrides the ordinary
 /// pickup shipping unit without weakening the live-owner check.
 // trace:TASK-2879 trace:BUG-2493 | ai:codex
+// trace:TASK-3876 | ai:codex
 pub(crate) const NATIVE_STOP_CONTRACT: &str = "\n\nStandalone native implementer launch: \
 Git metadata is read-only. Finish the edits and targeted tests, leave the edits uncommitted, \
 and write a final handoff listing changed files, validation results and blockers, then exit. \
@@ -113,11 +114,10 @@ Do not commit, push, open a PR or run `aida queue done` from this seat. After yo
 exits, the host launcher commits and publishes the PR; queue completion follows publication. \
 Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
 run `aida punt`; existing punt or hold signals remain publication vetoes. \
-For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" \
---commit-body-file <file>` to declare the host publication subject and optional body; \
-this records intent without publishing. \
-For a completing lane, use `aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" \
---commit-body-file <file>` to declare completion with an optional body. \
+When the exit summary claims every acceptance criterion, declare completion with \
+`aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>`. \
+Add `--partial-slice` only when the brief or exit summary declares a partial slice. \
+The host derives the PR title from this declaration and checks for outstanding child slices. \
 Omit `--commit-body-file <file>` when no body trailers are needed. \
 For required commit-body trailers such as `Help-Golden: unchanged`, write a UTF-8 file \
 outside the checkout (for example under `/tmp`) and add `--commit-body-file <file>` \
