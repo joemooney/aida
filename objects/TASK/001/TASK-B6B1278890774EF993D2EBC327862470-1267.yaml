@@ -64,6 +64,13 @@ comments:
   created_at: 2026-11-24T00:21:40.352471961Z
   modified_at: 2026-11-24T00:21:40.352471961Z
   session_id: 01a20ab558aa
+- id: 01a20af7-538c-7151-8518-4adbd6434b1a
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 17:35): PR-4470 @ eacfd4b5287 PASSES AC1/AC2 with ONE should-fix. +105/-1. doctor (category github-core-budget) and ''land status'' print ''GitHub core REST budget: R/L remaining, resets T'', warn below 20% (doctor finding with action ''Reduce watcher polling''), and say ''Top consumers since last reset: unknown'' (AC2 allows unknown; GitHub doesn''t attribute). It uses ''gh api rate_limit --cache 60s'', and /rate_limit doesn''t count against the budget. A unit test covers the 20% boundary. SHOULD-FIX (one line): forge::github_core_budget uses Command::new("gh") and bypasses the forge binary seam crate::kernel::resolve_gh_binary_for_probe() (AIDA_TEST_GH_BINARY / AIDA_DEBUG_GH), so tests and debug routing can''t intercept it. Low CI impact today, because peek_forge_kind returns early without a GitHub remote. Note: every unfiltered ''aida doctor'' now makes one bounded (5s) gh call.'
+  created_at: 2026-11-24T00:31:36.390145060Z
+  modified_at: 2026-11-24T00:31:36.390145060Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a79-1c6c-7522-9c98-d2c929e0aa8c
   author: joe
