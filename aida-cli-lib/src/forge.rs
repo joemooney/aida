@@ -1872,6 +1872,66 @@ pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
         .unwrap_or(ForgeKind::None)
 }
 
+// trace:TASK-3847 | ai:codex
+pub(crate) const CORE_BUDGET_CATEGORY: &str = "github-core-budget";
+
+// GitHub reports account totals but does not attribute requests to pollers.
+fn describe_core_budget(body: &[u8]) -> Option<(String, bool)> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let core = value.pointer("/resources/core")?;
+    let limit = core["limit"].as_u64()?;
+    let remaining = core["remaining"].as_u64()?;
+    if limit == 0 || remaining > limit {
+        return None;
+    }
+    let reset = chrono::DateTime::from_timestamp(core["reset"].as_i64()?, 0)?;
+    let low = u128::from(remaining) * 5 < u128::from(limit);
+    let warning = if low { " WARNING: below 20%." } else { "" };
+    Some((format!(
+        "GitHub core REST budget: {remaining}/{limit} remaining, resets {reset}.{warning} Top consumers since last reset: unknown."
+    ), low))
+}
+
+// trace:TASK-3847 | ai:codex
+pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
+    use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
+    if peek_forge_kind(root) != ForgeKind::GitHub {
+        return None;
+    }
+    let mut command = Command::new("gh");
+    command
+        .current_dir(root)
+        .args(["api", "rate_limit", "--cache", "60s"])
+        .stdin(std::process::Stdio::null());
+    if let BoundedCommandOutput::Completed(out) =
+        command_output_with_timeout_capped(command, std::time::Duration::from_secs(5), 65536)
+    {
+        if out.status.success() {
+            if let Some(reading) = describe_core_budget(&out.stdout) {
+                return Some(reading);
+            }
+        }
+    }
+    Some((
+        "GitHub core REST budget: unknown. Top consumers since last reset: unknown.".into(),
+        false,
+    ))
+}
+
+#[test]
+fn task_3847_cached_rate_limit_report() {
+    for (remaining, low) in [(0, true), (999, true), (1000, false), (5000, false)] {
+        let fake = serde_json::json!({"resources":{"core":{"remaining":remaining,"limit":5000,"reset":3600}}});
+        let (summary, warning) = describe_core_budget(fake.to_string().as_bytes()).unwrap();
+        assert_eq!(warning, low);
+        assert_eq!(summary.contains("WARNING"), low);
+        assert!(summary.contains(&format!("{remaining}/5000")));
+        assert!(summary.contains("1970-01-01 01:00:00 UTC"));
+        assert!(summary.contains("Top consumers since last reset: unknown"));
+    }
+    assert!(describe_core_budget(b"{}").is_none());
+}
+
 /// [`resolve_forge_kind`]'s answer for a read-only report: a stale pure-git
 /// config still resolves to the origin forge, but the config is not repaired.
 // trace:STORY-2824 | ai:claude

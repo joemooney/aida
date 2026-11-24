@@ -13,6 +13,9 @@ pub(crate) struct DoctorHealResult {
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub(crate) struct DoctorReport {
+    // trace:TASK-3847 | ai:codex
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) github_core_budget: Option<String>,
     pub(super) total: usize,
     pub(super) findings: Vec<DoctorFinding>,
     #[serde(skip_serializing_if = "is_zero_usize")]
@@ -206,6 +209,9 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
             crate::vendors::codex_auth_hints::REPORT_FIELD,
             lifetime,
         ));
+    }
+    if let Some(info) = &report.github_core_budget {
+        blocks.push(scalar("github_core_budget", info));
     }
     if !report.remote_drift_info.is_empty() {
         let rows = report
@@ -469,6 +475,9 @@ pub(super) fn render_doctor_report(report: &DoctorReport, healed: bool) -> Resul
     if let Some(lifetime) = &report.codex_token_lifetime {
         println!("  {lifetime}");
     }
+    if let Some(info) = &report.github_core_budget {
+        println!("  {info}");
+    }
     for info in &report.remote_drift_info {
         println!("  {info}");
     }
@@ -666,6 +675,7 @@ pub(crate) fn doctor_lane_tests_note(bwrap_live: bool) -> &'static str {
 impl DoctorReport {
     pub(super) fn from_findings(findings: Vec<DoctorFinding>) -> Self {
         Self {
+            github_core_budget: None,
             total: findings.len(),
             findings,
             hidden_completed_without_commit: 0,
