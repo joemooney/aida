@@ -20,12 +20,6 @@ tags:
 - schedule
 - small
 - track:integration
-relationships:
-- rel_type:
-    custom: implemented-by
-  target_id: 01a20c5f-b897-7a01-a173-a13fab63d723
-  created_at: 2026-11-24T07:06:05.239670773Z
-  created_by: dirtlab
 comments:
 - id: 01a20c29-73dc-7da1-9d49-20984ccb3495
   author: joe
@@ -50,6 +44,13 @@ comments:
   created_at: 2026-11-24T07:04:59.100442227Z
   modified_at: 2026-11-24T07:04:59.100442227Z
   session_id: 01a20c31ca41
+- id: 01a20c61-9ceb-7ba2-b408-72234273f5ba
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 00:12): PR-4498 @ 9bb10185cc PASSES the advisor''s 23:07 follow-up. +178/-28, merges CLEAN, standard tier (watch reporting). AC1: forge::commit_ci_api_read returns a typed WatchAuthenticationFailed (''GitHub CLI authentication failed while reading commit CI; refresh gh credentials'') when gh exits 4 or stderr carries an auth marker (http 401, bad credentials, ''to get started with github cli'', GH_TOKEN, authentication required). main_watch::scan_history propagates only that error (''judged'' is now fallible), so an expired login FAILS the pass (non-zero exit, CronJobFailed fires) instead of reading as Pending; other check errors still judge as before. AC2: the scheduled ''land watch'' runs with ''--format human'' (full error chain on stderr), and record_outcome_local uses watch_failure_error for it: ''exit N: <first Error: line> | <final cause>'', each capped at 240 chars. Tests in story_2897_main_watch_tests and maintenance_schedule_tests. Note: the auth detection is keyed on the existing verify_jobs flag (commit_checks_for(sha, true), forge.rs:3314), so any OTHER verified-checks caller (e.g. a train gate) also gets the clearer auth error. It still fails the same way, so this is benign.'
+  created_at: 2026-11-24T07:07:20.800755218Z
+  modified_at: 2026-11-24T07:07:20.800755218Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20c61-7c37-7a10-a5d4-9d9f9184ccb9
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int31-task-3859` at head `9bb10185cc8ffea3480c7aca9b6a2b298a2ba7e2`.'
