@@ -233,9 +233,11 @@ pub(crate) fn missing_seat_sidecar_note(
     }
     for issue in issues {
         use std::fmt::Write;
+        // trace:TASK-3851 | ai:codex
+        let separator = if issue.id.starts_with('-') { "-- " } else { "" };
         let _ = write!(
             note,
-            "\n{} — aida mailbox read {} (source {:?})",
+            "\n{} — aida mailbox read {separator}{} (source {:?})",
             issue.reason, issue.id, issue.source
         );
     }

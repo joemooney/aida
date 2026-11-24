@@ -1510,6 +1510,8 @@ struct Budget {
     max_roots: usize,
     entries_left: usize,
     retained_probes_left: usize,
+    #[cfg(test)]
+    expire_at_retained_checkpoint: Option<usize>,
     max_message_bytes: u64,
     bytes_left: u64,
 }
@@ -1521,6 +1523,8 @@ impl Budget {
             max_roots: limits.max_roots,
             entries_left: limits.max_entries,
             retained_probes_left: limits.max_retained_probes,
+            #[cfg(test)]
+            expire_at_retained_checkpoint: None,
             max_message_bytes: limits.max_message_bytes,
             bytes_left: limits.max_total_bytes,
         }
@@ -1528,6 +1532,23 @@ impl Budget {
 
     fn expired(&self) -> bool {
         Instant::now() >= self.deadline
+    }
+
+    // trace:TASK-3851 | ai:codex
+    fn check_retained_deadline(&mut self) -> Result<(), SourceErrorCode> {
+        #[cfg(test)]
+        if let Some(left) = self.expire_at_retained_checkpoint.as_mut() {
+            if *left == 0 {
+                self.deadline = Instant::now();
+            } else {
+                *left -= 1;
+            }
+        }
+        if self.expired() {
+            Err(SourceErrorCode::OverBudget)
+        } else {
+            Ok(())
+        }
     }
 
     /// Draw one directory entry from the snapshot-wide entry budget.
@@ -2302,6 +2323,7 @@ fn delivery_gates(
                         Ok(_) => {}
                         Err(code) => {
                             if code == SourceErrorCode::OverBudget {
+                                anchor.error.get_or_insert(code);
                                 unexamined.insert(id);
                             }
                             unknown_ids.insert(id.to_string());
@@ -2422,6 +2444,12 @@ struct RetainedDeliveries {
 
 impl RetainedDeliveries {
     fn open(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
+        let result = Self::open_generations(common, budget);
+        budget.check_retained_deadline()?;
+        result
+    }
+
+    fn open_generations(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
         let mut dir = PinnedDir::open_root(common)?;
         for component in RETAINED_PATH {
             match dir.child_dir(component)? {
@@ -2435,6 +2463,7 @@ impl RetainedDeliveries {
                 continue;
             };
             for generation in key_dir.names(budget)? {
+                budget.check_retained_deadline()?;
                 let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))?
                 else {
                     continue;
@@ -2455,6 +2484,16 @@ impl RetainedDeliveries {
     /// Every retained sidecar for message `id`. `Err` when one exists but
     /// cannot be read or parsed: that message's ownership is unknown.
     fn lookup(
+        &self,
+        id: &str,
+        budget: &mut Budget,
+    ) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+        let result = self.probe_generations(id, budget);
+        budget.check_retained_deadline()?;
+        result
+    }
+
+    fn probe_generations(
         &self,
         id: &str,
         budget: &mut Budget,

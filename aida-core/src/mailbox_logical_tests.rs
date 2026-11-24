@@ -1066,3 +1066,29 @@ fn bug2449_inventory_gap_preserves_independently_readable_mail() {
     assert!(!snapshot.ack_eligible());
     assert_eq!(snapshot.caught_up(), None);
 }
+
+// trace:TASK-3851 | ai:codex
+#[test]
+fn task3851_retained_deadline_rejects_late_generation_and_final_probe() {
+    let root = tempfile::tempdir().unwrap();
+    let key = root.path().join("aida/mail-lifecycle/retained/key");
+    for generation in ["first", "second"] {
+        std::fs::create_dir_all(key.join(generation).join("data").join(DELIVERIES_DIR)).unwrap();
+    }
+    let mut budget = Budget::new(&ReadLimits::explicit_read());
+    budget.expire_at_retained_checkpoint = Some(1);
+    assert!(matches!(
+        RetainedDeliveries::open_generations(root.path(), &mut budget),
+        Err(SourceErrorCode::OverBudget)
+    ));
+
+    let mut budget = Budget::new(&ReadLimits::explicit_read());
+    let retained = RetainedDeliveries::open(root.path(), &mut budget).unwrap();
+    budget.expire_at_retained_checkpoint = Some(0);
+    let before = budget.retained_probes_left;
+    assert!(matches!(
+        retained.lookup("absent", &mut budget),
+        Err(SourceErrorCode::OverBudget)
+    ));
+    assert_eq!(before - budget.retained_probes_left, 2);
+}

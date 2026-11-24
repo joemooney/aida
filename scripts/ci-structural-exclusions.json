@@ -497,6 +497,7 @@
   "aida-core/src/mailbox_logical_tests.rs::story1843_unsafe_receipt_files_are_partial_in_both_scopes": "Logical-inbox behavior test over fixture stores; not a source scan. Not part of the reviewed ratchet selection; remains FULL.",
   "aida-core/src/mailbox_logical_tests.rs::story1843_unusable_receipt_entries_are_skipped": "Logical-inbox behavior test over fixture stores; not a source scan. Not part of the reviewed ratchet selection; remains FULL.",
   "aida-core/src/mailbox_logical_tests.rs::story1843_worktree_porcelain_z_parser": "Logical-inbox behavior test over fixture stores; not a source scan. Not part of the reviewed ratchet selection; remains FULL.",
+  "aida-core/src/mailbox_logical_tests.rs::task3851_retained_deadline_rejects_late_generation_and_final_probe": "Behavioral deadline regression using retained mailbox generations on disk. Runs in FULL.",
   "aida-core/src/scaffolding/inventory.rs::claude_only_entries_name_real_masters_and_have_reasons": "Scaffolding-inventory behavior test of skill classification and include flags. Not part of the reviewed ratchet selection; remains FULL.",
   "aida-core/src/scaffolding/inventory.rs::every_skill_master_is_portable_or_claude_only": "Scaffolding-inventory behavior test of skill classification and include flags. Not part of the reviewed ratchet selection; remains FULL.",
   "aida-core/src/scaffolding/inventory.rs::folder_form_skill_carries_its_helpers": "Scaffolding-inventory behavior test of skill classification and include flags. Not part of the reviewed ratchet selection; remains FULL.",
