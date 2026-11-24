@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T04:00:57.861036245Z
+modified_at: 2026-11-24T04:07:39.620644229Z
 req_type: Task
 tags:
 - doctor
@@ -121,6 +121,19 @@ comments:
   modified_at: 2026-11-24T03:54:37.122977490Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20bbc-ec83-7681-a159-318627601d96
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d1ee3f49709e009d00dfffb6559c95783d5f604c plus the native working-tree diff. No untracked additions.
+    AC1: [evidence: behavioral-test] mail_backlog.rs:352 inventories seat sidecars before loading the registry. AC2: [evidence: behavioral-test] story_1843_mailbox_view_tests.rs:1532 forces registry load failure and checks doctor output. This existing CLI fixture was inspected, not executed in the targeted core run.
+    F1: [evidence: behavioral-test] mailbox_logical_tests.rs:1113 demonstrates that the oversized ID is hidden while the unrelated delivery retains ACK certification and appears in the relay output with known receipts. story_1843_relay_outbox_tests.rs:120 checks sender notice delivery with an unrelated oversized sidecar present; execution of that CLI test remains for CI.
+    F2: [evidence: behavioral-test] mailbox_logical_tests.rs:1098 expires the final retained lookup through inspect_seat_sidecars and checks the single UNEXAMINED ID and incomplete inventory. All three task3851 core tests passed in lane job j20261124T040223348-2-0.
+    Probes covered exact sidecar filenames, absent and oversized entries, single and multiple retained generations, corrupt per-ID payloads, and the receipt-anchor refusal path (mailbox_logical_tests.rs:936). Preserved the existing corrupt-payload behavior and retained the global refusal for actual receipt-anchor failures. Structural selection initially flagged the new tests; after classification all seven structural coverage tests passed. No reviewer verdict recorded.
+  created_at: 2026-11-24T04:07:39.620644229Z
+  modified_at: 2026-11-24T04:07:39.620644229Z
+  session_id: 01a20bb47d43
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
   author: joe
