@@ -10,7 +10,7 @@ Acceptance criteria describe the agreed outcome. Code traces and spec-bearing co
 
 ## Independent review at a commit
 
-The ordinary review path requires a reviewer independent of the change's author. Verdict evidence identifies the reviewed commit, and shipping evaluates applicable evidence against the current head. An old approval is not permission to ship arbitrary later work.
+The ordinary review path requires a reviewer independent of the change's author. Deterministic review preparation (`aida review prepare`) supplies the reviewer with a SHA-256-sealed file inventory, token-budgeted source and test batches, path-scoped playbooks with diff-triggered security and concurrency facets, snippet-anchored line positioning (`--anchor-findings`), and 100% file-coverage verification (`--verify-coverage`). Verdict evidence identifies the reviewed commit, and shipping evaluates applicable evidence against the current head. An old approval is not permission to ship arbitrary later work.
 
 There is an explicit, opt-in and audited solo-human self-approval exception for a verified person at a terminal. This does not turn an implementing agent's self-check into independent approval. The [review process](review-process.md) and current review command help describe the exact evidence and exception contracts.
 
