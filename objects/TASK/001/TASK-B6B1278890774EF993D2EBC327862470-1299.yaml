@@ -1,0 +1,31 @@
+id: 01a20c28-5a15-7bf3-b1d2-faed887533b2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1299
+title: 'Review follow-up: The newly eligible origin-named branches can produce misleading ship recommendations. Addi'
+description: |-
+  From TASK-3857
+  Reviewed sha: 929103959163eb27f0a485945b944ea813863e7a
+
+  The newly eligible origin-named branches can produce misleading ship recommendations. Adding origin aliases to active_prefixes at aida-cli-lib/src/status_prs.rs:2627 admits a lease-free task-1-097-old branch for an active TASK-3857, but the checks at :2757, :2963 and :3068 use the raw origin ID. An open PR on a different head titled with TASK-3857 is missed, as is a same-tip RequestChanges, Rejected or Waiting verdict keyed only by TASK-3857. A live lease scoped to the agreed ID on a different branch is also missed at :2767. Resolve the branch identity consistently for the existing live-work, forge and verdict checks, and cover a newly eligible origin-named branch with evidence keyed by its agreed ID.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-24T06:05:00.821108407Z
+modified_at: 2026-11-24T06:05:00.821108407Z
+req_type: Task
+tags:
+- carried-from:TASK-3857
+- finding-hash:d5ba4468
+- from-review:TASK-3857
+relationships:
+- rel_type: References
+  target_id: 01a20bd3-bad1-70e2-90f2-267562371b64
+  created_at: 2026-11-24T06:05:13.675665369Z
+filed_at:
+  code_sha: 929103959163eb27f0a485945b944ea813863e7a
+  branch: pr-4490
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
+  session: 01a20c251318
