@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T07:06:03.839202284Z
+modified_at: 2026-11-24T17:06:22.362351620Z
 req_type: Bug
 tags:
 - knob
@@ -197,6 +197,13 @@ comments:
   modified_at: 2026-11-23T07:06:03.839202284Z
   session_id: 01a2073147d2
   harness_version: codex-cli 0.167.0
+- id: 01a20e85-d81a-7bb0-a574-8642822050ef
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] c37feffb57ff
+    A reference merge (commit c37feffb57ff, `(Refs BUG-2725)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-24T17:06:22.362343311Z
+  modified_at: 2026-11-24T17:06:22.362343311Z
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
