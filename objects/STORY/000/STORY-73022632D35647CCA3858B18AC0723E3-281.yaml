@@ -1,0 +1,32 @@
+id: 01a20e1a-349a-77a3-8714-7b3be3866f8f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-281
+title: 'Review PR-4520: [AI:codex] docs(skills): wire aida review prepare into review skills (TASK-3863)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20ddc`) for branch `int32-task-3863`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4520>
+  - Branch: `int32-task-3863` → `integration`
+
+  ## Covers
+
+  - TASK-3863
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4520` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T15:08:48.154820859Z
+modified_at: 2026-11-24T15:08:48.154820859Z
+req_type: Story
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d5
+  session: 01a20ddc1582
