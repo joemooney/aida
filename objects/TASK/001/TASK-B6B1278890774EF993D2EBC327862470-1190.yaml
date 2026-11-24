@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-24T15:37:49.442757788Z
+modified_at: 2026-11-24T20:03:52.567749141Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -186,6 +186,11 @@ comments:
   modified_at: 2026-11-24T15:37:49.442757788Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f28-5a77-7de2-828b-42cdb5c5b5a2
+  author: joe
+  content: '#4420 CLOSED as superseded (advisor-122 13:12): its branch is held by stuck lease 01a2078e7236 (BUG-2755). The rework continues on task-3211-r5 (cut from d7b559f9); a new PR follows.'
+  created_at: 2026-11-24T20:03:52.567749141Z
+  modified_at: 2026-11-24T20:03:52.567749141Z
 history:
 - id: 01a1fcf0-ccab-7c51-aaa4-eaba556471cb
   author: joe
