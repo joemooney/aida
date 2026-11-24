@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-24T21:45:43.999219847Z
+modified_at: 2026-11-24T21:47:52.894409356Z
 req_type: Bug
 tags:
 - data-loss
@@ -125,6 +125,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T21:45:18.229236417Z
   modified_at: 2026-11-24T21:45:18.229236417Z
+- id: 01a20f87-c921-7801-8e8f-d22bf424c2b3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:47):
+    # BUG-2749 / PR #4537 CI-FIX ROUND (product-15 2026-11-24 14:47; NOT a review round). Lane: CODEX. MAIN, existing branch. <=40 lines. NO SCOPE CHANGE.
+    Your published head fails the structural ratchet aida-ci-guards `task_2143_clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read` (task_2143_clone_git_ratchet_tests.rs:469): the new code runs RAW git where a lease tree is read.
+    FIX: route that git read through the existing clone-git helper the ratchet expects (see how other lease-tree readers do it; rg the helper the ratchet names). Do NOT add the site to any ratchet allowlist/ledger.
+    Run `cargo test -p aida-ci-guards --lib task_2143` on the lane, then make check-ci-fast, then push to #4537. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T21:47:52.894409356Z
+  modified_at: 2026-11-24T21:47:52.894409356Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
