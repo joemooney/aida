@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T00:49:30.871962616Z
+modified_at: 2026-11-24T00:51:04.031364225Z
 req_type: Task
 tags:
 - doctor
@@ -26,6 +26,26 @@ comments:
   content: 'FOLDED (advisor-122 ruling 2026-11-23 17:52 on #4463 TASK-3846 r2; relayed by integration-30): this task now ALSO covers two deferred #4463 refinements. (a) The hint prints `aida mailbox read -- <id>` when an id starts with ''-'' (the test fixture uses ''-first-miss''). (b) Recheck the deadline BETWEEN retained-generation opens and AFTER the final probe, returning UNEXAMINED/incomplete instead of a late answer. Both with tests. Approved, drain, next integration bundle.'
   created_at: 2026-11-24T00:49:24.010934941Z
   modified_at: 2026-11-24T00:49:24.010934941Z
+- id: 01a20b09-25b8-75f1-8e4a-62a7ace6d758
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:51):
+    # TASK-3851: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3851` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3851 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3851)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE p30 (advisor-122 ruling 17:52; product-15): branch `int30-task-3851`, cut from origin/integration 3e8f586ad41. PR base MUST be `integration`. STRICT-PATH STOP: do not touch aida-cli-lib/src/gate/ (protected floor), leases, claims, grants, containment, session_reap, admission or the CI gate runner; if the fix needs them, STOP and punt.
+    SCOPE: FOLDED (advisor-122 ruling 2026-11-23 17:52 on #4463 TASK-3846 r2; relayed by integration-30): this task now ALSO covers two deferred #4463 refinements. (a) The hint prints `aida mailbox read -- <id>` when an id starts with '-' (the test fixture uses '-first-miss'). (b) Recheck the deadline BETWEEN retained-generation opens and AFTER the final probe, returning UNEXAMINED/incomplete instead of a late answer. Both with tests. Approved, drain, next integration bundle.
+    Also implement the ORIGINAL TASK-3851 AC (registry load failure must not silently skip the seat-sidecar inventory). SMALL-PR RULE <=300 lines.
+  created_at: 2026-11-24T00:51:04.031364225Z
+  modified_at: 2026-11-24T00:51:04.031364225Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b07-6f51-7e62-9917-bd7dd0fc7276
   author: joe
