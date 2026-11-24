@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T02:27:38.819722197Z
+modified_at: 2026-11-24T02:28:54.409501255Z
 req_type: Bug
 tags:
 - admission
@@ -30,6 +30,20 @@ comments:
   content: 'advisor-122 disposition 19:30: APPROVED, HIGH, strict, MAIN, drive; AC1+AC2 only, <=300 lines; launched ahead of filler. Related: the dell1 TARGETED heal (aida doctor heal stale-leases --id shared-207c3564..., rc=124 at 120s, no output) fits this lock (BUG-2739 has the separate imac serial-gh cause).'
   created_at: 2026-11-24T02:27:38.819722197Z
   modified_at: 2026-11-24T02:27:38.819722197Z
+- id: 01a20b62-b03f-7561-8dc2-ec2427d6e0c9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:28):
+    # BUG-2740: lane launch waiting for a cold-start slot holds the store write lock (advisor-122 disposition 2026-11-23 19:30; HIGH priority; product-15). Lane: CODEX. Track: MAIN. STRICT review (lock/admission). Mode drive. New branch, new PR. <=300 lines.
+
+    Read `aida show BUG-2740`. Evidence: /proc/locks showed FLOCK WRITE by `aida queue work BUG-2738` on .aida-store/.aida/store-write.lock for over an hour while it waited at "lane launch queued: host cold-start limit reached (lanes.max_concurrent_cold_starts = 2)"; every other store writer on the host deadlocked.
+    AC1: the cold-start wait (and any other admission/headroom wait) happens BEFORE taking the store write lock, or with it RELEASED. The lock is held only around the actual store mutation. Test: a launch blocked on the cold-start limit does not hold store-write.lock, and a concurrent store write succeeds.
+    AC2: a store-lock timeout error names the HOLDER (pid plus command line). Test.
+    Nothing else. Add `// trace:BUG-2740 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2740)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-24T02:28:54.409501255Z
+  modified_at: 2026-11-24T02:28:54.409501255Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
