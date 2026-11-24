@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:32:35.025155532Z
-modified_at: 2026-11-24T04:46:06.925686268Z
+modified_at: 2026-11-24T05:13:26.831574572Z
 req_type: Task
 tags:
 - small
@@ -25,6 +25,18 @@ comments:
   content: Filed Approved per advisor-122 ruling 2026-11-23 21:35 (#4483 follow-up; drain, integration filler).
   created_at: 2026-11-24T04:33:04.336755861Z
   modified_at: 2026-11-24T04:33:04.336755861Z
+- id: 01a20bf9-2737-7e81-82e9-af0775f4dfc3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3aad9dc80c53a9f306bd53d9bee4308022539810 plus native working-tree diff. Checked origin/main...HEAD (inherited integration changes), git diff HEAD and untracked files.
+    AC1: [evidence: behavioral-test] status_prs.rs:3483 and :3500 reproduce legacy tag and private-clone alerts and check resumption.
+    AC2: [evidence: behavioral-test] status_prs.rs:3524 reproduces a stale-lease candidate resolved by a commit using an alternate origin ID. All three cases failed before the fix and passed afterward.
+    Probes: checked ID case normalization, legacy tag syntax, display-ID precedence, zero/multiple summaries, and unreadable-clone handling. Removed an unintended seat-tree listing edit before the passing run. Changes affect reporting only. No new authority paths. Git diff --check and all 48 FAST source gates passed. Additional Rust ratchets passed. Make exited on manual verification because the built binary is mounted inside the job overlay. Running that last verifier directly against the same built binary. No PR-head CI yet.
+  created_at: 2026-11-24T05:13:26.831574572Z
+  modified_at: 2026-11-24T05:13:26.831574572Z
+  session_id: 01a20bdf8589
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bd4-271a-78c3-b285-2b0a41dee5b4
   author: joe
