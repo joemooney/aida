@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor` (a check) and `aida land status` show the remaining GitHub core REST budget (remaining/limit, reset time), using the cached rate_limit reading, and warn below 20%.
   - AC2: They name the top consumers since the last reset when known (review-watch, auto-train, main-watch, seat watchers), or say "unknown". Test with a fake rate_limit response below the threshold.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-24T00:21:40.352477936Z
+modified_at: 2026-11-24T00:45:37.577088436Z
 req_type: Task
 tags:
 - doctor
@@ -102,6 +102,14 @@ history:
   timestamp: 2026-11-24T00:20:30.299119294Z
   session_id: 01a20ab558aa
   changes: []
+- id: 01a20b03-f1a9-74b3-a0f7-f4e55b0d482e
+  author: aida-orchestrator
+  timestamp: 2026-11-24T00:45:37.577104631Z
+  session_id: 01a20affa780
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
@@ -110,3 +118,16 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f1a50179e5a
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Request changes for TASK-3847, a completing claim. Reviewed the full five-file diff against the generated worksheet at eacfd4b52870557151340a24d44b1b772be6c929.
+    TASK-b6b1278890774ef993d2ebc327862470-1267.AC1: unverified
+    TASK-b6b1278890774ef993d2ebc327862470-1267.AC2: unverified
+    AC1 has an effective-forge mismatch and lacks command-level test coverage. AC2 permits unknown attribution and the formatter test covers that text, but the required fake low-budget response never passes through either command. The stored implementer self-review reports the formatter test passed. Source inspection confirmed the narrow parser coverage.
+    The head is two commits behind origin/integration. Neither base commit changes the source or fixtures these findings depend on. Exact-head fast gates and the merge-hold check passed. Fast compile was pending at review time. No local tests or builds were run under reviewer policy.
+  recovery_hint: address the review findings, move TASK-3847 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T00:45:37.577088436Z
