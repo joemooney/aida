@@ -1,0 +1,28 @@
+id: 01a20df2-c61b-7940-9251-afb2b90e7879
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-509
+agreed_id: BUG-2748
+title: 'BUG-2721 slice b: a partial codex bg receipt with missing attribution fields fails closed (blocks admission, never retired)'
+description: |
+  Slice (b) re-spec from parked #4402 BUG-2721 (advisor-122 ruling 2026-11-24 07:30; filed by product-15). STRICT, drive, <=150 lines. Source finding F2 (p1, fail-open) at aida-cli-lib/src/codex_bg_receipt.rs:841: missing worker, supervisor or worktree fields silently remove their occupancy checks, so a grant-only partial receipt can be retired or stop blocking admission while a clean-environment helper still occupies the unrecorded worker group.
+
+  ## Acceptance
+  - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
+  - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T14:25:43.963681475Z
+modified_at: 2026-11-24T14:25:43.963681475Z
+req_type: Bug
+tags:
+- launch
+- receipts
+- strict
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d58
+  vendor: claude
