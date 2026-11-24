@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:21.678180988Z
-modified_at: 2026-11-24T09:52:21.171022420Z
+modified_at: 2026-11-24T09:56:34.295625478Z
 req_type: Task
 tags:
 - review
@@ -72,6 +72,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: May this PR also edit scripts/ratchet-set.json to register the four required regression tests? The one-file brief forbids the manifest edit, and make check-ci-fast rejects all four unregistered names. All 12 targeted review_engine tests passed.. No triage reason was given.'
   created_at: 2026-11-24T09:47:25.035458904Z
   modified_at: 2026-11-24T09:47:25.035458904Z
+- id: 01a20cfc-5b07-7db3-bf77-12c9fe830757
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 52f811166a0d169ab1d29c0af52a526fbfcac80d plus the native working diff. The integration delta is 149 changed lines across two files. No untracked additions.
+    AC1: [evidence: behavioral-test] aida-core/src/review_engine.rs:1186 and :1202 cover both credential names at three depths, near misses, and both rename directions. Both paths share normalization and exclusion rules.
+    AC2: [evidence: behavioral-test] aida-core/src/review_engine.rs:1221 and :1235 cover exact runtime components, adjacent names, absent and valid TOML, malformed TOML, invalid UTF-8 and a dangling link. No production loader callers in this tree. The earlier lane reproduced the root credential defect.
+    All 12 module tests passed in lane job j20261124T095259458-2-0. The only new edit registers those four tests at scripts/ratchet-set.json:13. Seven manifest checks passed. make check-ci-fast stopped in shard tooling because the native lane job runner cannot run cargo metadata. Full FAST and PR-head CI remain unverified.
+  created_at: 2026-11-24T09:56:34.295625478Z
+  modified_at: 2026-11-24T09:56:34.295625478Z
+  session_id: 01a20cf84b20
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20cd4-39e1-7bc0-b0bc-022cffae235a
   author: joe
@@ -113,6 +125,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20cf9-32e1-7280-8764-3c3f138720cb
+  author: dirtlab
+  timestamp: 2026-11-24T09:53:07.809952102Z
+  session_id: 01a20cf84b20
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
