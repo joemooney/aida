@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T14:36:30.780039269Z
+modified_at: 2026-11-24T14:38:15.195860425Z
 req_type: Story
 tags:
 - doctor
@@ -26,6 +26,34 @@ comments:
   content: 'Draft to Approved: advisor-122 disposition 2026-11-24 07:44 (HIGH, standard, drain, integration). Slice 1 = aida doctor check stalled-reviews + routed wake; slice 2 = advisor-loop job.'
   created_at: 2026-11-24T14:36:30.780039269Z
   modified_at: 2026-11-24T14:36:30.780039269Z
+- id: 01a20dfe-6fbb-7dd0-b256-5fb4ae4df9eb
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:38):
+    # STORY-3095: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show STORY-3095` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:STORY-3095 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (STORY-3095)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    NEW TESTS: if make check-ci-fast rejects new test names as unregistered, ADD them to scripts/ratchet-set.json (entries only; no other ratchet/gate changes) and list the added entries in the PR body. That is pre-approved; do not punt for it.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+
+    INTEGRATION (advisor-122 disposition 2026-11-24 07:44: HIGH, standard, drain; product-15): branch `int35-story-3095`, cut from origin/integration 88d8f9c4b01. PR base MUST be `integration`. This is SLICE 1 of 2: commit title ends with `(Refs STORY-3095)` so the story stays open for slice 2.
+    SLICE 1 (<=300 lines): `aida doctor check stalled-reviews`.
+    - Lists open PRs whose latest gate-ledger verdict is request-changes AT THE CURRENT HEAD with no rework lane/queue entry for the spec (PR, spec, verdict age, finding counts).
+    - Also lists APPROVED PRs with green CI that haven't landed after 60 min, with the reason if known.
+    - When the list is non-empty for >60 min, route a CronJobFailed-style advisor wake (reuse the existing routed-alert path, as main_watch does).
+    - Read-only on the ledger/forge; bounded forge calls (respect the GitHub core-budget helper if present).
+    - Tests: a stalled CR is reported; one with a queued rework is not; a re-pushed head clears it; approved-not-landing past 60 min is reported.
+    Reference implementation of the idea (shell, not to copy literally): .aida/tmp/stalled-cr.sh in the primary checkout. Slice 2 (the advisor-loop job) is separate. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants or admission; read the ledger through existing readers.
+  created_at: 2026-11-24T14:38:15.195860425Z
+  modified_at: 2026-11-24T14:38:15.195860425Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
