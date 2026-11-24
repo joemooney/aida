@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Criterion trace markers (`// trace:<SPEC>.<AC>`) on the budget tests in forge_tests_inline_tests.rs (~:2142) and task_3852_core_budget.rs, so each test names the criterion it proves. The 5s budget deadline starts BEFORE main_root / Repository::load, so slow repository discovery counts against it (test with a slow load).
   - AC2: A relative-PATH `gh` (e.g. AIDA_TEST_GH_BINARY=./bin/gh) is absolutized BEFORE current_dir is changed for the probe. Test with a linked-worktree fixture.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:41:03.472804465Z
-modified_at: 2026-11-24T03:43:05.258317307Z
+modified_at: 2026-11-24T03:47:29.630815774Z
 req_type: Task
 tags:
 - forge
@@ -48,6 +48,13 @@ history:
   author: joe
   timestamp: 2026-11-24T03:41:58.846421013Z
   changes: []
+- id: 01a20baa-72de-7222-ba49-780241398f2d
+  author: aida-session-start
+  timestamp: 2026-11-24T03:47:29.630813990Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
