@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor check stalled-reviews` also reports every open PR whose GitHub mergeable state is CONFLICTING (with the base) and has no active implementer lane or queued rework, showing PR, spec and head, and how long it has conflicted where known. Approved PRs that conflict are flagged first (they block landing).
   - AC2: For a conflicting PR with no lane, the detector queues ONE conflict-repair rework for the implementer (merge the base, resolve, no scope change) and notifies the advisor, deduplicated per (PR, head, base tip). Tests for detection and dedup.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-24T16:46:34.589229165Z
+modified_at: 2026-11-24T17:38:54.394636693Z
 req_type: Task
 tags:
 - review
@@ -36,6 +36,13 @@ history:
   author: joe
   timestamp: 2026-11-24T16:46:30.506822083Z
   changes: []
+- id: 01a20ea3-a13a-7be3-a192-01a3d1b2f25d
+  author: aida-session-start
+  timestamp: 2026-11-24T17:38:54.394635247Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
