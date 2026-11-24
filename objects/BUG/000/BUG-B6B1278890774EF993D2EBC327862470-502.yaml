@@ -70,6 +70,13 @@ comments:
   created_at: 2026-11-24T04:17:20.776630874Z
   modified_at: 2026-11-24T04:17:20.776630874Z
   session_id: 01a20b9e6c1c
+- id: 01a20bc7-c2bf-7e22-a2ec-dc01f8206120
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 21:22): PR-4483 @ 8468290642b PASSES AC1. +41/-17 in status_prs.rs, merges CLEAN, standard tier. collect_unshipped_work_items_bounded maps a deferred spec to status ''deferred'' and adds it to the excluded set (''deferred''|''completed''|''rejected''|''superseded''), applied at both the probe-prefix filter and the resolved-branch recheck. So a parked branch of a deferred spec isn''t alerted, and alerting resumes when the deferral lifts (test detector_skips_deferred_branch_until_deferral_is_lifted). Checked the real-store path: all_requirement_summaries lists with DeferFilter::Both, and RequirementSummary.deferred is the cache-backed STORY-584 flag, so it holds beyond the test''s caller summaries. Precedence is unchanged (the store snapshot is inserted last).'
+  created_at: 2026-11-24T04:19:06.763509468Z
+  modified_at: 2026-11-24T04:19:06.763509468Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b99-adf0-7950-aee0-2bcd6fbf00a2
   author: joe
