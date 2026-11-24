@@ -445,3 +445,52 @@ fn pooled_tree_ended_from_inside_is_returned_not_removed() {
         show(&out)
     );
 }
+
+// trace:TASK-3171 | ai:codex
+#[test]
+fn config_show_uses_linked_worktree_headless_tuning() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (repo, home) = project(tmp.path(), false);
+    let linked = tmp.path().join("linked");
+    git(
+        &repo,
+        &["worktree", "add", "--detach", linked.to_str().unwrap()],
+    );
+    assert!(!linked.join(".aida-store").exists());
+    std::fs::create_dir_all(linked.join(".aida")).unwrap();
+    std::fs::write(
+        repo.join(".aida/agents.toml"),
+        "[agents.codex]\nmodel='primary'\ntiers=['primary']",
+    )
+    .unwrap();
+    std::fs::write(
+        linked.join(".aida/config.toml"),
+        "[deployment]\nmode='distributed'\nstore_path='.aida-store'\n[agents.codex]\nmodel='lower'\ntiers=['linked-tier']",
+    )
+    .unwrap();
+    std::fs::write(
+        linked.join(".aida/agents.toml"),
+        "[agents.codex.seats.reviewer]\nmodel=''\n[agents.agy]\nmodel='ignored-by-launcher'",
+    )
+    .unwrap();
+    let out = aida(&linked, &home)
+        .env("AIDA_AGENT_EFFORT", "high\nrow\x1b")
+        .env("NO_COLOR", "1")
+        .args(["config", "show"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", show(&out));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains(r#"tiers: ["linked-tier"]"#), "{stdout}");
+    assert!(
+        stdout.contains("implementer: model=lower (.aida/config.toml)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains(r"reviewer: model=default (.aida/agents.toml), effort=high\nrow\u{1b} (AIDA_AGENT_EFFORT)"), "{stdout}");
+    let agy = stdout.split("[agents.agy]").last().unwrap();
+    assert!(
+        agy.contains("reviewer: model=unmanaged by headless launch"),
+        "{stdout}"
+    );
+    assert!(!agy.contains("ignored-by-launcher"));
+}

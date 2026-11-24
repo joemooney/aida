@@ -51,10 +51,9 @@ pub(crate) struct Evidence {
 fn git(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
     // Store status can execute fsmonitor: use the shared host boundary for
     // every command, including read-only source/object evidence.
-    let out = aida_core::git_ops::host_git_command(repo)
-        .args(args)
-        .env("GIT_NO_REPLACE_OBJECTS", "1")
-        .output()
+    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    cmd.args(args).env("GIT_NO_REPLACE_OBJECTS", "1");
+    let out = crate::gate::kernel_deps::local_output(cmd)
         .context("reading committed mandate trace evidence")?;
     ensure!(
         out.status.success(),
@@ -178,7 +177,12 @@ fn bounded_dirt_query(
 ) -> Result<bool> {
     use std::io::Read;
     use std::os::fd::AsRawFd;
+    use std::os::unix::process::CommandExt;
+    if std::time::Instant::now() >= deadline {
+        return Ok(false);
+    }
     let mut child = command
+        .process_group(0)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -224,7 +228,9 @@ fn bounded_dirt_query(
         }
     })();
     // Also covers setup/read errors and a child that closes stdout then stalls.
-    let _ = child.kill();
+    if !matches!(result, Ok(true)) {
+        crate::bounded_process::kill_process_group(child.id());
+    }
     child.wait().context("reaping mandate dirt query")?;
     result
 }
@@ -238,6 +244,8 @@ fn snapshot_dirt(store: &Path) -> Result<Option<String>> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline =
+        crate::forge_lookup::forge_lookup_deadline().map_or(deadline, |d| d.min(deadline));
     let mut status = Vec::new();
     if !bounded_dirt_query(
         snapshot_command(store).args(STORE_STATUS_ARGS),
@@ -613,7 +621,9 @@ fn same_evidence_tree(store: &Path, old: &str, new: &str, scope: &EvidenceScope)
 /// 1, `None` for anything else.
 // trace:TASK-2067 | ai:antigravity
 fn snapshot_status(store: &Path, args: &[&str]) -> Option<bool> {
-    let status = snapshot_command(store).args(args).status().ok()?;
+    let mut cmd = snapshot_command(store);
+    cmd.args(args);
+    let status = crate::gate::kernel_deps::local_output(cmd).ok()?.status;
     match status.code() {
         Some(0) => Some(true),
         Some(1) => Some(false),
@@ -650,29 +660,13 @@ fn snapshot_command(store: &Path) -> std::process::Command {
 /// One snapshot git query; `Err` carries git's stderr.
 // trace:TASK-2067 | ai:antigravity
 fn snapshot_git(store: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>> {
-    use std::io::Write;
     let mut cmd = snapshot_command(store);
     cmd.args(args);
-    if stdin.is_some() {
-        cmd.stdin(std::process::Stdio::piped());
+    let out = match stdin {
+        Some(input) => crate::gate::kernel_deps::local_output_fed(cmd, input.to_vec()),
+        None => crate::gate::kernel_deps::local_output(cmd),
     }
-    let mut child = cmd
-        .spawn()
-        .context("reading the mandate exclusion store snapshot")?;
-    let writer = stdin.map(|input| {
-        let mut pipe = child.stdin.take().expect("piped stdin");
-        let input = input.to_vec();
-        std::thread::spawn(move || pipe.write_all(&input))
-    });
-    let out = child
-        .wait_with_output()
-        .context("reading the mandate exclusion store snapshot")?;
-    if let Some(writer) = writer {
-        writer
-            .join()
-            .map_err(|_| anyhow::anyhow!("snapshot stdin writer panicked"))?
-            .context("writing to git")?;
-    }
+    .context("reading the mandate exclusion store snapshot")?;
     ensure!(
         out.status.success(),
         "git {}: {}",
