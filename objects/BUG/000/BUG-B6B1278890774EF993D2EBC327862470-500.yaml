@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T02:46:06.157728438Z
+modified_at: 2026-11-24T02:47:27.259794116Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -52,6 +52,24 @@ comments:
   content: 'CORRECTION (product-15 19:33): the TASK-3851 ''repro'' above is NOT this bug. After the BUG-2740 store-lock deadlock was cleared on dell1 (19:20), the same targeted heal (aida doctor heal stale-leases --id shared-207c3564-6f8b-424c-beba-2fef6d8adaa4 --yes) completed instantly with status healed. Its earlier rc=124 hang was the dell1 store write lock held by a lane parent waiting for a cold-start slot (BUG-2740).'
   created_at: 2026-11-24T02:36:31.367838112Z
   modified_at: 2026-11-24T02:36:31.367838112Z
+- id: 01a20b73-aa61-7970-acf2-5c041f91d9cb
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:47):
+    # BUG-2739: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2739` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2739 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2739)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    ADVISOR (19:36): AC0 FIRST: `aida doctor heal stale-leases --id X` must act on that ONE finding without scanning all branches (it currently makes one serial gh call per branch, ~2005 branches, ~80 min, before acting). Then the silent-hang ACs as written. Small; standard tier; launched after BUG-2740.
+  created_at: 2026-11-24T02:47:27.259794116Z
+  modified_at: 2026-11-24T02:47:27.259794116Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
