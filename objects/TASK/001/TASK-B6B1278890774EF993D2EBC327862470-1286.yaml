@@ -82,6 +82,13 @@ comments:
   created_at: 2026-11-24T04:38:10.531236270Z
   modified_at: 2026-11-24T04:38:10.531236270Z
   session_id: 01a20baa19b8
+- id: 01a20bdb-21e8-7652-bdaa-1d8b656b87de
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 21:45): PR-4486 @ 7ada68eff2 PASSES. +89/-34 in 4 files, merges CLEAN on integration. AC1: github_core_budget now enters forge_lookup::with_forge_lookup_deadline(5s) BEFORE main_root and Repository::load, so slow repository discovery spends the same budget; criterion trace markers were added to the budget tests (forge_tests_inline_tests.rs, task_3852_core_budget.rs). AC2: the gh binary is std::path::absolute()''d before current_dir(&root). I checked this is safe: kernel::resolve_forge_binary_before never returns a bare ''gh''. It returns PATH-dir.join(exe), an absolute fallback, or the test env value, so absolutizing only changes a relative PATH entry like ./bin/gh, resolved against the probe''s original cwd as intended. Fast CI pending.'
+  created_at: 2026-11-24T04:40:27.952517892Z
+  modified_at: 2026-11-24T04:40:27.952517892Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20ba5-66be-7a31-bcaa-958dd2e9ad20
   author: joe
