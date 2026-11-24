@@ -1894,6 +1894,15 @@ fn describe_core_budget(body: &[u8]) -> Option<(String, bool)> {
 
 // trace:TASK-3847 | ai:codex
 pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
+    github_core_budget_with_cache(root, true)
+}
+
+// trace:STORY-3095 | ai:codex
+pub(crate) fn github_core_budget_uncached(root: &Path) -> Option<(String, bool)> {
+    github_core_budget_with_cache(root, false)
+}
+
+fn github_core_budget_with_cache(root: &Path, cache: bool) -> Option<(String, bool)> {
     use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
     use crate::review_watch::forge::{main_root, Repository};
     use std::time::Duration;
@@ -1911,8 +1920,11 @@ pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
             repo.pin_command(&mut command);
             command
                 .current_dir(&root)
-                .args(["api", "rate_limit", "--cache", "60s"])
+                .args(["api", "rate_limit"])
                 .stdin(std::process::Stdio::null());
+            if cache {
+                command.args(["--cache", "60s"]);
+            }
             let remaining = crate::forge_lookup::forge_lookup_deadline()?
                 .checked_duration_since(std::time::Instant::now())?;
             let BoundedCommandOutput::Completed(out) =

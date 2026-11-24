@@ -124,7 +124,6 @@ pub(crate) fn handle_doctor_command(
             // trace:STORY-3095 | ai:codex
             if normalize_doctor_category(category).as_deref().ok() == Some("stalled-reviews") {
                 let root = main_worktree_root_from(&find_project_root()?);
-                let store = Storage::new(root.join(".aida-store")).load()?;
                 use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
                 let exec = ExecContext::new(
                     Environment::capture(),
@@ -134,8 +133,7 @@ pub(crate) fn handle_doctor_command(
                     ToolPaths::default(),
                     std::sync::Arc::new(SystemClock::default()),
                 );
-                let report =
-                    DoctorReport::from_findings(crate::stalled_reviews::scan(&exec, &store)?);
+                let report = DoctorReport::from_findings(crate::stalled_reviews::scan(&exec)?);
                 let reason = (*fail_on_findings && !report.findings.is_empty())
                     .then(|| format!("{} stalled reviews", report.findings.len()));
                 return emit_doctor_report(
