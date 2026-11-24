@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A project config knob (default OFF, so behaviour is unchanged) makes specs that are Approved AND marked small/standard-tier (no ADR-76 strict path: leases, claims, grants, containment, gate/guard, authority) default to execution mode `drain`. Strict-tier and authority specs stay unset/supervised. An explicit per-spec `--mode` always wins.
   - AC2: Tests: with the knob off, the default is unchanged; with it on, a small standard-tier approved spec resolves to drain and a strict-tier one stays supervised. `aida config` documents the knob.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T20:48:58.868631693Z
+modified_at: 2026-11-24T20:49:01.574670210Z
 req_type: Story
 tags:
 - autonomy
@@ -375,6 +375,11 @@ comments:
   content: 'advisor-122 13:52 (#4532 r1): F2 REJECTED. With the allow-list = docs/cli/*.md only, the backstop gap is moot. POLICY: widening drain_safe_paths is a per-entry, advisor-reviewed, protected-config change. F3/F4 deferred to TASK-3886 (LOW). r2: F1/F5/F6 + shrink to <=350, or split.'
   created_at: 2026-11-24T20:48:58.868631693Z
   modified_at: 2026-11-24T20:48:58.868631693Z
+- id: 01a20f51-b086-7530-a67d-50fbfeef64d1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing STORY-3038 (origin STORY-b6b1278890774ef993d2ebc327862470-820). REQUEST CHANGES. The complete landed diff was checked against protected main 95eaccf328557402d176c0b41983afe1b677965f (landed tree bf36b4108febceee8121204b504ea27149a99552). This verdict attests original head 369406b8ee12c6cbac47b88395cf315cce12b5ef. The head is six commits behind the pinned base. I checked the overlapping files in the landed tree, including the base''s train and fetch changes. No finding depends on code removed or replaced by those base commits.. No triage reason was given.'
+  created_at: 2026-11-24T20:49:01.574660240Z
+  modified_at: 2026-11-24T20:49:01.574660240Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
@@ -557,6 +562,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20f51-b086-7530-a67d-50ee921f4c1a
+  author: joe
+  timestamp: 2026-11-24T20:49:01.574651070Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
@@ -565,17 +577,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1 full sweep for completing STORY-3038 (origin STORY-b6b1278890774ef993d2ebc327862470-820). REQUEST CHANGES. The complete landed diff was checked against protected main 95eaccf328557402d176c0b41983afe1b677965f (landed tree bf36b4108febceee8121204b504ea27149a99552). This verdict attests original head 369406b8ee12c6cbac47b88395cf315cce12b5ef. The head is six commits behind the pinned base. I checked the overlapping files in the landed tree, including the base's train and fetch changes. No finding depends on code removed or replaced by those base commits.
-
-    STORY-b6b1278890774ef993d2ebc327862470-820.AC1: unverified
-    STORY-b6b1278890774ef993d2ebc327862470-820.AC2: verified by source inspection of the traced `cargo test -p aida-cli-lib approved_small_default_requires_approval_size_and_standard_tier` test cases and the `aida config` knob and policy registry in config_cmd.rs.
-
-    The supplied untraced-criteria list names AC1 and AC2. The diff now adds test traces for both. The tests cover the disabled default, opt-in for approved small documentation work, an explicit Guided override and representative strict paths. The AC1 defects remain despite that coverage. Exact-head FAST gates and merge-hold checks passed. FAST compilation was pending and FAST skips the full test shards. No local build or tests were run.
-  recovery_hint: address the review findings, move STORY-3038 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T20:47:51.768902109Z
