@@ -7,16 +7,15 @@ description: |
 
   ## Acceptance
   - AC1: Restore a detach-enabled assertion for explicit JSON/TOON output at a TTY: EITHER they still defer (the pre-C rule) and a test asserts that, OR a test proves the deferral was removed on purpose (citing the change that removed it).
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:33:42.356470431Z
-modified_at: 2026-11-24T04:05:50.244771214Z
+modified_at: 2026-11-24T08:16:35.652202574Z
 req_type: Task
 tags:
 - small
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -111,6 +110,11 @@ comments:
   modified_at: 2026-11-24T04:05:50.244771214Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ca0-d0fe-79e0-8d85-def9a1144304
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3853 was In Progress when merge 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e completed it; verify that no active round remains.'
+  created_at: 2026-11-24T08:16:35.582177054Z
+  modified_at: 2026-11-24T08:16:35.582177054Z
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
@@ -163,6 +167,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ca0-d0fe-79e0-8d85-df0cea02eb48
+  author: aida-auto-bump
+  timestamp: 2026-11-24T08:16:35.582186175Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a20ca0-d144-71f1-9cb2-a56a65363032
+  timestamp: 2026-11-24T08:16:35.652198138Z
+  agent: aida
+  commit_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
+  summary: 'Advisor (delegated authority): promotion 30, linear on main f0d3a0ae222 + 5 cherry-picks; per-commit patch-ids match approved integration squashes (0bcf18da, 3aad9dc8, 5b57f2c1, fa7e9a9c, fbcd41f6); combined 6887cfc4d511; no protected paths; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -173,4 +191,6 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
+  completed_at: 2026-11-24T08:16:35.582182435Z
+  completion_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
   reopened_at_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
