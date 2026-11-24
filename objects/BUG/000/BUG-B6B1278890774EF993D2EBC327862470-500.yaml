@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T01:44:40.665384314Z
+modified_at: 2026-11-24T02:27:33.801612334Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -23,6 +23,11 @@ comments:
   modified_at: 2026-11-24T01:44:40.665384314Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a20b61-4529-79c0-822d-ff6583e24c6f
+  author: joe
+  content: 'Repro (product-15): after the global imac heal finished, the expired shared claim for TASK-3851 (task-...-1278-3acc2856dc7c47e2.toml, shared-207c3564-6f8b-424c-beba-2fef6d8adaa4, lease 01a20b0d78d6) is still present; doctor check leases lists it as eligible, yet both the targeted heal (dell1, rc=124 at 120s, no output) and the global heal left it. TASK-3851 stays parked.'
+  created_at: 2026-11-24T02:27:33.801612334Z
+  modified_at: 2026-11-24T02:27:33.801612334Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
