@@ -69,6 +69,12 @@ comments:
   modified_at: 2026-11-24T01:18:05.304875609Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20b22-2f41-7953-a370-d323ff5c6f98
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int30-task-3853` at head `1a6b454e9c589c4c5fb4b2be24d462b886e6df8d`.'
+  created_at: 2026-11-24T01:18:39.425984454Z
+  modified_at: 2026-11-24T01:18:39.425984454Z
+  session_id: 01a20b00bd28
 history:
 - id: 01a20af9-612c-7710-bb75-2a6f263a5d1d
   author: joe
