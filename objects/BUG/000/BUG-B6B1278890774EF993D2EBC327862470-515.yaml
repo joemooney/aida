@@ -12,12 +12,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T18:48:49.864469968Z
-modified_at: 2026-11-24T20:46:44.249473942Z
+modified_at: 2026-11-24T20:47:26.998997122Z
 req_type: Bug
 tags:
 - ci
 - lanes
 - small
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20f50-095b-7991-b2bd-8c8191fed292
+  created_at: 2026-11-24T20:47:26.998968280Z
+  created_by: dirtlab
 comments:
 - id: 01a20f2b-d47d-76d1-b0bf-7f7de8390dce
   author: dirtlab
@@ -62,6 +68,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20f50-4dd6-7af0-9cf2-0fc89ef3708e
+  author: dirtlab
+  timestamp: 2026-11-24T20:47:30.774422262Z
+  session_id: 01a20f083acf
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
