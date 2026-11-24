@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T01:38:01.644005624Z
+modified_at: 2026-11-24T01:44:40.665384314Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -16,6 +16,13 @@ comments:
   content: 'Draft to Approved + drive: advisor-122 disposition 2026-11-23 18:38 (small, standard tier); set by product-15 before grant expiry. Evidence: heal stale-leases on dell1 rc=124 at 120s with zero output (shared-207c3564..., TASK-3851 claim).'
   created_at: 2026-11-24T01:38:01.644005624Z
   modified_at: 2026-11-24T01:38:01.644005624Z
+- id: 01a20b3a-3824-7703-a92a-5dc1f2611d9c
+  author: joe
+  content: 'ROOT CAUSE (observed 18:45 MST, live process on imac): not a lock hang. `aida doctor heal stale-leases` scans every local branch (2005 in refs/heads) and runs one serial `gh pr list --head <branch> --state merged --limit 1` per branch, about 2.5s each, before printing anything. That''s ~80 min and ~2000 GraphQL points per run, and it happens even with --id (product''s --id run hit the same 120s timeout). Fix: with --id, query only that lease''s branch; otherwise batch (one `gh pr list --state merged --limit N` or GraphQL search), skip branches with no lease or claim, print progress, and bound by a deadline.'
+  created_at: 2026-11-24T01:44:40.665384314Z
+  modified_at: 2026-11-24T01:44:40.665384314Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
