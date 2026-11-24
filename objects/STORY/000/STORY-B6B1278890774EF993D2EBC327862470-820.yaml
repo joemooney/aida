@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T22:20:01.943530053Z
+modified_at: 2026-11-24T22:21:17.993227114Z
 req_type: Story
 tags:
 - autonomy
@@ -438,6 +438,11 @@ comments:
   content: '#4532 split at the size limit (product-15 15:25): the lane''s slice-1 shrink was uncommitted after its punt; product committed + pushed it as-is (5c415037, +318/-26 = 344 total), retitled ''Refs STORY-3038 [slice 1]''. Slice 2 = TASK-3890 (F1/F5/F6 live recheck; landing stays supervised until then).'
   created_at: 2026-11-24T22:20:01.943530053Z
   modified_at: 2026-11-24T22:20:01.943530053Z
+- id: 01a20fa6-2b29-7190-8f00-52cd4c2a893d
+  author: joe
+  content: 'REVIEW FOCUS for #4532 slice 1 (advisor-122 15:24): verify NO ship/train path treats the approval-time classification as drain authority yet; landing stays supervised until TASK-3890 lands.'
+  created_at: 2026-11-24T22:21:17.993227114Z
+  modified_at: 2026-11-24T22:21:17.993227114Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
