@@ -1,5 +1,6 @@
 id: 01a20f93-2fa6-7ed2-9333-a653049e06da
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-291
+agreed_id: STORY-3108
 title: 'Review PR-4538: [AI:codex] fix(launch): bound lock acquisition and contained child reaping (TASK-3884)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f35`) for branch `task-b6b1278890774ef993d2ebc327862470-1374`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T22:00:49.661621465Z
   session_id: 01a20f356c20
+  changes: []
+- id: 01a20fc1-ad79-7ec2-9cac-62f27400f9f1
+  author: joe
+  timestamp: 2026-11-24T22:51:20.825255709Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 5665f7c661c7b100b06434132c000715144387e7

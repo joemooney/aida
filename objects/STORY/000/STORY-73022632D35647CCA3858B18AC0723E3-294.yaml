@@ -1,5 +1,6 @@
 id: 01a20fbc-1389-73d3-92e1-54fa7d9a6f99
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-294
+agreed_id: STORY-3109
 title: 'Review PR-4542: [AI:codex] fix(launch): retain reservations with incomplete receipt attribution (BUG-2748)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20f4f`) for branch `bug-b6b1278890774ef993d2ebc327862470-509`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T22:45:47.127385010Z
   session_id: 01a20f4fc4d9
+  changes: []
+- id: 01a20fc1-e345-73c0-b3e6-c2edf9f60714
+  author: joe
+  timestamp: 2026-11-24T22:51:34.597176341Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 841efeba1bc48f093c15d9ef5f362b0b5027f738
