@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T04:09:00.624161633Z
+modified_at: 2026-11-24T04:11:03.510444182Z
 req_type: Bug
 tags:
 - admission
@@ -99,6 +99,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T04:08:42.937286243Z
   modified_at: 2026-11-24T04:08:42.937286243Z
+- id: 01a20bc0-4193-7933-89d9-37c30ecd2abe
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:11):
+    # BUG-2740 / PR #4481 r2 (advisor-122 ruling 2026-11-23 21:10: CR UPHELD at 833284c1; strict; product-15). Lane: CODEX. MAIN, existing branch. <=300 lines.
+
+    MUST FIX:
+    (1) Moving the cold-start wait to the FRONT caused three ordering regressions: the disk-floor refusal now sits behind the slot wait (undoing TASK-3154, landed today); an expired reservation timer can still spawn; WIP is not rechecked after the wait.
+      PREFERRED: RESTORE the original order (disk preflight -> WIP -> admission) and simply DON'T hold the store write lock across the cold-start wait: release it before waiting, or wait before acquiring it.
+      If you keep the reorder instead, fix ALL THREE with tests: disk refusal before the wait; re-admit if the reservation expired before spawn; WIP recheck after the wait.
+    (2) AC1 test through the PRODUCTION queue-work path: with a FULL cold-start slot, an independent writer can mutate the same store WHILE the pickup waits.
+    (3) AC2: the bounded 5s writer-timeout branch reports the holder PID + command when they're visible, with a test.
+    DEFERRED (do NOT implement; product files a follow-up): holder diagnostics across PID namespaces, and a fallback for unreadable cmdline. Printing "holder unavailable" there is fine.
+    Fallback if still blocked after this round: the smallest fix (don't hold the lock across the wait) + test (2).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4481). COMMIT your work.
+  created_at: 2026-11-24T04:11:03.510444182Z
+  modified_at: 2026-11-24T04:11:03.510444182Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
