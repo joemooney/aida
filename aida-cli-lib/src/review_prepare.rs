@@ -114,11 +114,16 @@ pub struct ReviewPreparationBundle {
     pub anchored_findings: Option<Vec<RawReviewFinding>>,
 }
 
+// trace:TASK-3862 | ai:codex
+fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
+    ProjectReviewRulesConfig::load_from_root(project_root).context("load .aida/review-rules.toml")
+}
+
 /// Execute `aida review prepare`.
 // trace:STORY-3076 | ai:antigravity
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     let project_root = find_project_root()?;
-    let rules_cfg = ProjectReviewRulesConfig::load_from_root(&project_root);
+    let rules_cfg = load_review_rules(&project_root)?;
     let registry = PlaybookRegistry::new(rules_cfg.rules.clone());
 
     let mut excludes = rules_cfg.exclude.clone();
@@ -780,6 +785,16 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_review_rules_errors() {
+        let root = tempfile::tempdir().unwrap();
+        let config_dir = root.path().join(".aida");
+        std::fs::create_dir(&config_dir).unwrap();
+        std::fs::write(config_dir.join("review-rules.toml"), "[unterminated").unwrap();
+        let error = load_review_rules(root.path()).unwrap_err();
+        assert_eq!(error.to_string(), "load .aida/review-rules.toml");
+    }
 
     #[test]
     fn option_like_endpoints_refuse_before_git() {

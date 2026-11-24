@@ -33,6 +33,7 @@
       "source": "aida-cli-lib/src/review_prepare.rs",
       "tests": [
         "git_inventory_and_content_errors_propagate",
+        "invalid_review_rules_errors",
         "option_like_endpoints_refuse_before_git",
         "root_commit_preserves_unusual_git_paths",
         "write_confines_new_and_existing_paths"
