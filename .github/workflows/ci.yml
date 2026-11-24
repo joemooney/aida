@@ -617,7 +617,10 @@ jobs:
       # trace:TASK-1780 | ai:claude
       - name: test-touched planner tests
         if: matrix.shard == 'gates'
-        run: python3 -m unittest tests/test_test_touched.py
+        run: |
+          python3 -m unittest tests/test_test_touched.py
+          # trace:BUG-2734 | ai:codex
+          python3 scripts/discover-python-tests.py
 
       # Host adapter fixtures use fake AIDA/Codex executables and temporary repos.
       # trace:TASK-2347 | ai:codex
@@ -792,7 +795,14 @@ jobs:
       # trace:STORY-1477 | ai:codex
       - name: Run history template CLI/config/MCP contract tests
         if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
-        run: bash tests/test_history_templates.sh
+        run: |
+          bash tests/test_history_templates.sh
+          # Standalone suites require the built CLI. trace:BUG-2734 | ai:codex
+          python3 tests/test_gitlab_review_handoff.py --aida target/debug/aida
+          python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida
+          python3 tests/test_pr_ship_preflight.py --aida target/debug/aida
+          python3 tests/test_seat_takeover_lifecycle.py "$PWD/target/debug/aida"
+          python3 tests/test_skill_discovery.py --aida target/debug/aida
 
       # trace:BUG-1801 | ai:codex
       - name: Run single-spec show latency regression
