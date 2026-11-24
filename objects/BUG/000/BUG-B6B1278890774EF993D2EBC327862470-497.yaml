@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T01:01:08.593542405Z
+modified_at: 2026-11-24T01:03:00.071560585Z
 req_type: Bug
 tags:
 - integration
@@ -113,6 +113,24 @@ comments:
   content: 'Moved OFF the p30 integration bundle to MAIN, strict review, mode drive (product-15 18:03): the bundle lane correctly punted on a strict path (BUG-2736: leases.rs shelve writer; BUG-2737: gate/ledger/event.rs, protected floor, needs a human/advisor merge).'
   created_at: 2026-11-24T01:01:08.593542405Z
   modified_at: 2026-11-24T01:01:08.593542405Z
+- id: 01a20b14-0e34-7670-8cd5-4dcca758a0f4
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:02):
+    # BUG-2736: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2736` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2736 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2736)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    ROUTED TO MAIN, STRICT REVIEW, mode drive (product-15 18:03, after the p30 bundle lane correctly punted). FINDING from that lane: event 930883d1 (BUG-2728 Done -> NeedsAttention, no comment, failure_reason.kind verdict:request-changes) comes from review_commands.rs -> leases::shelve_spec_on_failure -> shelve_status_flip (aida-cli-lib/src/leases.rs). You ARE authorized to change that shelving writer in leases.rs, SCOPED: every automated status regression (shelve) must leave a spec comment naming its writer (module plus reason, e.g. "shelved by review_commands/leases::shelve_spec_on_failure: verdict request-changes on PR #N"). Do NOT change WHEN or WHETHER shelving happens. Also check: a Done (completed) spec should arguably not be shelved by a stale CR at all; if you find that, list it in the PR body as a follow-up, don't fix it here. Test: a shelve writes the comment.
+  created_at: 2026-11-24T01:03:00.071560585Z
+  modified_at: 2026-11-24T01:03:00.071560585Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
