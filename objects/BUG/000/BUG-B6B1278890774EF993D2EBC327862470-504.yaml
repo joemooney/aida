@@ -9,12 +9,12 @@ description: |
 
   ## Acceptance
   - AC1: The test waits for `child.pid` to hold a parseable PID (bounded retry), OR the child writes the pid file atomically (temp + rename). A regression test simulates an empty-then-filled pid file.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T05:40:14.041811102Z
+modified_at: 2026-11-24T05:43:34.635232844Z
 req_type: Bug
 tags:
 - flaky
@@ -29,6 +29,14 @@ comments:
   modified_at: 2026-11-24T05:40:14.041811102Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+history:
+- id: 01a20c14-b9eb-72e1-a1e3-9c482909bb69
+  author: joe
+  timestamp: 2026-11-24T05:43:34.635222808Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
   branch: main
