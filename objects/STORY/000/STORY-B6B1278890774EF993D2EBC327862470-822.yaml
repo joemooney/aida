@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-24T05:08:41.249352106Z
+modified_at: 2026-11-24T05:33:37.565046514Z
 req_type: Story
 tags:
 - hygiene
@@ -25,6 +25,11 @@ comments:
   content: 'Draft to Approved with the POLICY DECIDED (advisor-122 2026-11-23 22:10; LOW, strict, MAIN, drive): reapable when the tree is clean (per BUG-2742), no stash, and every local commit is reachable from an origin ref verified by a fresh bounded fetch at reap time, regardless of PR state; record branch + tip SHA on the owning spec before reaping; refuse with ''publication unknown'' if the fetch fails. AC1 closed-unmerged+published -> reaped with comment; AC2 one unpushed commit -> refused; AC3 fetch failure -> refused. HOLD until BUG-2742 lands.'
   created_at: 2026-11-24T05:08:41.249352106Z
   modified_at: 2026-11-24T05:08:41.249352106Z
+- id: 01a20c0b-9d9d-7bd2-a260-627d49ba2980
+  author: joe
+  content: 'Added AC4/AC5 (advisor-122 2026-11-23 22:37): AC4 a stash-only clone is refused; AC5 a clone whose only unique commit is on a non-current local branch is refused unless that commit is reachable from a freshly fetched origin ref. Detection runs at reap time in the reap path, not via dispatch ahead/status (which reports such clones clean; a reporting gap, not data loss, since the reap scan refuses them).'
+  created_at: 2026-11-24T05:33:37.565046514Z
+  modified_at: 2026-11-24T05:33:37.565046514Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
