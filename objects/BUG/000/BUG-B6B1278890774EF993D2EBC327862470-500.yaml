@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T02:36:31.367838112Z
+modified_at: 2026-11-24T02:46:06.157728438Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -70,7 +70,11 @@ history:
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
   changes: []
-execution_mode: drive
+- id: 01a20b72-3ea0-7af1-9f9e-5fbf6e8c8db0
+  author: joe
+  timestamp: 2026-11-24T02:46:06.240924723Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
   branch: main
