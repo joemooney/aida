@@ -174,7 +174,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let max_files = rules_cfg
         .max_files_per_batch
         .unwrap_or(DEFAULT_MAX_FILES_PER_BATCH);
-    let batches = bundle_review_batches(&inventory.reviewable_files, token_budget, max_files);
+    let batches = bundle_review_batches(&inventory.reviewable_files, token_budget, max_files)?;
 
     // 5. Collect distinct resolved playbooks referenced by reviewable files and
     //    enrich each with diff/content-triggered facets (ANSSI / Tokio / Rust API).
@@ -253,9 +253,10 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     if let Some(cov) = &bundle.coverage_verification {
         if !cov.passed {
             anyhow::bail!(
-                "file coverage verification failed ({}% accounted; missing: {:?}, skipped without reason: {:?})",
+                "file coverage verification failed ({}% accounted; missing: {:?}, ambiguous: {:?}, skipped without reason: {:?})",
                 cov.coverage_rate_pct,
                 cov.unaccounted_files,
+                cov.ambiguous_files,
                 cov.skipped_without_reason
             );
         }
@@ -480,7 +481,7 @@ fn collect_git_diff_entries(
             additions,
             deletions,
             is_binary,
-            patch_bytes: (additions + deletions) * 48,
+            patch_bytes: additions.saturating_add(deletions).saturating_mul(48),
         });
     }
     if mode == "workspace" {
@@ -781,6 +782,12 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
             "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
             cov.passed, cov.coverage_rate_pct, cov.total_reviewable
         ));
+        if !cov.ambiguous_files.is_empty() {
+            out.push_str(&format!(
+                "- **Ambiguous ledger rows**: `{}`\n",
+                cov.ambiguous_files.join(", ")
+            ));
+        }
         if !cov.unaccounted_files.is_empty() {
             out.push_str(&format!(
                 "- **Unaccounted files**: `{}`\n",

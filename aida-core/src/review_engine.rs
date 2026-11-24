@@ -557,8 +557,8 @@ fn glob_to_regex(pat: &str) -> String {
 
 /// Estimate review token weight from patch byte count and line churn.
 pub fn estimate_file_tokens(patch_bytes: usize, additions: usize, deletions: usize) -> usize {
-    let from_bytes = (patch_bytes + 3) / 4;
-    let from_lines = (additions + deletions) * 12;
+    let from_bytes = patch_bytes.div_ceil(4);
+    let from_lines = additions.saturating_add(deletions).saturating_mul(12);
     from_bytes.max(from_lines).max(32)
 }
 
@@ -670,14 +670,17 @@ where
 
     let mut hasher = Sha256::new();
 
+    // trace:TASK-3867 | ai:codex
+    let mut frame = |fields: &[&str]| {
+        for field in fields {
+            hasher.update((field.len() as u64).to_be_bytes());
+            hasher.update(field.as_bytes());
+        }
+    };
     for entry in &sorted_entries {
         if let Some(reason) = classify_exclusion(entry, user_excludes) {
             let reason_str = reason.label();
-            hasher.update(b"excluded:");
-            hasher.update(entry.path.as_bytes());
-            hasher.update(b":");
-            hasher.update(reason_str.as_bytes());
-            hasher.update(b"\n");
+            frame(&["excluded", &entry.path, &reason_str]);
             excluded_files.push(ExcludedFile {
                 path: entry.path.clone(),
                 kind: entry.kind,
@@ -688,13 +691,7 @@ where
             let estimated_tokens =
                 estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
             let has_trace_comment = trace_detector(&entry.path);
-            hasher.update(b"reviewable:");
-            hasher.update(entry.path.as_bytes());
-            hasher.update(b":");
-            hasher.update(entry.kind.as_str().as_bytes());
-            hasher.update(b":");
-            hasher.update(playbook.id.as_bytes());
-            hasher.update(b"\n");
+            frame(&["reviewable", &entry.path, entry.kind.as_str(), &playbook.id]);
             reviewable_files.push(ReviewableFile {
                 path: entry.path.clone(),
                 old_path: entry.old_path.clone(),
@@ -779,16 +776,24 @@ pub fn canonical_module_stem(path: &str) -> String {
 ///    are paired first so implementation and test changes are reviewed together.
 /// 2. Unpaired files are grouped by shared `playbook_id`, packing into batches
 ///    that respect `max_tokens_per_batch` and `max_files_per_batch`.
+/// Returns an error when a single file exceeds the token budget.
 // trace:STORY-3076 | ai:antigravity
 pub fn bundle_review_batches(
     files: &[ReviewableFile],
     max_tokens_per_batch: usize,
     max_files_per_batch: usize,
-) -> Vec<ReviewBatch> {
+) -> anyhow::Result<Vec<ReviewBatch>> {
     if files.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    let token_cap = max_tokens_per_batch.max(256);
+    let token_cap = max_tokens_per_batch;
+    if let Some(file) = files.iter().find(|f| f.estimated_tokens > token_cap) {
+        anyhow::bail!(
+            "{} requires {} tokens, exceeding batch budget {token_cap}",
+            file.path,
+            file.estimated_tokens
+        );
+    }
     let file_cap = max_files_per_batch.max(1);
 
     // Group by canonical module stem first to detect source+test companions.
@@ -805,8 +810,10 @@ pub fn bundle_review_batches(
 
     for (stem, group) in by_stem {
         if group.len() > 1 && group.len() <= file_cap {
-            let sum_tokens: usize = group.iter().map(|f| f.estimated_tokens).sum();
-            if sum_tokens <= token_cap {
+            let sum_tokens = group
+                .iter()
+                .try_fold(0usize, |sum, f| sum.checked_add(f.estimated_tokens));
+            if sum_tokens.is_some_and(|sum| sum <= token_cap) {
                 raw_batches.push((format!("module:{stem}"), group));
                 continue;
             }
@@ -827,8 +834,8 @@ pub fn bundle_review_batches(
 
         for f in group {
             let would_exceed_files = current.len() >= file_cap;
-            let would_exceed_tokens =
-                !current.is_empty() && current_tokens + f.estimated_tokens > token_cap;
+            let would_exceed_tokens = !current.is_empty()
+                && f.estimated_tokens > token_cap.saturating_sub(current_tokens);
             if would_exceed_files || would_exceed_tokens {
                 raw_batches.push((
                     format!("playbook:{playbook_id}#{}", part),
@@ -837,7 +844,7 @@ pub fn bundle_review_batches(
                 current_tokens = 0;
                 part += 1;
             }
-            current_tokens += f.estimated_tokens;
+            current_tokens = current_tokens.saturating_add(f.estimated_tokens);
             current.push(f);
         }
         if !current.is_empty() {
@@ -850,7 +857,7 @@ pub fn bundle_review_batches(
         }
     }
 
-    raw_batches
+    Ok(raw_batches
         .into_iter()
         .enumerate()
         .map(|(idx, (label, members))| {
@@ -860,7 +867,7 @@ pub fn bundle_review_batches(
             for m in members {
                 playbooks.insert(m.playbook_id.clone());
                 paths.push(m.path.clone());
-                estimated_tokens += m.estimated_tokens;
+                estimated_tokens = estimated_tokens.saturating_add(m.estimated_tokens);
             }
             ReviewBatch {
                 batch_index: idx + 1,
@@ -870,7 +877,7 @@ pub fn bundle_review_batches(
                 estimated_tokens,
             }
         })
-        .collect()
+        .collect())
 }
 
 /// Disposition recorded by a reviewer for one file in the coverage ledger.
@@ -903,6 +910,8 @@ pub struct CoverageVerificationReport {
     pub total_reviewable: usize,
     pub reviewed_count: usize,
     pub skipped_count: usize,
+    #[serde(default)]
+    pub ambiguous_files: Vec<String>,
     pub unaccounted_files: Vec<String>,
     pub skipped_without_reason: Vec<String>,
     pub coverage_rate_pct: usize,
@@ -916,8 +925,11 @@ pub fn verify_coverage_ledger(
     ledger: &CoverageLedger,
 ) -> CoverageVerificationReport {
     let mut by_path: BTreeMap<&str, &FileCoverageEntry> = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
     for entry in &ledger.files {
-        by_path.insert(entry.path.as_str(), entry);
+        if by_path.insert(entry.path.as_str(), entry).is_some() {
+            ambiguous.insert(entry.path.clone());
+        }
     }
 
     let mut reviewed_count = 0usize;
@@ -926,6 +938,9 @@ pub fn verify_coverage_ledger(
     let mut skipped_without_reason = Vec::new();
 
     for req_file in &inventory.reviewable_files {
+        if ambiguous.contains(&req_file.path) {
+            continue;
+        }
         match by_path.get(req_file.path.as_str()) {
             Some(entry) => match entry.status {
                 FileCoverageStatus::Reviewed => {
@@ -957,13 +972,15 @@ pub fn verify_coverage_ledger(
         (accounted * 100) / total_reviewable
     };
 
-    let passed = unaccounted_files.is_empty() && skipped_without_reason.is_empty();
+    let passed =
+        ambiguous.is_empty() && unaccounted_files.is_empty() && skipped_without_reason.is_empty();
 
     CoverageVerificationReport {
         passed,
         total_reviewable,
         reviewed_count,
         skipped_count,
+        ambiguous_files: ambiguous.into_iter().collect(),
         unaccounted_files,
         skipped_without_reason,
         coverage_rate_pct,
@@ -1074,16 +1091,18 @@ pub struct ReviewObservation {
     pub has_error: bool,
 }
 
-/// Validation result for `[[obs-NNNNNN]]` citations inside a review report or verdict.
+/// Validation result for observation citations inside a review report or verdict.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CitationVerification {
     pub valid: bool,
     pub cited_ids: Vec<String>,
     pub unknown_ids: Vec<String>,
+    #[serde(default)]
+    pub ambiguous_ids: Vec<String>,
     pub errored_ids: Vec<String>,
 }
 
-/// Parse all `[[obs-...]]` markers in `markdown_text` and verify that each cited
+/// Parse single- and double-bracket observation markers in `markdown_text` and verify that each cited
 /// observation exists in `observations` and did not record an error.
 // trace:STORY-3076 | ai:antigravity
 pub fn verify_observation_citations(
@@ -1091,17 +1110,23 @@ pub fn verify_observation_citations(
     observations: &[ReviewObservation],
 ) -> CitationVerification {
     static OBS_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-        Regex::new(r"\[\[(obs-[A-Za-z0-9_-]+)\]\]").expect("static obs citation regex is valid")
+        Regex::new(r"\[\[(obs-[A-Za-z0-9_-]+)\]\]|\[(obs-[A-Za-z0-9_-]+)\]")
+            .expect("static obs citation regex is valid")
     });
     let mut cited_set = BTreeSet::new();
     for cap in OBS_RE.captures_iter(markdown_text) {
-        if let Some(m) = cap.get(1) {
+        if let Some(m) = cap.get(1).or_else(|| cap.get(2)) {
             cited_set.insert(m.as_str().to_string());
         }
     }
 
-    let obs_map: BTreeMap<&str, &ReviewObservation> =
-        observations.iter().map(|o| (o.id.as_str(), o)).collect();
+    let mut obs_map = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
+    for obs in observations {
+        if obs_map.insert(obs.id.as_str(), obs).is_some() {
+            ambiguous.insert(obs.id.clone());
+        }
+    }
 
     let mut cited_ids = Vec::new();
     let mut unknown_ids = Vec::new();
@@ -1109,6 +1134,9 @@ pub fn verify_observation_citations(
 
     for id in cited_set {
         cited_ids.push(id.clone());
+        if ambiguous.contains(&id) {
+            continue;
+        }
         match obs_map.get(id.as_str()) {
             None => unknown_ids.push(id),
             Some(obs) if obs.has_error => errored_ids.push(id),
@@ -1116,11 +1144,12 @@ pub fn verify_observation_citations(
         }
     }
 
-    let valid = unknown_ids.is_empty() && errored_ids.is_empty();
+    let valid = ambiguous.is_empty() && unknown_ids.is_empty() && errored_ids.is_empty();
     CitationVerification {
         valid,
         cited_ids,
         unknown_ids,
+        ambiguous_ids: ambiguous.into_iter().collect(),
         errored_ids,
     }
 }
@@ -1180,6 +1209,92 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3867 | ai:codex
+    fn inventory(paths: &[&str], binary: bool) -> ClassifiedInventory {
+        let entries = paths
+            .iter()
+            .map(|p| RawDiffEntry {
+                path: (*p).into(),
+                old_path: None,
+                kind: FileChangeKind::Modified,
+                additions: 0,
+                deletions: 0,
+                patch_bytes: 0,
+                is_binary: binary,
+            })
+            .collect::<Vec<_>>();
+        classify_diff_inventory(&entries, &PlaybookRegistry::default(), &[], |_| false)
+    }
+
+    #[test]
+    fn h2a_digest_frames_paths() {
+        let pair = inventory(&["a", "b"], true).inventory_sha256;
+        assert_eq!(pair, inventory(&["b", "a"], true).inventory_sha256);
+        assert_ne!(
+            pair,
+            inventory(&["a:binary_file\nexcluded:b"], true).inventory_sha256
+        );
+    }
+
+    #[test]
+    fn h2a_duplicates_are_ambiguous() {
+        let row = FileCoverageEntry {
+            path: "a".into(),
+            status: FileCoverageStatus::Reviewed,
+            reason: None,
+        };
+        let coverage = verify_coverage_ledger(
+            &inventory(&["a"], false),
+            &CoverageLedger {
+                files: vec![row.clone(), row],
+            },
+        );
+        assert!(!coverage.passed);
+        assert_eq!(coverage.reviewed_count, 0);
+        assert_eq!(coverage.ambiguous_files, ["a"]);
+        let obs = ReviewObservation {
+            id: "obs-1".into(),
+            path: "a".into(),
+            start_line: 1,
+            end_line: 1,
+            content_sha256: String::new(),
+            has_error: false,
+        };
+        let citations = verify_observation_citations("[[obs-1]]", &[obs.clone(), obs]);
+        assert!(!citations.valid);
+        assert_eq!(citations.ambiguous_ids, ["obs-1"]);
+    }
+
+    #[test]
+    fn h2a_token_overflow() {
+        assert_eq!(estimate_file_tokens(usize::MAX, 0, 0), usize::MAX / 4 + 1);
+        assert_eq!(estimate_file_tokens(0, usize::MAX, 1), usize::MAX);
+        let mut files = inventory(&["a.rs", "a_test.rs"], false).reviewable_files;
+        files[0].estimated_tokens = usize::MAX;
+        let batches = bundle_review_batches(&files, usize::MAX, 2).unwrap();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].estimated_tokens, usize::MAX);
+    }
+
+    #[test]
+    fn h2a_budget_is_a_cap() {
+        let files = inventory(&["a", "b"], false).reviewable_files;
+        assert_eq!(bundle_review_batches(&files, 32, 2).unwrap().len(), 2);
+        for cap in [0, 31] {
+            assert!(bundle_review_batches(&files, cap, 2)
+                .unwrap_err()
+                .to_string()
+                .contains("exceeding batch budget"));
+        }
+    }
+
+    #[test]
+    fn h2a_single_bracket_citations() {
+        let citations = verify_observation_citations("[obs-1] [[obs-2]] [obs-1] obs-3", &[]);
+        assert!(!citations.valid);
+        assert_eq!(citations.unknown_ids, ["obs-1", "obs-2"]);
+    }
 
     // trace:TASK-3866 | ai:codex
     #[test]
@@ -1472,7 +1587,7 @@ mod tests {
 
         // Budget 2000 tokens: parser.rs + parser_test.rs (1400 tokens) pair into `module:parser`,
         // while alpha.rs (1500) and beta.rs (1500) split into two separate playbook batches.
-        let batches = bundle_review_batches(&files, 2000, 4);
+        let batches = bundle_review_batches(&files, 2000, 4).unwrap();
         assert_eq!(batches.len(), 3);
         assert_eq!(batches[0].label, "module:parser");
         assert_eq!(

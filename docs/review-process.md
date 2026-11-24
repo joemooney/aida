@@ -295,7 +295,7 @@ The optional CLI ledger check accounts for each reviewable file as reviewed or s
    - Seals the scope with `inventory_sha256` and records whether the file contains the literal `trace:` marker, without validating an ID.
    - When `--verify-coverage` is passed, `aida review prepare` fails closed unless 100% of `reviewable_files` are explicitly marked `reviewed` or `skipped` (with a non-empty reason).
 2. **Zero-LLM Token-Budgeted Semantic Batching**:
-   - A same-stem heuristic groups likely source and test companions. The default target is 12,000 estimated tokens per batch. An oversized file gets its own batch.
+   - A same-stem heuristic groups likely source and test companions. The default cap is 12,000 estimated tokens per batch. Preparation reports an error if any file exceeds the configured cap.
 3. **Core Playbooks + Whole-File Substring Security Facets**:
    - Matches files against built-in language playbooks (`rust`, `cargo_toml`, `go`, `typescript_js`, `python`, `shell`, `sql`, `config_data`) layered beneath optional project rules in `.aida/review-rules.toml`.
    - For Rust files, injects an always-on core checklist (~250 tokens mapped directly to AIDA's finding classes: `fail-open`, `absent-evidence-reads-as-good`, `perf`, `portability`, `contract-drift`, `incomplete-fix`, `untested-path`) and appends conditional facets (`rust_unsafe_ffi`, `rust_async_concurrency`, `rust_io_subprocess_security`, `rust_macros` distilled from the Rust API Guidelines, ANSSI Secure Rust, and Tokio) **only** when their substrings appear anywhere in the reviewed files, including unchanged lines and comments.

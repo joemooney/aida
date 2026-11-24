@@ -79,13 +79,13 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 - **Companion Test Pairing (`canonical_module_stem`)**:
   - Automatically normalizes stems across `<name>.rs`, `<name>_test.rs`, `<name>_tests.rs`, `test_<name>.py`, and `<name>.test.ts`.
-  - Uses a same-stem heuristic to identify likely companions. Oversized files get their own batches.
+  - Uses a same-stem heuristic to identify likely companions. Preparation rejects oversized files.
 - **Crate-Qualified Generic Stems**:
   - Qualifies entry-point filenames (`lib.rs`, `mod.rs`, `main.rs`, `index.ts`) by parent directory (`aida-core/src/lib` vs `aida-cli-lib/src/lib`) so unrelated crates never collide.
 - **Token & File-Count Bin Packing (`bundle_review_batches`)**:
   - Packs remaining files by shared playbook ID toward `DEFAULT_BATCH_TOKEN_BUDGET` (`12,000` tokens) and `DEFAULT_MAX_FILES_PER_BATCH` (`8` files).
 
-<!-- Files with matching stems can be unrelated. An oversized file gets its own batch. -->
+<!-- Files with matching stems can be unrelated. Preparation rejects a file that exceeds the configured token cap. -->
 
 ---
 
