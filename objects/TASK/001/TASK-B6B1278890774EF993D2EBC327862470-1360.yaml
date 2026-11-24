@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: The lane ship step titles the PR with the completing "(X)" trailer when the lane's exit summary claims every acceptance criterion of X, and uses "Refs X" ONLY when the brief or the exit summary declares a partial slice.
   - AC2: Tests for both cases: an all-AC-claimed exit produces "(X)"; a declared-slice exit produces "Refs X".
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:31:16.499980191Z
-modified_at: 2026-11-24T19:27:10.072772293Z
+modified_at: 2026-11-24T20:10:19.452177186Z
 req_type: Task
 tags:
 - lanes
@@ -45,6 +45,12 @@ comments:
   modified_at: 2026-11-24T19:27:10.072772293Z
   session_id: 01a20ef772c0
   harness_version: codex-cli 0.167.0
+- id: 01a20f2e-41bc-7fd3-bbf5-c90892fc10fc
+  author: aida-publication-done
+  content: Implementer push 3c6018b7f139 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T20:10:19.452175999Z
+  modified_at: 2026-11-24T20:10:19.452175999Z
+  session_id: 01a20ef772c0
 history:
 - id: 01a20e66-1ae3-7fc3-86c4-e2e953404751
   author: joe
@@ -63,6 +69,14 @@ history:
   session_id: 01a20ef772c0
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20f2e-41bc-7fd3-bbf5-c8f1b8032dbb
+  author: aida-publication-done
+  timestamp: 2026-11-24T20:10:19.452168679Z
+  session_id: 01a20ef772c0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
