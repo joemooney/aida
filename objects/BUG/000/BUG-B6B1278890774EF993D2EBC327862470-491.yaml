@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T14:45:32.673818017Z
+modified_at: 2026-11-24T14:54:40.076850894Z
 req_type: Bug
 tags:
 - doctor
@@ -172,6 +172,13 @@ comments:
     Probes checked ref parsing, zero/multiple rows, exhausted budgets, slow executable resolution, failed lock admission and local publication. F1–F3 addressed. Per pickup ruling F4 unknown inventory/detail coverage, F5 skipped red cache, F6 partial dedup cleanup, F7 scan fairness and F8 fetch-lock contention are deferred.
   created_at: 2026-11-24T14:45:32.673818017Z
   modified_at: 2026-11-24T14:45:32.673818017Z
+  session_id: 01a20df74a50
+  harness_version: codex-cli 0.167.0
+- id: 01a20e0d-478a-7531-98b7-f498945ab40d
+  author: dirtlab
+  content: Implementer self-review validation update for fbf0c04013 plus working tree. The scheduled slow-forge regression passed in the lane with both run and per-head exhaustion, including the local store commit and deferred remote publication checks. The store-writer inventory was reconciled, the PATH fixture uses fixed system directories, and git diff --check passed. FAST gate run in progress.
+  created_at: 2026-11-24T14:54:40.076850894Z
+  modified_at: 2026-11-24T14:54:40.076850894Z
   session_id: 01a20df74a50
   harness_version: codex-cli 0.167.0
 history:

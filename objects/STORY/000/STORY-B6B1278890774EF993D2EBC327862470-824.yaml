@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T14:31:00.582688216Z
+modified_at: 2026-11-24T14:56:01.478339114Z
 req_type: Story
 tags:
 - admission
@@ -207,6 +207,18 @@ comments:
   modified_at: 2026-11-24T14:20:21.888241625Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e0e-858d-7fe1-88c3-8711751a9eec
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7a2afbab9c3a44100316974052f88c0f0c7a9633 plus native working changes. Reviewed the merge-base diff, git diff HEAD and untracked inventory (empty).
+    AC1: [evidence: behavioral-test] The unchanged contained fresh child grant test failed at line 368 before the fix with a review-watch Git probe error and passed afterward. All 7 grant tests passed in j20261124T143854003-2-0. wip_limit.rs:168 now shares the documented unreadable-count policy with initial admission while fetching a fresh count for new work. standalone_implementer.rs:1473 refuses a non-directory authority store and checks anchor and members under writer exclusion. session/headless.rs:2803 releases only after receipt, liveness, grant and service binding. Native spawn uses the same guard lifetime. The started callback follows successful release. Fresh authority refusal precedes consumption of the prior veto. Resume retains the original attempt.
+    AC2: [evidence: behavioral-test] bug_2451_pickup_entry_tests.rs:1944 exercises the queue callback after a writer runs during a held cold-start slot, including a canonical pull. The fixture asserts the sentinel and prior veto. Execution of the story regressions and FAST gate is pending.
+    Deep-pass checked UUID identity, empty and multi-member plans, absent and file-backed authority stores, first launch versus resume, cleanup after refusal and lock lifetime through both launch paths. Fixed a test Git maintenance ratchet finding; its 8 tests passed. The reviewed changes do not modify the child-grant integration test. An unavailable WIP observation remains diagnostic as at initial admission. No full-CI result exists for the unpublished edits.
+  created_at: 2026-11-24T14:56:01.478339114Z
+  modified_at: 2026-11-24T14:56:01.478339114Z
+  session_id: 01a20df74d3e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
