@@ -284,19 +284,23 @@ sets a short-lived presence for the advisor code gate.
 
 ## Deterministic review preparation (`aida review prepare`) — trace:STORY-3076 | ai:antigravity
 
-Whether the reviewer is an interactive advisor session or a headless `reviewer` phase inside `aida queue work --auto-complete`, raw diff reading suffers from context-window skimming on large pull requests, line-number drift, and vague checklist prompts. `aida review prepare` provides a deterministic Rust preparation and verification layer (`aida_core::review_engine` + `aida_cli_lib::review_prepare`) alongside `aida review prompt`:
+Upcoming (lands with the CLI/skills slices): S2 adds `aida review prepare` and S3 integrates it into `/aida-review` and `/aida-code-review`.
+
+Git is required in every mode. Workspace mode compares local changes with HEAD and includes non-ignored untracked files. Range mode uses the merge base of the supplied refs (target defaults to HEAD). PR mode needs forge base/head metadata and local revisions. Commit mode needs the commit and its parent. Scan mode uses `git ls-files --cached --others --exclude-standard` under the selected paths.
+
+The optional CLI ledger check accounts for each reviewable file as reviewed or skipped with a reason. Merge gates operate independently.
 
 1. **SHA-256-Sealed Inventory & 100% File Coverage (`--verify-coverage <ledger.json>`)**:
    - Classifies every changed or scanned file into `reviewable_files` vs `excluded_files` (with explicit exclusion reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, or `user_excluded:<glob>`).
-   - Seals the scope with `inventory_sha256` and verifies whether each file carries an inline `trace:<SPEC-ID>` comment.
+   - Seals the scope with `inventory_sha256` and records whether the file contains the literal `trace:` marker, without validating an ID.
    - When `--verify-coverage` is passed, `aida review prepare` fails closed unless 100% of `reviewable_files` are explicitly marked `reviewed` or `skipped` (with a non-empty reason).
 2. **Zero-LLM Token-Budgeted Semantic Batching**:
-   - Pairs implementation files with their companion test files (`<stem>.rs` + `<stem>_test.rs` / `tests/<stem>_test.rs`, qualifying generic entry-point stems like `lib.rs` and `mod.rs` by parent directory so unrelated crates never collide) and packs remaining files by shared playbook within a 12,000-token / 8-file ceiling.
-3. **Core Playbooks + Zero-Overhead Diff-Triggered Security Facets**:
+   - A same-stem heuristic groups likely source and test companions. The default target is 12,000 estimated tokens per batch. An oversized file gets its own batch.
+3. **Core Playbooks + Whole-File Substring Security Facets**:
    - Matches files against built-in language playbooks (`rust`, `cargo_toml`, `go`, `typescript_js`, `python`, `shell`, `sql`, `config_data`) layered beneath optional project rules in `.aida/review-rules.toml`.
-   - For Rust files, injects an always-on core checklist (~250 tokens mapped directly to AIDA's finding classes: `fail-open`, `absent-evidence-reads-as-good`, `perf`, `portability`, `contract-drift`, `incomplete-fix`, `untested-path`) and appends conditional facets (`rust_unsafe_ffi`, `rust_async_concurrency`, `rust_io_subprocess_security`, `rust_macros` distilled from the Rust API Guidelines, ANSSI Secure Rust, and Tokio) **only** when those constructs appear in the reviewed files.
+   - For Rust files, injects an always-on core checklist (~250 tokens mapped directly to AIDA's finding classes: `fail-open`, `absent-evidence-reads-as-good`, `perf`, `portability`, `contract-drift`, `incomplete-fix`, `untested-path`) and appends conditional facets (`rust_unsafe_ffi`, `rust_async_concurrency`, `rust_io_subprocess_security`, `rust_macros` distilled from the Rust API Guidelines, ANSSI Secure Rust, and Tokio) **only** when their substrings appear anywhere in the reviewed files, including unchanged lines and comments.
 4. **Two-Pass Snippet Line-Anchoring (`--anchor-findings <findings.json>`) & Observation Citations**:
-   - Resolves quoted `existing_code` snippets to exact 1-based `(start_line, end_line)` spans against the pinned target git revision (`git show <sha>:<path>`), and validates `[[obs-NNNNNN]]` evidence citations.
+   - Resolves quoted `existing_code` snippets to exact 1-based `(start_line, end_line)` spans against the pinned target git revision (`git show <sha>:<path>`). A separate library-only verifier checks `[[obs-NNNNNN]]` evidence citations.
    - Also supports full-directory audits without a git diff via `aida review prepare --scan --path <dir>` for `/aida-code-review`.
 
 ## Related

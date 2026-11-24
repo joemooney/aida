@@ -23,7 +23,7 @@ mkdir -p "$OUT"
 # (source files live next to this script).
 DECKS=(
   "aida-executive-briefing|Executive Briefing|Executives & leadership — problem, wedge, moat, proof, ask"
-  "aida-code-review-engine|Deterministic Code Review Engine|Engineering leadership & architects — clean-room Rust review preparation, diff-triggered facets, line anchoring & self-review case study"
+  "aida-code-review-engine|Deterministic Code Review Engine|Engineering leadership & architects — clean-room Rust review preparation, whole-file substring facets, line anchoring & self-review case study"
   "aida-developer-deep-dive|Developer Deep Dive (under the hood)|Engineers — storage, distributed IDs, the orchestrator, MCP, traceability"
   "aida-administrator-guide|Administrator Guide|Operators — init, multi-node, config, maintenance, doctor, security"
   "aida-user-walkthrough|User Walkthrough|Daily users — the loop, queue, autonomous drain, traces, lifecycle, TUI"
