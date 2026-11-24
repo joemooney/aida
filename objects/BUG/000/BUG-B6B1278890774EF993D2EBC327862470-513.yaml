@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: When `aida init` is run with codex as the only selected vendor, it writes `[contained.vendors] codex = "native"` into the committed default-branch config (the trusted location the check requires) and tells the user in one line what that means (codex's native sandbox, not AIDA containment). A test: init with codex-only → `aida agent new codex --role advisor` passes the containment check.
   - AC2: When a codex launch is refused for missing containment config in a project with NO claude vendor configured, the error names the exact one-line fix (`[contained.vendors] codex = "native"` in .aida/config.toml on the default branch) instead of suggesting claude. Test.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T20:49:01.762119497Z
+modified_at: 2026-11-24T20:58:28.608228057Z
 req_type: Bug
 tags:
 - codex
@@ -197,6 +197,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20f5a-5780-7982-b78b-05b3199d592a
+  author: aida-orchestrator
+  timestamp: 2026-11-24T20:58:28.608236300Z
+  session_id: 01a20f5797c3
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
@@ -205,3 +213,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Reviewed BUG-2752 against protected main 95eaccf328557402d176c0b41983afe1b677965f and landed tree d0d492aff5a75ff6331d1c78126f10b3b0bc1c08. AC1 is partial. The PTY fixture covers fresh Codex-only init, the committed policy and controlled advisor launch, plus topic refusal, clean local re-init and optional prompt error handling. Recovery still fails to guide users when the locally committed opt-in is absent from the trusted remote tip. AC2 is partial. Missing-policy refusals give Codex-specific guidance, but the manual remedy stops at a local commit even where launch requires the remote tip. The head is one commit behind main. Neither finding depends on code changed by the base advance. CI pending at review time. No local tests or builds were run.
+  recovery_hint: address the review findings, move BUG-2752 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T20:58:28.608228057Z
