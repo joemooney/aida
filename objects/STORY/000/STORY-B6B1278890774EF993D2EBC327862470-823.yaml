@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T05:56:58.273415588Z
-modified_at: 2026-11-24T07:23:10.048773672Z
+modified_at: 2026-11-24T07:24:49.946560186Z
 req_type: Story
 tags:
 - track:integration
@@ -38,6 +38,21 @@ comments:
   content: 'Slicing per advisor-122 ruling 2026-11-24 00:30: S1 = this spec (core review_engine.rs + 8 tests; standard; size exception approved; the lane posts a <=1-page sketch comment here before merge, for advisor signoff), S2/S3/S4 child tasks filed. All TRACK=integration, cherry-picked from 0fdac177513 keeping Joe''s authorship; S2 after S1, S3 after S2, S4 independent; the .pptx is dropped.'
   created_at: 2026-11-24T07:23:10.048773672Z
   modified_at: 2026-11-24T07:23:10.048773672Z
+- id: 01a20c71-9e43-7b01-b981-2da2519886f5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:24):
+    # STORY-3076 (STORY-3076 slice; advisor-122 ruling 2026-11-24 00:30; product-15). Lane: CODEX. Base: INTEGRATION (branch `int32-story-3076-s1`, cut from origin/integration 965a6dd2b2c). PR base MUST be `integration`.
+
+    SOURCE: Joe's reference commit 0fdac177513 on branch story-3076-review-engine (git fetch origin story-3076-review-engine). Do NOT modify that branch.
+    CHERRY-PICK AS A FILE SUBSET: `git checkout 0fdac177513 -- <files>` (and hand-apply only this slice's hunks to shared files such as lib.rs). KEEP Joe's authorship: commit with `--author="Joe Mooney <joe.mooney@gmail.com>"`.
+    SLICE S1 = aida-core/src/review_engine.rs (+ its 8 unit tests) + the aida-core/src/lib.rs `mod`/`pub use` hunk ONLY. Standard tier; the size exception (>300 lines) is APPROVED for this cohesive module. Do NOT change review_engine logic beyond what review requires. Commit title `[AI:codex] feat(review): deterministic review engine core (Refs STORY-3076)`.
+    BEFORE the PR merges, post a <=1-PAGE SKETCH comment on STORY-3076 (`aida comment add STORY-3076 ...`, or put it in the PR body and say so in your exit summary if you cannot comment): module boundaries (review_engine in aida-core; review_prepare in the CLI, slice S2), what it READS (git, the working tree) and WRITES (only --write output paths), and an EXPLICIT statement that NOTHING in gate/, the gate ledger, review verdict recording or train admission consumes it: advisory reviewer tooling only. If you find any gate/verdict path consumes it, STOP and punt (it would be re-tiered strict).
+    Add `// trace:STORY-3076 | ai:codex` only where you add code. One targeted test run, then `make check-ci-fast`, then ship the PR INTO integration. COMMIT your work.
+  created_at: 2026-11-24T07:24:49.946560186Z
+  modified_at: 2026-11-24T07:24:49.946560186Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-d3d0-7262-85d6-f61f4d82947a
   author: joe
