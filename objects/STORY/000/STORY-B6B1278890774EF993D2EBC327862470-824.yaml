@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T14:56:01.478339114Z
+modified_at: 2026-11-24T15:31:00.238634842Z
 req_type: Story
 tags:
 - admission
@@ -217,6 +217,13 @@ comments:
     Deep-pass checked UUID identity, empty and multi-member plans, absent and file-backed authority stores, first launch versus resume, cleanup after refusal and lock lifetime through both launch paths. Fixed a test Git maintenance ratchet finding; its 8 tests passed. The reviewed changes do not modify the child-grant integration test. An unavailable WIP observation remains diagnostic as at initial admission. No full-CI result exists for the unpublished edits.
   created_at: 2026-11-24T14:56:01.478339114Z
   modified_at: 2026-11-24T14:56:01.478339114Z
+  session_id: 01a20df74d3e
+  harness_version: codex-cli 0.167.0
+- id: 01a20e2e-8b4e-7a20-b13d-ed00bffa7d77
+  author: dirtlab
+  content: 'Implementer validation complete for HEAD 7a2afbab9c plus the native working diff. AC1: [evidence: behavioral-test] All seven unchanged child-grant tests passed, including the originally failing contained grant and lease stamp. All four story_1662_queue_work_wiring tests passed. AC2: [evidence: behavioral-test] All five story_3080 tests passed, including three blocked cold-start mutations through real pickup, canonical pull, retained veto and untouched sentinel. The file-backend refusal, writer lock lifetime, live WIP and resume regressions passed. Updated the store writer inventory to follow the relocated barrier write with identical classification. make check-ci-fast exited 0 in j20261124T151332360-2-0; the runner reported an overlay-stale notice at teardown. git diff --check passed; no untracked files. Hosted full CI awaits host publication.'
+  created_at: 2026-11-24T15:31:00.238634842Z
+  modified_at: 2026-11-24T15:31:00.238634842Z
   session_id: 01a20df74d3e
   harness_version: codex-cli 0.167.0
 history:
