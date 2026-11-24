@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2746",
+  "publishes": [
+    {
+      "at": "2026-11-24T14:53:54.393764005Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T12:07:44.168149034Z",
+      "spec": "BUG-2746",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4514,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "372c046ed782f4f1a660c89b9c71436a0444ec47"
+      }
+    },
+    {
+      "ts": "2026-11-24T12:07:55.564102805Z",
+      "spec": "BUG-2746",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep for completing BUG-2746 (origin BUG-b6b1278890774ef993d2ebc327862470-507).\n\n- AC1 — verified by source inspection of execute_reservation and RuntimeLock, and by the new behavioral coverage in `cargo test -p aida-cli-lib bug2746_train_admission_during_reviewer_launch` and `cargo test -p aida-cli-lib bug2746_admission_fd_absent_after_exec`. The train acquires admission for an unrelated member while the reservation callback is still running, and the exec probe checks for the exact review-watch lock inode. The implementer reports these tests passed. I did not run local tests.\n- AC2 — unverified. The diff adds a supervisor alert fixture, but it does not exercise auto-train member selection contending with a review-watch transaction. The alert can also report the previous acquirer's activity and age when the current holder has not written a record.\n\nReviewed the complete landed diff from protected base 6c832e0d3a8b189ff57b0665563aafb822a7a71d to tree 8c31ab0de5b99f906be9d9161d26ed6dd821c85e. The attestation names the original PR head. That head is one commit behind the protected base. None of the findings depends on code changed by the intervening base commit. Exact-head CI fast gates and merge-hold gate passed. Fast compile was pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2746 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T13:24:15.577754527Z",
+      "spec": "BUG-2746",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4514,
+        "verdict": "APPROVED",
+        "reviewed_sha": "98c7d347a78f37d3540e428c2bc3f05decb5471c"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:49:49.303330697Z",
+      "spec": "BUG-2746",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4514
+      }
+    },
+    {
+      "ts": "2026-11-24T14:53:54.186407645Z",
+      "spec": "BUG-2746",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "9cc76437f4f2054f6c97da341ed1b482c60c221d",
+        "pr": 4514,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
