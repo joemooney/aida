@@ -1,0 +1,32 @@
+id: 01a20b8f-0952-70e2-83fb-8a44dfb590af
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-256
+title: 'Review PR-4478: [AI:codex] fix(forge): pin GitHub budget probes to the land origin (TASK-3852)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b60`) for branch `int30-task-3852`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4478>
+  - Branch: `int30-task-3852` → `integration`
+
+  ## Covers
+
+  - TASK-3852
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4478` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T03:17:33.138056968Z
+modified_at: 2026-11-24T03:17:33.138056968Z
+req_type: Story
+filed_at:
+  code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5e3711c9f
+  session: 01a20b60b88b
