@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: An approval recorded through review-watch requests full-tier CI exactly as a manual `aida review record` approval does: ci:full is applied, or the full workflow is triggered, after any in-flight FAST run finishes, so no FAST run is cancelled (avoiding the BUG-2723 ghost red).
   - AC2: A regression test: a review-watch approval of a head without ci:full results in a full-tier request.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-24T16:20:12.035349971Z
+modified_at: 2026-11-24T18:23:47.364108406Z
 req_type: Bug
 tags:
 - ci
@@ -191,6 +191,11 @@ comments:
   created_at: 2026-11-24T16:20:12.035346530Z
   modified_at: 2026-11-24T16:20:12.035346530Z
   session_id: 01a20e200a25
+- id: 01a20ecc-b8a4-7b70-8cab-c90e1b77e102
+  author: lane-recovery
+  content: Reference merge `ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-24T18:23:47.364101593Z
+  modified_at: 2026-11-24T18:23:47.364101593Z
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
@@ -254,6 +259,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ecc-b8a4-7b70-8cab-c91086c7294b
+  author: lane-recovery
+  timestamp: 2026-11-24T18:23:47.364108346Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
   branch: main
