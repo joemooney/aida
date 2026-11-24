@@ -1,0 +1,32 @@
+id: 01a20c10-d27a-7cc3-80bd-7b2c87f5224f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-504
+agreed_id: BUG-2743
+title: 'Flaky story_2775_operator_signals_stop_supervisor: reads child.pid before the PID is written (ParseIntError Empty) and reds trains'
+description: |
+  Found 2026-11-23 22:40 (integration-30): train #4488 (carrying promotion 29 / PR #4485) closed RED on CI (lib-1) because of a flaky test unrelated to its diff: `deputy_shell::supervisor::tests::story_2775_operator_signals_stop_supervisor` panicked at aida-cli-lib/src/deputy_shell/supervisor.rs:281 with `ParseIntError { kind: Empty }` (run 45332748370, job 138237557644). Main CI at aaeb386bf5 was green, and #4485 was green at its own head.
+
+  Cause: the test waits only until `child.pid` EXISTS (`q.root.join("child.pid").exists()`), then `read_to_string(..).trim().parse().unwrap()`. The supervisor child can create the file before writing the PID, so the read sees an empty string. A red train is bisected and ejected rather than rerun, so one flake costs a whole promotion cycle.
+
+  ## Acceptance
+  - AC1: The test waits for `child.pid` to hold a parseable PID (bounded retry), OR the child writes the pid file atomically (temp + rename). A regression test simulates an empty-then-filled pid file.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T05:39:18.778436659Z
+modified_at: 2026-11-24T05:39:18.778436659Z
+req_type: Bug
+tags:
+- flaky
+- small
+- tests
+- track:integration
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
