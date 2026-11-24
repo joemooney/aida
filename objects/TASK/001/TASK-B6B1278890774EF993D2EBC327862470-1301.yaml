@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The status_prs unshipped-work detector uses aida_core::id_identity for ALL status keys and lookups, including zero-padding equivalence (TASK-1-097 == TASK-1-97) and consistent branch-identity resolution across the detector's other checks.
   - AC2: Tests: padded vs unpadded IDs and alias forms resolve to the same spec in every detector check.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T06:33:18.113528789Z
+modified_at: 2026-11-24T07:17:16.793217745Z
 req_type: Task
 tags:
 - small
@@ -37,6 +37,12 @@ comments:
   modified_at: 2026-11-24T06:33:18.113528789Z
   session_id: 01a20c31cd32
   harness_version: codex-cli 0.167.0
+- id: 01a20c6a-8379-77f2-9a4a-b0c11624c32d
+  author: aida-publication-done
+  content: Implementer push b1eb63071069 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T07:17:16.793216167Z
+  modified_at: 2026-11-24T07:17:16.793216167Z
+  session_id: 01a20c31cd32
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe
@@ -55,6 +61,14 @@ history:
   session_id: 01a20c31cd32
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c6a-8379-77f2-9a4a-b0be6aa6effa
+  author: aida-publication-done
+  timestamp: 2026-11-24T07:17:16.793213337Z
+  session_id: 01a20c31cd32
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
