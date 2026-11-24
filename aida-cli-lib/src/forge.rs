@@ -1900,34 +1900,38 @@ pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
 
     // Use the same main-repository identity and host pin as land discovery.
     // trace:TASK-3852 | ai:codex
-    let root = main_root(root).ok()?;
-    let repo = Repository::load(&root).ok()?;
-    repo.github_slug()?;
-    let reading = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
-        let mut command = Command::new(crate::kernel::resolve_gh_binary_for_probe()?);
-        repo.pin_command(&mut command);
-        command
-            .current_dir(&root)
-            .args(["api", "rate_limit", "--cache", "60s"])
-            .stdin(std::process::Stdio::null());
-        let remaining = crate::forge_lookup::forge_lookup_deadline()?
-            .checked_duration_since(std::time::Instant::now())?;
-        let BoundedCommandOutput::Completed(out) =
-            command_output_with_timeout_capped(command, remaining, 65536)
-        else {
-            return None;
-        };
-        if !out.status.success() {
-            return None;
-        }
-        describe_core_budget(&out.stdout)
-    });
-    Some(reading.unwrap_or_else(|| {
-        (
-            "GitHub core REST budget: unknown. Top consumers since last reset: unknown.".into(),
-            false,
-        )
-    }))
+    // trace:TASK-3854 | ai:codex
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
+        let root = main_root(root).ok()?;
+        let repo = Repository::load(&root).ok()?;
+        repo.github_slug()?;
+        let reading = (|| {
+            let binary = std::path::absolute(crate::kernel::resolve_gh_binary_for_probe()?).ok()?;
+            let mut command = Command::new(binary);
+            repo.pin_command(&mut command);
+            command
+                .current_dir(&root)
+                .args(["api", "rate_limit", "--cache", "60s"])
+                .stdin(std::process::Stdio::null());
+            let remaining = crate::forge_lookup::forge_lookup_deadline()?
+                .checked_duration_since(std::time::Instant::now())?;
+            let BoundedCommandOutput::Completed(out) =
+                command_output_with_timeout_capped(command, remaining, 65536)
+            else {
+                return None;
+            };
+            if !out.status.success() {
+                return None;
+            }
+            describe_core_budget(&out.stdout)
+        })();
+        Some(reading.unwrap_or_else(|| {
+            (
+                "GitHub core REST budget: unknown. Top consumers since last reset: unknown.".into(),
+                false,
+            )
+        }))
+    })
 }
 
 #[test]
