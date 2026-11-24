@@ -4,12 +4,12 @@ agreed_id: BUG-2701
 title: Nested Bubblewrap Git fixtures fail under the dell1 lane job wrapper
 description: |
   TASK-3133 baseline on unmodified origin/main at b82066836029b7ef323861eb91d1dbd4967a3096, dell1 lane job j20261119T175135035-2-0, reproduced failures in the live BUG-2169 nested Bubblewrap tests for clone Git operations, origin HEAD and tags, and the fixture's historical-layout positive controls. Diagnostics include Git alternates and repository discovery failures. This is separate from the TASK-2712 case already owned by BUG-2676. Compare the effective fixture environment on a direct host and in a lane job. Preserve live denial and positive-control assertions. Full job output is under .aida/lane-jobs/01a1f4ece859 on dell1.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-24T17:01:04.359554136Z
+modified_at: 2026-11-24T17:11:21.553542954Z
 req_type: Bug
 tags:
 - bwrap
@@ -206,9 +206,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20e8a-68d1-7932-b375-7140c1780dcf
+  author: aida-orchestrator
+  timestamp: 2026-11-24T17:11:21.553551569Z
+  session_id: 01a20e88318e
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5b78d27e1
   vendor: codex
   session: 01a1f4ece859
   harness_version: codex-cli 0.167.0
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2701 is partial. The pinned landing diff fixes the prior findings by exercising the real probe on failure, restoring the CI skip sentinel, and refusing broken executables and unexpected probe errors. The success arm still lacks a regression that prevents silent loss of live containment coverage (ADR-76). Reviewed the full landing diff against main at 289cc394a334ee2760c79067fd871bbe66f9c5a9. The finding applies equally to the original PR head and the pinned landing tree. CI pending at review time. The fast source gates passed and fast compilation was running. No local tests were run.
+  recovery_hint: address the review findings, move BUG-2701 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T17:11:21.553542954Z
