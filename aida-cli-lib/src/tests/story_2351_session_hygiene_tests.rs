@@ -234,3 +234,47 @@ fn bug_2627_unknown_routes_reason_without_salvage_even_if_probe_marks_dirty() {
     )
     .is_none());
 }
+
+// trace:TASK-3858 | ai:codex
+#[test]
+fn scan_skipped_clone_guidance_survives_both_hygiene_summaries() {
+    use crate::seat_clone::{Probe, ProbeFacts};
+    use crate::session_reap::{classify_clone_reap, ReapRow, ReapVerdict};
+
+    for name in ["refs/stash", "refs/heads/side"] {
+        let detail = format!("1 commit(s) on {name}");
+        let facts = ProbeFacts {
+            branch: Some("seat".into()),
+            unpushed: 1,
+            unpushed_refs: vec![detail.clone()],
+            ..Default::default()
+        };
+        let ReapVerdict::Skip(reason) =
+            classify_clone_reap(|| Probe::Known(facts), "seat", true, true, || true)
+        else {
+            panic!("expected the clone with {name} to be skipped")
+        };
+        let outcome = HygieneOutcome {
+            scan_skipped: vec![ReapRow {
+                session: "session-one".into(),
+                scope: String::new(),
+                worktree: "/clone".into(),
+                branch: "seat".into(),
+                verdict: "skip",
+                reason,
+                spec_finished: true,
+                branch_tip: None,
+                outcome: None,
+                ending_retained: false,
+            }],
+            ..Default::default()
+        };
+        for dry_run in [true, false] {
+            let summary = render_summary(&outcome, dry_run);
+            assert!(summary.contains("session-one  skipped"), "{summary}");
+            assert!(summary.contains(&detail), "{summary}");
+            assert!(!summary.contains("git "), "{summary}");
+            assert!(summary.contains("0 session(s)"), "{summary}");
+        }
+    }
+}
