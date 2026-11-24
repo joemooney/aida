@@ -13,12 +13,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:09:03.418936684Z
-modified_at: 2026-11-24T04:13:17.838438160Z
+modified_at: 2026-11-24T04:13:20.305644475Z
 req_type: Task
 tags:
 - diagnostics
 - small
 - store
+comments:
+- id: 01a20bc2-1c31-7950-bebb-1be1bec1500e
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 21:14 (LOW priority, strict lock code, MAIN, drive, <=300 lines). HOLD: launch only after BUG-2740 lands, based on it.'
+  created_at: 2026-11-24T04:13:20.305644475Z
+  modified_at: 2026-11-24T04:13:20.305644475Z
 history:
 - id: 01a20bc1-f5c0-7f00-89a2-78dae81d9158
   author: joe
