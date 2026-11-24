@@ -1,0 +1,28 @@
+id: 01a20e94-7763-7de1-b489-28d8c22b0ba8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1364
+agreed_id: TASK-3880
+title: 'Review engine H2c: directory-scoped same-stem batching; Rust facets keyed on language, not playbook ID prefix'
+description: |
+  H2c of the STORY-3076 review engine (deferred from H2b #4525 TASK-3872 AC2; advisor-122 disposition 2026-11-24 10:23; filed by product-15). LOW, small, integration track.
+
+  ## Acceptance
+  - AC1: same-stem batching is scoped to the directory/package: files that share a stem in different directories or packages are not batched together. Test.
+  - AC2: Rust review facets are keyed on the file's LANGUAGE, not on the playbook ID prefix. Test.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T17:22:20.643705009Z
+modified_at: 2026-11-24T17:22:20.643705009Z
+req_type: Task
+tags:
+- integration
+- review
+- small
+filed_at:
+  code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1ee
+  vendor: claude
