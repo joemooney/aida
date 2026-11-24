@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T06:41:44.406696199Z
+modified_at: 2026-11-24T06:43:08.445004291Z
 req_type: Task
 tags:
 - hygiene
@@ -79,6 +79,12 @@ comments:
   modified_at: 2026-11-24T05:47:34.744521041Z
   session_id: 01a20c0fef5f
   harness_version: codex-cli 0.167.0
+- id: 01a20c4b-421c-7230-a626-9d5b0af1621d
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int31-task-3858` at head `cd7112f31629a280a0fd5a49b4fee11df953716b`.'
+  created_at: 2026-11-24T06:43:08.444998638Z
+  modified_at: 2026-11-24T06:43:08.444998638Z
+  session_id: 01a20c0fef5f
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
