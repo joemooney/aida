@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   - AC1: Lane admission waits (cold-start limit, memory/disk headroom, any queue wait) do NOT hold the store write lock. The lock is taken only around the actual store mutation and released before waiting. Test: a launch blocked on the cold-start limit doesn't hold store-write.lock, and a concurrent store write succeeds.
   - AC2: A store-lock timeout error names the HOLDER (pid plus command line) so this is diagnosable without /proc/locks. Test.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T06:21:36.289890499Z
+modified_at: 2026-11-24T06:40:06.931523670Z
 req_type: Bug
 tags:
 - admission
@@ -298,6 +298,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20c48-7d13-76f3-8aea-74b9c36b0d4d
+  author: aida-orchestrator
+  timestamp: 2026-11-24T06:40:06.931532037Z
+  session_id: 01a20c458286
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -309,3 +317,11 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2740 AC1 PASS on lock ordering. Nested admission refuses and the production pickup regression runs an independent writer against the same store while the slot is occupied. Queued and unqueued disk deferral have coverage. AC2 PASS for visible holders. Both timeout paths carry holder PID and argv, and the mediated wire response retains Busy. Cross-namespace and unreadable command diagnostics were explicitly deferred. Pickup authority checks remain incomplete as detailed in the findings. The full pinned landing diff was reviewed against main at f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c. The PR is one commit behind that base, and the findings apply with the intervening commit included. FAST source gates passed and compile CI was pending at review time. Review used source and existing evidence.
+  recovery_hint: address the review findings, move BUG-2740 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-24T06:40:06.931523670Z
