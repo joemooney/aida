@@ -1,0 +1,29 @@
+id: 01a20c28-5fa8-7730-9ac5-dfa0d7212da6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1300
+agreed_id: TASK-3859
+title: main_watch reports a gh authentication failure (non-zero, clear cause) instead of Pending; CronJobFailed keeps a compact failed-step + cause summary
+description: |
+  Follow-up to TASK-3218 / #4491 (advisor-122 ruling 2026-11-23 23:07, overridden to APPROVE; relayed by integration-30; filed by product-15). Both issues pre-date #4491.
+
+  ## Acceptance
+  - AC1: main_watch tells a gh AUTHENTICATION failure apart from pending CI. With expired or missing gh auth, red-main-watch currently reads as Pending and exits 0, so CronJobFailed never fires. It must exit NON-ZERO with a clear auth cause. Test with a fake gh that fails auth.
+  - AC2: The routed CronJobFailed trip keeps a COMPACT failed-step + cause summary, not just stderr's last line. Test.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T06:05:02.248297583Z
+modified_at: 2026-11-24T06:05:02.248297583Z
+req_type: Task
+tags:
+- main-watch
+- schedule
+- small
+- track:integration
+filed_at:
+  code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aaeb386bf51
+  vendor: claude
