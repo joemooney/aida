@@ -8,17 +8,16 @@ description: |
   ## Acceptance
   - AC1: Robustness: a length-framed inventory digest; duplicate ledger rows and observation IDs reported as ambiguous; checked/saturating token arithmetic; globs compiled once with bounded brace expansion; CRLF-normalized trimming; resolved anchor coordinates kept separate from submitted hints; a linear line-anchoring matcher.
   - AC2: Behaviour: same-stem batching scoped to directory/package; the budget cap honored or rejected (TASK-3319); single-bracket citations accepted (-047); Rust facets keyed on language, not ID prefix. Tests for each item; split into H2a/H2b if over ~300 lines.
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T18:22:12.590745534Z
+modified_at: 2026-11-24T20:22:31.771420613Z
 req_type: Task
 tags:
 - review
 - story-3076
-- track:integration
 comments:
 - id: 01a20de6-5a70-7f72-b48d-f5619180261a
   author: dirtlab
@@ -143,6 +142,13 @@ comments:
   modified_at: 2026-11-24T18:22:12.590745534Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f39-6e16-7e73-bc1f-81af4b147faf
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3867 was In Progress when merge 95eaccf328557402d176c0b41983afe1b677965f completed it; verify that no active round remains.'
+  created_at: 2026-11-24T20:22:31.702393231Z
+  modified_at: 2026-11-24T20:22:31.702393231Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20cd4-4160-7d93-a028-44fad8a0f0dd
   author: joe
@@ -201,6 +207,22 @@ history:
   session_id: 01a20e981a7e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20f39-6e16-7e73-bc1f-81b7e74c1edb
+  author: aida-auto-bump
+  timestamp: 2026-11-24T20:22:31.702401905Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a20f39-6e5b-75d1-bfec-9b19a7c5866b
+  timestamp: 2026-11-24T20:22:31.771377753Z
+  agent: aida
+  commit_sha: 95eaccf328557402d176c0b41983afe1b677965f
+  summary: 'Advisor (delegated authority): promotion 36, linear on main ee2e6d830ff + 2 cherry-picks; per-commit patch-ids match approved integration squashes (9c119d4f, 15215bdc); 15 files +256/-84; no protected paths; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
@@ -209,3 +231,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 103bb2ed7ea
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T20:22:31.702398844Z
+  completion_sha: 95eaccf328557402d176c0b41983afe1b677965f
