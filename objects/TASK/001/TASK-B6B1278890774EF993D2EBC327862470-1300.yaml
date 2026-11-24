@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T06:05:02.248297583Z
-modified_at: 2026-11-24T06:06:09.209019547Z
+modified_at: 2026-11-24T06:06:12.956519887Z
 req_type: Task
 tags:
 - main-watch
 - schedule
 - small
 - track:integration
+comments:
+- id: 01a20c29-73dc-7da1-9d49-20984ccb3495
+  author: joe
+  content: 'Filed Approved per advisor-122 ruling 2026-11-23 23:07 (#4491 follow-up; standard, drain, integration filler). Builds on #4491''s CronJobFailed routing: launched after #4491 merges into integration.'
+  created_at: 2026-11-24T06:06:12.956519887Z
+  modified_at: 2026-11-24T06:06:12.956519887Z
 history:
 - id: 01a20c29-65ab-76d1-94ac-a40605b8d567
   author: joe
