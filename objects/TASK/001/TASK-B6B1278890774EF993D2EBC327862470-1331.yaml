@@ -1,0 +1,29 @@
+id: 01a20cd3-dfae-74b1-9541-2f348c1a409c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1331
+agreed_id: TASK-3866
+title: 'STORY-3076 H1: review_engine content-selection safety (credential dirs at any depth, both rename sides, exact .aida components, invalid project config errors); blocks S2 merge'
+description: |
+  STORY-3076 hardening H1 (advisor-122 ruling 2026-11-24 02:15, from the independent CR on #4506 S1, which was approved by override and merged at integration 3ecf8d43; filed by product-15). Content-selection safety in aida-core/src/review_engine.rs. Standard tier, <=150 lines. BLOCKS S2's (TASK-3862) merge; S2 may launch meanwhile. Folds in TASK-3320.
+
+  ## Acceptance
+  - AC1: (a) credential-directory exclusion matches `.aws` / `.ssh` path COMPONENTS at ANY depth, including the repo root; (b) a rename evaluates BOTH sides (old and new path) for exclusion.
+  - AC2: (c) .aida runtime exclusions match EXACT components (`.aida/cache-policy.toml` stays eligible); (d) a present-but-invalid or unreadable project config (.aida/review-rules.toml) gives a contextual ERROR, defaulting only when the file is ABSENT. One test for each of (a)-(d).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T09:12:21.678180988Z
+modified_at: 2026-11-24T09:12:21.678180988Z
+req_type: Task
+tags:
+- review
+- small
+- story-3076
+- track:integration
+filed_at:
+  code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 103bb2ed7ea
+  vendor: claude
