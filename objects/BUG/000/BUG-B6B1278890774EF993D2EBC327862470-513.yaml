@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: When `aida init` is run with codex as the only selected vendor, it writes `[contained.vendors] codex = "native"` into the committed default-branch config (the trusted location the check requires) and tells the user in one line what that means (codex's native sandbox, not AIDA containment). A test: init with codex-only → `aida agent new codex --role advisor` passes the containment check.
   - AC2: When a codex launch is refused for missing containment config in a project with NO claude vendor configured, the error names the exact one-line fix (`[contained.vendors] codex = "native"` in .aida/config.toml on the default branch) instead of suggesting claude. Test.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-24T19:15:24.772098568Z
+modified_at: 2026-11-24T19:17:42.241834648Z
 req_type: Bug
 tags:
 - codex
@@ -64,6 +64,11 @@ comments:
   created_at: 2026-11-24T19:04:41.973225934Z
   modified_at: 2026-11-24T19:04:41.973225934Z
   session_id: 01a20ebafafb
+- id: 01a20efe-14e1-78b0-996e-dc130c4b2456
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed all six files of the pinned landed diff (protected base ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358, landed tree 2b22e48c1221eae047a36c8db5909e17a2c2c8b0) against the generated worksheet for the completing BUG-2752. The PR head is one commit behind main. The base advance, BUG-2729, changes CI and review scheduling. No finding depends on code it changed.. No triage reason was given.'
+  created_at: 2026-11-24T19:17:42.241828184Z
+  modified_at: 2026-11-24T19:17:42.241828184Z
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
@@ -110,6 +115,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20efe-14e1-78b0-996e-dc0a96caa9cb
+  author: joe
+  timestamp: 2026-11-24T19:17:42.241822196Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
@@ -118,19 +130,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Reviewed all six files of the pinned landed diff (protected base ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358, landed tree 2b22e48c1221eae047a36c8db5909e17a2c2c8b0) against the generated worksheet for the completing BUG-2752. The PR head is one commit behind main. The base advance, BUG-2729, changes CI and review scheduling. No finding depends on code it changed.
-
-    BUG-b6b1278890774ef993d2ebc327862470-513.AC1 — unverified. The new helper test sets the scaffold-committed flag directly and manually advances the trusted ref in a prebuilt main-branch fixture. The init-to-advisor test required by the worksheet is absent, and the accepted opt-in still leaves affected existing projects and non-default-branch invocations without trusted policy.
-    BUG-b6b1278890774ef993d2ebc327862470-513.AC2 — verified by the new Codex-only missing-policy assertions in bug_2752_codex_only_init_consent_supplies_trusted_seat_policy, the assertions in the_containment_refusal_names_the_vendor_fix_in_its_first_line, and the agent-new preference path through apply_agent_default_flags to containment_posture_in. The diagnostic gives the exact key, file and trusted branch. The stale BUG-2144 assertion is a separate test-suite regression.
-
-    BUG-2752 bug protocol — PR touches at least one test file — met. The diff modifies task_2631_containment_tests.rs and bug_2223_orphan_seat_reentry_tests.rs. Both changes trace BUG-2752. The supplied untraced-criteria list was checked against the diff for AC1 and AC2.
-
-    At review time, exact-head FAST source gates and merge-hold-gate had passed, FAST compile was pending and full test shards were skipped. The implementer reports targeted helper tests passed. No local tests were run under reviewer policy. The explicit review-claim command was refused by AIDA in this lane.
-  recovery_hint: address the review findings, move BUG-2752 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T19:15:24.772098568Z
