@@ -71,6 +71,7 @@ pub(crate) fn outcome(row: &Value) -> Result<&str> {
 
 #[derive(Default, Debug)]
 pub(crate) struct TierSelection {
+    conclusions: BTreeMap<String, String>,
     pub owned: BTreeSet<String>,
     pub selected: Vec<TierRun>,
 }
@@ -134,6 +135,11 @@ pub(crate) fn latest_runs_at(
         let id = run["id"].as_u64().context("missing Actions run ID")?;
         ensure!(seen.insert(id), "duplicate Actions run {id}");
         if run["event"].as_str().context("missing Actions event")? != "pull_request" {
+            // Other triggers never replace PR checks, but their run state can
+            // explain a blocking row (e.g. a pull_request_target hold gate).
+            if let Ok(state) = outcome(run) {
+                result.conclusions.insert(id.to_string(), state.to_owned());
+            }
             continue;
         }
         // Commit checks are SHA-scoped. Even ignoring a foreign run here would
@@ -188,7 +194,15 @@ pub(crate) fn latest_runs_at(
             ensure!(tier.replace(marker).is_none(), "ambiguous tier in run {id}");
         }
         let conclusion = outcome(run)?.to_owned();
-        let Some(tier) = tier else {
+        result
+            .conclusions
+            .insert(id.to_string(), conclusion.clone());
+        let tier = if let Some(marker) = tier {
+            marker
+        } else if path == ".github/workflows/ci.yml" && jobs.is_empty() && conclusion == "cancelled"
+        {
+            "unavailable"
+        } else {
             if path == ".github/workflows/ci.yml"
                 && !jobs
                     .iter()
@@ -230,14 +244,16 @@ pub(crate) fn latest_runs_at(
         );
     }
     for mut tiers in groups.into_values() {
-        if let (Some(full), Some(fast)) = (tiers.get("FULL"), tiers.get("FAST")) {
-            if full.id > fast.id
-                && full.conclusion == "success"
+        if let Some(full) = tiers.get("FULL") {
+            if full.conclusion == "success"
                 && full.jobs.iter().any(|j| {
                     j["name"] == super::CI_AGGREGATOR_CHECK && j["conclusion"] == "success"
                 })
             {
-                tiers.remove("FAST");
+                let full_id = full.id;
+                tiers.retain(|tier, run| {
+                    !matches!(*tier, "FAST" | "unavailable") || run.id >= full_id
+                });
             }
         }
         for run in tiers.into_values() {
@@ -303,6 +319,19 @@ impl TierRun {
 }
 
 impl TierSelection {
+    pub fn describe(&self, id: Option<&str>, check_state: &str) -> String {
+        let id = id.unwrap_or("unavailable");
+        if let Some(run) = self.selected.iter().find(|r| Some(r.id) == id.parse().ok()) {
+            return run.detail();
+        }
+        let conclusion = self
+            .conclusions
+            .get(id)
+            .map(String::as_str)
+            .unwrap_or("unavailable");
+        format!("run {id} conclusion {conclusion} (check {check_state}, supersession unavailable)")
+    }
+
     pub fn verify_marker(&self, name: &str, id: Option<&str>) -> Result<()> {
         if matches!(name, "ci-tier: fast" | "ci-tier: full") {
             ensure!(
@@ -335,14 +364,8 @@ impl TierSelection {
                     "pending" => CheckOutcome::Pending,
                     _ => CheckOutcome::Failed,
                 };
-                let name = match outcome {
-                    CheckOutcome::Pending | CheckOutcome::Failed => {
-                        format!("{} ({})", row.name, run.detail())
-                    }
-                    _ => row.name,
-                };
                 selected.push(CommitCheck {
-                    name,
+                    name: row.name,
                     outcome,
                     run_id: row.run_id,
                     workflow_id: None,
@@ -354,7 +377,16 @@ impl TierSelection {
             }
         }
         effective.extend(&selected);
-        let mut verdict = super::commit_ci::judge_effective_checks(&effective, required);
+        let mut verdict = super::commit_ci::judge_effective_checks(&effective, required, |c| {
+            let state = if c.cancelled {
+                "cancelled"
+            } else if c.outcome == CheckOutcome::Pending {
+                "pending"
+            } else {
+                "failed"
+            };
+            format!("{} ({})", c.name, self.describe(c.run_id.as_deref(), state))
+        });
         if let super::CommitCi::MissingRequired(name) = &mut verdict {
             for run in &self.selected {
                 name.push_str(&format!("; {}", run.detail()));
@@ -389,6 +421,9 @@ pub(crate) mod fixture {
                     != format!("actions/runs/{id}/attempts/{attempt}/jobs?per_page=100&page=1")
                 {
                     continue;
+                }
+                if run["fixture_tier"].is_null() {
+                    return Ok(serde_json::to_vec(&json!({"total_count":0,"jobs":[]}))?);
                 }
                 let tier_job = format!("ci-tier: {}", run["fixture_tier"].as_str().unwrap());
                 let job = |id, name: &str, status, conclusion| {

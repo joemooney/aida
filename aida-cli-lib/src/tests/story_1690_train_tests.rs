@@ -6529,6 +6529,15 @@ fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
         judge(&[fast.clone(), full.clone()]),
         TrainCiReadiness::Green
     );
+    let mut jobless = run(11, "", "cancelled");
+    jobless["fixture_tier"] = serde_json::Value::Null;
+    assert_eq!(
+        judge(&[fast.clone(), jobless.clone(), run(12, "full", "success")]),
+        TrainCiReadiness::Green
+    );
+    assert!(
+        matches!(judge(&[run(10, "full", "success"), jobless]), TrainCiReadiness::InfraRed(detail) if detail.contains("run 11 attempt 1 tier unavailable conclusion cancelled"))
+    );
     let mut rerun = run(10, "fast", "failure");
     rerun["run_attempt"] = 2.into();
     assert_eq!(
@@ -6564,6 +6573,37 @@ fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
             "{field}"
         );
     }
+    // An untiered workflow can cancel even though one of its jobs reports failure.
+    let mut external = run(42, "", "cancelled");
+    external["path"] = ".github/workflows/audit.yml".into();
+    external["fixture_tier"] = serde_json::Value::Null;
+    let selection = read(&[external]).unwrap();
+    let mut row = bug2401_row("audit", "fail");
+    row.run_id = Some("42".into());
+    let cfg = Default::default();
+    let rows = [row];
+    let mut state = train_ci_readiness(&rows, &[], &cfg, false);
+    super::describe_train_ci_refusal(&mut state, &rows, &[], &cfg, false, &selection);
+    assert!(
+        matches!(state, TrainCiReadiness::Red(s) if s.contains("run 42 conclusion cancelled") && s.contains("supersession unavailable"))
+    );
+    let checks = crate::forge::CommitChecks {
+        sha: HEAD.into(),
+        checks: vec![crate::forge::CommitCheck {
+            name: "audit".into(),
+            outcome: crate::forge::CheckOutcome::Failed,
+            run_id: Some("42".into()),
+            workflow_id: None,
+            cancelled: false,
+            job_id: Some(123),
+            run_attempt: Some(1),
+            run_in_progress: false,
+        }],
+    };
+    assert!(
+        matches!(selection.judge_commit_checks(checks, &[]).unwrap(),
+        crate::forge::CommitCi::Failed(names) if names[0].contains("run 42 conclusion cancelled") && names[0].contains("supersession unavailable"))
+    );
     let target = serde_json::json!({"number":1,"base":{"ref":"main"}});
     for owners in [
         serde_json::json!([{"number":2,"base":{"ref":"integration"}}]),

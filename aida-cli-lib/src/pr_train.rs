@@ -960,17 +960,17 @@ fn describe_train_ci_refusal(
     };
     let mut runs = std::collections::BTreeMap::<_, Vec<_>>::new();
     for row in blocking {
-        runs.entry(row.run_id).or_default().push(row.name);
+        runs.entry((row.run_id, row.bucket))
+            .or_default()
+            .push(row.name);
     }
-    for (id, names) in runs {
-        let detail = selection
-            .selected
-            .iter()
-            .find(|r| Some(r.id.to_string()) == id)
-            .map(|r| r.detail())
-            .unwrap_or_else(|| {
-                format!("run {} (tier unknown)", id.as_deref().unwrap_or("unknown"))
-            });
+    for ((id, bucket), names) in runs {
+        let state = if bucket == "cancel" {
+            "cancelled"
+        } else {
+            &bucket
+        };
+        let detail = selection.describe(id.as_deref(), state);
         reason.push_str(&format!("; {}: {detail}", names.join(", ")));
     }
 }

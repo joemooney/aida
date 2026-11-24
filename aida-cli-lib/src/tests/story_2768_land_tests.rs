@@ -762,7 +762,17 @@ fn bug2723_land_and_exact_tip_judge_both_tier_orders() {
             (State::Blocked, Action::Wait)
         );
     }
+    let mut jobless = run(11, "", "cancelled");
+    jobless["fixture_tier"] = serde_json::Value::Null;
     for (runs, green) in [
+        (
+            vec![
+                run(10, "fast", "cancelled"),
+                jobless,
+                run(12, "full", "success"),
+            ],
+            true,
+        ),
         (
             vec![run(10, "fast", "failure"), run(11, "full", "success")],
             true,
@@ -897,6 +907,31 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
         serde_json::json!({"sha": MERGE, "parents": [{"sha": OLD}, {"sha": head}]}).to_string(),
     )
     .unwrap();
+    let mut run = crate::forge::tier_runs::fixture::run(20, "full", "failure");
+    run["pull_requests"][0]["number"] = 7.into();
+    let job = |id, name: &str, conclusion: &str| {
+        serde_json::json!({
+            "id": id, "name": name, "conclusion": conclusion, "status": "completed",
+            "run_id": 20, "head_sha": head, "run_attempt": 1
+        })
+    };
+    let jobs = [
+        job(200, "ci-tier: full", "success"),
+        job(201, crate::forge::CI_AGGREGATOR_CHECK, "failure"),
+        job(202, "CI (gates)", "success"),
+    ];
+    for (file, body) in [
+        (
+            "runs.json",
+            serde_json::json!({"total_count":1,"workflow_runs":[run]}),
+        ),
+        (
+            "jobs.json",
+            serde_json::json!({"total_count":jobs.len(),"jobs":jobs}),
+        ),
+    ] {
+        std::fs::write(temp.path().join(file), body.to_string()).unwrap();
+    }
     let bin = temp.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let gh = bin.join("gh");
@@ -904,6 +939,8 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
         &gh,
         format!(
             "#!/bin/sh\ncase \"$*\" in\n  \
+             *'repos/owner/repo/actions/runs?head_sha={head}&per_page=100&page=1') cat ../runs.json ;;\n  \
+             *'repos/owner/repo/actions/runs/20/attempts/1/jobs?per_page=100&page=1') cat ../jobs.json ;;\n  \
              'api repos/owner/repo/actions/jobs/202/logs'|'api --allow-escape-sequences repos/owner/repo/actions/jobs/202/logs') cat ../job.log ;;\n  \
              'api repos/owner/repo/git/commits/{MERGE}'|'api --allow-escape-sequences repos/owner/repo/git/commits/{MERGE}') cat ../merge.json ;;\n  \
              *) exit 99 ;;\nesac\n"
