@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T03:27:05.669804177Z
-modified_at: 2026-11-24T04:16:07.579208570Z
+modified_at: 2026-11-24T04:17:20.776636953Z
 req_type: Bug
 tags:
 - small
@@ -63,6 +63,12 @@ comments:
   content: Implementer push 8468290642b9 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-24T04:15:20.169377898Z
   modified_at: 2026-11-24T04:15:20.169377898Z
+  session_id: 01a20b9e6c1c
+- id: 01a20bc5-c788-7493-899d-f4d9dc8f08b1
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int30-bug-2741` at head `8468290642b9fe9f63d0af40ced5556f908311bd`.'
+  created_at: 2026-11-24T04:17:20.776630874Z
+  modified_at: 2026-11-24T04:17:20.776630874Z
   session_id: 01a20b9e6c1c
 history:
 - id: 01a20b99-adf0-7950-aee0-2bcd6fbf00a2
