@@ -6,11 +6,12 @@
 
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
-    anchor_findings_with, bundle_review_batches, classify_diff_inventory, verify_coverage_ledger,
+    anchor_findings_with, bundle_review_batches, classify_with_exclusions, verify_coverage_ledger,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
     PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
     ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
 };
+use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -126,6 +127,14 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let mut excludes = rules_cfg.exclude.clone();
     excludes.extend(args.exclude.iter().cloned());
 
+    let excludes = compile_exclusions(&excludes);
+    for (pattern, glob) in &excludes {
+        anyhow::ensure!(
+            glob.is_valid(),
+            "exclusion glob exceeds compilation limits: {pattern}"
+        );
+    }
+
     // 1. Resolve comparison mode and git endpoints.
     let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
 
@@ -149,7 +158,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let target_rev = head_ref.as_deref();
     let mut content_cache: BTreeMap<String, String> = BTreeMap::new();
     let mut read_error = None;
-    let inventory = classify_diff_inventory(&raw_entries, &registry, &excludes, |rel_path| {
+    let inventory = classify_with_exclusions(&raw_entries, &registry, &excludes, |rel_path| {
         match read_file_at_revision(&project_root, target_rev, rel_path) {
             Ok(Some(content)) => {
                 let has_trace = content.contains("trace:");
@@ -431,7 +440,7 @@ fn collect_git_diff_entries(
     mode: &str,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
-    excludes: &[String],
+    excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     let range = match (mode, merge_base, head_ref) {
         ("commit" | "range", Some(base), Some(head)) => format!("{base}..{head}"),
@@ -532,7 +541,7 @@ fn path_matches_any_scope(candidate: &str, scopes: &[String]) -> bool {
 fn collect_git_scan_entries(
     project_root: &Path,
     paths: &[String],
-    excludes: &[String],
+    excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     for p in paths {
         crate::git_arg_guard::reject_option_like("--path", p)?;
@@ -563,7 +572,7 @@ fn worktree_entries(
     root: &Path,
     paths: &str,
     kind: FileChangeKind,
-    excludes: &[String],
+    excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     let mut entries = Vec::new();
     for path in paths.split_terminator('\0').collect::<BTreeSet<_>>() {
@@ -580,7 +589,7 @@ fn worktree_entries(
             is_binary: false,
             patch_bytes: 0,
         };
-        if aida_core::review_engine::classify_exclusion(&entry, excludes).is_none() {
+        if classify_compiled(&entry, excludes).is_none() {
             let Some(bytes) = read_workspace_file(root, path)? else {
                 continue;
             };

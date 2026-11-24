@@ -200,8 +200,8 @@ pub struct PlaybookFacet {
 /// Clean-room registry of built-in and project-defined path-scoped review playbooks.
 #[derive(Debug, Clone)]
 pub struct PlaybookRegistry {
-    custom_rules: Vec<CustomPathRule>,
-    builtin_rules: Vec<ResolvedPlaybook>,
+    custom_rules: Vec<(CompiledGlob, CustomPathRule)>,
+    builtin_rules: Vec<(CompiledGlob, ResolvedPlaybook)>,
     default_playbook: ResolvedPlaybook,
 }
 
@@ -318,8 +318,14 @@ impl PlaybookRegistry {
         };
 
         Self {
-            custom_rules,
-            builtin_rules,
+            custom_rules: custom_rules
+                .into_iter()
+                .map(|rule| (CompiledGlob::new(&rule.pattern), rule))
+                .collect(),
+            builtin_rules: builtin_rules
+                .into_iter()
+                .map(|rule| (CompiledGlob::new(&rule.pattern), rule))
+                .collect(),
             default_playbook,
         }
     }
@@ -329,11 +335,12 @@ impl PlaybookRegistry {
         let builtin = self
             .builtin_rules
             .iter()
-            .find(|r| glob_matches(&r.pattern, rel_path))
+            .find(|(glob, _)| glob.matches(rel_path))
+            .map(|(_, rule)| rule)
             .unwrap_or(&self.default_playbook);
 
-        for custom in &self.custom_rules {
-            if glob_matches(&custom.pattern, rel_path) {
+        for (glob, custom) in &self.custom_rules {
+            if glob.matches(rel_path) {
                 if custom.merge_builtin {
                     return ResolvedPlaybook {
                         id: format!("{}+{}", builtin.id, custom.id),
@@ -494,17 +501,39 @@ pub fn detect_rust_content_facets(samples: &[&str]) -> Vec<PlaybookFacet> {
 /// Matching is case-insensitive on ASCII path characters and normalizes path separators to `/`.
 // trace:STORY-3076 | ai:antigravity
 pub fn glob_matches(pattern: &str, candidate: &str) -> bool {
-    let norm_candidate = candidate.replace('\\', "/").to_ascii_lowercase();
-    for expanded in expand_braces(pattern) {
-        let norm_pat = expanded.replace('\\', "/").to_ascii_lowercase();
-        let regex_str = glob_to_regex(&norm_pat);
-        if let Ok(re) = Regex::new(&regex_str) {
-            if re.is_match(&norm_candidate) {
-                return true;
-            }
-        }
+    CompiledGlob::new(pattern).matches(candidate)
+}
+
+// trace:TASK-3872 | ai:codex
+#[derive(Debug, Clone)]
+pub struct CompiledGlob(Option<Regex>);
+
+#[cfg(test)]
+thread_local! { static GLOB_COMPILES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
+impl CompiledGlob {
+    pub fn is_valid(&self) -> bool {
+        self.0.is_some()
     }
-    false
+
+    fn new(pattern: &str) -> Self {
+        #[cfg(test)]
+        GLOB_COMPILES.set(GLOB_COMPILES.get() + 1);
+        let alternatives = expand_braces(pattern)
+            .into_iter()
+            .map(|pat| glob_to_regex(&pat.replace('\\', "/").to_ascii_lowercase()))
+            .collect::<Vec<_>>();
+        if alternatives.is_empty() {
+            return Self(None);
+        }
+        Self(Regex::new(&alternatives.join("|")).ok())
+    }
+
+    fn matches(&self, candidate: &str) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|re| re.is_match(&candidate.replace('\\', "/").to_ascii_lowercase()))
+    }
 }
 
 fn expand_braces(pattern: &str) -> Vec<String> {
@@ -517,6 +546,15 @@ fn expand_braces(pattern: &str) -> Vec<String> {
     let close = open + rel_close;
     let prefix = &pattern[..open];
     let suffix = &pattern[close + 1..];
+    let count = pattern[open + 1..close].split(',').count();
+    if count > 256
+        || (prefix.len() + suffix.len())
+            .saturating_mul(count)
+            .saturating_add(close - open)
+            > 1024 * 1024
+    {
+        return Vec::new();
+    }
     pattern[open + 1..close]
         .split(',')
         .map(|alt| format!("{prefix}{}{suffix}", alt.trim()))
@@ -567,6 +605,20 @@ pub fn classify_exclusion(
     entry: &RawDiffEntry,
     user_excludes: &[String],
 ) -> Option<ExclusionReason> {
+    classify_compiled(entry, &compile_exclusions(user_excludes))
+}
+
+pub fn compile_exclusions(patterns: &[String]) -> Vec<(&str, CompiledGlob)> {
+    patterns
+        .iter()
+        .map(|p| (p.as_str(), CompiledGlob::new(p)))
+        .collect()
+}
+
+pub fn classify_compiled(
+    entry: &RawDiffEntry,
+    user_excludes: &[(&str, CompiledGlob)],
+) -> Option<ExclusionReason> {
     if entry.is_binary {
         return Some(ExclusionReason::BinaryFile);
     }
@@ -580,7 +632,10 @@ pub fn classify_exclusion(
         .find_map(|path| classify_path_exclusion(path, user_excludes))
 }
 
-fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<ExclusionReason> {
+fn classify_path_exclusion(
+    path: &str,
+    user_excludes: &[(&str, CompiledGlob)],
+) -> Option<ExclusionReason> {
     let norm = path.replace('\\', "/");
     let file_name = Path::new(&norm)
         .file_name()
@@ -623,9 +678,9 @@ fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<Exclu
     }
 
     // Check user/project configured exclusion patterns.
-    for pat in user_excludes {
-        if glob_matches(pat, &norm) {
-            return Some(ExclusionReason::UserExcludedPattern(pat.clone()));
+    for (pat, glob) in user_excludes {
+        if glob.0.is_none() || glob.matches(&norm) {
+            return Some(ExclusionReason::UserExcludedPattern((*pat).to_owned()));
         }
     }
 
@@ -657,11 +712,21 @@ pub fn classify_diff_inventory<F>(
     entries: &[RawDiffEntry],
     registry: &PlaybookRegistry,
     user_excludes: &[String],
-    mut trace_detector: F,
+    trace_detector: F,
 ) -> ClassifiedInventory
 where
     F: FnMut(&str) -> bool,
 {
+    let excludes = compile_exclusions(user_excludes);
+    classify_with_exclusions(entries, registry, &excludes, trace_detector)
+}
+
+pub fn classify_with_exclusions(
+    entries: &[RawDiffEntry],
+    registry: &PlaybookRegistry,
+    excludes: &[(&str, CompiledGlob)],
+    mut trace_detector: impl FnMut(&str) -> bool,
+) -> ClassifiedInventory {
     let mut reviewable_files = Vec::new();
     let mut excluded_files = Vec::new();
 
@@ -671,7 +736,7 @@ where
     let mut hasher = Sha256::new();
 
     for entry in &sorted_entries {
-        if let Some(reason) = classify_exclusion(entry, user_excludes) {
+        if let Some(reason) = classify_compiled(entry, excludes) {
             let reason_str = reason.label();
             hasher.update(b"excluded:");
             hasher.update(entry.path.as_bytes());
@@ -991,7 +1056,7 @@ pub fn anchor_snippet_lines(
     snippet: &str,
     hint_line: Option<usize>,
 ) -> Option<AnchoredSpan> {
-    let snippet_trimmed = snippet.trim_matches('\n').trim_matches('\r');
+    let snippet_trimmed = snippet.trim_matches(['\r', '\n']);
     if snippet_trimmed.trim().is_empty() {
         return None;
     }
@@ -1003,17 +1068,7 @@ pub fn anchor_snippet_lines(
     }
 
     // Pass 1: exact line-by-line match.
-    let mut exact_candidates = Vec::new();
-    let window = needle_lines.len();
-    for start_idx in 0..=(file_lines.len() - window) {
-        let matches_exact = (0..window).all(|offset| {
-            file_lines[start_idx + offset].trim_end_matches('\r')
-                == needle_lines[offset].trim_end_matches('\r')
-        });
-        if matches_exact {
-            exact_candidates.push((start_idx + 1, start_idx + window));
-        }
-    }
+    let exact_candidates = matching_spans(&needle_lines, &file_lines, |s| s.trim_end_matches('\r'));
 
     if let Some((start_line, end_line)) = pick_closest_span(&exact_candidates, hint_line) {
         return Some(AnchoredSpan {
@@ -1030,20 +1085,42 @@ pub fn anchor_snippet_lines(
         return None;
     }
 
-    let mut trimmed_candidates = Vec::new();
-    for start_idx in 0..=(file_lines.len() - window) {
-        let matches_trimmed =
-            (0..window).all(|offset| file_lines[start_idx + offset].trim() == norm_needle[offset]);
-        if matches_trimmed {
-            trimmed_candidates.push((start_idx + 1, start_idx + window));
-        }
-    }
+    let trimmed_candidates = matching_spans(&norm_needle, &file_lines, str::trim);
 
     pick_closest_span(&trimmed_candidates, hint_line).map(|(start_line, end_line)| AnchoredSpan {
         start_line,
         end_line,
         match_kind: "trimmed_whitespace".to_string(),
     })
+}
+
+// trace:TASK-3872 | ai:codex
+fn matching_spans(
+    needle: &[&str],
+    lines: &[&str],
+    normalize: fn(&str) -> &str,
+) -> Vec<(usize, usize)> {
+    let needle: Vec<_> = needle.iter().map(|line| normalize(line)).collect();
+    let mut prefix = vec![0; needle.len()];
+    let advance = |mut n: usize, line: &str, prefix: &[usize]| {
+        while n > 0 && needle[n] != line {
+            n = prefix[n - 1];
+        }
+        n + usize::from(needle[n] == line)
+    };
+    for i in 1..needle.len() {
+        prefix[i] = advance(prefix[i - 1], needle[i], &prefix);
+    }
+    let mut spans = Vec::new();
+    let mut matched = 0;
+    for (i, line) in lines.iter().enumerate() {
+        matched = advance(matched, normalize(line), &prefix);
+        if matched == needle.len() {
+            spans.push((i + 2 - matched, i + 1));
+            matched = prefix[matched - 1];
+        }
+    }
+    spans
 }
 
 fn pick_closest_span(
@@ -1141,11 +1218,12 @@ pub struct RawReviewFinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_line: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_span: Option<AnchoredSpan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor_status: Option<String>,
 }
 
-/// Anchor a batch of findings against a file-content provider, updating `start_line`,
-/// `end_line`, and `anchor_status` (`"exact"`, `"trimmed_whitespace"`, `"unanchored"`, or `"no_snippet"`).
+/// Anchor a batch of findings against a file-content provider, updating `resolved_span` and `anchor_status` (`"exact"`, `"trimmed_whitespace"`, `"unanchored"`, or `"no_snippet"`).
 // trace:STORY-3076 | ai:antigravity
 pub fn anchor_findings_with<F>(
     findings: &[RawReviewFinding],
@@ -1157,12 +1235,12 @@ where
     let mut out = Vec::with_capacity(findings.len());
     for f in findings {
         let mut cloned = f.clone();
+        cloned.resolved_span = None;
         if let Some(snippet) = f.existing_code.as_deref() {
             if let Some(content) = read_file(&f.path) {
                 if let Some(span) = anchor_snippet_lines(&content, snippet, f.start_line) {
-                    cloned.start_line = Some(span.start_line);
-                    cloned.end_line = Some(span.end_line);
-                    cloned.anchor_status = Some(span.match_kind);
+                    cloned.anchor_status = Some(span.match_kind.clone());
+                    cloned.resolved_span = Some(span);
                 } else {
                     cloned.anchor_status = Some("unanchored".to_string());
                 }
@@ -1180,6 +1258,57 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3872 | ai:codex
+    #[test]
+    fn h2b_compiled_globs_bound_expansion() {
+        let rules = [String::from("*{*,x}/FoO")];
+        let registry = PlaybookRegistry::default();
+        let compiled = compile_exclusions(&rules);
+        let before = GLOB_COMPILES.get();
+        for path in ["one.rs", "two.rs"] {
+            registry.resolve(path);
+        }
+        assert!(compiled[0].1.matches(r"a\b\foo"));
+        assert!(compiled[0].1.matches("foo"));
+        assert_eq!(GLOB_COMPILES.get(), before);
+        assert!(!CompiledGlob::new(&format!("{{{}z}}", "x,".repeat(256))).is_valid());
+    }
+
+    #[test]
+    fn h2b_crlf_padding() {
+        let span = anchor_snippet_lines("a\nb", "\r\n\r\na\r\nb\r\n\r\n", None).unwrap();
+        assert_eq!(
+            (span.start_line, span.end_line, span.match_kind.as_str()),
+            (1, 2, "exact")
+        );
+    }
+
+    #[test]
+    fn h2b_resolved_span_preserves_hints() {
+        let finding = serde_json::from_value(serde_json::json!({"path":"a","severity":"low","category":"c","message":"m","existing_code":"x","start_line":9,"end_line":10})).unwrap();
+        let anchored = anchor_findings_with(&[finding], |_| Some("x\nx".into()));
+        assert_eq!(
+            (anchored[0].start_line, anchored[0].end_line),
+            (Some(9), Some(10))
+        );
+        assert_eq!(anchored[0].resolved_span.as_ref().unwrap().start_line, 2);
+        assert!(anchor_findings_with(&anchored, |_| None)[0]
+            .resolved_span
+            .is_none());
+    }
+
+    #[test]
+    fn h2b_linear_repeated_prefix() {
+        let file = format!("{}b", "a\n".repeat(32000));
+        let snippet = format!("{}b", "a\n".repeat(16000));
+        assert_eq!(
+            anchor_snippet_lines(&file, &snippet, None)
+                .unwrap()
+                .start_line,
+            16001
+        );
+    }
 
     // trace:TASK-3866 | ai:codex
     #[test]
