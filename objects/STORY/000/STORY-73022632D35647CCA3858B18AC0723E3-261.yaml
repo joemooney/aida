@@ -1,5 +1,6 @@
 id: 01a20bc4-6290-79f1-81a6-0c0df2e9d28f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-261
+agreed_id: STORY-3070
 title: 'Review PR-4483: [AI:codex] fix(status): skip deferred branches in unshipped-work alerts (BUG-2741)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b9e`) for branch `int30-bug-2741`.
@@ -48,6 +49,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20be9-f210-77e3-968b-ee04331ac3c4
+  author: joe
+  timestamp: 2026-11-24T04:56:50.960156816Z
+  changes: []
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
   branch: main

@@ -1,5 +1,6 @@
 id: 01a20b91-8fa1-7ea1-ae72-12fb9fc65dae
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-257
+agreed_id: STORY-3068
 title: 'Review PR-4479: [AI:codex] fix(ci): discover Python tests and enforce suite coverage (BUG-2734)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b60`) for branch `int28-bug-2734`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T03:20:32.454067372Z
   session_id: 01a20b6055af
+  changes: []
+- id: 01a20be9-f1f1-7760-9693-26737947d4dd
+  author: joe
+  timestamp: 2026-11-24T04:56:50.929025219Z
   changes: []
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47

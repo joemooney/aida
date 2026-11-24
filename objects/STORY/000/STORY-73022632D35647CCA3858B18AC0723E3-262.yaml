@@ -1,5 +1,6 @@
 id: 01a20bd7-7f29-7ea0-8ba8-850b4c82afe6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-262
+agreed_id: STORY-3073
 title: 'Review PR-4486: [AI:codex] fix(forge): include repository discovery in the budget and resolve gh before changing directories (TASK-3854)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20baa`) for branch `int31-task-3854`.
@@ -48,6 +49,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20be9-f2ae-7a61-8b8f-22728e230719
+  author: joe
+  timestamp: 2026-11-24T04:56:51.118834011Z
+  changes: []
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
   branch: main

@@ -1,5 +1,6 @@
 id: 01a20ba3-add7-75f3-993d-b6b001098289
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-258
+agreed_id: STORY-3071
 title: 'Review PR-4480: [AI:codex] fix(mailbox): preserve seat inventory on registry failure and reject late probes (TASK-3851)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b6d`) for branch `int30-task-3851`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T03:40:21.057211991Z
   session_id: 01a20b6dfa0b
+  changes: []
+- id: 01a20be9-f220-7541-ad93-63f4a08e4ad7
+  author: joe
+  timestamp: 2026-11-24T04:56:50.976284263Z
   changes: []
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47

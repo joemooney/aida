@@ -1,5 +1,6 @@
 id: 01a20bb5-6560-7910-a2b2-9cbb09f95fc5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-260
+agreed_id: STORY-3069
 title: 'Review PR-4482: [AI:codex] fix(doctor): scope stale lease healing to the requested ID (Refs BUG-2739)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b76`) for branch `bug-b6b1278890774ef993d2ebc327862470-500`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T03:59:41.674024655Z
   session_id: 01a20b762f9e
+  changes: []
+- id: 01a20be9-f1f2-7cd1-8522-18e7291d7a79
+  author: joe
+  timestamp: 2026-11-24T04:56:50.930018367Z
   changes: []
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47

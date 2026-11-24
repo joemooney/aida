@@ -1,5 +1,6 @@
 id: 01a20ba5-3410-71b3-a77b-1e95c7eaac8a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-259
+agreed_id: STORY-3075
 title: 'Review PR-4481: [AI:codex] fix(queue): wait for cold-start capacity before store setup (BUG-2740)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20b65`) for branch `bug-b6b1278890774ef993d2ebc327862470-501`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T03:42:38.843207096Z
   session_id: 01a20b651a11
+  changes: []
+- id: 01a20be9-f2c7-7753-9c9a-3a674f443946
+  author: joe
+  timestamp: 2026-11-24T04:56:51.143611962Z
   changes: []
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47

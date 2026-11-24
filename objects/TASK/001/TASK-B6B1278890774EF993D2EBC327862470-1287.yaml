@@ -1,5 +1,6 @@
 id: 01a20baf-2edf-70d0-8884-22f9488cce67
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1287
+agreed_id: TASK-3310
 title: 'Review follow-up: aida-core/src/mailbox_logical.rs:2326 promotes every retained lookup OverBudget error to a'
 description: |-
   From TASK-3851
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20abc-01fd-76f1-ac21-75a3cd1d36db
   created_at: 2026-11-24T03:52:52.673228976Z
+history:
+- id: 01a20be9-ef29-73b0-bdd4-1b87ee52664c
+  author: joe
+  timestamp: 2026-11-24T04:56:50.217240700Z
+  changes: []
 filed_at:
   code_sha: e94099b539b9cd19d00f797a8dd872a305a5d623
   branch: pr-4480
