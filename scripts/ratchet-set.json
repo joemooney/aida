@@ -29,6 +29,24 @@
       "target": [
         "--lib"
       ],
+      "filter": "review_prepare::tests::",
+      "source": "aida-cli-lib/src/review_prepare.rs",
+      "tests": [
+        "forge_head_and_shallow_parent",
+        "git_inventory_and_content_errors_propagate",
+        "invalid_review_rules_errors",
+        "option_like_endpoints_refuse_before_git",
+        "prepare_excludes_credentials_before_revision_reads",
+        "root_commit_preserves_unusual_git_paths",
+        "write_confines_new_and_existing_paths"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
       "filter": "story_1888_gate_paths",
       "source": "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
       "tests": [

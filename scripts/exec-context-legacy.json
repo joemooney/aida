@@ -1,5 +1,5 @@
 {
-  "ceiling": 1199,
+  "ceiling": 1197,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -518,8 +518,6 @@
     "aida-cli-lib/src/session/headless.rs:drive_path_env:var_os:dd727c4b59933866a12a": 1,
     "aida-cli-lib/src/session/headless.rs:explicit_headless_vendor_selected:var:f97bac83dc762f470a37": 1,
     "aida-cli-lib/src/session/headless.rs:install_headless_vendor_override:set_var:5533e536bba093f3c6af": 1,
-    "aida-cli-lib/src/session/headless.rs:resolve_agent_tuning:var:53394bdfed1190e426dd": 1,
-    "aida-cli-lib/src/session/headless.rs:resolve_agent_tuning:var:d09bd9cae76b6e53ff49": 1,
     "aida-cli-lib/src/session/headless.rs:resolve_headless_vendor:var:f97bac83dc762f470a37": 1,
     "aida-cli-lib/src/session/headless.rs:resolve_vendor_model:var:53394bdfed1190e426dd": 1,
     "aida-cli-lib/src/session/inline_tests.rs:bwrap_write_confinement_live_or_fail_closed:var_os:e41b8db44fe40e21871e": 1,

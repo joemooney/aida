@@ -7966,11 +7966,7 @@ pub(crate) fn run_standalone_reviewer(
                         )?;
                     }
                     crate::gate::review_verdict::verify_recorded_draft(
-                        project_root,
-                        verdict_path,
-                        &pr_spec_ids,
-                        launched_at,
-                        &checks,
+                        project_root, verdict_path, &pr_spec_ids, launched_at, &checks,
                     )
                     .map_err(anyhow::Error::msg)
                 })();
