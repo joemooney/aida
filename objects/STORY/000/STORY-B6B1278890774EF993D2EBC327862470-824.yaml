@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: ONE function, called in the FINAL before_spawn hook, reloads the anchor and members FRESH and re-applies the hold gate, the track/headless policy and the WIP limit, refusing BEFORE spawn on any violation. No other site re-checks authority piecemeal.
   - AC2: Tests: (a) a hold placed during the wait refuses the spawn; (b) track:operator set after admission refuses the spawn; (c) a pull that flips the track refuses the spawn.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T09:08:55.712015458Z
+modified_at: 2026-11-24T09:09:39.060824106Z
 req_type: Story
 tags:
 - admission
@@ -144,6 +144,11 @@ comments:
   created_at: 2026-11-24T08:45:02.021902462Z
   modified_at: 2026-11-24T08:45:02.021902462Z
   session_id: 01a20c9942b6
+- id: 01a20cd1-6474-7163-aa87-d5f9e79538a1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3080 requires changes. AC1 fails at the contained vendor exec barrier and on legacy file-backed stores. A final refusal can also consume a prior publication veto. Source inspection confirms a fresh WIP count for new pickups and preservation of started lanes on a late authority refusal during automatic or FAST-fix resume. AC2 partially exercises the standalone hook and spawn sentinel but misses production pickup wiring and the controlled wait. Reviewed the full landing diff for tree 9510180f38e28fbd79f339ca56acc5a8795c1104 on pinned main 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e and attest the original PR head. The head is one commit behind; none of the findings depends on code changed by that intervening commit. Exact-head FAST build passed, full test shards were skipped, and merge-hold-gate was pending. Review used source and existing CI evidence.. No triage reason was given.'
+  created_at: 2026-11-24T09:09:39.060814738Z
+  modified_at: 2026-11-24T09:09:39.060814738Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
@@ -213,6 +218,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20cd1-6474-7163-aa87-d5eb03055ffe
+  author: joe
+  timestamp: 2026-11-24T09:09:39.060805964Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
@@ -221,11 +233,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aaeb386bf51
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: STORY-3080 requires changes. AC1 fails at the contained vendor exec barrier and on legacy file-backed stores. A final refusal can also consume a prior publication veto. Source inspection confirms a fresh WIP count for new pickups and preservation of started lanes on a late authority refusal during automatic or FAST-fix resume. AC2 partially exercises the standalone hook and spawn sentinel but misses production pickup wiring and the controlled wait. Reviewed the full landing diff for tree 9510180f38e28fbd79f339ca56acc5a8795c1104 on pinned main 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e and attest the original PR head. The head is one commit behind; none of the findings depends on code changed by that intervening commit. Exact-head FAST build passed, full test shards were skipped, and merge-hold-gate was pending. Review used source and existing CI evidence.
-  recovery_hint: address the review findings, move STORY-3080 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-24T09:08:55.712015458Z
