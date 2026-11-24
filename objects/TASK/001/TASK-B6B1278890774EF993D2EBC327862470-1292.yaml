@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T06:06:58.074882341Z
+modified_at: 2026-11-24T06:25:26.896720879Z
 req_type: Task
 tags:
 - ci
@@ -53,6 +53,13 @@ comments:
   created_at: 2026-11-24T06:06:58.074876799Z
   modified_at: 2026-11-24T06:06:58.074876799Z
   session_id: 01a20beec6d4
+- id: 01a20c3b-456d-78f2-a73f-78a7b5a8f6dd
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 23:30): PR-4492 @ 328f196e49 PASSES. +56/-2, merges CLEAN. AC1: dedicated_invocations() credits a step''s run lines only when its ''if:'' is a KNOWN runnable form (true/success()/always(), the build job''s full-tier gate, or a gates/contracts shard check optionally ANDed with full_ci or pull_request). An unknown or always-false condition gets no credit, so the ratchet fails loudly (fail-safe). It switches to yaml BaseLoader so YAML 1.1 words like ''on'' aren''t coerced to True. AC2: subtests cover false, ${{ false }}, ''false'', true&&false, on, and a shard that isn''t in the matrix (all uncredited) vs true and matrix.shard == ''gates'' (credited). Checked against the REAL ci.yml on this branch: all 13 CLI-set suites are still credited (0 missing), so full CI''s gates shard won''t regress.'
+  created_at: 2026-11-24T06:25:26.896720879Z
+  modified_at: 2026-11-24T06:25:26.896720879Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bc9-e27b-7140-82f7-88ad645d2195
   author: joe
