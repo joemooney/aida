@@ -8,8 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T00:49:16.109887371Z
+modified_at: 2026-11-24T00:49:18.997669380Z
 req_type: Bug
+tags:
+- track:integration
 history:
 - id: 01a20b07-3d37-7d11-b94a-d087427bce06
   author: joe
@@ -22,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-24T00:49:16.309086514Z
   changes: []
+- id: 01a20b07-5295-78e1-9ddf-5d938ad2010d
+  author: joe
+  timestamp: 2026-11-24T00:49:18.997668899Z
+  changes:
+  - field_name: tags
+    old_value: ''
+    new_value: track:integration
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
