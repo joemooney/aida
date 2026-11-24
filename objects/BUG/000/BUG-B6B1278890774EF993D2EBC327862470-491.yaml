@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T15:57:08.418259497Z
+modified_at: 2026-11-24T15:57:18.486300065Z
 req_type: Bug
 tags:
 - doctor
@@ -187,6 +187,24 @@ comments:
   created_at: 2026-11-24T15:29:13.769919661Z
   modified_at: 2026-11-24T15:29:13.769919661Z
   session_id: 01a20df74a50
+- id: 01a20e46-9c7e-7b40-9108-a205f4ce28e4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4457):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9f84897ea603
+    Recorded: 2026-11-24T15:47:12.814857591+00:00
+    Findings:
+    1. BUG-2730 AC2, aida-cli-lib/src/land_stalls.rs:2006 and aida-cli-lib/src/schedule_ledger.rs:411. Routing still runs synchronously before snapshot persistence and before the doctor report can return. The five-second limit in write_local_bounded covers acquiring the store lock. After admission, write_cas_opts calls git_ops::commit, whose run_git_result waits on Command::output without a timeout. For example, a store using commit signing can wait on its signer beyond the scheduler ceiling even with a free store lock and no remote push. The scheduler can still kill a run that printed PARTIAL before it saves the snapshot or returns the findings. Defer the local transaction outside the deadline-sensitive report path or enforce a routing deadline with recoverable store-write semantics. Cover a slow local route transaction in the scheduled-path regression.
+    2. Deferred follow-up (prior F4), aida-cli-lib/src/land_stalls.rs:1552. The coverage string originates only in guard_rows. If listing exhausts the run deadline before that callback, the error propagates without phase timings or coverage. A supplementary detail or landing-history timeout after all primary rows fit leaves the primary partial field absent. Report unavailable discovery separately and identify supplementary deadline exhaustion.
+    3. Deferred follow-up (prior F5), aida-cli-lib/src/land_stalls.rs:1289. The red-detail cache is pruned against red heads from covered rows alone. Skipping a still-red PR drops its cached test evidence and refresh-order timestamp. Prune only entries that confirmed inventory or observations invalidate.
+    4. Deferred follow-up (prior F6), aida-cli-lib/src/land_stalls.rs:1887. Any partial pass skips all routing-memory cleanup. A covered PR can clear a stall and then recur on the same head without a new wake. Closed or superseded rerun keys can also persist across partial passes. Reconcile covered results and known open heads separately.
+    5. Deferred follow-up (prior F7), aida-cli-lib/src/land_stalls.rs:1516. Scheduled passes always start in forge-list order. An unchanged slow prefix can exhaust every run and continuously starve the suffix. Resume skipped work or prioritize least-recently-covered changes.
+    6. Deferred follow-up (prior F8), aida-cli-lib/src/land.rs:851. A brief overlap with another landing fetch causes immediate lock refusal. Pin-dependent rows can then be unknown yet count as covered, allowing routing cleanup to discard earlier stall deduplication. Retry contention within the remaining budget or explicitly preserve state when pins are unavailable.
+    7. aida-cli-lib/src/land_stalls.rs:1574. The bounded default-branch rewrite drops the previous GitHub metadata fallback. Without a local origin/HEAD, a host whose gh authentication succeeds while Git transport is unavailable now loses the default branch even if the corresponding cached remote-tracking ref can supply landing history. Landings become unknown and dry-window escalation cannot run. Retain a deadline-scoped forge metadata fallback.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T15:57:18.334026183Z
+  modified_at: 2026-11-24T15:57:18.334026183Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
