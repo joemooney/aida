@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:19:06.344317243Z
-modified_at: 2026-11-24T00:08:25.866769053Z
+modified_at: 2026-11-24T00:18:47.139847320Z
 req_type: Task
 tags:
 - ci
@@ -45,6 +45,17 @@ comments:
   modified_at: 2026-11-23T23:24:23.881605802Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20aeb-6134-7f33-a961-1f073bfc4894
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 13bcf6bd6715439e9fdb4769e36b0551f2d27921. Reviewed origin/main...HEAD (inherited integration mailbox work), git diff HEAD and untracked inventory.
+    AC1: [evidence: behavioral-test] tests/test_pr_ship_preflight.py:131. Reproduced definition exit 23 instead of 24. Ran the script with the installed aida binary: 11 cases and help passed. Inspected SHA, receipt time and UUID consistency, local Git transport and label identity, absent and multiple review rounds. Fixed a false-positive corpus exit by asserting the missing-provenance diagnostic. Both stale cases refuse before CI and every case forbids merge. No production changes. No PR-head CI yet.
+    AC2: [evidence: configuration-validation] Deferred. The assigned integration base lacks BUG-2734's scripts/discover-python-tests.py and dated exclusion. End-to-end discovery awaits that dependency. Partial slice for integration. Fast source gates 48/48 passed; compiled ratchets pending.
+  created_at: 2026-11-24T00:18:47.139847320Z
+  modified_at: 2026-11-24T00:18:47.139847320Z
+  session_id: 01a20abec8e2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20ab7-f1a5-7640-bd70-c99b97044e42
   author: joe
