@@ -113,6 +113,13 @@ comments:
   created_at: 2026-11-24T05:49:57.178223764Z
   modified_at: 2026-11-24T05:49:57.178223764Z
   session_id: 01a20be5080b
+- id: 01a20c1c-b256-7ff0-9764-607390b7bc91
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 22:58): PR-4491 @ 0560b3407e is content-OK, with a BUNDLING CAVEAT. +70 in 2 files, merges CLEAN. It adds a [[schedule.jobs]] ''red-main-watch-route'' (seats=[advisor], on=[''CronJobFailed:red-main-watch'']) mirroring hub-drift-guard-route; the test drives tick+route for a pass, a fetch failure and a timeout and asserts that only failures become due with trip id and ''exit N: <diagnostic>''. It meets the advisor scope (existing routed CronJobFailed mechanism; no store writes in the observation pass). CAVEAT: it edits .aida/config.toml, which is on the built-in GATE_PROTECTED_PATHS floor, so any promotion carrying it needs a mandate that covers protected paths (advisor seat) to train. Recommend promoting it ALONE, not mixed into p30, so p30 stays auto-trainable.'
+  created_at: 2026-11-24T05:52:04.215201426Z
+  modified_at: 2026-11-24T05:52:04.215201426Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fd68-b1dd-78c2-a574-7b1a9c2b6017
   author: joe
