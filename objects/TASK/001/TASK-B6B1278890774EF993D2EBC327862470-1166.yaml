@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.173596810Z
-modified_at: 2026-11-24T04:45:44.346824537Z
+modified_at: 2026-11-24T04:47:24.645822331Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -64,6 +64,24 @@ comments:
     GUARDS (advisor-122 01:40): target MAIN, not integration (S3a is on main as a16f3592f01). Do NOT change aida-cli-lib/src/review_draft.rs or the land readiness code that S1b (#4401) also changes; if the fix needs those files, stop and punt naming the overlap.
   created_at: 2026-11-23T08:43:27.202761064Z
   modified_at: 2026-11-23T08:43:27.202761064Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20be1-7ff8-7ae3-9eb2-8dfefc32dbad
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:47):
+    # TASK-3218: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3218` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3218 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3218)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    INTEGRATION BUNDLE (product-15 21:50, filling idle dell1 slots): branch `int31-task-3218`, cut from origin/integration 3aad9dc80c5. PR base MUST be `integration`. SMALL-PR RULE binding (<=300 lines; ship the first coherent slice if bigger). STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission, mandate/train or the CI gate runner; if needed, STOP and punt.
+  created_at: 2026-11-24T04:47:24.645822331Z
+  modified_at: 2026-11-24T04:47:24.645822331Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
