@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-498
 agreed_id: BUG-2737
 title: Review risk classifier tags integration-base PRs STRICT from integration's own diff vs main
 description: 'Gate-ledger verdicts on #4463 and #4470 (base=integration) carry risk.tier=STRICT with reason ''sensitive path: scripts/ci-structural-exclusions.json''. Neither PR touches that file; it changed on integration. The classifier diffs base_tip=main..head instead of the PR''s actual base (integration). Result: reviewers apply ADR-76 strict blocking to standard-tier test/diagnostic PRs, forcing extra rework rounds. AC1: classifier uses the PR''s base ref (merge-base with the PR base) for integration-base PRs; regression with an integration branch carrying a sensitive-path change the PR does not touch.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:48:15.574534086Z
-modified_at: 2026-11-24T15:56:54.139677916Z
+modified_at: 2026-11-24T15:56:56.645862470Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -193,6 +193,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20e46-47c5-7002-bad4-e118e3b4f232
+  author: joe
+  timestamp: 2026-11-24T15:56:56.645855826Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 execution_mode: drive
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -203,3 +210,6 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T15:56:56.645788977Z
