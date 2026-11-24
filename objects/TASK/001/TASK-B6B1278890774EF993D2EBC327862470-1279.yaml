@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: forge::github_core_budget resolves gh via crate::kernel::resolve_gh_binary_for_probe() (one line), so the seam is honoured. A test uses the fake gh (AIDA_TEST_GH_BINARY) and asserts the budget reading comes from it.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T00:46:30.974336151Z
+modified_at: 2026-11-24T01:53:34.641374697Z
 req_type: Task
 tags:
 - small
@@ -58,6 +58,11 @@ comments:
   content: 'SCOPE FOLD (advisor-122 2026-11-23 17:50, approving #4470 TASK-3847 with one follow-up folded here): (a) resolve the budget against the same effective GitHub host/repo as land forge reads ([forge] config vs main-repo origin, GH_HOST), with fixtures; (b) criterion-traced fake-gh tests through aida doctor check github-core-budget and aida land status (--cache, remaining/limit/reset, <20% warning); (c) the resolve_gh_binary_for_probe seam. Relaunches automatically after #4470 merges into integration.'
   created_at: 2026-11-24T00:46:30.974336151Z
   modified_at: 2026-11-24T00:46:30.974336151Z
+- id: 01a20b42-27b1-7662-a3a7-701c1631bb50
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: The assigned base 13bcf6bd671 and local origin/integration 669dc6e3dd lack forge::github_core_budget. TASK-3847 commit eacfd4b528 introduces it in PR #4470. Can product relaunch TASK-3852 on an integration base containing #4470?. No triage reason was given.'
+  created_at: 2026-11-24T01:53:34.641361736Z
+  modified_at: 2026-11-24T01:53:34.641361736Z
 history:
 - id: 01a20af8-f8c0-7502-a9b7-4065638fe1c1
   author: joe
@@ -85,6 +90,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20b42-27b1-7662-a3a7-7007fdbc277b
+  author: joe
+  timestamp: 2026-11-24T01:53:34.641352040Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -93,8 +105,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5db0b2b1b17
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: 'The assigned base 13bcf6bd671 and local origin/integration 669dc6e3dd lack forge::github_core_budget. TASK-3847 commit eacfd4b528 introduces it in PR #4470. Can product relaunch TASK-3852 on an integration base containing #4470?'
-  raised_by: implementer
-  raised_at: 2026-11-24T00:42:10.768567856Z
