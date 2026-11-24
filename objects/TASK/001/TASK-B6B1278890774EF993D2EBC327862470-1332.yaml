@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Robustness: a length-framed inventory digest; duplicate ledger rows and observation IDs reported as ambiguous; checked/saturating token arithmetic; globs compiled once with bounded brace expansion; CRLF-normalized trimming; resolved anchor coordinates kept separate from submitted hints; a linear line-anchoring matcher.
   - AC2: Behaviour: same-stem batching scoped to directory/package; the budget cap honored or rejected (TASK-3319); single-bracket citations accepted (-047); Rust facets keyed on language, not ID prefix. Tests for each item; split into H2a/H2b if over ~300 lines.
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:34.523182279Z
-modified_at: 2026-11-24T16:21:37.546099936Z
+modified_at: 2026-11-24T17:26:44.245494083Z
 req_type: Task
 tags:
 - review
@@ -163,6 +163,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a20e98-7d15-76a1-a505-5f14a2fb8e25
+  author: aida-session-start
+  timestamp: 2026-11-24T17:26:44.245489633Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
