@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-24T23:30:11.595388342Z
+modified_at: 2026-11-24T23:32:58.558469517Z
 req_type: Story
 tags:
 - hygiene
@@ -30,6 +30,29 @@ comments:
   content: 'Added AC4/AC5 (advisor-122 2026-11-23 22:37): AC4 a stash-only clone is refused; AC5 a clone whose only unique commit is on a non-current local branch is refused unless that commit is reachable from a freshly fetched origin ref. Detection runs at reap time in the reap path, not via dispatch ahead/status (which reports such clones clean; a reporting gap, not data loss, since the reap scan refuses them).'
   created_at: 2026-11-24T05:33:37.565046514Z
   modified_at: 2026-11-24T05:33:37.565046514Z
+- id: 01a20fe8-0127-7f13-ae1d-a8bca64310b7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:32):
+    # STORY-3059: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show STORY-3059` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:STORY-3059 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (STORY-3059)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    ROUTING (advisor-122 disposition 22:10): MAIN, STRICT review (reap = destructive path), mode drive, LOW priority. Builds on BUG-2742 (already on main when this lane starts).
+    DECIDED POLICY: a clone is reapable when its tree is CLEAN (per BUG-2742), it has NO stash, and EVERY local commit is reachable from an origin ref verified by a FRESH, bounded fetch at reap time, regardless of PR state. Before reaping, record on the OWNING SPEC the branch name and tip SHA that preserve the work. If the fetch fails or times out, REFUSE ("publication unknown").
+    AC1: a closed-unmerged PR + a published branch -> reaped, with the spec comment. AC2: one unpushed commit -> refused. AC3: a fetch failure -> refused. A test for each. <=300 lines.
+    AC4 (advisor 22:37): a STASH-ONLY clone is REFUSED.
+    AC5 (advisor 22:37): a clone whose only unique commit is on a NON-CURRENT local branch is REFUSED unless that commit is reachable from a freshly fetched origin ref.
+    Detection happens at REAP TIME, by the reap path itself; do NOT rely on dispatch's ahead/status (which reports these clones as clean). A test for each.
+  created_at: 2026-11-24T23:32:58.558469517Z
+  modified_at: 2026-11-24T23:32:58.558469517Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
