@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-24T19:31:06.263594190Z
+modified_at: 2026-11-24T19:53:46.934202228Z
 req_type: Story
 tags:
 - autonomy
@@ -344,6 +344,13 @@ comments:
     Probes covered case, literal separators, empty and multi-file diffs, UTF-8 failure, git rename/deletion output, strict inventory and operator floor precedence. Fast gate identified the two missing mandate-gate markers; added both and reran the gate. Incremental patch totals 200 lines. Native Git metadata is read-only; merging the four origin/main commits, PR-head CI and protected-floor human/advisor merge are host steps.
   created_at: 2026-11-24T19:31:06.263594190Z
   modified_at: 2026-11-24T19:31:06.263594190Z
+  session_id: 01a20eec0c39
+  harness_version: codex-cli 0.167.0
+- id: 01a20f1f-1e49-75f3-b45d-a46e0c9dfa16
+  author: dirtlab
+  content: Final validation for the native working tree at 9a12555ef75a. The three approved_small regressions passed in lane job j20261124T191043908-3-0. After the two floor markers were added, make check-ci-fast passed in j20261124T193053643-2-0, including all 52 protected-path tests and CLI manual verification.
+  created_at: 2026-11-24T19:53:46.934202228Z
+  modified_at: 2026-11-24T19:53:46.934202228Z
   session_id: 01a20eec0c39
   harness_version: codex-cli 0.167.0
 history:
