@@ -143,6 +143,13 @@ comments:
   created_at: 2026-11-24T07:40:59.978367236Z
   modified_at: 2026-11-24T07:40:59.978367236Z
   session_id: 01a20c620f83
+- id: 01a20c81-649b-7383-9f93-a10af91f3df0
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 00:50): PR-4496 @ c65debc4ac PASSES the advisor''s upheld F1, checked with a SECURITY lens. The PR''s net diff vs integration is +112/-8 in 4 files. classify_clone_reap''s Skip reason is back to the ORIGINAL plain text (''seat clone holds N commit(s) origin does not have (refs)''), with NO git/stash/log advice. Searching the whole PR diff for runnable command strings finds only two test assertions that the summary contains no ''git '' (story_2351_session_hygiene_tests, task_2053_seat_clone_lifecycle_tests). Hygiene still surfaces ''<session>  skipped — <reason>'' via reap_quiet_with_skips / scan_reapable (output only; no reap decision changes). scan_clone_lease became pub(crate), used only by the new task_2053 test. Merges CLEAN.'
+  created_at: 2026-11-24T07:42:03.748931718Z
+  modified_at: 2026-11-24T07:42:03.748931718Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
