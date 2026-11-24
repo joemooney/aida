@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-24T19:48:15.528702846Z
+modified_at: 2026-11-24T19:49:49.599801221Z
 req_type: Bug
 tags:
 - hygiene
@@ -172,6 +172,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T19:48:15.363648454Z
   modified_at: 2026-11-24T19:48:15.363648454Z
+- id: 01a20f1b-b419-78e3-984a-93a115460809
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:49):
+    # BUG-2713 / PR #4416 round 4 of 4 (advisor-122 ruling 2026-11-24 12:50 at 5a786685; product-15). Lane: CODEX. MAIN, existing branch. <=60 lines. ONE round.
+    MUST F1 (p1 regression): the SHARED status collector's switch to --untracked-files=all makes runtime .aida/ symlinks count as dirty, so `a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty` FAILS.
+    FIX: do NOT change the shared collector's semantics for teardown/reap. Use --untracked-files=all ONLY in the refusal-summary path (or filter the known runtime links the same way the old behaviour did). That test must stay green UNCHANGED.
+    DEFERRED (do NOT do): F2 (a trailing-space filename quoting edge), a LOW follow-up.
+    One targeted cargo run (incl. that test), then make check-ci-fast, then push to #4416. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T19:49:49.599801221Z
+  modified_at: 2026-11-24T19:49:49.599801221Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
