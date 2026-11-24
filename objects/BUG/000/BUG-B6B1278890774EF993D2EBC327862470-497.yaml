@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T01:12:53.529779925Z
+modified_at: 2026-11-24T02:42:13.740945370Z
 req_type: Bug
 tags:
 - integration
@@ -129,6 +129,15 @@ comments:
     ROUTED TO MAIN, STRICT REVIEW, mode drive (product-15 18:03, after the p30 bundle lane correctly punted). FINDING from that lane: event 930883d1 (BUG-2728 Done -> NeedsAttention, no comment, failure_reason.kind verdict:request-changes) comes from review_commands.rs -> leases::shelve_spec_on_failure -> shelve_status_flip (aida-cli-lib/src/leases.rs). You ARE authorized to change that shelving writer in leases.rs, SCOPED: every automated status regression (shelve) must leave a spec comment naming its writer (module plus reason, e.g. "shelved by review_commands/leases::shelve_spec_on_failure: verdict request-changes on PR #N"). Do NOT change WHEN or WHETHER shelving happens. Also check: a Done (completed) spec should arguably not be shelved by a stale CR at all; if you find that, list it in the PR body as a follow-up, don't fix it here. Test: a shelve writes the comment.
   created_at: 2026-11-24T01:03:00.071560585Z
   modified_at: 2026-11-24T01:03:00.071560585Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20b6e-b26c-7941-a4b7-dc241ed9ff86
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] e5e3711c9f9f
+    A reference merge (commit e5e3711c9f9f, `(Refs BUG-2736)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-24T02:42:13.740938395Z
+  modified_at: 2026-11-24T02:42:13.740938395Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
