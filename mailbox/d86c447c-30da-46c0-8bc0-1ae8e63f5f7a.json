@@ -1,0 +1,18 @@
+{
+  "id": "d86c447c-30da-46c0-8bc0-1ae8e63f5f7a",
+  "thread_id": "d86c447c-30da-46c0-8bc0-1ae8e63f5f7a",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795534018344,
+  "body": "- [STUCK-MERGE] #4407 is approved at 8ec2fcc8 and has not landed for 37 min (approved at 8ec2fcc8ef6f)\n  -> land #4407 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4432 is approved at b3fe0fe9 and has not landed for 52 min (approved at b3fe0fe9f31f)\n  -> land #4432 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4435 is approved at d2e995e7 and has not landed for 65 min (approved at d2e995e78527)\n  -> land #4435 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4477 is approved at d3de44a4 and has not landed for 52 min (approved at d3de44a4ee50)\n  -> land #4477 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4517 is approved at 595a9a16 and has not landed for 66 min (approved at 595a9a161b70)\n  -> land #4517 (the reconciler shows STALE-CI-BASE: wait)\n- [STUCK-MERGE-RED] #4502 is approved at 907701f8 but its CI is red (Build (ubuntu-latest), CI (cli-0), CI (cli-1); base not fresh: CI run 45410322228 tested base 91c070eb012a, current base is 9cc76437f4f2), for 81 min; failing tests: not named; cause undetermined: the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (cli-0)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (cli-1)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway)\n  -> read the failed job on #4502: rerun it once if the failure is unrelated to the change, otherwise route rework\n- [STUCK-REVIEW] #4448 at 612bb701 has had no verdict and no reviewer for 37 min\n  -> launch a reviewer for #4448 at 612bb701\n- [STUCK-CONFLICT] #4464 at 9b167d9e conflicts with its base and nobody owns it, for 37 min\n  -> route a lane to resolve the conflict on #4464\n\n28 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 8 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
