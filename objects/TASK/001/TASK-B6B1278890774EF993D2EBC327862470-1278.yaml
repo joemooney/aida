@@ -13,13 +13,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T03:39:33.987157297Z
+modified_at: 2026-11-24T03:40:24.980122476Z
 req_type: Task
 tags:
 - doctor
 - mailbox
 - small
 - track:integration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20ba3-add7-75f3-993d-b6b001098289
+  created_at: 2026-11-24T03:40:24.980092411Z
+  created_by: dirtlab
 comments:
 - id: 01a20b07-662b-72c0-b465-8ab45d552041
   author: joe
@@ -166,6 +172,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20ba4-06db-70b2-8c1b-295d184dd35c
+  author: dirtlab
+  timestamp: 2026-11-24T03:40:28.763391600Z
+  session_id: 01a20b6dfa0b
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
