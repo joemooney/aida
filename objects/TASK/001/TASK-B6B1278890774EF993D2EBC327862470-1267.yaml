@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-24T02:43:59.702184600Z
+modified_at: 2026-11-24T02:44:09.515159816Z
 req_type: Task
 tags:
 - doctor
@@ -75,6 +75,11 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for TASK-3847, a completing claim. Reviewed the full five-file diff against the generated worksheet at eacfd4b52870557151340a24d44b1b772be6c929.. No triage reason was given.'
   created_at: 2026-11-24T02:43:57.565149575Z
   modified_at: 2026-11-24T02:43:57.565149575Z
+- id: 01a20b70-76ab-7721-971f-ff4918949adb
+  author: joe
+  content: 'Completed by product-15 (2026-11-23 19:40): shipped to main in promotion 28 (e5e3711c9f9, #4473), whose squash title lists all members as Refs, so the trailer did not complete it.'
+  created_at: 2026-11-24T02:44:09.515159816Z
+  modified_at: 2026-11-24T02:44:09.515159816Z
 history:
 - id: 01a20a79-1c6c-7522-9c98-d2c929e0aa8c
   author: joe
