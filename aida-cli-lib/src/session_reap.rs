@@ -1923,12 +1923,16 @@ fn registered_index_matches_tip(admin: &std::path::Path, pinned_tip: Option<&str
         return false;
     }
     let git = || {
-        let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(admin).env_clear().args([
-            "--no-replace-objects",
-            "--git-dir=.",
-            "--work-tree=.",
-        ]);
+        let mut cmd = aida_core::git_ops::host_git_command(admin);
+        // Keep the builder's explicit safeguards while excluding inherited Git
+        // overrides that could redirect the index, refs, or object database.
+        let env: Vec<_> = cmd
+            .get_envs()
+            .filter_map(|(key, value)| value.map(|v| (key.to_owned(), v.to_owned())))
+            .collect();
+        cmd.env_clear()
+            .envs(env)
+            .args(["--no-replace-objects", "--git-dir=.", "--work-tree=."]);
         cmd
     };
     let Ok(head) = git()
