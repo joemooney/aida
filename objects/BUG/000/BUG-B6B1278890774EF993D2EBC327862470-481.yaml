@@ -9,12 +9,12 @@ description: |
   - AC1: An attempt that exited because of a transient pickup blocker (worktree or branch held, lock busy) is retried automatically once the blocker is gone, bounded with backoff, not left as a permanent exited reservation.
   - AC2: The pass summary counts heads it skipped because of a prior exited attempt (e.g. "N held by exited attempts"), naming the PRs, so "0 dispatched, 0 refused" can never hide stuck changes.
   - AC3: A regression test: an attempt exits on a held worktree, the worktree is removed, and the next pass dispatches the same head.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-24T15:37:33.578077274Z
+modified_at: 2026-11-24T18:55:09.748068127Z
 req_type: Bug
 tags:
 - review-watch
@@ -205,6 +205,13 @@ history:
   author: joe
   timestamp: 2026-11-24T15:33:25.985164207Z
   changes: []
+- id: 01a20ee9-71b4-7d32-975b-af216f4aec19
+  author: aida-session-start
+  timestamp: 2026-11-24T18:55:09.748066039Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
