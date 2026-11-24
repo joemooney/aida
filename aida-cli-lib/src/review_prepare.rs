@@ -6,7 +6,7 @@
 
 use crate::{
     detect_forge_from_origin, extract_acceptance_section, find_project_root, git_log_messages,
-    pr_base_head, Storage,
+    Storage,
 };
 use aida_core::review_engine::{
     anchor_findings_with, bundle_review_batches, classify_diff_inventory, verify_coverage_ledger,
@@ -202,7 +202,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         args,
         merge_base.as_deref(),
         head_ref.as_deref(),
-    );
+    )?;
 
     // 7. Optional: verify a coverage ledger file.
     let coverage_verification = if let Some(ledger_path) = &args.verify_coverage {
@@ -289,6 +289,10 @@ fn write_output(root: &Path, path: &Path, text: &str) -> Result<()> {
             .all(|c| matches!(c, Component::Normal(_) | Component::CurDir)),
         "--write escapes repository"
     );
+    anyhow::ensure!(
+        !path.components().any(|c| c.as_os_str() == ".git"),
+        "--write refuses Git metadata"
+    );
     let mut dir = std::fs::File::open(root)?;
     let pinned =
         |file: &std::fs::File| PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
@@ -330,20 +334,19 @@ fn resolve_comparison_endpoints(
 
     if let Some(commit) = &args.commit {
         crate::git_arg_guard::reject_option_like("--commit", commit)?;
-        let head_sha = git_rev_parse(project_root, commit)?;
-        let parents = git_text(
+        let head_sha = git_rev_parse(project_root, &format!("{commit}^{{commit}}"))?;
+        // Raw headers retain parents hidden by shallow revision traversal.
+        let raw = git_text(
             project_root,
-            &[
-                "show",
-                "-s",
-                "--format=%P",
-                "--end-of-options",
-                &head_sha,
-                "--",
-            ],
+            &["show", "-s", "--format=raw", &head_sha, "--"],
         )?;
-        let parent_sha = match parents.split_whitespace().next() {
-            Some(parent) => parent.to_owned(),
+        let parent = raw
+            .lines()
+            .take_while(|line| !line.is_empty())
+            .find_map(|line| line.strip_prefix("parent "));
+        let parent_sha = match parent {
+            Some(parent) => git_rev_parse(project_root, &format!("{parent}^{{commit}}"))
+                .context("commit parent unavailable")?,
             None => git_text(project_root, &["hash-object", "-t", "tree", "/dev/null"])?
                 .trim()
                 .to_owned(),
@@ -372,16 +375,31 @@ fn resolve_comparison_endpoints(
 
     if let Some(pr_n) = args.pr {
         let forge = detect_forge_from_origin(project_root).context("cannot resolve PR forge")?;
-        let (base, head) = pr_base_head(project_root, forge, pr_n)?;
-        crate::git_arg_guard::reject_option_like("base", &base)?;
-        crate::git_arg_guard::reject_option_like("head", &head)?;
-        let head_sha = git_rev_parse(project_root, &head)?;
-        let mb = git_merge_base(project_root, &base, &head_sha)?;
-        return Ok(("range".into(), Some(base), Some(head_sha), Some(mb)));
+        let meta = crate::forge::forge_for_kind(project_root, forge.forge_kind())
+            .change_metadata(pr_n, &mut crate::network_retry::NoopSink)?;
+        let (head, mb) = pr_comparison(project_root, &meta.base_ref, &meta.head_sha)?;
+        return Ok(("range".into(), Some(meta.base_ref), Some(head), Some(mb)));
     }
 
     let head_sha = git_rev_parse(project_root, "HEAD").ok();
     Ok(("workspace".to_string(), head_sha, None, None))
+}
+
+// trace:TASK-3862 | ai:codex
+fn pr_comparison(root: &Path, base: &str, head: &str) -> Result<(String, String)> {
+    anyhow::ensure!(
+        crate::forge::is_full_commit_sha(head),
+        "invalid forge head SHA"
+    );
+    let base_ref = format!("refs/remotes/origin/{base}");
+    git_text(root, &["check-ref-format", &base_ref])?;
+    let resolved = git_rev_parse(root, &format!("{head}^{{commit}}"))?;
+    anyhow::ensure!(
+        resolved.eq_ignore_ascii_case(head),
+        "forge head SHA mismatch"
+    );
+    let mb = git_merge_base(root, &base_ref, &resolved)?;
+    Ok((resolved, mb))
 }
 
 fn git_rev_parse(project_root: &Path, rev: &str) -> Result<String> {
@@ -612,11 +630,7 @@ fn resolve_linked_specs(
     args: &ReviewPrepareArgs,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
-) -> Vec<LinkedSpecAcceptance> {
-    let Ok(store) = storage.load() else {
-        return Vec::new();
-    };
-
+) -> Result<Vec<LinkedSpecAcceptance>> {
     let mut spec_ids: Vec<String> = Vec::new();
     if let Some(csv) = &args.specs {
         spec_ids.extend(
@@ -625,13 +639,22 @@ fn resolve_linked_specs(
                 .filter(|s| !s.is_empty()),
         );
     } else if let (Some(mb), Some(head)) = (merge_base, head_ref) {
-        if let Ok(messages) = git_log_messages(project_root, mb, head) {
-            let cov = crate::review_gates::review_coverage_from_commits(&messages);
-            spec_ids.extend(cov.delivered);
-            spec_ids.extend(cov.slice_refs);
-        }
+        let messages = if args.commit.is_some() {
+            vec![git_text(
+                project_root,
+                &["show", "-s", "--format=%B", head, "--"],
+            )?]
+        } else {
+            git_log_messages(project_root, mb, head)?
+        };
+        let cov = crate::review_gates::review_coverage_from_commits(&messages);
+        spec_ids.extend(cov.delivered);
+        spec_ids.extend(cov.slice_refs);
     }
 
+    let Ok(store) = storage.load() else {
+        return Ok(Vec::new());
+    };
     let mut seen = BTreeSet::new();
     let mut out = Vec::new();
     for id in spec_ids {
@@ -656,7 +679,7 @@ fn resolve_linked_specs(
             });
         }
     }
-    out
+    Ok(out)
 }
 
 fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
@@ -792,7 +815,9 @@ mod tests {
         let config_dir = root.path().join(".aida");
         std::fs::create_dir(&config_dir).unwrap();
         std::fs::write(config_dir.join("review-rules.toml"), "[unterminated").unwrap();
-        let error = load_review_rules(root.path()).unwrap_err();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root.path(), None);
+        let store = Storage::new(root.path().join("requirements.yaml"));
+        let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store).unwrap_err();
         assert_eq!(error.to_string(), "load .aida/review-rules.toml");
     }
 
@@ -837,7 +862,10 @@ mod tests {
         std::fs::write(&outside, "original").unwrap();
         std::os::unix::fs::symlink(temp.path(), root.join("link")).unwrap();
         std::os::unix::fs::symlink(&outside, root.join("leaf")).unwrap();
+        std::fs::write(root.join(".git"), "gitdir: ../metadata").unwrap();
         for path in [
+            Path::new(".git"),
+            Path::new("new/.git/config"),
             Path::new("../outside"),
             &outside,
             Path::new("link/outside"),
@@ -845,6 +873,11 @@ mod tests {
         ] {
             assert!(write_output(&root, path, "changed").is_err());
         }
+        assert!(!root.join("new").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.join(".git")).unwrap(),
+            "gitdir: ../metadata"
+        );
         assert_eq!(std::fs::read_to_string(outside).unwrap(), "original");
         write_output(&root, Path::new("nested/report"), "ok").unwrap();
         assert_eq!(
@@ -869,6 +902,13 @@ mod tests {
         let (mode, _, head, base) = resolve_comparison_endpoints(root, &args).unwrap();
         let entries =
             collect_git_diff_entries(root, &mode, base.as_deref(), head.as_deref(), &[]).unwrap();
+        let store = Storage::new(root.join("requirements.yaml"));
+        assert!(
+            resolve_linked_specs(root, &store, &args, base.as_deref(), head.as_deref()).is_ok()
+        );
+        assert!(
+            resolve_linked_specs(root, &store, &args, base.as_deref(), Some("missing")).is_err()
+        );
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].path, path);
         assert_eq!(
@@ -877,6 +917,98 @@ mod tests {
                 .as_deref(),
             Some("fn main() {}\n")
         );
+    }
+
+    #[test]
+    fn prepare_excludes_credentials_before_revision_reads() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::create_dir(root.join(".aws")).unwrap();
+        std::fs::write(root.join(".aws/token"), [0xff]).unwrap();
+        git_text(root, &["add", "-f", ".aws/token"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        git_text(root, &["mv", ".aws/token", "ordinary.rs"]).unwrap();
+        std::fs::create_dir(root.join(".ssh")).unwrap();
+        std::fs::write(root.join(".ssh/key"), [0xfe]).unwrap();
+        git_text(root, &["add", "-f", ".ssh/key"]).unwrap();
+        crate::test_git::commit_fixture(root);
+        let dest = root.join("bundle.json");
+        let args = ReviewPrepareArgs {
+            from: Some(base),
+            json: true,
+            write: Some(dest.clone()),
+            ..Default::default()
+        };
+        handle_review_prepare(&args, &store).unwrap(); // Either content read would fail UTF-8 decoding.
+        let bundle: ReviewPreparationBundle =
+            serde_json::from_slice(&std::fs::read(dest).unwrap()).unwrap();
+        assert!(bundle.inventory.reviewable_files.is_empty());
+        let paths: Vec<_> = bundle
+            .inventory
+            .excluded_files
+            .iter()
+            .map(|f| f.path.as_str())
+            .collect();
+        assert_eq!(paths, [".ssh/key", "ordinary.rs"]);
+    }
+
+    #[test]
+    fn forge_head_and_shallow_parent() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let base = crate::test_git::commit_fixture(root);
+        git_text(root, &["update-ref", "refs/remotes/origin/base", &base]).unwrap();
+        git_text(root, &["branch", "topic", &base]).unwrap();
+        let head = crate::test_git::commit_fixture(root);
+        git_text(
+            root,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://gitlab.com/fixture/repo.git",
+            ],
+        )
+        .unwrap();
+        let glab = root.join("glab");
+        let metadata = serde_json::json!({"iid":1,"source_branch":"topic","target_branch":"base","state":"opened","title":"t","sha":head});
+        crate::test_exec::write_executable(
+            &glab,
+            &format!("#!/bin/sh\nprintf '%s\\n' '{metadata}'\n"),
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GLAB_BINARY",
+            glab.to_str().unwrap(),
+        )]);
+        let pr = ReviewPrepareArgs {
+            pr: Some(1),
+            ..Default::default()
+        };
+        let (_, _, selected, mb) = resolve_comparison_endpoints(root, &pr).unwrap();
+        assert_eq!((selected, mb), (Some(head.clone()), Some(base)));
+        assert!(pr_comparison(root, "base", &"f".repeat(40)).is_err());
+        let clone = temp.path().join("shallow");
+        git_text(
+            root,
+            &[
+                "clone",
+                "--depth=1",
+                &format!("file://{}", root.display()),
+                "shallow",
+            ],
+        )
+        .unwrap();
+        let args = ReviewPrepareArgs {
+            commit: Some(head),
+            ..Default::default()
+        };
+        assert!(resolve_comparison_endpoints(&clone, &args)
+            .unwrap_err()
+            .to_string()
+            .contains("parent unavailable"));
     }
 
     #[test]
