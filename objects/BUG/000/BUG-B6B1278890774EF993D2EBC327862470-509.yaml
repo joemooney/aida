@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-24T20:53:17.583232508Z
+modified_at: 2026-11-24T21:43:08.781078841Z
 req_type: Bug
 tags:
 - launch
@@ -83,6 +83,18 @@ comments:
   modified_at: 2026-11-24T15:38:20.339692816Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f83-3f52-78f2-b121-d7a813833f95
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 95eaccf328557402d176c0b41983afe1b677965f plus native working-tree diff (4 files, 149 changed lines). The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/codex_bg_receipt.rs:739 requires both process identities and an absolute worktree. The admission check at line 702 and locked retirement at line 864 only free unknown, unscoped evidence on Clear. Recovery CLI pins /proc. I reproduced grant-only retirement with the installed CLI in a temporary AIDA home.
+    AC2: [evidence: behavioral-test] aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:164 covers each missing field and grant-only JSON. It checks Unknown, actual admission and retirement refusals, the inspection command, and unchanged receipt bytes. Launcher job j20261124T212730694-2-0 passed (1 executed). The positive retirement control uses an inspector-only process table after live procfs proved nondeterministic. The supervisor refusal regression at story_2254_codex_bg_supervisor_tests.rs:608 also passed on an intermediate tree.
+    Strict-tier probes covered reader/writer field spelling, JSON null and absent fields, zero PIDs, missing start ticks, empty paths, missing combinations, symlink/size handling, and the admission lock. No user-controlled proc-root selector, new grant route or gate edits. Rustfmt, diff --check, store-writer inventory and FAST source gates passed. Intermediate broad run: 35 passed and 4 failed, including the since-fixed positive control. Three existing supervisor checks exercised real process visibility and remained red in that run. No PR-head CI is available in this native lane.
+  created_at: 2026-11-24T21:43:08.781078841Z
+  modified_at: 2026-11-24T21:43:08.781078841Z
+  session_id: 01a20f4fc4d9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
