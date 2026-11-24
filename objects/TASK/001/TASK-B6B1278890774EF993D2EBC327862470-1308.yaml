@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:06.238132894Z
-modified_at: 2026-11-24T16:05:22.033719109Z
+modified_at: 2026-11-24T16:05:28.160617926Z
 req_type: Task
 tags:
 - review
@@ -94,6 +94,18 @@ comments:
   created_at: 2026-11-24T16:00:37.904194913Z
   modified_at: 2026-11-24T16:00:37.904194913Z
   session_id: 01a20e27d925
+- id: 01a20e4e-4a5f-7d01-bf4e-f7afdea5923e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:05):
+    # TASK-3863 / PR #4520 r3: ONE-SENTENCE template note (advisor-122 ruling 2026-11-24 08:30; product-15). Lane: CODEX. Base: INTEGRATION (existing branch int32-task-3863). <=10 lines total.
+    (The two present-tense "Upcoming" line fixes are already in r2; keep them.)
+    In the template MASTERS aida-core/templates/skills/aida-review.md and aida-core/templates/skills/aida-code-review.md, add ONE sentence each: `aida review prepare` requires an aida CLI that includes it; if it's unavailable (e.g. "unexpected argument"), the reviewer continues with the existing worksheet / manual audit.
+    Then run `make sync-templates` and `make check-templates` and commit the regenerated mirrors in the same commit. Nothing else. Push to #4520. COMMIT your work.
+  created_at: 2026-11-24T16:05:28.160617926Z
+  modified_at: 2026-11-24T16:05:28.160617926Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c6f-7831-71b0-b9fa-5f3500ee061c
   author: joe
