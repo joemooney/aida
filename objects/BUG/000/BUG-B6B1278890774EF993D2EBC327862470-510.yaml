@@ -1,0 +1,28 @@
+id: 01a20df2-eabd-75c0-b007-ef8378a02015
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-510
+agreed_id: BUG-2749
+title: 'BUG-2684 data-loss slice: never clear a missing-checkout worktree registration whose index holds staged changes'
+description: |
+  Data-loss slice re-spec from parked #4364 BUG-2684 (advisor-122 ruling 2026-11-24 07:30; filed by product-15). STRICT, drive, <=150 lines. Source finding F1 (p1, data-loss) at queue_cmd/work.rs:3971: a deleted checkout can still have staged changes in its per-worktree Git index. The branch-tip ancestry check passes for a file staged without a commit, and clear_missing_worktree_registration then recursively removes the admin directory, erasing the only index mapping paths to those blobs. Branch of #4364 (closed unmerged) kept for reference; the remaining #4364 findings (incl. F2, a lock acquired after inventory) are re-specced after this lands.
+
+  ## Acceptance
+  - AC1: Before clearing a missing-checkout worktree registration, inspect its registered index against the pinned tip; RETAIN the registration on any difference or unreadable evidence.
+  - AC2: Test: a missing checkout with a staged-only file is retained, not cleared.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T14:25:53.341692173Z
+modified_at: 2026-11-24T14:25:53.341692173Z
+req_type: Bug
+tags:
+- data-loss
+- strict
+- worktree
+filed_at:
+  code_sha: 8dfad228d5897828a20168a919294468baab8452
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8dfad228d58
+  vendor: claude
