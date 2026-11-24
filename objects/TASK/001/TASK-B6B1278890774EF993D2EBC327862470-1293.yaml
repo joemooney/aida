@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:32:35.025155532Z
-modified_at: 2026-11-24T04:33:02.664661523Z
+modified_at: 2026-11-24T04:33:04.336755861Z
 req_type: Task
 tags:
 - small
 - track:integration
 - watcher
+comments:
+- id: 01a20bd4-2d50-7bf3-a997-87b8a31e6769
+  author: joe
+  content: Filed Approved per advisor-122 ruling 2026-11-23 21:35 (#4483 follow-up; drain, integration filler).
+  created_at: 2026-11-24T04:33:04.336755861Z
+  modified_at: 2026-11-24T04:33:04.336755861Z
 history:
 - id: 01a20bd4-271a-78c3-b285-2b0a41dee5b4
   author: joe
