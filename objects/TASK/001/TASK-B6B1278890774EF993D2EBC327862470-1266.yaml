@@ -10,18 +10,17 @@ description: |
   - AC2: Test: a seat message without a sidecar is hidden from the reader AND reported by count plus id.
 
   Pre-screen (integration-30): touches mailbox_logical.rs / mailbox_cmd and doctor; no ADR-76 strict paths.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-24T02:43:44.385783964Z
+modified_at: 2026-11-24T02:43:46.277186164Z
 req_type: Task
 tags:
 - doctor
 - mailbox
 - small
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -204,6 +203,20 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a20b70-1b65-73e1-a56c-7d3820670435
+  author: joe
+  timestamp: 2026-11-24T02:43:46.149271261Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a20b70-1be5-7cc1-9609-d424ff7d058a
+  author: joe
+  timestamp: 2026-11-24T02:43:46.277183517Z
+  changes:
+  - field_name: tags
+    old_value: doctor, mailbox, small, track:integration
+    new_value: doctor, mailbox, small
 execution_mode: drain
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
@@ -212,3 +225,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f1a50179e5a
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T02:43:46.149206189Z
