@@ -13,12 +13,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T06:08:18.418633256Z
+modified_at: 2026-11-24T06:08:21.407286071Z
 req_type: Task
 tags:
 - small
 - track:integration
 - watcher
+comments:
+- id: 01a20c2b-699f-7b60-8031-e145e2112725
+  author: joe
+  content: 'Filed Approved per advisor-122 ruling 2026-11-23 23:10 (#4490 follow-up; LOW, drain, integration filler). LAST follow-up on this detector: no further split-offs.'
+  created_at: 2026-11-24T06:08:21.407286071Z
+  modified_at: 2026-11-24T06:08:21.407286071Z
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe
