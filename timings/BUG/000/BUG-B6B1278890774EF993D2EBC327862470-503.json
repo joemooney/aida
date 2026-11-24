@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-503",
+  "publishes": [
+    {
+      "at": "2026-11-24T23:27:30.725806477Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T03:29:20.489206342Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T03:29:22.652447861Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:57:07.952836644Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T04:57:07.991033672Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T16:34:32.213063572Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T23:27:30.500618266Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-24T23:27:30.561768554Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-503",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
