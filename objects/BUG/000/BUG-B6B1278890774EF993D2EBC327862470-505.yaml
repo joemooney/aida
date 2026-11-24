@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T08:59:06.860453806Z
+modified_at: 2026-11-24T09:07:46.360333922Z
 req_type: Bug
 tags:
 - ci
@@ -145,6 +145,13 @@ comments:
   created_at: 2026-11-24T08:59:06.860450860Z
   modified_at: 2026-11-24T08:59:06.860450860Z
   session_id: 01a20cae2559
+- id: 01a20ccf-de50-7842-bd32-428ae36e3a50
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 02:10): PR-4503 @ c76d24deba PASSES the advisor''s 01:24 remove-rather-than-patch ruling. +12/-2 in 2 files, merges CLEAN. ci.yml: ALL cache machinery is gone (no prepare step, no actions/cache restore/save, no Dir::Cache::archives or Keep-Downloaded-Packages); the only functional change is ''Install compile dependencies'' timeout-minutes 5 -> 15, with the install line split over two lines (same package list, same Acquire options). test_self_hosted_runner.py requires exactly ONE ''Install compile dependencies'' step in job fast-compile with timeout-minutes == 15, and keeps every other apt step <=5 and build''s 12.'
+  created_at: 2026-11-24T09:07:46.360333922Z
+  modified_at: 2026-11-24T09:07:46.360333922Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c55-0c2b-7530-98f2-82815cd53321
   author: joe
