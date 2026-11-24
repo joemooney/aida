@@ -13,12 +13,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T06:53:09.322660749Z
-modified_at: 2026-11-24T06:53:09.322660749Z
+modified_at: 2026-11-24T06:53:49.910961216Z
 req_type: Bug
 tags:
 - ci
 - small
 - track:integration
+history:
+- id: 01a20c55-0c2b-7530-98f2-82815cd53321
+  author: joe
+  timestamp: 2026-11-24T06:53:49.995339254Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
   branch: main
