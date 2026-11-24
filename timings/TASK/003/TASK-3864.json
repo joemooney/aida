@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3864",
+  "publishes": [
+    {
+      "at": "2026-11-24T12:26:58.380159342Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T08:25:51.099973969Z",
+      "spec": "TASK-3864",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4504,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "417ba689a6ea369ed6664055289418bb0e2c3c5c"
+      }
+    },
+    {
+      "ts": "2026-11-24T08:26:31.270696478Z",
+      "spec": "TASK-3864",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3864 (origin ID below) is the sole completing spec in the generated worksheet. Round 1 full sweep of all 12 changed paths at 417ba689a6ea369ed6664055289418bb0e2c3c5c.\nTASK-b6b1278890774ef993d2ebc327862470-1309.AC1 — unverified. Git and forge verify the integration target, matching author, and source provenance for all 12 submitted paths. Eleven blobs match 0fdac177513 and the showcase differs only by three PowerPoint link removals. The advisor's required README index line is missing from the slice.\nTASK-b6b1278890774ef993d2ebc327862470-1309.AC2 — verified by the pinned Git tree and full diff. All changes are under docs/; the build script change only registers the retained Marp source. The showcase HTML remains, both excluded paths are unchanged or absent, and all three HTML download links were removed.\nThe supplied untraced list names both criteria. The exact-head fast source gates passed, including the showcase drift guard, but the diff adds no criterion-traced check for the Git/forge provenance or the selective PowerPoint removal. The implementer reported a showcase drift check and a shell syntax check. Local test, build and rendering commands were not run by the reviewer.\nThe forge's integration tip 9435f22c422 is six commits ahead of the PR's merge base. The six commits do not change the reviewed documentation, showcase generator or review command registration and do not add the engine. None of the findings depends on behavior changed by those commits. Fast compile was pending at review time.",
+        "recovery_hint": "address the review findings, move TASK-3864 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T09:38:57.876714711Z",
+      "spec": "TASK-3864",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4504,
+        "verdict": "APPROVED",
+        "reviewed_sha": "3612b0b0a3ca68d53fec3f76baa5b9a20e4f4278"
+      }
+    },
+    {
+      "ts": "2026-11-24T11:28:26.692761724Z",
+      "spec": "TASK-3864",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4513,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7d9da6922e72b9b34b1bfae865ad332cc262c276"
+      }
+    },
+    {
+      "ts": "2026-11-24T12:18:24.790136094Z",
+      "spec": "TASK-3864",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4513
+      }
+    },
+    {
+      "ts": "2026-11-24T12:26:58.168678518Z",
+      "spec": "TASK-3864",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8dfad228d5897828a20168a919294468baab8452",
+        "pr": 4513,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
