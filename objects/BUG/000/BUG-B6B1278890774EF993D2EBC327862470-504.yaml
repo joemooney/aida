@@ -9,18 +9,17 @@ description: |
 
   ## Acceptance
   - AC1: The test waits for `child.pid` to hold a parseable PID (bounded retry), OR the child writes the pid file atomically (temp + rename). A regression test simulates an empty-then-filled pid file.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T06:52:02.760339135Z
+modified_at: 2026-11-24T09:45:53.969659970Z
 req_type: Bug
 tags:
 - flaky
 - small
 - tests
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -119,6 +118,22 @@ history:
   timestamp: 2026-11-24T06:41:34.501953868Z
   session_id: 01a20c196274
   changes: []
+- id: 01a20cf2-93eb-7ec2-94be-bacf6704840a
+  author: aida-auto-bump
+  timestamp: 2026-11-24T09:45:53.899803552Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20cf2-9431-7fc2-873b-167e8226d03b
+  timestamp: 2026-11-24T09:45:53.969655806Z
+  agent: aida
+  commit_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
+  summary: 'Advisor (delegated authority): promotion 32, linear on main 103bb2ed7ea + 6 cherry-picks; per-commit patch-ids match approved integration squashes (2d1970e3, e19440f4, 965a6dd2, edbd4bf8, 35c6d45f, 1af1d426); combined 559b487a51cc; no protected paths; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -129,3 +144,7 @@ filed_at:
   vendor: claude
   session: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T09:45:53.899796037Z
+  completion_sha: 91c070eb012a63da0770c0f5d76cd883dda414af
