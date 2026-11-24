@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (a) credential-directory exclusion matches `.aws` / `.ssh` path COMPONENTS at ANY depth, including the repo root; (b) a rename evaluates BOTH sides (old and new path) for exclusion.
   - AC2: (c) .aida runtime exclusions match EXACT components (`.aida/cache-policy.toml` stays eligible); (d) a present-but-invalid or unreadable project config (.aida/review-rules.toml) gives a contextual ERROR, defaulting only when the file is ABSENT. One test for each of (a)-(d).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:21.678180988Z
-modified_at: 2026-11-24T09:26:21.861411921Z
+modified_at: 2026-11-24T09:29:39.193857937Z
 req_type: Task
 tags:
 - review
@@ -39,6 +39,17 @@ comments:
   modified_at: 2026-11-24T09:14:32.074211074Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ce3-7331-7462-a33e-2327177c754b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3ecf8d438fadf29abd59c928160fca898c900016 plus native working diff, no untracked additions. Integration branch starts at the requested S1 commit. Reproduced root .ssh/config misclassification before editing.
+    AC1: [evidence: behavioral-test] review_engine.rs:1186 and :1202 exercise exact credential names at three depths, near misses and both rename directions. Both sides share preexisting path normalization and all exclusion rules.
+    AC2: [evidence: behavioral-test] review_engine.rs:1221 and :1235 cover runtime exactness, eligible cache-policy, absent/valid/malformed/unreadable text and a dangling config symlink. Self-review fixed a path check/open race by inspecting the opened nonblocking file descriptor. No production loader callers at this base. All 12 review_engine tests passed on the revised tree; no exact PR-head CI yet.
+  created_at: 2026-11-24T09:29:22.078459853Z
+  modified_at: 2026-11-24T09:29:22.078459853Z
+  session_id: 01a20ce06f89
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20cd4-39e1-7bc0-b0bc-022cffae235a
   author: joe
@@ -51,6 +62,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ce1-4655-78c3-9c27-28ba007a3992
+  author: dirtlab
+  timestamp: 2026-11-24T09:26:59.925537567Z
+  session_id: 01a20ce06f89
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20ce3-b5f9-7630-9b74-a1484f7c49da
+  author: dirtlab
+  timestamp: 2026-11-24T09:29:39.577721747Z
+  session_id: 01a20ce06f89
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
@@ -59,3 +85,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 103bb2ed7ea
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: May this PR also edit scripts/ratchet-set.json to register the four required regression tests? The one-file brief forbids the manifest edit, and make check-ci-fast rejects all four unregistered names. All 12 targeted review_engine tests passed.
+  lean: Authorize the manifest-only scope extension.
+  raised_by: implementer
+  raised_at: 2026-11-24T09:29:39.193857937Z
