@@ -4,13 +4,15 @@ mod test_git;
 
 use std::{fs, os::unix::fs::PermissionsExt, process::Command};
 
+// trace:TASK-3847.AC1 | ai:codex
+// trace:TASK-3854.AC1 | ai:codex
+// trace:TASK-3854.AC2 | ai:codex
 #[test]
 fn task_3852_budget_doctor_and_land_use_cached_pinned_reading() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("main");
     let checkout = tmp.path().join("lane");
-    let bin = tmp.path().join("bin");
-    fs::create_dir(&bin).unwrap();
+    let bin = checkout.join("bin");
     fs::create_dir(&root).unwrap();
     let git = |args: &[&str]| {
         assert!(test_git::git_command()
@@ -54,6 +56,7 @@ fn task_3852_budget_doctor_and_land_use_cached_pinned_reading() {
         )
         .unwrap();
     }
+    fs::create_dir(&bin).unwrap();
     let gh = bin.join("gh");
     fs::write(
         &gh,
@@ -81,7 +84,8 @@ esac
             let out = Command::new(env!("CARGO_BIN_EXE_aida"))
                 .env_clear()
                 .env("HOME", tmp.path())
-                .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+                // The budget resolver sees ./bin first. Land also runs gh from main.
+                .env("PATH", format!("./bin:{}:/usr/bin:/bin", bin.display()))
                 .env("GH_HOST", "other.invalid")
                 .env("GH_REPO", "other/repo")
                 .env("EXPECTED_ROOT", &root)
@@ -110,4 +114,38 @@ esac
             );
         }
     }
+
+    // A slow origin lookup consumes the budget before gh can be invoked.
+    let git_wrapper = bin.join("git");
+    let started = tmp.path().join("started");
+    let finished = tmp.path().join("finished");
+    fs::write(
+        &git_wrapper,
+        r#"#!/bin/sh
+if [ "$*" = 'remote get-url origin' ]; then
+    touch "$STARTED"
+    sleep 7
+    touch "$FINISHED"
+fi
+exec /usr/bin/git "$@"
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(git_wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_aida"))
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("STARTED", &started)
+        .env("FINISHED", &finished)
+        .current_dir(&checkout)
+        .args(["doctor", "check", "github-core-budget"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert!(started.exists());
+    assert!(
+        !finished.exists(),
+        "origin lookup exceeded the probe budget"
+    );
 }
