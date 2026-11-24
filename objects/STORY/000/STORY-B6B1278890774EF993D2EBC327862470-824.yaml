@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T09:09:39.060824106Z
+modified_at: 2026-11-24T09:09:46.127412981Z
 req_type: Story
 tags:
 - admission
@@ -149,6 +149,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3080 requires changes. AC1 fails at the contained vendor exec barrier and on legacy file-backed stores. A final refusal can also consume a prior publication veto. Source inspection confirms a fresh WIP count for new pickups and preservation of started lanes on a late authority refusal during automatic or FAST-fix resume. AC2 partially exercises the standalone hook and spawn sentinel but misses production pickup wiring and the controlled wait. Reviewed the full landing diff for tree 9510180f38e28fbd79f339ca56acc5a8795c1104 on pinned main 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e and attest the original PR head. The head is one commit behind; none of the findings depends on code changed by that intervening commit. Exact-head FAST build passed, full test shards were skipped, and merge-hold-gate was pending. Review used source and existing CI evidence.. No triage reason was given.'
   created_at: 2026-11-24T09:09:39.060814738Z
   modified_at: 2026-11-24T09:09:39.060814738Z
+- id: 01a20cd1-7f79-73a2-8b94-50838c8fca21
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3080):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a45d28c70da8
+    Recorded: 2026-11-24T09:08:49.683689944+00:00
+    Findings:
+    1. AC1: The contained path drops the store writer hold at session/headless.rs:2764 after the helper returns its receipt. The vendor is still behind the exec barrier until run.release() at :2788 (launch/contained.rs:2285–2297). A concurrent hold, track edit, or store pull can commit during lease stamping, liveness registration, or grant binding, and the vendor is then released under stale authority. Put the final revalidation after the slow helper and host binding work and keep its guard through the exec-barrier release. Exercise a writer at that boundary.
+    2. AC1: revalidate_before_spawn at standalone_implementer.rs:1478–1503 only retains authority for directory-backed stores. Queue work still accepts file-backed Storage. A YAML read releases its shared lock before returning to the hook (aida-core/src/storage.rs:516 onward), and SQLite likewise returns without a retained transaction. A supported file-backed writer can therefore set a hold or change the track after the read and before the launcher starts the child. Retain backend-appropriate writer exclusion through the launch boundary, or refuse this launch mode for a backend that cannot provide it.
+    3. A fresh pickup can erase its prior publication veto and then refuse to start. standalone_implementer.rs:1774 clears the host and seat punt/hold markers before the new WIP and spec checks at :1775; a refusal from either check returns without restoring them. The queue rollback owns setup resources, and the host marker is independent state that publication consults (ship_from_seat.rs:937–951). Keep the old veto on authority refusal by separating signal preparation from consumption or restoring it on failure. Cover a retry with an existing veto and a newly refused launch.
+    4. AC2: The fake-child test at bug_home_038_seat_publish_tests.rs:6377–6411 directly supplies its own check callback. Its hold and track writes occur inside that callback and join before the authority read; the pull happens before run_checked_launch. This exercises hook invocation and the validator, but never drives a writer through the cold-start wait or the pull through the production pickup path. Replacing the production callback at queue_cmd/work.rs:6784 with a no-op would leave these cases green. Exercise the production pickup wiring with a controlled wait and canonical pull, asserting that the child sentinel stays untouched.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-24T09:09:45.977188220Z
+  modified_at: 2026-11-24T09:09:45.977188220Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
