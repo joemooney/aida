@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728Z
-modified_at: 2026-11-24T17:49:05.624204409Z
+modified_at: 2026-11-24T17:56:58.237194389Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -289,6 +289,17 @@ comments:
   content: 'POST-LAND PLAN (advisor-122 10:06 + Joe, via product-15): after #4403 lands and dell1 promotes, re-run aida doctor check for reservations pr-4376-...-01a2053df3e6 (BUG-2669) and pr-4401-...-01a206405299 (STORY-2897); if still retained with dead lanes, product submits two attested repair-reservations jobs to a deputy-shell runner and Joe types each confirmation at its PTY. Then conflict repairs for #4376 and #4401. Full commands: product .aida/tmp/after-2722-release-plan.md.'
   created_at: 2026-11-24T17:01:43.435243308Z
   modified_at: 2026-11-24T17:01:43.435243308Z
+- id: 01a20eb4-313b-7093-807a-9ee1a0f30b04
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5089c24a5be7cdf1775b01c723912d8e5561d061 plus the native worktree test rename. Refs-only CI repair for PR #4403.
+    AC1: [evidence: behavioral-test] The existing repair_attestation.py PTY fixture checks direct CLI release and audit ID. AC2: [evidence: behavioral-test] The fixture exercises managed, autonomous, integrity-floor and JSON refusals and a concurrent reservation change. The original broader automated salvage determination is outside this attested slice. AC3: [evidence: behavioral-test] repair_journal.rs:934 asserts the old merge still refuses after successor reservation against a new base.
+    Run 45147180234 selected FULL. All six other shards passed. The gates job ran the complete-branch test but counted its embedded suite prefix only in the results. The aggregate propagated that failure. Reviewed merge-base diff, working diff and untracked paths. The one-line name fix in task_2053_seat_clone_lifecycle_tests.rs:62 adds the missing source inventory entry without changing test behavior, filters or skip rules. Verified all 56 historical passing names and 57 expected on merged main. Fresh hosted CI requires host publication.
+  created_at: 2026-11-24T17:56:58.237194389Z
+  modified_at: 2026-11-24T17:56:58.237194389Z
+  session_id: 01a20eacb197
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
