@@ -4773,7 +4773,7 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
 // trace:BUG-1985 | ai:claude
 pub fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
     if contained_code_tree(worktree_path) {
-        return contained_safety_scan(worktree_path).map(|(_, edited)| edited);
+        return contained_safety_scan(worktree_path, false).map(|(_, edited)| edited);
     }
     let r = git(
         worktree_path,
@@ -4818,9 +4818,9 @@ const MAX_SUBMODULE_DEPTH: usize = 8;
 /// inside changed) and the paths of those submodules. Any refusal or git
 /// failure is an error, so callers keep the tree.
 // trace:BUG-1985 | ai:claude
-fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
+fn contained_safety_scan(tree: &Path, expand_untracked: bool) -> Result<(String, Vec<String>)> {
     let (top, links) = contained_top_gitlinks(tree)?;
-    let mut porcelain = per_file_porcelain(&top, "--ignore-submodules=dirty")?;
+    let mut porcelain = status_porcelain(&top, "--ignore-submodules=dirty", expand_untracked)?;
     let mut edited = Vec::new();
     for link in links {
         let Some(git_dir) = &link.git_dir else {
@@ -5012,7 +5012,7 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
     // submodule; each validated submodule is inspected separately, so its
     // uncommitted edits still count. trace:BUG-1985 | ai:claude
     if contained_code_tree(worktree_path) {
-        return contained_safety_scan(worktree_path)
+        return contained_safety_scan(worktree_path, false)
             .map(|(porcelain, _)| porcelain.trim().to_string());
     }
     let r = git(
@@ -5032,17 +5032,13 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
 /// Convert NUL-delimited status to the quoted porcelain lines used by lifecycle callers.
 /// In -z mode rename/copy records list the destination first and the source second.
 // trace:BUG-2713 | ai:codex
-fn per_file_porcelain(tree: &Path, submodules: &str) -> Result<String> {
-    let out = host_git_command(tree)
-        .args([
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            submodules,
-        ])
-        .output()
-        .context("run git status")?;
+fn status_porcelain(tree: &Path, submodules: &str, expand_untracked: bool) -> Result<String> {
+    let mut cmd = host_git_command(tree);
+    cmd.args(["status", "--porcelain=v1", "-z", submodules]);
+    if expand_untracked {
+        cmd.arg("--untracked-files=all");
+    }
+    let out = cmd.output().context("run git status")?;
     anyhow::ensure!(
         out.status.success(),
         "git status failed in {}: {}",
@@ -5081,10 +5077,19 @@ fn per_file_porcelain(tree: &Path, submodules: &str) -> Result<String> {
 /// exactly when [`worktree_status_porcelain`] does.
 // trace:BUG-1985 | ai:claude
 pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<String>> {
+    status_porcelain_lines(worktree_path, false)
+}
+
+/// Session-end refusal evidence names each untracked file inside new directories.
+pub fn session_refusal_porcelain_lines(worktree_path: &Path) -> Result<Vec<String>> {
+    status_porcelain_lines(worktree_path, true)
+}
+
+fn status_porcelain_lines(worktree_path: &Path, expand_untracked: bool) -> Result<Vec<String>> {
     let raw = if contained_code_tree(worktree_path) {
-        contained_safety_scan(worktree_path)?.0
+        contained_safety_scan(worktree_path, expand_untracked)?.0
     } else {
-        per_file_porcelain(worktree_path, "--ignore-submodules=none")?
+        status_porcelain(worktree_path, "--ignore-submodules=none", expand_untracked)?
     };
     Ok(raw
         .lines()

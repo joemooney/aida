@@ -2560,6 +2560,31 @@ pub(crate) fn session_dirty_summary(
     entries: &[String],
 ) -> String {
     let location = worktree.to_string_lossy().escape_debug().to_string();
+    // Expand collapsed directories only for display after the gate refused.
+    // Keep the gate evidence if the tree changes or the second probe fails.
+    let collapsed = entries
+        .iter()
+        .any(|entry| entry.starts_with("?? ") && (entry.ends_with('/') || entry.ends_with("/\"")));
+    let expanded;
+    let entries = if !is_clone
+        && collapsed
+        && aida_core::seat_clone_detect::seat_clone_root(worktree).is_none()
+    {
+        expanded = aida_core::git_ops::session_refusal_porcelain_lines(worktree)
+            .map(|lines| dirty_entries_ignoring_runtime_links(worktree, lines))
+            .unwrap_or_else(|err| {
+                let mut evidence = entries.to_vec();
+                evidence.push(format!("git status failed: {err:#}"));
+                evidence
+            });
+        if expanded.is_empty() {
+            entries
+        } else {
+            &expanded
+        }
+    } else {
+        entries
+    };
     let evidence = session_evidence(entries);
     if is_clone {
         format!("seat clone {location} holds work origin does not have: {evidence}\n")
