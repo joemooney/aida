@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T04:21:06.913518651Z
-modified_at: 2026-11-24T04:21:49.696959007Z
+modified_at: 2026-11-24T04:21:51.765055945Z
 req_type: Task
 tags:
 - ci
 - small
 - tests
 - track:integration
+comments:
+- id: 01a20bc9-ea15-7a70-a27c-edd49316489c
+  author: joe
+  content: Filed Approved per advisor-122 ruling 2026-11-23 21:22 (#4479 follow-up; drain, integration filler).
+  created_at: 2026-11-24T04:21:51.765055945Z
+  modified_at: 2026-11-24T04:21:51.765055945Z
 history:
 - id: 01a20bc9-e27b-7140-82f7-88ad645d2195
   author: joe
