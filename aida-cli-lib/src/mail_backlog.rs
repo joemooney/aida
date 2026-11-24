@@ -241,6 +241,20 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
         .into_iter()
         .map(Backlog::into_doctor_finding)
         .collect();
+    // trace:TASK-3846 | ai:codex
+    if let Some(summary) = crate::mailbox_view::missing_seat_sidecar_note(
+        &unknown.missing_seat_sidecars,
+        unknown.seat_inventory_incomplete,
+    ) {
+        findings.push(DoctorFinding {
+            category: CATEGORY.into(),
+            id: format!("{CATEGORY}:missing-seat-sidecars"),
+            summary,
+            action: "Inspect the named messages in their source checkout or canonical store."
+                .into(),
+            safe_heal: false,
+        });
+    }
     if unknown.any() {
         findings.push(unknown_finding(&unknown));
     }
@@ -254,6 +268,8 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
 #[derive(Debug, Default)]
 pub(crate) struct Unknown {
+    missing_seat_sidecars: Vec<aida_core::mailbox_logical::SeatSidecarIssue>,
+    seat_inventory_incomplete: bool,
     all: bool,
     keys: BTreeSet<String>,
 }
@@ -266,7 +282,7 @@ impl Unknown {
     fn whole() -> Self {
         Self {
             all: true,
-            keys: BTreeSet::new(),
+            ..Self::default()
         }
     }
 
@@ -313,24 +329,39 @@ fn inspect_backlog(
     use aida_core::mailbox_logical::{inspect_mail, InspectionState, MailboxContext};
     let home = crate::mailbox_store::mailbox_home(project_root);
     let root = home.root();
-    let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
-        Ok(directory) => directory,
-        Err(_) => return (Vec::new(), Unknown::whole()),
-    };
     let store = std::fs::symlink_metadata(store_root)
         .is_ok()
         .then_some(store_root);
     let ctx = match MailboxContext::resolve_or_local(root, store) {
         Ok(ctx) => ctx,
-        Err(_) => return (Vec::new(), Unknown::whole()),
+        Err(_) => {
+            return (
+                Vec::new(),
+                Unknown {
+                    seat_inventory_incomplete: true,
+                    ..Unknown::whole()
+                },
+            )
+        }
     };
     // A skipped (unreadable/invalid) registry row is not a reader, exactly as
     // for send and the own inbox; it does not make other recipients unknown.
     let mut unknown = Unknown::default();
     let mut grouped: BTreeMap<String, (Backlog, Vec<&AgentRegistryEntry>)> = BTreeMap::new();
+    // trace:TASK-3851 | ai:codex
+    let (complete, missing) = aida_core::mailbox_logical::inspect_seat_sidecars(&ctx, limits);
+    unknown.missing_seat_sidecars = missing;
+    unknown.seat_inventory_incomplete = !complete;
+    let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
+        Ok(directory) => directory,
+        Err(_) => {
+            unknown.all = true;
+            return (Vec::new(), unknown);
+        }
+    };
     let readers = directory.inspection_readers();
     if readers.is_empty() {
-        unknown.all = !aida_core::mailbox_logical::inspection_sources_complete(&ctx, limits);
+        unknown.all = !complete;
     }
     for (entry, subject) in readers {
         let subject = match subject {

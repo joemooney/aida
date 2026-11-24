@@ -644,6 +644,32 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
+    // trace:BUG-2746 | ai:codex
+    fn admission_lock(&self, activity: &str) -> Result<RuntimeLock> {
+        self.admission_lock_with(|file| {
+            let pid = std::process::id();
+            let identity = aida_core::proc_identity::ProcIdentity::capture(pid)
+                .map_err(std::io::Error::other)?;
+            writeln!(
+                file,
+                "{pid} {} {} {activity}",
+                identity.starttime,
+                chrono::Utc::now().timestamp()
+            )
+        })
+    }
+
+    fn admission_lock_with(
+        &self,
+        record: impl FnOnce(&mut File) -> std::io::Result<()>,
+    ) -> Result<RuntimeLock> {
+        let mut lock = self.lock("admission.lock")?;
+        if lock.0.set_len(0).is_ok() && record(&mut lock.0).is_err() {
+            let _ = lock.0.set_len(0);
+        }
+        Ok(lock)
+    }
+
     fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
         // Retry brief concurrent transactions; a holder that outlasts the
@@ -652,10 +678,50 @@ impl Directory {
         let mut attempts = 0;
         loop {
             match file.try_lock_exclusive() {
-                Ok(()) => return Ok(RuntimeLock(file)),
+                Ok(()) => return Ok(RuntimeLock(file, name == "admission.lock")),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e)
+                    if name == "admission.lock" && e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
+                    let mut record = String::new();
+                    let summary = (&file)
+                        .take(256)
+                        .read_to_string(&mut record)
+                        .ok()
+                        .and_then(|_| {
+                            let mut fields = record.strip_suffix('\n')?.splitn(4, ' ');
+                            let pid = fields.next()?.parse().ok()?;
+                            let start: u64 = fields.next()?.parse().ok()?;
+                            let at = fields.next()?;
+                            let meta = file.metadata().ok()?;
+                            let locks = std::fs::read_to_string("/proc/locks").ok()?;
+                            let holders = crate::admission_owner::flock_holders(
+                                &locks,
+                                meta.dev(),
+                                meta.ino(),
+                            );
+                            (holders == [pid]
+                                && aida_core::proc_identity::ProcIdentity::capture(pid)
+                                    .ok()?
+                                    .starttime
+                                    == start)
+                                .then_some((at, fields.next()?))
+                        })
+                        .and_then(|(at, activity)| {
+                            let age = chrono::Utc::now()
+                                .timestamp()
+                                .checked_sub(at.parse().ok()?)?;
+                            (age >= 0
+                                && !activity.is_empty()
+                                && !activity.chars().any(char::is_control))
+                            .then(|| format!("last recorded activity {activity}, age {age}s"))
+                        })
+                        .unwrap_or_else(|| "activity and age unknown".into());
+                    return Err(e)
+                        .with_context(|| format!("review-watch lock busy: {name}; {summary}"));
                 }
                 Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
             }
@@ -667,9 +733,12 @@ impl Directory {
 // the same open file description. End ownership at the transaction boundary,
 // even when a child has not yet exec'd (Rust opens files with CLOEXEC).
 // trace:TASK-3809 | ai:codex
-pub(crate) struct RuntimeLock(File);
+pub(crate) struct RuntimeLock(File, bool);
 impl Drop for RuntimeLock {
     fn drop(&mut self) {
+        if self.1 {
+            let _ = self.0.set_len(0);
+        }
         if let Err(error) = FileExt::unlock(&self.0) {
             eprintln!("review-watch runtime unlock failed: {error}");
         }
@@ -728,7 +797,9 @@ impl Store {
         parse_key(key)?;
         // Every writer uses this ordering. No forge query, child wait or mail
         // delivery occurs while either lock is held.
-        let _global = self.dir.lock("admission.lock")?;
+        let _global = self
+            .dir
+            .admission_lock(&format!("review-watch updating {key}"))?;
         let _change = self.dir.lock(&format!("{key}.lock"))?;
         let mut state = self.load()?;
         let initialized = self.dir.read("initialized")?.is_some();
@@ -774,7 +845,7 @@ impl Store {
     /// `None` drops no entry.
     fn settle(&self, open: Option<&BTreeSet<String>>) -> Result<usize> {
         // Every writer takes the global lock first, so it alone excludes them.
-        let _global = self.dir.lock("admission.lock")?;
+        let _global = self.dir.admission_lock("review-watch pruning state")?;
         let mut state = self.load()?;
         let bytes = serde_json::to_vec(&state)?;
         self.reconcile_lost_dispatchers(&mut state);
@@ -1689,7 +1760,7 @@ fn select_with_coverage(
         }
         // End ownership even if a concurrent fork retains the descriptor.
         // trace:BUG-2650 | ai:codex
-        let _member = RuntimeLock(member);
+        let _member = RuntimeLock(member, false);
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -4450,7 +4521,7 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
     // land/ship wait retries until they settle; other errors still refuse.
     // trace:BUG-2703 | ai:claude
     let busy = |why: String| -> anyhow::Error { crate::admission_owner::AdmissionBusy(why).into() };
-    let _lock = match dir.lock("admission.lock") {
+    let _lock = match dir.admission_lock("review-watch checking active reviews") {
         Ok(lock) => lock,
         Err(error) if is_busy(&error) => {
             return Err(busy("review-watch admission lock is busy".into()))
@@ -4532,7 +4603,7 @@ pub(crate) fn select_train_members(
 ) -> Result<(Vec<RuntimeLock>, Vec<crate::pr_train::Ejected>)> {
     let runtime = Directory::shared(&root.join(".aida"))?;
     let dir = Directory::open(&runtime.path().join("review-watch"))?;
-    let _global = dir.lock("admission.lock")?;
+    let _global = dir.admission_lock("train selecting members")?;
     let state = match dir.read(STATE)? {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;

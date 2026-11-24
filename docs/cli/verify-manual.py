@@ -845,11 +845,13 @@ def main():
     specid = re.compile(r"\b(STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|PRIN|VIS|CON|TERM|CR)-[0-9]+")
     leaks = []
     for f in files:
-        for i, line in enumerate(open(f), 1):
-            # blank out recognized backlink markers; their SPEC-IDs are exempt
-            scan = backlink.sub("", line)
-            for m in specid.finditer(scan):
-                leaks.append(f"{os.path.basename(f)}:{i} {m.group(0)}")
+        # trace:TASK-3840 | ai:codex
+        with open(f) as fh:
+            for i, line in enumerate(fh, 1):
+                # blank out recognized backlink markers; their SPEC-IDs are exempt
+                scan = backlink.sub("", line)
+                for m in specid.finditer(scan):
+                    leaks.append(f"{os.path.basename(f)}:{i} {m.group(0)}")
     if leaks:
         hard_fail = True
         print(f"FAIL spec-id leak — {len(leaks)} SPEC-ID(s) in the user-facing manual (use <spec-id>/<epic-id> placeholders):")
@@ -864,7 +866,8 @@ def main():
     if len(sys.argv) == 1:
         manual_text = ""
         for f in files:
-            manual_text += open(f).read() + "\n"
+            with open(f) as fh:
+                manual_text += fh.read() + "\n"
         spec_deltas, store_ok = all_surface_changing_specs()
         if not store_ok:
             print(
