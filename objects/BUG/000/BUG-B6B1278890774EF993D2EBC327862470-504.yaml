@@ -9,12 +9,12 @@ description: |
 
   ## Acceptance
   - AC1: The test waits for `child.pid` to hold a parseable PID (bounded retry), OR the child writes the pid file atomically (temp + rename). A regression test simulates an empty-then-filled pid file.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T06:00:38.980398147Z
+modified_at: 2026-11-24T06:40:44.540393792Z
 req_type: Bug
 tags:
 - flaky
@@ -58,6 +58,12 @@ comments:
   modified_at: 2026-11-24T06:00:38.980398147Z
   session_id: 01a20c196274
   harness_version: codex-cli 0.167.0
+- id: 01a20c49-0ffc-7a33-a7c9-e178c251ec9c
+  author: aida-publication-done
+  content: Implementer push 6a84668f1deb declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T06:40:44.540392503Z
+  modified_at: 2026-11-24T06:40:44.540392503Z
+  session_id: 01a20c196274
 history:
 - id: 01a20c14-b9eb-72e1-a1e3-9c482909bb69
   author: joe
@@ -81,6 +87,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20c49-0ffc-7a33-a7c9-e160fc005685
+  author: aida-publication-done
+  timestamp: 2026-11-24T06:40:44.540387944Z
+  session_id: 01a20c196274
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
