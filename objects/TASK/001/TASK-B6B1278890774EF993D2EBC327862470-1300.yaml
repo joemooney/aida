@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: main_watch tells a gh AUTHENTICATION failure apart from pending CI. With expired or missing gh auth, red-main-watch currently reads as Pending and exits 0, so CronJobFailed never fires. It must exit NON-ZERO with a clear auth cause. Test with a fake gh that fails auth.
   - AC2: The routed CronJobFailed trip keeps a COMPACT failed-step + cause summary, not just stderr's last line. Test.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:05:02.248297583Z
-modified_at: 2026-11-24T06:06:12.956519887Z
+modified_at: 2026-11-24T06:15:32.552316332Z
 req_type: Task
 tags:
 - main-watch
@@ -31,6 +31,13 @@ history:
   author: joe
   timestamp: 2026-11-24T06:06:09.323018750Z
   changes: []
+- id: 01a20c31-fdc8-7fc1-a18b-13fbdaae7827
+  author: aida-session-start
+  timestamp: 2026-11-24T06:15:32.552314385Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
