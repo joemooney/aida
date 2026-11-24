@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: tests/test_seat_takeover_lifecycle.py passes under CI discovery (fix the test or the code it covers; if the test is obsolete, delete it with a reason).
   - AC2: Remove its entry from the BUG-2734 known-failing list in the same PR.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:19:15.482224561Z
-modified_at: 2026-11-24T00:45:48.497492659Z
+modified_at: 2026-11-24T06:20:25.439202417Z
 req_type: Task
 tags:
 - ci
 - from-bug-2734
 - tests
-- track:integration
 comments:
 - id: 01a20ab8-2a84-74c3-ae73-ca1f1351ce30
   author: joe
@@ -69,6 +68,13 @@ comments:
   modified_at: 2026-11-24T00:45:48.497492659Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20c36-759b-7693-b116-739805c5fd65
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3850 was In Progress when merge f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c completed it; verify that no active round remains.'
+  created_at: 2026-11-24T06:20:25.371007691Z
+  modified_at: 2026-11-24T06:20:25.371007691Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20ab8-154e-7660-9b6c-b3bf520e2e62
   author: joe
@@ -101,6 +107,22 @@ history:
   session_id: 01a20abfb86e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c36-759b-7693-b116-73aa2d9ce0cf
+  author: aida-auto-bump
+  timestamp: 2026-11-24T06:20:25.371015724Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a20c36-75df-7af2-9c25-85d3ef23c919
+  timestamp: 2026-11-24T06:20:25.439199Z
+  agent: aida
+  commit_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  summary: 'Advisor (delegated authority): promotion 29, linear on main e5e3711c9f9 + 3 cherry-picks; per-commit patch-ids match approved integration squashes (9a3a02bd, 0c7265b2, be227b8e); combined 33c2f1e05bbe; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
@@ -109,3 +131,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4e140498bc8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T06:20:25.371012404Z
+  completion_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
