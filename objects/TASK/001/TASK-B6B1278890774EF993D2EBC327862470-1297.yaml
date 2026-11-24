@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The refusal names WHICH stash entries or WHICH other branches (with their unique commit counts) hold the work, and gives a correct command to inspect or publish each one.
   - AC2: Tests: a stash-only clone and an other-branch-only clone each produce the specific guidance.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:58:21.118647007Z
-modified_at: 2026-11-24T07:19:14.561089989Z
+modified_at: 2026-11-24T07:39:49.521273198Z
 req_type: Task
 tags:
 - hygiene
@@ -131,6 +131,12 @@ comments:
   modified_at: 2026-11-24T07:19:14.561089989Z
   session_id: 01a20c620f83
   harness_version: codex-cli 0.167.0
+- id: 01a20c7f-2791-7db0-9c59-f2ac12144374
+  author: aida-publication-done
+  content: Implementer push c65debc4acd3 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T07:39:49.521272655Z
+  modified_at: 2026-11-24T07:39:49.521272655Z
+  session_id: 01a20c620f83
 history:
 - id: 01a20bf4-8194-7992-8e65-8d42b5a0c44e
   author: joe
@@ -206,6 +212,14 @@ history:
   session_id: 01a20c620f83
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c7f-2791-7db0-9c59-f2938c3cc1cc
+  author: aida-publication-done
+  timestamp: 2026-11-24T07:39:49.521271014Z
+  session_id: 01a20c620f83
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
