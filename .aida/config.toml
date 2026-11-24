@@ -234,6 +234,14 @@ command = "land watch"
 every = "5m"
 enabled = true
 
+# trace:TASK-3218 | ai:codex
+[[schedule.jobs]]
+name = "red-main-watch-route"
+seats = ["advisor"]
+on = ["CronJobFailed:red-main-watch"]
+prompt = "The red-main-watch job failed. Inspect the routed trip diagnostic for the failed land watch step and consult .aida/schedule.log for its command output."
+enabled = true
+
 [[schedule.jobs]]
 name = "hub-drift-guard-route"
 seats = ["advisor"]
