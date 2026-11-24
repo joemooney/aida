@@ -339,6 +339,12 @@ pub(crate) fn containment_posture_in(
         return Ok(ContainmentPosture::None);
     }
     let setting = crate::agent_config::load_contained_vendor(root, vendor)?;
+    if setting.is_none() && vendor == crate::vendors::native_setup::KEY {
+        let branch = crate::forge::default_branch_of(root);
+        if let Some(hint) = crate::vendors::native_setup::unpublished_hint(root, &branch) {
+            anyhow::bail!("`{vendor}` has no trusted native policy; refusing to launch: {hint}");
+        }
+    }
     vendor_containment_posture(vendor, setting.as_deref())
 }
 

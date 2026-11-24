@@ -1746,6 +1746,12 @@ pub(crate) fn setup_init_native_policy(root: &std::path::Path, initialized: bool
         clean == Some(true),
         "review and commit .aida/config.toml on {default}, then rerun `aida init --agent {vendor}`"
     );
+    if crate::agent_config::load_contained_vendor(root, vendor)?.is_none() {
+        if let Some(hint) = crate::vendors::native_setup::unpublished_hint(root, &default) {
+            println!("  {hint}");
+            return Ok(());
+        }
+    }
     if offer_init_codex_native(root, true, true, || {
         anyhow::ensure!(
             initialized || config_commit::init_refresh_mode() == CommitMode::Auto,

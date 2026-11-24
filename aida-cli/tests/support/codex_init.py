@@ -71,9 +71,16 @@ def exercise(root, aida):
     assert "trusted default branch (main)" in result and "Opt Codex into" not in result, result
     assert "native" != tomllib.loads(config.read_text())["contained"]["vendors"].get("codex")
     git("switch", "-q", "main")
+    unpublished_base = git("rev-parse", "main").strip()
     result = terminal(*init)
     assert explanation in result, result
     assert tomllib.loads(git("show", f"main:{path}"))["contained"]["vendors"]["codex"] == "native"
+
+    git("update-ref", "refs/remotes/origin/main", unpublished_base)
+    git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+    result = terminal(*init)
+    assert "policy committed locally but not pushed: run `git push origin main`" in result, result
+    assert "Opt Codex into" not in result, result
 
     # A valid inline table that the editor declines must not abort role setup.
     config.write_text("contained = {}\n" + re.sub(r"(?ms)^\[contained(?:\.vendors)?\].*?(?=^\[|\Z)", "", config.read_text()))

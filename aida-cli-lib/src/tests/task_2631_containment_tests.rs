@@ -535,7 +535,11 @@ fn bug_2752_remote_policy_refuses_until_published() {
     git(root.path(), &["commit", "-qam", "local native policy"]);
     // Remote-backed launches trust the published tip. Local writes alone
     // must still refuse until the default branch receives the init commit.
-    assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
+    let error = session::containment_posture_in(root.path(), "codex", true).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("policy committed locally but not pushed: run `git push origin main`"));
+    assert!(!error.to_string().contains("aida init"));
     git(
         root.path(),
         &["update-ref", "refs/remotes/origin/main", "main"],
