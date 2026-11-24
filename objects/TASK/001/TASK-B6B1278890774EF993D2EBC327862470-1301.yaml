@@ -114,6 +114,13 @@ comments:
   created_at: 2026-11-24T08:40:50.287311684Z
   modified_at: 2026-11-24T08:40:50.287311684Z
   session_id: 01a20c99443c
+- id: 01a20cb7-5460-7fc1-a054-5a6aa46d59f5
+  author: joe
+  content: 'INTEGRATION PRE-CHECK r2 (integration-30, 01:44): PR-4500 @ 415457c4d0 PASSES the upheld F1. The rework commit 415457c4d04 makes DetectorSpecs::branch_id ALWAYS try known store IDs first, longest-first (the whole branch, then each prefix ending at a ''-'' boundary), and fall back to the heuristic work_spec_id_from_branch only when no known ID matches. So task-42-2026-fix with an active TASK-42 resolves to TASK-42 again (the old prefix rule), while ''-'' boundaries keep task-420-x from matching TASK-42, and branches with no known prefix resolve via the parser as before. New regression task_3860_admits_leaseless_branch_with_numeric_suffix asserts exactly that row (branch task-42-2026-fix, spec_id TASK-42). The other commits in the range come from its integration merge. Merges CLEAN.'
+  created_at: 2026-11-24T08:40:58.205573187Z
+  modified_at: 2026-11-24T08:40:58.205573187Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe
