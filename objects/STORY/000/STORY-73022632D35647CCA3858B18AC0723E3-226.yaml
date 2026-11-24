@@ -31,6 +31,11 @@ relationships:
   created_at: 2026-11-23T13:21:31.031293775Z
   created_by: dirtlab
 comments:
+- id: 01a20e86-29be-7132-8428-3443acb6b3bc
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4432 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-24T17:06:43.262108314Z
+  modified_at: 2026-11-24T17:06:43.262108314Z
 - id: 01a20e86-64ce-7702-804e-e09fc92f4e29
   author: aida-auto-bump
   content: 'Auto-completed: PR #4432 merged without a reviewer session (the review story was never queued past Draft).'
@@ -48,6 +53,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a20e86-29be-7132-8428-345e7655bd31
+  author: aida-auto-bump
+  timestamp: 2026-11-24T17:06:43.262120751Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 - id: 01a20e86-64ce-7702-804e-e08b6737d650
   author: aida-auto-bump
   timestamp: 2026-11-24T17:06:58.382947041Z
