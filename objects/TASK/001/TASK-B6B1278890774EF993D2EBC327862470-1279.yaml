@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: forge::github_core_budget resolves gh via crate::kernel::resolve_gh_binary_for_probe() (one line), so the seam is honoured. A test uses the fake gh (AIDA_TEST_GH_BINARY) and asserts the budget reading comes from it.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T00:32:43.258391737Z
-modified_at: 2026-11-24T00:41:46.736515374Z
+modified_at: 2026-11-24T00:42:10.768567856Z
 req_type: Task
 tags:
 - small
@@ -59,6 +59,15 @@ history:
   session_id: 01a20affd1eb
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20b00-cb35-7f82-9abf-b2b3ebbb33fd
+  author: dirtlab
+  timestamp: 2026-11-24T00:42:11.125159777Z
+  session_id: 01a20affd1eb
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -67,3 +76,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5db0b2b1b17
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: 'The assigned base 13bcf6bd671 and local origin/integration 669dc6e3dd lack forge::github_core_budget. TASK-3847 commit eacfd4b528 introduces it in PR #4470. Can product relaunch TASK-3852 on an integration base containing #4470?'
+  raised_by: implementer
+  raised_at: 2026-11-24T00:42:10.768567856Z
