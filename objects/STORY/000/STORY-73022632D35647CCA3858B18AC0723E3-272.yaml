@@ -1,0 +1,32 @@
+id: 01a20c83-029c-7320-afa9-40d5a68784bc
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-272
+title: 'Review PR-4502: [AI:codex] fix(queue): revalidate standalone launch authority before spawn (STORY-3080)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c4f`) for branch `story-b6b1278890774ef993d2ebc327862470-824`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4502>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-824` → `main`
+
+  ## Covers
+
+  - STORY-3080
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4502` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T07:44:02.204024144Z
+modified_at: 2026-11-24T07:44:02.204024144Z
+req_type: Story
+filed_at:
+  code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0d3a0ae22
+  session: 01a20c4fa138
