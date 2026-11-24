@@ -332,6 +332,19 @@ comments:
   content: '#4408 r4 FINAL: advisor-122 OVERRIDE -> APPROVE on FAST green (2026-11-24 10:20). The remaining 3 fail-closed findings plus the BUG-2725 #4407 p2 edges are in follow-up TASK-3879 (MEDIUM). Strict/supervised: after full CI, Joe''s train loop lands it.'
   created_at: 2026-11-24T17:20:15.616041363Z
   modified_at: 2026-11-24T17:20:15.616041363Z
+- id: 01a20ec8-fe34-7b92-a887-6674f9bf32c3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:19):
+    # BUG-2723 / PR #4408 CI-FIX ROUND (advisor-122 ruling 2026-11-24 11:20; NOT a review round; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4408 was approved at 252353bb but FULL CI is RED (lib-0 and Build). Failing: gate::dispatch_auth story_1917 tests, e.g. story_1917_native_train_authority_lost_after_merge_names_the_cause and ...held_member_mandate_replaced_during_hold_gate_wait_never_merges (panics at test_env.rs:127 and story_1917_dispatch_flow_schedule_tests.rs:2102). These are TRAIN-AUTHORITY tests, so it's likely a real regression from the new run selector.
+    FIX: read the real failing CI logs first (`gh run list -R joemooney/aida --branch <branch>`, `gh run view <id> --log-failed`). Make them pass by FIXING PRODUCTION. Update fixtures ONLY if the selector's new run-shape contract provably requires it, and if so EXPLAIN why in the PR body. NO weakening of any authority assertion. Fix the Build failure too.
+    Run those exact tests on the lane (cargo nextest/test filtered to story_1917), then make check-ci-fast, then push to #4408. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T18:19:29.450745252Z
+  modified_at: 2026-11-24T18:19:29.450745252Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
