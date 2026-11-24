@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T14:06:32.220460159Z
+modified_at: 2026-11-24T14:08:29.325646585Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -111,6 +111,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T14:06:32.076348713Z
   modified_at: 2026-11-24T14:06:32.076348713Z
+- id: 01a20de3-2de1-76e0-acfa-bb4d4bd9563a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:08):
+    # BUG-2739 / PR #4482 r2 (advisor-122 ruling 2026-11-24 07:12: CR UPHELD at 4a5d76cd; lease/claim safety = STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. Fix ALL FOUR, with a test each:
+    (F1) The --id APPLY path must NOT call list_leases. Open ONLY <id>.toml: no sibling parsing, no FIFO blocking. Resolve by EXACT FILENAME, never by embedded-id first match.
+    (F2) Re-check generation uniqueness and the selected receipt UNDER THE STORE LOCK before salvaging or deleting; refuse on ambiguity.
+    (F3) RESTORE the previous zombie-creator eligibility: don't route local leases through local_claim_process_is_dead, or handle DeadReason::Exited as dead for this path. Add a regression test.
+    (F4) KEEP the heal_exited_claim writer-lock sink in scripts/store-writers.toml; teach the inventory scanner the bounded wrapper spelling. Do NOT delete the row.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch (#4482). COMMIT your work.
+  created_at: 2026-11-24T14:08:29.325646585Z
+  modified_at: 2026-11-24T14:08:29.325646585Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
