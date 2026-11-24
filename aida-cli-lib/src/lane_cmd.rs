@@ -70,6 +70,13 @@ fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Re
 /// The job for `argv`, carrying the allow-listed variables set in this
 /// process's environment.
 pub(crate) fn job_from(argv: Vec<String>, env: impl Fn(&str) -> Option<String>) -> JobRequest {
+    // trace:BUG-2754 | ai:codex — the fast gate owns its environment.
+    if argv == ["make", "check-ci-fast"] {
+        return JobRequest {
+            argv,
+            env: Default::default(),
+        };
+    }
     let env = lane_job::ALLOWED_ENV
         .iter()
         .filter_map(|k| env(k).map(|v| ((*k).to_string(), v)))

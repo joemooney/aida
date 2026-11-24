@@ -137,7 +137,8 @@ timeout: 900 seconds on a warm target, 3600 when the output says `seed: cold` (a
 can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
-finishes. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
+finishes. For the pre-push gate, run `aida lane job run -- make check-ci-fast` and wait the \
+same way. The gate runs its own Cargo metadata queries and ratchets. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
 zero-match filters, `--no-run` and `--list` do not. If it reports that this session has no lane \
 job runner, or refuses the run, say `untested=true` in your final result.";
 
