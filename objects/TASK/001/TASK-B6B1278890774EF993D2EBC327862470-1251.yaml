@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T11:17:07.353676794Z
-modified_at: 2026-11-24T12:30:48.623357931Z
+modified_at: 2026-11-24T12:32:53.062114903Z
 req_type: Task
 tags:
 - carried-from:BUG-2729
@@ -29,6 +29,28 @@ comments:
   content: 'Draft to Approved (advisor-122 05:38): one docs lane for TASK-3282/3266.'
   created_at: 2026-11-24T12:30:48.623357931Z
   modified_at: 2026-11-24T12:30:48.623357931Z
+- id: 01a20d8b-a705-7530-a0eb-e95607c4476a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:32):
+    # TASK-3282: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3282` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3282 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3282)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    PRODUCT QUESTIONS: lanes cannot reach product by mail (mailbox over budget). If you need a product answer (a follow-up spec ID, a scope call), PUNT with the exact question in your exit summary; product reads lane exits and relaunches with the answer.
+
+    NEW TESTS: if make check-ci-fast rejects new test names as unregistered, ADD them to scripts/ratchet-set.json (entries only; no other ratchet/gate changes) and list the added entries in the PR body. That is pre-approved; do not punt for it.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+
+    INTEGRATION p35 filler (advisor-122 dispositions 05:38; product-15): branch `int35-task-3282`, cut from origin/integration 51cc0a828f9. PR base MUST be `integration`.
+    ONE DOCS LANE covering TWO specs: TASK-3282 (docs/internal/testing/ci-test-shards.md:18 and docs/advanced/landing.md:113 still say adding a label cancels the running workflow, which contradicts current behaviour; correct them) and TASK-3266 (ci-test-shards.md:39 BUG-2723 AC4 retoggle wording per the spec). Docs only. Commit title MUST end with `(TASK-3282 TASK-3266)`.
+  created_at: 2026-11-24T12:32:53.062114903Z
+  modified_at: 2026-11-24T12:32:53.062114903Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20838-dd87-7f91-a3ee-de1bfdc2aac4
   author: joe
