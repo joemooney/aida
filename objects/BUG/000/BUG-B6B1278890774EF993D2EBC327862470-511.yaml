@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-24T17:16:34.556355107Z
+modified_at: 2026-11-24T17:28:07.634162613Z
 req_type: Bug
 tags:
 - store
@@ -117,6 +117,15 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Which Git-canonical record should represent an independent upstream merge hold for required test (b)? The production hold writer appends to the primary checkout''s .aida/gate-ledger outside the fetched store, and signed review publications do not transport that hold. If none exists, may this slice use a signed request-changes refusal for (b) and track independent hold transport separately?. No triage reason was given.'
   created_at: 2026-11-24T15:57:21.637391822Z
   modified_at: 2026-11-24T15:57:21.637391822Z
+- id: 01a20e99-c47c-7832-95b4-6d8c4b54378b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 289cc394a334ee2760c79067fd871bbe66f9c5a9. Reviewed the empty origin/main...HEAD diff, working diff, and the new 126-line module. AC1: [evidence: behavioral-test] incomplete. A two-repository fixture reproduced the stale HEAD and confirmed the SHA in both unchanged and fast-forward fetch output. pr_train_store_refresh.rs:9 fetches with a deadline; pr_train.rs:39 registers the module only. Train admission still reads local HEAD. AC2: [evidence: behavioral-test] partial. pr_train_store_refresh.rs:79 exercised a successful fetch, a stalled transport, and a nonblocking writer lock probe. Final lane job j20261124T171618638-2-0 passed 1 test in 2.02s. No train-level fallback or permit/refusal union is exercised. Probes covered ref and output formatting, destination and SHA validation, concurrent tracking-ref readers, and absence of a writer lock during a stall. Fixed space-prefixed fast-forward parsing and fixture Git maintenance. Strict-tier gaps remain in review_publication.rs:978, :1293 and pr_train_verified.rs:746. No new authority path is active. Punted for a scope split; no publication declaration.
+  created_at: 2026-11-24T17:28:07.634162613Z
+  modified_at: 2026-11-24T17:28:07.634162613Z
+  session_id: 01a20e87b17f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
