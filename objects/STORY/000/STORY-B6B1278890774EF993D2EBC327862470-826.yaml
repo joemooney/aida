@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-24T14:52:06.032074489Z
+modified_at: 2026-11-24T15:06:46.488615255Z
 req_type: Story
 tags:
 - doctor
@@ -54,6 +54,18 @@ comments:
   modified_at: 2026-11-24T14:38:15.195860425Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e18-5d9a-7800-9e55-1e248010c0bd
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 88d8f9c4b01ab4c1858eb6447d08fac412a00171 plus the native working tree and untracked stalled_reviews.rs. The 11 committed files in origin/main...HEAD are the integration baseline.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/stalled_reviews.rs:205 exercises requests for changes, queued rework, changed heads, green overdue approvals, train and non-green exclusions. Initial targeted run executed one passing test. The dedicated doctor dispatch avoids unrelated cleanup forge calls. The checked change reader propagates corrupt ledger errors. Normalized IDs, exact head matching, empty lists, duplicate observations, concurrent scans, bounded listing and train membership were inspected. No authority or gate code changed.
+    AC2: [evidence: behavioral-test] The final fixture exercises 60/61/62-minute observations and duplicate urgent advisor delivery. Final-tree launcher run pending. Scan state is local and wakes require repeated observations. No live forge or advisor mailbox used for testing. Slice 2 owns scheduled invocation.
+    Validation: rustfmt and diff whitespace passed. make check-ci-fast stopped at the test-speed tooling gate: the native cargo runner refuses cargo metadata. No ratchet entries changed. PR base integration; Refs-only.
+  created_at: 2026-11-24T15:06:46.488615255Z
+  modified_at: 2026-11-24T15:06:46.488615255Z
+  session_id: 01a20e094287
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
