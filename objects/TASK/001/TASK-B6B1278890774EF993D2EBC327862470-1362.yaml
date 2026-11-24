@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor check stalled-reviews` also reports every open PR whose GitHub mergeable state is CONFLICTING (with the base) and has no active implementer lane or queued rework, showing PR, spec and head, and how long it has conflicted where known. Approved PRs that conflict are flagged first (they block landing).
   - AC2: For a conflicting PR with no lane, the detector queues ONE conflict-repair rework for the implementer (merge the base, resolve, no scope change) and notifies the advisor, deduplicated per (PR, head, base tip). Tests for detection and dedup.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-24T17:38:54.394636693Z
+modified_at: 2026-11-24T17:39:42.199157011Z
 req_type: Task
 tags:
 - review
@@ -43,6 +43,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20ea4-5f76-7bd3-ad42-f3455fd9aaec
+  author: dirtlab
+  timestamp: 2026-11-24T17:39:43.094485066Z
+  session_id: 01a20ea33d91
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
@@ -51,3 +60,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: waiting on STORY-3095 slice 1
+  raised_by: implementer
+  raised_at: 2026-11-24T17:39:42.199157011Z
