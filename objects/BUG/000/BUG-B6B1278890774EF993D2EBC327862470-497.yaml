@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T01:01:06.412281577Z
+modified_at: 2026-11-24T01:01:08.593542405Z
 req_type: Bug
 tags:
 - integration
@@ -108,6 +108,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Event 930883d1 records Done -> NeedsAttention with no comment and failure_reason.kind verdict:request-changes. review_commands.rs calls leases::shelve_spec_on_failure, which applies shelve_status_flip and persists the spec in aida-cli-lib/src/leases.rs. The brief requires a strict-path stop. Will product route BUG-2736 to a lane authorized to change the shelving writer in leases.rs?. No triage reason was given.'
   created_at: 2026-11-24T01:01:06.412271438Z
   modified_at: 2026-11-24T01:01:06.412271438Z
+- id: 01a20b12-2672-74c2-b9f5-bbc62e44061e
+  author: joe
+  content: 'Moved OFF the p30 integration bundle to MAIN, strict review, mode drive (product-15 18:03): the bundle lane correctly punted on a strict path (BUG-2736: leases.rs shelve writer; BUG-2737: gate/ledger/event.rs, protected floor, needs a human/advisor merge).'
+  created_at: 2026-11-24T01:01:08.593542405Z
+  modified_at: 2026-11-24T01:01:08.593542405Z
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
