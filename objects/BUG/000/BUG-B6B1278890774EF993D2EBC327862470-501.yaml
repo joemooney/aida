@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T02:26:30.731169338Z
-modified_at: 2026-11-24T06:40:06.931523670Z
+modified_at: 2026-11-24T06:43:03.839748449Z
 req_type: Bug
 tags:
 - admission
@@ -210,6 +210,11 @@ comments:
   created_at: 2026-11-24T06:21:36.289883778Z
   modified_at: 2026-11-24T06:21:36.289883778Z
   session_id: 01a20bf89a2f
+- id: 01a20c4b-301f-72b3-a7e9-84923942f897
+  author: joe
+  content: 'PARKED (advisor-122 2026-11-23 23:46): #4481 closed unmerged at d1697771 (branch kept). Three rounds showed that releasing the store lock opens authority windows (a hold during the wait, a track change between admission and spawn, a post-pull flip). Redesign prerequisite: STORY-3080 (single pre-spawn launch-authority revalidation). BUG-2740''s lock release then lands ON TOP of it as a <=60-line PR. Mitigation meanwhile: the dell1 launcher keeps at most 2 launches in flight (= lanes.max_concurrent_cold_starts).'
+  created_at: 2026-11-24T06:43:03.839748449Z
+  modified_at: 2026-11-24T06:43:03.839748449Z
 history:
 - id: 01a20b61-5185-7250-a25b-1093eea784e1
   author: joe
