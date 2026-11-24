@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T08:08:32.825191212Z
+modified_at: 2026-11-24T08:20:43.557466647Z
 req_type: Story
 tags:
 - admission
@@ -123,6 +123,15 @@ comments:
   modified_at: 2026-11-24T07:57:51.580822497Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20ca4-9b30-7bb0-8d53-2f8dbe4803f8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6796a5ee4aec8ed13a5b2efed6da009660ca464b plus the native seat working diff. AC1: [evidence: behavioral-test] wip_limit.rs:372 exercised a fresh under-limit snapshot against ten live changes and an offline exempt branch. Checked writer guard lifetime through both spawn arms in session/headless.rs:2762 and :2817. Resume bypasses new-work WIP and preserves first-child ownership. AC2: [evidence: behavioral-test] bug_home_038_seat_publish_tests.rs:6345 drives standalone launch, held and retracked members, a Git-canonical pull and a late hold on automatic resume. Spawn count, first-child output and lease assertions passed. Reviewed ID comparisons, Git and forge formats, member multiplicity, missing authority, concurrent writes and rollback paths. Canonical stores share the writer lock, legacy file stores receive a fresh read only. FAST-fix shares the tested resume hook. Both final targeted tests passed in job j20261124T081754225-2-0. Rustfmt and git diff --check passed. Local make check-ci-fast stopped because the lane runner does not support cargo metadata. Full FAST remains for host validation. F4 and F7 retained per advisor ruling.
+  created_at: 2026-11-24T08:20:43.557466647Z
+  modified_at: 2026-11-24T08:20:43.557466647Z
+  session_id: 01a20c9942b6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
