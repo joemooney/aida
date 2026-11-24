@@ -610,8 +610,9 @@ pub(crate) fn probe_worktree_from(main: &Path, worktree: &Path) -> WorktreeGitPr
         return probe_worktree(worktree);
     }
     let result = (|| -> anyhow::Result<WorktreeGitProbe> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let snapshot = crate::seat_clone::dispatch_snapshot(main, worktree)?;
-        let mut fields = snapshot.splitn(4, |b| *b == 0);
+        let mut fields = snapshot.splitn(6, |b| *b == 0);
         let branch = std::str::from_utf8(fields.next().unwrap_or_default())?.trim();
         let log = std::str::from_utf8(
             fields
@@ -626,18 +627,27 @@ pub(crate) fn probe_worktree_from(main: &Path, worktree: &Path) -> WorktreeGitPr
         )?
         .trim()
         .parse()?;
+        // trace:BUG-2742 | ai:codex
+        let stash = fields
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing stash field"))?;
+        let unique = fields
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing local branch field"))?;
         let status = fields
             .next()
             .ok_or_else(|| anyhow::anyhow!("missing status field"))?;
-        let mut records = parse_porcelain_z_bytes(status);
-        records.retain(|(xy, path)| {
-            xy != "??"
-                || !(crate::seat_clone::is_runtime_noise_entry(
-                    worktree,
-                    &format!("? {}", path.display()),
-                ) || (path == Path::new(".gitmodules")
-                    && crate::seat_clone::is_empty_gitmodules_placeholder(worktree)))
-        });
+        let records = parse_porcelain_z_bytes(status);
+        // A local tracking ref can lag publication. Resolve candidate branch
+        // commits using the clone probe's existing host coverage evidence.
+        let mut dirty = !status.is_empty() || !stash.is_empty();
+        if !dirty && !unique.is_empty() {
+            dirty = match crate::seat_clone::probe_until(main, worktree, &[], Some(deadline)) {
+                crate::seat_clone::Probe::Known(facts) => facts.unshipped(),
+                crate::seat_clone::Probe::Unknown(reason)
+                | crate::seat_clone::Probe::HasSubmodules(reason) => anyhow::bail!("{reason}"),
+            };
+        }
         let paths: Vec<_> = records
             .iter()
             .filter(|(xy, path)| counts_toward_recent_movement(xy, &path.to_string_lossy()))
@@ -647,7 +657,7 @@ pub(crate) fn probe_worktree_from(main: &Path, worktree: &Path) -> WorktreeGitPr
             parse_commit_time_and_subject(log, chrono::Utc::now().timestamp());
         Ok(WorktreeGitProbe {
             branch: (!branch.is_empty()).then(|| branch.to_owned()),
-            dirty: !records.is_empty(),
+            dirty,
             ahead_of_main: ahead,
             last_commit_subject,
             head_commit_age_secs,

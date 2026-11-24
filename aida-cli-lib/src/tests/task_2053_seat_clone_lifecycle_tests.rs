@@ -2634,6 +2634,13 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         return;
     }
     let fx = fixture();
+    // Runtime output is clean only when this project's Git rules ignore it.
+    // trace:BUG-2742 | ai:codex
+    std::fs::write(
+        fx.main.join(".git/info/exclude"),
+        "/target/\n/.gitmodules\n",
+    )
+    .unwrap();
     let clone = seat(&fx, "hygiene", "c0ffee002473");
     seat_commit(&clone, "published.txt");
     // Both commit activity and dirty-file activity must be old: a fresh
@@ -3158,5 +3165,94 @@ fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
     assert!(
         fx.main.join(".aida/salvage").exists(),
         "cleanup reached salvage"
+    );
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_bwrap_ignored_state_and_tracked_edits() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "ignored-state", "c0ffee002742");
+    let state = ".aida/hygiene-state.json";
+    std::fs::write(clone.join(state), "{}").unwrap();
+    assert_eq!(git_ok(&clone, &["check-ignore", state]), state);
+    let inspect = || crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    let clean = inspect();
+    assert!(clean.error.is_none() && !clean.dirty, "{clean:?}");
+    assert!(!known(probe_for_reap(&fx.main, &clone, Some("feat"), &[])).unshipped());
+
+    std::fs::write(clone.join("README.md"), "pending edit").unwrap();
+    let dirty = inspect();
+    assert!(dirty.error.is_none() && dirty.dirty, "{dirty:?}");
+    assert!(known(probe_for_reap(&fx.main, &clone, Some("feat"), &[])).unshipped());
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_bwrap_untracked_file_blocks_reap() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "untracked", "c0ffee002742");
+    std::fs::create_dir_all(clone.join("target")).unwrap();
+    std::fs::write(clone.join("target/notes.txt"), "unfinished").unwrap();
+    let report = crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    assert!(report.error.is_none() && report.dirty, "{report:?}");
+    assert!(known(probe_for_reap(&fx.main, &clone, Some("feat"), &[]))
+        .dirty
+        .contains(&"? target/notes.txt".to_owned()));
+    let kept = destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap();
+    assert!(matches!(kept, Destroyed::Kept { .. }), "{kept:?}");
+    assert_eq!(
+        std::fs::read(clone.join("target/notes.txt")).unwrap(),
+        b"unfinished"
+    );
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_bwrap_other_branch_blocks_reap() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "other-branch", "c0ffee002742");
+    seat_git(&clone, &["checkout", "-qb", "unfinished"]);
+    seat_commit(&clone, "work.txt");
+    seat_git(&clone, &["checkout", "-q", "feat"]);
+    let report = crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    assert!(report.error.is_none() && report.dirty, "{report:?}");
+    let facts = known(probe_for_reap(&fx.main, &clone, Some("feat"), &[]));
+    assert!(facts.dirty.is_empty(), "{facts:?}");
+    assert_eq!(
+        facts.unpushed_refs,
+        ["1 commit(s) on refs/heads/unfinished"]
+    );
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_bwrap_stash_blocks_reap() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "stashed", "c0ffee002742");
+    std::fs::write(clone.join("README.md"), "pending edit").unwrap();
+    seat_git(&clone, &["stash", "push", "-q"]);
+    let report = crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    assert!(report.error.is_none() && report.dirty, "{report:?}");
+    let facts = known(probe_for_reap(&fx.main, &clone, Some("feat"), &[]));
+    assert!(facts.dirty.is_empty(), "{facts:?}");
+    assert!(
+        facts
+            .unpushed_refs
+            .iter()
+            .any(|r| r.ends_with(" on refs/stash")),
+        "{facts:?}"
     );
 }
