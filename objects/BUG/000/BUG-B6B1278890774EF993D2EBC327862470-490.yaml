@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-24T15:15:25.967660112Z
+modified_at: 2026-11-24T15:44:08.130759719Z
 req_type: Bug
 tags:
 - ci
@@ -173,6 +173,18 @@ comments:
   modified_at: 2026-11-24T14:30:02.602321414Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20e3a-8f61-7c23-b900-68364c345390
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 724a60a26105648f4eddc284c07bb09bafb7f028 plus native uncommitted diff. Current origin/main is an ancestor. Inspected merge-base and worktree diffs and untracked inventory.
+    AC1: [evidence: behavioral-test] review_watch.rs promote_approved_heads and tests/test_ci_tiers.py. Seven tier tests passed. The production standalone regression exercised absent, queued and running FAST, head movement, completed FAST and repeat ticks. Both recorders persist the reviewed verdict before scheduled promotion.
+    AC2: [evidence: behavioral-test] review_draft.rs standalone_review_verdict_parent_records_after_unbound_child_refusal_and_retries passed via lane job j20261124T153854109-2-0. A fake GitHub observed exactly one add-label after settlement.
+    F1–F4 and F6 addressed. F5 rechecks the reviewed head before each bounded label edit. Residual race between GitHub head read and label write remains. Reviewed marker spelling, malformed or missing evidence, multiple markers and receipt locking. Approval grants no merge authority. Diff against origin/main is +179/-172, above requested size. Refs-only handoff.
+  created_at: 2026-11-24T15:44:08.130759719Z
+  modified_at: 2026-11-24T15:44:08.130759719Z
+  session_id: 01a20e200a25
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
