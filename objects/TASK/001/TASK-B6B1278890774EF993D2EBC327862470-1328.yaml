@@ -1,5 +1,6 @@
 id: 01a20ca8-c8cc-7912-a322-4dd7c7a2859d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1328
+agreed_id: TASK-3339
 title: 'Review follow-up: docs/showcase/code-review.html:231–232 and 257 leave inactive slides display:none in deck '
 description: |-
   From TASK-3864
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20c6f-7d40-73c3-acac-3692587839bc
   created_at: 2026-11-24T08:25:30.707169276Z
+history:
+- id: 01a20cec-ea6b-76b2-a56f-78238c0698dd
+  author: joe
+  timestamp: 2026-11-24T09:39:42.827021418Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504

@@ -1,5 +1,6 @@
 id: 01a20ca5-7e54-7241-b638-23be6c4d98c1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1314
+agreed_id: TASK-3334
 title: 'Review follow-up: The new AC1 regression assertion is conditional on finding the existing job and step names'
 description: |-
   From BUG-2744
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20c54-6d4a-7413-a677-c2e357c87c0e
   created_at: 2026-11-24T08:21:54.948539397Z
+history:
+- id: 01a20ceb-df19-7231-8606-d659e47a8548
+  author: joe
+  timestamp: 2026-11-24T09:38:34.393794851Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
   branch: pr-4503

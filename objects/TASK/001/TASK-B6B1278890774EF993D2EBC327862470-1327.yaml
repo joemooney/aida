@@ -1,5 +1,6 @@
 id: 01a20ca8-95e2-70e3-ae84-af6e6caeacc1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1327
+agreed_id: TASK-3331
 title: 'Review follow-up: docs/showcase/code-review.html:523–532 and 843–849 mark the facet picker as a tablist but '
 description: |-
   From TASK-3864
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20c6f-7d40-73c3-acac-3692587839bc
   created_at: 2026-11-24T08:25:17.635936520Z
+history:
+- id: 01a20ceb-3f09-73a2-be20-220fb69891ca
+  author: joe
+  timestamp: 2026-11-24T09:37:53.417676332Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504

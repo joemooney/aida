@@ -1,5 +1,6 @@
 id: 01a20ca7-0079-74f0-bc33-8fdd526b6fb1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1319
+agreed_id: TASK-3338
 title: 'Review follow-up: docs/review-process.md:288 and docs/showcase/code-review.html:414 and 479 claim inline spe'
 description: |-
   From TASK-3864
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20c6f-7d40-73c3-acac-3692587839bc
   created_at: 2026-11-24T08:23:33.813826397Z
+history:
+- id: 01a20cec-b53a-7393-9008-3d647f0dfbf0
+  author: joe
+  timestamp: 2026-11-24T09:39:29.210240555Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504

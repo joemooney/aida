@@ -1,5 +1,6 @@
 id: 01a20cbc-0717-7bc2-8efe-d597f3fd4a73
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-275
+agreed_id: STORY-3090
 title: 'Review PR-4506: [AI:codex] feat(review): deterministic review engine core (Refs STORY-3076)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c9a`) for branch `int32-story-3076-s1`.
@@ -50,6 +51,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20cef-0145-7ef1-b307-a13030bce990
+  author: joe
+  timestamp: 2026-11-24T09:41:59.749373713Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
   branch: main
