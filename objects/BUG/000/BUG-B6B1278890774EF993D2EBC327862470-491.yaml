@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-24T15:57:18.486300065Z
+modified_at: 2026-11-24T15:59:30.606512938Z
 req_type: Bug
 tags:
 - doctor
@@ -205,6 +205,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-24T15:57:18.334026183Z
   modified_at: 2026-11-24T15:57:18.334026183Z
+- id: 01a20e48-d4b3-7090-a6f6-9ebbbd11f6a6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:59):
+    # BUG-2730 / PR #4457 round 3, MAJOR ONLY (advisor-122 ruling 2026-11-24 09:00 at 9f84897e; product-15). Lane: CODEX. MAIN, existing branch. <=80 lines. If still blocked after this, the advisor approves as is.
+    F1 (major): routing still runs SYNCHRONOUSLY before snapshot persistence and before the doctor report can return (land_stalls.rs:2006, schedule_ledger.rs:411); the 5s limit covers only acquiring the store lock.
+    FIX: PERSIST the snapshot and RETURN the report within the 5s limit FIRST, then route ASYNCHRONOUSLY, or skip routing with a "routing deferred" note when the deadline is near. TEST: with slow routing, the snapshot is persisted and the report returned within the limit.
+    Do NOT fix F2-F7 (deferred to the follow-up). One targeted cargo run, then `make check-ci-fast`, then push to #4457. COMMIT your work.
+  created_at: 2026-11-24T15:59:30.606512938Z
+  modified_at: 2026-11-24T15:59:30.606512938Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
