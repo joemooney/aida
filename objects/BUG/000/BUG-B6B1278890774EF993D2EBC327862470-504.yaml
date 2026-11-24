@@ -14,13 +14,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T05:39:18.778436659Z
-modified_at: 2026-11-24T05:39:18.778436659Z
+modified_at: 2026-11-24T05:40:14.041811102Z
 req_type: Bug
 tags:
 - flaky
 - small
 - tests
 - track:integration
+comments:
+- id: 01a20c11-dc4d-7cf1-b581-0bde7e29c3fa
+  author: joe
+  content: 'Advisor disposition 22:45: APPROVED, standard tier (test-only), drain, integration filler, priority high. Confirmed at aida-cli-lib/src/deputy_shell/supervisor.rs:272-281: the test waits for child.pid to exist, then parses it, which races the writer (empty file → ParseIntError). Fix: poll until the content parses as a u32, within the existing deadline. If production writes child.pid non-atomically, write temp+rename there too. ≤40 lines. This flake cost train #4488 (promotion 29).'
+  created_at: 2026-11-24T05:40:14.041811102Z
+  modified_at: 2026-11-24T05:40:14.041811102Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
   branch: main
