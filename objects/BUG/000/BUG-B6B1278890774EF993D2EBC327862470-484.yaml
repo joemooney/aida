@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-24T15:33:16.136606326Z
+modified_at: 2026-11-24T15:37:17.324756841Z
 req_type: Bug
 tags:
 - ci
@@ -282,6 +282,29 @@ comments:
     Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
   created_at: 2026-11-24T15:18:22.444942548Z
   modified_at: 2026-11-24T15:18:22.444942548Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20e34-7c98-7533-b7f5-8283fef4222d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:37):
+    # BUG-2723 / PR #4408 rework (advisor-122 stalled-CR ruling 2026-11-24 07:30; product-15). Lane: CODEX. MAIN, existing branch, merge current origin/main in first. <= 120 lines. NOTE: r4 FINAL. Fix ONLY the security-authority-bypass finding(s); nothing else. If still blocked, the PR is parked.
+
+    BLANKET RULING (advisor-122 07:20/07:30): MUST-fix every finding classed security-authority-bypass, data-loss, mutation-kill, untested-path, race or fail-open, plus any p1/major regression this PR introduced; DEFER minor/p2 unmet-claimed-AC and test-strength items (list them in the PR body as deferred). Per finding, list fixed or deferred.
+
+    CR at 037bd499. Findings:
+
+    F1. [high/unmet-claimed-ac/blocking] BUG-2723 AC3 — aida-cli-lib/src/forge_tier_runs.rs:331 does not compile against pinned main. CommitCheck now requires cancelled, job_id, run_attempt and run_in_progress. The fast compile job for 037bd499b31a reported E0063 and the Build aggregate failed on COMPILE. This finding depends on protected-base change a16f3592f015e (#4410), whose CommitCheck fields are present in the pinned landed tree. Populate the fields using the selected job and attempt metadata so the regression can run.
+
+    F2. [high/unmet-claimed-ac/blocking] BUG-2723 AC1/AC3 — aida-cli-lib/src/forge_tier_runs.rs:178-185 aborts selection on a cancelled CI run with no jobs. GitHub reports exactly that for run 45099765934, attempt 1, at the original PR #4391 incident head e324ae3ea40778e0bfb75b245756439a2f132c45. It sits between FAST 45098448471 and successful FULL 45099774496 in the head inventory. The function returns tier unavailable before it can select FULL, so train readiness and landing still refuse the reported case. Handle the cancelled jobless run using the pinned workflow and run evidence, without treating it as a pass, and cover this three-run sequence. The existing fixture always manufactures a tier job.
+
+    F3. [high/security-authority-bypass/blocking] aida-cli-lib/src/forge_tier_runs.rs:123-149 and :201-228 use repository-wide head-SHA evidence to replace PR-scoped rows. The selection key omits the PR and base, and neither train caller filters by them. The workflow runs for both main and integration. Two open PRs from one branch to those bases can share every key field, so a passing FULL run from one PR can suppress a failed FAST run from the other. Both train readiness and the exact-tip proof accept the substituted rows. Bind replacement and injected jobs to the target PR/base and refuse ambiguous ownership.
+
+    F4. [medium/unmet-claimed-ac/blocking] BUG-2723 AC2 — aida-cli-lib/src/forge_tier_runs.rs:315-340 only annotates failures projected from selected tier runs. For a failed or cancelled untiered Actions check with a known run ID, the exact-tip refusal still prints only the check name because judge_effective_checks discards run metadata. In the live readiness path, aida-cli-lib/src/pr_train.rs:962-970 appends the fallback run ID but omits cancellation/supersession state for unselected runs. Preserve the known run ID and cancellation state in both refusal paths and distinguish unavailable evidence explicitly.
+
+    Register new tests in scripts/ratchet-set.json if required (same-PR entries only). One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-24T15:37:17.324756841Z
+  modified_at: 2026-11-24T15:37:17.324756841Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
