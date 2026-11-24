@@ -650,6 +650,9 @@ class AptBounds(unittest.TestCase):
             self.assertIsNotNone(limit, f'{job_name}: {step["name"]} has no step timeout')
             if (job_name, step['name']) == ('build', 'Install Linux dependencies'):
                 self.assertEqual(int(limit), 12)
+            elif (job_name, step['name']) == ('fast-compile', 'Install compile dependencies'):
+                # trace:BUG-2744 | ai:codex
+                self.assertEqual(limit, 15)
             else:
                 self.assertLessEqual(int(limit), 5, f'{job_name}: {step["name"]}')
 
