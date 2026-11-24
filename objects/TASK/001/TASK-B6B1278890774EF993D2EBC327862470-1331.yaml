@@ -8,18 +8,17 @@ description: |
   ## Acceptance
   - AC1: (a) credential-directory exclusion matches `.aws` / `.ssh` path COMPONENTS at ANY depth, including the repo root; (b) a rename evaluates BOTH sides (old and new path) for exclusion.
   - AC2: (c) .aida runtime exclusions match EXACT components (`.aida/cache-policy.toml` stays eligible); (d) a present-but-invalid or unreadable project config (.aida/review-rules.toml) gives a contextual ERROR, defaulting only when the file is ABSENT. One test for each of (a)-(d).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T09:12:21.678180988Z
-modified_at: 2026-11-24T10:29:28.517006348Z
+modified_at: 2026-11-24T12:26:54.408757736Z
 req_type: Task
 tags:
 - review
 - small
 - story-3076
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -178,6 +177,22 @@ history:
   timestamp: 2026-11-24T10:28:28.386003627Z
   session_id: 01a20cf84b20
   changes: []
+- id: 01a20d85-fc04-7170-a9b1-09caada21070
+  author: aida-auto-bump
+  timestamp: 2026-11-24T12:26:54.340363880Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20d85-fc48-7981-9e1a-fd33d0988447
+  timestamp: 2026-11-24T12:26:54.408754714Z
+  agent: aida
+  commit_sha: 8dfad228d5897828a20168a919294468baab8452
+  summary: 'Advisor (delegated authority): promotion 34, linear on main 6c832e0d3a8 + 3 cherry-picks; per-commit patch-ids match approved integration squashes (3e0fa1c4, f1f2503d, c1b877d3); combined 4268d24bcc7f; no protected paths; STORY-3076 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 103bb2ed7ea904e4e4a4cfbdf786aa7588e2224e
@@ -186,3 +201,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 103bb2ed7ea
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-24T12:26:54.340356574Z
+  completion_sha: 8dfad228d5897828a20168a919294468baab8452
