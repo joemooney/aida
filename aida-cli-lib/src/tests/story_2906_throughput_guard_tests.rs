@@ -1617,6 +1617,7 @@ fn bug_2730_slow_approval_forge_reports_partial_before_ceiling() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1], skipped PRs [2, 3]"));
         assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1, 3], skipped PRs [2]"));
+        assert!(stderr.contains("throughput-guard: routing deferred (deadline)"));
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
@@ -1685,7 +1686,17 @@ exec /usr/bin/git "$@"
     let path = format!("{}:/usr/bin:/bin", root.display());
     let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
     let _transport = crate::review_pr_transport_fixture();
-    for (run, per_pr, covered, skipped) in [(5, 8, "[1]", "[2, 3]"), (12, 3, "[1, 3]", "[2]")] {
+    let signer = root.join("slow-signer");
+    crate::test_exec::write_executable(&signer, "#!/bin/sh\nexec sleep 12\n");
+    git(&[
+        "-C",
+        ".aida-store",
+        "config",
+        "gpg.program",
+        signer.to_str().unwrap(),
+    ]);
+    git(&["-C", ".aida-store", "config", "commit.gpgSign", "true"]);
+    for (run, per_pr, covered, skipped) in [(3, 8, "[1]", "[2, 3]"), (12, 3, "[1, 3]", "[2]")] {
         let start = Instant::now();
         let findings = scan_with_budgets(
             root,
@@ -1703,7 +1714,13 @@ exec /usr/bin/git "$@"
             Some(&coverage)
         );
         assert_eq!(findings.len(), 1);
-        assert_eq!(memory.routed.len(), 1);
+        if run == 3 {
+            assert!(start.elapsed() < StdDuration::from_secs(5));
+            assert!(memory.routed.is_empty());
+            git(&["-C", ".aida-store", "config", "commit.gpgSign", "false"]);
+        } else {
+            assert_eq!(memory.routed.len(), 1);
+        }
         assert!(git(&["branch", "--list", "aida-store"]).is_empty());
     }
 }

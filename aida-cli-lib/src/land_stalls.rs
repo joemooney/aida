@@ -1534,6 +1534,8 @@ fn guard_rows(
     (rows, (facts, partial))
 }
 
+type Reruns = BTreeMap<String, Vec<u64>>;
+
 /// One live observation: the reconciler's pass, the same evidence read fact
 /// by fact, and CI detail for the red approved heads. Returns the report and
 /// the memory to keep (a scheduled run saves it; `aida land stalls` does
@@ -1544,7 +1546,7 @@ fn observe(
     now: DateTime<Utc>,
     run_budget: std::time::Duration,
     per_pr: std::time::Duration,
-) -> Result<(Report, Memory, PathBuf)> {
+) -> Result<(Report, Memory, PathBuf, Reruns)> {
     use std::time::{Duration as StdDuration, Instant};
     let started = Instant::now();
     let end = started + run_budget;
@@ -1650,21 +1652,23 @@ fn observe(
         hosts: host_lines(&pass),
         unknown,
     };
-    let mut report = build_report(&facts, policy, &mut memory, now);
+    // Keep proposed reruns separate until this tick admits routing.
+    let mut proposed = Memory::default();
+    let mut report = build_report(&facts, policy, &mut proposed, now);
     report.partial = partial;
     eprintln!(
         "throughput-guard timings: setup={setup_time:?} observations={:?} details/report={:?}",
         observed.duration_since(started).saturating_sub(setup_time),
         observed.elapsed()
     );
-    Ok((report, memory, root))
+    Ok((report, memory, root, proposed.reruns))
 }
 
 /// `aida land stalls`.
 pub(crate) fn run(start: &Path, json: bool) -> Result<()> {
     let cfg = crate::read_project_config_value(&crate::main_worktree_root_from(start));
     let policy = Policy::from_config(cfg.as_ref());
-    let (mut report, memory, _root) = observe(start, &policy, Utc::now(), RUN_BUDGET, GH_TIMEOUT)?;
+    let (mut report, memory, _, _) = observe(start, &policy, Utc::now(), RUN_BUDGET, GH_TIMEOUT)?;
     report.last_scheduled_run = memory.runs.last().cloned();
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1998,16 +2002,28 @@ fn scan_with_budgets(
         return Ok(Vec::new());
     }
     let now = Utc::now();
-    let (report, mut memory, root) = observe(project_root, &policy, now, run_budget, per_pr)?;
+    let started = std::time::Instant::now();
+    let (report, mut memory, root, proposed) =
+        observe(project_root, &policy, now, run_budget, per_pr)?;
     if let Some(partial) = &report.partial {
         eprintln!("throughput-guard: {partial}");
     }
     if route_findings {
-        route(&root, &report, &mut memory, &policy, now);
         record_run(&mut memory, &report);
         save_memory(&root, &memory);
         if let Some(run) = memory.runs.last() {
             eprintln!("throughput-guard: {}", snapshot_line(run));
+        }
+        // Store commits can invoke an unbounded signer even with a free lock.
+        // Leave new stalls eligible for the next tick when time is short.
+        if run_budget.saturating_sub(started.elapsed()) <= std::time::Duration::from_secs(5) {
+            eprintln!("throughput-guard: routing deferred (deadline)");
+        } else {
+            for (key, checks) in proposed {
+                memory.reruns.entry(key).or_insert(checks);
+            }
+            route(&root, &report, &mut memory, &policy, now);
+            save_memory(&root, &memory);
         }
     }
     for unknown in &report.unknown {
