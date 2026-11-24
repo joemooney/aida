@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Unshipped-work alerts also skip deferred specs reached through (a) legacy `deferred:<date>` TAGS and (b) private-clone rows.
   - AC2: ...and (c) alternate-ID aliases (agreed_id vs spec_id vs origin ID). Each of (a), (b), (c) gets its own regression case.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:32:35.025155532Z
-modified_at: 2026-11-24T05:19:57.198778706Z
+modified_at: 2026-11-24T05:46:55.190830626Z
 req_type: Task
 tags:
 - small
@@ -44,6 +44,12 @@ comments:
   modified_at: 2026-11-24T05:19:57.198778706Z
   session_id: 01a20bdf8589
   harness_version: codex-cli 0.167.0
+- id: 01a20c17-c956-7861-93cd-99c250e8175a
+  author: aida-publication-done
+  content: Implementer push 929103959163 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-24T05:46:55.190829671Z
+  modified_at: 2026-11-24T05:46:55.190829671Z
+  session_id: 01a20bdf8589
 history:
 - id: 01a20bd4-271a-78c3-b285-2b0a41dee5b4
   author: joe
@@ -62,6 +68,14 @@ history:
   session_id: 01a20bdf8589
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20c17-c956-7861-93cd-99b5326c1284
+  author: aida-publication-done
+  timestamp: 2026-11-24T05:46:55.190826937Z
+  session_id: 01a20bdf8589
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
