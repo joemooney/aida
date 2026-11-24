@@ -1,0 +1,32 @@
+id: 01a20c97-12ac-7461-8e06-f5cfe4619f49
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-274
+title: 'Review PR-4504: [AI:codex] docs(review): review-engine showcase and presentation (TASK-3864)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20c7a`) for branch `int32-task-3864`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4504>
+  - Branch: `int32-task-3864` → `integration`
+
+  ## Covers
+
+  - TASK-3864
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4504` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T08:05:57.036686660Z
+modified_at: 2026-11-24T08:05:57.036686660Z
+req_type: Story
+filed_at:
+  code_sha: dd141d1a42e6f2450b54a345df6ee14e51c80fec
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dd141d1a42
+  session: 01a20c7a4e51
