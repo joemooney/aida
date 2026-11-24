@@ -321,6 +321,8 @@ mod remote_cmd;
 pub mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+// trace:STORY-3076 | ai:antigravity
+mod review_prepare;
 mod review_waiting;
 // trace:STORY-1742 | ai:claude
 #[cfg(unix)]
