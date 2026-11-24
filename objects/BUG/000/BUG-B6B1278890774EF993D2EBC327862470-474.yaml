@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-24T16:39:18.190849639Z
+modified_at: 2026-11-24T16:41:49.696231631Z
 req_type: Bug
 tags:
 - hygiene
@@ -123,6 +123,17 @@ comments:
   content: PR-4416 at ba014d8fb4716d1d8785bf25913ead084084ac85 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-24T09:43:06.667919922Z
   modified_at: 2026-11-24T09:43:06.667919922Z
+- id: 01a20e6f-946e-7d80-8ace-424a6f3b8bf2
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:41):
+    # BUG-2713 / PR #4416 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 09:45; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4416 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4416. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-24T16:41:49.696231631Z
+  modified_at: 2026-11-24T16:41:49.696231631Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
