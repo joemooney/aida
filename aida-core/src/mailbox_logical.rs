@@ -233,8 +233,7 @@ pub struct ResolvedAudience {
     private: Vec<String>,
     human: Vec<String>,
     shared: Vec<String>,
-    /// The `shared` keys that are roles, not vendor groups (slice D1): only
-    /// role mail can carry a delivery sidecar.
+    /// Role keys may have legacy mail from before delivery sidecars existed.
     roles: Vec<String>,
     /// The verified session's recipient UUID (slice D1): the only key a
     /// role-cohort delivery is visible and acknowledged under.
@@ -395,6 +394,7 @@ impl ResolvedAudience {
 // Private policy input shared by own-reader and diagnostic paths. This type
 // cannot be passed to ACK, binding, or any identity constructor.
 struct PolicySubject<'a> {
+    inspect_all_seat_sidecars: bool,
     private: &'a [String],
     human: &'a [String],
     shared: &'a [String],
@@ -404,6 +404,7 @@ struct PolicySubject<'a> {
 impl<'a> PolicySubject<'a> {
     fn own(a: &'a ResolvedAudience) -> Self {
         Self {
+            inspect_all_seat_sidecars: false,
             private: &a.private,
             human: &a.human,
             shared: &a.shared,
@@ -464,16 +465,32 @@ pub struct MailInspection {
 /// Source coverage when there are no verified live inspection subjects.
 /// Even an empty recipient directory cannot turn an unreadable source clear.
 pub fn inspection_sources_complete(ctx: &MailboxContext, limits: &ReadLimits) -> bool {
+    inspect_seat_sidecars(ctx, limits).0
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SeatSidecarIssue {
+    pub id: String,
+    pub source: PathBuf,
+    pub reason: &'static str,
+}
+
+/// Inventory missing or unverified seat sidecars without projecting messages or granting ACK access.
+/// trace:TASK-3846 | ai:codex
+pub fn inspect_seat_sidecars(
+    ctx: &MailboxContext,
+    limits: &ReadLimits,
+) -> (bool, Vec<SeatSidecarIssue>) {
     let policy = PolicySubject {
+        inspect_all_seat_sidecars: true,
         private: &[],
         human: &[],
         shared: &[],
         roles: &[],
         recipient: None,
     };
-    snapshot_for_policy(ctx, &policy, &Query::Inbox, limits)
-        .0
-        .complete()
+    let snapshot = snapshot_for_policy(ctx, &policy, &Query::Inbox, limits).0;
+    (snapshot.complete(), snapshot.missing_seat_sidecars)
 }
 
 /// Observe delivery eligibility using exactly the own-inbox policy, without
@@ -491,6 +508,7 @@ pub fn inspect_mail(
 ) -> MailInspection {
     let private = vec![subject.handle.clone()];
     let policy = PolicySubject {
+        inspect_all_seat_sidecars: false,
         private: &private,
         human: &[],
         shared: &subject.role,
@@ -564,9 +582,12 @@ impl Query {
 /// number of small-file reads (no listing, no git process).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadLimits {
+    #[cfg(test)]
+    expire_at_retained_checkpoint: Option<usize>,
     pub deadline: Instant,
     pub max_roots: usize,
     pub max_entries: usize,
+    pub max_retained_probes: usize,
     pub max_message_bytes: u64,
     /// Materialized history, independent of unread discovery.
     pub max_total_bytes: u64,
@@ -583,9 +604,12 @@ impl ReadLimits {
 
     pub fn with_deadline(deadline: Instant) -> Self {
         Self {
+            #[cfg(test)]
+            expire_at_retained_checkpoint: None,
             deadline,
             max_roots: 512,
             max_entries: 16_384,
+            max_retained_probes: 16_384,
             max_message_bytes: 1024 * 1024,
             max_total_bytes: 32 * 1024 * 1024,
             max_discovery_bytes: 128 * 1024 * 1024,
@@ -795,7 +819,9 @@ pub fn relay_run_unread_deliveries(
     // (advisor ruling on TASK-...-077). trace:STORY-1843 | ai:claude
     let receipts_unknown = snapshot.anchor_error.is_some();
     let mut out = RelayRunDeliveries {
-        complete: snapshot.live_sources_observed() && !receipts_unknown,
+        complete: snapshot.live_sources_observed()
+            && !snapshot.retained_inventory_incomplete
+            && !receipts_unknown,
         receipts_unknown,
         ..Default::default()
     };
@@ -856,8 +882,14 @@ pub struct LogicalSnapshot {
     /// The receipt anchor could not be read for some key: acknowledgements
     /// recorded there may be missing, so the view is partial.
     pub anchor_error: Option<SourceErrorCode>,
+    pub retained_inventory_incomplete: bool,
+    /// Failure to open the shared retained inventory, before any per-ID lookup.
+    pub retained_open_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
+    /// Observed seat messages with missing or unverified sidecars.
+    // trace:TASK-3846 | ai:codex
+    pub missing_seat_sidecars: Vec<SeatSidecarIssue>,
     /// Records whose delivery or receipt evidence could not be determined.
     /// Readers must not project these as unread or cleared mail. The raw
     /// records remain available for explicit ID resolution; coverage and ACK
@@ -876,6 +908,7 @@ impl LogicalSnapshot {
     /// history was materialized.
     pub fn complete(&self) -> bool {
         !self.history_truncated
+            && !self.retained_inventory_incomplete
             && self.inventory_error.is_none()
             && self.anchor_error.is_none()
             && !matches!(self.canonical, CanonicalCoverage::Refused(_))
@@ -947,6 +980,7 @@ impl LogicalSnapshot {
         let local_only = self.inventory_error == Some(SourceErrorCode::NotAGitCheckout);
         (self.inventory_error.is_none() || local_only)
             && self.anchor_error.is_none()
+            && self.retained_open_error.is_none()
             && match self.canonical {
                 CanonicalCoverage::Refused(SourceErrorCode::NotAGitCheckout) => local_only,
                 CanonicalCoverage::Refused(_) => false,
@@ -1086,15 +1120,15 @@ fn snapshot_for_policy(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let (delivered, pending_deliveries, delivery_conflicts, mut unknown_ids) = delivery_gates(
-        ctx,
-        &observed,
-        salvaged,
-        unsighted,
-        audience,
-        &mut anchor,
-        &mut budget,
-    );
+    let (
+        delivered,
+        pending_deliveries,
+        delivery_conflicts,
+        mut unknown_ids,
+        missing_seat_sidecars,
+        retained_inventory_incomplete,
+        retained_open_error,
+    ) = delivery_gates(ctx, &observed, salvaged, unsighted, audience, &mut budget);
     let (mut records, mut conflicts) = reconcile(
         &observed,
         local_count,
@@ -1194,6 +1228,9 @@ fn snapshot_for_policy(
         retention: RetentionCoverage::Unestablished,
         exact_found: None,
         anchor_error: anchor.error,
+        retained_inventory_incomplete,
+        retained_open_error,
+        missing_seat_sidecars,
         inspection_unknown_ids: unknown_ids.clone(),
         pending_deliveries: pending_deliveries
             .into_iter()
@@ -1484,6 +1521,9 @@ struct Budget {
     deadline: Instant,
     max_roots: usize,
     entries_left: usize,
+    retained_probes_left: usize,
+    #[cfg(test)]
+    expire_at_retained_checkpoint: Option<usize>,
     max_message_bytes: u64,
     bytes_left: u64,
 }
@@ -1494,6 +1534,9 @@ impl Budget {
             deadline: limits.deadline,
             max_roots: limits.max_roots,
             entries_left: limits.max_entries,
+            retained_probes_left: limits.max_retained_probes,
+            #[cfg(test)]
+            expire_at_retained_checkpoint: limits.expire_at_retained_checkpoint,
             max_message_bytes: limits.max_message_bytes,
             bytes_left: limits.max_total_bytes,
         }
@@ -1501,6 +1544,23 @@ impl Budget {
 
     fn expired(&self) -> bool {
         Instant::now() >= self.deadline
+    }
+
+    // trace:TASK-3851 | ai:codex
+    fn check_retained_deadline(&mut self) -> Result<(), SourceErrorCode> {
+        #[cfg(test)]
+        if let Some(left) = self.expire_at_retained_checkpoint.as_mut() {
+            if *left == 0 {
+                self.deadline = Instant::now();
+            } else {
+                *left -= 1;
+            }
+        }
+        if self.expired() {
+            Err(SourceErrorCode::OverBudget)
+        } else {
+            Ok(())
+        }
     }
 
     /// Draw one directory entry from the snapshot-wide entry budget.
@@ -1976,6 +2036,7 @@ impl PinnedDir {
 }
 
 struct ObservedMessage {
+    source: PathBuf,
     message: Message,
     fingerprint: String,
     recorded: Recorded,
@@ -2060,6 +2121,7 @@ fn read_source(
         mtime_ns: i128::from(meta.mtime()) * 1_000_000_000 + i128::from(meta.mtime_nsec()),
     };
     let mut messages = Vec::new();
+    let mailbox_path = root.join(components.iter().collect::<PathBuf>());
     for name in dir.names(budget)? {
         if !name.ends_with(b".json") || name.starts_with(b".") {
             continue;
@@ -2089,6 +2151,7 @@ fn read_source(
             return Err(SourceErrorCode::CorruptMessage);
         }
         messages.push(ObservedMessage {
+            source: mailbox_path.join(OsStr::from_bytes(&name)),
             fingerprint: fingerprint(&bytes),
             message,
             recorded,
@@ -2165,8 +2228,11 @@ enum DeliveryGate {
 /// after the sending worktree is retired. Faults stay local to their
 /// message: a retained sidecar or a queued delivery's binding that cannot be
 /// read or parsed hides that one message (its ownership is unknown) and
-/// offers nothing to bind, without making the whole view partial. Only a
-/// retained area that cannot be opened at all is a view-wide anchor error.
+/// offers nothing to bind. An over-budget lookup also marks the retained
+/// inventory incomplete. Unrelated observed deliveries remain eligible for
+/// ACK. Failure to open the retained inventory vetoes ACK for the snapshot
+/// via AckError::Partial and leaves receipt-anchor evidence separate.
+// trace:TASK-3861 | ai:codex
 ///
 /// `salvaged`: the sidecars of live sources whose message read failed but
 /// whose `.deliveries/` was read on its own.
@@ -2175,7 +2241,8 @@ enum DeliveryGate {
 /// was not read, so the snapshot is already partial), a
 /// role message with no sidecar found anywhere has unknown ownership and is
 /// hidden from every reader of this snapshot, never served as legacy role
-/// mail. Vendor-group mail never carries a sidecar and is never gated.
+/// mail. Direct seat mail always requires a sidecar, even after a complete
+/// search. Vendor-group mail never carries a sidecar and is never gated.
 // trace:STORY-1843 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
 fn delivery_gates(
@@ -2184,19 +2251,23 @@ fn delivery_gates(
     salvaged: Vec<DeliverySidecar>,
     unsighted: bool,
     audience: &PolicySubject<'_>,
-    anchor: &mut AnchorEvidence,
     budget: &mut Budget,
 ) -> (
     HashMap<String, DeliveryGate>,
     Vec<PendingDelivery>,
     Conflicts,
     Vec<String>,
+    Vec<SeatSidecarIssue>,
+    bool,
+    Option<SourceErrorCode>,
 ) {
     let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
-    let mut role_addressed: BTreeSet<&str> = BTreeSet::new();
+    let mut delivery_addressed = BTreeSet::new();
+    let mut seat_addressed = HashMap::new();
+    let mut deleted = HashSet::new();
     for sidecar in salvaged {
         sidecars
             .entry(sidecar.message_id.clone())
@@ -2221,6 +2292,9 @@ fn delivery_gates(
                 .entry(&m.message.id)
                 .or_default()
                 .insert(m.message.thread_id.clone());
+            if m.message.deleted {
+                deleted.insert(m.message.id.as_str());
+            }
             let undeleted = Message {
                 deleted: false,
                 ..m.message.clone()
@@ -2229,20 +2303,34 @@ fn delivery_gates(
             if !keys.is_empty() {
                 addressed.insert(&m.message.id);
             }
-            if keys
+            // Seat sends always write delivery records. Match the actual envelope
+            // so a broadcast reaching a seat keeps its ordinary shared visibility.
+            // trace:STORY-2767 | ai:codex
+            if (!keys.is_empty() || audience.inspect_all_seat_sidecars)
+                && matches!(&m.message.to, Recipient::Agent(to) if to.starts_with("seat:"))
+            {
+                seat_addressed
+                    .entry(m.message.id.as_str())
+                    .or_insert(&m.source);
+                delivery_addressed.insert(m.message.id.as_str());
+            } else if keys
                 .iter()
                 .any(|k| audience.role_keys().iter().any(|s| s == k))
             {
-                role_addressed.insert(&m.message.id);
+                delivery_addressed.insert(m.message.id.as_str());
             }
         }
     }
     let mut unknown_ids = BTreeSet::new();
     let mut gates = HashMap::new();
-    let wanted: Vec<&str> = role_addressed
+    let wanted: Vec<&str> = delivery_addressed
         .into_iter()
         .filter(|id| !sidecars.contains_key(*id))
         .collect();
+    // trace:TASK-3851 | ai:codex
+    let mut retained_inventory_incomplete = false;
+    let mut retained_open_error = None;
+    let mut unexamined = HashSet::new();
     if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
         match RetainedDeliveries::open(common.path(), budget) {
             Ok(retained) => {
@@ -2252,7 +2340,11 @@ fn delivery_gates(
                             sidecars.insert(id.to_string(), found);
                         }
                         Ok(_) => {}
-                        Err(()) => {
+                        Err(code) => {
+                            if code == SourceErrorCode::OverBudget {
+                                retained_inventory_incomplete = true;
+                                unexamined.insert(id);
+                            }
                             unknown_ids.insert(id.to_string());
                             gates.insert(id.to_string(), DeliveryGate::NotOwned);
                         }
@@ -2260,16 +2352,37 @@ fn delivery_gates(
                 }
             }
             Err(code) => {
-                anchor.error.get_or_insert(code);
+                retained_open_error = Some(code);
+                retained_inventory_incomplete = true;
                 for &id in &wanted {
+                    if code == SourceErrorCode::OverBudget {
+                        unexamined.insert(id);
+                    }
                     unknown_ids.insert(id.to_string());
                     gates.insert(id.to_string(), DeliveryGate::NotOwned);
                 }
             }
         }
     }
-    if unsighted {
-        for id in wanted.into_iter().filter(|id| !sidecars.contains_key(*id)) {
+    let mut missing_seat_sidecars = Vec::new();
+    for id in wanted {
+        if (unsighted || seat_addressed.contains_key(id)) && !sidecars.contains_key(id) {
+            // Retained lookup failures and unread sources are unknown, not confirmed absences.
+            // trace:TASK-3846 | ai:codex
+            if let Some(&source) = seat_addressed.get(id).filter(|_| !deleted.contains(id)) {
+                let reason = if unexamined.contains(id) {
+                    "UNEXAMINED"
+                } else if unsighted || unknown_ids.contains(id) {
+                    "UNVERIFIED"
+                } else {
+                    "delivery sidecar missing"
+                };
+                missing_seat_sidecars.push(SeatSidecarIssue {
+                    id: id.to_owned(),
+                    source: source.clone(),
+                    reason,
+                });
+            }
             unknown_ids.insert(id.to_string());
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
         }
@@ -2327,7 +2440,15 @@ fn delivery_gates(
         };
         gates.insert(id.to_string(), gate);
     }
-    (gates, pending, conflicts, unknown_ids.into_iter().collect())
+    (
+        gates,
+        pending,
+        conflicts,
+        unknown_ids.into_iter().collect(),
+        missing_seat_sidecars,
+        retained_inventory_incomplete,
+        retained_open_error,
+    )
 }
 
 /// Where retired sources' mailboxes are kept, below the common Git dir:
@@ -2345,6 +2466,12 @@ struct RetainedDeliveries {
 
 impl RetainedDeliveries {
     fn open(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
+        let result = Self::open_generations(common, budget);
+        budget.check_retained_deadline()?;
+        result
+    }
+
+    fn open_generations(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
         let mut dir = PinnedDir::open_root(common)?;
         for component in RETAINED_PATH {
             match dir.child_dir(component)? {
@@ -2358,6 +2485,7 @@ impl RetainedDeliveries {
                 continue;
             };
             for generation in key_dir.names(budget)? {
+                budget.check_retained_deadline()?;
                 let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))?
                 else {
                     continue;
@@ -2377,16 +2505,43 @@ impl RetainedDeliveries {
 
     /// Every retained sidecar for message `id`. `Err` when one exists but
     /// cannot be read or parsed: that message's ownership is unknown.
-    fn lookup(&self, id: &str, budget: &mut Budget) -> Result<Vec<DeliverySidecar>, ()> {
+    fn lookup(
+        &self,
+        id: &str,
+        budget: &mut Budget,
+    ) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+        let result = self.probe_generations(id, budget);
+        budget.check_retained_deadline()?;
+        result
+    }
+
+    fn probe_generations(
+        &self,
+        id: &str,
+        budget: &mut Budget,
+    ) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+        if budget.expired() || budget.retained_probes_left == 0 {
+            return Err(SourceErrorCode::OverBudget);
+        }
         let name = format!("{id}.json");
         let mut out = Vec::new();
+        if self.dirs.is_empty() {
+            budget.retained_probes_left -= 1;
+        }
         for dir in &self.dirs {
-            let bytes = dir
-                .read_file(OsStr::new(&name), DELIVERY_FILE_CAP)
-                .map_err(|_| ())?;
+            if budget.expired() {
+                return Err(SourceErrorCode::OverBudget);
+            }
+            budget.retained_probes_left = budget
+                .retained_probes_left
+                .checked_sub(1)
+                .ok_or(SourceErrorCode::OverBudget)?;
+            let bytes = dir.read_file(OsStr::new(&name), DELIVERY_FILE_CAP)?;
             let Some(bytes) = bytes else { continue };
-            budget.take(bytes.len()).map_err(|_| ())?;
-            out.push(DeliverySidecar::parse(&bytes, id).map_err(|_| ())?);
+            budget.take(bytes.len())?;
+            out.push(
+                DeliverySidecar::parse(&bytes, id).map_err(|_| SourceErrorCode::CorruptMessage)?,
+            );
         }
         Ok(out)
     }

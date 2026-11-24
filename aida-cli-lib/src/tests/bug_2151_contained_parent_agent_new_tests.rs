@@ -274,7 +274,7 @@ fn ended_agent(root: &std::path::Path, agent_type: &str, name: &str) {
 // trace:BUG-2619 | ai:codex
 #[test]
 fn bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript() {
-    if crate::test_env::run_path_isolated_test() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
@@ -323,6 +323,7 @@ fn bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript() {
     crate::test_exec::write_executable(
         &bin.join("claude"),
         r#"#!/bin/sh
+touch "${0%/*}/../vendor-started"
 if [ "$1" = --version ]; then echo fixture; exit 0; fi
 printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
 "#,
@@ -360,6 +361,33 @@ printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
             &resume,
         )
     };
+    // trace:TASK-3151 | ai:codex
+    env.set_key("AIDA_CONTAINED", "1");
+    let err = aida_core::git_ops::with_host_git_version("git version 2.45.0", launch)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("contained resume requires the recorded worktree"),
+        "{err}"
+    );
+    assert!(!tmp.path().join("vendor-started").exists());
+
+    let recorded_dir = crate::session::claude_project_dir(&root).unwrap();
+    std::fs::create_dir_all(&recorded_dir).unwrap();
+    let recorded = recorded_dir.join("018f-session.jsonl");
+    let alternate = transcript_dir.join("018f-session.jsonl");
+    std::fs::rename(&alternate, &recorded).unwrap();
+    let launch_cwd = crate::agent_launch::verify_agent_native_session_available(
+        &root,
+        "claude",
+        &root,
+        "018f-session",
+    )
+    .unwrap();
+    assert_eq!(launch_cwd, root);
+    std::fs::rename(&recorded, &alternate).unwrap();
+    env.unset_key("AIDA_CONTAINED");
+
     let unrelated = transcript_dir.with_file_name("-unrelated");
     std::fs::create_dir(&unrelated).unwrap();
     std::fs::write(unrelated.join("018f-session.jsonl"), "{}\n").unwrap();

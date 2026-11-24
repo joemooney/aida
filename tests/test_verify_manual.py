@@ -5,6 +5,7 @@ import io
 import sys
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -119,8 +120,13 @@ External commands
                     stack.enter_context(patch.object(self.vm, "help_command_paths", return_value=set()))
                     stack.enter_context(patch.object(self.vm, "flag_accuracy_misses", return_value=[]))
                     stack.enter_context(contextlib.redirect_stdout(output))
+                    # trace:TASK-3840 | ai:codex
+                    caught = stack.enter_context(warnings.catch_warnings(record=True))
+                    warnings.simplefilter("always", ResourceWarning)
                     with self.assertRaises(SystemExit) as exit_result:
                         self.vm.main()
+                self.assertEqual([str(w.message) for w in caught
+                                  if issubclass(w.category, ResourceWarning)], [])
                 self.assertEqual(exit_result.exception.code, expected_exit)
                 self.assertIn("Checking aida binary: /fixture/aida", output.getvalue())
                 self.assertNotIn("aida gui", output.getvalue())

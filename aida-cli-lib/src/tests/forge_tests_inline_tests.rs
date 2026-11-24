@@ -2138,3 +2138,61 @@ fn glab_mr_approvals_derive_review_decision() {
 
     assert!(parse_glab_mr_approvals("nope").is_err());
 }
+
+// trace:TASK-3852.AC1 | ai:codex
+#[test]
+fn task_3852_budget_uses_probe_binary_and_land_origin() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for args in [
+        &["init", "-q"][..],
+        &[
+            "remote",
+            "add",
+            "origin",
+            "git@github.com:example/project.git",
+        ],
+    ] {
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::create_dir(root.join(".aida")).unwrap();
+    let config = root.join(".aida/config.toml");
+    std::fs::write(&config, "[forge]\nprovider = \"gitlab\"\n").unwrap();
+    let fake = root.join("probe-only");
+    crate::test_exec::write_executable(
+        &fake,
+        r#"#!/bin/sh
+[ "$GH_HOST" = github.com ] && [ -z "${GH_REPO+x}" ] || exit 1
+[ "$*" = 'api rate_limit --cache 60s' ] || exit 1
+echo '{"resources":{"core":{"remaining":19,"limit":100,"reset":3600}}}'
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_TEST_GH_BINARY", fake.to_str().unwrap()),
+        ("GH_HOST", "other.invalid"),
+        ("GH_REPO", "other/repo"),
+    ]);
+    let (summary, low) = github_core_budget(root).unwrap();
+    assert!(low && summary.contains("19/100 remaining"), "{summary}");
+    std::fs::write(config, "[forge]\nprovider = \"github\"\n").unwrap();
+    assert!(crate::test_git::git_command()
+        .current_dir(root)
+        .args([
+            "remote",
+            "set-url",
+            "origin",
+            "https://gitlab.com/example/project.git"
+        ])
+        .status()
+        .unwrap()
+        .success());
+    assert!(github_core_budget(root).is_none());
+}
