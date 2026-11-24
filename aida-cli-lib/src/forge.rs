@@ -2170,6 +2170,7 @@ pub(crate) fn required_checks_from_output(
 }
 
 pub struct GitHubForge {
+    metadata_repo: Option<String>,
     project_root: PathBuf,
 }
 
@@ -2274,9 +2275,21 @@ impl GitHubForge {
         })
     }
 
+    // trace:TASK-3862 | ai:codex
+    pub(crate) fn for_review(root: &Path) -> Result<Self> {
+        let pin = crate::merge_hold::resolve_pinned_repo(root, ForgeKind::GitHub)
+            .map_err(anyhow::Error::msg)?
+            .context("missing origin")?;
+        Ok(Self {
+            metadata_repo: Some(pin.repo_arg()),
+            ..Self::new(root)
+        })
+    }
+
     pub fn new(project_root: &Path) -> Self {
         Self {
             project_root: project_root.to_path_buf(),
+            metadata_repo: None,
         }
     }
 
@@ -3146,6 +3159,9 @@ impl Forge for GitHubForge {
                     "--json",
                     "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
                 ]);
+                if let Some(repo) = &self.metadata_repo {
+                    c.env_remove("GH_REPO").args(["-R", repo]);
+                }
                 crate::forge_lookup::deadline_output(
                     c,
                     crate::process_retry::command_output_retrying_etxtbsy,
