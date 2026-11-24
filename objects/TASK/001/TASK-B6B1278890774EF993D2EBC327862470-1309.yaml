@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - AC1: The slice is cherry-picked as a file subset from 0fdac177513 into a PR into integration, keeping Joe's authorship (git commit --author from the original commit).
   - AC2: S4 is docs only. DROP docs/showcase/aida-deterministic-code-review.pptx and the publish.py .pptx change; remove or adjust the pptx download button/link in code-review.html; keep the Marp source and the showcase HTML.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980Z
-modified_at: 2026-11-24T08:54:57.578268869Z
+modified_at: 2026-11-24T08:57:25.282432215Z
 req_type: Task
 tags:
 - review
@@ -192,6 +192,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20cc6-3222-7633-8337-9ab74fc8ca63
+  author: aida-session-start
+  timestamp: 2026-11-24T08:57:25.282430515Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
