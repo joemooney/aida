@@ -1596,7 +1596,10 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                         // recorded before the key named the approval.
                         let (kind, digest) = rest.split_once(':').unwrap_or((rest, ""));
                         valid_sha(head)
-                            && matches!(kind, ready::WAKE_READY | ready::WAKE_AFTER_UPDATE)
+                            && matches!(
+                                kind,
+                                ready::WAKE_READY | ready::WAKE_TRAIN | ready::WAKE_AFTER_UPDATE
+                            )
                             && (digest.is_empty() || notice::valid_digest(digest))
                     }))
                 && entry
