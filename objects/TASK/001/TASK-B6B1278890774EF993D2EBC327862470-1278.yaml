@@ -13,12 +13,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:27:03.165422425Z
-modified_at: 2026-11-24T00:49:28.647320141Z
+modified_at: 2026-11-24T00:49:30.871962616Z
 req_type: Task
 tags:
 - doctor
 - mailbox
 - small
+- track:integration
 comments:
 - id: 01a20b07-662b-72c0-b465-8ab45d552041
   author: joe
@@ -37,6 +38,13 @@ history:
   author: joe
   timestamp: 2026-11-24T00:49:28.806721231Z
   changes: []
+- id: 01a20b07-80f7-7e23-8e07-efd1488c2f98
+  author: joe
+  timestamp: 2026-11-24T00:49:30.871961948Z
+  changes:
+  - field_name: tags
+    old_value: doctor, mailbox, small
+    new_value: doctor, mailbox, small, track:integration
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
