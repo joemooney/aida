@@ -12,12 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T03:27:05.669804177Z
-modified_at: 2026-11-24T03:29:15.164255375Z
+modified_at: 2026-11-24T03:29:17.160399534Z
 req_type: Bug
 tags:
 - small
 - track:integration
 - watcher
+comments:
+- id: 01a20b99-c768-7b83-a428-697591651faa
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 20:33 (standard tier, drain, integration filler).'
+  created_at: 2026-11-24T03:29:17.160399534Z
+  modified_at: 2026-11-24T03:29:17.160399534Z
 history:
 - id: 01a20b99-adf0-7950-aee0-2bcd6fbf00a2
   author: joe
