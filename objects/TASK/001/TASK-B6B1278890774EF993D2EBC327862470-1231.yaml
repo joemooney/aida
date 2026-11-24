@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-24T12:30:45.036906163Z
+modified_at: 2026-11-24T13:12:41.662083950Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -29,6 +29,11 @@ comments:
   content: Draft to Approved (advisor-122 05:38); FOLDED into the TASK-3282 docs lane.
   created_at: 2026-11-24T12:30:45.036906163Z
   modified_at: 2026-11-24T12:30:45.036906163Z
+- id: 01a20daf-e7be-7c32-bfb7-7708f6f12d86
+  author: joe
+  content: Folded into the TASK-3282 docs lane, but per the one-spec-per-lane rule (advisor 06:14) that PR's trailer carries only TASK-3282 with Refs TASK-3266; product completes TASK-3266 by hand after it lands.
+  created_at: 2026-11-24T13:12:41.662083950Z
+  modified_at: 2026-11-24T13:12:41.662083950Z
 history:
 - id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
   author: joe
