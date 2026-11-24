@@ -12,12 +12,13 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T18:08:56.586388162Z
-modified_at: 2026-11-24T12:30:14.903442234Z
+modified_at: 2026-11-24T12:30:16.914369582Z
 req_type: Task
 tags:
 - carried-from:BUG-2731
 - finding-hash:0061a46e
 - from-review:BUG-2731
+- track:integration
 relationships:
 - rel_type: References
   target_id: 01a208f5-2928-7921-9dff-50aa746498fb
@@ -40,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-24T12:30:15.032635809Z
   changes: []
+- id: 01a20d89-1352-7802-aaff-b21316a86c28
+  author: joe
+  timestamp: 2026-11-24T12:30:16.914368832Z
+  changes:
+  - field_name: tags
+    old_value: carried-from:BUG-2731, finding-hash:0061a46e, from-review:BUG-2731
+    new_value: carried-from:BUG-2731, finding-hash:0061a46e, from-review:BUG-2731, track:integration
 execution_mode: drain
 filed_at:
   code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
