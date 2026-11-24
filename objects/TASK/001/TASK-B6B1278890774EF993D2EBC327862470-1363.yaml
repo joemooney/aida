@@ -1,0 +1,27 @@
+id: 01a20e91-d34b-7613-8ae9-32f340623f06
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1363
+agreed_id: TASK-3879
+title: 'BUG-2723/2725 follow-up: fail-closed tier-run selection edges (job-less cancelled run, rerun-of-failed prerequisites, untiered annotation) and readiness/admission predicate edges'
+description: |
+  Follow-up for BUG-2723 (#4408, approved r4 FINAL by advisor-122 OVERRIDE 2026-11-24 10:20) and BUG-2725 (#4407, landed c37feffb57f). Filed by product-15. MEDIUM. All items fail CLOSED: the train refuses rather than admitting wrongly, so none was blocking.
+
+  ## Acceptance
+  - AC1 (BUG-2723 tier-run selection, forge_tier_runs.rs): (a) a cancelled CI run with NO jobs doesn't abort the whole selection (the PR #4391 run 45099765934 attempt-1 shape: a test replays it); (b) after a rerun-of-failed-jobs, the effective run keeps the retained successful prerequisites from earlier attempts, not just the latest attempt's job list; (c) failed or cancelled UNTIERED checks with a known Actions run are annotated, not reported as a bare check name. A test for each.
+  - AC2 (BUG-2725 edges, review_watch_ready.rs / review_watch.rs): readiness looks past newer label-only skipped CI runs on the same SHA to the last run that actually executed; auto-train admission uses the same ReadyForTrain predicate as the readiness report (not the separate advisor_loop_train predicate); the readiness tests exercise the real workflow selector instead of a hard-coded tuple; an invalid landing.mode must not enable clean-merge in the reporting loader. A test for each.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-24T17:19:27.563183795Z
+modified_at: 2026-11-24T17:19:27.563183795Z
+req_type: Task
+tags:
+- ci
+- train
+filed_at:
+  code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f2a1ab1e1ee
+  vendor: claude
