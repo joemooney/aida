@@ -1,13 +1,10 @@
 job: throughput-guard
-last_run: 2026-11-24T12:01:06.106117473Z
+last_run: 2026-11-24T12:21:43.438204214Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:124
 failure_trips:
-- trip_id: throughput-guard@2026-11-24T03:17:05.428442133Z
-  at: 2026-11-24T03:17:05.428442133Z
-  status: 124
 - trip_id: throughput-guard@2026-11-24T03:39:09.301405705Z
   at: 2026-11-24T03:39:09.301405705Z
   status: 124
@@ -64,4 +61,7 @@ failure_trips:
   status: 124
 - trip_id: throughput-guard@2026-11-24T12:01:06.106117473Z
   at: 2026-11-24T12:01:06.106117473Z
+  status: 124
+- trip_id: throughput-guard@2026-11-24T12:21:43.438204214Z
+  at: 2026-11-24T12:21:43.438204214Z
   status: 124
