@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T19:56:13.188082481Z
+modified_at: 2026-11-24T20:43:46.806738608Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -169,6 +169,18 @@ comments:
   modified_at: 2026-11-24T19:46:02.614282166Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20f4c-e603-7d21-a6f1-8dacce78f78d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9887130544fc1b2369920087b2a8af1b74e51daf and pending merge of 8a4c9ba4ba. Refs-only conflict repair.
+    AC1: [evidence: behavioral-test] Targeted shared heal reports its bounded lock timeout. Session hygiene and end-to-end timing across commands remain outside this slice.
+    AC2: [evidence: behavioral-test] coordination.rs:2192 held-lock and post-refresh duplicate regression passed, one test executed. Inspected the local exact-record and zombie regression at bug_1947_session_end_live_process.rs:742.
+    Compared both parents, inspected merge-base and worktree diffs and checked for untracked additions. scripts/check-store-writers.py:29 preserves bounded and unbounded writer-lock calls, and line 30 preserves queue_update_notes. No new mutation authority. 59 inventory fixtures passed, 3873 sites reconciled. Launcher make check-ci-fast exited 0 including all 48 source gates and manual verification; launcher reported a stale seed overlay at teardown. Hosted CI for the new merge awaits publication.
+  created_at: 2026-11-24T20:43:46.806738608Z
+  modified_at: 2026-11-24T20:43:46.806738608Z
+  session_id: 01a20f20de79
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
