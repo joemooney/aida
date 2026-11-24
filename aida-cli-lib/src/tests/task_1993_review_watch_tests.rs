@@ -1713,6 +1713,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             worker: None,
                             reviewer_spawning: false,
                             setup_retry: false,
+                            pickup_retries: 0,
+                            pickup_retry_at: None,
                             retryable_fetch: false,
                             fetch_failures: 0,
                             no_verdict_attempts: 0,
@@ -3774,7 +3776,7 @@ pub(crate) fn bug2521_assert_peer_waiting_backoff(
             .unwrap()
         };
         let before = attempts(store.load().unwrap());
-        let action = select_with_coverage(&store, &c, None, 2, || None).unwrap();
+        let (action, _) = select_with_coverage(&store, &c, None, 2, || None).unwrap();
         assert!(
             matches!(action, Action::Skip(ref reason) if reason.contains(&format!("retry after {deadline}"))),
             "{action:?}"
@@ -5718,9 +5720,11 @@ fn bug2735_watchers_yield_core_budget_to_train_ci() {
         r#"#!/bin/sh
 [ "$1" = --version ] || echo "$*" >> calls
 case "$*" in
+    browse) git remote get-url upstream ;;
     'api rate_limit --cache 60s')
         case "$GH_HOST" in
-            github.com|enterprise.example) /bin/cat budget ;;
+            github.com) /bin/cat origin-budget ;;
+            enterprise.example) /bin/cat budget ;;
             *) echo '{"resources":{"core":{"limit":5000,"remaining":5000}}}' ;;
         esac ;;
     'run list '*) echo '[{"databaseId":42}]' ;;
@@ -5748,6 +5752,12 @@ esac
     for args in [
         vec!["init", "-q"],
         vec!["remote", "add", "origin", "https://github.com/org/repo.git"],
+        vec![
+            "remote",
+            "add",
+            "upstream",
+            "https://enterprise.example/org/repo",
+        ],
     ] {
         assert!(crate::test_git::git_command()
             .current_dir(root)
@@ -5757,14 +5767,19 @@ esac
             .success());
     }
     let repo = forge::Repository::load(root).unwrap();
-    let budget = |remaining| {
+    let budget = |file: &str, remaining| {
         std::fs::write(
-            root.join("budget"),
+            root.join(file),
             format!(r#"{{"resources":{{"core":{{"limit":5000,"remaining":{remaining}}}}}}}"#),
         )
         .unwrap()
     };
-    budget(999);
+    budget("budget", 999);
+    budget("origin-budget", 999);
+    assert!(crate::queue_cmd::integrate_discovery_backoff(root, true)
+        .unwrap()
+        .contains("999/5000"));
+    assert!(crate::queue_cmd::integrate_discovery_backoff(root, false).is_none());
     assert!(repo
         .discover_for_watch(root)
         .unwrap_err()
@@ -5782,8 +5797,10 @@ esac
     .unwrap();
     let train_forge = crate::forge::forge_for_kind(root, crate::forge::ForgeKind::GitHub);
     assert_eq!(train_forge.commit_checks(&sha).unwrap().sha, sha);
-    budget(1000);
+    budget("origin-budget", 1000);
     assert!(repo.discover_for_watch(root).unwrap().is_empty());
+    budget("origin-budget", 5000);
+    budget("budget", 1000);
     // Only the bounded resolver can find this gh. The default API host
     // has ample budget, but the watched host drops below threshold in watch.
     let bin = tempfile::tempdir().unwrap();
@@ -5791,7 +5808,7 @@ esac
     env.set_key("PATH", bin.path());
     env.set_key("AIDA_TEST_FORGE_FALLBACK_DIRS", root);
     env.set_key("GH_HOST", "default.example");
-    env.set_key("GH_REPO", "enterprise.example/org/repo");
+
     std::fs::write(root.join("calls"), "").unwrap();
     assert!(crate::ci_watch::stream_ci(Some(root), "topic").is_none());
     assert_eq!(
@@ -5803,6 +5820,143 @@ esac
     let calls = std::fs::read_to_string(root.join("calls")).unwrap();
     assert_eq!(calls.matches("api rate_limit").count(), 2);
     assert!(!calls.contains("pr list"));
+    budget("budget", 1000);
+    env.set_key("GH_REPO", "enterprise.example/org/override");
+    assert!(crate::ci_watch::stream_ci(Some(root), "topic").is_none());
+    assert_eq!(
+        std::fs::read_to_string(root.join("watched"))
+            .unwrap()
+            .trim(),
+        "enterprise.example/org/override"
+    );
+}
+
+// trace:BUG-2720 | ai:codex
+#[test]
+fn bug2720_exited_pickup_retries_after_worktree_release() {
+    let (temp, store) = fixture();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(temp.path())
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&[
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.org",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "base",
+    ]);
+    git(&["worktree", "add", "-qb", "pr-1", "held"]);
+    let c = change(1, 1, false);
+    for _ in 0..2 {
+        let a = dispatch(select(&store, &c, None, 1).unwrap());
+        execute_reservation(
+            &store,
+            "PR-1",
+            &a.token,
+            |_| Ok(()),
+            |_| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some("pr-1")),
+        )
+        .unwrap_err();
+    }
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dead = Identity::child(&child).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let receipt = |identity: &Identity, due: bool, retries: u8| {
+        store
+            .transaction("PR-1", |state| {
+                let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                assert_eq!(a.phase, Phase::Exited);
+                a.identity = Some(identity.clone());
+                a.pickup_retry_at = due.then(chrono::Utc::now);
+                a.pickup_retries = retries;
+                Ok(())
+            })
+            .unwrap();
+    };
+    let skip = |message: &str| {
+        let (action, outcome) = select_with_coverage(&store, &c, None, 1, || None).unwrap();
+        let Action::Skip(reason) = action else {
+            panic!("unexpected dispatch")
+        };
+        assert!(reason.contains(message), "{reason}");
+        assert_eq!(outcome, Admission::Skipped("held by exited attempts"));
+    };
+    skip("process exit unconfirmed");
+    receipt(&dead, false, 0);
+    skip("backoff");
+    receipt(&dead, true, 0);
+    skip("is held by worktree");
+    git(&["worktree", "remove", "held"]);
+    receipt(&dead, true, 3);
+    skip("retry cap");
+    receipt(&dead, true, 0);
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_eq!(retry.pickup_retries, 1);
+    assert_eq!(retry.head, c.head);
+}
+
+// trace:BUG-2720 | ai:codex
+#[test]
+fn bug2720_lock_contention_preserves_same_head_retry() {
+    let (temp, store) = fixture();
+    let c = change(1, 1, false);
+    let held = crate::agent_handle::lock_namespace(temp.path()).unwrap();
+    for _ in 0..2 {
+        let a = dispatch(select(&store, &c, None, 1).unwrap());
+        execute_reservation(
+            &store,
+            "PR-1",
+            &a.token,
+            |_| Ok(()),
+            |_| {
+                crate::agent_handle::lock_namespace_within(temp.path(), std::time::Duration::ZERO)
+                    .map(drop)
+            },
+        )
+        .unwrap_err();
+    }
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dead = Identity::child(&child).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let expire = || {
+        store
+            .transaction("PR-1", |state| {
+                let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                assert_eq!(a.phase, Phase::Exited);
+                assert_eq!(a.pickup_retries, 0);
+                a.identity = Some(dead.clone());
+                a.pickup_retry_at = Some(chrono::Utc::now());
+                Ok(())
+            })
+            .unwrap()
+    };
+    for _ in 0..4 {
+        expire();
+        assert!(
+            matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(msg)
+            if msg.contains("handle allocation lock busy"))
+        );
+    }
+    drop(held);
+    expire();
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_eq!(retry.head, c.head);
+    assert_eq!(retry.pickup_retries, 1);
 }
 
 // trace:BUG-2746 | ai:codex

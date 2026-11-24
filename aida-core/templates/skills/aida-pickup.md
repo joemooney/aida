@@ -49,12 +49,14 @@ from the seat. After the child process exits, the host launcher commits and
 publishes; the host must finish queue completion after publication. Every
 native lane must declare its descriptive publication subject before exiting:
 `aida ship -m '[AI:codex] type(scope): subject (ID)'`. Always write `(ID)`;
-for an approved partial slice add `--partial-slice`. The commit and PR trailer
+use this completing subject when the exit summary claims every acceptance criterion.
+Add `--partial-slice` only when the brief or exit summary declares a partial slice. The commit and PR trailer
 is derived from that declaration (`(ID)` completes, `(Refs ID)` otherwise, and
 outstanding child slices always make it partial; only child specs count as a
 slice plan, never a plan written in prose). A completing push marks the
 spec Done, on every rework round too. In a native seat this only records a
 lease-bound declaration; the host commits and publishes after exit.
+<!-- trace:TASK-3876 | ai:codex -->
 <!-- trace:BUG-2696 | ai:claude --> For required commit-body trailers,
 write a UTF-8 body file outside the checkout (for example under `/tmp`) and add
 `--commit-body-file <file>` to the declaration

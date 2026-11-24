@@ -2368,7 +2368,7 @@ impl GitHubForge {
 
     // trace:BUG-2492 | ai:codex — retain hold labels for coarse pending classification.
     fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
-        let mut args = vec![
+        let out = self.gh(&[
             "pr",
             "list",
             "--head",
@@ -2379,12 +2379,7 @@ impl GitHubForge {
             "number,headRefOid,statusCheckRollup,labels",
             "--limit",
             "1",
-        ];
-        let repo = watcher_repo(&self.project_root);
-        if let Some(repo) = repo.as_deref() {
-            args.extend(["--repo", repo]);
-        }
-        let out = self.gh(&args);
+        ]);
         let (probe, head_sha) = match out {
             Ok(out) if out.status.success() => {
                 let body = String::from_utf8_lossy(&out.stdout);
@@ -2408,31 +2403,40 @@ impl GitHubForge {
 }
 
 // Resolve a repository-qualified route for interactive GitHub watchers.
-fn watcher_repo(root: &Path) -> Option<String> {
+fn watcher_repo(root: &Path, gh: &Path) -> Option<String> {
     if let Ok(repo) = aida_core::exec_context::Environment::capture().var("GH_REPO") {
         if !repo.is_empty() {
             return Some(repo.to_owned());
         }
     }
-    let origin = origin_url(root)?;
-    let host = forge_host_of(&origin)?;
-    Some(format!("{host}/{}", project_path_of(&origin)?))
+    // Let gh select its base repository. With no selector, browse hands its
+    // repository URL to the browser. Echo it locally without an API request.
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root)
+        .env("GH_BROWSER", "/bin/echo")
+        .arg("browse");
+    let out = crate::forge_lookup::deadline_output(cmd, Command::output_retrying_etxtbsy).ok()?;
+    let url = std::str::from_utf8(&out.stdout)
+        .ok()?
+        .trim()
+        .strip_prefix("https://")?;
+    out.status.success().then(|| url.to_owned())
 }
 
 pub(crate) fn watcher_command(root: &Path) -> Option<impl Fn() -> Command + '_> {
     let (gh, repo) =
         crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(5), || {
-            Some((crate::resolve_gh_binary()?, watcher_repo(root)))
+            let gh = crate::resolve_gh_binary()?;
+            let repo = watcher_repo(root, gh.as_ref())?;
+            Some((gh, repo))
         })?;
     Some(move || {
         let mut command = Command::new(&gh);
         command.current_dir(root);
-        if let Some(repo) = &repo {
-            if let [host, _, _] = repo.split('/').collect::<Vec<_>>().as_slice() {
-                command.env("GH_HOST", host);
-            }
-            command.env("GH_REPO", repo);
+        if let [host, _, _] = repo.split('/').collect::<Vec<_>>().as_slice() {
+            command.env("GH_HOST", host);
         }
+        command.env("GH_REPO", &repo);
         command
     })
 }
@@ -2920,7 +2924,7 @@ impl Forge for GitHubForge {
     }
     // trace:STORY-1166 | ai:claude
     fn ci_progress_snapshot(&self, branch: &str) -> String {
-        crate::ci_rollup_json_for_branch(branch)
+        crate::ci_rollup_json_for_branch(&self.project_root, branch)
     }
 
     fn supports_delegated_review(&self) -> bool {

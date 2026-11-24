@@ -104,6 +104,8 @@ pub(crate) use done::{
 };
 #[path = "integrate.rs"]
 mod integrate_command;
+#[cfg(test)]
+pub(crate) use integrate_command::integrate_discovery_backoff;
 pub(crate) use integrate_command::{
     build_focus_display_subtree, ci_state_from_terminal_probe, handle_queue_integrate,
     probe_pr_integration_state, wait_for_integrate_ci,

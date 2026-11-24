@@ -805,11 +805,12 @@ pub(crate) fn emit_ci_terminal(project_root: Option<&std::path::Path>, green: bo
 /// network blip) — the fingerprint then degrades to the base tip only, which
 /// still re-arms on a rebase.
 // trace:TASK-968 | ai:claude
-pub(crate) fn ci_rollup_json_for_branch(branch: &str) -> String {
+pub(crate) fn ci_rollup_json_for_branch(root: &std::path::Path, branch: &str) -> String {
     let Some(gh) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
         return String::new();
     };
     let output = std::process::Command::new(&gh)
+        .current_dir(root)
         .args([
             "pr",
             "list",

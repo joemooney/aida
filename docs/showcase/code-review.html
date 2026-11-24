@@ -333,7 +333,7 @@
           <h1>Beyond "vibe-check"<br /><span>AI code review.</span></h1>
           <p class="hero-lead">
             General-purpose coding agents cut corners on large diffs, hallucinate line numbers, fluctuate across prompt phrasing, and inspect code without knowing the requirement it was built to satisfy.
-            Upcoming (lands with the CLI/skills slices): S2 adds <code>aida review prepare</code> and S3 integrates it into <code>/aida-review</code> and <code>/aida-code-review</code>.
+            Both <code>/aida-review</code> and <code>/aida-code-review</code> use <code>aida review prepare</code> to build their file inventories.
           </p>
           <div class="meta-strip">
             <div><strong>CRATES:</strong> <code>aida_core::review_engine</code> + <code>aida_cli_lib::review_prepare</code></div>
@@ -437,7 +437,7 @@
           </div>
           <ul>
             <li><strong>Sealed inventory.</strong> Rust hashes the file inventory and records whether each file contains the literal <code>trace:</code> marker.</li>
-            <li><strong>Batching.</strong> A same-stem heuristic groups likely source and test companions. The default target is 12,000 estimated tokens per batch. An oversized file gets its own batch.</li>
+            <li><strong>Batching.</strong> A same-stem heuristic groups likely source and test companions. The default cap is 12,000 estimated tokens per batch. Preparation lists over-cap files and their token estimates in the exclusions and coverage report, then batches the remaining files.</li>
             <li><strong>Whole-File Substring Security &amp; Concurrency Facets:</strong> Injects ANSSI <code>unsafe</code>/FFI, Tokio async cancellation, subprocess option-injection, and macro checklists <em>only</em> when matching substrings appear anywhere in the file.</li>
             <li><strong>Snippet anchoring.</strong> The CLI locates matching quoted lines in the target file.</li>
           </ul>
@@ -483,7 +483,7 @@
             </div>
             <span class="badge badge-info">12k estimated target</span>
           </div>
-          <p>A same-stem heuristic groups likely source and test companions. The default target is 12,000 estimated tokens per batch. An oversized file gets its own batch.</p>
+          <p>A same-stem heuristic groups likely source and test companions. The default cap is 12,000 estimated tokens per batch. Preparation lists over-cap files and their token estimates in the exclusions and coverage report, then batches the remaining files.</p>
           <ul>
             <li><strong>Source + Companion Test Pairing:</strong> Normalizes <code>foo.rs</code>, <code>foo_test.rs</code>, <code>foo_tests.rs</code>, <code>test_foo.py</code>, and <code>foo.test.ts</code> to a shared stem as a heuristic for identifying likely companions.</li>
             <li><strong>Crate-Qualified Generic Stems:</strong> Entry-point filenames (<code>lib.rs</code>, <code>mod.rs</code>, <code>main.rs</code>, <code>index.ts</code>) are qualified by parent directory (<code>aida-core/src/lib</code> vs <code>aida-cli-lib/src/lib</code>) so unrelated crates never collide.</li>
@@ -710,7 +710,7 @@
           <h2>AIDA Native Review Engine vs. Standalone Review Binaries</h2>
         </div>
         <p class="section-desc">
-          This qualitative feature matrix compares the upcoming <code>aida review prepare</code> against standalone external AI code review CLI tools (such as OpenCodeReview / <code>ocr</code>) and raw prompt skills.
+          This qualitative feature matrix compares <code>aida review prepare</code> with standalone external AI code review CLI tools (such as OpenCodeReview / <code>ocr</code>) and raw prompt skills.
         </p>
       </div>
 
@@ -781,10 +781,10 @@
       <div class="section-head">
         <div>
           <div class="section-num">06 / WORKFLOW &amp; CLI REFERENCE</div>
-          <h2>Upcoming integration with <code>/aida-review</code>, <code>/aida-code-review</code> &amp; the CLI</h2>
+          <h2>Integration with <code>/aida-review</code>, <code>/aida-code-review</code> &amp; the CLI</h2>
         </div>
         <p class="section-desc">
-          Upcoming (lands with the CLI/skills slices): S2 adds <code>aida review prepare</code> and S3 integrates it into <code>/aida-review</code> and <code>/aida-code-review</code>.
+          Both <code>/aida-review</code> and <code>/aida-code-review</code> use <code>aida review prepare</code> to build their file inventories.
         </p>
       </div>
 
