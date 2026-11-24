@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:07:50.903555094Z
-modified_at: 2026-11-24T07:19:22.714014141Z
+modified_at: 2026-11-24T07:32:48.834511132Z
 req_type: Task
 tags:
 - small
@@ -55,6 +55,13 @@ comments:
   created_at: 2026-11-24T07:19:22.714009515Z
   modified_at: 2026-11-24T07:19:22.714009515Z
   session_id: 01a20c31cd32
+- id: 01a20c78-ecaf-7800-a527-575ef81709e9
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 00:40): PR-4500 @ b1eb630710 PASSES the LAST detector follow-up (advisor 23:10). +192/-82 in status_prs.rs only, merges CLEAN. A new DetectorSpecs map holds every summary''s display (agreed_id) and origin (spec_id) under aida_core::id_identity::id_key, with the BUG-2741/TASK-3857 status rules (deferred flag or deferred:<date> tag). All status keys, live-lease scopes, PR-head open/merged indexes (parse_pr_head_state_snapshot now takes &DetectorSpecs) and branch ids go through id_key, so zero-padding (TASK-1-097 vs TASK-1-97) and origin/display aliases resolve consistently. NOTE: the BUG-1288 candidate gate branch_belongs_to_active_work was REPLACED by DetectorSpecs::active_branch: parse the branch''s spec id, or match a known id prefix at a ''-'' boundary, then check status != deferred/completed/rejected/superseded. That''s equivalent for the old prefix rule and broader for aliases. Nothing tested the old function directly; BUG-1288''s operation-count regression still runs. New test task_3860_detector_joins_branch_lease_and_forge_aliases. Fast gates pass; compile pending.'
+  created_at: 2026-11-24T07:32:48.834511132Z
+  modified_at: 2026-11-24T07:32:48.834511132Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c2b-5e9f-7842-9868-5a0d84e04a78
   author: joe
