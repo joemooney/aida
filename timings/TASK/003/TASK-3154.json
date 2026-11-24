@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3154",
+  "publishes": [
+    {
+      "at": "2026-11-24T00:21:39.484375267Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T18:08:35.766114154Z",
+      "spec": "TASK-3154",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4451,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "07b93fab2510fdfa184464c63e35d01bcd6047bb"
+      }
+    },
+    {
+      "ts": "2026-11-23T18:09:19.781052588Z",
+      "spec": "TASK-3154",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3154 (completion claim) — request changes. The implementation preserves the typed refusal at the deferral helper. The full pickup regression required by the worksheet is missing.\nTASK-b6b1278890774ef993d2ebc327862470-1115.ac88451d — unverified\nTASK-b6b1278890774ef993d2ebc327862470-1115.ac3b9372 — verified by source inspection of cargo test -p aida-cli-lib bug_2684_ coverage. The existing rollback test covers both launch shapes and retry. The updated deferral test asserts the registered exit code 36, retained queue routing and notes, and exit 1 with an admission-refused receipt for an unrelated measurement error.\nBoth criterion IDs are from the supplied untraced list. The implementer reported focused tests passing in launcher job j20261123T170451088-2-0. This review relied on source and existing evidence and ran no local tests.\nReviewed the full landed diff against protected base 88d5e17985196b6f8540654cc8d4e882076b6cdc at tree 9c33997f27bf13a4ae248d5e71753447909f898f. The original head is two commits behind that base. Neither intervening commit changes the code on which the finding depends. Fast gates and the merge-hold gate passed at the reviewed head. Fast compilation was pending.",
+        "recovery_hint": "address the review findings, move TASK-3154 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:24:10.545595312Z",
+      "spec": "TASK-3154",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4451,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a7db72d69851216e90a04f3e77bfa4ea601fd646"
+      }
+    },
+    {
+      "ts": "2026-11-24T00:16:53.420544833Z",
+      "spec": "TASK-3154",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4451
+      }
+    },
+    {
+      "ts": "2026-11-24T00:21:39.275344520Z",
+      "spec": "TASK-3154",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ac22ab7f548b4d4088ad68fd66dbf68f17880b81",
+        "pr": 4451,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
