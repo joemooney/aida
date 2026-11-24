@@ -414,6 +414,7 @@ fn approved_for_publication(req: &Requirement) -> bool {
 const STRICT_PATHS: &[&str] = &[
     ".githooks",
     ".github/workflows",
+    "aida-cli-lib/src/admission_owner.rs",
     "aida-cli-lib/src/approvals_cmd.rs",
     "aida-cli-lib/src/ci_gate.rs",
     "aida-cli-lib/src/claim.rs",

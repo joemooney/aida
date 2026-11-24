@@ -579,6 +579,7 @@ fn approved_small_default_requires_approval_size_and_standard_tier() {
         Some(ExecutionMode::Drain)
     );
     for path in [
+        "aida-cli-lib/src/admission_owner.rs",
         "aida-cli-lib/src/role_cmd.rs",
         "aida-cli-lib/src/launch/grant.rs",
         "aida-cli-lib/src/worktree_lease.rs",

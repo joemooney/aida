@@ -279,6 +279,7 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     ".aida/config.toml",
     // Gate authority, code and its tests together (STORY-1889).
     "aida-cli-lib/src/gate/",
+    "aida-cli-lib/src/admission_owner.rs",
     // The drift ratchet that keeps this list complete (STORY-1888 C1).
     "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
 ];
