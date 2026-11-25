@@ -41,6 +41,7 @@ const OPERATOR_SEAT: &str = crate::mail_backlog::OPERATOR_SEAT;
 const ADVISOR_SEAT: &str = "advisor";
 const SENDER: &str = "aida-throughput-guard";
 const NOTIFY_RULE: &str = "throughput-guard-escalation";
+const RUN_BUDGET: std::time::Duration = std::time::Duration::from_secs(220);
 /// Bound on one forge call.
 const GH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 /// Time one run may spend reading CI detail. Every forge call is given what
@@ -891,6 +892,8 @@ pub(crate) struct RunSnapshot {
     pub landings: Landings,
     pub hosts: Vec<HostLine>,
     pub changes: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partial: Option<String>,
     pub stuck: usize,
 }
 
@@ -899,6 +902,8 @@ pub(crate) struct RunSnapshot {
 pub(crate) struct Report {
     pub at: DateTime<Utc>,
     pub changes: Vec<PrLine>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial: Option<String>,
     pub stuck: Vec<Item>,
     pub landings: Landings,
     pub hosts: Vec<HostLine>,
@@ -1019,6 +1024,7 @@ pub(crate) fn build_report(
     let escalate = dry && !stuck.is_empty();
     Report {
         at: now,
+        partial: None,
         changes,
         stuck,
         landings: Landings {
@@ -1043,6 +1049,7 @@ pub(crate) fn record_run(memory: &mut Memory, report: &Report) {
         landings: report.landings.clone(),
         hosts: report.hosts.clone(),
         changes: report.changes.len(),
+        partial: report.partial.clone(),
         stuck: report.stuck.len(),
     });
     let extra = memory.runs.len().saturating_sub(MAX_RUNS);
@@ -1062,19 +1069,24 @@ fn snapshot_line(run: &RunSnapshot) -> String {
         .collect::<Vec<_>>()
         .join("; ");
     format!(
-        "{}: {} landing(s) in {} min; {} open change(s), {} stuck; {}",
+        "{}: {} landing(s) in {} min; {} {} change(s), {} stuck; {}{}",
         run.at.format("%Y-%m-%d %H:%M UTC"),
         run.landings
             .count
             .map_or("unknown".to_string(), |n| n.to_string()),
         run.landings.window_mins,
         run.changes,
+        run.partial.as_ref().map_or("open", |_| "covered"),
         run.stuck,
         if hosts.is_empty() {
             "no lanes".to_string()
         } else {
             hosts
-        }
+        },
+        run.partial
+            .as_deref()
+            .map(|s| format!("; {s}"))
+            .unwrap_or_default()
     )
 }
 
@@ -1096,12 +1108,19 @@ pub(crate) fn render(report: &Report) -> String {
             line.title
         ));
     }
-    if report.changes.is_empty() {
+    if let Some(partial) = &report.partial {
+        out.push_str(partial);
+        out.push('\n');
+    } else if report.changes.is_empty() {
         out.push_str("(no open changes)\n");
     }
     out.push('\n');
     if report.stuck.is_empty() {
-        out.push_str("Nothing is stuck.\n");
+        out.push_str(if report.partial.is_some() {
+            "No stalls found among covered changes.\n"
+        } else {
+            "Nothing is stuck.\n"
+        });
     } else {
         out.push_str(&format!("Stuck ({}):\n", report.stuck.len()));
         for item in &report.stuck {
@@ -1179,7 +1198,9 @@ impl Gh<'_> {
         if cfg!(test) {
             return Err("the forge is not read in unit tests".into());
         }
-        crate::forge::github_stall_read(self.0, args, timeout)
+        crate::forge_lookup::with_forge_lookup_deadline(timeout, || {
+            crate::forge::github_stall_read(self.0, args, timeout)
+        })
     }
 }
 
@@ -1278,7 +1299,15 @@ pub(crate) fn read_red_details(
     order.sort_by_key(|(key, _)| memory.red_detail.get(key).map(|detail| detail.at));
     let mut logs_read = 0;
     for (key, head) in order {
-        let listed = budget
+        // One red head may use at most 55s of the 75s detail window.
+        // trace:BUG-2730 | ai:codex
+        let head_budget = Budget {
+            limit: budget
+                .limit
+                .min((budget.elapsed)() + std::time::Duration::from_secs(55)),
+            elapsed: budget.elapsed,
+        };
+        let listed = head_budget
             .call_timeout()
             .and_then(|timeout| ci.check_runs(head, timeout));
         let runs = match listed {
@@ -1313,7 +1342,7 @@ pub(crate) fn read_red_details(
                 logs_read += 1;
                 for check in checks.iter_mut().filter(|check| check.tests.is_err()) {
                     let id = check.id;
-                    check.tests = budget
+                    check.tests = head_budget
                         .call_timeout()
                         .and_then(|timeout| ci.job_tests(id, timeout));
                 }
@@ -1472,29 +1501,104 @@ fn save_memory(root: &Path, memory: &Memory) {
     }
 }
 
+// trace:BUG-2730 | ai:codex
+fn guard_rows(
+    changes: &[super::Pr],
+    end: std::time::Instant,
+    per_pr: std::time::Duration,
+    mut read: impl FnMut(&super::Pr) -> (super::Row, PrFact),
+) -> (Vec<super::Row>, (Vec<PrFact>, Option<String>)) {
+    use std::time::Instant;
+    let mut rows = Vec::new();
+    let mut facts = Vec::new();
+    let mut skipped = Vec::new();
+    for pr in changes {
+        let started = Instant::now();
+        let budget = end.saturating_duration_since(started).min(per_pr);
+        if !budget.is_zero() {
+            let (row, fact) = crate::forge_lookup::with_forge_lookup_deadline(budget, || read(pr));
+            if started.elapsed() < budget {
+                rows.push(row);
+                facts.push(fact);
+                continue;
+            }
+        }
+        skipped.push(pr.id);
+    }
+    rows.sort_by_key(|row| row.pr);
+    facts.sort_by_key(|fact| fact.number);
+    let partial = (!skipped.is_empty()).then(|| {
+        let covered: Vec<_> = rows.iter().map(|row| row.pr).collect();
+        format!("PARTIAL: covered PRs {covered:?}, skipped PRs {skipped:?} (deadline)")
+    });
+    (rows, (facts, partial))
+}
+
+type Reruns = BTreeMap<String, Vec<u64>>;
+
 /// One live observation: the reconciler's pass, the same evidence read fact
 /// by fact, and CI detail for the red approved heads. Returns the report and
 /// the memory to keep (a scheduled run saves it; `aida land stalls` does
 /// not).
-fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report, Memory, PathBuf)> {
-    let (pass, mut prs) = super::live_pass_with(start, |changes, rows, evidence| {
-        rows.iter()
-            .filter_map(|row| {
-                let pr = changes.iter().find(|pr| pr.id == row.pr)?;
-                Some(pr_fact(pr, row, evidence))
+fn observe(
+    start: &Path,
+    policy: &Policy,
+    now: DateTime<Utc>,
+    run_budget: std::time::Duration,
+    per_pr: std::time::Duration,
+) -> Result<(Report, Memory, PathBuf, Reruns)> {
+    use std::time::{Duration as StdDuration, Instant};
+    let started = Instant::now();
+    let end = started + run_budget;
+    let mut setup_time = StdDuration::ZERO;
+    let (pass, (mut prs, partial)) = crate::forge_lookup::with_forge_lookup_deadline(
+        end.saturating_duration_since(Instant::now()),
+        || {
+            super::live_pass_with(start, |changes, evidence| {
+                setup_time = started.elapsed();
+                guard_rows(changes, end, per_pr, |pr| {
+                    let row = super::derive(pr, evidence);
+                    let fact = pr_fact(pr, &row, evidence);
+                    (row, fact)
+                })
             })
-            .collect::<Vec<PrFact>>()
-    })?;
-    let started = std::time::Instant::now();
-    let elapsed = move || started.elapsed();
+        },
+    )?;
+    // Discovery cut by the deadline keeps the pages read; the rest is unknown.
+    // trace:BUG-2730 | ai:claude
+    let partial = match (partial, pass.discovery_cut) {
+        (partial, false) => partial,
+        (partial, true) => Some(format!(
+            "{}; changes past the discovery deadline unknown",
+            partial.unwrap_or_else(|| format!(
+                "PARTIAL: covered PRs {:?}",
+                prs.iter().map(|fact| fact.number).collect::<Vec<_>>()
+            ))
+        )),
+    };
+    let observed = Instant::now();
+    let elapsed = || observed.elapsed();
     let budget = Budget {
-        limit: DETAIL_BUDGET,
+        limit: DETAIL_BUDGET.min(end.saturating_duration_since(observed)),
         elapsed: &elapsed,
     };
     let root = pass.root.clone();
     let mut memory = load_memory(&root);
     let mut unknown = pass.warnings.clone();
-    let branch = crate::forge::default_branch_of(&root);
+    let branch = crate::forge_lookup::with_forge_lookup_deadline(
+        end.saturating_duration_since(Instant::now()),
+        || {
+            let symref = ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"];
+            super::git_text(&root, &symref)
+                .ok()
+                .and_then(|name| name.strip_prefix("origin/").map(str::to_owned))
+                .or_else(|| {
+                    super::origin_git(&root, &["ls-remote", "--symref", "origin", "HEAD"], 20)
+                        .ok()
+                        .and_then(|out| crate::forge::parse_ls_remote_symref_head(&out))
+                })
+        },
+    );
     let red_heads: Vec<(String, String)> = prs
         .iter()
         .filter(|fact| fact.wants_red_detail())
@@ -1515,7 +1619,7 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
         read_red_details(
             &Gh(&root),
             &budget,
-            &branch,
+            branch.as_deref().unwrap_or_default(),
             &red_heads,
             &mut memory,
             policy,
@@ -1528,7 +1632,10 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
             continue;
         };
         let changed_paths = match pass.changes.iter().find(|pr| pr.id == fact.number) {
-            Some(pr) => super::changed_paths(&root, &super::base_ref(&pr.base), &pr.head),
+            Some(pr) => crate::forge_lookup::with_forge_lookup_deadline(
+                end.saturating_duration_since(Instant::now()),
+                || super::changed_paths(&root, &super::base_ref(&pr.base), &pr.head),
+            ),
             None => Err("the change left the pass".to_string()),
         };
         fact.red = Some(RedFact {
@@ -1540,7 +1647,16 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
     }
     let dry_since =
         now - Duration::minutes(policy.escalate_after_mins.max(policy.landings_window_mins));
-    let (landings, last_landing) = landing_times(&root, &branch, dry_since);
+    let (landings, last_landing) = match branch {
+        Some(branch) if Instant::now() < end => crate::forge_lookup::with_forge_lookup_deadline(
+            end.saturating_duration_since(Instant::now()),
+            || landing_times(&root, &branch, dry_since),
+        ),
+        _ => (
+            Err("default branch or time budget unavailable".into()),
+            None,
+        ),
+    };
     let facts = Facts {
         prs,
         landings: Some(landings),
@@ -1548,15 +1664,23 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
         hosts: host_lines(&pass),
         unknown,
     };
-    let report = build_report(&facts, policy, &mut memory, now);
-    Ok((report, memory, root))
+    // Keep proposed reruns separate until this tick admits routing.
+    let mut proposed = Memory::default();
+    let mut report = build_report(&facts, policy, &mut proposed, now);
+    report.partial = partial;
+    eprintln!(
+        "throughput-guard timings: setup={setup_time:?} observations={:?} details/report={:?}",
+        observed.duration_since(started).saturating_sub(setup_time),
+        observed.elapsed()
+    );
+    Ok((report, memory, root, proposed.reruns))
 }
 
 /// `aida land stalls`.
 pub(crate) fn run(start: &Path, json: bool) -> Result<()> {
     let cfg = crate::read_project_config_value(&crate::main_worktree_root_from(start));
     let policy = Policy::from_config(cfg.as_ref());
-    let (mut report, memory, _root) = observe(start, &policy, Utc::now())?;
+    let (mut report, memory, _, _) = observe(start, &policy, Utc::now(), RUN_BUDGET, GH_TIMEOUT)?;
     report.last_scheduled_run = memory.runs.last().cloned();
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1620,7 +1744,7 @@ fn raise_due(root: &Path, store: &Path, seat: &str, evidence: &str, now: DateTim
         "{job}@{}",
         now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
     );
-    if let Err(err) = schedule_ledger::write_cas(store, &job, |ledger| {
+    match schedule_ledger::write_local_bounded(store, &job, |ledger| {
         if ledger.due_since.is_none() {
             ledger.due_since = Some(now);
         }
@@ -1633,8 +1757,12 @@ fn raise_due(root: &Path, store: &Path, seat: &str, evidence: &str, now: DateTim
             error: Some(evidence.to_string()),
         });
     }) {
-        eprintln!("warning: could not write schedule ledger for '{job}': {err}");
-        return false;
+        Ok(true) => {}
+        Ok(false) => return false,
+        Err(err) => {
+            eprintln!("warning: could not write schedule ledger for '{job}': {err}");
+            return false;
+        }
     }
     if !already_due {
         events::emit(
@@ -1822,7 +1950,7 @@ pub(crate) fn route_with(
             }
         }
     }
-    if !report.landings.dry {
+    if report.landings.count.is_some() && !report.landings.dry {
         memory.escalated_at = None;
     }
     if plan.escalate {
@@ -1867,19 +1995,47 @@ pub(crate) fn scan_and_route(
     project_root: &Path,
     route_findings: bool,
 ) -> Result<Vec<DoctorFinding>> {
+    scan_with_budgets(project_root, route_findings, RUN_BUDGET, GH_TIMEOUT)
+}
+
+fn scan_with_budgets(
+    project_root: &Path,
+    route_findings: bool,
+    run_budget: std::time::Duration,
+    per_pr: std::time::Duration,
+) -> Result<Vec<DoctorFinding>> {
     let cfg = crate::read_project_config_value(project_root);
     let policy = Policy::from_config(cfg.as_ref());
     if !policy.enabled {
         return Ok(Vec::new());
     }
     let now = Utc::now();
-    let (report, mut memory, root) = observe(project_root, &policy, now)?;
+    let started = std::time::Instant::now();
+    let (report, mut memory, root, proposed) =
+        observe(project_root, &policy, now, run_budget, per_pr)?;
+    if let Some(partial) = &report.partial {
+        eprintln!("throughput-guard: {partial}");
+    }
     if route_findings {
-        route(&root, &report, &mut memory, &policy, now);
         record_run(&mut memory, &report);
         save_memory(&root, &memory);
         if let Some(run) = memory.runs.last() {
             eprintln!("throughput-guard: {}", snapshot_line(run));
+        }
+        // A partial pass only persists its snapshot: routing commits to the
+        // store (an unbounded signer) and needs the whole inventory, so new
+        // stalls stay eligible for the next complete tick.
+        // trace:BUG-2730 | ai:claude
+        if report.partial.is_some()
+            || run_budget.saturating_sub(started.elapsed()) <= std::time::Duration::from_secs(5)
+        {
+            eprintln!("throughput-guard: routing deferred (deadline)");
+        } else {
+            for (key, checks) in proposed {
+                memory.reruns.entry(key).or_insert(checks);
+            }
+            route(&root, &report, &mut memory, &policy, now);
+            save_memory(&root, &memory);
         }
     }
     for unknown in &report.unknown {

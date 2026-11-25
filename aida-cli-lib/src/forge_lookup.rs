@@ -67,6 +67,20 @@ pub(crate) fn with_forge_lookup_timeout<T>(
     f()
 }
 
+// trace:BUG-2730 | ai:codex
+pub(crate) fn remaining_call_budget(limit: Duration) -> std::io::Result<Duration> {
+    let remaining = forge_lookup_deadline()
+        .map(|end| end.saturating_duration_since(Instant::now()).min(limit))
+        .unwrap_or(limit);
+    if remaining.is_zero() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "read deadline expired",
+        ));
+    }
+    Ok(remaining)
+}
+
 /// Run a subprocess reached by a scoped read, keeping ordinary output
 /// semantics for callers outside the deadline.
 // trace:TASK-3792 | ai:codex

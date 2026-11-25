@@ -259,8 +259,9 @@ impl Repository {
         }
         command.current_dir(root).stdin(Stdio::null());
         self.pin_command(&mut command);
-        let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
-            .with_context(|| {
+        let timeout =
+            crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(30))?;
+        let out = crate::command_output_with_timeout(command, timeout).with_context(|| {
             format!("{program} discovery timed out or failed to spawn; ensure {program} is on PATH")
         })?;
         anyhow::ensure!(
@@ -275,10 +276,33 @@ impl Repository {
         serde_json::from_slice(&out.stdout).context("invalid forge discovery JSON")
     }
     pub fn discover(&self, root: &Path) -> Result<Vec<Change>> {
+        let (changes, cut) = self.discover_with(root, |change, _| Ok(change))?;
+        anyhow::ensure!(!cut, "forge discovery ran out of time");
+        Ok(changes)
+    }
+
+    // Keep the title already returned in the GitLab listing for landing reads.
+    // A page lost to the scoped read deadline returns the pages already read
+    // with `true`: the caller reports a partial inventory, never a closed one.
+    // trace:BUG-2730 | ai:codex ai:claude
+    pub(crate) fn discover_with<T>(
+        &self,
+        root: &Path,
+        project: impl Fn(Change, &serde_json::Value) -> Result<T>,
+    ) -> Result<(Vec<T>, bool)> {
         let mut changes = Vec::new();
         let mut ids = BTreeSet::new();
         for page in 1..=10 {
-            let value = self.json(root, None, page)?;
+            let value = match self.json(root, None, page) {
+                Ok(value) => value,
+                Err(_)
+                    if crate::forge_lookup::forge_lookup_deadline()
+                        .is_some_and(|end| std::time::Instant::now() >= end) =>
+                {
+                    return Ok((changes, true));
+                }
+                Err(err) => return Err(err),
+            };
             let rows = value
                 .as_array()
                 .context("forge discovery did not return an array")?;
@@ -290,11 +314,11 @@ impl Repository {
             for row in rows {
                 if let Some(change) = parse_change(row, self.kind == ForgeKind::GitLab)? {
                     anyhow::ensure!(ids.insert(change.id), "duplicate change in forge discovery");
-                    changes.push(change);
+                    changes.push(project(change, row)?);
                 }
             }
             if rows.len() < cap {
-                return Ok(changes);
+                return Ok((changes, false));
             }
             anyhow::ensure!(
                 self.kind == ForgeKind::GitLab && page < 10,
