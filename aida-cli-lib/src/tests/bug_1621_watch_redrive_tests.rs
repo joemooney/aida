@@ -117,9 +117,13 @@ struct Rec {
 }
 
 impl ShiftExec for Rec {
-    fn reap(&mut self) -> usize {
+    fn reap(
+        &mut self,
+        _: Option<&str>,
+        _: Option<std::time::Instant>,
+    ) -> crate::session_reap::ReapProgress {
         self.calls.push("reap".into());
-        0
+        Default::default()
     }
     fn tag_batch(&mut self, _: &str, _: &[String]) -> anyhow::Result<()> {
         self.calls.push("tag".into());

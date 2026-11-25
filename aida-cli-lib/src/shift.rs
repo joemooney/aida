@@ -542,6 +542,8 @@ pub(crate) struct ShiftState {
     pub version: u32,
     #[serde(default)]
     pub last_tick_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reap_next_session: Option<String>,
     /// Guards that refused on the last tick (event only on change).
     #[serde(default)]
     pub last_refused: Vec<String>,
@@ -1425,7 +1427,11 @@ fn budget_evidence_verdict(cfg: &ShiftConfig, p: &Probes, now: DateTime<Utc>) ->
 /// Every side effect of a tick. Production is [`RealExec`]; tests record.
 pub(crate) trait ShiftExec {
     /// Reap finished sessions; returns the count.
-    fn reap(&mut self) -> usize;
+    fn reap(
+        &mut self,
+        resume: Option<&str>,
+        deadline: Option<Instant>,
+    ) -> crate::session_reap::ReapProgress;
     fn tag_batch(&mut self, batch: &str, specs: &[String]) -> Result<()>;
     /// Start the wave: in its own transient unit under the systemd driver,
     /// else detached. Returns its pid and/or unit, and how it was isolated.
@@ -1769,8 +1775,14 @@ impl<'a> RealExec<'a> {
 }
 
 impl ShiftExec for RealExec<'_> {
-    fn reap(&mut self) -> usize {
-        crate::session_reap::reap_quiet(&self.project_root)
+    fn reap(
+        &mut self,
+        resume: Option<&str>,
+        deadline: Option<Instant>,
+    ) -> crate::session_reap::ReapProgress {
+        crate::session_reap::reap_quiet(&self.project_root, resume, || {
+            deadline.is_some_and(|end| Instant::now() >= end)
+        })
     }
     fn tag_batch(&mut self, batch: &str, specs: &[String]) -> Result<()> {
         tag_specs(self.backend, batch, specs)
@@ -1917,6 +1929,9 @@ pub(crate) struct TickReport {
     // trace:TASK-1510 | ai:claude
     pub wave_isolation: Option<WaveIsolation>,
     pub reaped: usize,
+    pub reap_visited: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reap_next_session: Option<String>,
     pub recovered_stale_pid: Option<u32>,
     pub breaker: Option<String>,
     pub escalated: Vec<String>,
@@ -2527,7 +2542,13 @@ pub(crate) fn tick_core(
     ctx.phase(TickPhase::Reap);
     // 1. Reap first, so dead-pid leases are freed before a wave starts.
     if live && ctx.optional_allowed && ctx.state_error.is_none() {
-        report.reaped = exec.reap();
+        // trace:BUG-2710 | ai:codex
+        let deadline = ctx.clock.map(|(start, budget)| start + budget);
+        let progress = exec.reap(state.reap_next_session.as_deref(), deadline);
+        report.reaped = progress.reaped;
+        report.reap_visited = progress.visited;
+        state.reap_next_session.clone_from(&progress.next_session);
+        report.reap_next_session = progress.next_session;
     }
 
     ctx.phase(TickPhase::Settle);
@@ -3449,7 +3470,12 @@ pub(crate) fn render_report(r: &TickReport) -> String {
             Some(WaveIsolation::Detached { reason: None }) | None => {}
         }
     }
-    if r.reaped > 0 {
+    if let Some(next) = &r.reap_next_session {
+        out.push_str(&format!(
+            "  reap yielded after {} session(s), {} reaped, next {next}\n",
+            r.reap_visited, r.reaped
+        ));
+    } else if r.reaped > 0 {
         out.push_str(&format!("  reaped {} finished session(s)\n", r.reaped));
     }
     if let Some(pid) = r.recovered_stale_pid {
