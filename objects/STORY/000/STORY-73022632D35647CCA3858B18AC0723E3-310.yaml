@@ -1,0 +1,32 @@
+id: 01a21218-1244-70b1-9895-7070ec6d046c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-310
+title: 'Review PR-4568: [AI:codex] fix(review-watch): verify exited attempts before dispatching moved heads (BUG-2763)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a211de`) for branch `bug-b6b1278890774ef993d2ebc327862470-524`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4568>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-524` → `main`
+
+  ## Covers
+
+  - BUG-2763
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4568` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T09:44:57.156091224Z
+modified_at: 2026-11-25T09:44:57.156091224Z
+req_type: Story
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a8
+  session: 01a211de6003
