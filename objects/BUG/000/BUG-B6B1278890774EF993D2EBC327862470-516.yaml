@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T05:49:47.401536940Z
+modified_at: 2026-11-25T05:51:16.483682565Z
 req_type: Bug
 tags:
 - leases
@@ -200,6 +200,12 @@ comments:
   content: Implementer push eb2e718dbedd declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-25T05:49:47.401536033Z
   modified_at: 2026-11-25T05:49:47.401536033Z
+  session_id: 01a210f85542
+- id: 01a21142-2203-7750-9fdb-e2d9731b7e2e
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-516` at head `eb2e718dbedddf53460aab314d05c520db5e6c2c`.'
+  created_at: 2026-11-25T05:51:16.483677401Z
+  modified_at: 2026-11-25T05:51:16.483677401Z
   session_id: 01a210f85542
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
