@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T04:54:19.749621204Z
+modified_at: 2026-11-25T04:58:38.100272657Z
 req_type: Task
 tags:
 - integration
@@ -143,6 +143,18 @@ comments:
   created_at: 2026-11-25T04:54:19.749617811Z
   modified_at: 2026-11-25T04:54:19.749617811Z
   session_id: 01a210c5f448
+- id: 01a21112-4239-7fe1-9fce-6d9e1bc56c1e
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4560 r3 @ 7edd193406 (integration-30): PASS. 2 files, +54/-4. merge-tree is clean vs integration afbea08b75a.
+    (a) Promisor lazy fetch: the local cat-file probe sets GIT_NO_LAZY_FETCH=1. I verified on this host's git 2.43.0 (the same version as dell1) with a promisor clone missing the object. With the variable, git prints 'lazy fetching disabled' and does not fetch; without it, the same probe fetches.
+    (b) Bundle URI: the fetch runs with -c fetch.bundleURI= -c transfer.bundleURI=false, so neither a configured nor an advertised bundle URI opens a second transport.
+    (c) Production path: the test now drives review_risk_pr_base, the real caller. It uses a stub gh, a promisor-configured review clone and an SSH transport shim that logs each connection, and asserts exactly ONE transport ('fetch'). GIT_TRACE2_EVENT confirms the bundle-disabling -c args precede fetch, and the merge base resolves.
+    The title is Refs-only; p38's title completes TASK-3874. READY after FAST.
+  created_at: 2026-11-25T04:58:38.100272657Z
+  modified_at: 2026-11-25T04:58:38.100272657Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
