@@ -26,12 +26,12 @@ description: |
   - knob on + dead lane + mandate → released, with an audit record.
 
   Tier: STRICT (authority/grants + repair journal). Size: ≤300 lines, one slice.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T04:32:01.299841541Z
+modified_at: 2026-11-25T04:45:09.050786580Z
 req_type: Task
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
@@ -81,6 +81,13 @@ history:
   author: joe
   timestamp: 2026-11-25T04:32:01.441506682Z
   changes: []
+- id: 01a21105-983a-7881-a9b3-4391eeb67f23
+  author: aida-session-start
+  timestamp: 2026-11-25T04:45:09.050785033Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
