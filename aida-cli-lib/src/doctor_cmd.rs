@@ -351,6 +351,15 @@ pub(crate) fn handle_doctor_command(
             all: sub_all,
             json: heal_json,
         } => {
+            // trace:TASK-3878 | ai:codex
+            if normalize_doctor_category(category)? == "stalled-reviews" {
+                anyhow::ensure!(
+                    id.is_none() && attest.is_none() && !heal_json && !json,
+                    "use doctor heal stalled-reviews without selectors or JSON"
+                );
+                let root = main_worktree_root_from(&find_project_root()?);
+                return crate::stalled_reviews::queue_repairs(&root);
+            }
             // trace:BUG-2722 | ai:codex
             if normalize_doctor_category(category)? == "repair-reservations" {
                 let root = main_worktree_root_from(&find_project_root()?);

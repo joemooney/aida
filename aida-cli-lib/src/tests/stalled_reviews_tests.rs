@@ -20,7 +20,6 @@ fn story_3095_stalled_review_cases() {
 
 #[test]
 fn story_3095_read_only_scan() {
-    use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let state = root.join(".aida");
@@ -28,14 +27,6 @@ fn story_3095_read_only_scan() {
     let store = root.join(".aida-store");
     std::fs::create_dir_all(store.join("objects")).unwrap();
     std::fs::write(store.join("metadata.yaml"), "{}").unwrap();
-    let exec = ExecContext::new(
-        Environment::default(),
-        None,
-        root.into(),
-        root.into(),
-        ToolPaths::default(),
-        std::sync::Arc::new(SystemClock::default()),
-    );
     use crate::gate::ledger::{ledger_dir, store::ledger_file, EventBody, GateEvent};
     let head = "a".repeat(40);
     let change = ChangeKey::pr(1);
@@ -44,13 +35,12 @@ fn story_3095_read_only_scan() {
     crate::gate::ledger::bindings::bootstrap(root).unwrap();
     let state_entries = std::fs::read_dir(&state).unwrap().count();
     let ledger_entries = std::fs::read_dir(ledger_dir(root)).unwrap().count();
+    let scan_pr =
+        |pr| scan_rows(root, Utc::now(), TimeDelta::minutes(60), vec![pr], false).unwrap();
     let scan = || {
-        scan_open(&exec, TimeDelta::minutes(60), |_| {
-            Ok(vec![serde_json::json!({
-                "number":1, "headRefOid":head, "headRefName":"fix", "title":"Fix review"
-            })])
-        })
-        .unwrap()
+        scan_pr(serde_json::json!({
+            "number":1, "headRefOid":head, "headRefName":"fix", "title":"Fix review"
+        }))
     };
     for (age, expected) in [(59, 0), (61, 1)] {
         let record = serde_json::json!({"verdict":"request-changes", "reviewed_sha":head});
@@ -73,6 +63,13 @@ fn story_3095_read_only_scan() {
         ledger_entries + 1
     );
     assert_eq!(std::fs::read_dir(store).unwrap().count(), 2);
+    let conflicting = || {
+        scan_pr(serde_json::json!({
+            "number":7, "headRefOid":head, "baseRefOid":"b".repeat(40), "mergeable":"CONFLICTING",
+            "headRefName":"fix", "title":"Fix"
+        }))
+    };
+    assert!(conflicting()[0].summary.contains("conflicting"));
     let sessions = crate::leases_dir(root);
     std::fs::create_dir(&sessions).unwrap();
     let lease = format!(
@@ -90,8 +87,21 @@ active_pid = {}
         Utc::now().to_rfc3339(),
         std::process::id()
     );
-    std::fs::write(sessions.join("running.toml"), lease).unwrap();
+    std::fs::write(sessions.join("running.toml"), &lease).unwrap();
     assert!(scan().is_empty());
+    let blocked = "blocked: reservation repair needed";
+    let active = format!("active_pid = {}", std::process::id());
+    let dead = lease.replace(&active, "active_pid = 2147483647");
+    std::fs::write(sessions.join("running.toml"), dead).unwrap();
+    assert!(conflicting()[0].summary.contains(blocked));
+    std::fs::remove_file(sessions.join("running.toml")).unwrap();
+    let reservation = serde_json::json!({"version":1,"entries":[{
+        "key":{"repository":root,"pr":7,"original_head":head}, "dispatched_by":"host",
+        "reserved_at":"now","lane_id":"retained","tree_path":root,"branch":"fix",
+        "base":"b".repeat(40),"spawn":"unknown","original_conflict_paths":[]
+    }]});
+    std::fs::write(state.join("repair-journal.json"), reservation.to_string()).unwrap();
+    assert!(conflicting()[0].summary.contains(blocked));
 }
 
 #[test]
@@ -108,4 +118,13 @@ fn story_3095_green_since_last_completion() {
     );
     rows[1]["completedAt"] = serde_json::Value::Null;
     assert!(crate::land::green_rollup_at(&rows).is_none());
+}
+
+// trace:TASK-3878 | ai:codex
+#[test]
+fn conflict_repair_queue_and_delivery_receipts_deduplicate() {
+    assert!(should_queue(false, false, false).unwrap());
+    assert!(!should_queue(true, false, true).unwrap());
+    assert!(!should_queue(false, true, true).unwrap());
+    assert!(should_queue(false, false, true).is_err());
 }

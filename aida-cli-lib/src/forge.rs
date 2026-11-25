@@ -2568,7 +2568,7 @@ pub(crate) fn github_open_changes_detailed(
             "--repo",
             slug,
             "--json",
-            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
+            "number,title,headRefOid,headRefName,baseRefName,baseRefOid,mergeable,reviewDecision,isDraft,labels,statusCheckRollup,updatedAt",
         ])
         .current_dir(root)
         .stdin(std::process::Stdio::null());
