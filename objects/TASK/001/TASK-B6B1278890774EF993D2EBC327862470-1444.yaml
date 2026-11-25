@@ -12,12 +12,22 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T15:28:58.694156811Z
-modified_at: 2026-11-25T15:28:58.694156811Z
+modified_at: 2026-11-25T15:29:09.835499528Z
 req_type: Task
 tags:
 - codex-limit
 - config
 - due-2026-11-29
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a21352-9a2c-7550-8d5c-bca18a7c5902
+  created_at: 2026-11-25T15:29:09.835451521Z
+  created_by: joe
+history:
+- id: 01a21353-507a-7c30-ae50-8d6da6fb8545
+  author: joe
+  timestamp: 2026-11-25T15:29:16.922324655Z
+  changes: []
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
   branch: main
