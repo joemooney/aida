@@ -7,18 +7,17 @@ description: |-
   Reviewed sha: f2f2903d70c9294046921dee86a86c3c35299176
 
   docs/internal/testing/ci-test-shards.md:18 and docs/advanced/landing.md:113 still describe label addition as canceling the running workflow, which contradicts the changed labeled-event expression. Update the operator guidance to describe the final scheduling behavior and the approval path used by review-watch.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T11:17:07.353676794Z
-modified_at: 2026-11-24T23:49:11.656821874Z
+modified_at: 2026-11-25T02:44:22.845449810Z
 req_type: Task
 tags:
 - carried-from:BUG-2729
 - finding-hash:f109b562
 - from-review:BUG-2729
-- track:integration
 relationships:
 - rel_type: References
   target_id: 01a207dd-4395-70a2-8265-932cc529c679
@@ -210,6 +209,22 @@ history:
   timestamp: 2026-11-24T23:47:59.140215058Z
   session_id: 01a20fc2545c
   changes: []
+- id: 01a21097-0678-78e3-82a6-b83f85a222bf
+  author: aida-auto-bump
+  timestamp: 2026-11-25T02:44:22.776291455Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21097-06bd-7c31-9b0e-bfc4bf164cdb
+  timestamp: 2026-11-25T02:44:22.845446474Z
+  agent: aida
+  commit_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
+  summary: 'Advisor (delegated authority): promotion 37, linear on main dc27cf1f4cb + 2 cherry-picks; per-commit patch-ids match approved integration squashes (e703bc46, a3397751); config hunk (stalled-reviews job + route) verified line by line earlier; STORY-3095 Refs-only; fast CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f2f2903d70c9294046921dee86a86c3c35299176
@@ -219,3 +234,7 @@ filed_at:
   aida_build_sha: 55f63f38008
   vendor: claude
   session: 01a2081bec8b
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T02:44:22.776284308Z
+  completion_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
