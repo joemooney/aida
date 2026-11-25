@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T10:00:07.656219577Z
+modified_at: 2026-11-25T10:02:33.964719779Z
 req_type: Bug
 tags:
 - review-watch
@@ -75,6 +75,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T10:00:07.511911343Z
   modified_at: 2026-11-25T10:00:07.511911343Z
+- id: 01a21228-6c12-7081-b828-2b5e6f5abe0e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:02):
+    # BUG-2763 / PR #4568 r2: REDESIGN BY REMOVAL (advisor-122 ruling 2026-11-25 02:58 at 14a5d0f2; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=100 NET lines; it should SHRINK.
+    r1 drew 6 high + 3 medium findings, all about PROVING the old attempt is dead (pgid reuse, reboot, a group scan swallowing errors, spawn-failure markers). STOP proving liveness:
+    - KEY the exited-attempt hold by (PR, HEAD SHA). A NEW head is a NEW key: no hold, the review is dispatched.
+    - Safety argument (put it in a code comment): if the old attempt is somehow still alive it can only record a verdict for the OLD head, which the gate already ignores (verdicts are head-pinned).
+    - The SAME-head hold stays exactly as today (operator `--release`).
+    - `--release` must also clear the SKIP entry (the medium finding).
+    - DROP the doctor/stalled-reviews finding from this PR (later).
+    REMOVE the r1 liveness-probe machinery (group scans, pgid/reboot identity checks) added for this feature.
+    Tests: exited hold on head A + new head B → B dispatched with NO probe; same head A → still held; a late verdict from the A attempt does NOT count for B.
+    One targeted cargo run, then make check-ci-fast, then push to #4568. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T10:02:33.964719779Z
+  modified_at: 2026-11-25T10:02:33.964719779Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
