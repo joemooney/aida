@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T07:20:49.960372423Z
-modified_at: 2026-11-25T04:19:34.462899650Z
+modified_at: 2026-11-25T04:19:37.513715004Z
 req_type: Bug
 tags:
 - employer-content
@@ -37,6 +37,11 @@ comments:
   content: 'Correction: BUG-715 stays COMPLETED (the auto-bump was right — the core file-content redaction is the shipped fix; the recurring leak is closed). The earlier "reopened to approved" note did NOT take effect (reopening a Completed spec is refused by design). The three residuals (git author, doctor detection, dry-run) are tracked in the follow-up task filed today, not by reopening this.'
   created_at: 2026-07-08T16:10:40.972463186Z
   modified_at: 2026-07-08T16:10:40.972463186Z
+- id: 01a210ee-39a9-7232-b198-a21e6f9f14e3
+  author: joe
+  content: '2026-11-24 (product-15, with Joe''s decision): the aida-store hubs diverged ~00:47Z-21:20 because reconcile''s one-hub email-consent gate refused. Finding: the operator''s WORK email is ALREADY on BOTH hubs in the store registry (registry/blocks.yaml block owners: 25 entries; registry/nodes.toml: 6 entries; identical on origin and gitlab), since ~July (cf. BUG-724). Joe chose: sync now with --yes (no new exposure, done: hubs in sync at union a4ef7965098a), SCRUB BOTH HUBS LATER via this spec. Raised to HIGH. Scope reminder: replace the raw work email with a non-identifying placeholder in both hubs'' registries (blocks owners + nodes), plus an opt-in redaction so work machines write a sanitized identity going forward. The scrub rewrites registry content on both hubs: procedure needs advisor review before it runs.'
+  created_at: 2026-11-25T04:19:37.513715004Z
+  modified_at: 2026-11-25T04:19:37.513715004Z
 history:
 - id: 019f427c-e9d7-75a0-be0a-b3d1aa7a5da5
   author: aida-auto-bump
