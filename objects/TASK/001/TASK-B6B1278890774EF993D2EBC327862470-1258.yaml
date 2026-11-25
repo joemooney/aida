@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 7a751a02a101c89f3b2bd6d6a2dbc003afa58f5a
 
   PR #4449 description: the BUG-2732 implementer brief asks the PR body to explain when main already behaves correctly and the patch only adds regression coverage. The current body contains publication metadata. Add the existing receipt-pruning behavior and the scope of the regression coverage to the PR description.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T17:57:49.176693892Z
-modified_at: 2026-11-25T07:18:57.104417776Z
+modified_at: 2026-11-25T07:18:59.349733681Z
 req_type: Task
 tags:
 - carried-from:BUG-2732
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21192-7015-7de0-a1d7-452f8a5a181d
+  author: joe
+  timestamp: 2026-11-25T07:18:59.349731611Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 7a751a02a101c89f3b2bd6d6a2dbc003afa58f5a
   branch: pr-4449
