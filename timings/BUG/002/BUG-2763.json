@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2763",
+  "publishes": [
+    {
+      "at": "2026-11-25T21:22:20.873969803Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T09:58:49.527385153Z",
+      "spec": "BUG-2763",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4568,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "14a5d0f2168490d925f2cf18dc924ac3a987b637"
+      }
+    },
+    {
+      "ts": "2026-11-25T09:59:00.862634060Z",
+      "spec": "BUG-2763",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes for completing BUG-2763. Reviewed the full landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to landed tree 114e622e446e548ee50b978330ccfda2fb16cad0, attesting original head 14a5d0f2168490d925f2cf18dc924ac3a987b637.\nBUG-b6b1278890774ef993d2ebc327862470-524.AC1 — unverified. The moved-head check handles the focused reaped-worker case, but can retain a definitively exited attempt, treat an incomplete group observation as death proof, and suppress the doctor finding.\nBUG-b6b1278890774ef993d2ebc327862470-524.AC2 — unverified. Source inspection of cargo test -p aida-cli-lib bug2763_moved_exit_requires_verified_death shows live, unknown and dead worker assertions and reservation replacement. The test constructs the skip and calls the finding helper directly. The complete doctor and group paths remain uncovered. The supplied aida criteria list identifies AC1 and AC2 as untraced, and the diff adds only a spec-level test trace.\nBUG-2763 (bug protocol): the PR touches at least one test file — met (aida-cli-lib/src/tests/task_1993_review_watch_tests.rs).\nAt the exact original head, Fast gates passed, Fast compile was pending, and the test shards were skipped by the Fast tier. The implementer reported a focused test pass on the working-tree diff. No local tests or builds were run during review.",
+        "recovery_hint": "address the review findings, move BUG-2763 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T11:42:42.074242259Z",
+      "spec": "BUG-2763",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4568,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "2753e3c99e8b00ce74a377dd77550baa87c92efd"
+      }
+    },
+    {
+      "ts": "2026-11-25T11:43:01.972628143Z",
+      "spec": "BUG-2763",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the full landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 63cd86e202fd7ca9e3810a5640664390285ac990 for BUG-2763. AC1 and AC2 fail as canonically recorded. The revised local design holds the same head and treats a late old-head approval as evidence for that old head. Production hub admission can still prevent the claimed moved-head dispatch, and a stale skip write can race release. GitHub fast gates, fast compile and Build (ubuntu-latest) passed for the reviewed head. The merge-hold status was pending. No local tests were run.",
+        "recovery_hint": "address the review findings, move BUG-2763 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:27:05.237612759Z",
+      "spec": "BUG-2763",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4568,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "abbcff0abc5a4777ad5cee540ab1874a381f101d"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:27:09.281464950Z",
+      "spec": "BUG-2763",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2763 (BUG-b6b1278890774ef993d2ebc327862470-524). AC1: verified — local hold is keyed by head (select_with_coverage only inspects attempts with a.head == change.head; Exited is not active(), so a moved head is dispatched with no liveness probe); hub chain()/update_with_observer now scope ownership and the Reserved fence to the same head while predecessor still orders the whole change (no forks); same-head hold stays until --release (bug2763_exited_hold_is_scoped_to_reviewed_head); --release clears the skip entry (release_retries_an_exited_head_and_refuses_a_live_one asserts skipped_changes empty); verdicts stay head-pinned (history.conclusive(old) true, conclusive(new) false). AC2: verified — local test covers hold-A/new-B dispatch, same-head held, late A verdict not counted for B; hub test bug2763_running_hub_claim_allows_dispatch_only_for_a_different_head leaves A Running and dispatches B, then fences both heads against node b. The design is sound and the bug2518/bug2521 test edits use a really-exited process rather than weakening assertions. Requesting changes only for two untested gate paths that this change newly makes reachable (ADR-76: test gaps in gate code block). Stale base: main has since changed review_watch.rs (BUG-2757 admission release during probes) and the review_watch tests; neither finding depends on those changes. CI pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2763 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:27:35.545142164Z",
+      "spec": "BUG-2763",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4568,
+        "verdict": "APPROVED",
+        "reviewed_sha": "abbcff0abc5a4777ad5cee540ab1874a381f101d"
+      }
+    },
+    {
+      "ts": "2026-11-25T21:18:22.244677275Z",
+      "spec": "BUG-2763",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4568
+      }
+    },
+    {
+      "ts": "2026-11-25T21:22:20.669428082Z",
+      "spec": "BUG-2763",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "34c86b75a25da79cf648a68dfdd1d593949567b4",
+        "pr": 4568,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
