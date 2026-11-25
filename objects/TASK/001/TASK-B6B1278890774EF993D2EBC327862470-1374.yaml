@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T02:09:49.230461534Z
+modified_at: 2026-11-25T02:13:02.644898263Z
 req_type: Task
 tags:
 - launch
@@ -136,6 +136,17 @@ comments:
   modified_at: 2026-11-25T02:00:13.608271187Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2107a-581a-7f71-8727-1310b9d309a2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 345cb8782b5ed9d3e9b56c356a698b7a3118387b plus uncommitted native-lane edits. Inspected the merge-base diff, working diff and untracked paths (none).
+    AC1: [evidence: behavioral-test] grant and lease contention fixtures exercise the same kernel_deps lock helper; task_3884_releases_lock_acquired_at_expiry tests reacquisition through a second file descriptor. The receipt-aware entry retains acceptance, service grant, worker PID and locked grant checks. Deadline failure precedes mutation. The holder releases independently within two seconds. Targeted run including story_1888 submitted as j20261125T020841287-2-0.
+    AC2: [evidence: behavioral-test] incomplete. The existing reap_or_record test exercises the helper with writable storage. It does not prove bounded Drop or failed recovery handoff. Inspection found synchronous temp-directory publication, stderr and recursive TempDir cleanup, plus a separate mutation Session shutdown budget. F3/F4/F5 punted for a pre-spawn recovery owner and sufficient scope. Publication veto recorded. Rustfmt and git diff --check passed.
+  created_at: 2026-11-25T02:13:02.644898263Z
+  modified_at: 2026-11-25T02:13:02.644898263Z
+  session_id: 01a210732923
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
