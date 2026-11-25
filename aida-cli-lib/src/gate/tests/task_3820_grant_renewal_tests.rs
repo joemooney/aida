@@ -592,4 +592,19 @@ fn task_3884_contended_grant_times_out() {
         bind_contained_launch_worker_until(&id, &receipt, Some(end)).map(|()| true)
     });
     assert_eq!(bytes(&id), before);
+
+    let clock = std::cell::Cell::new(Instant::now());
+    let end = clock.get() + std::time::Duration::from_secs(3600);
+    let slow_read = |id: &str| {
+        let grant = read_grant(id)?;
+        clock.set(end);
+        Ok(grant)
+    };
+    let change = |_: &mut SeatGrant| panic!("expired update ran");
+    let error = update_grant_until(&id, Some(end), slow_read, || clock.get(), change, |_| false)
+        .unwrap_err()
+        .downcast::<std::io::Error>()
+        .unwrap();
+    assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+    assert_eq!(bytes(&id), before);
 }

@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use uuid::Uuid;
 
 pub(crate) const GRANT_ENV: &str = "AIDA_SESSION_GRANT";
@@ -171,13 +172,15 @@ fn update_grant(
     change: impl FnMut(&mut SeatGrant) -> bool,
     applied: impl Fn(&SeatGrant) -> bool,
 ) -> Result<bool> {
-    update_grant_until(id, None, change, applied)
+    update_grant_until(id, None, read_grant, Instant::now, change, applied)
 }
 
 // trace:TASK-3884 | ai:codex
 fn update_grant_until(
     id: &str,
     deadline: Option<std::time::Instant>,
+    read: impl Fn(&str) -> Result<SeatGrant>,
+    now: impl Fn() -> Instant,
     mut change: impl FnMut(&mut SeatGrant) -> bool,
     applied: impl Fn(&SeatGrant) -> bool,
 ) -> Result<bool> {
@@ -201,7 +204,10 @@ fn update_grant_until(
             None => lock.lock_exclusive(),
         }
         .context("cannot lock the session grant record")?;
-        let mut grant = read_grant(id)?;
+        let mut grant = read(id)?;
+        if deadline.is_some_and(|end| now() >= end) {
+            return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+        }
         let changed = change(&mut grant);
         if changed {
             write_grant(&grant)?;
@@ -3443,6 +3449,8 @@ fn bind_token_until(id: &str, token: &str, deadline: Option<std::time::Instant>)
     update_grant_until(
         id,
         deadline,
+        read_grant,
+        Instant::now,
         |grant| {
             if grant.binding.iter().any(|b| b == token) {
                 return false;
