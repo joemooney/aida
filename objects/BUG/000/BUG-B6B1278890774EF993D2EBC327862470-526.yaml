@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T22:42:06.332931345Z
+modified_at: 2026-11-25T22:44:02.914623883Z
 req_type: Bug
 tags:
 - admission
@@ -92,6 +92,20 @@ comments:
   modified_at: 2026-11-25T22:23:33.275097152Z
   session_id: 01a2147671bd
   harness_version: 2.1.319 (Claude Code)
+- id: 01a214e1-9ca6-7c73-956b-d26524f12e6a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:44):
+    # BUG-2765 r1 (advisor-122 ruling 2026-11-25 15:46 on #4597 @ 5f2421b5; product-15). Lane: CLAUDE. MAIN, existing branch fix-review-watch-forge-admission / PR #4597. <=40 lines. Keep the title "(BUG-2765)".
+    (F1) Forge WRITES (update-branch, review launch) must still run UNDER the admission claim; only the READS move outside it.
+    (F2) ADD A TEST driving admit_change with Some(claim), proving decide() happens AFTER the reads (and the writes happen under the claim).
+    (F3) Fix --once so a mid-pass land/ship YIELDS cleanly instead of erroring.
+    DEFERRED (do NOT do): the cosmetic TTL item.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4597. COMMIT your work.
+  created_at: 2026-11-25T22:44:02.914623883Z
+  modified_at: 2026-11-25T22:44:02.914623883Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
