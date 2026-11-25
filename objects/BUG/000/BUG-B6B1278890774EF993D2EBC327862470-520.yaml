@@ -9,11 +9,11 @@ description: |
   - AC1: Every reconcile refusal NAMES its cause (which check refused, which hub/ref, and the underlying git/merge error). A test asserts the reason text for at least the push-race and merge-refusal paths.
   - AC2: A BOUNDED retry (e.g. up to 2 attempts with re-fetch + re-union) when a push rejection is a fast-forward race from a concurrent writer. Test with a simulated race.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T01:13:40.508655756Z
+modified_at: 2026-11-25T01:15:36.483768797Z
 req_type: Bug
 tags:
 - hubs
@@ -28,6 +28,14 @@ comments:
     Evidence so far: the email-consent path is RULED OUT (no one-sided email lines in registry diffs between origin b396b9cf040 and gitlab ab1549859da; base 120fccedf1fb). Both hubs changed registry/blocks.yaml and registry/agreed_counters.toml, so the BLOCK REGISTRY RANGE COLLISION is the leading candidate (both hubs allocating ID blocks independently today: home seats on origin, Joe's work clone on gitlab). Confirm once AC1 prints the chain.
   created_at: 2026-11-25T01:13:40.508655756Z
   modified_at: 2026-11-25T01:13:40.508655756Z
+history:
+- id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
+  author: joe
+  timestamp: 2026-11-25T01:15:36.483768227Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
   branch: main
