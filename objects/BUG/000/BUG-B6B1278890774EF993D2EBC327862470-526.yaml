@@ -9,12 +9,12 @@ description: |
   - AC1: review-watch collects the forge snapshot (per-PR gh/glab reads) OUTSIDE the admission lock, and takes admission only for the dispatch decision (recheck the snapshot is still current under the lock; if stale, release and retry).
   - AC2: a test where the forge scan is slow (e.g. a stub forge that sleeps per PR) shows a manual train is admitted DURING the scan.
   - AC3: hold time is bounded and logged: an admission hold by review-watch over N seconds writes a warning naming the phase.
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T22:44:02.914623883Z
+modified_at: 2026-11-25T22:56:22.497201970Z
 req_type: Bug
 tags:
 - admission
@@ -106,6 +106,12 @@ comments:
   modified_at: 2026-11-25T22:44:02.914623883Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a214ec-a3e1-7df1-99b5-cbed93d0f7db
+  author: aida-publication-done
+  content: Implementer push 5f2421b51c82 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T22:56:22.497201405Z
+  modified_at: 2026-11-25T22:56:22.497201405Z
+  session_id: 01a2147671bd
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
@@ -150,6 +156,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a214ec-a3e1-7df1-99b5-cbd28a1d444d
+  author: aida-publication-done
+  timestamp: 2026-11-25T22:56:22.497199707Z
+  session_id: 01a2147671bd
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
