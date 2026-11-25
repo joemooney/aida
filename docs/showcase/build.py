@@ -75,8 +75,31 @@ def figure(graphic_path, fallback):
 FIGURE = re.compile(r'^!\[([^\]]+)\]\(([^)]+\.svg)\)$')
 
 
+# trace:STORY-2839 | ai:claude
+# GFM pipe tables: a `| a | b |` header line directly followed by a
+# `| --- | :-: |` separator with the same cell count. `\|` is a literal pipe
+# inside a cell; cell text goes through inline(), which HTML-escapes it.
+TABLE_PIPE = re.compile(r'(?<!\\)\|')
+
+
+def is_table_row(line):
+    stripped = line.strip()
+    return len(stripped) > 1 and stripped.startswith('|') and stripped.endswith('|') and not stripped.endswith('\\|')
+
+
+def parse_table_row(line):
+    return [cell.strip().replace('\\|', '|') for cell in TABLE_PIPE.split(line.strip()[1:-1])]
+
+
+def is_table_separator(line, width):
+    if not is_table_row(line):
+        return False
+    cells = parse_table_row(line)
+    return len(cells) == width and all(re.fullmatch(r':?-+:?', cell) for cell in cells)
+
+
 def render(source, base='.'):
-    output, paragraph, listing, code, slugs = [], [], None, None, set()
+    output, paragraph, listing, table, code, slugs = [], [], None, None, None, set()
     def flush():
         if paragraph:
             output.append('<p>' + inline(' '.join(paragraph), base) + '</p>')
@@ -86,9 +109,20 @@ def render(source, base='.'):
         if listing:
             output.append(f'</{listing}>')
             listing = None
-    for line in source.splitlines():
+    def close_table():
+        nonlocal table
+        if table:
+            headers, rows = table
+            cells = lambda row, tag: ''.join(f'<{tag}>{inline(cell, base)}</{tag}>' for cell in (row + [''] * len(headers))[:len(headers)])
+            body = ''.join('<tr>' + cells(row, 'td') + '</tr>' for row in rows)
+            output.append('<div class="table-wrap"><table><thead><tr>' + cells(headers, 'th') + '</tr></thead><tbody>' + body + '</tbody></table></div>')
+            table = None
+    lines, skip = source.splitlines(), False
+    for i, line in enumerate(lines):
+        if skip:
+            skip = False; continue
         if line.startswith('```'):
-            flush(); close_list()
+            flush(); close_list(); close_table()
             if code is None:
                 code = []
             else:
@@ -98,6 +132,13 @@ def render(source, base='.'):
         if code is not None:
             code.append(line); continue
         if line.startswith('<!--'):
+            continue
+        if table is not None and is_table_row(line):
+            table[1].append(parse_table_row(line)); continue
+        close_table()
+        if is_table_row(line) and i + 1 < len(lines) and is_table_separator(lines[i + 1], len(parse_table_row(line))):
+            flush(); close_list()
+            table, skip = (parse_table_row(line), []), True
             continue
         image = FIGURE.match(line)
         if image:
@@ -132,7 +173,7 @@ def render(source, base='.'):
             output.append('<blockquote><p>' + inline(line[2:], base) + '</p></blockquote>')
         elif line.strip():
             paragraph.append(line)
-    flush(); close_list()
+    flush(); close_list(); close_table()
     if code is not None:
         raise ValueError('Unclosed code fence')
     return '\n'.join(output)
@@ -144,6 +185,13 @@ def search_text(content):
     text = re.sub(r'\[([^\]]+)\]\([^\s)]+\)', r'\1', text)
     text = re.sub(r'^#{1,6} ', '', text, flags=re.M)
     text = re.sub(r'^> ?', '', text, flags=re.M)
+    # trace:STORY-2839 | ai:claude — table separators and pipes are layout, not text.
+    def table_text(line):
+        if not is_table_row(line):
+            return line
+        cells = parse_table_row(line)
+        return '' if all(re.fullmatch(r':?-+:?', cell) for cell in cells) else ' '.join(cells)
+    text = '\n'.join(table_text(line) for line in text.splitlines())
     text = text.replace('`', '').replace('**', '')
     return re.sub(r'\s+', ' ', text).strip()
 
