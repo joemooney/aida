@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 876ace623dbe8dc8b38dd09fe16c114d6cbc31fb
 
   The new inline list at session_end.rs:1635 makes a private clone with one untracked file named 'a; untracked: z' indistinguishable from a clone with two untracked files named 'a' and 'z'. Both summaries show 'untracked: a; untracked: z' because seat_clone.rs:2256 leaves the delimiter unescaped. The previous detailed session-end output used a separate line per entry. Use a representation that keeps entry boundaries intact and add a case with a delimiter in a filename.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T04:39:58.468483030Z
-modified_at: 2026-11-25T21:04:42.792217772Z
+modified_at: 2026-11-25T21:04:44.680872234Z
 req_type: Task
 tags:
 - carried-from:TASK-3882
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T05:37:23.652568312Z
   changes: []
+- id: 01a21486-7088-7ab1-9b73-15aee32b7c3e
+  author: joe
+  timestamp: 2026-11-25T21:04:44.680870468Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 876ace623dbe8dc8b38dd09fe16c114d6cbc31fb
   branch: pr-4559
