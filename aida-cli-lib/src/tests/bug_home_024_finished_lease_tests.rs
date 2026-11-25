@@ -584,13 +584,27 @@ fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
         claim.claim_verb = true;
         claim.hostname = crate::coordination::hostname();
         write_lease(repo.path(), &claim);
+        // A finished claim recorded while the same tree was on another
+        // already-merged branch: off-branch at the start of the pass, so it
+        // stays put even after dead1's reap removes the checkout.
+        assert!(git(repo.path(), &["branch", "other4"]).status.success());
+        let mut off = lease_at(
+            "other4",
+            "BUG-2710",
+            &holder.path().join("dead1"),
+            "other4",
+            Some(reaped_pid()),
+        );
+        off.claim_verb = true;
+        off.hostname = crate::coordination::hostname();
+        write_lease(repo.path(), &off);
         let notes = holder.path().join("dirty2/notes");
         std::fs::write(&notes, "unsaved").unwrap();
         if budgeted {
             let progress = super::reap_quiet(repo.path(), None, || false);
             assert_eq!(
                 (progress.visited, progress.reaped, progress.next_session),
-                (3, 1, None)
+                (4, 1, None)
             );
         } else {
             let outcomes = super::reap_quiet_outcomes(repo.path());
@@ -598,6 +612,8 @@ fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
             assert_eq!(outcomes.leases[0].0, "dead1");
         }
         assert!(lease_path(repo.path(), "later3").exists());
+        assert!(lease_path(repo.path(), "other4").exists());
+        assert!(local_branch_exists(repo.path(), "other4"));
         assert!(!lease_path(repo.path(), "dead1").exists());
         assert!(!holder.path().join("dead1").exists());
         assert!(!local_branch_exists(repo.path(), "dead1"));

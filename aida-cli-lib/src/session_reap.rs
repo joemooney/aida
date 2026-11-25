@@ -2531,6 +2531,12 @@ pub(crate) fn reap_quiet(
         .filter(|path| !path.as_os_str().is_empty() && matches!(path.try_exists(), Ok(false)))
         .collect();
     let mut release_gone = gone_tree_releaser(project_root);
+    // Every lease on one worktree is classified together, before any of them
+    // is torn down: reaping one must not make a sibling look on-branch (its
+    // checkout gone) and so reapable. A later sibling waits for the next pass.
+    let mut classified: HashSet<String> = HashSet::new();
+    let mut reapable: std::collections::HashMap<String, Option<String>> =
+        std::collections::HashMap::new();
     let progress = visit_sessions(&leases[start..], expired, |listed| {
         let Ok(Some(lease)) = leases::read_exact_lease(project_root, &listed.id) else {
             return false;
@@ -2538,20 +2544,36 @@ pub(crate) fn reap_quiet(
         if initially_missing.contains(&lease.worktree_path) && release_gone(&lease) {
             return true;
         }
-        let classify = scan.get_or_insert_with(|| {
-            lease_scanner(project_root, &leases, |pr| {
-                reap_pr_terminal(project_root, pr)
-            })
-        });
-        let mut report = ReapReport::default();
-        classify(&lease, &mut report);
-        report.reapable.first().is_some_and(|row| {
+        if !classified.contains(&lease.id) {
+            let classify = scan.get_or_insert_with(|| {
+                lease_scanner(project_root, &leases, |pr| {
+                    reap_pr_terminal(project_root, pr)
+                })
+            });
+            let tree = &listed.worktree_path;
+            let mut report = ReapReport::default();
+            for sibling in leases[start..].iter().filter(|l| {
+                l.id == listed.id || (!tree.as_os_str().is_empty() && l.worktree_path == *tree)
+            }) {
+                if classified.insert(sibling.id.clone()) {
+                    if let Ok(Some(current)) = leases::read_exact_lease(project_root, &sibling.id) {
+                        classify(&current, &mut report);
+                    }
+                }
+            }
+            reapable.extend(
+                report
+                    .reapable
+                    .into_iter()
+                    .map(|r| (r.session, r.branch_tip)),
+            );
+        }
+        reapable.remove(&lease.id).is_some_and(|tip| {
             leases::read_exact_lease(project_root, &lease.id)
                 .ok()
                 .flatten()
                 .is_some_and(|current| {
-                    reap_one(project_root, &current, row.branch_tip.as_deref())
-                        .starts_with("reaped")
+                    reap_one(project_root, &current, tip.as_deref()).starts_with("reaped")
                 })
         })
     });
