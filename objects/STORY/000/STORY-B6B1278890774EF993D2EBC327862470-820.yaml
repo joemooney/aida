@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-25T02:33:12.140284511Z
+modified_at: 2026-11-25T02:37:03.620381514Z
 req_type: Story
 tags:
 - autonomy
@@ -462,6 +462,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T02:33:11.985934648Z
   modified_at: 2026-11-25T02:33:11.985934648Z
+- id: 01a21090-a368-71c3-8d95-a42db98a557d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:36):
+    # STORY-3038 slice 1 / PR #4532 r2 (advisor-122 ruling 2026-11-24 19:36 at 5c415037; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=100 lines. ONE round.
+    (F1) The preview diff uses `--ignore-submodules=none --no-ext-diff`, and ANY submodule/gitlink path is NOT allow-listed, so it stays SUPERVISED (fail closed).
+    (F2) A git-backed test with a REAL submodule path plus a REAL unreadable path through the ACTUAL preview path.
+    (F3) It must NOT say "Effective mode: drain" while slice 1 keeps landing supervised. Render it as "drain-eligible (preview; landing stays supervised until TASK-3890)" in BOTH human output and TOON. That's the safety property, and it must be visible.
+    One targeted cargo run, then make check-ci-fast, then push to #4532. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T02:37:03.620381514Z
+  modified_at: 2026-11-25T02:37:03.620381514Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
