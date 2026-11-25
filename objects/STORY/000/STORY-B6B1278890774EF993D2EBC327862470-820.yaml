@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-25T08:21:02.506843966Z
+modified_at: 2026-11-25T09:11:13.199796805Z
 req_type: Story
 tags:
 - autonomy
@@ -504,6 +504,12 @@ comments:
   modified_at: 2026-11-25T08:21:02.506843966Z
   session_id: 01a211b66540
   harness_version: codex-cli 0.167.0
+- id: 01a211f9-302f-7c93-9481-e20921b54a99
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-820` at head `c666694699ff0429fb9bf68e1caa4bb7107b716a`.'
+  created_at: 2026-11-25T09:11:13.199787524Z
+  modified_at: 2026-11-25T09:11:13.199787524Z
+  session_id: 01a211b66540
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
