@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:54:53.934825801Z
-modified_at: 2026-11-25T21:29:48.749983263Z
+modified_at: 2026-11-25T22:27:52.054920064Z
 req_type: Story
 tags:
 - completion
@@ -37,6 +37,26 @@ comments:
   modified_at: 2026-11-25T21:23:51.571894709Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a214d2-8a76-7f70-8836-5fb3d8cc6d34
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: baefcf4e12 (git diff origin/main...HEAD: 4 files, +265/-29).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: pr_train::complete_landed_specs runs after every non-dry-run train that lands, before (and independent of) the optional pull, so the advisor-loop train (no_pull=true) now completes too. It calls db_reconcile::complete_landed_commits, which is the pull-side auto_bump_scan over exactly the landed SHAs (git log --no-walk), skipping the HEAD-on-default-branch check. Test: story_3006_complete_at_merge_tests::train_landing_completes_trailer_spec_at_merge (checkout NOT pulled; BUG-9100 Completed with completion_sha = landed commit; Refs-only STORY-9101 not Completed).
+    - AC2 [behavioral-test]: pull_after_merge_time_completion_is_a_no_op: after merging the landed commits into main, auto_bump_done_to_completed returns no flips, status/completion_sha unchanged, exactly one SpecCompleted event.
+    - AC3 [behavioral-test]: both tests use a squash subject ending in (BUG-9100) (#4377).
+    - Extra: landing_without_a_known_commit_completes_nothing (empty / non-hex sha => no-op).
+    Targeted run: cargo test -p aida-cli-lib --lib story_3006 => 3 passed.
+
+    Probe findings: (1) same extractors/eligibility as pull, no divergence. (2) only full 40/64-hex SHAs reach git log. (3) 0/1/N landed handled; first commit wins per spec, as on pull. (4) a landed SHA missing from the local object DB makes git log fail => silent no-op; the next pull still completes it. (5) no authority/gate change; writes use the existing auto-bump author and store push.
+    Fixes during review: test git calls moved to test_git helper (maintenance ratchet); store-writer inventory row renamed for the extracted scan_and_share.
+    Residual risks: the train completes against the primary's local store without first pulling the store leg (BUG-1625 class); writes go through the same lock + propagate_store_writes as pull. The scan also performs the pull-side waiting-verdict/stranded-review forge lookups, adding some latency to a train run.
+  created_at: 2026-11-25T22:27:52.054920064Z
+  modified_at: 2026-11-25T22:27:52.054920064Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-8b06-77e3-b30f-6f6bcc0f2195
   author: joe
