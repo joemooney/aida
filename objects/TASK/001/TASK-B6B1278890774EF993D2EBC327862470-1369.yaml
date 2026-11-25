@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T18:27:25.010128140Z
+modified_at: 2026-11-25T18:30:21.040076188Z
 req_type: Task
 tags:
 - integration
@@ -343,6 +343,33 @@ comments:
   modified_at: 2026-11-25T18:27:25.010128140Z
   session_id: 01a213c53f76
   harness_version: 2.1.319 (Claude Code)
+- id: 01a213f9-522f-7682-87de-fdec2af95677
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4585 @ c43ef85ff9 (TASK-3882 r4 FINAL on a fresh branch; supersedes #4559 and #4416; Refs-only; +295/-29, of which about 155 are tests).
+
+    Result: PASS on both ruling items, with ONE shared-helper finding for the advisor to rule on (below). The change is fail-safe, but it is exactly the r3 lesson class.
+
+    Ruling (1), shared safety readers: contained_safety_scan keeps `--porcelain` with its existing untracked mode, and so does worktree_status_porcelain_lines. `--untracked-files=all` appears only in the new display-only refusal_status_lines and in the clone probe, which already used it. bug_1986 is unchanged (the self-review says it passes; CI will confirm).
+    Ruling (2): the clone probe and the refusal summary both read `status --porcelain=v2 -z` as raw bytes. porcelain_v2_z_lines quotes each path exactly once, from bytes. There's no from_utf8_lossy on paths and no dependence on core.quotePath, and describe_status_entry no longer re-escapes. The field counts are right for 1/2/u records (8/9/10), and the rename origPath is taken from the next NUL record. Tests cover a<TAB><space>, \xfe/\xff with a trailing space, rename endpoints, quotePath=false, agreement with git v1, and an end-to-end session-end refusal.
+
+    Safety-path changes I checked:
+    - Clone probe (a teardown safety decision): it moved from probe_run (run_sandboxed, no deadline) to run_sandboxed_until with the same cap and the caller's deadline. That's stricter, and the same sandbox.
+    - Noise filters now see RAW paths. A path that isn't UTF-8 never reaches skip(), so it counts as work (fail-safe). A non-ASCII UTF-8 path under a noise prefix now counts as noise, which is correct: it is noise. The PR body states this residual.
+    - worktree_status_porcelain_lines (host branch) now pins `-c core.quotePath=true`. That matches the contained branch, which already pinned it (TASK-2146). Its only non-test caller is status_sections.rs:91 (display). Acceptable.
+    - refusal_evidence (session_end): display only, run after the gate refused, on non-clone worktrees only, via host_git_command with --ignore-submodules=all. A failed scan falls back to the gate's entries.
+
+    FINDING (shared helper, for the advisor's ruling). porcelain_quote changed from private to pub, and it now ALSO quotes any path containing a SPACE. Its other caller is the SHARED safety reader contained_safety_scan → note_edited_submodule (git_ops.rs:4868). That function synthesizes ` M <path>` for an edited submodule "the way git would quote it". Git's porcelain v1 does NOT quote spaces, so a submodule at `my sub` is now added as ` M "my sub"`, which diverges from git and from the function's own doc comment.
+    Effect: fail-safe. The dedupe compares unquoted, and a consumer that doesn't unquote sees a path that doesn't match, so the entry stays dirty. But it changes a shared safety reader's output, which ruling (1) said must not change, and bug_1986 doesn't cover a space-named submodule.
+    Fix (about 8 lines): keep porcelain_quote git-compatible (no space rule) and add a display-only `refusal_quote(bytes)` = porcelain_quote, plus quoting on a space, used only in porcelain_v2_z_lines. Add a one-line test that note_edited_submodule's line for `my sub` equals git's.
+    Options: (a) an at-most-10-line micro-round before merge (r4 is the final round, so it needs your explicit allowance), or (b) merge as is and record it on TASK-3882 as a follow-up, given it's fail-safe. I recommend (a) if a Claude lane is free; otherwise (b).
+
+    Size: about 140 non-test lines against the brief's at-most-60. Most of it is the new v2 -z renderer that the ruling required; noted, not blocking.
+    Self-approve limits: this touches session teardown and safety-reader code (git_ops, session_end, seat_clone probe), so it needs an INDEPENDENT verdict at the final head.
+  created_at: 2026-11-25T18:30:21.040076188Z
+  modified_at: 2026-11-25T18:30:21.040076188Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
