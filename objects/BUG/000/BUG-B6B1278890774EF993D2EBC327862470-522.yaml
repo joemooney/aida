@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T08:54:29.848157184Z
+modified_at: 2026-11-25T09:18:16.585641851Z
 req_type: Bug
 tags:
 - lanes
@@ -150,6 +150,12 @@ comments:
   modified_at: 2026-11-25T08:54:29.848157184Z
   session_id: 01a211b9a1ca
   harness_version: codex-cli 0.167.0
+- id: 01a211ff-a609-7ee2-a3f3-62a294ea2e92
+  author: aida-publication-done
+  content: Implementer push a0ecc2ae63c3 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T09:18:16.585641356Z
+  modified_at: 2026-11-25T09:18:16.585641356Z
+  session_id: 01a211b9a1ca
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
@@ -235,6 +241,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a211ff-a609-7ee2-a3f3-6297ef8e014f
+  author: aida-publication-done
+  timestamp: 2026-11-25T09:18:16.585639520Z
+  session_id: 01a211b9a1ca
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
