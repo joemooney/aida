@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 707d29be1157e87dba031c3422dbd451fec7e00b
 
   The round-three brief asks for the accepted attribution limit in the PR body. The implementer self-review records it, but the PR body only contains the publication notice and FAST marker. Add the accepted limitation for a descendant that changes session, clears its environment, and runs outside the worktree.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T06:57:22.158602532Z
-modified_at: 2026-11-25T07:18:33.095510578Z
+modified_at: 2026-11-25T07:18:35.879861582Z
 req_type: Task
 tags:
 - carried-from:BUG-2721
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
   changes: []
+- id: 01a21192-1467-7d22-af3a-eb761290eb32
+  author: joe
+  timestamp: 2026-11-25T07:18:35.879856872Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 707d29be1157e87dba031c3422dbd451fec7e00b
   branch: pr-4402
