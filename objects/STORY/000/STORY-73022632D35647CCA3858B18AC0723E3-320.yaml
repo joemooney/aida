@@ -1,5 +1,6 @@
 id: 01a2141b-9294-7bb2-b60d-ee963d63e674
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-320
+agreed_id: STORY-3142
 title: 'Review PR-4587: [AI:claude] fix(review): promote spec-keyed approvals to ci:full and report each PR (BUG-2764)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a213ea`) for branch `fix-approved-cifull`.
@@ -52,6 +53,10 @@ history:
   timestamp: 2026-11-25T19:08:20.570009075Z
   session_id: 01a213ea88d0
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2141f-edd3-75f1-a581-7daca6cb7382
+  author: joe
+  timestamp: 2026-11-25T19:12:46.547044381Z
   changes: []
 filed_at:
   code_sha: 6719a94592e6bf03948325240c4a38f8e310f068

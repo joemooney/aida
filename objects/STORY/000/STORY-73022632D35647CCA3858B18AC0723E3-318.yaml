@@ -1,5 +1,6 @@
 id: 01a21409-119f-7492-b12e-8907c6782e0b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-318
+agreed_id: STORY-3141
 title: 'Review PR-4584: [AI:claude] feat(doctor): landing-drought watchdog with scheduled investigate route (Refs STORY-3131)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a213c8`) for branch `story-3131-s1-landing-drought`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21409-39b7-7871-9e4f-ea4aa23c9095
   author: dirtlab
   timestamp: 2026-11-25T18:47:58.647914179Z
+  changes: []
+- id: 01a2141f-ed48-7862-b791-41454f35cad8
+  author: joe
+  timestamp: 2026-11-25T19:12:46.408634593Z
   changes: []
 filed_at:
   code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8

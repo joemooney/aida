@@ -1,5 +1,6 @@
 id: 01a213fb-16ee-7370-b1a6-dc3a6d9c5c44
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-317
+agreed_id: STORY-3139
 title: 'Review PR-4582: [AI:claude] feat(review): hardened review-runner spawn helper (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21396`) for branch `int40-story-3120-s3a`.
@@ -35,6 +36,10 @@ history:
 - id: 01a213fb-4ead-71b0-a0a3-d9859568cf7c
   author: dirtlab
   timestamp: 2026-11-25T18:32:46.509764486Z
+  changes: []
+- id: 01a2141f-ed36-7253-83fe-43af63d2dee1
+  author: joe
+  timestamp: 2026-11-25T19:12:46.390838480Z
   changes: []
 filed_at:
   code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
