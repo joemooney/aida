@@ -267,6 +267,43 @@ pub(crate) fn cleared_by_human_facts(
     }
 }
 
+/// BUG-2663: the hold facts of a supervised-by-mode PR with no open hold.
+/// A PR never held needs clean labels. BUG-2745: a hold the ledger records
+/// as auto-released by a reviewer verdict ([`verdict_auto_release`]) is a
+/// recorded clearance, not a vanished marker, so it needs only labels that
+/// agree it was cleared. Any other clearance, a missing-marker reason, a
+/// live hold label or a closed PR refuses.
+///
+/// [`verdict_auto_release`]: crate::gate::merge_hold_core::verdict_auto_release
+// trace:BUG-2663 BUG-2745 | ai:claude
+pub(crate) fn unheld_supervised_facts(
+    hold_root: &std::path::Path,
+    pr: u64,
+    hold_reason: Option<&str>,
+    labels: impl FnOnce() -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
+) -> std::result::Result<crate::gate::mandate::HoldFacts, crate::gate::mandate::MandateRefusal> {
+    use crate::gate::mandate::{HoldFacts, MandateRefusal};
+    use crate::gate::merge_hold_core::{recorded_clearance, verdict_auto_release};
+    let auto_released = verdict_auto_release(hold_root, pr).is_some();
+    if hold_reason.is_some() || (!auto_released && recorded_clearance(hold_root, pr).is_some()) {
+        return Err(MandateRefusal::MarkerMissing);
+    }
+    let change = labels()
+        .map_err(MandateRefusal::LabelsUnreadable)?
+        .ok_or_else(|| {
+            MandateRefusal::LabelsUnreadable("no pinned label evidence for the checked head".into())
+        })?;
+    let labels_agree = if auto_released {
+        change.recorded_label == change.cleared_label
+    } else {
+        !change.recorded_label && !change.cleared_label
+    };
+    if !change.is_open() || change.hold_label || !labels_agree {
+        return Err(MandateRefusal::MarkerMissing);
+    }
+    Ok(HoldFacts::SupervisedByMode)
+}
+
 /// BUG-056: the store evidence one exclusion collection read, for the
 /// stability check. Every judged spec contributes its ID and its aliases: a
 /// spec named by its `agreed_id` has its object at the canonical `spec_id`
@@ -835,26 +872,7 @@ fn collect_mandate_cover(
             if cleared_by_human_facts(hold_root, pr, labels) == HoldFacts::ClearedByHuman {
                 HoldFacts::ClearedByHuman
             } else if supervised? {
-                if hold_reason.is_some()
-                    || crate::gate::merge_hold_core::recorded_clearance(hold_root, pr).is_some()
-                {
-                    return Err(MandateRefusal::MarkerMissing);
-                }
-                let change = labels()
-                    .map_err(MandateRefusal::LabelsUnreadable)?
-                    .ok_or_else(|| {
-                        MandateRefusal::LabelsUnreadable(
-                            "no pinned label evidence for the checked head".into(),
-                        )
-                    })?;
-                if !change.is_open()
-                    || change.hold_label
-                    || change.recorded_label
-                    || change.cleared_label
-                {
-                    return Err(MandateRefusal::MarkerMissing);
-                }
-                HoldFacts::SupervisedByMode
+                unheld_supervised_facts(hold_root, pr, hold_reason.as_deref(), labels)?
             } else {
                 HoldFacts::None
             }
