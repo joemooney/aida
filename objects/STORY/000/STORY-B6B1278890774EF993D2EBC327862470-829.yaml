@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T12:22:18.099276837Z
+modified_at: 2026-11-25T12:42:16.083465672Z
 req_type: Story
 tags:
 - integration
@@ -180,6 +180,12 @@ comments:
   modified_at: 2026-11-25T12:22:18.099276837Z
   session_id: 01a21285c99f
   harness_version: codex-cli 0.167.0
+- id: 01a212ba-6893-7f02-94e8-8dc8a27e1374
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int39-story-3120-s2` at head `48e4b95289aa45cce659b3ff7c9eb3708ce79d7b`.'
+  created_at: 2026-11-25T12:42:16.083462360Z
+  modified_at: 2026-11-25T12:42:16.083462360Z
+  session_id: 01a21285c99f
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
