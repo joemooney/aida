@@ -4774,7 +4774,12 @@ fn story_2897_s1b_waiting_dependencies() {
     assert!(validate_waiting_needs(&policy, &["check:Build".parse().unwrap()]).is_err());
     assert!(validate_waiting_needs(&policy, &["test:foo::bar".parse().unwrap()]).is_ok());
     // The aggregate rule applies to every kind, not only check:.
-    for raw in ["test:ci-tier:full", "artifact:Build", "actor:CI", "test:Build (ubuntu-latest)"] {
+    for raw in [
+        "test:ci-tier:full",
+        "artifact:Build",
+        "actor:CI",
+        "test:Build (ubuntu-latest)",
+    ] {
         assert!(
             validate_waiting_needs(&policy, &[raw.parse().unwrap()]).is_err(),
             "{raw} must be refused as aggregate"
@@ -4783,7 +4788,10 @@ fn story_2897_s1b_waiting_dependencies() {
     // A specific dependency alongside an aggregate one still passes.
     assert!(validate_waiting_needs(
         &policy,
-        &["check:Build".parse().unwrap(), "artifact:dist/aida.tar".parse().unwrap()]
+        &[
+            "check:Build".parse().unwrap(),
+            "artifact:dist/aida.tar".parse().unwrap()
+        ]
     )
     .is_ok());
 }
@@ -4795,9 +4803,16 @@ fn story_2897_needs_only_on_waiting_verdicts() {
     use crate::gate::review_verdict::VerdictKind;
     let policy = crate::landing_policy::LandingPolicy::default();
     let need = ["test:foo::bar".parse().unwrap()];
-    for kind in [VerdictKind::Approved, VerdictKind::RequestChanges, VerdictKind::Rejected] {
+    for kind in [
+        VerdictKind::Approved,
+        VerdictKind::RequestChanges,
+        VerdictKind::Rejected,
+    ] {
         let err = validate_verdict_needs(&policy, kind, &need).unwrap_err();
-        assert!(err.to_string().contains("only to a waiting verdict"), "{err}");
+        assert!(
+            err.to_string().contains("only to a waiting verdict"),
+            "{err}"
+        );
         assert!(validate_verdict_needs(&policy, kind, &[]).is_ok());
     }
     assert!(validate_verdict_needs(&policy, VerdictKind::Waiting, &need).is_ok());
