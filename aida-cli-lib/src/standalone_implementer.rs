@@ -106,6 +106,7 @@ a design fork, run `aida punt`; to push the branch but hold the PR for a manual 
 /// recorded lease still vouches for the work. This overrides the ordinary
 /// pickup shipping unit without weakening the live-owner check.
 // trace:TASK-2879 trace:BUG-2493 | ai:codex
+// trace:TASK-3876 | ai:codex
 pub(crate) const NATIVE_STOP_CONTRACT: &str = "\n\nStandalone native implementer launch: \
 Git metadata is read-only. Finish the edits and targeted tests, leave the edits uncommitted, \
 and write a final handoff listing changed files, validation results and blockers, then exit. \
@@ -113,11 +114,10 @@ Do not commit, push, open a PR or run `aida queue done` from this seat. After yo
 exits, the host launcher commits and publishes the PR; queue completion follows publication. \
 Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
 run `aida punt`; existing punt or hold signals remain publication vetoes. \
-For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" \
---commit-body-file <file>` to declare the host publication subject and optional body; \
-this records intent without publishing. \
-For a completing lane, use `aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" \
---commit-body-file <file>` to declare completion with an optional body. \
+When the exit summary claims every acceptance criterion, declare completion with \
+`aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>`. \
+Add `--partial-slice` only when the brief or exit summary declares a partial slice. \
+The host derives the PR title from this declaration and checks for outstanding child slices. \
 Omit `--commit-body-file <file>` when no body trailers are needed. \
 For required commit-body trailers such as `Help-Golden: unchanged`, write a UTF-8 file \
 outside the checkout (for example under `/tmp`) and add `--commit-body-file <file>` \
@@ -137,7 +137,8 @@ timeout: 900 seconds on a warm target, 3600 when the output says `seed: cold` (a
 can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
-finishes. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
+finishes. For the pre-push gate, run `aida lane job run -- make check-ci-fast` and wait the \
+same way. The gate runs its own Cargo metadata queries and ratchets. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
 zero-match filters, `--no-run` and `--list` do not. If it reports that this session has no lane \
 job runner, or refuses the run, say `untested=true` in your final result.";
 

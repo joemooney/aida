@@ -59,6 +59,12 @@ pub(crate) struct ChangeKey {
     pub number: u64,
 }
 
+impl From<u64> for ChangeKey {
+    fn from(number: u64) -> Self {
+        Self::pr(number)
+    }
+}
+
 impl ChangeKey {
     pub(crate) fn pr(number: u64) -> Self {
         Self {

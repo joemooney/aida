@@ -1296,7 +1296,23 @@ impl GitBackend {
     /// probe of a missing or partial store has no filesystem side effect.
     // trace:BUG-1629 | ai:claude
     pub fn read_metadata_only(root: &Path) -> Result<RequirementsStore> {
-        let backend = Self {
+        Self::without_initialization(root).load_metadata_only()
+    }
+
+    /// Access an existing store without creating directories during observation.
+    // trace:STORY-3095 | ai:codex
+    pub fn open_existing(root: &Path) -> Result<Self> {
+        let backend = Self::without_initialization(root);
+        anyhow::ensure!(
+            backend.objects_root.is_dir() && backend.metadata_path.is_file(),
+            "incomplete canonical store at {}",
+            root.display()
+        );
+        Ok(backend)
+    }
+
+    fn without_initialization(root: &Path) -> Self {
+        Self {
             root: root.to_path_buf(),
             objects_root: root.join("objects"),
             metadata_path: root.join("metadata.yaml"),
@@ -1304,8 +1320,7 @@ impl GitBackend {
             auto_commit: false,
             oplog_enabled: false,
             pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
-        };
-        backend.load_metadata_only()
+        }
     }
 
     /// Save metadata to the metadata.yaml file.
@@ -3351,6 +3366,59 @@ impl DatabaseBackend for GitBackend {
         users.sort();
         users.dedup();
         Ok(users)
+    }
+
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    fn queue_update_notes(
+        &self,
+        requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        let queues = self.root.join("registry/queues");
+        let files = match std::fs::read_dir(&queues) {
+            Ok(files) => files,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(e.into()),
+        };
+        let paths = files
+            .map(|file| file.map(|entry| entry.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        let mut total = 0;
+        for path in paths {
+            if path.extension() != Some(std::ffi::OsStr::new("yaml")) {
+                continue;
+            }
+            let relative = path
+                .strip_prefix(&self.root)?
+                .to_str()
+                .context("queue path is not valid UTF-8")?;
+            if !Self::read_queue_file(&path)?
+                .iter()
+                .any(|row| requirement_ids.contains(&row.requirement_id))
+            {
+                continue;
+            }
+            let _lock = self.lock_queue_write()?;
+            let mut entries = Self::read_queue_file(&path)?;
+            let mut changed = false;
+            for entry in entries
+                .iter_mut()
+                .filter(|e| requirement_ids.contains(&e.requirement_id))
+            {
+                total += 1;
+                let note = update(entry.note.as_deref());
+                if entry.note.as_ref() != Some(&note) {
+                    entry.note = Some(note);
+                    changed = true;
+                }
+            }
+            if changed {
+                crate::fs_atomic::write_atomic(&path, serde_yaml::to_string(&entries)?)?;
+                self.auto_commit_paths("update queue note", &[relative]);
+            }
+        }
+        Ok(total)
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {

@@ -1566,6 +1566,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["cache-refresh", "refresh-worker", "cache-worker"],
         "cache-refresh",
     ),
+    (&["repair-reservations"], "repair-reservations"),
     (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
     (
         &["abandoned-lease", "abandoned-leases", "abandoned"],
@@ -1914,6 +1915,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     // trace:STORY-2849 | ai:codex
+    (&["stalled-reviews"], "stalled-reviews"),
     (&["landing-health"], "landing-health"),
     // Open changes nobody is moving. trace:STORY-2906 | ai:claude
     (
