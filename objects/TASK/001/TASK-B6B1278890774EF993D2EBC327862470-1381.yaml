@@ -8,17 +8,27 @@ description: |
   ## Acceptance
   - AC1: (F4) throttling restores the terminal with a bounded graceful stop before SIGKILL of the interactive gh child (ci_watch.rs:62); (F5) intentionally throttled time does not count toward CI inactivity (ci_probe.rs:658). Tests.
   - AC2: (F6) a throttle is reported as a distinct throttle state, not a generic discovery error (advisor_loop_service.rs:1183, review_watch.rs:2988); (F7) the review-watch fixture exercises the real throttled discovery path end to end (task_1993_review_watch_tests.rs:5709). Tests.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T21:04:03.035149773Z
-modified_at: 2026-11-25T00:14:48.602982057Z
+modified_at: 2026-11-25T00:15:38.023975273Z
 req_type: Task
 tags:
 - forge
 - integration
 - throughput
+comments:
+- id: 01a2100e-d9d1-7d32-b240-8f8bea7e780c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 71bb63b62b39af8acab3724b1ec8d938c651df11. AC1: [evidence: behavioral-test] blocked before testing. AC2: [evidence: behavioral-test] blocked before testing. Inspection of ci_watch.rs and the review-watch fixture on the seat and remote integration tip found the prerequisite absent. Merge-base diff, worktree diff and untracked additions empty. No fixes or gate run. See blocked-dependency punt.
+  created_at: 2026-11-25T00:15:38.023975273Z
+  modified_at: 2026-11-25T00:15:38.023975273Z
+  session_id: 01a210032a74
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f5f-9bfc-71d2-8ab9-9a49e196522f
   author: joe
@@ -44,6 +54,15 @@ history:
   session_id: 01a210032a74
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a2100e-cd98-7782-a51c-6f823f202fde
+  author: dirtlab
+  timestamp: 2026-11-25T00:15:35.320166148Z
+  session_id: 01a210032a74
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
@@ -52,3 +71,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8a4c9ba4ba5
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: Both the seat HEAD 71bb63b62b and advertised integration e703bc469a lack the BUG-2735 interactive throttle and review-watch fixture. Restoring the prerequisite 1bfff1d02c would change protected ci_gate.rs and pr_train.rs outside the brief. Restore the prerequisite on integration and relaunch this native seat there.
+  raised_by: implementer
+  raised_at: 2026-11-25T00:15:34.888695791Z
