@@ -17,12 +17,12 @@ description: |
   4. Live-binary guard: in review-gated mode, `aida dev build` promotion refuses a main SHA without green CI and names the last green SHA. Activation in a worktree is unaffected.
   5. Docs: the two-seat protocol and the landing docs describe both modes and when to choose each.
   6. Tests: the ship gate in each mode, the required-check reconcile (forge mocked), the red-main alert routing, and the promotion refusal.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T03:05:35.866360786Z
+modified_at: 2026-11-25T03:06:34.820888809Z
 req_type: Story
 tags:
 - landing
@@ -1697,6 +1697,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a210ab-5b6a-7aa3-b8b1-5f2cef961e28
+  author: dirtlab
+  timestamp: 2026-11-25T03:06:35.242141402Z
+  session_id: 01a210aa3746
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -1706,3 +1715,8 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'PR #4401 staged parents 0612b2c022 and 5d24023de5 overlap in the same readiness decision in review_watch_ready.rs: S1b permits covered red checks in review-gated mode, while incoming clean_policy requires successful exact-head latest FULL evidence for a stale base. Their intersection needs an explicit precedence decision. main_watch.rs also overlaps pass-deadline and verdict-error behavior. All ten host-recorded conflict paths remain unresolved: .aida/config.toml and aida-cli-lib/src/{forge.rs,land_metrics.rs,main_watch.rs,maintenance_schedule.rs,review_commands.rs,review_draft.rs,review_watch_ready.rs,tests/story_2897_main_watch_tests.rs,tests/task_1945_review_watch_ready_tests.rs}. No edits or publication declaration.'
+  raised_by: implementer
+  raised_at: 2026-11-25T03:06:34.820888809Z
