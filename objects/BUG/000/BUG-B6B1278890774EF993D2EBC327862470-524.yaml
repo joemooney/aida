@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: An exited-attempt hold is keyed by (PR, head SHA). When the PR head differs from the held attempt's head, review-watch dispatches the new head with no liveness probe. This includes the hub/claim path: an old head's claim, Running or not, never blocks a different head. Verdicts stay head-pinned, so a late verdict from the old attempt never counts for the new head. A same-head hold stays held until an operator runs `--release`. `--release` also clears the saved skip entry.
   - AC2: Tests: a hold on head A plus a new head B → B is dispatched with no probe; the same head A → still held; a late verdict from the A attempt does not count for B; a hub-enabled case where A's claim is left Running → B is still dispatched.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T11:48:16.966711640Z
+modified_at: 2026-11-25T11:48:19.103291844Z
 req_type: Bug
 tags:
 - review-watch
@@ -123,6 +123,11 @@ comments:
   content: 'DEFERRED (advisor-122 2026-11-25 04:55, #4568 r2): the p2 race between `review watch --release` and record_skip (a release can be overwritten by a concurrent skip record). For a later slice.'
   created_at: 2026-11-25T11:48:16.966711640Z
   modified_at: 2026-11-25T11:48:16.966711640Z
+- id: 01a21289-041f-7a80-9c69-be1bc59b8de1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 63cd86e202fd7ca9e3810a5640664390285ac990 for BUG-2763. AC1 and AC2 fail as canonically recorded. The revised local design holds the same head and treats a late old-head approval as evidence for that old head. Production hub admission can still prevent the claimed moved-head dispatch, and a stale skip write can race release. GitHub fast gates, fast compile and Build (ubuntu-latest) passed for the reviewed head. The merge-hold status was pending. No local tests were run.. No triage reason was given.'
+  created_at: 2026-11-25T11:48:19.103286042Z
+  modified_at: 2026-11-25T11:48:19.103286042Z
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
@@ -211,6 +216,13 @@ history:
       ## Acceptance
       - AC1: An exited-attempt hold is keyed by (PR, head SHA). When the PR head differs from the held attempt's head, review-watch dispatches the new head with no liveness probe. This includes the hub/claim path: an old head's claim, Running or not, never blocks a different head. Verdicts stay head-pinned, so a late verdict from the old attempt never counts for the new head. A same-head hold stays held until an operator runs `--release`. `--release` also clears the saved skip entry.
       - AC2: Tests: a hold on head A plus a new head B → B is dispatched with no probe; the same head A → still held; a late verdict from the A attempt does not count for B; a hub-enabled case where A's claim is left Running → B is still dispatched.
+- id: 01a21289-041f-7a80-9c69-be0902da1654
+  author: joe
+  timestamp: 2026-11-25T11:48:19.103272065Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
@@ -219,11 +231,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 33a7b137a89
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Reviewed the full landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 63cd86e202fd7ca9e3810a5640664390285ac990 for BUG-2763. AC1 and AC2 fail as canonically recorded. The revised local design holds the same head and treats a late old-head approval as evidence for that old head. Production hub admission can still prevent the claimed moved-head dispatch, and a stale skip write can race release. GitHub fast gates, fast compile and Build (ubuntu-latest) passed for the reviewed head. The merge-hold status was pending. No local tests were run.
-  recovery_hint: address the review findings, move BUG-2763 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T11:42:53.344277611Z
