@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: same-stem batching is scoped to the directory/package: files that share a stem in different directories or packages are not batched together. Test.
   - AC2: Rust review facets are keyed on the file's LANGUAGE, not on the playbook ID prefix. Test.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T04:37:17.954943241Z
+modified_at: 2026-11-25T05:01:40.342970347Z
 req_type: Task
 tags:
 - integration
@@ -39,6 +39,12 @@ comments:
   modified_at: 2026-11-25T04:37:17.954943241Z
   session_id: 01a210ddafaf
   harness_version: codex-cli 0.167.0
+- id: 01a21114-b876-7ee2-8e0a-86c6cb8aefd6
+  author: aida-publication-done
+  content: Implementer push 1cd44c480f3f declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T05:01:40.342969511Z
+  modified_at: 2026-11-25T05:01:40.342969511Z
+  session_id: 01a210ddafaf
 history:
 - id: 01a20e94-a407-75a0-baf4-38e2a3232a5d
   author: joe
@@ -61,6 +67,14 @@ history:
   session_id: 01a210ddafaf
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a21114-b876-7ee2-8e0a-86b70544d511
+  author: aida-publication-done
+  timestamp: 2026-11-25T05:01:40.342965752Z
+  session_id: 01a210ddafaf
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
