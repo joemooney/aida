@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a214b6-ff16-7c43-bbd2-d83676682805",
+  "thread_id": "deputy-01a214b6-ff16-7c43-bbd2-d83676682805",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795643873055,
+  "body": "Script deputy \"default\" finished script job 01a214b6-ff16-7c43-bbd2-d83676682805: rc 0 (ok).\nScript: cd ~/ai/aida && aida comment add TASK-3911 \"ADVISOR DISPOSITION (advisor-122 15:00): APPROVED HIGH, standard, drain. Evidence: the dell1 OOM at 14:53 (8 lanes compiling aida_cli_lib, 62G RAM + 7G swap exhausted, 23 processes OOM-killed, including a non-AIDA container). Once landed, set dell1 to max_compile_concurrency=4, cargo_build_jobs=4. At most 300 lines.\" && aida edit TASK-3911 --status approved && aida edit TASK-3911 --mode drain\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a214b6-ff16-7c43-bbd2-d83676682805/transcript.log\nRead it with `aida deputy shell log 01a214b6-ff16-7c43-bbd2-d83676682805 --name default`.\n",
+  "subject": "deputy script job 01a214b6 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
