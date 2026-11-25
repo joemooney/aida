@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-25T05:16:17.103352950Z
+modified_at: 2026-11-25T05:19:36.112562500Z
 req_type: Bug
 tags:
 - mass-change
@@ -272,6 +272,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Host-staged PR #4396 repair overlaps behavior in aida-cli-lib/src/gate/kernel_deps.rs: one side permits class-only mass-change deferral while main returns Blocker::Unclassified for a missing tier. The advisor specifies the intended behavior, but the host repair instruction explicitly requires punting any behavioral overlap. aida-cli-lib/src/review_draft.rs also remains conflicted in the recorder regression tests. Requires a semantic repair authorized for this merge.. No triage reason was given.'
   created_at: 2026-11-25T05:16:17.103345045Z
   modified_at: 2026-11-25T05:16:17.103345045Z
+- id: 01a21125-5ee0-7092-b3b0-e641cf11c100
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:19):
+    # BUG-2712: FRESH SLICE from current main (advisor-122 ruling 2026-11-24 22:08; supersedes #4396; product-15). Lane: CODEX. MAIN, NEW branch bug-2712-fresh (cut from origin/main). <=300 lines. Ordinary implementer round: NOT a merge/conflict repair.
+    Re-implement the intent of the closed PR #4396 (old branch bug-b6b1278890774ef993d2ebc327862470-473, read it with git log/diff origin/main...origin/bug-b6b1278890774ef993d2ebc327862470-473) ON TOP of current main. Reference: the saved conflict state on dell1 at /home/dirtlab/salvage/BUG-2712-conflict-20261124T2128 (staged.patch, unmerged-worktree/).
+    SEMANTICS RULING (advisor-122): (20:40) MAIN's fail-closed behaviour wins: a finding with NO blocking_tier → Blocker::Unclassified BEFORE the class is consulted; class alone NEVER qualifies for mass-change deferral; BUG-2712's deferral applies only with an explicit deferrable tier. Resolve review_draft.rs consistently (drafts carry the tier; never infer it from the class). Test: unmet-claimed-ac + no tier → Unclassified blocker even under mass-change.
+    Read `aida show BUG-2712` for the ACs. One targeted cargo run, then make check-ci-fast. Open a NEW PR to main with the completing (BUG-2712) trailer. COMMIT your work.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+    TITLE TRAILER: ship with the COMPLETING "(SPEC-ID)" trailer when your work meets every acceptance criterion of the spec. Use "Refs SPEC-ID" ONLY if this brief explicitly says this is a partial slice (advisor-122 ruling 2026-11-24 09:35).
+    RATCHET LEDGERS: never add a site or RAISE a count; LOWERING an exact count to match sites you REMOVED is tightening and is allowed (product-15 2026-11-24, after BUG-2749 punted on an over-strict brief).
+  created_at: 2026-11-25T05:19:36.112562500Z
+  modified_at: 2026-11-25T05:19:36.112562500Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
