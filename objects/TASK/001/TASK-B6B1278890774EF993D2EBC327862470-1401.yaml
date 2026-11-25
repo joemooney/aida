@@ -2,14 +2,70 @@ id: 01a210f2-2c2e-7730-b276-d9e8d2555732
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1401
 agreed_id: TASK-3895
 title: Mandate-attested release of dead-lane repair reservations (project knob, default off)
-description: x
+description: |
+  Joe approved this 2026-11-24 21:23 (advisor-122 filed it). Today, every conflict-repair lane that punts leaves a repair-journal reservation that only an operator can release (`aida doctor heal repair-reservations --attest`, which is terminal-bound). That costs Joe one manual step per lane; there were 4 on 2026-11-24. This is an interim fix until BUG-2761 (resume a retained seat) removes most cases, and it stays afterwards as a fallback.
+
+  ## Acceptance criteria
+
+  AC1: Add a project config knob, e.g. `[repair_journal] mandate_attested_release`, defaulting to false.
+  - Knob off: behaviour is unchanged, and the terminal attest is still required.
+  - Knob on, with a live operator mandate that carries the release scope: `aida doctor heal repair-reservations --id X --attest-by-mandate` releases the reservation non-interactively.
+    - It records the mandate id, grant and liveness evidence in the journal.
+    - It keeps the tree in place and deletes nothing.
+  - It refuses (fails closed) if:
+    - the lane has any live process, matched by lease id or tree path;
+    - the liveness probe errors or is incomplete;
+    - the lease owner is live or unverified;
+    - there is no mandate, or the mandate lacks the scope.
+
+  AC2: Tests:
+  - knob off → the terminal is still required;
+  - knob on + live lane → refuse;
+  - knob on + probe error → refuse;
+  - knob on + no mandate → refuse;
+  - knob on + dead lane + mandate → released, with an audit record.
+
+  Tier: STRICT (authority/grants + repair journal). Size: ≤300 lines, one slice.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T04:23:56.206173407Z
+modified_at: 2026-11-25T04:24:51.604874444Z
 req_type: Task
+history:
+- id: 01a210f3-0494-7051-bffa-7f144d13fb39
+  author: joe
+  timestamp: 2026-11-25T04:24:51.604873547Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: x
+    new_value: |
+      Joe approved this 2026-11-24 21:23 (advisor-122 filed it). Today, every conflict-repair lane that punts leaves a repair-journal reservation that only an operator can release (`aida doctor heal repair-reservations --attest`, which is terminal-bound). That costs Joe one manual step per lane; there were 4 on 2026-11-24. This is an interim fix until BUG-2761 (resume a retained seat) removes most cases, and it stays afterwards as a fallback.
+
+      ## Acceptance criteria
+
+      AC1: Add a project config knob, e.g. `[repair_journal] mandate_attested_release`, defaulting to false.
+      - Knob off: behaviour is unchanged, and the terminal attest is still required.
+      - Knob on, with a live operator mandate that carries the release scope: `aida doctor heal repair-reservations --id X --attest-by-mandate` releases the reservation non-interactively.
+        - It records the mandate id, grant and liveness evidence in the journal.
+        - It keeps the tree in place and deletes nothing.
+      - It refuses (fails closed) if:
+        - the lane has any live process, matched by lease id or tree path;
+        - the liveness probe errors or is incomplete;
+        - the lease owner is live or unverified;
+        - there is no mandate, or the mandate lacks the scope.
+
+      AC2: Tests:
+      - knob off → the terminal is still required;
+      - knob on + live lane → refuse;
+      - knob on + probe error → refuse;
+      - knob on + no mandate → refuse;
+      - knob on + dead lane + mandate → released, with an audit record.
+
+      Tier: STRICT (authority/grants + repair journal). Size: ≤300 lines, one slice.
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
