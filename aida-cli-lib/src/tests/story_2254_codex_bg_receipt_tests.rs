@@ -93,7 +93,11 @@ fn story_2254_bg_two_same_scope_one_admitted_and_terminal_frees() {
             f.project.path(),
             &first.attempt,
             |_| Ok(()),
-            |r| r.phase = phase,
+            |r| {
+                r.phase = phase;
+                r.worker = Some(me());
+                r.supervisor = Some(me());
+            },
         )
         .unwrap();
         assert!(scope_entry_blocker(f.project.path(), "implementer", "TASK-1").is_some());
@@ -139,29 +143,22 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
         scope_entry_blocker(f.project.path(), "implementer", "TASK-10").is_none(),
         "one corrupt receipt must not block every scope"
     );
-    // No readable scope at all, while a process still names the attempt:
-    // every scope is blocked, and it cannot be retired.
     std::fs::write(&path, "{ not json").unwrap();
-    let mut running = std::process::Command::new("sh")
-        .args(["-c", "sleep 30; true", &attempt])
-        .spawn()
-        .unwrap();
     assert!(scope_entry_blocker(f.project.path(), "implementer", "TASK-10").is_some());
     let err = retire_unknown(&dir, f.project.path(), &attempt, Path::new("/proc")).unwrap_err();
     assert!(
         format!("{err:#}").contains("cannot be proven dead"),
         "{err:#}"
     );
-    let _ = running.kill();
-    let _ = running.wait();
     // trace:BUG-2748 | ai:codex
     let complete = serde_json::json!({
         "grant_id": "public-selector",
+        "owner": Owner::Dispatcher(me()),
         "worker": {"pid": 2147483647, "start": me().start},
         "supervisor": {"pid": 2147483646, "start": me().start},
         "worktree": f.project.path(),
     });
-    for missing in ["worker", "supervisor", "worktree", "all"] {
+    for missing in ["worker", "supervisor", "worktree", "owner", "all"] {
         let mut partial = complete.clone();
         partial
             .as_object_mut()
@@ -183,6 +180,16 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     std::fs::write(&path, complete.to_string()).unwrap();
     let proc_root = f.project.path(); // Mock process table containing only the inspector.
     std::fs::create_dir(proc_root.join(std::process::id().to_string())).unwrap();
+    let scope = ScopeKey::new("implementer", "TASK-10");
+    let blocker = || scope_blocker_except(&dir, proc_root, &scope, None, proc_root);
+    let process = proc_root.join("2147483647");
+    std::fs::create_dir(&process).unwrap();
+    std::fs::write(process.join("stat"), "42 (worker) S 1 2147483647 1").unwrap();
+    assert!(blocker().is_some());
+    std::fs::write(process.join("stat"), "malformed").unwrap();
+    assert!(blocker().is_some());
+    std::fs::remove_dir_all(process).unwrap();
+    assert!(blocker().is_none());
     let kept = retire_unknown(&dir, f.project.path(), &attempt, proc_root).unwrap();
     assert!(kept.starts_with(dir.join("retired")) && kept.exists());
     assert!(!path.exists());
@@ -231,7 +238,7 @@ fn story_2254_bg_terminal_receipt_retention_is_bounded() {
             &r.attempt,
             |_| Ok(()),
             |r| {
-                r.phase = Phase::Exited;
+                r.phase = Phase::RefusedBeforeExecution;
                 r.owner = Owner::Released;
             },
         )
@@ -282,6 +289,8 @@ fn story_2254_bg_owner_transfer_is_a_compare_update() {
             Ok(())
         },
         |now| {
+            now.worker = Some(me());
+            now.supervisor = Some(sup.clone());
             now.owner = Owner::Supervisor(sup.clone());
             now.phase = Phase::SupervisorOwned;
         },

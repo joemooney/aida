@@ -820,9 +820,10 @@ fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
             h.root(),
             &h.attempt,
             |_| Ok(()),
-            move |r| {
+            |r| {
                 r.phase = Phase::RecoveryRequired;
                 r.owner = Owner::Released;
+                r.supervisor = Some(leader_id.clone());
                 r.worker = Some(w);
             },
         )
@@ -846,13 +847,22 @@ fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     // A missing start identity is unknown, never gone.
-    set_worker(ProcId {
-        pid: leader_id.pid,
-        start: String::new(),
-    });
+    let path = h.dir.join("attempts").join(format!("{}.json", h.attempt));
+    let intact = std::fs::read(&path).unwrap();
+    let mut damaged = serde_json::to_value(h.receipt()).unwrap();
+    damaged["worker"]["start"] = "".into();
+    std::fs::write(&path, damaged.to_string()).unwrap();
     let err = recover_launch_at(&h.dir, h.root(), &h.attempt, &own).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
-    set_worker(leader_id);
+    damaged = serde_json::from_slice(&intact).unwrap();
+    damaged.as_object_mut().unwrap().remove("supervisor");
+    std::fs::write(&path, damaged.to_string()).unwrap();
+    assert!(launch_status_at(&h.dir, h.root(), &h.attempt).contains("UNKNOWN"));
+    assert!(recover_launch_at(&h.dir, h.root(), &h.attempt, &own).is_err());
+    assert!(receipt::retire_unknown(&h.dir, h.root(), &h.attempt, h.root()).is_err());
+    assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2265").is_some());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), damaged.to_string());
+    std::fs::write(path, intact).unwrap();
     // A process still running in the worktree.
     let mut occupant = std::process::Command::new("sleep")
         .arg("30")

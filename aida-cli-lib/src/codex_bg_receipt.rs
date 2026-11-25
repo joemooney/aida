@@ -612,6 +612,25 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
     if receipt.attempt != stem {
         return ReceiptRead::Unknown("receipt attempt id does not match its file".into());
     }
+    let transferred = matches!(
+        receipt.phase,
+        Phase::SupervisorOwned
+            | Phase::Registered
+            | Phase::AcceptedRunning
+            | Phase::RecoveryRequired
+            | Phase::Exited
+    ) || receipt.worker.is_some()
+        || receipt.supervisor.is_some()
+        || matches!(receipt.owner, Owner::Supervisor(_));
+    let valid = |p: &ProcId| p.pid != 0 && p.start_tick().is_some();
+    if !receipt.worktree.is_absolute()
+        || matches!(&receipt.owner, Owner::Dispatcher(p) | Owner::Supervisor(p) if !valid(p))
+        || (transferred
+            && !(receipt.worker.as_ref().is_some_and(valid)
+                && receipt.supervisor.as_ref().is_some_and(valid)))
+    {
+        return ReceiptRead::Unknown("incomplete receipt attribution".into());
+    }
     ReceiptRead::Known(Box::new(receipt))
 }
 
@@ -668,7 +687,7 @@ pub(crate) fn list_receipts(dir: &Path, project_root: &Path) -> Vec<(String, Rec
 /// Why `scope` is not free: an attempt that still holds it, or an unknown
 /// receipt that might. `None` when no receipt stands in the way.
 pub(crate) fn scope_blocker(dir: &Path, project_root: &Path, scope: &ScopeKey) -> Option<String> {
-    scope_blocker_except(dir, project_root, scope, None)
+    scope_blocker_except(dir, project_root, scope, None, Path::new("/proc"))
 }
 
 /// [`scope_blocker`] that ignores attempt `except` (the caller's own).
@@ -677,6 +696,7 @@ fn scope_blocker_except(
     project_root: &Path,
     scope: &ScopeKey,
     except: Option<&str>,
+    proc_root: &Path,
 ) -> Option<String> {
     for (attempt, read) in list_receipts(dir, project_root) {
         if except == Some(attempt.as_str()) {
@@ -699,13 +719,11 @@ fn scope_blocker_except(
                 // every scope only while something may still run for it.
                 let blocks = match unknown_receipt_scope(dir, &attempt) {
                     Some(owned) => owned == *scope,
-                    None => {
-                        attempt_occupancy(dir, &attempt, Path::new("/proc")) != Occupancy::Clear
-                    }
+                    None => attempt_occupancy(dir, &attempt, proc_root) != Occupancy::Clear,
                 };
                 if blocks {
                     return Some(format!(
-                        "detached launch attempt {attempt} has an unreadable receipt ({why}), so it may still own this scope; inspect `aida agent launch-status {attempt}`, and once its processes are gone retire it with `aida agent recover-launch {attempt} --retire-unknown`"
+                        "detached launch attempt {attempt} has an unreadable receipt ({why}), so it may still own this scope; inspect `aida agent launch-status {attempt}`; incomplete attribution requires restoration or attested release. With complete attribution and a clear scan, use `aida agent recover-launch {attempt} --retire-unknown`"
                     ));
                 }
             }
@@ -742,7 +760,7 @@ fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
         worker: ProcId,
         supervisor: ProcId,
         worktree: PathBuf,
-        owner: Option<Owner>,
+        owner: Owner,
     }
     let attribution = receipt_path(dir, attempt)
         .ok()
@@ -762,15 +780,18 @@ fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
     }
     let first_process_tick = worker_tick.min(supervisor_tick);
     let owner_tick = match fields.owner {
-        Some(Owner::Dispatcher(p) | Owner::Supervisor(p)) => p.start_tick(),
-        _ => None,
+        Owner::Dispatcher(p) | Owner::Supervisor(p) => match p.start_tick() {
+            Some(t) if p.pid != 0 => Some(t.min(first_process_tick)),
+            _ => return Occupancy::Unknown("incomplete receipt attribution".into()),
+        },
+        Owner::Released => None,
     };
     let probe = OccupancyProbe {
         worktree: Some(&fields.worktree),
         group: Some(fields.worker.pid),
         session: Some(fields.supervisor.pid),
         attempt: Some(attempt),
-        not_before: Some(owner_tick.map_or(first_process_tick, |t| t.min(first_process_tick))),
+        not_before: owner_tick,
     };
     let mut own = std::collections::HashSet::new();
     own.insert(std::process::id());
@@ -898,9 +919,13 @@ pub(crate) fn with_scope_entry<T>(
     };
     let scope = ScopeKey::new(role, spec);
     with_admission_lock(&dir, || {
-        if let Some(blocker) =
-            scope_blocker_except(&dir, project_root, &scope, own_attempt().as_deref())
-        {
+        if let Some(blocker) = scope_blocker_except(
+            &dir,
+            project_root,
+            &scope,
+            own_attempt().as_deref(),
+            Path::new("/proc"),
+        ) {
             anyhow::bail!("refusing to enter `{}`: {blocker}", scope.spec);
         }
         enter()
@@ -920,6 +945,7 @@ pub(crate) fn scope_entry_blocker(project_root: &Path, role: &str, spec: &str) -
             project_root,
             &scope,
             own_attempt().as_deref(),
+            Path::new("/proc"),
         ))
     }) {
         Ok(blocker) => blocker,

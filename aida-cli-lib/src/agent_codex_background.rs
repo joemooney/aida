@@ -2065,7 +2065,7 @@ pub(crate) fn launch_status_at(
                     );
                 }
             }
-            let _ = writeln!(out, "  an unknown receipt never permits cleanup; once nothing runs for it: `aida agent recover-launch {attempt} --retire-unknown`");
+            let _ = writeln!(out, "  incomplete attribution requires restoration or attested release. Retirement requires complete attribution and a clear scan: `aida agent recover-launch {attempt} --retire-unknown`");
         }
         ReceiptRead::Known(r) => {
             let _ = writeln!(out, "attempt {}: {}", r.attempt, r.phase.as_str());
@@ -2189,7 +2189,7 @@ pub(crate) fn recover_launch_at(
     let r = match receipt::read_receipt(dir, root, attempt) {
         ReceiptRead::Known(r) => *r,
         ReceiptRead::Unknown(why) => anyhow::bail!(
-            "attempt {attempt} is UNKNOWN ({why}); nothing was changed and its scope stays held. Once nothing runs for it, retire it with `aida agent recover-launch {attempt} --retire-unknown`"
+            "attempt {attempt} is UNKNOWN ({why}); nothing was changed and its scope stays held. Inspect `aida agent launch-status {attempt}`; incomplete attribution requires restoration or attested release. With complete attribution and a clear scan, use `aida agent recover-launch {attempt} --retire-unknown`"
         ),
     };
     if !r.phase.holds_scope() {
@@ -2256,7 +2256,11 @@ pub(crate) fn recover_launch_at(
             Ok(())
         },
         |now| {
-            now.phase = Phase::Exited;
+            now.phase = if now.phase == Phase::Prepared {
+                Phase::RefusedBeforeExecution
+            } else {
+                Phase::Exited
+            };
             now.owner = Owner::Released;
             if now.terminal.is_none() {
                 now.terminal = Some(TerminalRecord {
