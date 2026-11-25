@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: dfdc2a82a951731a9174a3f8020e7d7a3b721ad7
 
   aida-cli-lib/src/review_watch.rs:3674–3688 and aida-cli-lib/src/forge_commit_ci.rs:370–402: The commit-check reader already fetches Actions metadata for every referenced run. The new FAST selector fetches that same run again under the receipt lock each tick, increasing API traffic and combining marker/attempt metadata from separate observations. Obtain the owner and conclusion from a single pinned run observation when selecting the applicable FAST run.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T04:33:35.454098023Z
-modified_at: 2026-11-25T21:04:28.693684759Z
+modified_at: 2026-11-25T21:04:30.575820656Z
 req_type: Task
 tags:
 - carried-from:TASK-3877
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T05:37:23.643732671Z
   changes: []
+- id: 01a21486-396f-7df2-be16-4a4073098a9f
+  author: joe
+  timestamp: 2026-11-25T21:04:30.575817992Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: dfdc2a82a951731a9174a3f8020e7d7a3b721ad7
   branch: pr-4558
