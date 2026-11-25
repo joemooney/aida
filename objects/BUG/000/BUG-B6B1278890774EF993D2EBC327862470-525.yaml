@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T20:03:49.651166258Z
+modified_at: 2026-11-25T20:05:22.974036417Z
 req_type: Bug
 tags:
 - ci
@@ -121,6 +121,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T20:03:49.447919359Z
   modified_at: 2026-11-25T20:03:49.447919359Z
+- id: 01a21450-60b1-7892-9b3e-b044a9ba3091
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:05):
+    # BUG-2764 r1 (advisor-122 ruling 2026-11-25 13:04 on #4587 @ 6719a945; the core promotion fix is fine; AC3 reporting gaps; product-15). Lane: CLAUDE. MAIN, existing branch fix-approved-cifull / PR #4587. <=50 lines. HIGH priority.
+    (F1) Print EVERY pass-level error (repository load, directory open, ledger read) to stderr with context before the non-zero exit. The error chain must be visible (no bare `?`).
+    (F2) Print the collected per-PR lines (promoted/skipped/failed) BEFORE returning the error, so one failing PR never hides the others.
+    (F3) Add a TEST of the failure path: one PR's promotion fails → its "PR-N: failed: …" goes to stderr, the other PR's line is still printed, and the exit is non-zero.
+    Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4587. COMMIT your work. Keep the PR title "(BUG-2764)".
+  created_at: 2026-11-25T20:05:22.974036417Z
+  modified_at: 2026-11-25T20:05:22.974036417Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
