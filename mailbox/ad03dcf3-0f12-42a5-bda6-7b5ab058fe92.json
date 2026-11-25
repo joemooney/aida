@@ -1,0 +1,18 @@
+{
+  "id": "ad03dcf3-0f12-42a5-bda6-7b5ab058fe92",
+  "thread_id": "ad03dcf3-0f12-42a5-bda6-7b5ab058fe92",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795627310901,
+  "body": "- [STUCK-MERGE] #4574 is approved at 2bb36e32 and has not landed for 94 min (approved at 2bb36e329773)\n  -> land #4574 (the reconciler shows STALE-CI-BASE: wait)\n- [STUCK-REVIEW] #4376 at d469d3dc has had no verdict and no reviewer for 458 min\n  -> launch a reviewer for #4376 at d469d3dc\n- [STUCK-REVIEW] #4416 at 51b86352 has had no verdict and no reviewer for 544 min\n  -> launch a reviewer for #4416 at 51b86352\n- [STUCK-REVIEW] #4464 at 735b299a has had no verdict and no reviewer for 1043 min\n  -> launch a reviewer for #4464 at 735b299a\n- [STUCK-REVIEW] #4475 at dfa658dd has had no verdict and no reviewer for 1479 min\n  -> launch a reviewer for #4475 at dfa658dd\n- [STUCK-REVIEW] #4482 at 04aa3b22 has had no verdict and no reviewer for 1221 min\n  -> launch a reviewer for #4482 at 04aa3b22\n- [STUCK-REVIEW] #4532 at c6666946 has had no verdict and no reviewer for 515 min\n  -> launch a reviewer for #4532 at c6666946\n- [STUCK-REVIEW] #4533 at 9c3a006b has had no verdict and no reviewer for 617 min\n  -> launch a reviewer for #4533 at 9c3a006b\n- [STUCK-REVIEW] #4538 at 306675d0 has had no verdict and no reviewer for 687 min\n  -> launch a reviewer for #4538 at 306675d0\n- [STUCK-REVIEW] #4541 at 696fd842 has had no verdict and no reviewer for 375 min\n  -> launch a reviewer for #4541 at 696fd842\n- [STUCK-REVIEW] #4544 at 1d4db4ec has had no verdict and no reviewer for 325 min\n  -> launch a reviewer for #4544 at 1d4db4ec\n- [STUCK-REVIEW] #4568 at abbcff0a has had no verdict and no reviewer for 43 min\n  -> launch a reviewer for #4568 at abbcff0a\n- [STUCK-REVIEW] #4569 at ee393994 has had no verdict and no reviewer for 441 min\n  -> launch a reviewer for #4569 at ee393994\n- [STUCK-REVIEW] #4578 at aa1bd0fa has had no verdict and no reviewer for 55 min\n  -> launch a reviewer for #4578 at aa1bd0fa\n- [STUCK-REWORK] #4559 has changes requested at be1d46a9 (round 3) and no lane or session on it for 341 min\n  -> route rework of #4559 to a lane\n\n15 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 15 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
