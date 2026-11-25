@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When recording ci:full intent, RE-READ the PR head and skip if it moved since the snapshot (head-snapshot-then-verdict race). Use the workflow run's CONCLUSION, not the marker's run_in_progress flag, to decide settlement.
   - AC2: Key the FAST marker by PR number + base, not by SHA+name alone, so PRs sharing a head cannot match each other's marker. A test for each of the three cases.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T04:15:54.082307134Z
+modified_at: 2026-11-25T04:34:12.628528648Z
 req_type: Task
 tags:
 - ci
@@ -105,6 +105,14 @@ history:
   timestamp: 2026-11-25T04:14:10.332099948Z
   session_id: 01a210ad058e
   changes: []
+- id: 01a210fb-9414-71c2-87cd-0c6cd35f6a11
+  author: aida-orchestrator
+  timestamp: 2026-11-25T04:34:12.628757093Z
+  session_id: 01a210f6bf69
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
@@ -113,3 +121,15 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Round 1 full sweep of PR #4558 at dfdc2a82a951731a9174a3f8020e7d7a3b721ad7. The generated worksheet identifies TASK-3877 as completing, with two acceptance criteria.
+    TASK-b6b1278890774ef993d2ebc327862470-1361.AC1 — unverified. The stale and moved fixture cases cover both head reads. The queued, in_progress, missing-conclusion and completed cases distinguish workflow conclusion from the marker flag for one visible run. The current workflow can still be missing from the marker listing while an older run is concluded.
+    TASK-b6b1278890774ef993d2ebc327862470-1361.AC2 — verified by source inspection of the singleton owner PR/base check and the foreign and retargeted cases, alongside a matching positive control, in cargo test -p aida-cli-lib standalone_review_verdict_parent_records_after_unbound_child_refusal_and_retries. The supplied untraced-criteria list names both ACs. The diff extends the existing behavioral fixture for all three requested cases. Same-head association and receipt follow-ups are listed separately.
+    The implementer reported the focused regression passed. FAST CI and merge-hold-gate were green at this SHA (Actions run 45545237927 for FAST). Local tests were not run under reviewer policy. The actual base is integration at afbea08b75a, one commit ahead of the merge base. Its intervening review-engine change affects none of the findings.
+  recovery_hint: address the review findings, move TASK-3877 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T04:34:12.628528648Z
