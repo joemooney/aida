@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T04:44:46.448450567Z
+modified_at: 2026-11-25T04:45:44.041474439Z
 req_type: Task
 tags:
 - integration
@@ -86,6 +86,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T04:44:46.292848389Z
   modified_at: 2026-11-25T04:44:46.292848389Z
+- id: 01a21106-5aa8-75c3-ada8-e9f7891ac96d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:45):
+    # TASK-3882 / PR #4559 r2 (advisor-122 ruling 2026-11-24 21:32 at 876ace62, via integration-30; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int38-task-3882. <=60 lines. ONE round.
+    - F1 MUST: session_end.rs's status calls (~1584 and ~1635) use `--untracked-files=all`, so nested untracked files are listed individually. Test: a sole 'notes/todo ' (trailing space) is shown in full.
+    - F2: quote synthetic lines with git's porcelain v1 rule (leading/trailing space, control chars, quotes, backslash). Simplest: git's `-z` output plus ONE quote helper using git's predicate.
+    - F3: add the AC1 criterion trace to the two new tests.
+    - F4 (p3): render one entry per line instead of joining with "; ". INTEGRATION NOTE: agent_error_summary_help keeps only the FIRST line, and the r1 e2e test asserts the summary contains the path, so KEEP a first line that still names the first entry (or "N dirty paths, first: <path>"), then list entries one per line; KEEP the e2e assertion.
+    make check-ci-fast, then push to #4559. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T04:45:44.041474439Z
+  modified_at: 2026-11-25T04:45:44.041474439Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
