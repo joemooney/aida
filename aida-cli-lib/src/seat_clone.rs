@@ -6027,7 +6027,8 @@ pub(crate) struct ReapPublication {
 fn reap_inventory(main: &Path, clone: &Path) -> Result<String> {
     let args = [
         "-c".as_ref(),
-        "git symbolic-ref HEAD && git show-ref --head".as_ref(),
+        "git symbolic-ref HEAD && git show-ref --head && git rev-list --no-walk=unsorted --reflog"
+            .as_ref(),
     ];
     let bytes = run_sandboxed(clone, main, "sh", &args, PROBE_OUTPUT_CAP)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -6051,67 +6052,113 @@ pub(crate) fn reap_publication(
     );
     let mut tips = BTreeSet::from([tip]);
     for line in refs {
-        let (oid, name) = line.split_once(' ').context("invalid seat ref")?;
+        let (oid, name) = line.split_once(' ').unwrap_or((line, "reflog"));
         anyhow::ensure!(is_full_oid(oid), "invalid seat tip");
         anyhow::ensure!(name != "refs/stash", "seat has a stash (refs/stash)");
         tips.insert(oid);
     }
-    // Verbose porcelain includes unchanged refs. Only OIDs reported by this
-    // fetch can grant coverage, even if older tracking refs survive locally.
-    let deadline = Some(std::time::Instant::now() + ORIGIN_REFRESH_CAP);
-    let mut fetch = origin_fetch_command(main);
-    fetch.args([
-        "fetch",
-        "--atomic",
-        "--verbose",
-        "--porcelain",
-        "--no-prune",
-        "--no-tags",
-        "--no-write-fetch-head",
-        "--refmap=",
-        "origin",
-        "+refs/heads/*:refs/remotes/origin/*",
-    ]);
-    let output = run_bounded(fetch, "", deadline)
-        .context("publication unknown: origin fetch failed or timed out")?;
-    anyhow::ensure!(
-        !output.contains('\u{fffd}'),
-        "publication unknown: unreadable origin ref"
-    );
-    let mut fetched = BTreeSet::new();
+    // Observe origin without fetching objects or updating shared tracking refs.
+    let deadline = std::time::Instant::now() + ORIGIN_REFRESH_CAP;
+    let mut query = origin_fetch_command(main);
+    query.args(["ls-remote", "--heads", "origin"]);
+    let output = match crate::command_output_with_timeout_capped(
+        query,
+        ORIGIN_REFRESH_CAP,
+        PROBE_OUTPUT_CAP,
+    ) {
+        crate::BoundedCommandOutput::Completed(out)
+            if out.status.success() && out.stdout.len() as u64 <= PROBE_OUTPUT_CAP =>
+        {
+            String::from_utf8(out.stdout)?
+        }
+        _ => anyhow::bail!("publication unknown: origin lookup failed or exceeded its budget"),
+    };
+    let mut heads = Vec::new();
     for row in output.lines() {
-        // Porcelain: flag, old OID, new OID, full destination ref.
-        let (_, tail) = row
-            .get(2..)
-            .and_then(|r| r.split_once(' '))
-            .context("invalid fetch result")?;
-        fetched.insert(tail);
+        let (oid, name) = row
+            .split_once('\t')
+            .context("invalid origin advertisement")?;
+        let branch = name
+            .strip_prefix("refs/heads/")
+            .context("invalid origin branch")?;
+        anyhow::ensure!(is_full_oid(oid), "invalid origin head");
+        anyhow::ensure!(
+            heads.len() < ORIGIN_HEADS_CAP,
+            "origin branch inventory exceeds budget"
+        );
+        heads.push((oid, branch));
     }
-    let mut pointers = Vec::new();
+    let mut note = format!("Seat reap: `{branch}` at `{tip}`.");
     for oid in tips {
-        let mut cmd = aida_core::git_ops::host_git_command(main);
-        cmd.env(ACCESSOR_ENV, "1")
-            .env("GIT_NO_REPLACE_OBJECTS", "1")
-            .args([
-                "for-each-ref",
-                "--format=%(objectname) %(refname)",
-                "--contains",
-                oid,
-                "refs/remotes/origin/",
-            ]);
-        let refs = run_bounded(cmd, "", deadline)
-            .with_context(|| format!("publication unknown or unpublished tip {oid}"))?;
-        let pointer = refs
-            .lines()
-            .find(|line| fetched.contains(line))
-            .with_context(|| format!("origin does not have seat tip {oid}"))?;
-        pointers.push(format!("{pointer} covers {oid}"));
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "origin ancestry budget elapsed"
+        );
+        let (head, branch) = heads
+            .iter()
+            .find(|(head, _)| *head == oid)
+            .or_else(|| {
+                heads
+                    .iter()
+                    .take_while(|_| std::time::Instant::now() < deadline)
+                    .find(|(head, _)| {
+                        let mut cmd = aida_core::git_ops::host_git_command(main);
+                        cmd.env(ACCESSOR_ENV, "1")
+                            .env("GIT_NO_REPLACE_OBJECTS", "1")
+                            .env("GIT_NO_LAZY_FETCH", "1")
+                            .args(["merge-base", "--is-ancestor", oid, head]);
+                        run_bounded(cmd, "", Some(deadline)).is_some()
+                    })
+            })
+            .with_context(|| format!("origin does not have proven coverage for seat tip {oid}"))?;
+        use std::fmt::Write;
+        write!(note, " {head} origin/{branch} covers {oid}.")?;
+        anyhow::ensure!(
+            note.len() <= PROBE_OUTPUT_CAP as usize,
+            "recovery pointer exceeds budget"
+        );
     }
-    let note = format!("Seat reap: `{branch}` at `{tip}`. {}", pointers.join(", "));
     Ok(ReapPublication { inventory, note })
 }
 
+// Moving the tree takes its lease path out of circulation for resume. Open
+// descriptors follow the inode into quarantine and remain visible to procfs.
+fn remove_quarantined(clone: &Path, verify: impl FnOnce(&Path) -> Result<()>) -> Result<()> {
+    use aida_core::mailbox_lifecycle::rename_noreplace;
+    let parent = clone.parent().context("seat has no parent")?;
+    let tree = parent.join(format!(".aida-reap-{}", uuid::Uuid::new_v4()));
+    rename_noreplace(clone, &tree)?;
+    if let Err(error) = verify(&tree) {
+        rename_noreplace(&tree, clone).with_context(|| {
+            format!(
+                "{error:#}; retained seat at {} after restore failed",
+                tree.display()
+            )
+        })?;
+        return Err(error);
+    }
+    std::fs::remove_dir_all(&tree)
+        .with_context(|| format!("remove quarantined seat {}", tree.display()))
+}
+
 impl ReapPublication {
+    fn verify_quarantined(&self, main: &Path, tree: &Path) -> Result<()> {
+        let holders = || {
+            aida_core::worktree_holders::check_worktree_removal(tree)
+                .map_err(|why| anyhow::anyhow!("seat in use: {why}"))
+        };
+        holders()?;
+        anyhow::ensure!(
+            reap_inventory(main, tree)? == self.inventory,
+            "seat refs or reflogs changed during publication check"
+        );
+        anyhow::ensure!(
+            matches!(probe(main, tree), Probe::Known(current) if current.dirty.is_empty()),
+            "seat changed during publication check"
+        );
+        holders()
+    }
+
     fn record(&self, main: &Path, scope: &str) -> Result<()> {
         let mut recorded = false;
         let store =
@@ -6283,7 +6330,12 @@ fn destroy_inner(
         // Recheck publication against origin, including explicit refspec pushes
         // that left no tracking ref. Keep fresh dirty/unpublished work protected.
         // trace:BUG-2630 | ai:codex
-        let mut facts = match probe_counting_origin(main, clone, None, shipped, None) {
+        let initial = if matches!(mode, DestroyMode::PublishedReap { .. }) {
+            probe(main, clone)
+        } else {
+            probe_counting_origin(main, clone, None, shipped, None)
+        };
+        let mut facts = match initial {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
@@ -6389,12 +6441,6 @@ fn destroy_inner(
         }
         if let Some((proof, scope)) = &publication {
             proof.record(main, scope)?;
-            anyhow::ensure!(
-                matches!(probe(main, clone), Probe::Known(current) if current.dirty.is_empty()),
-                "seat changed during publication check"
-            );
-            aida_core::worktree_holders::check_worktree_removal(clone)
-                .map_err(|why| anyhow::anyhow!("seat in use: {why}"))?;
         }
         // Retire the clone's mail into main's anchor before the removal.
         // trace:STORY-1843 | ai:claude
@@ -6420,10 +6466,7 @@ fn destroy_inner(
             retirement,
             || {
                 if let Some((proof, ..)) = &publication {
-                    anyhow::ensure!(
-                        reap_inventory(main, clone)? == proof.inventory,
-                        "seat refs changed during publication check"
-                    );
+                    return remove_quarantined(clone, |tree| proof.verify_quarantined(main, tree));
                 }
                 std::fs::remove_dir_all(clone)
                     .with_context(|| format!("remove the seat clone {}", clone.display()))

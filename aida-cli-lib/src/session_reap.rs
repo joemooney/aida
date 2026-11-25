@@ -1308,7 +1308,7 @@ fn reap_one_with_clear_hooks(
 /// every reap scan, interactive or from the drive loop and night shift,
 /// visits every clone lease. Then the probe, in [`classify_session_reap`]'s
 /// order (unreadable or uncommitted state, the branch, work origin lacks),
-/// then publication coverage from a fresh origin fetch.
+/// then publication coverage from freshly advertised origin branches.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn classify_clone_reap(
     probe: impl FnOnce() -> crate::seat_clone::Probe,
@@ -2303,10 +2303,10 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
             );
         }
         if report.reapable.is_empty() {
-            println!("No session is reapable (finished + merged + process exited).");
+            println!("No session is reapable (finished + process exited + merged worktree branch or published seat clone).");
         } else {
             println!(
-                "{} finished session(s) are reapable (spec finished + branch merged + process exited):",
+                "{} finished session(s) are reapable (spec finished + process exited + merged worktree branch or published seat clone):",
                 report.reapable.len()
             );
             for row in &report.reapable {

@@ -1751,6 +1751,43 @@ fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
     let tip = seat_git(&clone, &["rev-parse", "HEAD"]).trim().to_owned();
     assert!(reap(Some(&tip)).contains(&tip));
     seat_git(&clone, &["push", "origin", "feat"]);
+    seat_git(&fx.main, &["fetch", "origin"]);
+    git_ok(&fx.origin, &["tag", "release", &tip]);
+    git_ok(&fx.origin, &["update-ref", "-d", "refs/heads/feat"]);
+    assert!(reap(Some(&tip)).contains(&tip));
+    assert_eq!(git_ok(&fx.main, &["rev-parse", "origin/feat"]).trim(), tip);
+    assert!(clone.exists() && lease().is_some());
+    seat_git(&clone, &["push", "origin", "feat"]);
+    seat_commit(&clone, "reflog-only");
+    let lost = seat_git(&clone, &["rev-parse", "HEAD"]);
+    seat_git(&clone, &["reset", "--hard", &tip]);
+    assert!(reap(Some(&tip)).contains(lost.trim()));
+    assert!(clone.exists() && lease().is_some());
+    seat_git(
+        &clone,
+        &[
+            "push",
+            "origin",
+            &format!("{}:refs/heads/recovered", lost.trim()),
+        ],
+    );
+    let mut missing_owner = lease().unwrap();
+    missing_owner.scope = "absent-owner".into();
+    assert!(
+        crate::session_reap::reap_one_clone(&fx.main, &missing_owner, Some(&tip))
+            .contains("cannot record publication")
+    );
+    assert!(clone.exists() && lease().is_some());
+    let proof = reap_publication(&fx.main, &clone, "feat", &tip).unwrap();
+    let error = remove_quarantined(&clone, |tree| {
+        assert!(!clone.exists());
+        std::fs::write(tree.join("late-edit"), "keep")?;
+        proof.verify_quarantined(&fx.main, tree)
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("seat changed"));
+    assert!(clone.join("late-edit").exists() && lease().is_some());
+    std::fs::remove_file(clone.join("late-edit")).unwrap();
     let row = reap(Some(&tip));
     assert!(row.starts_with("reaped"), "{row}");
     assert!(!clone.exists() && lease().is_none());
@@ -2691,9 +2728,11 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "hygiene", "c0ffee002473");
-    seat_commit(&clone, "published.txt");
+    std::fs::write(clone.join("published.txt"), "seat work").unwrap();
+    git_ok(&clone, &["add", "published.txt"]);
     // Both commit activity and dirty-file activity must be old: a fresh
     // commit intentionally suppresses salvage even for a dead process.
     // trace:BUG-2627 | ai:codex
@@ -2709,8 +2748,8 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
             "-c",
             "gc.auto=0",
             "commit",
-            "--amend",
-            "--no-edit",
+            "-m",
+            "seat work",
             "--date=2000-01-01T00:00:00Z",
         ],
     );
@@ -2719,10 +2758,11 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     git_ok(&clone, &["branch", "also-published"]);
     seat_git(&clone, &["push", "-q", "origin", "also-published"]);
     let mut lease = crate::list_leases(&fx.main).remove(0);
-    lease.tree_kind = TreeKind::Worktree;
-    lease.branch.clear();
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     lease.active_pid = Some(999_999_999);
+    let bound = toml::to_string_pretty(&lease).unwrap();
+    lease.tree_kind = TreeKind::Worktree;
+    lease.branch.clear();
     std::fs::write(clone.join(".gitmodules"), "").unwrap();
     std::fs::create_dir_all(clone.join("target")).unwrap();
     std::fs::write(clone.join("target/output"), "cache").unwrap();
@@ -2793,18 +2833,36 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     // Closed PR 2473 is absent from merged-only results.
     crate::test_exec::write_executable(
         &shims.join("gh"),
-        "#!/bin/sh\ncase \"$*\" in *--version*) exit 0;; *merged*) exit 0;; *closed*) echo '2473';; *) exit 1;; esac\n",
+        format!("#!/bin/sh\ncase \"$*\" in *--version*) exit 0;; 'pr view 2473 '*) printf 'CLOSED\\tMERGEABLE\\tAPPROVED\\t{}\\n';; *merged*) exit 0;; *) exit 1;; esac\n", git_ok(&clone, &["rev-parse", "HEAD"])),
     );
     let environment = aida_core::exec_context::Environment::capture();
     let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
     let _ambient =
         crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let change = crate::forge::ChangeRef {
+        id: 2473,
+        branch: "feat".into(),
+        base: "main".into(),
+        title: None,
+        url: String::new(),
+    };
+    let status = crate::forge::forge_for_kind(&fx.main, crate::forge::ForgeKind::GitHub)
+        .change_status(&change)
+        .unwrap();
+    assert_eq!(status.state, crate::forge::ChangeState::Closed);
+    assert_eq!(status.head_sha, git_ok(&clone, &["rev-parse", "HEAD"]));
+    git_ok(
+        &fx.main,
+        &["update-ref", "refs/remotes/origin/feat", "HEAD"],
+    );
+    let before = git_ok(&fx.main, &["show-ref"]);
     let report = crate::session_reap::scan_reapable(&fx.main);
     let row = report
         .reapable
         .iter()
         .find(|row| row.session == lease.id)
         .unwrap_or_else(|| panic!("legacy clone must be reapable: {report:?}"));
+    assert_eq!(git_ok(&fx.main, &["show-ref"]), before);
     assert_eq!(row.branch, "feat");
     assert!(row.branch_tip.is_some());
 
@@ -2883,6 +2941,28 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     );
     assert!(clone.exists());
     assert!(!crate::list_leases(&fx.main).is_empty());
+    seat_git(&clone, &["restore", "published.txt"]);
+    seat_git(&clone, &["push", "origin", "unpublished"]);
+    // Destructive mail retirement requires the original host-bound clone lease.
+    std::fs::write(crate::lease_path(&fx.main, &lease.id), bound).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let report = crate::session_reap::scan_reapable(&fx.main);
+    let [row] = report.reapable.as_slice() else {
+        panic!("expected one reapable clone: {report:?}")
+    };
+    assert_eq!(row.session, lease.id);
+    let tip = row.branch_tip.as_deref().unwrap();
+    let result = crate::session_reap::reap_one(&fx.main, &lease, Some(tip));
+    assert!(result.starts_with("reaped"), "{result}");
+    assert!(!clone.exists() && !crate::lease_path(&fx.main, &lease.id).exists());
+    let req = backend
+        .get_requirement_by_spec_id(&lease.scope)
+        .unwrap()
+        .unwrap();
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains(tip) && c.content.contains("origin/")));
 }
 
 /// A broken clone is unknown, and the guard's ordinary Display carries the
