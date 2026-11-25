@@ -12,12 +12,12 @@ description: |
   - AC1: an approval recorded at a head whose FAST run is complete adds ci:full (or re-triggers the full run), and a full run appears. An approval recorded while FAST is still running is promoted by approved-head-full-ci as soon as FAST completes, within one tick.
   - AC2: a test covering both orders (approval after FAST completes; approval before FAST completes, then the job tick).
   - AC3: `review --promote-approved-heads` prints one line per approved PR it considered (promoted / skipped + reason), and a non-zero exit always carries a stderr reason, so schedule.log is diagnosable.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T21:10:50.257466476Z
+modified_at: 2026-11-25T21:18:46.258975844Z
 req_type: Bug
 tags:
 - ci
@@ -159,6 +159,12 @@ comments:
   content: 'FOLDED REVIEW FINDING (backlog cleanup 2026-11-25 14:20, product-15): TASK-b6b1278890774ef993d2ebc327862470-1452: description: "From BUG-2764\nReviewed sha: 69cf3759d3c019700c639070d6e553dfe1941588\n\nStore-writer inventory coverage loss: after splitting promote_approved_heads into a private promotion_pass, the regenerated scripts/store-writers.toml drops the run_review -> promote_approved_heads wrapper row, ... (truncated; --full for the rest)" filed_at: 69cf375 (pr-4587) · aida 0.16.0 (ea1b3c3) · claude session 01a2147c relationships[1]{rel,id,title}:   references,BUG-2764,"Approved PRs do not get ci:full: review record --verdict approved and approved-head-full-ci leave approved heads on the fast tier (~1h landing delay per PR)" next[2]{cmd,to}:   aida edit TASK-b6b1278890774ef993d2ebc327862470-1452'
   created_at: 2026-11-25T21:10:50.257466476Z
   modified_at: 2026-11-25T21:10:50.257466476Z
+- id: 01a21493-47f2-73a3-a4ab-a21c006fafeb
+  author: aida-publication-done
+  content: Implementer push 69cf3759d3c0 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T21:18:46.258975372Z
+  modified_at: 2026-11-25T21:18:46.258975372Z
+  session_id: 01a214529616
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
@@ -218,6 +224,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21493-47f2-73a3-a4ab-a2082a1f3cad
+  author: aida-publication-done
+  timestamp: 2026-11-25T21:18:46.258973618Z
+  session_id: 01a214529616
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
