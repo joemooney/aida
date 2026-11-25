@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T01:36:56.979873604Z
+modified_at: 2026-11-25T01:39:06.266465836Z
 req_type: Bug
 tags:
 - leases
@@ -93,6 +93,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T01:36:56.566540851Z
   modified_at: 2026-11-25T01:36:56.566540851Z
+- id: 01a2105b-864d-77b1-864e-720f378f1ef2
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:39):
+    # BUG-2755 / PR #4541 r2 (advisor-122 ruling 2026-11-24 18:39 at 521e5f20; STRICT, lease safety; 8 majors; product-15). Lane: CODEX. MAIN, existing branch. <=200 lines. ONE round.
+    GOVERNING RULE: FAIL CLOSED. Any uncertainty means REFUSE to end the lease.
+    (F1) "Absent" requires an ENOENT from lstat of the path with trailing slashes stripped; so (F2) a DANGLING SYMLINK is NOT absent. Check mounts ACROSS NAMESPACES: scan every /proc/*/mountinfo you can read; if any is unreadable or the path can't be resolved, REFUSE ("absence unverifiable").
+    (F4) For a PRESENT clone, a git untracked traversal with ANY stderr warning (opendir/permission) is a FAILURE → refuse. Capture stderr even on exit 0.
+    (F7) Keep force_cleanup_lease's SECOND holder check after the clone probe; no early release that skips it.
+    (F8) Do NOT bypass the established mail-retention refusal path: an unbound clone with an ignored nonempty mailbox still goes through keep_ending_retained.
+    (F3, F5, F6) TESTS: inject mount evidence at the HEAL ENTRY (not the helper); the AC2 fixture is a REAL clone with an unreadable subdirectory → refused; the AC3 mailbox fixture is a clean repo with .aida/mailbox ignored, asserting the SPECIFIC mail-guard refusal.
+    If you cannot fit <=200, KEEP F1/F2/F4/F7/F8 and their tests; defer nothing else.
+    LIVE REPRO still on dell1: lease 01a2078e7236 (owns TASK-3211's canonical TASK-…-1190); do NOT end it yourself.
+    One targeted cargo run, then make check-ci-fast, then push to #4541. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T01:39:06.266465836Z
+  modified_at: 2026-11-25T01:39:06.266465836Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
