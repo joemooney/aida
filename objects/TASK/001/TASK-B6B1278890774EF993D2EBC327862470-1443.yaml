@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T15:28:30.252627712Z
-modified_at: 2026-11-25T16:18:59.944006152Z
+modified_at: 2026-11-25T16:41:11.875375949Z
 req_type: Task
 tags:
 - codex-limit
@@ -33,6 +33,19 @@ comments:
     - None
   created_at: 2026-11-25T16:18:59.944006152Z
   modified_at: 2026-11-25T16:18:59.944006152Z
+  session_id: 01a213800b55
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21395-27c3-7bc1-93cd-fa3af8ca4344
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: aa1bd0fab5
+    - AC1 [configuration-validation]: .aida/config.toml [agents] vendor = "claude" with the required TEMPORARY comment line; tomllib parse -> {'vendor': 'claude'}; make check-ci-fast exit 0 (lane job j20261125T161905191-4-0). Diff is 2 lines, 1 file.
+    - Probes: TOML comment is on its own line (no inline-comment parsing risk); single key, no multiplicity concerns; no authority/gate code touched.
+    - Fixes: none needed.
+    - Residual risk: temporary — must be reverted to codex after 2026-11-29 10:41 (no automatic revert).
+  created_at: 2026-11-25T16:41:11.875375949Z
+  modified_at: 2026-11-25T16:41:11.875375949Z
   session_id: 01a213800b55
   harness_version: 2.1.319 (Claude Code)
 history:
