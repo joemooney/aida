@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T04:35:55.680455354Z
+modified_at: 2026-11-25T05:15:54.369153260Z
 req_type: Story
 tags:
 - landing
@@ -1352,6 +1352,11 @@ comments:
   modified_at: 2026-11-25T04:35:55.680455354Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21121-c081-7010-9966-efb5fe378515
+  author: joe
+  content: 'FRESH SLICE (advisor-122 22:08): #4401 closed (branch kept); re-implemented from main on story-2897-fresh; the new PR is recorded here when it opens. Leftover reservation pr-4401-…-01a210aa3746 was released; any new leftovers wait for TASK-3895/BUG-2761.'
+  created_at: 2026-11-25T05:15:54.369153260Z
+  modified_at: 2026-11-25T05:15:54.369153260Z
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
