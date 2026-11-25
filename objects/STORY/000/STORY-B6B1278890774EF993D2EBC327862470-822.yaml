@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T01:29:08.112685348Z
+modified_at: 2026-11-25T01:29:16.453059652Z
 req_type: Story
 tags:
 - hygiene
@@ -119,6 +119,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full five-file landing diff for original head 1deb5e4d92f5160624c66dc67dcf15035af2ae08 against protected main dc27cf1f4cb49a050002334062efb59fe7d2b914, landed tree 163f7c1c1ef88e0abf43140b82458e2db2acc09b. The PR head is two commits behind main. None of the findings depends on the intervening base changes. Exact-head FAST gates, FAST compile, Build (ubuntu-latest), and merge-hold-gate passed. The full test shards were skipped. No local tests or builds were run. The implementer reported a targeted run before publication.. No triage reason was given.'
   created_at: 2026-11-25T01:29:08.112672272Z
   modified_at: 2026-11-25T01:29:08.112672272Z
+- id: 01a21052-430a-7931-b725-1517b57e6791
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3059):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1deb5e4d92f5
+    Recorded: 2026-11-25T01:26:00.068776710+00:00
+    Findings:
+    1. aida-cli-lib/src/seat_clone.rs:6390 and :6421 (pinned landing tree) — The deletion closure checks only symbolic HEAD and refs, after the last dirt and holder checks. The sandboxed inventory can take up to PROBE_TIMEOUT (120 seconds). An editor can write a Git-visible file, or a resumed process can start using the seat, during that interval while leaving the ref inventory byte-for-byte identical. Reap then deletes the new work and can remove an in-use seat. Carry the dirt and liveness checks into the final destructive boundary and coordinate removal with resume. Add a regression that injects a write or resumed holder after the preliminary checks.
+    2. aida-cli-lib/src/seat_clone.rs:6027–6058 (pinned landing tree) — The new proof inventories HEAD and refs/* only. After a reset or branch deletion, a seat-only commit can remain recoverable through the seat's HEAD reflog, while all listed refs point to published commits and the worktree is clean. Reaping then destroys the remaining recovery copy despite the decided policy requiring coverage for every local commit. Include recovery roots such as the HEAD reflog in the bounded evidence, or retain a recoverable bundle for their unique commits. Cover a clean published branch with a reflog-only unpublished commit.
+    3. aida-cli-lib/src/seat_clone.rs:6063–6107 (pinned landing tree) — Coverage is restricted to refs/heads/* and explicitly excludes tags. The decided policy allows a freshly verified origin ref to preserve a local commit. A commit preserved by an origin release tag, with no remaining origin branch containing it, is refused even when the seat is clean and all other work is published. Accept fresh coverage from allowed origin tags, peeling annotated tags for commit ancestry and keeping the ref and object identity in the recovery evidence.
+    4. aida-cli-lib/src/session_reap.rs:1422 and aida-cli-lib/src/seat_clone.rs:6063 (pinned landing tree) — Scanning every eligible clone now force-fetches all remote heads into the primary checkout's shared refs/remotes/origin namespace. This includes hygiene --dry-run, which the CLI guide promises changes nothing, and the maintenance condition that only counts reapable sessions. A preview can now advance or rewind unrelated local tracking refs without cleanup confirmation. Use isolated proof refs or another read-only observation for scans, and keep any write outside the shared tracking namespace.
+    5. aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:1677 and :2669 — The closed-unmerged fixture provides a forge shim that the clone path never calls. It checks scan eligibility and exercises removal only with a missing scanned tip. The other fixture checks successful removal and the comment without a closed-unmerged PR fixture. Exercise scan through actual removal with the published closed-unmerged fixture and check the owning-spec pointer, deleted clone and released lease in that same scenario.
+    6. aida-cli-lib/src/seat_clone.rs:6059–6107 and :6390 (pinned landing tree) — The destructive fixture covers an unreachable origin and a commit that was never pushed. It does not test a successful fetch after an origin branch has been deleted or rewound while the former tip still exists locally. It also does not force the required recovery-comment write to fail with otherwise valid publication evidence. Add negative removal cases for stale tracking evidence and a refused recovery-comment write, asserting that both the clone and its lease survive.
+    7. aida-cli-lib/src/session_reap.rs:2306 and :2309, and docs/cli/06-roles-sessions.md:115 and :193 — The user-facing summary and guide still describe a merged branch as required, and the hygiene guide promises that open PRs are never touched. The new seat-clone path allows fresh publication regardless of PR state. Update the messages and guide to describe the predicate for seat clones and retain the merge criterion for ordinary worktrees.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T01:29:16.298275080Z
+  modified_at: 2026-11-25T01:29:16.298275080Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
