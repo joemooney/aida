@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 833284c12f44606b5f680b675adc6d851eceb167
 
   aida-cli-lib/src/queue_cmd/work.rs:5153 and aida-cli-lib/src/standalone_implementer.rs:1572. Moving the cold-start wait ahead of the disk-floor preflight reverses their order. On a host with full cold-start capacity and disk below the floor, a pickup now waits for a slot before it can return the typed disk refusal and queue deferral. Preserve a disk-floor refusal with the existing deferral semantics before the potentially unbounded slot wait, and recheck disk at launch.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T04:06:36.960036536Z
-modified_at: 2026-11-25T07:19:23.062114750Z
+modified_at: 2026-11-25T07:19:25.515940449Z
 req_type: Task
 tags:
 - carried-from:BUG-2740
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-24T04:56:50.367155758Z
   changes: []
+- id: 01a21192-d64b-72d3-b6e7-99fed5ec46f7
+  author: joe
+  timestamp: 2026-11-25T07:19:25.515935458Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 833284c12f44606b5f680b675adc6d851eceb167
   branch: pr-4481
