@@ -9,12 +9,12 @@ description: |
   - AC1: Deferred review findings are recorded as FINDINGS attached to their spec/PR (the findings ledger), NOT as new requirement specs. Reviewers and deferral rulings stop creating "Review follow-up:" drafts; `aida list` (default) shows no findings.
   - AC2: `aida findings` (or `aida findings list --area <path|tag>`) shows open review debt grouped by area/spec; a finding is PROMOTED to a requirement only by an explicit command that groups related findings into one spec with acceptance criteria.
   - AC3: A one-time migration converts existing open "Review follow-up:" drafts into findings on their parent spec (dry-run + operator sign-off), preserving their text and provenance.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T03:02:18.439763407Z
+modified_at: 2026-11-25T03:03:20.000832551Z
 req_type: Story
 tags:
 - backlog
@@ -26,6 +26,26 @@ comments:
   content: 'advisor-122 APPROVED HIGH (2026-11-24 19:30). Architecture change: SKETCH FIRST (where findings live, the reviewer/deferral write path, the aida findings read surface, promotion, the migration of the 127 drafts via dry-run -> Joe sign-off -> apply). Slices: S1 record + write path; S2 aida findings + promote; S3 migration; each <=300. Interim: advisor follow-ups are filed as COMMENTS on the parent spec unless it says file a task.'
   created_at: 2026-11-25T02:27:25.709200616Z
   modified_at: 2026-11-25T02:27:25.709200616Z
+- id: 01a210a8-428a-7bf3-b2ac-c4d5d21e5e71
+  author: dirtlab
+  content: |-
+    SKETCH (codex design lane): Deferred review findings
+
+    1. Store one versioned review_findings collection in the canonical parent requirement object, keyed by finding ID and defaulting to empty for older objects. Each row carries parent UUID, forge/PR or MR, reviewed head SHA, path/line, area tags, severity, class, full text, provenance (source event, author, time, rationale), and status open/fixed/promoted/obsolete. Keep unknown metadata null. Derive IDs from parent UUID + immutable source receipt and finding ordinal so identical wording can occur twice and replay is harmless.
+
+    2. Replace both draft and sweep creation in findings_gate.rs::emit_verdict_findings with an idempotent parent update under the store writer lock. Pair verdict findings with finding_dispositions by ordinal using the existing validated reader. Reviewer guidance should record a deferral in the verdict. Give advisors a findings defer operation against the same source row, recording their authenticated ruling and rationale instead of filing a LOW task. Only an accepted deferral writes open debt. Blocking or malformed evidence cannot be downgraded by this operation. Surface write failures and allow replay. Gate decisions continue to read their existing evidence.
+
+    3. Extend aida findings list with --area <path-prefix|tag>, --spec and --pr. Default to open, grouped by area and parent, with distinct-ID totals for --count. Preserve existing triage inputs during rollout. aida list already enumerates requirement objects, so embedded findings add zero rows.
+
+    4. Add aida findings promote-group <finding-id>... --title ... --acceptance ... . Under one store lock, resolve every ID, require open findings and nonblank criteria, create one Draft referencing all parents, mark each finding promoted with the new UUID, and retain its text. Retrying the same group returns the existing spec. Mixed or conflicting selections fail as a unit.
+
+    5. Migration defaults to a dry-run manifest of open “Review follow-up:” drafts. Resolve parents from UUID relationships and corroborating origin tags. List conflicts, ambiguous parents and out-of-scope Approved tasks separately. Joe signs off on the exact manifest digest. Apply rechecks source fingerprints under lock, copies text and provenance keyed by legacy UUID, and archives each original with a backlink in the same update. Preserve its comments, history and incoming links; reruns skip verified conversions and report drift.
+
+    6. Proposed changed-line ceilings including tests (paths under aida-cli-lib/src unless qualified): S1 ≤300, aida-core/src/models.rs, findings_gate.rs, findings_gate_args.rs, tests/story_1421_carry_forward_findings_tests.rs and reviewer/advisor workflow masters (strict: verdict-driven write selection and advisor authority; test blocking, malformed and replay). S2 ≤300, findings_gate_args.rs, findings_gate.rs, findings.rs and promotion tests (filters, counts, atomic group retry). S3 ≤300, findings_gate_args.rs, findings_gate.rs and new findings_migration.rs with manifest, drift and rerun tests. Advisor approval precedes implementation.
+  created_at: 2026-11-25T03:03:11.835406553Z
+  modified_at: 2026-11-25T03:03:11.835406553Z
+  session_id: 01a210a6b0ca
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a21087-762e-7253-a4ae-33628f3dae2c
   author: joe
@@ -47,6 +67,15 @@ history:
   session_id: 01a210a6b0ca
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a210a8-627c-7ab2-8503-8cd0488ea866
+  author: dirtlab
+  timestamp: 2026-11-25T03:03:20.444395029Z
+  session_id: 01a210a6b0ca
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 260a82ae939faf34a8e6505a6f765f2151655610
   branch: main
@@ -54,3 +83,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: dc27cf1f4cb
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: Design sketch posted. Advisor sign-off is required before S1 implementation.
+  raised_by: implementer
+  raised_at: 2026-11-25T03:03:20.000832551Z
