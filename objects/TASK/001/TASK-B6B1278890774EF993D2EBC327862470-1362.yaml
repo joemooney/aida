@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T09:17:24.389525531Z
+modified_at: 2026-11-25T09:20:03.844040717Z
 req_type: Task
 tags:
 - review
@@ -159,6 +159,19 @@ comments:
   created_at: 2026-11-25T09:15:25.526671714Z
   modified_at: 2026-11-25T09:15:25.526671714Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21201-8198-75a0-a54e-535b5f29fc9f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:20):
+    # TASK-3878 / PR #4566 r2 (advisor-122 ruling 2026-11-25 02:20, per integration-30's pre-check; STORY-3095 slice 2; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int38r-task-3878. <=60 lines.
+    (a) Add the END-TO-END dedup test through scan_rows(repair=true) (not just the should_queue helper): the first run queues and notifies ONCE; a re-run at the same (PR, head, base) is a NO-OP; a new base tip while the earlier rework is still queued → NO double queue.
+    (b) Release the .aida flock BEFORE spawning the child and delivering mail (as the module doc says), OR fix the repair_journal module doc if holding it is required. Say which in the PR body.
+    (c) mergeable=UNKNOWN → re-query ONCE; if still unknown, report "unknown" (NEVER treated as clean).
+    Details: `aida show TASK-3878 --comments` (integration-30's pre-check). make check-ci-fast, then push to #4566. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T09:20:03.844040717Z
+  modified_at: 2026-11-25T09:20:03.844040717Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
