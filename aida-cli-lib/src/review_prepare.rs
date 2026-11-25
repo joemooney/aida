@@ -75,12 +75,20 @@ pub struct ReviewPrepareArgs {
     pub anchor_findings: Option<PathBuf>,
 
     /// Execute automated batch code review across the prepared batches using
-    /// `AIDA_REVIEW_RUNNER_CMD` (if set in the environment) or `claude --print`,
-    /// automatically anchoring reported `existing_code` snippets to exact 1-based
-    /// line numbers and verifying 100% file coverage.
+    /// the resolved project agent (`claude`, `codex`, `antigravity`/`agy`, or `gemini`)
+    /// or `AIDA_REVIEW_RUNNER_CMD`, automatically anchoring reported `existing_code`
+    /// snippets to exact 1-based line numbers and verifying 100% file coverage.
     // trace:STORY-3120 | ai:antigravity
     #[clap(long)]
     pub run_review: bool,
+
+    /// Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
+    /// When omitted, resolves from `.aida/review-rules.toml` (`default_agent`),
+    /// `[agents] vendor` (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`),
+    /// or the project's `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo).
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "AGENT")]
+    pub agent: Option<String>,
 
     /// Export anchored findings as a SARIF 2.1.0 JSON file inside the repository
     /// (for GitHub Code Scanning / GitLab SAST).
@@ -233,8 +241,10 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let mut runner_findings: Option<Vec<RawReviewFinding>> = None;
     let mut runner_ledger: Option<CoverageLedger> = None;
     if args.run_review {
+        let resolved_agent = resolve_review_runner_agent(&project_root, args, &rules_cfg)?;
         let (f, l) = execute_automated_batch_reviews(
             &project_root,
+            &resolved_agent,
             &mode,
             merge_base.as_deref(),
             head_ref.as_deref(),
@@ -914,11 +924,71 @@ fn post_forge_review_comment(project_root: &Path, pr_n: u64, comment_md: &str) -
     client.comment(&change_ref, comment_md)
 }
 
+/// Resolve the review runner agent CLI to invoke for `--run-review`.
+///
+/// Precedence (highest first):
+///   1. `--agent <AGENT>` CLI flag
+///   2. `AIDA_REVIEW_AGENT` environment variable
+///   3. `.aida/review-rules.toml` `default_agent`
+///   4. `[agents] vendor` from `.aida/agents.toml` > `.aida/config.toml` > `~/.aida/agents.toml`
+///   5. `[agents] enabled = [...]` written by `aida init` (e.g. `["codex"]` on a Codex-only repo)
+///   6. `"claude"` fallback
+// trace:STORY-3120 | ai:antigravity
+fn resolve_review_runner_agent(
+    project_root: &Path,
+    args: &ReviewPrepareArgs,
+    rules_cfg: &ProjectReviewRulesConfig,
+) -> Result<String> {
+    if let Some(flag_agent) = &args.agent {
+        return normalize_review_agent(flag_agent);
+    }
+    if let Ok(env_agent) = std::env::var("AIDA_REVIEW_AGENT") {
+        let trimmed = env_agent.trim();
+        if !trimmed.is_empty() {
+            return normalize_review_agent(trimmed);
+        }
+    }
+    if let Some(cfg_agent) = &rules_cfg.default_agent {
+        let trimmed = cfg_agent.trim();
+        if !trimmed.is_empty() {
+            return normalize_review_agent(trimmed);
+        }
+    }
+    if let Some(vendor) = aida_core::agents_config::resolve_default_vendor(project_root) {
+        return normalize_review_agent(&vendor);
+    }
+    if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(project_root) {
+        if selection.codex && !selection.claude {
+            return Ok("codex".to_string());
+        }
+        if selection.antigravity && !selection.claude && !selection.codex {
+            return Ok("agy".to_string());
+        }
+        if selection.claude {
+            return Ok("claude".to_string());
+        }
+    }
+    Ok("claude".to_string())
+}
+
+fn normalize_review_agent(raw: &str) -> Result<String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "claude" => Ok("claude".to_string()),
+        "codex" => Ok("codex".to_string()),
+        "antigravity" | "agy" => Ok("agy".to_string()),
+        "gemini" => Ok("gemini".to_string()),
+        other => anyhow::bail!(
+            "unsupported review agent `{other}` (expected `claude`, `codex`, `antigravity`/`agy`, or `gemini`)"
+        ),
+    }
+}
+
 /// Execute automated batch code reviews over each prepared batch using either
-/// `AIDA_REVIEW_RUNNER_CMD` (invoked with prompt on stdin) or `claude --print`.
+/// `AIDA_REVIEW_RUNNER_CMD` (invoked with prompt on stdin) or the resolved agent CLI.
 // trace:STORY-3120 | ai:antigravity
 fn execute_automated_batch_reviews(
     project_root: &Path,
+    agent: &str,
     mode: &str,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
@@ -944,7 +1014,7 @@ fn execute_automated_batch_reviews(
             linked_specs,
             content_cache,
         )?;
-        let raw_out = invoke_review_runner(project_root, &prompt)?;
+        let raw_out = invoke_review_runner(project_root, agent, &prompt)?;
         let (batch_findings, batch_ledger) = parse_runner_findings_json(&raw_out)
             .map_err(|e| anyhow::anyhow!("batch {} runner output error: {e}", batch.batch_index))?;
         all_findings.extend(batch_findings);
@@ -1062,7 +1132,7 @@ fn build_batch_review_prompt(
     Ok(prompt)
 }
 
-fn invoke_review_runner(project_root: &Path, prompt: &str) -> Result<String> {
+fn invoke_review_runner(project_root: &Path, agent: &str, prompt: &str) -> Result<String> {
     use std::io::Write;
     use std::process::Stdio;
 
@@ -1071,6 +1141,7 @@ fn invoke_review_runner(project_root: &Path, prompt: &str) -> Result<String> {
         if !trimmed.is_empty() {
             let mut child = Command::new(trimmed)
                 .current_dir(project_root)
+                .env("AIDA_REVIEW_RESOLVED_AGENT", agent)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -1089,16 +1160,58 @@ fn invoke_review_runner(project_root: &Path, prompt: &str) -> Result<String> {
         }
     }
 
-    let out = Command::new("claude")
+    let tuning = aida_core::agents_config::resolve_agent_tuning(
+        project_root,
+        agent,
+        aida_core::agents_config::AgentSeat::Reviewer,
+    );
+
+    let (program, mut argv) = match agent {
+        "codex" => {
+            let mut args = vec![
+                "exec".to_string(),
+                "--sandbox".to_string(),
+                "read-only".to_string(),
+                "--skip-git-repo-check".to_string(),
+            ];
+            if let Some(model) = tuning.model {
+                args.push("--model".to_string());
+                args.push(model);
+            }
+            if let Some(effort) = tuning.effort {
+                args.push("-c".to_string());
+                args.push(format!("model_reasoning_effort={effort}"));
+            }
+            args.push("--".to_string());
+            args.push(prompt.to_string());
+            ("codex", args)
+        }
+        "agy" => ("agy", vec!["-p".to_string(), prompt.to_string()]),
+        "gemini" => ("gemini", vec!["-p".to_string(), prompt.to_string()]),
+        _ => {
+            let mut args = vec!["--print".to_string()];
+            if let Some(model) = tuning.model {
+                args.push("--model".to_string());
+                args.push(model);
+            }
+            args.push("-p".to_string());
+            args.push(prompt.to_string());
+            ("claude", args)
+        }
+    };
+
+    let out = Command::new(program)
         .current_dir(project_root)
-        .args(["--print", "-p", prompt])
+        .args(&mut argv)
         .output()
-        .context(
-            "failed to run `claude --print` (set AIDA_REVIEW_RUNNER_CMD or install claude CLI)",
-        )?;
+        .with_context(|| {
+            format!(
+                "failed to run `{program}` review runner (use `--agent <claude|codex|agy|gemini>`, configure `[agents] vendor` / `aida init`, or set `AIDA_REVIEW_RUNNER_CMD`)"
+            )
+        })?;
     anyhow::ensure!(
         out.status.success(),
-        "`claude --print` failed: {}",
+        "`{program}` review runner failed: {}",
         String::from_utf8_lossy(&out.stderr).trim()
     );
     Ok(String::from_utf8(out.stdout)?)
@@ -1449,6 +1562,39 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"]
                 ["startLine"],
             3
+        );
+
+        // Verify project-level default agent resolution:
+        // 1. When a project was initialized with only codex (`aida init --agents codex`),
+        //    `resolve_review_runner_agent` defaults to `"codex"` automatically.
+        crate::test_env::write_project_config_fixture(root, "[agents]\nenabled = [\"codex\"]\n");
+        assert_eq!(
+            resolve_review_runner_agent(
+                root,
+                &ReviewPrepareArgs::default(),
+                &ProjectReviewRulesConfig::default()
+            )
+            .unwrap(),
+            "codex"
+        );
+        // 2. `.aida/review-rules.toml` `default_agent` overrides `aida init` enabled list.
+        let rules_with_gemini = ProjectReviewRulesConfig {
+            default_agent: Some("gemini".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_review_runner_agent(root, &ReviewPrepareArgs::default(), &rules_with_gemini)
+                .unwrap(),
+            "gemini"
+        );
+        // 3. Explicit `--agent` flag overrides project config.
+        let args_with_flag = ReviewPrepareArgs {
+            agent: Some("antigravity".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_review_runner_agent(root, &args_with_flag, &rules_with_gemini).unwrap(),
+            "agy"
         );
     }
 }

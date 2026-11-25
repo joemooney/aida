@@ -125,6 +125,11 @@ pub struct ProjectReviewRulesConfig {
     pub batch_token_budget: Option<usize>,
     #[serde(default)]
     pub max_files_per_batch: Option<usize>,
+    /// Optional project-level default agent for `aida review prepare --run-review`
+    /// (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub default_agent: Option<String>,
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
 }
