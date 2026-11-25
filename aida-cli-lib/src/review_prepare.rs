@@ -244,6 +244,12 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             .map(|file| file.path.as_str())
             .collect();
         for finding in &parsed {
+            // trace:TASK-3320 | ai:claude
+            anyhow::ensure!(
+                !aida_core::review_engine::is_credential_path(&finding.path),
+                "finding cites a credential path, which review never reads: {:?}",
+                finding.path
+            );
             anyhow::ensure!(
                 allowed.contains(finding.path.as_str()),
                 "finding path outside reviewable inventory: {:?}",
@@ -925,6 +931,76 @@ mod tests {
         );
         args.fail_on = Some("critical".into());
         handle_review_prepare(&args, &store).unwrap();
+    }
+
+    // trace:TASK-3320 | ai:claude
+    #[test]
+    fn root_credential_dirs_excluded_reported_and_refused_as_findings() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("seed.rs"), "seed").unwrap();
+        git_text(root, &["add", "seed.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        let creds = [
+            ".aws/credentials",
+            ".gnupg/secring.gpg",
+            ".config/gcloud/credentials.db",
+            ".docker/config.json",
+            ".netrc",
+        ];
+        let mut expected = Vec::new();
+        for rel in creds {
+            for path in [rel.to_string(), format!("nested/{rel}")] {
+                let full = root.join(&path);
+                std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+                std::fs::write(&full, "SENTINEL_SECRET_3320\n").unwrap();
+                git_text(root, &["add", "-f", &path]).unwrap();
+                expected.push(path);
+            }
+        }
+        std::fs::write(root.join("ordinary.rs"), "fn ok() {}\n").unwrap();
+        git_text(root, &["add", "ordinary.rs"]).unwrap();
+        crate::test_git::commit_fixture(root);
+        let dest = root.join("bundle.json");
+        let mut args = ReviewPrepareArgs {
+            from: Some(base),
+            json: true,
+            write: Some(dest.clone()),
+            ..Default::default()
+        };
+        handle_review_prepare(&args, &store).unwrap();
+        let rendered = std::fs::read_to_string(&dest).unwrap();
+        assert!(!rendered.contains("SENTINEL_SECRET_3320"));
+        let bundle: ReviewPreparationBundle = serde_json::from_str(&rendered).unwrap();
+        let reviewable: Vec<_> = bundle
+            .inventory
+            .reviewable_files
+            .iter()
+            .map(|f| f.path.as_str())
+            .collect();
+        assert_eq!(reviewable, ["ordinary.rs"]);
+        expected.sort();
+        let excluded: Vec<_> = bundle
+            .inventory
+            .excluded_files
+            .iter()
+            .inspect(|f| assert_eq!(f.reason, "secret_sensitive_path", "{}", f.path))
+            .map(|f| f.path.clone())
+            .collect();
+        assert_eq!(excluded, expected);
+
+        let input = root.join("findings.json");
+        args.anchor_findings = Some(input.clone());
+        for cited in [".netrc", "nested/.docker/config.json"] {
+            let finding = serde_json::json!([{"path":cited,"severity":"low",
+                "category":"bug","message":"m","existing_code":"SENTINEL_SECRET_3320"}]);
+            std::fs::write(&input, finding.to_string()).unwrap();
+            let error = handle_review_prepare(&args, &store).unwrap_err();
+            assert!(error.to_string().contains("credential path"), "{error:#}");
+        }
     }
 
     #[test]

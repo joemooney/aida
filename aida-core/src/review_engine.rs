@@ -710,6 +710,17 @@ fn classify_path_exclusion(
     None
 }
 
+/// True when `path` (repository-relative, `/` or `\` separated) names a
+/// credential file or lies under a credential directory, at the repository
+/// root or nested at any depth. Such paths are never read into a review
+/// prompt, and findings that cite them are refused.
+// trace:TASK-3320 | ai:claude
+pub fn is_credential_path(path: &str) -> bool {
+    let norm = path.replace('\\', "/");
+    let file_name = norm.rsplit('/').next().unwrap_or(&norm);
+    is_secret_sensitive_path(&norm, file_name)
+}
+
 fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
     let lower_name = file_name.to_ascii_lowercase();
     if lower_name == ".env"
@@ -717,15 +728,42 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
         || lower_name.ends_with(".pem")
         || lower_name.ends_with(".key")
         || lower_name.ends_with(".p12")
-        || lower_name == "id_rsa"
-        || lower_name == "id_ed25519"
-        || lower_name == "credentials.json"
+        || lower_name.ends_with(".pfx")
+        || matches!(
+            lower_name.as_str(),
+            "id_rsa"
+                | "id_dsa"
+                | "id_ecdsa"
+                | "id_ed25519"
+                | "credentials.json"
+                | ".netrc"
+                | "_netrc"
+                | ".git-credentials"
+                | ".pgpass"
+                | ".pypirc"
+        )
     {
         return true;
     }
-    norm_path
+    // trace:TASK-3320 | ai:claude
+    // Component matching, ASCII case-insensitive (a case-insensitive checkout
+    // resolves `.AWS/credentials` to the same directory as `.aws/credentials`).
+    let parts: Vec<String> = norm_path
         .split('/')
-        .any(|part| matches!(part, ".aws" | ".ssh"))
+        .map(|part| part.to_ascii_lowercase())
+        .collect();
+    parts
+        .iter()
+        .any(|part| matches!(part.as_str(), ".aws" | ".ssh" | ".gnupg" | ".azure"))
+        || parts.windows(2).any(|w| {
+            matches!(
+                (w[0].as_str(), w[1].as_str()),
+                (".config", "gcloud")
+                    | (".config", "gh")
+                    | (".docker", "config.json")
+                    | (".kube", "config")
+            )
+        })
 }
 
 /// Classify raw diff entries into reviewable and excluded lists, resolving each
@@ -1792,6 +1830,49 @@ mod tests {
                 classify_path_exclusion(&format!("{dir}-docs/config"), &[]),
                 None
             );
+        }
+    }
+
+    // trace:TASK-3320 | ai:claude
+    #[test]
+    fn root_and_nested_credential_paths_are_excluded() {
+        for rel in [
+            ".aws/credentials",
+            ".ssh/config",
+            ".gnupg/pubring.kbx",
+            ".azure/accessTokens.json",
+            ".config/gcloud/application_default_credentials.json",
+            ".config/gh/hosts.yml",
+            ".docker/config.json",
+            ".kube/config",
+            ".netrc",
+            "_netrc",
+            ".git-credentials",
+            ".pgpass",
+            ".pypirc",
+            ".AWS/credentials",
+            ".Docker/Config.json",
+        ] {
+            for prefix in ["", "nested/", "a/b/"] {
+                let path = format!("{prefix}{rel}");
+                assert_eq!(
+                    classify_path_exclusion(&path, &[]),
+                    Some(ExclusionReason::SecretSensitivePath),
+                    "{path}"
+                );
+                assert!(is_credential_path(&path), "{path}");
+                assert!(is_credential_path(&path.replace('/', "\\")), "{path}");
+            }
+        }
+        for path in [
+            ".docker/Dockerfile",
+            ".config/nvim/init.lua",
+            "gcloud/setup.md",
+            "src/netrc.rs",
+            ".kube-docs/config",
+        ] {
+            assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
+            assert!(!is_credential_path(path), "{path}");
         }
     }
 
