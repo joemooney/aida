@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T20:42:21.163156393Z
+modified_at: 2026-11-25T20:44:20.740100623Z
 req_type: Bug
 tags:
 - admission
@@ -26,6 +26,18 @@ relationships:
   target_id: 01a20f1e-62b5-7ab2-a411-c2901671838a
   created_at: 2026-11-25T20:42:17.454450912Z
   created_by: joe
+comments:
+- id: 01a21473-fec4-7dc0-98e7-f3445d27677f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:44):
+    # BUG-2765: review-watch holds admission across forge reads (advisor-122 13:47; product-15). Lane: CLAUDE. MAIN, NEW branch. STANDARD. <=250 lines. Completing (BUG-2765) trailer.
+    READ: `aida show BUG-2765` (evidence + AC1-AC3) and BUG-2757's fix (d9e1d55c3c3, #4576: 'release admission during worktree and history probes'). Apply the SAME pattern to the per-PR forge (gh pr view) reads: snapshot OUTSIDE the lock, then take admission only for the dispatch decision, with a staleness recheck. Add the AC2 test (slow stub forge; a manual train is admitted mid-scan) and the AC3 hold-time warning.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T20:44:20.740100623Z
+  modified_at: 2026-11-25T20:44:20.740100623Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
