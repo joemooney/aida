@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T00:00:58.986279493Z
+modified_at: 2026-11-25T00:13:29.281606131Z
 req_type: Story
 tags:
 - hygiene
@@ -76,6 +76,17 @@ comments:
   modified_at: 2026-11-24T23:55:50.420273564Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2100c-e4e4-72c2-8508-b02814d7b7d1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 71bb63b62b39af8acab3724b1ec8d938c651df11; native working tree reviewed with git diff HEAD. The merge-base diff and untracked list were empty.
+    AC1: [evidence: behavioral-test] task_2053_seat_clone_lifecycle_tests.rs:1677 covers removal, lease release and persisted origin branch/SHA pointers; :2669 exercises scanning with a closed, unmerged PR fixture. AC2: [evidence: behavioral-test] the current unpublished commit remains. AC3: [evidence: behavioral-test] taking origin offline refuses despite cached evidence. AC4: [evidence: behavioral-test] stash-only work refuses. AC5: [evidence: behavioral-test] the off-branch commit refuses until pushed. These cases call the reap path in the same lifecycle test.
+    Strict-tier inspection: scan checks holders, spec completion, clean state and branch. The destructive path re-fetches trusted origin, checks every ref tip in host Git, records the recovery pointer on the finished owning spec, rechecks dirt and holders, and compares the ref inventory before removal. Missing clone metadata now fails closed. Existing mail retirement remains mandatory. Actual Git probes verified new, unchanged, fast-forwarded and deleted branches. Formatting and whitespace checks passed. Lane regression and fast gate pending; no PR-head CI exists yet.
+  created_at: 2026-11-25T00:13:29.281606131Z
+  modified_at: 2026-11-25T00:13:29.281606131Z
+  session_id: 01a21000a7c5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
