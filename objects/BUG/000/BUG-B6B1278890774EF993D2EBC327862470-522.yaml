@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T16:42:04.862379244Z
+modified_at: 2026-11-25T16:43:26.480729994Z
 req_type: Bug
 tags:
 - lanes
@@ -388,6 +388,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T16:42:03.498851990Z
   modified_at: 2026-11-25T16:42:03.498851990Z
+- id: 01a21397-73a5-7d60-97a4-043b86b46887
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:43):
+    # BUG-2761 S3: route before reserve + attempt-scoped rollback (reservation-lifecycle sketch by integration-30, SIGNED OFF by advisor-122 2026-11-25 09:42; product-15). Lane: CLAUDE. STRICT TIER. MAIN, NEW branch from main. Title "(Refs BUG-2761)", because S3 does not complete the bug. <=300 changed lines.
+    READ FIRST: `aida show BUG-2761 --comments`, comment 25 (the sketch: §1 records/lifecycle; R4-3; test T2) and comment 26 (the signoff). Closed PR #4564 is reference only.
+    FIX R4-3 (p1): "A first-time interactive conflict pickup can strand a new reservation before any worker starts." (a) Decide the ROUTE (interactive vs headless worker vs refusal) BEFORE calling repair_journal `reserve`, so no path reserves and then refuses or returns early. (b) Attempt-scoped rollback: if this attempt reserved and then fails before a worker starts, roll back ITS OWN entry only (it must not touch entries from other attempts; key-match exact), and leave existing ProvenDead/attest semantics unchanged.
+    NOT IN SCOPE: K/owner-lock (S1), journal schema / reservation_id / base-in-key (S2), adoption (S4), Stale/--fresh (S5), mandate release (S6). No schema change.
+    TEST T2: a first-time interactive pickup that is refused after routing leaves NO reservation; a failure between reserve and worker start rolls back exactly that attempt's entry, and a pre-existing entry for another attempt survives.
+    One targeted cargo test run on this host, then make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T16:43:26.480729994Z
+  modified_at: 2026-11-25T16:43:26.480729994Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
