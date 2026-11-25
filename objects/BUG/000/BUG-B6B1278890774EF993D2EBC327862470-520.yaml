@@ -13,12 +13,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T01:04:40.825248848Z
+modified_at: 2026-11-25T01:13:40.508655756Z
 req_type: Bug
 tags:
 - hubs
 - store
 - sync
+comments:
+- id: 01a21043-fb9c-73d3-a2ef-5ed9baa1c42e
+  author: joe
+  content: |-
+    READ-ONLY DIAGNOSIS (product-15 2026-11-24 18:25, per advisor-122). Message site: aida-cli-lib/src/remote_create.rs:3182, rollback_to_preimage(), reached from :2860 when merge_and_validate() returns an error that is NOT a sync refusal. It does `err.context("reconcile refused; nothing was pushed; …")`: the REAL cause stays in the anyhow chain, but the CLI error printer shows only the outermost context. So the fix for AC1 is to render the full chain (`{:#}` / each `.chain()` cause) for this error (or include the cause text in the context string).
+    merge_and_validate() failure points (remote_create.rs ~2950-3127) that can reach it: "fast-forward to <tip> failed"; "union merge of <tip> failed"; "cannot list the objects of <rev>"; "union would lose N spec file(s) present on <hub> — refusing"; "unioned block registry has range collision(s) — refusing to publish"; "reconcile would publish registry content carrying email(s) currently on one hub only … re-run with --yes" (the cron job runs WITHOUT --yes).
+    Evidence so far: the email-consent path is RULED OUT (no one-sided email lines in registry diffs between origin b396b9cf040 and gitlab ab1549859da; base 120fccedf1fb). Both hubs changed registry/blocks.yaml and registry/agreed_counters.toml, so the BLOCK REGISTRY RANGE COLLISION is the leading candidate (both hubs allocating ID blocks independently today: home seats on origin, Joe's work clone on gitlab). Confirm once AC1 prints the chain.
+  created_at: 2026-11-25T01:13:40.508655756Z
+  modified_at: 2026-11-25T01:13:40.508655756Z
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
   branch: main
