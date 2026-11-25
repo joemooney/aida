@@ -1,0 +1,31 @@
+id: 01a2117d-88a5-78c2-84cd-da66906b578e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1410
+title: 'Review follow-up: Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automa'
+description: |-
+  From BUG-2761
+  Reviewed sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8
+
+  Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automatically selects retained repairs for --no-launch, --plan-only and --guided, and session_start.rs:3763-3784 transfers the journal and removes the predecessor. These modes skip host repair preparation and routing (queue_cmd/work.rs:6345); for --no-launch the command reports setup complete and prints a generic deferred launch with no repair instructions or host exit handler (6546-6596). A later real repair dispatch can then be blocked by the new live setup lease. Require a repair-capable launch before automatic transfer, or preserve the repair handoff through deferral with the same preparation and publication gates.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T06:56:09.381367346Z
+modified_at: 2026-11-25T06:56:09.381367346Z
+req_type: Task
+tags:
+- carried-from:BUG-2761
+- finding-hash:29156af6
+- from-review:BUG-2761
+relationships:
+- rel_type: References
+  target_id: 01a210b8-0b89-7b72-a5d9-49f67101d886
+  created_at: 2026-11-25T06:56:24.555598963Z
+filed_at:
+  code_sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8
+  branch: pr-4564
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d346c27496
+  vendor: claude
+  session: 01a211780fc6
