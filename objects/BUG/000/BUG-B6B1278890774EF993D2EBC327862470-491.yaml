@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T17:59:31.709405646Z
+modified_at: 2026-11-25T18:30:01.482904401Z
 req_type: Bug
 tags:
 - doctor
@@ -358,6 +358,11 @@ comments:
   created_at: 2026-11-25T17:59:31.709402545Z
   modified_at: 2026-11-25T17:59:31.709402545Z
   session_id: 01a2138d95fd
+- id: 01a213f8-ca0b-7d11-96a4-6eeff05c56e6
+  author: joe
+  content: 'DEFERRED follow-ups (advisor-122 override-approval of #4457 r4 @ 08ee6da5, 2026-11-25 11:35; one comment per the findings-as-comments rule):'
+  created_at: 2026-11-25T18:30:01.482904401Z
+  modified_at: 2026-11-25T18:30:01.482904401Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
