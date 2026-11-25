@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T06:44:23.368370505Z
+modified_at: 2026-11-25T06:46:03.566072566Z
 req_type: Task
 tags:
 - integration
@@ -122,6 +122,19 @@ comments:
   created_at: 2026-11-25T06:44:23.368364929Z
   modified_at: 2026-11-25T06:44:23.368364929Z
   session_id: 01a211314e8d
+- id: 01a21174-840d-7b51-9e25-94ff4a6e9f9f
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4561 r2 @ 47ed765135 (integration-30): PASS. merge-tree is clean vs integration b911ef916bb. The branch is based on afbea08b75a, so a raw diff vs integration shows TASK-3877 reversed; that is an artifact, and the 3-way merge keeps it.
+    F1: canonical_module_stem keys a trailing tests/ or test/ directory as its parent (path-component match, not a substring), so src/tests/foo_tests.rs pairs with src/foo.rs. A repo-root tests/<x> joins src/<x> only when that key exists. The ORIGINAL tests/parser_test.rs case is restored and still pairs into module:src/parser, and a direct src/foo ↔ src/tests/foo_tests assertion was added.
+    F2: a non-merge custom rule resolves to its own playbook id rule:<index>:<id> with active_facets [<id>], so its checklist reaches only matched files. The test asserts an unrelated file gets a different playbook, no facet and no checklist text.
+    F3: criterion traces (AC1/AC2) on the new tests.
+    F4: the guide now describes directory-qualified stems and the tests/ rule.
+    NIT (not blocking): crate-level <crate>/tests/foo.rs keys as <crate>/foo, which doesn't pair with <crate>/src/foo.rs. The src/ fallback only applies at the repo root. That's fine for this repo, where integration tests are feature-named. READY after FAST plus the independent review.
+  created_at: 2026-11-25T06:46:03.566072566Z
+  modified_at: 2026-11-25T06:46:03.566072566Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e94-a407-75a0-baf4-38e2a3232a5d
   author: joe
