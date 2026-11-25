@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T18:50:55.641507443Z
-modified_at: 2026-11-20T18:51:01.940804105Z
+modified_at: 2026-11-25T21:19:25.435555238Z
 req_type: Story
 relationships:
 - rel_type:
@@ -32,6 +32,12 @@ relationships:
   target_id: 01a1ec45-5343-7720-a3ac-34f995c661c4
   created_at: 2026-11-20T18:51:01.940741487Z
   created_by: dirtlab
+comments:
+- id: 01a21493-e0fb-7930-826e-5a148e66fa65
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): REJECTED: stale review story for #4376 (that PR is superseded by a fresh round).'
+  created_at: 2026-11-25T21:19:25.435555238Z
+  modified_at: 2026-11-25T21:19:25.435555238Z
 history:
 - id: 01a1fa4c-4222-7410-b8a9-4cf3bef86a52
   author: dirtlab
