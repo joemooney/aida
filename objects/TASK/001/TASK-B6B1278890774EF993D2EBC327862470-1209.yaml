@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 14c0451a5928d949f71fd6681831a1c27d42fd95
 
   On a resumed review, moving a retained same-head draft into the new launch directory preserves its modification time. submit_draft discards the metadata at aida-cli-lib/src/review_draft.rs:466 and reports acceptance, so the reviewer exits. LaunchDraft::read then rejects that unchanged file as stale at line 153, leaving the review unrecorded. Make the launch freshness cutoff available to the in-session check, retain the parent's independent check, and cover a retained draft with an older modification time.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-22T19:03:42.486813523Z
-modified_at: 2026-11-25T07:16:49.845761276Z
+modified_at: 2026-11-25T07:16:52.156830359Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.524792928Z
   changes: []
+- id: 01a21190-7f3c-7600-b9dd-25c1108eb5fa
+  author: joe
+  timestamp: 2026-11-25T07:16:52.156825695Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 14c0451a5928d949f71fd6681831a1c27d42fd95
   branch: pr-4385
