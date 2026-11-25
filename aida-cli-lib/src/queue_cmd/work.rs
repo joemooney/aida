@@ -894,6 +894,10 @@ pub(crate) fn apply_rework_conflict_route(
         }
         .into());
     }
+    anyhow::ensure!(
+        !launch.interactive,
+        "conflict repair requires a supervised launch; retry queue rework"
+    );
     session::preflight_launch_vendor(vendor, launch.interactive)?;
     session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
     prompt.push_str(&format!(
@@ -4670,6 +4674,29 @@ pub(crate) fn handle_queue_work(
         // Provisional capture above retains failures before a plan is available.
         // trace:STORY-2690 | ai:codex
         let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
+        // A retained repair needs a supervising launcher even when queue rework
+        // requested an interactive session. Select it before unattended admission.
+        // trace:BUG-2761 | ai:codex
+        let mut repair_dispatch = None;
+        if !list_sessions && plan.review_target.is_none() && plan.entries.len() == 1 {
+            let root = find_main_worktree_root()?;
+            if let Some(lease) = crate::leases::adoptable_orphan_lease(&root, &plan.scope) {
+                if crate::repair_journal::RepairGuard::lock(&root)?
+                    .retained_for_lease(&lease)?
+                    .is_some()
+                {
+                    if no_launch || plan_only || guided || role != "implementer" {
+                        println!(
+                            "retained repair available for {}; launch queue rework to continue",
+                            plan.scope
+                        );
+                        return Ok(());
+                    }
+                    repair_dispatch = Some(lease.id);
+                }
+            }
+        }
+        let no_human = no_human || repair_dispatch.is_some();
         let implementer_route =
             resolve_pickup_attempt(&mut attempt, &plan, &role, no_human, branch_override)?;
 
@@ -4965,6 +4992,16 @@ pub(crate) fn handle_queue_work(
         } else {
             None
         };
+        anyhow::ensure!(
+            repair_dispatch.as_ref() == retained.as_ref().map(|lease| &lease.id),
+            "retained repair changed during dispatch or has no matching open PR; retry pickup"
+        );
+        if repair_dispatch.is_some() {
+            anyhow::ensure!(
+                crate::vendors::headless::host_publishes_implementer(launch_vendor, contained),
+                "retained repair requires a supervised host-published implementer launch"
+            );
+        }
         let retained_id = retained.as_ref().map(|lease| lease.id.clone());
         let adopt_orphan = retained.or(adopt_orphan);
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
@@ -6352,6 +6389,17 @@ pub(crate) fn handle_queue_work(
                         *pr,
                         &lease.id,
                     );
+                    if let Some(name) = lease
+                        .worktree_path
+                        .file_name()
+                        .filter(|_| retained_id.is_some())
+                    {
+                        let salvage = project_root.join(".aida/salvage").join(name);
+                        prompt.push_str(&format!(
+                            "\nIf the base advanced, consult the previous resolution patch in {}.",
+                            salvage.display()
+                        ));
+                    }
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
                         files,

@@ -371,6 +371,35 @@ impl RepairGuard {
             .context("missing repair reservation")
     }
 
+    // Keep the old parent pair fenced even after the reservation moves.
+    // trace:BUG-2761 | ai:codex
+    pub fn supersede_base(
+        &mut self,
+        previous: &RepairEntry,
+        patch: &Path,
+        next: Option<RepairEntry>,
+    ) -> Result<()> {
+        let entry = self.entry_mut(&previous.key)?;
+        anyhow::ensure!(
+            entry == previous,
+            "repair changed during base refresh; inspect the saved resolution"
+        );
+        self.journal
+            .entries
+            .retain(|entry| entry.key != previous.key);
+        self.journal.releases.push(ReservationRelease {
+            merge: Some(previous.into()),
+            id: reservation_id(previous),
+            uid: unsafe { libc::geteuid() },
+            at: chrono::Utc::now().to_rfc3339(),
+            reason: format!("base advanced; previous resolution at {}", patch.display()),
+        });
+        if let Some(next) = next {
+            self.journal.entries.push(next);
+        }
+        self.save()
+    }
+
     pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<()> {
         if let Some(previous) = self.journal.entries.iter().find(|e| e.key == entry.key) {
             anyhow::ensure!(previous.spawn == SpawnOutcome::ProvenDead, "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");

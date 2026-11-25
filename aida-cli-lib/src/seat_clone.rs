@@ -4016,6 +4016,7 @@ fn prepare_host_repair_with(
         "rework branch changed"
     );
     let (base, pr_head) = fetch_heads()?;
+    let mut superseded = None;
     if execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
         let head = execute(&["rev-parse", "HEAD"])?;
         let merge = execute(&["rev-parse", "MERGE_HEAD"])?;
@@ -4025,27 +4026,60 @@ fn prepare_host_repair_with(
             resume
                 && entry.lane_id == lane_id
                 && entry.key.pr == pr
-                && pr_head == head
-                && merge == base,
-            "pending repair belongs to a different lane, PR, head or base"
+                && pr_head == head,
+            "pending repair lane, PR or PR head changed; preserve the clone and inspect the current PR head before retrying"
         );
-        let paths = entry.original_conflict_paths.clone();
-        let key = entry.key.clone();
-        let prepared = entry.preparation_success == Some(true);
-        let failed_generation = entry.regeneration_success == Some(false);
-        drop(guard);
-        if !prepared || failed_generation {
-            RepairGuard::lock(main)?.record_preparation(&key, false)?;
-            regenerate(&merge, !failed_generation)?;
-            RepairGuard::lock(main)?.record_preparation(&key, true)?;
-            if failed_generation {
-                RepairGuard::lock(main)?.record_regeneration(&key, true)?;
+        if merge != base {
+            let previous = entry.clone();
+            drop(guard);
+            verify_retained_index(&previous, execute)
+                .context("retained repair index changed; preserve the clone before retrying")?;
+            execute(&["merge-base", "--is-ancestor", &merge, &base]).with_context(|| format!(
+                "cannot prove fetched base {base} descends from retained base {merge}; preserve the merge and inspect the PR base history before retrying"
+            ))?;
+            let patch = salvage(main, tree)
+                .context("cannot preserve the old resolution; merge retained")?;
+            // A partly staged resolution can differ from both HEAD and the
+            // working tree. Preserve its stage-zero version independently.
+            let args = [
+                "diff",
+                "--cached",
+                "--binary",
+                "--no-ext-diff",
+                "--no-textconv",
+                "HEAD",
+            ];
+            let args: Vec<_> = args.iter().map(std::ffi::OsStr::new).collect();
+            let index = run_sandboxed(tree, main, "git", &args, SALVAGE_OUTPUT_CAP)
+                .map_err(|why| anyhow::anyhow!("cannot preserve staged resolution: {why}"))?;
+            std::fs::write(patch.with_extension("index.patch"), index)
+                .context("cannot save staged resolution; merge retained")?;
+            eprintln!(
+                "Previous resolution saved for reference at {}",
+                patch.display()
+            );
+            execute(&["merge", "--abort"])
+                .context("cannot abort the retained merge; inspect the saved resolution")?;
+            superseded = Some((previous, patch));
+        } else {
+            let paths = entry.original_conflict_paths.clone();
+            let key = entry.key.clone();
+            let prepared = entry.preparation_success == Some(true);
+            let failed_generation = entry.regeneration_success == Some(false);
+            drop(guard);
+            if !prepared || failed_generation {
+                RepairGuard::lock(main)?.record_preparation(&key, false)?;
+                regenerate(&merge, !failed_generation)?;
+                RepairGuard::lock(main)?.record_preparation(&key, true)?;
+                if failed_generation {
+                    RepairGuard::lock(main)?.record_regeneration(&key, true)?;
+                }
             }
+            RepairGuard::lock(main)?
+                .for_tree(tree, branch, &head, &merge)?
+                .require_prepared()?;
+            return Ok(paths);
         }
-        RepairGuard::lock(main)?
-            .for_tree(tree, branch, &head, &merge)?
-            .require_prepared()?;
-        return Ok(paths);
     }
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
     anyhow::ensure!(
@@ -4057,7 +4091,7 @@ fn prepare_host_repair_with(
     } else {
         "seated rework branch is behind the PR head; retry pickup with its current head"
     })?;
-    if dirty {
+    if dirty && superseded.is_none() {
         execute(&["merge-tree", "--write-tree", "HEAD", &base])
             .context("could not prove clean merge for dirty resume; edits preserved")?;
         return Ok(vec![]);
@@ -4085,8 +4119,7 @@ fn prepare_host_repair_with(
             before == pr_head,
             "repair requires the exact original PR head; local commits preserved"
         );
-        let mut journal = RepairGuard::lock(main)?;
-        journal.reserve(RepairEntry {
+        let next = RepairEntry {
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: chrono::Utc::now().to_rfc3339(),
@@ -4101,7 +4134,13 @@ fn prepare_host_repair_with(
             preparation_success: None,
             validation: None,
             refusal_notice: None,
-        })?;
+        };
+        let mut journal = RepairGuard::lock(main)?;
+        if let Some((entry, patch)) = superseded {
+            journal.supersede_base(&entry, &patch, Some(next))?;
+        } else {
+            journal.reserve(next)?;
+        }
         drop(journal);
         match execute(&["merge", "--no-edit", "--no-verify", &base]) {
             Ok(_) => {
@@ -4130,6 +4169,9 @@ fn prepare_host_repair_with(
             }
         }
     } else {
+        if let Some((entry, patch)) = superseded {
+            RepairGuard::lock(main)?.supersede_base(&entry, &patch, None)?;
+        }
         // Keep the prepared merge local until ship publishes the fix.
         // trace:BUG-2726 | ai:codex
         execute(&["merge", "--no-edit", "--no-verify", &base])?;
