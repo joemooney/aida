@@ -1917,6 +1917,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     // trace:STORY-2849 | ai:codex
     (&["stalled-reviews"], "stalled-reviews"),
     (&["landing-health"], "landing-health"),
+    // trace:STORY-3131 | ai:claude
+    (&["landing-drought", "drought"], "landing-drought"),
     // Open changes nobody is moving. trace:STORY-2906 | ai:claude
     (
         &["throughput-guard", "throughput", "land-stalls", "stalls"],

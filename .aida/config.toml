@@ -263,6 +263,21 @@ on = ["CronJobFailed:stalled-reviews"]
 prompt = "Inspect the stalled-reviews failure and its PR findings in .aida/schedule.log."
 enabled = true
 
+# Approved PRs ready without landing, and main not moving while they wait.
+# Tuned by [landing_watchdog]. trace:STORY-3131 | ai:claude
+[[schedule.jobs]]
+name = "landing-drought"
+command = "doctor check landing-drought --fail-on-findings"
+every = "10m"
+enabled = true
+
+[[schedule.jobs]]
+name = "landing-drought-route"
+seats = ["advisor"]
+on = ["CronJobFailed:landing-drought"]
+prompt = "INVESTIGATE the landing-drought failure in .aida/schedule.log. If the job errored or timed out (exit 124), report 'landing guard unhealthy' to the operator: the guard is blind. Otherwise, for each stuck PR, confirm the cause it names (supervised needs an operator train, full CI tier missing or cancelled, red required check, unknown), then act on its prescribed next action. Page the operator for anything you cannot move."
+enabled = true
+
 [[schedule.jobs]]
 name = "hub-drift-guard-route"
 seats = ["advisor"]
@@ -665,6 +680,15 @@ shared_failure_min_prs = 3
 step_headroom_ratio = 0.8
 # Shared-failure and successful-duration lookback.
 window_minutes = 1440
+
+# Landing-drought watchdog (the defaults, spelled out). action = "report"
+# lists findings without failing the job, so nothing is routed.
+# trace:STORY-3131 | ai:claude
+[landing_watchdog]
+enabled = true
+drought_minutes = 60
+ready_dwell_minutes = 30
+action = "investigate"
 
 [[schedule.jobs]]
 name = "landing-health-guard"

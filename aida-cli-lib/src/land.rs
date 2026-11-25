@@ -1460,8 +1460,8 @@ pub(crate) fn green_rollup_at(
     latest
 }
 
-#[cfg(test)]
-fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
+// trace:STORY-3131 | ai:claude
+pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     ci_of_checks(rollup.as_array().into_iter().flatten())
 }
 
