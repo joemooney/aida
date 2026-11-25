@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T04:40:33.720657184Z
+modified_at: 2026-11-25T04:40:50.160865187Z
 req_type: Task
 tags:
 - integration
@@ -57,6 +57,13 @@ comments:
     Output formatting only. It suggests no new commands. READY after FAST.
   created_at: 2026-11-25T04:27:28.736560239Z
   modified_at: 2026-11-25T04:27:28.736560239Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21101-e23d-7ad1-8af0-c7877a430ed1
+  author: joe
+  content: 'ADVISOR RULING relayed by integration-30 (advisor 21:32 on #4559 @ 876ace62): one round, ≤60 lines. F1 MUST: session_end.rs status calls use --untracked-files=all; test that a sole ''notes/todo '' is shown in full. F2: quote synthetic lines with git''s porcelain v1 rule (leading/trailing space, control chars, quotes, backslash) via -z output plus one quote helper. F3: AC1 criterion trace on the two new tests. F4 (p3): one entry per line instead of ''; ''. Integration note: agent_error_summary_help keeps only the first line, so the first line must still name the first entry (or a count plus the first entry); keep the e2e summary assertion.'
+  created_at: 2026-11-25T04:40:50.160865187Z
+  modified_at: 2026-11-25T04:40:50.160865187Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
