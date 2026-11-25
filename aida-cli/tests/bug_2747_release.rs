@@ -1,9 +1,11 @@
 // trace:BUG-b6b1278890774ef993d2ebc327862470-508.AC1 | ai:codex
 // trace:BUG-b6b1278890774ef993d2ebc327862470-508.AC2 | ai:codex
-use std::{fs, os::unix::fs::DirBuilderExt, process::Command};
 
+#[cfg(target_os = "linux")]
 #[test]
 fn bug_2747_release_checks_real_ancestor() {
+    use std::{fs, os::unix::fs::DirBuilderExt, process::Command};
+
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     fs::create_dir(root.join(".aida")).unwrap();
