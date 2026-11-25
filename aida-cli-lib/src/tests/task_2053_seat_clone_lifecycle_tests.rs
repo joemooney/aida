@@ -1909,6 +1909,46 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
     );
 }
 
+// trace:TASK-3882 | ai:codex
+#[test]
+fn task_3882_refusal_quotes_trailing_spaces_on_each_rename_path() {
+    let facts = parse_status_v2(
+        "? notes\n? notes  \n2 R. N... 100644 100644 100644 aaa aaa R100 new \told  \n",
+    );
+    assert_eq!(
+        unshipped_items(&facts),
+        [
+            "untracked: notes",
+            r#"untracked: "notes  ""#,
+            r#"renamed (R.): "old  " -> "new ""#
+        ]
+    );
+}
+
+// trace:TASK-3882 | ai:codex
+#[test]
+fn task_3882_agent_refusal_keeps_quoted_worktree_filename() {
+    let fx = fixture();
+    let tree = fx.root.join("worktree-3882");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-b", "feat", tree.to_str().unwrap()],
+    );
+    let id = "c0ffee003882";
+    write_clone_lease(&fx.main, &tree, id);
+    let lease = crate::lease_path(&fx.main, id);
+    let mut record = crate::list_leases(&fx.main).remove(0);
+    record.tree_kind = TreeKind::Worktree;
+    std::fs::write(&lease, toml::to_string(&record).unwrap()).unwrap();
+    std::fs::write(tree.join("notes  "), "pending").unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let err = end_session(id, false).unwrap_err();
+    let msg = format!("{err:#}");
+    let (summary, _) = crate::agent_error_summary_help(&msg);
+    assert!(summary.contains(r#"?? "notes  ""#), "{msg}");
+    assert!(tree.exists() && lease.exists());
+}
+
 /// BUG-051: every probe `git status` entry is named by its path, and a set
 /// of findings is never rendered as an empty list.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude

@@ -1624,21 +1624,20 @@ pub(crate) fn session_end_with_discard_unpushed(
             DirtyGateOutcome::Proceed => false,
             DirtyGateOutcome::Salvage => true,
             DirtyGateOutcome::Refuse => {
+                // Agent summaries retain the first line. Git porcelain v1 already
+                // quotes spaced paths, and clone entries are formatted by unshipped_items.
+                // trace:TASK-3882 | ai:codex
+                let location = target
+                    .worktree_path
+                    .to_string_lossy()
+                    .escape_debug()
+                    .to_string();
+                let evidence = dirty_entries.join("; ").replace('\n', "; ");
                 let mut msg = if is_clone {
-                    // trace:TASK-2053 | ai:claude
-                    format!(
-                        "seat clone {} holds work origin does not have:\n",
-                        target.worktree_path.display()
-                    )
+                    format!("seat clone {location} holds work origin does not have: {evidence}\n")
                 } else {
-                    format!(
-                        "worktree {} has uncommitted changes:\n",
-                        target.worktree_path.display()
-                    )
+                    format!("worktree {location} has uncommitted changes: {evidence}\n")
                 };
-                for line in &dirty_entries {
-                    msg.push_str(&format!("  {}\n", line));
-                }
                 if is_clone {
                     msg.push_str(
                         "\nPush the branch from inside the seat, or pass `--force` to `aida \
