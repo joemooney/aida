@@ -8,8 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T16:26:48.938419383Z
-modified_at: 2026-11-24T16:26:48.938419383Z
+modified_at: 2026-11-25T21:19:58.606689418Z
 req_type: Bug
+comments:
+- id: 01a21494-628f-7850-9497-cfd27e79fa17
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): DEFERRED: not on the current throughput path. STORY-2997 needs a sketch; STORY-2852''s docs go via STORY-2839 d-slices.'
+  created_at: 2026-11-25T21:19:58.606689418Z
+  modified_at: 2026-11-25T21:19:58.606689418Z
 history:
 - id: 01a20e83-7063-7501-817b-37b14154af70
   author: joe
