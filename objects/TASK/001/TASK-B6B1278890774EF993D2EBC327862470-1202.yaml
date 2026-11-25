@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: d49e95064e4bf518480e260c7798e998e93e965e
 
   The manual promises that a replacement starts at the fetched PR head even on conversation resume. Only explicit fresh placement uses PinnedRework. prepare_host_repair_admitted accepts a clean local tip ahead of the PR for ReworkSeat::Replacement when the merge probe is clean. Qualify the documented guarantee or consistently place replacements at the pin while preserving local commits.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-22T04:57:14.326061663Z
-modified_at: 2026-11-25T07:17:34.163987356Z
+modified_at: 2026-11-25T07:17:39.582768980Z
 req_type: Task
 tags:
 - carried-from:BUG-2688
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.586742211Z
   changes: []
+- id: 01a21191-387e-7151-8356-203cc40a321d
+  author: joe
+  timestamp: 2026-11-25T07:17:39.582764262Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: d49e95064e4bf518480e260c7798e998e93e965e
   branch: review-4388-d49e95064e4b
