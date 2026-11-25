@@ -10,12 +10,12 @@ description: |
   That fails closed (no lost or forged verdict), but the cross-launch replay path is effectively dead.
 
   Acceptance: either (a) a design (sketch plus advisor signoff) under which a later launcher can deliver a retained draft without impersonating the original launcher's grant, or (b) remove the cross-launch replay path and keep only the same-launch bounded retry, with docs and tests updated. Either way, a regression shows what happens to a retained draft after the launcher restarts.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-25T03:02:21.058087813Z
+modified_at: 2026-11-25T04:30:32.292229472Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -480,6 +480,11 @@ comments:
   modified_at: 2026-11-25T02:01:25.112615588Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210f8-3764-7883-a05a-4914ae843faa
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: PR #4376 merge overlaps draft consumption behavior. Main''s LaunchDraft::collect marks consumption internally and returns the collected verdict even if marker persistence fails. BUG-2669 closes a receipt only after confirmed marker persistence, and distinguishes draft recording from fallback collection. Integrating those outcomes crosses the requested mechanical repair boundary. Unresolved: aida-cli-lib/src/queue_cmd/work.rs, aida-cli-lib/src/review_draft.rs, aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs.. No triage reason was given.'
+  created_at: 2026-11-25T04:30:32.292219479Z
+  modified_at: 2026-11-25T04:30:32.292219479Z
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
@@ -635,6 +640,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a210f8-3764-7883-a05a-490ce23b0eda
+  author: joe
+  timestamp: 2026-11-25T04:30:32.292210805Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
@@ -645,8 +657,3 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'PR #4376 merge overlaps draft consumption behavior. Main''s LaunchDraft::collect marks consumption internally and returns the collected verdict even if marker persistence fails. BUG-2669 closes a receipt only after confirmed marker persistence, and distinguishes draft recording from fallback collection. Integrating those outcomes crosses the requested mechanical repair boundary. Unresolved: aida-cli-lib/src/queue_cmd/work.rs, aida-cli-lib/src/review_draft.rs, aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs.'
-  raised_by: implementer
-  raised_at: 2026-11-25T03:02:21.058087813Z
