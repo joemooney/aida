@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: eacfd4b52870557151340a24d44b1b772be6c929
 
   forge.rs:1901 bypasses the shared gh probe binary resolution in kernel.rs:500. The standard test override, debug diagnostics, and fallback executable search do not apply, so the report can silently say unknown when other forge probes resolve gh. Route it through a resolver that honors the probe controls while keeping executable resolution and the API call bounded.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T00:44:18.919331944Z
-modified_at: 2026-11-25T07:20:48.808039559Z
+modified_at: 2026-11-25T07:20:50.916005140Z
 req_type: Task
 tags:
 - carried-from:TASK-3847
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21194-23e3-7a71-906b-2ab83236d39f
+  author: joe
+  timestamp: 2026-11-25T07:20:50.915998051Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: eacfd4b52870557151340a24d44b1b772be6c929
   branch: pr-4470
