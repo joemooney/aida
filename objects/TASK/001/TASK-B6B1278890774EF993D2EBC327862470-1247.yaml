@@ -17,11 +17,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T10:36:23.151754810Z
-modified_at: 2026-11-23T10:36:23.151754810Z
+modified_at: 2026-11-25T21:08:55.941153934Z
 req_type: Task
 tags:
 - main-watch
 - review-follow-up
+comments:
+- id: 01a2148a-4605-75a3-9fde-9476c4845020
+  author: joe
+  content: FOLDED into a comment on TASK-3903 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:08:55.941153934Z
+  modified_at: 2026-11-25T21:08:55.941153934Z
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
   branch: main
