@@ -1,0 +1,26 @@
+id: 01a210f7-9017-78c3-b28d-7274fb8dbc79
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-523
+agreed_id: BUG-2762
+title: 'Promotion 37''s stalled-reviews schedule job fails every tick: its command is not in the scheduled-command allowlist, so the advisor gets a bogus CronJobFailed alert every 20m'
+description: |
+  Found 2026-11-24 21:35 MST by integration-30. Promotion 37 (#4551, 5d24023de56) landed STORY-3095 slice 1, which added two jobs to `.aida/config.toml`: `stalled-reviews` (command `doctor check stalled-reviews --fail-on-findings`, every 20m) and `stalled-reviews-route` (on CronJobFailed:stalled-reviews, routed to the advisor). The command was never added to the scheduler's allowlist of scheduled commands in `aida-cli-lib/src/maintenance_schedule.rs`, unlike `doctor check performance/remote-drift/stale-remote-branches/runaway-seats --fail-on-findings`. Since the live binary was promoted (45206d90a1d, 03:44Z), every tick fails in `.aida/schedule.log`: `status=127 ... unknown scheduled task command 'doctor check stalled-reviews --fail-on-findings'`. Each failure fires CronJobFailed, which routes a bogus "inspect the stalled-reviews failure" alert to the advisor every 20 minutes. The detector itself never runs, so STORY-3095 AC2 (routed alert) is not met in production.
+
+  ## Acceptance
+  - AC1: add `doctor check stalled-reviews --fail-on-findings` to the scheduled-command allowlist in maintenance_schedule.rs (same gated shape as the other doctor check jobs, hook_allowed false), so the job runs and routes only real findings.
+  - AC2: a test that every `[[schedule.jobs]]` `command` in the repository's `.aida/config.toml` resolves to an allowlisted scheduled command, so a config job cannot ship without its allowlist entry.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T04:29:49.463570317Z
+modified_at: 2026-11-25T04:29:49.463570317Z
+req_type: Bug
+filed_at:
+  code_sha: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45206d90a1d
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
