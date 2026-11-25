@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:20:03.717015552Z
+modified_at: 2026-11-25T16:28:51.020426408Z
 req_type: Story
 tags:
 - integration
@@ -239,6 +239,63 @@ comments:
   content: 'REFERENCE COMMITS (Joe 2026-11-25 09:19; branch story-3120-ci-review): 0d21f696ebf adds --effort / --challenger-effort (default_effort and challenger_effort in .aida/review-rules.toml; finder_effort/challenger_effort on AdversarialReviewSummary; codex gets -c model_reasoning_effort=<LEVEL>, claude and agy get --effort <LEVEL>). It goes into S3 (--effort) and S4 (--challenger-effort). b5826a0f949 (37 files, +4159) is the unified showcase integration: S5 takes ONLY docs/showcase/code-review.html and its ''How it works ▾'' menu entry; the rest belongs to STORY-2839/STORY-2852 (see those comments). Product-15 slices briefs to <=300 lines.'
   created_at: 2026-11-25T16:20:03.717015552Z
   modified_at: 2026-11-25T16:20:03.717015552Z
+- id: 01a2138a-1539-7111-9462-21b2f0d5f0da
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 security-lens pre-check of the STORY-3120 S3 BRIEF (--run-review + --effort). Source: reference branch story-3120-ci-review @ 0d21f696ebf, aida-cli-lib/src/review_prepare.rs (invoke_review_runner ~1741, resolve_review_runner_effort ~1352, git_text ~731).
+
+    Result: the reference code is NOT shippable as S3. The S3 brief must require each item below. Items 1-8 are blocking.
+
+    1. RUNNER WORKING DIRECTORY = PR CHECKOUT (blocking). invoke_review_runner does current_dir(project_root), which is the checkout under review. `claude --print` then loads the PR's .claude/settings.json (hooks), .mcp.json and CLAUDE.md; gemini/agy load .gemini/ settings. All of that is PR-controlled, and it runs with the operator's credentials.
+       Required: run the runner in a fresh empty temp dir. Pass all PR content in the prompt only. For claude, disable project settings, hooks and MCP; the brief must name the exact flags and include a test proving a planted .claude/settings.json hook does not run. Give the agent NO tools (claude: an empty tool allowlist; codex: keep exec --sandbox read-only).
+
+    2. ENVIRONMENT PASSTHROUGH (blocking). Both spawn paths inherit the whole environment: GH_TOKEN/GITHUB_TOKEN, GITLAB_TOKEN, AIDA_SESSION_GRANT, cloud keys, GIT_DIR/GIT_CONFIG*. A prompt-injected runner could exfiltrate them.
+       Required: env_clear() plus an explicit allowlist: PATH, HOME, LANG/LC_*, TERM, the vendor's own auth vars only for that vendor (ANTHROPIC_API_KEY for claude, OPENAI_API_KEY/CODEX_HOME for codex, ...), and AIDA_REVIEW_RESOLVED_*/AIDA_REVIEW_PASS. Test: a sentinel GH_TOKEN never reaches the runner.
+
+    3. AIDA_REVIEW_RUNNER_CMD (blocking). Command::new(value) with cwd = PR checkout means a relative value containing '/' (e.g. scripts/review) resolves INSIDE the PR, so the PR chooses the executable.
+       Required:
+       - must be an absolute path to an existing regular file outside the reviewed checkout;
+       - no shell, no splitting (keep the single-program semantics), refuse anything else;
+       - read it from the operator's env only, never from repo config.
+       Test: a relative value is refused.
+
+    4. PROMPT IN ARGV (blocking). Every vendor path passes the whole prompt (diffs plus file bodies) as one argv element. That hits ARG_MAX/MAX_ARG_STRLEN (128 KiB per arg on Linux → E2BIG on any real PR) and exposes PR content in /proc/<pid>/cmdline.
+       Required: send the prompt on stdin for every vendor (claude -p reads stdin; codex exec reads `-` from stdin). Write it from a separate thread; the current custom-cmd path writes all of stdin before reading stdout, which deadlocks once the runner fills the pipe.
+
+    5. NO DEADLINE, NO OUTPUT BOUND (blocking). Both paths use output()/wait_with_output() with no timeout and unbounded stdout/stderr.
+       Required: a per-batch deadline (configurable, default e.g. 15 min) that kills the process group, plus stdout/stderr caps (e.g. 4 MiB stdout, 64 KiB stderr kept for the error). Exceeding either fails the run closed. Test both.
+
+    6. EFFORT ALLOWLIST (blocking; Joe's addendum). resolve_review_runner_effort passes any non-empty string through. Codex gets `-c model_reasoning_effort=<raw>`, which is TOML-parsed by codex, so <raw> can inject config values.
+       Required:
+       - a fixed allowlist (low|medium|high|xhigh, plus max only if that vendor supports it), validated for EVERY source in the precedence chain (flag, AIDA_REVIEW_EFFORT, review-rules.toml default_effort, agents seat effort) BEFORE any argv is built;
+       - an invalid value refuses the whole run and names its source;
+       - gemini, which has no effort flag, either refuses an explicit --effort or reports it as ignored, never silently;
+       - a test per source.
+
+    7. MODEL STRING (blocking, same class). --model/AIDA_REVIEW_MODEL/default_model/seat model reach argv unvalidated. A value starting with '-' is parsed as a flag by some vendor CLIs.
+       Required: charset [A-Za-z0-9._:/-], must not start with '-', max 128 chars, validated before spawn.
+
+    8. REPO-CONTROLLED REVIEW CONFIG (blocking). default_model, default_effort, default agent and challenger come from .aida/review-rules.toml in project_root, i.e. the PR head. The PR under review then picks its own reviewer, model and effort; for example it can downgrade effort, or pick the single-vendor fallback to defeat the opposing-author rule.
+       Required: resolve review-rules.toml from the trusted base (the merge-base or target-branch blob), not the PR working tree. Alternatively, refuse to run when the PR modifies .aida/review-rules.toml or .aida/config.toml [agents].
+
+    9. git_text USED TO BUILD THE PROMPT (should-fix in S3). It uses raw Command::new("git") with the inherited env (GIT_DIR/GIT_CONFIG*/GIT_INDEX_FILE). The diff has --no-ext-diff but not --no-textconv, so a textconv driver runs. `.unwrap_or_default()` silently falls back from diff to the full file.
+       Required: route it through aida_core::git_ops::host_git_command (or a sanitized builder), add --no-textconv, and make a diff failure an error, not a silent fallback.
+
+    10. RUNNER PATH INVENTORY. S3 must route EVERY spawn through ONE helper that applies items 1-7: custom-cmd, claude (the `_ =>` default arm), codex, agy, gemini, plus the S4 challenger pass that reuses invoke_review_runner. The brief should list these five spawn paths. A test enumerates them (one test per vendor, using a fake binary on PATH that dumps its argv/env/cwd) and asserts cwd/env/argv for each.
+        Also: the `_ =>` arm turns any unrecognised agent into claude. Make it an exhaustive match on the normalized enum so it can't default silently.
+
+    11. OUTPUT HANDLING (already OK, keep it). Runner stdout is only parsed (parse_runner_findings_json), never executed or used to choose a command, and S2 refuses paths outside the inventory. Keep that, and add a test showing that a runner emitting a path outside the inventory refuses the run when --run-review is used.
+
+    12. SCOPE. The reference diff is far over 300 lines. Suggested split:
+        - S3a: the sanitized spawn helper plus --run-review with the custom-cmd and claude/codex runners (items 1-5, 9, 10);
+        - S3b: --effort/--model resolution, the allowlists and trusted-base config (items 6-8).
+        agy and gemini can come in S3b or later.
+
+    Self-approve limits: S3 spawns agents with credentials in reach, so it needs an INDEPENDENT review at the final head, with no carry-over.
+  created_at: 2026-11-25T16:28:51.020426408Z
+  modified_at: 2026-11-25T16:28:51.020426408Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
