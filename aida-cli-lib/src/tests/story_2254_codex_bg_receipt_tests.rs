@@ -3,6 +3,7 @@
 // trace:BUG-2476 | ai:codex
 
 use super::*;
+use crate::agent_launch::agent_codex_background::{launch_status_at, recover_launch_at};
 use std::os::unix::fs::PermissionsExt;
 
 struct Fixture {
@@ -116,10 +117,27 @@ fn story_2254_bg_two_same_scope_one_admitted_and_terminal_frees() {
 
 // trace:BUG-2748 | ai:codex
 #[test]
-fn story_2254_bg_legacy_prepared_recovery_stays_released() {
+fn story_2254_bg_incomplete_prepared_and_recovered_attempts_stay_held() {
     let f = fixture();
     let dir = runtime_dir(f.project.path()).unwrap();
     let mut r = receipt_for(&f, "implementer", "TASK-1");
+    let path = receipt_path(&dir, &r.attempt).unwrap();
+    let retained = || {
+        assert!(launch_status_at(&dir, f.project.path(), &r.attempt).contains("UNKNOWN"));
+        assert!(
+            recover_launch_at(&dir, f.project.path(), &r.attempt, &Default::default()).is_err()
+        );
+        assert!(retire_unknown(&dir, f.project.path(), &r.attempt, f.project.path()).is_err());
+        assert!(scope_blocker(&dir, f.project.path(), &r.scope).is_some());
+    };
+    write_receipt(&dir, &r).unwrap();
+    let mut raw: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    raw.as_object_mut()
+        .unwrap()
+        .retain(|k, _| k != "worker" && k != "supervisor");
+    std::fs::write(&path, raw.to_string()).unwrap();
+    retained();
     r.phase = Phase::Exited;
     r.owner = Owner::Released;
     r.generation = 1;
@@ -130,10 +148,11 @@ fn story_2254_bg_legacy_prepared_recovery_stays_released() {
         ..Default::default()
     });
     write_receipt(&dir, &r).unwrap();
-    assert!(scope_blocker(&dir, f.project.path(), &r.scope).is_none());
-    r.reason = None;
-    write_receipt(&dir, &r).unwrap();
-    assert!(scope_blocker(&dir, f.project.path(), &r.scope).is_some());
+    retained();
+    raw = serde_json::to_value(&r).unwrap();
+    raw.as_object_mut().unwrap().remove("dispatcher");
+    std::fs::write(path, raw.to_string()).unwrap();
+    retained();
 }
 
 /// A corrupt receipt never frees the scope it names, and one whose scope
@@ -176,11 +195,19 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     let complete = serde_json::json!({
         "grant_id": "public-selector",
         "owner": Owner::Dispatcher(me()),
+        "dispatcher": me(),
         "worker": {"pid": 2147483647, "start": me().start},
         "supervisor": {"pid": 2147483646, "start": me().start},
         "worktree": f.project.path(),
     });
-    for missing in ["worker", "supervisor", "worktree", "owner", "all"] {
+    for missing in [
+        "worker",
+        "supervisor",
+        "worktree",
+        "owner",
+        "dispatcher",
+        "all",
+    ] {
         let mut partial = complete.clone();
         partial
             .as_object_mut()
@@ -213,6 +240,7 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     std::fs::remove_dir_all(process).unwrap();
     assert!(blocker().is_none());
     let mut transferred = complete.clone();
+    transferred["dispatcher"] = serde_json::Value::Null;
     transferred["owner"] = transferred["supervisor"].clone();
     transferred["owner"]["kind"] = "supervisor".into();
     std::fs::write(&path, transferred.to_string()).unwrap();
@@ -236,6 +264,12 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     readable.owner = Owner::Supervisor(readable.supervisor.clone().unwrap());
     readable.dispatcher = None;
     write_receipt(&dir, &readable).unwrap();
+    let status = launch_status_at(&dir, proc_root, &readable.attempt);
+    assert!(
+        status.contains("UNKNOWN")
+            && status.contains("dispatcher")
+            && status.contains("restoration")
+    );
     assert!(matches!(
         crate::agent_launch::agent_codex_background::attempt_occupancy(&readable, &Default::default(), proc_root),
         Occupancy::Unknown(why) if why.contains("dispatcher")

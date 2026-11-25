@@ -105,7 +105,7 @@ pub(crate) enum Occupancy {
     Unknown(String),
 }
 
-/// What [`scan_occupancy`] looks for.
+/// What [`scan_occupancy_in`] looks for.
 #[derive(Debug, Default)]
 pub(crate) struct OccupancyProbe<'a> {
     /// Every process whose cwd is within this tree.
@@ -368,6 +368,7 @@ pub(crate) struct LaunchReceipt {
     pub phase: Phase,
     pub owner: Owner,
     /// Original launcher identity, retained across ownership transfer.
+    #[serde(deserialize_with = "Deserialize::deserialize")]
     pub dispatcher: Option<ProcId>,
     /// Bumped by every compare-update; a writer that read an older value
     /// never clobbers a newer one.
@@ -379,7 +380,9 @@ pub(crate) struct LaunchReceipt {
     pub worktree: PathBuf,
     pub log_path: PathBuf,
     pub context_path: Option<PathBuf>,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
     pub supervisor: Option<ProcId>,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
     pub worker: Option<ProcId>,
     pub terminal: Option<TerminalRecord>,
     /// The last precise cause or uncertainty, for status output.
@@ -594,7 +597,7 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
     };
     let receipt: LaunchReceipt = match serde_json::from_slice(&body) {
         Ok(receipt) => receipt,
-        Err(e) => return ReceiptRead::Unknown(format!("receipt malformed: {e}")),
+        Err(e) => return ReceiptRead::Unknown(format!("incomplete receipt: {e}")),
     };
     if receipt.version != RECEIPT_VERSION {
         return ReceiptRead::Unknown(format!(
@@ -613,22 +616,14 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
     if receipt.attempt != stem {
         return ReceiptRead::Unknown("receipt attempt id does not match its file".into());
     }
-    // The previous recovery writer marked reconciled Prepared attempts Exited.
-    let recovered = receipt.owner == Owner::Released
-        && receipt.generation > 0
-        && receipt.reason.as_deref() == Some(RECOVERY_REASON)
-        && matches!(&receipt.terminal, Some(TerminalRecord { code: None, signal: None, unknown: Some(why) }) if why == RECOVERY_OUTCOME);
     let pre_transfer_terminal = receipt.owner == Owner::Released
-        && (recovered
-            || (receipt.phase == Phase::RefusedBeforeExecution
-                && receipt.reason.as_deref() == Some(DISPATCHER_REFUSAL)))
+        && receipt.phase == Phase::RefusedBeforeExecution
+        && matches!(
+            receipt.reason.as_deref(),
+            Some(DISPATCHER_REFUSAL | RECOVERY_REASON)
+        )
         && receipt.worker.is_none()
-        && receipt.supervisor.is_none()
-        && serde_json::from_slice::<serde_json::Value>(&body).is_ok_and(|raw| {
-            ["worker", "supervisor"]
-                .iter()
-                .all(|key| raw.get(*key).is_some_and(|v| v.is_null()))
-        });
+        && receipt.supervisor.is_none();
     let transferred = matches!(
         receipt.phase,
         Phase::SupervisorOwned
@@ -641,10 +636,10 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
         || receipt.supervisor.is_some()
         || matches!(receipt.owner, Owner::Supervisor(_));
     let valid = |p: &ProcId| p.pid != 0 && p.start_tick().is_some();
-    if (transferred
-        && !receipt.phase.holds_scope()
-        && dispatcher_tick(&receipt.owner, receipt.dispatcher.as_ref()).is_none())
-        || !receipt.worktree.is_absolute()
+    if dispatcher_tick(&receipt.owner, receipt.dispatcher.as_ref()).is_none() {
+        return ReceiptRead::Unknown("incomplete receipt: missing dispatcher identity".into());
+    }
+    if !receipt.worktree.is_absolute()
         || matches!(&receipt.owner, Owner::Dispatcher(p) | Owner::Supervisor(p) if !valid(p))
         || (transferred
             && !(receipt.worker.as_ref().is_some_and(valid)
@@ -771,11 +766,12 @@ pub(crate) fn unknown_receipt_scope(dir: &Path, attempt: &str) -> Option<ScopeKe
 }
 
 pub(crate) fn dispatcher_tick(owner: &Owner, recorded: Option<&ProcId>) -> Option<u64> {
-    let dispatcher = match owner {
-        Owner::Dispatcher(p) => p,
+    let dispatcher = recorded?;
+    match owner {
+        Owner::Dispatcher(p) if p != dispatcher => return None,
         Owner::Supervisor(p) if p.pid == 0 || p.start_tick().is_none() => return None,
-        _ => recorded?,
-    };
+        _ => {}
+    }
     (dispatcher.pid != 0)
         .then(|| dispatcher.start_tick())
         .flatten()
@@ -793,6 +789,7 @@ fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
         supervisor: ProcId,
         worktree: PathBuf,
         owner: Owner,
+        #[serde(deserialize_with = "Deserialize::deserialize")]
         dispatcher: Option<ProcId>,
     }
     let attribution = receipt_path(dir, attempt)
