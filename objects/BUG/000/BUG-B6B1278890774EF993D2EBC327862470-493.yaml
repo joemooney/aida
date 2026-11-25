@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A legacy review-watch/auto-train admission claim whose recorded pid+start-time is not live is treated as RELEASED immediately (the same liveness proof leases use: pid exists AND start time matches), so manual train admission proceeds without waiting out the bound.
   - AC2: Test: a claim recorded for a dead pid (or a reused pid with a different start time) does not block admission; a claim for a live pid+start-time still does.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:48:18.423378315Z
-modified_at: 2026-11-23T21:59:36.331283927Z
+modified_at: 2026-11-25T12:12:39.648812861Z
 req_type: Bug
 tags:
 - admission
@@ -178,6 +178,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2129f-4d17-7fc3-b4f5-242f966731a9
+  author: aida-auto-bump
+  timestamp: 2026-11-25T12:12:39.575960340Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2129f-4d60-7623-9398-0af06319a8ad
+  timestamp: 2026-11-25T12:12:39.648809630Z
+  agent: aida
+  commit_sha: 05e44004589d32a6743173766ee25eb805f5c7a5
+  summary: BUG-2732 AC1 PASS (source review). The pinned base already prunes receipts whose PID and start time prove the holder is gone. The new stale-only test requires the first zero-wait manual admission call to return its own claim and checks removal of both legacy receipts. AC2 PASS (source review). The fixtures model PID reuse with a mismatched start time. A separate test requires AdmissionBusy while a real auto-train claim remains live, checks that its receipt survives while both stale receipts are pruned, and requires admission after the live claim drops. Both criteria have trace comments. Reviewed the landed diff against main at 4e140498bc8d425330633234bec803e5f8584ca0. The one intervening base commit does not affect the reviewed admission or process-identity code. Exact-head CI status was unavailable due to GitHub API rate limiting. No local tests were run.
+  punted:
+  - 'punted: BUG-2732 (BUG-b6b1278890774ef993d2ebc327862470-493) — PARTIAL. The test covers pruning and the live-holder refusal. It leaves immediate admission with stale receipts present unverified. BUG-b6b1278890774ef993d2ebc327862470-493.AC1 — unverified. Pinned landed source inspection confirms receipts() prunes confirmed dead or reused PID identities before the busy decision. The test never attempts admission with stale receipts as the only holders. BUG-b6b1278890774ef993d2ebc327862470-493.AC2 — unverified. The implementer reported a passing lane run of `cargo test -p aida-cli-lib bug2732_manual_train_releases_stale_legacy_receipts`. The test observes a live auto-train refusal and reused-PID pruning, then succeeds only after both stale entries are gone. The supplied untraced-criteria list names AC1 and AC2, and the diff adds only the spec-level trace. Reviewed the whole landed diff on protected base ef906ec7464cf1b3100c4383085280c203722941 (landed tree 003fd914bc3a12da06f2798b3623a383fe002212) while attesting the original head. Main is four commits ahead. Its changes in admission_owner.rs leave the tested stale-receipt path intact, and neither finding depends on those changes. At review time, exact-head fast gates and the merge-hold gate passed, fast compile was pending, and the full test shards were skipped. No local tests or builds were run.'
+  review_verdict: approved
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
   branch: main
@@ -185,3 +201,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6708d633cf3
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T12:12:39.575953288Z
+  completion_sha: 05e44004589d32a6743173766ee25eb805f5c7a5
