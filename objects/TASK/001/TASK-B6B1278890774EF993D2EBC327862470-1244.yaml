@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
 
   TASK-3195 — PR #4418 description. The advisor brief asks the PR body to say when main already handles directory sync and the change adds regression coverage. The published body has only seat publication and fast-gate metadata. Add the baseline behavior and the scope of the added coverage to the description.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T09:42:10.147691442Z
-modified_at: 2026-11-25T07:18:48.539343161Z
+modified_at: 2026-11-25T07:18:50.567211823Z
 req_type: Task
 tags:
 - carried-from:TASK-3195
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21192-4dc7-7552-b43d-0664f5406894
+  author: joe
+  timestamp: 2026-11-25T07:18:50.567207076Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
   branch: pr-4418
