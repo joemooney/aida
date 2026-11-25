@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T04:47:23.279813440Z
+modified_at: 2026-11-25T04:49:34.589492200Z
 req_type: Task
 tags:
 - launch
@@ -226,6 +226,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T04:47:23.127266957Z
   modified_at: 2026-11-25T04:47:23.127266957Z
+- id: 01a21109-f114-7ee3-904c-b782171244a5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:49):
+    # TASK-3884 / PR #4538 r4 FINAL (advisor-122 ruling 2026-11-24 21:40 at 8cf6db3a; STRICT prereq for STORY-3080; product-15). Lane: CODEX. MAIN, existing branch. <=25 lines.
+    One finding left: in seat_authority.rs:199-207, RE-CHECK the deadline AFTER the grant read/decode and IMMEDIATELY BEFORE invoking change. If it has passed, release the lock and return the deadline error with NO write.
+    Test: a read that crosses the deadline (inject a slow read hook) → NO binding persisted + a deadline error.
+    One targeted cargo run, then make check-ci-fast, then push to #4538. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T04:49:34.589492200Z
+  modified_at: 2026-11-25T04:49:34.589492200Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
