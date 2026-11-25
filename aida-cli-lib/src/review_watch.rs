@@ -3665,6 +3665,50 @@ fn watch_change(
     admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
 }
 
+// trace:TASK-3877 | ai:codex
+fn reviewed_fast_settled(
+    root: &Path,
+    repo: &forge::Repository,
+    change: &forge::Change,
+) -> Result<bool> {
+    let checks = repo.commit_checks(root, &change.head)?;
+    let slug = repo.github_slug().context("GitHub repository is unknown")?;
+    let (_, project) = slug.split_once('/').context("GitHub project is unknown")?;
+    let mut matched = false;
+    let mut seen = std::collections::BTreeSet::new();
+    for row in checks.checks.iter().filter(|c| c.name == "ci-tier: fast") {
+        let Some(id) = row.run_id.as_deref().and_then(|s| s.parse::<u64>().ok()) else {
+            return Ok(false);
+        };
+        if !seen.insert(id) {
+            continue;
+        }
+        let path = format!("repos/{project}/actions/runs/{id}");
+        let run: serde_json::Value =
+            serde_json::from_slice(&crate::forge::landing_ci_api(root, repo, &path)?)?;
+        anyhow::ensure!(
+            run["id"].as_u64() == Some(id)
+                && run["head_sha"]
+                    .as_str()
+                    .is_some_and(|sha| sha.eq_ignore_ascii_case(&change.head)),
+            "FAST workflow run identity changed"
+        );
+        if run["event"] != "pull_request"
+            || !run["pull_requests"].as_array().is_some_and(|owners| {
+                matches!(owners.as_slice(), [owner] if owner["number"] == change.id
+                    && owner["base"]["ref"] == change.base)
+            })
+        {
+            continue;
+        }
+        if crate::forge::tier_runs::bucket(crate::forge::tier_runs::outcome(&run)?) == "pending" {
+            return Ok(false);
+        }
+        matched = true;
+    }
+    Ok(matched)
+}
+
 // Both recorders persist the PR and attested SHA in the verdict. Remember
 // a consumed intent while GitHub registers the FULL run.
 // trace:BUG-2729 | ai:codex
@@ -3692,26 +3736,32 @@ pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
         {
             return Ok(());
         }
+        // Discovery can precede publication of a verdict for a newer head.
+        // Consuming that verdict against the old snapshot loses its request.
+        let current = repo.change(root, pr)?;
+        if current.head != change.head || current.base != change.base {
+            return Ok(());
+        }
         if head != change.head {
             eprintln!("{key}: discarding FULL request for superseded head {head}");
             return receipts.write(&receipt, head.as_bytes());
         }
-        let rows = repo.commit_checks(root, head)?.checks;
-        let mut fast = rows.iter().filter(|c| c.name == "ci-tier: fast");
-        let incomplete =
-            |c: &crate::forge::CommitCheck| c.workflow_id.is_none() || c.run_in_progress;
-        if fast.clone().next().is_none() || fast.any(incomplete) {
+        if !reviewed_fast_settled(root, &repo, &change)? {
             return Ok(());
         }
         let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
-            if repo.change(root, pr).map_err(|e| e.to_string())?.head != head {
+            let current = repo.change(root, pr).map_err(|e| e.to_string())?;
+            if current.head != head || current.base != change.base {
                 return Err(format!("{key} moved from reviewed head {head}"));
             }
             bounded(root, cli, args)
         })
         .map_err(anyhow::Error::msg)?;
         if edited {
-            receipts.write(&receipt, head.as_bytes())?;
+            let current = repo.change(root, pr)?;
+            if current.head == head && current.base == change.base {
+                receipts.write(&receipt, head.as_bytes())?;
+            }
         }
         Ok(())
     };
@@ -3735,11 +3785,14 @@ pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, reco
 state=$(cat state)
 case "$*" in
   *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
-  *"pr list"*) echo '[{change}]';;
-  *statusCheckRollup*) case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr list"*) if [ "$state" = stale ]; then echo '[{change}]' | sed "s/{head}/$(cat old)/"; else echo '[{change}]'; fi;;
+  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
   *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/";;
   *check-runs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"check_runs":[]}}'; else echo '{{"total_count":1,"check_runs":[{marker}]}}'; fi;;
-  *actions/runs*) printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","status":"%s"}}' "$state";;
+  *actions/runs*) owner={pr}; base=main; conclusion=null
+    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; esac
+    case "$state" in foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; esac
+    printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":%s,"base":{{"ref":"%s"}}}}],"status":"%s","conclusion":%s}}' "$owner" "$base" "$state" "$conclusion";;
   *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
   *"pr edit"*) echo "$*" >> edits;;
   *) exit 1;;
@@ -3752,14 +3805,28 @@ esac"#
     record();
     assert!(!root.join("edits").exists());
     let replacement = "a".repeat(40);
-    for state in ["absent", "queued", "in_progress", "moved", "done", "again"] {
-        let moved = state == "moved";
+    write("old", &replacement);
+    for state in [
+        "stale",
+        "absent",
+        "queued",
+        "in_progress",
+        "foreign",
+        "retargeted",
+        "missing",
+        "moved",
+        "done",
+        "again",
+    ] {
         let completed = matches!(state, "done" | "again");
-        let settled = completed || moved;
-        write("state", if settled { "completed" } else { state });
-        write("current", if moved { &replacement } else { head });
+        write("state", if completed { "completed" } else { state });
+        write("current", head);
         let result = promote_approved_heads(root);
-        assert_eq!(result.is_err(), moved, "{result:?}");
+        assert_eq!(
+            result.is_err(),
+            matches!(state, "missing" | "moved"),
+            "{state}: {result:?}"
+        );
         assert_eq!(root.join("edits").exists(), completed);
     }
     let edits = std::fs::read_to_string(root.join("edits")).unwrap();
