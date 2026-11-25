@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T01:45:28.617885632Z
+modified_at: 2026-11-25T01:47:33.581346794Z
 req_type: Bug
 tags:
 - launch
@@ -140,6 +140,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T01:45:28.436514156Z
   modified_at: 2026-11-25T01:45:28.436514156Z
+- id: 01a21063-40da-70d2-85bf-bc4a3a6914f5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:47):
+    # BUG-2748 / PR #4542 r2 (advisor-122 ruling 2026-11-24 18:47 at 12d08b65; STRICT, fail-closed receipts; product-15). Lane: CODEX. MAIN, existing branch. <=120 lines. ONE round.
+    MUST:
+    (F1, p1) Apply the attribution check to EVERY receipt, not just ReceiptRead::Unknown: a Known receipt missing supervisor, worker or worktree after transfer is INCOMPLETE; it blocks admission and is never retired.
+    (F2, p1) An absent or null owner, or one with an unusable start tick, means attribution UNKNOWN: refuse. NEVER borrow a later worker/supervisor tick as the earliest start bound.
+    (F4, strict untested-path) Restore an INDEPENDENT test of the admission branch's scanner decision: a well-formed incomplete receipt + a live process → REFUSE, and a control → ADMIT.
+    (F3) Update the operator guidance (codex_bg_receipt.rs:708, agent_codex_background.rs:2068/2190): an incomplete receipt STAYS until attribution is restored or an attested release happens. Do NOT say "retire once processes are gone".
+    One targeted cargo run, then make check-ci-fast, then push to #4542. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T01:47:33.581346794Z
+  modified_at: 2026-11-25T01:47:33.581346794Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
