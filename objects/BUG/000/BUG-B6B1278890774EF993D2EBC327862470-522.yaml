@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T18:37:00.108620660Z
+modified_at: 2026-11-25T18:57:33.941643290Z
 req_type: Bug
 tags:
 - lanes
@@ -460,6 +460,20 @@ comments:
   modified_at: 2026-11-25T18:37:00.108620660Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21412-00f5-7260-b269-42c9d156f1a9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 881f1adfdce9 (S3 r1, PR #4583)
+    - F1 (advisor-122): new behavioral test seat_clone::pickup_launch_rollback_tests::bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation drives run_pickup_launch with a real session_start setup: reserve on the attempt mark then a failed codex spawn -> rolled back, tree and lease gone, journal entry retired; reserve then a spawned child then error -> tree, lease and reservation kept. Passed with the other two bug_2761 tests (3 passed, lane job j20261125T183605126-5-0).
+    - F2: seat_clone.rs clean-merge refusal now states the actual journal state (entry stays recorded with unknown spawn until the pickup's rollback retires it with the tree; 'for recovery' when no attempt holds it).
+    - Probes: test uses the real lease id as lane_id and the real lease tree as tree_path, so roll_back_attempt's identity and path_absent checks are exercised, not stubbed.
+    - Scope: round-4 findings 1 (successor lease record) and 2 (base-moved fresh round) target the r4 branch commit 2d7195ae48ed, not this S3 slice; per advisor ruling they belong to S1/S2/S6 and are not addressed here. Finding 3 is what S3 (a299decaf1) fixes.
+    - Residual: none new; S1 spike and schema changes remain gated on advisor review.
+  created_at: 2026-11-25T18:57:33.941643290Z
+  modified_at: 2026-11-25T18:57:33.941643290Z
+  session_id: 01a213fc67dc
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
