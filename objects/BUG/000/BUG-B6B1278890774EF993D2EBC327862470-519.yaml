@@ -13,12 +13,25 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T23:59:11.983027226Z
-modified_at: 2026-11-25T00:09:34.673702055Z
+modified_at: 2026-11-25T00:22:19.866555166Z
 req_type: Bug
 tags:
 - outage
 - review-watch
 - rollover
+comments:
+- id: 01a21014-fcfa-7270-8ef6-bd2b193c4a4f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 71bb63b62b39af8acab3724b1ec8d938c651df11 plus six native-lane working-tree files. Merge-base diff empty, no untracked additions.
+    AC1: [evidence: behavioral-test] tests/task_1993_review_watch_tests.rs:5884 loads persisted state with extra root, entry and attempt fields through Store::load. Advisor restart uses the same State.
+    AC2: [evidence: behavioral-test] Same test checks actual writer JSON omits zero, missing reads as zero, and two persists. Lane job j20261125T001019581-2-0 ran one test, passed.
+    Reviewed matching, JSON types, optional/zero/nonzero counts, nested additions and authority. Known-field identity, version, pinned hub and grant checks still apply. Existing refusal coverage includes task1993_missing_corrupt_and_unsafe_state_refuse_reinitialization and story2571_revoked_successor_and_widening_refuse_without_mutation. No test weakened. Unknown fields can be discarded on rewrite. Already-deployed strict readers still need an upgrade for nonzero retries.
+  created_at: 2026-11-25T00:22:19.866555166Z
+  modified_at: 2026-11-25T00:22:19.866555166Z
+  session_id: 01a21006d380
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a21000-f703-7691-a95e-5c3599133388
   author: joe
