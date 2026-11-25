@@ -2,22 +2,18 @@ id: 01a210b8-0b89-7b72-a5d9-49f67101d886
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-522
 agreed_id: BUG-2761
 title: A retained conflict-repair seat cannot be resumed by any dispatch (force-claim and rework both refuse; every punted repair costs an operator attestation)
-description: 'Filed by product-15 per advisor-122 ruling 2026-11-24 20:20. HIGH, STRICT, drive. Every punted conflict-repair lane today left a retained seat (host-staged merge + repair-journal reservation + lease), and NO dispatch could resume it: a fresh launch with --force-claim refuses ("retained lease … and private clone"); a rework-resume dispatch refuses ("branch … is held by a contained seat''s private clone"). The only route was a Joe-attested journal release + salvage + a fresh lane, which happened 4x today (#4533, #4376, #4401, #4525). Each punted conflict repair costs Joe an attestation, which does not scale.
-
+description: |
+  Filed by product-15 per advisor-122 ruling 2026-11-24 20:20. HIGH, STRICT, drive. Every punted conflict-repair lane today left a retained seat (host-staged merge + repair-journal reservation + lease), and NO dispatch could resume it: a fresh launch with --force-claim refuses ("retained lease … and private clone"); a rework-resume dispatch refuses ("branch … is held by a contained seat's private clone"). The only route was a Joe-attested journal release + salvage + a fresh lane, which happened 4x today (#4533, #4376, #4401, #4525). Each punted conflict repair costs Joe an attestation, which does not scale.
 
   ## Acceptance
-
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
-
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-
-  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-25 03:20:26.761872+00:00
-modified_at: 2026-11-25 08:01:53.791675+00:00
+created_at: 2026-11-25T03:20:26.761872Z
+modified_at: 2026-11-25T08:54:29.848157184Z
 req_type: Bug
 tags:
 - lanes
@@ -27,170 +23,158 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a2116d-90ad-7e82-b9bb-f57ddc0155b7
-  created_at: 2026-11-25 06:39:02.992130+00:00
+  created_at: 2026-11-25T06:39:02.992130Z
   created_by: dirtlab
 comments:
 - id: 01a2112d-7dd4-7ac0-a9a8-47f8f4aab437
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 45206d90a1df483c1caff91dee5abf345df4a8d2 and the five uncommitted native-seat edits. The merge-base diff was empty. No untracked additions.
-
     AC1: [evidence: behavioral-test] queue_cmd/work.rs:4960 selects the retained repair independently of conversation resume. seat_clone.rs:3920 verifies the lease, PR, branch, original head, merge base and index paths. session_start.rs:2384 binds the predecessor and rechecks the journal at transfer. The regression refuses mismatched PR, original head and paths.
-
     AC2: [evidence: behavioral-test] tests/bug_2223_orphan_seat_reentry_tests.rs:267 exercises adoption, failed setup rollback, regeneration retry, staging the resolution and committing in the retained tree. Both merge parents are asserted. Final targeted lane job j20261125T052122915-2-0 ran one test and passed. Real sandbox probe assertions use the existing bwrap availability check.
-
-    Deep pass covered scope casing, exact Git and journal identifiers, NUL-delimited paths, resolved index stages, duplicate claims and concurrent journal changes. Fixed a selection-to-transfer race by pinning the predecessor and comparing the checked journal entry under the transfer lock. Existing dead-owner, containment and publication checks still apply. Fixed fixture Git auto-maintenance flags; all eight maintenance ratchet tests passed. The fast gate rerun is job j20261125T052825789-2-0. Hosted PR-head CI is unavailable before publication.'
-  created_at: 2026-11-25 05:28:42.597984+00:00
-  modified_at: 2026-11-25 05:28:42.597984+00:00
+    Deep pass covered scope casing, exact Git and journal identifiers, NUL-delimited paths, resolved index stages, duplicate claims and concurrent journal changes. Fixed a selection-to-transfer race by pinning the predecessor and comparing the checked journal entry under the transfer lock. Existing dead-owner, containment and publication checks still apply. Fixed fixture Git auto-maintenance flags; all eight maintenance ratchet tests passed. The fast gate rerun is job j20261125T052825789-2-0. Hosted PR-head CI is unavailable before publication.
+  created_at: 2026-11-25T05:28:42.597984Z
+  modified_at: 2026-11-25T05:28:42.597984Z
   session_id: 01a2111274b7
   harness_version: codex-cli 0.167.0
 - id: 01a2114a-dc9f-7652-99aa-525f1b2ece82
   author: dirtlab
   content: 'Implementer self-review addendum for HEAD 45206d90a1df483c1caff91dee5abf345df4a8d2 plus the native worktree. Reviewed the final sixth file, scripts/store-writers.toml: three exact entries describe the journal read, index probe and session setup caller. Writer inventory reconciled 3882 sites. Final make check-ci-fast job j20261125T053609978-2-0 exited 0, including all 48 fast source gates and application checks. The runner reported overlay-stale at teardown. The targeted regression passed in job j20261125T052122915-2-0. git diff --check passed.'
-  created_at: 2026-11-25 06:00:47.778487+00:00
-  modified_at: 2026-11-25 06:00:47.778487+00:00
+  created_at: 2026-11-25T06:00:47.778487Z
+  modified_at: 2026-11-25T06:00:47.778487Z
   session_id: 01a2111274b7
   harness_version: codex-cli 0.167.0
 - id: 01a2116d-50dd-79f3-aa6f-7f2ce768b233
   author: aida-publication-done
   content: Implementer push 2a9f9059b3d8 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-25 06:38:26.525104+00:00
-  modified_at: 2026-11-25 06:38:26.525104+00:00
+  created_at: 2026-11-25T06:38:26.525104Z
+  modified_at: 2026-11-25T06:38:26.525104Z
   session_id: 01a2111274b7
 - id: 01a2116e-dc3b-7e92-8eb9-c8173825453f
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-522` at head `2a9f9059b3d8170886b7b80ce59efcbe4dec99c8`.'
-  created_at: 2026-11-25 06:40:07.739527+00:00
-  modified_at: 2026-11-25 06:40:07.739527+00:00
+  created_at: 2026-11-25T06:40:07.739527Z
+  modified_at: 2026-11-25T06:40:07.739527Z
   session_id: 01a2111274b7
 - id: 01a2117e-4584-7700-b3f3-cea65032206a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes. BUG-2761 is a completing spec. Reviewed all six files in the landed diff against pinned main 2d346c274965961d1e187e5d48a6dbe611232393 and attested original PR head 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8.. No triage reason was given.'
-  created_at: 2026-11-25 06:56:57.732928+00:00
-  modified_at: 2026-11-25 06:56:57.732928+00:00
+  created_at: 2026-11-25T06:56:57.732928Z
+  modified_at: 2026-11-25T06:56:57.732928Z
 - id: 01a2117e-6235-72d2-8b4a-86c060010b9f
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2761):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2761):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 2a9f9059b3d8
-
     Recorded: 2026-11-25T06:56:01.683105558+00:00
-
     Findings:
-
     1. BUG-2761.AC1: The direct queue rework dispatch can adopt the repair but cannot finish it through the promised host route. queue_cmd/rework.rs:1140-1172 always passes no_human=false. queue_cmd/work.rs:856-905 admits the conflict using the vendor and containment alone and tells the lane to leave Git metadata read-only because the host will stage, commit and publish after exit. The interactive Codex branch instead execs the vendor at queue_cmd/work.rs:6854-6865 or 6893-6900, leaving no host exit handler. The recorded-thread interactive resume also drops the assembled conflict prompt. Route retained rework through a supervising host completion path and deliver the repair instructions on the recorded-thread path.
-
     2. BUG-2761.AC1: An upstream base advance strands a valid retained merge even when its lease, PR, HEAD, MERGE_HEAD and conflict paths match the journal. After adopting it, prepare_host_repair_with fetches the latest remote base and rejects unless it equals MERGE_HEAD (seat_clone.rs:4018-4030). An unrelated commit on main between the punt and retry therefore prevents the next dispatch from continuing the staged repair and yields the generic different lane/PR/head/base error. Provide an in-place recovery for an intact journaled merge whose base is behind, while preserving the PR-head and publication freshness checks, and give a specific recovery message for actual divergence.
-
     3. Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automatically selects retained repairs for --no-launch, --plan-only and --guided, and session_start.rs:3763-3784 transfers the journal and removes the predecessor. These modes skip host repair preparation and routing (queue_cmd/work.rs:6345); for --no-launch the command reports setup complete and prints a generic deferred launch with no repair instructions or host exit handler (6546-6596). A later real repair dispatch can then be blocked by the new live setup lease. Require a repair-capable launch before automatic transfer, or preserve the repair handoff through deferral with the same preparation and publication gates.
-
     4. BUG-2761.AC2: The extended story_2710_actual_orphan_adoption_transfers_pending_repair fixture is component-level coverage. It constructs the orphan lease/journal directly, injects the PR into session_start_with_receipt, calls prepare_host_repair_with with resume=true and synthetic fetched refs, and completes the merge with direct Git (bug_2223_orphan_seat_reentry_tests.rs:411-539). It never puts a dispatched lane through a punt and then re-enters it via queue rework or lane-run, so regressions that disable the queue selection or lose the host completion path still pass. Add a criterion-traced dispatch regression that starts from the punted lease and verifies that the successor uses the same clone and completes the merge through the regular host-owned path. The reported focused run, cargo test -p aida-cli-lib story_2710_actual_orphan_adoption_transfers_pending_repair, covers the component behavior.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-25 06:57:05.077789+00:00
-  modified_at: 2026-11-25 06:57:05.077789+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T06:57:05.077789Z
+  modified_at: 2026-11-25T06:57:05.077789Z
 - id: 01a21180-8608-71a0-8e90-69fa7f2316bb
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:59):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:59):
     # BUG-2761 / PR #4564 r2 (advisor-122 ruling 2026-11-24 23:54 at 2a9f9059; STRICT; HIGH; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. ONE round.
-
     (F1, MUST) The queue-rework ADOPTION path routes to the SAME host-repair completion as the original conflict lane: pass the repair routing (no_human / host-repair mode) consistently. A resumed repair that adopts but cannot finish is worse than none.
-
-    (F2, MUST) BASE ADVANCED since the punt: if origin''s base moved past MERGE_HEAD, do NOT reject. Abort the stale staged merge CLEANLY (capture its patch to the journal/salvage FIRST), then restart the merge on the NEW base under the SAME lease, offering the old resolution as reference. Test: an unrelated commit on main between the punt and the resume → the resume COMPLETES.
-
+    (F2, MUST) BASE ADVANCED since the punt: if origin's base moved past MERGE_HEAD, do NOT reject. Abort the stale staged merge CLEANLY (capture its patch to the journal/salvage FIRST), then restart the merge on the NEW base under the SAME lease, offering the old resolution as reference. Test: an unrelated commit on main between the punt and the resume → the resume COMPLETES.
     (F3, p2) Only REAL launch modes may adopt a retained repair; --no-launch / --plan-only / --guided must NOT transfer the journal or remove the predecessor; they only report "retained repair available". Test.
-
     (F4, MUST test-gap) ONE end-to-end test through `queue rework` dispatch → session start → host repair → merge completes, with REAL refs (no synthetic fetch injection).
-
-    One targeted cargo run, then make check-ci-fast, then push to #4564. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.'
-  created_at: 2026-11-25 06:59:10.290436+00:00
-  modified_at: 2026-11-25 06:59:10.290436+00:00
+    One targeted cargo run, then make check-ci-fast, then push to #4564. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T06:59:10.290436Z
+  modified_at: 2026-11-25T06:59:10.290436Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2119f-35b5-73f1-acd7-974bceded8f4
   author: dirtlab
-  content: '## Implementer self-review
-
-    Reviewed HEAD: 217841e559b911d533f6e59dd96e658cee6d3f33 plus the native lane''s uncommitted diff. Reviewed the merge-base diff, working tree, and untracked listing. No untracked additions.
-
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 217841e559b911d533f6e59dd96e658cee6d3f33 plus the native lane's uncommitted diff. Reviewed the merge-base diff, working tree, and untracked listing. No untracked additions.
     AC1: [evidence: behavioral-test] Partial. A local-origin queue launch reached an actual punt and retained the conflicted private clone. A separate Git probe preserved different staged and working-tree resolutions and reproduced merge --abort exiting 128 on that intact merge. The draft selects supervision before unattended admission, checks the predecessor identity again, and preserves the historical parent pair for publication validation. The clean-abort refusal remains an F2 design decision.
-
-    AC2: [evidence: behavioral-test] Unverified. The new binary dispatch test ran and failed during fixture setup because its in-progress spec was unqueued. Corrected the setup to queue the spec. The successor and remote-parent assertions have no passing result at this writing. The combined draft exceeds the 150-line ceiling. Recorded a design-fork punt. No reviewer verdict or publication declaration.'
-  created_at: 2026-11-25 07:32:53.017843+00:00
-  modified_at: 2026-11-25 07:32:53.017843+00:00
+    AC2: [evidence: behavioral-test] Unverified. The new binary dispatch test ran and failed during fixture setup because its in-progress spec was unqueued. Corrected the setup to queue the spec. The successor and remote-parent assertions have no passing result at this writing. The combined draft exceeds the 150-line ceiling. Recorded a design-fork punt. No reviewer verdict or publication declaration.
+  created_at: 2026-11-25T07:32:53.017843Z
+  modified_at: 2026-11-25T07:32:53.017843Z
   session_id: 01a211847f0e
   harness_version: codex-cli 0.167.0
 - id: 01a211a3-8d4f-7831-b2be-38d36066a014
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-522` at head `217841e559b911d533f6e59dd96e658cee6d3f33`.'
-  created_at: 2026-11-25 07:37:40.943265+00:00
-  modified_at: 2026-11-25 07:37:40.943265+00:00
+  created_at: 2026-11-25T07:37:40.943265Z
+  modified_at: 2026-11-25T07:37:40.943265Z
   session_id: 01a211847f0e
 - id: 01a211ad-0129-7040-a30a-124ac322b648
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-522` at head `unavailable`.'
-  created_at: 2026-11-25 07:48:00.425189+00:00
-  modified_at: 2026-11-25 07:48:00.425189+00:00
+  created_at: 2026-11-25T07:48:00.425189Z
+  modified_at: 2026-11-25T07:48:00.425189Z
 - id: 01a211b4-0ebd-7090-99b7-554c48f65042
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: F2: I dispute unconditional automatic restart when Git refuses a clean abort. Reproduced with an intact retained merge, an advanced base, a stage-zero resolution and a later working-tree edit to the same path. Both patches can be captured, but git merge --abort exits 128 (Entry ''conflict'' not uptodate). The draft retains the merge and both versions in this case. F4 dispatch publication remains unverified, and the combined draft exceeds the strict 150-line limit.. No triage reason was given.'
-  created_at: 2026-11-25 07:55:42.653461+00:00
-  modified_at: 2026-11-25 07:55:42.653461+00:00
+  created_at: 2026-11-25T07:55:42.653461Z
+  modified_at: 2026-11-25T07:55:42.653461Z
 - id: 01a211b6-6e74-7622-a96a-dc479f6d8c8e
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:58):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:58):
     # BUG-2761 / PR #4564 r3 (advisor-122 ruling 2026-11-25 00:52; STRICT; HIGH; product-15). Lane: CODEX. MAIN, existing branch. <=200 lines.
-
     Your r2 partial work is committed on the branch (c21f184762); continue from it.
-
     F1 (MUST, from r2): the adoption path routes to the SAME host-repair completion as the original conflict lane (no_human / host-repair mode passed consistently).
-
     F2 = FAIL-CLOSED (your dispute ACCEPTED): if the base advanced, TRY a clean `git merge --abort` (capturing both patches to the journal/salvage FIRST) and restart on the new base under the same lease; if the abort FAILS for ANY reason (e.g. "Entry not uptodate"), RETAIN everything and report "resume needs operator". NEVER force. Tests: the clean-abort case completes; the abort-fails case retains + reports.
-
     F3 (from r2): only real launch modes adopt; --no-launch/--plan-only/--guided only report "retained repair available".
-
-    F4: the end-to-end test through `queue rework` dispatch → session start → host repair → merge completes, with REAL refs. If publication genuinely can''t be verified in-process, test up to the host-repair handoff and SAY SO explicitly in the PR body.
-
-    One targeted cargo run, then make check-ci-fast, then push to #4564. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.'
-  created_at: 2026-11-25 07:58:03.659218+00:00
-  modified_at: 2026-11-25 07:58:03.659218+00:00
+    F4: the end-to-end test through `queue rework` dispatch → session start → host repair → merge completes, with REAL refs. If publication genuinely can't be verified in-process, test up to the host-repair handoff and SAY SO explicitly in the PR body.
+    One targeted cargo run, then make check-ci-fast, then push to #4564. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T07:58:03.659218Z
+  modified_at: 2026-11-25T07:58:03.659218Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a211b9-b880-73a2-b653-80ab6f52b0e5
   author: joe
   content: 'r3 ADDENDUM (advisor-122 00:58; the lane was already running when this was appended to its brief, so it is also posted here for the lane and the reviewer): ALSO (advisor-122 00:58, the CR on your r2 partial @c21f1847, no new ruling; still <=200): (a) staged-then-edited path → fail closed (retain + "resume needs operator"), already covered by F2; (b) write the DURABLE refresh state (the salvage patch + a journal "refreshing" record) BEFORE `git merge --abort`, so a crash mid-refresh leaves recoverable evidence; (c) the e2e test''s FIRST lane must also STAGE a resolution (not only the worktree version). '
-  created_at: 2026-11-25 08:01:53.791675+00:00
-  modified_at: 2026-11-25 08:01:53.791675+00:00
+  created_at: 2026-11-25T08:01:53.791675Z
+  modified_at: 2026-11-25T08:01:53.791675Z
+- id: 01a211e9-e498-7f42-a536-7807ec0c9f1b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c21f184762dd62cc8a97144e0fb97b4834ba1680 plus the uncommitted native-seat diff. Checked origin/main...HEAD, git diff HEAD, and untracked additions (none).
+    AC1: [evidence: behavioral-test] queue_cmd/work.rs:4680 selects supervision before admission and reports the retained repair for setup-only modes. The recorded thread receives the assembled prompt through run_queue_resume_to_exit. session_start.rs:2685 passes the verified repair to shared claim acquisition. coordination.rs:1118 checks the exit record against the exact claim, lease, host and retained clone. The dispatch fixture rejects mismatched exit evidence. seat_clone.rs:4075 reports resume needs operator after failed clean abort. The host rollback restores the predecessor shared claim conditionally against the successor receipt.
+    AC2: [evidence: behavioral-test] aida-cli/tests/story_1662_queue_work_wiring.rs:408 and :413 launch a real punt, probe all three deferred modes, then dispatch queue rework --work. The success case verifies the same clone, resolved contents and both parents on a real bare origin. The refusal case verifies the original lease, journal, shared claim, index, MERGE_HEAD, working edits and both saved patches. Targeted lane job j20261125T081516491-2-0 passed 2/2. The initial run exposed a fixture forge-config quoting error. A separate binary run exposed the shared-claim admission blocker, now covered by these tests.
+    Deep pass checked exact identifiers and scope/path comparisons, Git path encoding, empty and duplicate evidence, concurrent claim replacement, mismatched worker receipts, setup rollback and publication freshness. The new claim replacement requires the exact captured exited generation and keeps the existing compare-and-push operation. The abort rechecks journal ownership and the index after salvage. Fast gate j20261125T081511032-2-0 exited 0, including all 48 fast source gates. Final rustfmt, diff --check and the updated store writer inventory passed. The tests use a fixture vendor and forge metadata; Git transport, host preparation, validation and publication are real. Hosted CI for the new commit awaits host publication.
+  created_at: 2026-11-25T08:54:29.848157184Z
+  modified_at: 2026-11-25T08:54:29.848157184Z
+  session_id: 01a211b9a1ca
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
-  timestamp: 2026-11-25 03:21:06.390156+00:00
+  timestamp: 2026-11-25T03:21:06.390156Z
   changes: []
 - id: 01a210f9-517b-72e1-acae-cbacb7956820
   author: joe
-  timestamp: 2026-11-25 04:31:44.507580+00:00
+  timestamp: 2026-11-25T04:31:44.507580Z
   changes: []
 - id: 01a21112-ca76-75f0-8409-66eba9789f61
   author: aida-session-start
-  timestamp: 2026-11-25 04:59:33.878703+00:00
+  timestamp: 2026-11-25T04:59:33.878703Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21117-6036-7f53-ac1f-d325be6abfd6
   author: dirtlab
-  timestamp: 2026-11-25 05:04:34.358373+00:00
+  timestamp: 2026-11-25T05:04:34.358373Z
   session_id: 01a2111274b7
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a2116d-50dd-79f3-aa6f-7f1b05262f45
   author: aida-publication-done
-  timestamp: 2026-11-25 06:38:26.525100+00:00
+  timestamp: 2026-11-25T06:38:26.525100Z
   session_id: 01a2111274b7
   changes:
   - field_name: status
@@ -198,12 +182,12 @@ history:
     new_value: Done
 - id: 01a2116d-e7c7-7870-8fe1-546f07c06bbf
   author: dirtlab
-  timestamp: 2026-11-25 06:39:05.159996+00:00
+  timestamp: 2026-11-25T06:39:05.159996Z
   session_id: 01a2111274b7
   changes: []
 - id: 01a2117d-ff22-7753-a516-7f071bbd64f3
   author: aida-orchestrator
-  timestamp: 2026-11-25 06:56:39.714942+00:00
+  timestamp: 2026-11-25T06:56:39.714942Z
   session_id: 01a211780fc6
   changes:
   - field_name: status
@@ -211,21 +195,21 @@ history:
     new_value: NeedsAttention
 - id: 01a2117e-4584-7700-b3f3-ce9f49e0f097
   author: joe
-  timestamp: 2026-11-25 06:56:57.732917+00:00
+  timestamp: 2026-11-25T06:56:57.732917Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a21184-b7b6-7441-baef-83643a4bed33
   author: aida-session-start
-  timestamp: 2026-11-25 07:04:00.182313+00:00
+  timestamp: 2026-11-25T07:04:00.182313Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2119e-5120-7b63-8c37-44f0f85d5d9b
   author: dirtlab
-  timestamp: 2026-11-25 07:31:57.856612+00:00
+  timestamp: 2026-11-25T07:31:57.856612Z
   session_id: 01a211847f0e
   harness_version: codex-cli 0.167.0
   changes:
@@ -234,19 +218,19 @@ history:
     new_value: NeedsAttention
 - id: 01a211b4-0ebd-7090-99b7-553ab10dcb72
   author: joe
-  timestamp: 2026-11-25 07:55:42.653449+00:00
+  timestamp: 2026-11-25T07:55:42.653449Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a211b7-93f8-7b10-b580-4ad1a4023ac5
   author: joe
-  timestamp: 2026-11-25 07:59:33.368620+00:00
+  timestamp: 2026-11-25T07:59:33.368620Z
   session_id: 01a211b2f5c2
   changes: []
 - id: 01a211b9-e1d8-7733-9f2b-e27d69a8acd2
   author: aida-session-start
-  timestamp: 2026-11-25 08:02:04.376929+00:00
+  timestamp: 2026-11-25T08:02:04.376929Z
   changes:
   - field_name: status
     old_value: Approved
@@ -266,4 +250,4 @@ failure_reason:
   detail: Reviewed the complete landed diff against main at 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2761.AC1 is partial. Retained repairs select supervised launch, and setup checks the PR, predecessor lease, local head, merge base and conflict paths. Base refresh still strands valid retained repairs and has no retryable transition after abort. BUG-2761.AC2 is partial. The new real-ref queue-rework fixture asserts same-seat publication and both merge parents, but its happy path leaves the resolution unstaged and no successful run at this head was available. The preview dispatch returns before transferring ownership. Fast source gates passed and fast compilation was pending at review time. No local tests or builds were run.
   recovery_hint: address the review findings, move BUG-2761 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-25 07:59:17.968003+00:00
+  shelved_at: 2026-11-25T07:59:17.968003Z
