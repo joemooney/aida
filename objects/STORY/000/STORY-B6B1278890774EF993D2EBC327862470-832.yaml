@@ -15,12 +15,22 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-25T16:38:20.706287492Z
+modified_at: 2026-11-25T16:38:56.901553310Z
 req_type: Story
 tags:
 - agents
 - landing
 - throughput
+relationships:
+- rel_type: References
+  target_id: 01a21272-0001-7041-9d91-e0fef9f67516
+  created_at: 2026-11-25T16:38:56.901508293Z
+  created_by: joe
+history:
+- id: 01a21393-1ee3-7441-ae2a-65732125161c
+  author: joe
+  timestamp: 2026-11-25T16:38:58.531388293Z
+  changes: []
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
   branch: main
