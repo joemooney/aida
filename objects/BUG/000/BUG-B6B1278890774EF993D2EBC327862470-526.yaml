@@ -9,12 +9,12 @@ description: |
   - AC1: review-watch collects the forge snapshot (per-PR gh/glab reads) OUTSIDE the admission lock, and takes admission only for the dispatch decision (recheck the snapshot is still current under the lock; if stale, release and retry).
   - AC2: a test where the forge scan is slow (e.g. a stub forge that sleeps per PR) shows a manual train is admitted DURING the scan.
   - AC3: hold time is bounded and logged: an admission hold by review-watch over N seconds writes a warning naming the phase.
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T22:25:17.255835939Z
+modified_at: 2026-11-25T22:42:06.332931345Z
 req_type: Bug
 tags:
 - admission
@@ -129,6 +129,13 @@ history:
   session_id: 01a2147671bd
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a214df-937c-78e2-a6e4-9b6515641521
+  author: joe
+  timestamp: 2026-11-25T22:42:06.332927720Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
@@ -141,3 +148,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-25T22:25:17.255835939Z
   implemented_by: dirtlab
+  reopened_at_sha: a387b7e87b96e611ba9da42e196f44f36b538739
