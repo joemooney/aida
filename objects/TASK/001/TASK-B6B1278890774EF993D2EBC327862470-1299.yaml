@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 929103959163eb27f0a485945b944ea813863e7a
 
   The newly eligible origin-named branches can produce misleading ship recommendations. Adding origin aliases to active_prefixes at aida-cli-lib/src/status_prs.rs:2627 admits a lease-free task-1-097-old branch for an active TASK-3857, but the checks at :2757, :2963 and :3068 use the raw origin ID. An open PR on a different head titled with TASK-3857 is missed, as is a same-tip RequestChanges, Rejected or Waiting verdict keyed only by TASK-3857. A live lease scoped to the agreed ID on a different branch is also missed at :2767. Resolve the branch identity consistently for the existing live-work, forge and verdict checks, and cover a newly eligible origin-named branch with evidence keyed by its agreed ID.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T06:05:00.821108407Z
-modified_at: 2026-11-25T07:21:08.416181514Z
+modified_at: 2026-11-25T07:21:10.968855971Z
 req_type: Task
 tags:
 - carried-from:TASK-3857
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21194-7238-7e83-85ac-69a2d6766598
+  author: joe
+  timestamp: 2026-11-25T07:21:10.968845310Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 929103959163eb27f0a485945b944ea813863e7a
   branch: pr-4490
