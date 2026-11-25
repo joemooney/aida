@@ -1,0 +1,29 @@
+id: 01a210a8-1560-7a12-825e-a67a7b8aabed
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-521
+agreed_id: BUG-2760
+title: Live worktree removal synchronizes the existence/index check with git worktree remove (quarantine-rename + recheck; BUG-2749 residual race)
+description: |
+  Split from #4537 BUG-2749 r3 (advisor-122 ruling 2026-11-24 20:10; filed by product-15). STRICT (data loss), drive. SKETCH FIRST.
+  Residual race: remove_worktree_unguarded samples checkout existence BEFORE spawning `git worktree remove`. If an index change AND checkout disappearance both happen between that sample and git checking the checkout, the live path still deletes the registration, losing a staged index that the missing-at-entry check would have retained.
+
+  ## Acceptance
+  - AC1: Live worktree removal SYNCHRONIZES the existence/index check with `git worktree remove`: quarantine-rename the checkout (STORY-3059 style), re-check existence + staged-index retention on the quarantined path, then remove; any change → restore and RETAIN. Preserve explicitly authorized dirty-worktree removal and the existing pushed-index exception.
+  - AC2: A deterministic test injecting the index change + checkout disappearance inside the window → RETAINED; plus controls for authorized dirty removal and the pushed-index exception.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T03:03:00.704105673Z
+modified_at: 2026-11-25T03:03:00.704105673Z
+req_type: Bug
+tags:
+- data-loss
+- strict
+- worktrees
+filed_at:
+  code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 260a82ae939
+  vendor: claude
