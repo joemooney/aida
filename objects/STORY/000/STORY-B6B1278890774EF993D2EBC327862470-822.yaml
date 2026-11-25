@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T08:28:42.820228288Z
+modified_at: 2026-11-25T08:29:08.296570814Z
 req_type: Story
 tags:
 - hygiene
@@ -315,6 +315,11 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-822` at head `unavailable`.'
   created_at: 2026-11-25T08:28:42.820219745Z
   modified_at: 2026-11-25T08:28:42.820219745Z
+- id: 01a211d2-a948-7a40-b218-512f064c79fd
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-822` at head `unavailable`.'
+  created_at: 2026-11-25T08:29:08.296563762Z
+  modified_at: 2026-11-25T08:29:08.296563762Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
