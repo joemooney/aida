@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T02:57:35.280613382Z
+modified_at: 2026-11-25T03:03:52.590543751Z
 req_type: Bug
 tags:
 - data-loss
@@ -277,6 +277,11 @@ comments:
   created_at: 2026-11-25T02:57:35.280607533Z
   modified_at: 2026-11-25T02:57:35.280607533Z
   session_id: 01a21074d3cb
+- id: 01a210a8-e00e-7152-8222-311531b285ae
+  author: joe
+  content: 'advisor-122 20:10: r3 at the round cap; the residual live-to-missing race is split to BUG-2760 (STRICT, sketch first). The advisor rules on #4537 after the independent verdict on the r3 head (71b61e0938): override-approve if the only blocker is that race.'
+  created_at: 2026-11-25T03:03:52.590543751Z
+  modified_at: 2026-11-25T03:03:52.590543751Z
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
