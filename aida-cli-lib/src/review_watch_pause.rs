@@ -56,7 +56,6 @@ impl std::fmt::Display for Paused {
 impl std::error::Error for Paused {}
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Receipt {
     actor: String,
     reason: String,
@@ -65,7 +64,7 @@ struct Receipt {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(rename_all = "snake_case")]
 enum Event {
     Pause(Receipt),
     Resume { actor: String, at: DateTime<Utc> },
@@ -73,7 +72,6 @@ enum Event {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Journal {
     version: u8,
     repository: String,
