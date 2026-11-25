@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T01:27:08.369877619Z
+modified_at: 2026-11-25T01:29:08.112685348Z
 req_type: Story
 tags:
 - hygiene
@@ -114,6 +114,11 @@ comments:
   created_at: 2026-11-25T01:07:15.726506900Z
   modified_at: 2026-11-25T01:07:15.726506900Z
   session_id: 01a21000a7c5
+- id: 01a21052-2310-7ff0-9f4d-002940f2088a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full five-file landing diff for original head 1deb5e4d92f5160624c66dc67dcf15035af2ae08 against protected main dc27cf1f4cb49a050002334062efb59fe7d2b914, landed tree 163f7c1c1ef88e0abf43140b82458e2db2acc09b. The PR head is two commits behind main. None of the findings depends on the intervening base changes. Exact-head FAST gates, FAST compile, Build (ubuntu-latest), and merge-hold-gate passed. The full test shards were skipped. No local tests or builds were run. The implementer reported a targeted run before publication.. No triage reason was given.'
+  created_at: 2026-11-25T01:29:08.112672272Z
+  modified_at: 2026-11-25T01:29:08.112672272Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
@@ -171,6 +176,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21052-2310-7ff0-9f4d-00179caa87ca
+  author: joe
+  timestamp: 2026-11-25T01:29:08.112663245Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -179,23 +191,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Reviewed the full five-file landing diff for original head 1deb5e4d92f5160624c66dc67dcf15035af2ae08 against protected main dc27cf1f4cb49a050002334062efb59fe7d2b914, landed tree 163f7c1c1ef88e0abf43140b82458e2db2acc09b. The PR head is two commits behind main. None of the findings depends on the intervening base changes. Exact-head FAST gates, FAST compile, Build (ubuntu-latest), and merge-hold-gate passed. The full test shards were skipped. No local tests or builds were run. The implementer reported a targeted run before publication.
-
-    Generated worksheet for completing STORY-3059
-    - Original AC1, policy decision recorded on the story — verified by Joe's authoritative brief on STORY-3059, which specifies a clean tree, no stash, fresh bounded origin proof, and a recovery comment before removal.
-    - Original AC2, report parked until a decision — not-applicable-because the authoritative brief records the final policy and supersedes the interim parked behavior.
-
-    Authoritative implementation acceptance criteria from STORY-3059
-    - AC1, a published seat for a closed-unmerged PR reaps and leaves a recovery comment on the owning spec — unverified. The closed-PR fixture stops at scan eligibility and the removal/comment fixture has no closed-PR setup. The destruction path also has the evidence gaps described below.
-    - AC2, one unpushed current-branch commit is refused — verified by source inspection of reap_publication and the current.txt refusal before push in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.
-    - AC3, origin fetch failure refuses with publication unknown — verified by source inspection of the run_bounded error path and the offline-origin case in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.
-    - AC4, a stash-only clone is refused — verified by the explicit refs/stash refusal before fetch and the stash-only case in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.
-    - AC5, a unique noncurrent local branch commit is refused until freshly published — verified by source inspection of the all-ref inventory and the side-branch before/after publication case in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.
-  recovery_hint: address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T01:27:08.369877619Z
