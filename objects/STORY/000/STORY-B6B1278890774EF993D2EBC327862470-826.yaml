@@ -251,6 +251,20 @@ comments:
   created_at: 2026-11-25T00:00:59.932245421Z
   modified_at: 2026-11-25T00:00:59.932245421Z
   session_id: 01a20fb6f4b3
+- id: 01a21004-e27d-7d91-8e87-e1cac6844a75
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4547 @ 01b14beee4 (slice 1; integration-30): PASS with one non-blocking gap and one routing note.
+    Scope: +399/-8 across 11 files. New aida-cli-lib/src/stalled_reviews.rs adds a 'doctor check stalled-reviews' category. Two schedule jobs in .aida/config.toml: stalled-reviews every 20m with --fail-on-findings, and a CronJobFailed route to the advisor seat.
+    AC1: it lists request-changes at the current head with no rework queued or implementer lease, and approved at the current head with green CI, not on a train, with draft or merge-hold blockers. Each row carries PR, spec, verdict age and finding count. AC2: the 60m default threshold is overridable via AIDA_STALLED_REVIEW_MINUTES (added to DROPPED_AIDA_KEYS, so it does not leak into launches). The job fails on findings, which routes the alert to the advisor. Tests cover a stalled CR reported, queued rework suppressed, re-pushed head cleared, train suppressed, and a read-only scan.
+    Security/read-only: GitBackend::open_existing refuses to create a missing store; forge calls go through repo.pin_command. Before listing, it uses an uncached rate_limit probe, which costs no core budget, and bails when the budget is low (BUG-2735). Cost is about 3 open-PR listings per hour.
+    Semantic check against integration e703bc469ae (main 71bb63b62b3 merged in): extract_pr_spec_ids, pr_head_pins, list_leases, LeaseReader::retained, github_open_changes_detailed, change_verdicts_checked and newest_checks are all present and unchanged. merge-tree: clean.
+    GAP (non-blocking, for a later slice): an approved head whose CI is red or missing is never listed, because 'approved but not landing' requires green. That is exactly the 2026-11-20 3h stall (an approved PR with red full CI). AC1's 'with the blocking reason' suggests reporting it with the reason 'CI red' or 'CI missing'.
+    ROUTING: the PR touches .aida/config.toml, a protected path, so its promotion auto-trains under the mandate, as p31 did. The title is Refs-only, so STORY-3095 stays open.
+  created_at: 2026-11-25T00:04:31.901673975Z
+  modified_at: 2026-11-25T00:04:31.901673975Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20dfc-7b1d-73b3-8d32-ccc70a313cfb
   author: joe
