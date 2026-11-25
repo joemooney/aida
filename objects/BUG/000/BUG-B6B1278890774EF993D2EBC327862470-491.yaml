@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T18:33:52.032628435Z
+modified_at: 2026-11-25T21:06:42.055190018Z
 req_type: Bug
 tags:
 - doctor
@@ -368,6 +368,45 @@ comments:
   content: "DEFERRED follow-ups (advisor-122 override-approval of #4457 r4 @ 08ee6da5, 2026-11-25 11:35; one comment per the findings-as-comments rule):\n- Deferred follow-up (BUG-2730, p2): aida-cli-lib/src/land_stalls.rs scan_with_budgets (~:2019-2039) still routes synchronously on a COMPLETE pass whenever more than 5s of the 220s run budget remain. route() -> raise_due -> schedule_ledger::w\n- Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_deadline_keeps_listed_pages calls Repository::discover_with directly. No test drives a cut discovery through scan_with_budgets/observe, so nothing chec\n- Deferred follow-up (BUG-2730, p3): on GitHub, discover_rich -> forge::github_open_changes_detailed uses remaining_call_budget and propagates its error with `?` from live_pass_with. If the listing itself outlives the scoped run deadline, the\n- Deferred follow-up (BUG-2730, test-gap): in bug_2730_slow_approval_forge_reports_partial_before_ceiling, the assertion `git branch --list aida-store` runs against the fixture's root repo, but the aida-store branch only exists in the nested "
   created_at: 2026-11-25T18:33:52.032628435Z
   modified_at: 2026-11-25T18:33:52.032628435Z
+- id: 01a21488-3b07-7801-856c-c5672c9bc3f6
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 11 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3416: Review follow-up: Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1515–1528 starts eve
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1515–1528 starts every tick in forge-list order. If the same prefix consumes the run budget, later PRs are skipped on every tick. Resume from the skipped suffix or prioritize the least recently covered PRs.
+
+    - TASK-3417: Review follow-up: Deferred follow-up from prior review: landed aida-cli-lib/src/land.rs:855–860 refuses even
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a Deferred follow-up from prior review: landed aida-cli-lib/src/land.rs:855–860 refuses even brief contention on the fetch lock. The resulting missing pins lead to unknown mergeability, yet guard_rows can report these PRs covered and route_with can clear their previous stall deduplication. Retry contention within a bounded share of the deadline and preserve routing evidence whenever pins are unavailable.
+
+    - TASK-3419: Review follow-up: Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes th
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes the previous default-branch forge metadata fallback. With no local origin/HEAD and unavailable Git transport, an authenticated GitHub host can no longer identify the branch even if the cached tracking ref has the landing history. This suppresses dry-window escalation. Restore the forge metadata fallback under the same absolute budget.
+
+    - TASK-3421: Review follow-up: Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1889–1903 disables a
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1889–1903 disables all routing and rerun cleanup on a partial pass. A covered stall can clear and recur on the same head without a new wake, and keys for known closed or superseded heads persist. Reconcile covered observations and discovered open heads separately, preserving entries with unknown status.
+
+    - TASK-3422: Review follow-up: Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1289–1291 and :1590–
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1289–1291 and :1590–1615 prune red-detail memory using only covered red heads. Skipping a still-open red PR evicts its cached test names and observation timestamp. Use confirmed inventory and covered facts for eviction, and verify cache retention across a partial tick.
+
+    - TASK-3423: Review follow-up: Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1590–1658 sets repor
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1590–1658 sets report.partial solely from guard_rows. When all primary rows fit but the deadline prevents CI detail or landing history, the saved snapshot still reads as a complete run. Track supplementary deadline exhaustion separately and identify which supplementary observations were skipped.
+
+    - TASK-3430: Review follow-up: aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls int
+      From BUG-2730 Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls into the per-seat job. When a previously routed stall is skipped and a new covered stall for that same seat arrives before the existing job is consumed, raise_due replaces the job's note and due_failure with the covered subset. The skipped stall remains marked routed, so a later observation will not restore its due evidence. Preserve outstanding due evidence for skipped PRs when coalescing a new partial route.
+
+    - TASK-3432: Review follow-up: Deferred follow-up (BUG-2730, test-gap): in bug_2730_slow_approval_forge_reports_partial_b
+      From BUG-2730 Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f Deferred follow-up (BUG-2730, test-gap): in bug_2730_slow_approval_forge_reports_partial_before_ceiling, the assertion `git branch --list aida-store` runs against the fixture's root repo, but the aida-store branch only exists in the nested .aida-store repo, so the assertion is always empty and cannot detect a store commit. The memory.routed.is_empty() and elapsed<10s assertions do carry the no-route guarantee. Fix: assert on `git -C .aida-store rev-list --count aida-store` (unchanged), or drop the line.
+
+    - TASK-3433: Review follow-up: Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_d
+      From BUG-2730 Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_deadline_keeps_listed_pages calls Repository::discover_with directly. No test drives a cut discovery through scan_with_budgets/observe, so nothing checks the 'changes past the discovery deadline unknown' partial line (land_stalls.rs observe), the metrics::record skip in land.rs live_pass_with (rows.len()==changes.len() && !discovery_cut), or that routing is deferred on a cut. The prior review asked for a regression through the guard. Add a GitLab guard fixture whose page 2 hangs.
+
+    - TASK-3434: Review follow-up: Deferred follow-up (BUG-2730, p2): aida-cli-lib/src/land_stalls.rs scan_with_budgets (~:20
+      From BUG-2730 Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f Deferred follow-up (BUG-2730, p2): aida-cli-lib/src/land_stalls.rs scan_with_budgets (~:2019-2039) still routes synchronously on a COMPLETE pass whenever more than 5s of the 220s run budget remain. route() -> raise_due -> schedule_ledger::write_local_bounded bounds only lock admission; write_cas_opts(push=false) then runs a git commit whose signer has no deadline, and mailbox_store::write_message is also a store write. The advisor's r4 F1 brief said the guard pass should not route at all. The margin before the 300s scheduler ceiling is at least 85s, and main already routed synchronously (and pushed), so this is pre-existing
+
+    - TASK-3435: Review follow-up: Deferred follow-up (BUG-2730, p3): on GitHub, discover_rich -> forge::github_open_changes_
+      From BUG-2730 Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f Deferred follow-up (BUG-2730, p3): on GitHub, discover_rich -> forge::github_open_changes_detailed uses remaining_call_budget and propagates its error with `?` from live_pass_with. If the listing itself outlives the scoped run deadline, the guard exits with an error. It does not report an empty PARTIAL inventory, which is the GitLab discover_with behaviour. This is unlikely, because discovery runs first under a 60s cap within the 220s budget. Fix: treat deadline exhaustion in the rich listing the same way as the GitLab path.
+  created_at: 2026-11-25T21:06:42.055190018Z
+  modified_at: 2026-11-25T21:06:42.055190018Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
