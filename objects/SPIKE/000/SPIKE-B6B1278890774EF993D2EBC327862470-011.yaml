@@ -17,10 +17,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:38:27.540916722Z
-modified_at: 2026-11-25T21:19:45.237999444Z
+modified_at: 2026-11-25T21:20:16.577789355Z
 req_type: Spike
 tags:
 - area:architecture
+- operator-held
 - source:aida-multinode
 comments:
 - id: 01a21494-2e56-7ce3-9bdf-9df66b81c77a
@@ -35,6 +36,14 @@ history:
   session_id: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a21494-a910-7480-9fe6-dcab72afead6
+  author: joe
+  timestamp: 2026-11-25T21:20:16.656293791Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-25T21:20:16.577789355Z
+deferred_until: date:2026-12-09
+deferred_reason: 'advisor backlog pass 2026-11-25: off the current throughput path'
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
