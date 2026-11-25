@@ -81,6 +81,25 @@ comments:
   modified_at: 2026-11-25T09:36:54.131865915Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21211-86ae-7702-93c1-7f6533990a09
+  author: joe
+  content: |-
+    SLICE-BRIEF NOTES (advisor ruling 02:40, from the #4567 pre-check)
+
+    S1 micro-round (#4567, at most 15 lines, before merge): in findings_exceeding_threshold, an unknown or unparseable severity ranks as CRITICAL (4), so the gate fails closed. Add a test showing that severity 'blocker' or '' is caught by --fail-on critical. No other scope.
+
+    S2/S3 briefs:
+    (a) The CLI must refuse, not silently drop, any runner-supplied finding path that is outside the PR's changed-file inventory, including absolute paths, '..' and paths that aren't in the batch.
+    (b) --run-review spawns 'claude --print' or AIDA_REVIEW_RUNNER_CMD, so it needs the full security lens:
+    - where the command comes from (an environment-supplied command);
+    - the working directory, which must not be an untrusted seat clone;
+    - the environment and credentials the runner inherits;
+    - output size bounds;
+    - untrusted runner output is never executed or used to choose the command.
+  created_at: 2026-11-25T09:37:33.579099466Z
+  modified_at: 2026-11-25T09:37:33.579099466Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
