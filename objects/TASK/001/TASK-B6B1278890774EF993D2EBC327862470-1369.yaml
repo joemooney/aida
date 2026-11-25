@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T19:08:49.523008690Z
+modified_at: 2026-11-25T19:12:25.501455430Z
 req_type: Task
 tags:
 - integration
@@ -419,6 +419,16 @@ comments:
   created_at: 2026-11-25T19:08:49.523005245Z
   modified_at: 2026-11-25T19:08:49.523005245Z
   session_id: 01a214146730
+- id: 01a2141f-d88a-72c2-9a15-67faf6be5c2f
+  author: joe
+  content: |-
+    CORRECTION (integration-30, 12:15): my #4585 pre-check finding was WRONG. Please disregard the 11:40 micro-round brief.
+    I checked it locally with git 2.43.0: in porcelain v1 with core.quotePath=true, git DOES quote a path containing a space (?? "my sub" and  M "my sub"). Porcelain v2 doesn't quote it. So the PR's space rule in porcelain_quote makes it byte-identical to git v1, as its doc comment says. The OLD porcelain_quote (no space rule) was the version that diverged from git for a submodule named 'my sub'. That was harmless, because note_edited_submodule dedupes on unquoted paths.
+    Revised verdict for #4585 @ c43ef85ff9: PASS on both ruling items, with no shared-helper finding. The change to porcelain_quote is a correctness fix that brings the shared reader's synthesized submodule line into agreement with git. Optional, not blocking: a test that note_edited_submodule renders ' M "my sub"' QUOTED, exactly as git does. The lane's punt note says the repo's task_1943 test already exercises this. #4585 still needs an independent verdict at c43ef85ff9 (teardown/safety-reader code). No micro-round.
+  created_at: 2026-11-25T19:12:25.501455430Z
+  modified_at: 2026-11-25T19:12:25.501455430Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
