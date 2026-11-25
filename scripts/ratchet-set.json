@@ -10,6 +10,7 @@
       "scope": "module",
       "source": "aida-core/src/review_engine.rs",
       "tests": [
+        "s1_runner_findings_sarif_and_threshold",
         "config_defaults_only_when_absent",
         "credential_components_at_any_depth",
         "h2b_compiled_globs_bound_expansion",
