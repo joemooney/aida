@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T08:55:34.953259985Z
+modified_at: 2026-11-25T09:10:00.213520598Z
 req_type: Bug
 tags:
 - launch
@@ -422,6 +422,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a211f8-1315-7360-9ed9-2766708f018c
+  author: aida-orchestrator
+  timestamp: 2026-11-25T09:10:00.213528266Z
+  session_id: 01a211f4ed6d
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -430,3 +438,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2748 AC1 fails source review. Ordinary recovery can release a Prepared receipt with absent attribution keys, the inspection surface reports a normal phase for a held transfer without dispatcher attribution, and the legacy terminal exception cannot distinguish a partially corrupted post-transfer recovery from a Prepared recovery. AC2 passes source review. The grant-only success case now tests refusal and evidence preservation, and complete attribution has occupied, unreadable and clear scanner controls. Reviewed the full landed diff for acfa405338a5c0594f539768d81d12aa1b80b537 against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. The two trees at the landed result and original PR head have identical content. FAST source gates passed and compilation was pending when checked. No local tests were run.
+  recovery_hint: address the review findings, move BUG-2748 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T09:10:00.213520598Z
