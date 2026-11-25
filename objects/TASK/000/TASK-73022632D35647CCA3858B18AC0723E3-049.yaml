@@ -12,12 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T16:42:24.727738373Z
-modified_at: 2026-11-25T16:42:24.727738373Z
+modified_at: 2026-11-25T21:09:08.307154746Z
 req_type: Task
 tags:
 - from-implementer:TASK-3908
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a2148a-7653-7803-b678-a49a56847299
+  author: joe
+  content: DUPLICATE of TASK-3909 (same revert, filed separately); rejected by product-15 2026-11-25 14:10 in the backlog cleanup.
+  created_at: 2026-11-25T21:09:08.307154746Z
+  modified_at: 2026-11-25T21:09:08.307154746Z
 history:
 - id: 01a213cc-2131-7303-a1ec-7b1d833fa449
   author: joe
