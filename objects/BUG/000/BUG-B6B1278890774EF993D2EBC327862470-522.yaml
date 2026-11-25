@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T11:35:33.323556204Z
+modified_at: 2026-11-25T15:17:57.076423124Z
 req_type: Bug
 tags:
 - lanes
@@ -231,6 +231,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landed diff against pinned main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2761.AC1 FAIL: the recorded-thread retry can strand the successor shared claim, and the R4 base-moved refusal leaves the stated fresh-round fallback unavailable. The new interactive refusal can also strand a fresh repair reservation. BUG-2761.AC2 PASS for the staged-punt cold-dispatch scenario: the fixture asserts the same clone, staged resolution and both published merge parents, with a reported focused pass. It also checks preservation when the base has already moved and report-only behavior in non-launch modes. Exact-head fast gates, fast compile and aggregate build passed. Merge-hold status was pending. No local tests or builds were run per reviewer policy.. It was punted on: design-fork: R3 finding 1 asked for a durable refresh before abort. I dispute retaining that refresh under the final R4 ruling and removed the abort and restart. The same-base publication and moved-base preservation regression passed. The draft still adds 413 lines against the 300-line PR limit, including 99 lines of dispatch fixture. Parking for the specified TASK-3895 fallback.. No triage reason was given.'
   created_at: 2026-11-25T11:35:33.323549568Z
   modified_at: 2026-11-25T11:35:33.323549568Z
+- id: 01a21348-f0d4-7b03-b269-1ca19edfc172
+  author: joe
+  content: 'SKETCH SCOPE ADDED (advisor-122 05:37): include TASK-3895''s need, an owner-lifetime lease lock / launch-adoption protocol covering surviving lane processes, so a mandate-attested release has real liveness evidence.'
+  created_at: 2026-11-25T15:17:57.076423124Z
+  modified_at: 2026-11-25T15:17:57.076423124Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
