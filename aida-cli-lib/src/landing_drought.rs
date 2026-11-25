@@ -159,12 +159,12 @@ fn full_tier_gap(rollup: &serde_json::Value) -> Option<&'static str> {
         .iter()
         .filter(|c| c["name"] == crate::full_tier::FULL_MARKER)
         .collect();
-    let outcome = |c: &serde_json::Value| c["conclusion"].as_str().unwrap_or("");
+    let any = |outcome: &str| rows.iter().any(|c| c["conclusion"] == outcome);
     if rows.is_empty() {
         Some("missing")
-    } else if rows.iter().any(|c| outcome(c) == "SUCCESS") {
+    } else if any("SUCCESS") {
         None
-    } else if rows.iter().any(|c| outcome(c) == "CANCELLED") {
+    } else if any("CANCELLED") {
         Some("cancelled")
     } else {
         None
