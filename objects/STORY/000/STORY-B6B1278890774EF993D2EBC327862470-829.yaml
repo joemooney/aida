@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T18:03:02.249173779Z
+modified_at: 2026-11-25T18:13:57.136366198Z
 req_type: Story
 tags:
 - integration
@@ -376,6 +376,19 @@ comments:
     Merge-tree against integration: CLEAN (new files only, plus additive lines in launch/mod.rs, vendors/mod.rs, launch_env_keys.rs, ratchet-set.json and store-writers.toml).
   created_at: 2026-11-25T18:08:29.596043852Z
   modified_at: 2026-11-25T18:08:29.596043852Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a213ea-739d-72a2-96ca-b33bca8b768f
+  author: joe
+  content: |-
+    SLICE-BRIEF NOTE for S3a-2, the --run-review slice (advisor ruling 11:18; recorded by integration-30). S3a-2 must carry, in addition to wiring --run-review onto launch::review_runner::RunnerCall:
+    (1) BOUNDED JOINS (#4582 pre-check should-fix a). After kill(-pgid), wait for the stdout/stderr reader threads and the stdin writer thread with a short grace (poll JoinHandle::is_finished, about 5s). If any thread is still running, fail closed with 'review runner left descendants holding its pipes' and leak that thread. TEST: a runner that starts a setsid'd (or double-forked) descendant that inherits stdout/stdin, then exits. run() must return an error within deadline + grace.
+    (2) Item 11: a runner finding path outside the PR inventory refuses the whole --run-review run. Add a test.
+    (3) git_text should-fixes: route through a sanitized git builder (the env allowlist, see the BUG-2760 note and the TASK-3874 sketch), add --no-textconv, and make a diff failure an error, with no silent full-file fallback.
+    (4) The caller passes std::env::vars_os() unchanged as parent_env.
+    S3b (--effort/--model allowlists, review-rules.toml from the trusted base) follows after S3a-2.
+  created_at: 2026-11-25T18:13:57.136366198Z
+  modified_at: 2026-11-25T18:13:57.136366198Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
