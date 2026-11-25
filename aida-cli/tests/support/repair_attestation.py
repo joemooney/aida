@@ -77,6 +77,26 @@ class RepairAttestation(unittest.TestCase):
             self.assertEqual(lease.read_text(), stamped)
             self.assertTrue(tree.is_dir())
             lease.write_text(body)
+            events = lambda: {e: json.loads(e.read_text()) for e in lease.parent.glob("*.attestation.json")}
+            # trace:BUG-2755 | ai:claude — a present but inaccessible tree refuses and keeps its lease.
+            if os.geteuid() != 0:
+                locked, prior = Path(tmp) / "locked", events()
+                hidden = locked / tree.name
+                locked.mkdir()
+                tree.rename(hidden)
+                lease.write_text(body.replace(str(tree), str(hidden)))
+                locked.chmod(0)
+                try:
+                    result = run(tty, env=env, input=id_ + "\n")
+                finally:
+                    locked.chmod(0o700)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(os.strerror(errno.EACCES), result.stdout)
+                self.assertEqual(lease.read_text(), body.replace(str(tree), str(hidden)))
+                self.assertEqual(events(), prior)
+                self.assertTrue((hidden / ".git").is_dir())
+                hidden.rename(tree)
+                lease.write_text(body)
             # An ordinary heal refuses the unverified binding, even with --yes.
             result = run(args[:-2] + ["--yes"], env=env)
             self.assertNotEqual(result.returncode, 0)
@@ -88,10 +108,15 @@ class RepairAttestation(unittest.TestCase):
             if other is not None:
                 with other as home:
                     if Path(home).stat().st_dev != tree.stat().st_dev:
+                        prior = events()
                         result = run(tty, env=env | {"HOME": home}, input=id_ + "\n")
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn(os.strerror(errno.EXDEV), result.stdout)
                         self.assertTrue(tree.is_dir() and lease.exists())
+                        new = sorted((v for e, v in events().items() if e not in prior), key=lambda v: v["outcome"])
+                        self.assertEqual([v["outcome"].split(":")[0] for v in new], ["failed", "pending"])
+                        self.assertIn(os.strerror(errno.EXDEV), new[0]["outcome"])
+                        self.assertTrue(new[1]["planned"].startswith("salvage destination"))
             (tree / "mail").write_text("pending")
             for change in ("replace", "create", "stamp", "wrong", "salvage", "absent"):
                 if change == "create":
@@ -118,9 +143,10 @@ class RepairAttestation(unittest.TestCase):
                     self.assertEqual((saved / alternates).read_bytes(), contents)
                     self.assertEqual((saved / "mail").read_text(), "pending")
                 if success:
-                    event, = set(lease.parent.glob("*.attestation.json")) - existing_events
+                    new = [json.loads(e.read_text()) for e in set(lease.parent.glob("*.attestation.json")) - existing_events]
                     outcome = f"salvage destination {saved}" if change == "salvage" else "tree absent, nothing to salvage"
-                    self.assertEqual(json.loads(event.read_text()), dict(lease_id=id_, reason="stopped writers", outcome=outcome))
+                    record = dict(lease_id=id_, reason="stopped writers", outcome=outcome)
+                    self.assertCountEqual(new, [record, record | dict(outcome="pending", planned=outcome)])
 
     def test_real_terminal_gates_and_concurrent_change(self):
         with tempfile.TemporaryDirectory() as tmp:

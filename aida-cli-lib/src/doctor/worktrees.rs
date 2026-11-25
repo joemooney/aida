@@ -1524,26 +1524,39 @@ pub(super) fn attest_clone_lease(main: &std::path::Path, id: &str, reason: &str)
             "tree absent, nothing to salvage".into()
         };
         let audit = format!("operator attested {id}: {reason}; {outcome}");
-        // Immutable write-ahead lease event, including for pre-ownership leases.
+        // Immutable lease events, including for pre-ownership leases: a
+        // write-ahead "pending" intent, then the final outcome or failure.
+        // trace:BUG-2755 | ai:claude
         let directory = main.join(".aida/sessions");
-        let event = directory.join(format!("{id}-{}.attestation.json", uuid::Uuid::new_v4()));
-        let pending = tempfile::NamedTempFile::new_in(&directory)?;
-        serde_json::to_writer(
-            pending.as_file(),
-            &serde_json::json!({ "lease_id": id, "reason": reason, "outcome": outcome }),
+        let record = |record: serde_json::Value| -> Result<()> {
+            let event = directory.join(format!("{id}-{}.attestation.json", uuid::Uuid::new_v4()));
+            let pending = tempfile::NamedTempFile::new_in(&directory)?;
+            serde_json::to_writer(pending.as_file(), &record)?;
+            pending.as_file().sync_all()?;
+            pending.persist_noclobber(event)?;
+            std::fs::File::open(&directory)?.sync_all()?;
+            Ok(())
+        };
+        record(
+            serde_json::json!({ "lease_id": id, "reason": reason, "outcome": "pending", "planned": outcome }),
         )?;
-        pending.as_file().sync_all()?;
-        pending.persist_noclobber(event)?;
-        std::fs::File::open(directory)?.sync_all()?;
-        if before.is_some() {
-            aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
-                .with_context(|| format!("atomic salvage to {}", dest.display()))?;
-        }
-        eprintln!("{outcome}");
-        crate::session_reap::release_lease_files_with_reason(main, id, &audit);
-        let removed = !crate::lease_path(main, id).try_exists()?;
-        anyhow::ensure!(removed, "lease {id} could not be removed");
-        Ok(())
+        let done = (|| -> Result<()> {
+            if before.is_some() {
+                aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
+                    .with_context(|| format!("atomic salvage to {}", dest.display()))?;
+            }
+            eprintln!("{outcome}");
+            crate::session_reap::release_lease_files_with_reason(main, id, &audit);
+            let removed = !crate::lease_path(main, id).try_exists()?;
+            anyhow::ensure!(removed, "lease {id} could not be removed");
+            Ok(())
+        })();
+        let last = match &done {
+            Ok(()) => outcome.clone(),
+            Err(e) => format!("failed: {e:#}"),
+        };
+        record(serde_json::json!({ "lease_id": id, "reason": reason, "outcome": last }))?;
+        done
     })
 }
 
