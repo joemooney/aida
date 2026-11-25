@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:24:10.635879426Z
-modified_at: 2026-11-25T22:57:23.483570733Z
+modified_at: 2026-11-25T23:25:48.293333910Z
 req_type: Bug
 comments:
 - id: 01a21493-6f47-7ed1-8c8e-85fdd72abf7f
@@ -40,6 +40,26 @@ comments:
   modified_at: 2026-11-25T21:53:57.993360387Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21507-9585-70c0-bff6-6d5bfdf870fc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3e675a5c6e (branch bug-2745-hold-marker-refusal, diff origin/main...HEAD: 6 files, +282/-22).
+
+    Root cause: mandate_ship::collect_mandate_cover, supervised-by-mode branch (BUG-2663), refused with MarkerMissing whenever ANY recorded clearance existed for a PR with no open hold, and required recorded/cleared labels to be absent. A rework hold auto-released by a reviewer verdict (principal auto-released:verdict) hit that path, so the train reported 'hold marker missing without a recorded clearance (tampering suspected)'. The marker-missing reason itself was not set: read_hold/unrecorded_marker_removals already saw the ledger release. The bug was the cover's refusal, not a different read root.
+
+    Fix: extract unheld_supervised_facts (mandate_ship.rs). It accepts a release only when merge_hold_core::verdict_auto_release finds it: on the ledger (not a legacy clearance file), no open hold, cleared_by == rework_hold_release::PRINCIPAL, released_by_verdict present, and the released hold is a typed non-legacy Rework. The kind comes from the ledger hold the release closed (new HoldState.released from the fold), not from the clearance's own claim. Labels must then agree it was cleared (no hold label, recorded == cleared, the same rule as recheck_train_release and cleared_by_human_facts) and the PR must be open. The result is HoldFacts::SupervisedByMode, so the mandate include_supervised, approval-at-head, two-person and gate-path checks all still apply.
+
+    AC1: [evidence: behavioral-test] src/tests/bug_2745_verdict_release_tests.rs::a_reviewer_worktree_verdict_auto_release_counts_as_a_recorded_clearance places and releases from a linked reviewer worktree and reads the result from the primary checkout.
+    Refusal paths: other_recorded_releases_stay_refused (Supervision kind, a non-auto principal, no verdict, a forged Rework claim over a Supervision hold), a_verdict_auto_release_still_needs_agreeing_labels (hold label, mismatched labels, closed PR, unreadable forge), missing_marker_and_never_held_shapes_are_unchanged (BUG-2663 shapes).
+    Probes: 5 (authority). The new allow path is reachable only through a ledger hold-release event. Contained seats cannot append. The worst case is the existing never-held SupervisedByMode outcome. A fail-open check: parse errors, a missing released hold and legacy-only evidence all answer None, which stays a refusal. No existing test was changed.
+    Ratchet: the test lives in src/tests (registered from pr_train.rs) because naming merge_hold types inside gate/ would add an upward gate-dependency edge.
+    Residual: a mandate-advisor release (released_under_mandate, cleared_by advisor:*) and an uncorroborated human clearance still read as MarkerMissing on a later train pass; the second message is misleading. Out of scope here.
+    Tests: 4/4 bug_2745 passed (lane job). make check-ci-fast is running on this head.
+  created_at: 2026-11-25T23:25:48.293333910Z
+  modified_at: 2026-11-25T23:25:48.293333910Z
+  session_id: 01a214ed601d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-77a9-7c53-a7a7-683c2a24c1c7
   author: joe
