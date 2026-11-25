@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T16:53:41.118089377Z
+modified_at: 2026-11-25T18:06:47.264428253Z
 req_type: Bug
 tags:
 - lanes
@@ -402,6 +402,21 @@ comments:
   modified_at: 2026-11-25T16:43:26.480729994Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213e3-83e0-7b13-a09c-c3e330d781fb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a299decaf1388ee3f0eec3ce11c023cf4269f111 (S3, Refs-only slice of the signed-off reservation-lifecycle sketch; R4-3).
+    AC (R4-3 / T2): [evidence: behavioral-test]
+    - Route before reserve: seat_clone.rs prepare_host_repair_routed runs RepairAttempt.admit after a conflict is observed and before RepairGuard::reserve. queue_cmd/work.rs conflict_route_admission covers host publication, the new interactive refusal, vendor and containment. Test seat_clone::rework_merge_tests::bug_2761_refused_route_reserves_nothing_and_headless_retry_reserves: an interactive pickup is refused with no journal, MERGE_HEAD, index or HEAD change, and a headless retry at the same head reserves.
+    - Attempt-scoped rollback: reserve() returns AttemptReservation, recorded on AgentLaunchMark.repair. run_pickup_launch retires it only after receipt.rollback() succeeded and no child spawned. RepairGuard::roll_back_attempt matches the reservation id (pr/head/lane), tree path and reserved_at, requires spawn Unknown and the tree absent, and restores a replaced ProvenDead entry. Test repair_journal::tests::bug_2761_attempt_rollback_retires_only_its_own_reservation: another PR's entry survives; the replaced ProvenDead entry is restored; a retired, superseded or tree-present entry is untouched.
+    Probes: concurrent attest or replacement makes the identity/spawn check fail, so the reservation is kept. A journal error keeps the reservation and prints a note (fail-closed). Clean merges are not admitted, so interactive clean rework is unchanged. No existing test was weakened.
+    Validation: targeted lane jobs passed bug_2761 x2, story_2710, task_3804, bug_2603, story_2475, bug_2684 and bug_2223. The only failure was story_2475_all_codex_lane_exits_publish_after_child_exit, from the host disk floor (31 GiB free < 60 GiB floor), which this diff does not touch. make check-ci-fast passed. The store-writer inventory gained 3 rows.
+    Residual: a panic during launch keeps the reservation (conservative). An adopted, non-owned setup keeps its reservation (S4). R4-1 and R4-2 are deferred to S4/S5 per the signoff. The diff is about 375 changed lines (about 215 production, the rest tests), above the 300-line target.
+  created_at: 2026-11-25T18:06:47.264428253Z
+  modified_at: 2026-11-25T18:06:47.264428253Z
+  session_id: 01a213a055e9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
