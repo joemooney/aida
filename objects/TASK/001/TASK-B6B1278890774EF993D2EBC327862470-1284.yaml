@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: a2f048d7d0cdfb74977229c352068cb6c35339d8
 
   aida-cli-lib/src/forge.rs:1907 — The resolver can return a relative executable from PATH (kernel.rs:415–425). It checks that candidate from AIDA's current directory, then the API command sets its cwd to the main worktree. With a relative PATH entry such as ./bin from a linked checkout, the API spawn can miss the checked binary or execute the main checkout's different bin/gh. Make the selected executable absolute before setting current_dir, and cover relative PATH in the linked-worktree fixture. See https://doc.rust-lang.org/std/process/struct.Command.html#method.current_dir
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T03:38:43.311692442Z
-modified_at: 2026-11-25T07:21:03.661500665Z
+modified_at: 2026-11-25T07:21:06.052053085Z
 req_type: Task
 tags:
 - carried-from:TASK-3852
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-24T04:56:50.295893027Z
   changes: []
+- id: 01a21194-5f04-79c3-b2c0-a5039e54892a
+  author: joe
+  timestamp: 2026-11-25T07:21:06.052048362Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: a2f048d7d0cdfb74977229c352068cb6c35339d8
   branch: pr-4478
