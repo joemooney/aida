@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: (F2) refusal summaries quote dirty-path filenames that have trailing spaces unambiguously. Test.
-status: Done
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T18:57:34.437111261Z
+modified_at: 2026-11-25T19:04:52.216014935Z
 req_type: Task
 tags:
 - integration
@@ -587,6 +587,15 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T18:57:43.592737334Z
   changes: []
+- id: 01a21418-b0f8-7540-a041-b012da9ca3c5
+  author: dirtlab
+  timestamp: 2026-11-25T19:04:52.216067408Z
+  session_id: 01a214146730
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
@@ -598,6 +607,12 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Disputing advisor-122 MICRO-ROUND item (1)/(3): the ruling''s premise is false. git 2.43.0 porcelain v1 under core.quotePath=true DOES quote paths containing a space (wt-status short format uses quote_path with QUOTE_PATH_QUOTE_SP). Repro: git init; touch ''my sub''; git -c core.quotePath=true status --porcelain=v1 -> ?? "my sub" (porcelain v2 prints unquoted ''? my sub''). So the current porcelain_quote space rule is already byte-identical to git v1; reverting it makes note_edited_submodule emit '' M my sub'' while git prints '' M "my sub"''. Implemented the ruling as written and the required test failed against real git: task_1943_quoted_porcelain_path_is_listed_once panicked at store_hook_tests.rs:1267 asserting git status contains ''?? my sub'' (lane job j20261125T190409759-25-0). No commit pushed; the working tree in this seat holds the uncommitted ruling edits (git checkout revert was denied by the harness).'
+  lean: 'Keep porcelain_quote as on #4585 (space-quoting = git v1 parity, no refusal_quote needed). Optional micro-commit: add a test asserting porcelain_quote("my sub") equals git''s own ''?? "my sub"'' line, pinning parity.'
+  raised_by: implementer
+  raised_at: 2026-11-25T19:04:52.216014935Z
 failure_reason:
   phase: reviewer
   phase_index: 3
