@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T19:09:28.383618768Z
+modified_at: 2026-11-25T19:48:42.088232569Z
 req_type: Story
 tags:
 - hygiene
@@ -504,6 +504,20 @@ comments:
   modified_at: 2026-11-25T19:04:56.091151930Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21440-d1e8-7ca3-b638-ead6e255163b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8d24c593ef (PR #4570, r3 per advisor-122 ruling)
+    - F1 (GitLab veto test gap): added story_3059_gitlab_closed_unmerged_exact_tip_veto (forge_task_1222_gc_forge_tests_inline_tests.rs) on parse_terminal_branch(GitLab, unmerged_only=true): closed same-project MR at full tip -> matched (iid carried); open MR alongside does not cancel it; merged, moved-sha, open-only and cross-project -> not matched; empty/7-char/39-char sha -> None (unknown); GitHub-cased 'CLOSED' on GitLab -> None. This kills the mutations named in the finding (dropping 'closed', removing the same-project or full-SHA guards).
+    - F2 (PR number in hint): parse_terminal_branch now returns TerminalTip{matched, number} (GitHub 'number', GitLab 'iid'; gh pr list now requests 'number'). clone_history_veto renders 'PR #N closed unmerged on branch ...'; it falls back to 'closed PR' when the forge omits a number. bug_2473 lifecycle test asserts 'PR #4570 closed unmerged on branch `feat`'.
+    - GC semantics are unchanged: observe_gc_branch_closed/parse_gc_branch_closed map to .matched.
+    - Evidence: lane job: 6 targeted tests passed (story_3059, task_1222_gc*, bug_2473_bwrap_clean_pushed_clone...); make check-ci-fast exit 0.
+    - Residual risk: on GitLab the hint still says 'PR #N' rather than 'MR !N' (follows AC2 wording).
+  created_at: 2026-11-25T19:48:42.088232569Z
+  modified_at: 2026-11-25T19:48:42.088232569Z
+  session_id: 01a2141caea2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
