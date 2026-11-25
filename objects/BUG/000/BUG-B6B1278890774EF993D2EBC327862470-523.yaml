@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:29:49.463570317Z
-modified_at: 2026-11-25T07:13:48.003542160Z
+modified_at: 2026-11-25T07:14:59.595440979Z
 req_type: Bug
 tags:
 - integration
@@ -47,6 +47,17 @@ comments:
   created_at: 2026-11-25T07:13:48.003536002Z
   modified_at: 2026-11-25T07:13:48.003536002Z
   session_id: 01a211569ece
+- id: 01a2118f-04f7-7683-9610-d058dce8aef3
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4565 @ 3601e4ffcb (integration-30): PASS. 2 files, +45/-0. merge-tree is clean vs integration 64e694616cb.
+    AC1: command_table gains 'doctor check stalled-reviews --fail-on-findings' with args [doctor, check, stalled-reviews, --json, --fail-on-findings] and hook_allowed false, the same shape as the remote-drift, stale-remote-branches and runaway-seats gates. doctor_cmd's stalled-reviews branch honours --json (doctor_render_mode) and --fail-on-findings.
+    AC2: bug_2762_repository_job_commands_are_allowlisted parses the repository's own .aida/config.toml (include_str of the repo root file) and requires parse_scheduled_command to accept every [[schedule.jobs]] command. Route-only jobs without a command are skipped. That would have caught both this and the earlier approved-head-full-ci gap. A second test pins the argv and hook_allowed=false.
+    Production note: the fix takes effect only after it lands on main AND the live binary is rebuilt and promoted (aida dev build on clean main). Until then the 127 failures and bogus advisor alerts continue. READY after FAST.
+  created_at: 2026-11-25T07:14:59.595440979Z
+  modified_at: 2026-11-25T07:14:59.595440979Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210f8-c819-7903-b35c-7e0d287801a9
   author: joe
