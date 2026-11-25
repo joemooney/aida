@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T12:04:06.814880062Z
+modified_at: 2026-11-25T12:04:14.365351973Z
 req_type: Bug
 tags:
 - doctor
@@ -257,6 +257,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full sweep of the eight-file landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 0c2d297e23b055b15ce4630176359421083d2757, attesting original head f613bc9c207b12bb4de7a0db4356d3c738bf9d6a. The worksheet and completion declaration cover both BUG-2730 criteria. The supplied untraced list was used. The diff adds a BUG-2730-traced regression, cargo test -p aida-cli-lib bug_2730_slow_approval_forge_reports_partial_before_ceiling. Its assertions cover ordinary row exhaustion, but the pinned-base Actions change prevents the fixture from testing the claimed approval path. The signer fixture avoids the admitted slow transaction. FAST gates, compile, and the required aggregate passed at the original head. FAST skipped runtime shards. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-25T12:04:06.814871236Z
   modified_at: 2026-11-25T12:04:06.814871236Z
+- id: 01a21297-9701-7a02-a8a0-18e2f466016a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2730):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f613bc9c207b
+    Recorded: 2026-11-25T12:02:23.556983664+00:00
+    Findings:
+    1. BUG-2730.AC2: aida-cli-lib/src/land_stalls.rs:2017–2026 still calls route synchronously whenever more than five seconds remain. The bound at aida-cli-lib/src/schedule_ledger.rs:338–348 covers lock admission only. The admitted write invokes git_ops::commit at :411, whose subprocess waits for a signer without a deadline. A partial scan that takes three seconds of a twelve-second budget with the fixture's signer still enabled takes over the fixture ceiling; in production a signer taking over 300 seconds can make the scheduler kill the guard after snapshot persistence and before the doctor findings return. The first fixture pass skips the writer and the second disables signing, so neither exercises this path. Move the potentially blocking transaction out of the report's critical path or bound it with recoverable write semantics. Test with a slow route that would actually be admitted.
+    2. BUG-2730.AC1/AC2, pinned-base interaction: aida-cli-lib/src/tests/story_2906_throughput_guard_tests.rs:1667–1674 sleeps on every gh command except pr list and --version. Protected main's BUG-2723 change (52f38dc581f) makes land_ci_base.rs:22 call latest_runs_at even for an empty rollup. This calls gh api (including a capability probe), so PR 2 spends its deadline in CI before derive reaches merge_approval_subject_observed. The generic reading marker and the covered/skipped assertions can still pass while the approval reader is never exercised. Return immediate fixture responses for capability and Actions-list reads, make just PR 2's approval metadata slow, assert the specific call was reached, and check emitted timing fields. This failure of the regression's evidence depends on the protected base change.
+    3. BUG-2730.AC1/AC2: aida-cli-lib/src/land_stalls.rs:1554–1566 propagates deadline exhaustion before the coverage callback via ?. On GitLab, a later slow listing page can hit the full run budget after earlier pages discovered changes. review_watch_forge.rs:291–309 drops the accumulated inventory on error, so doctor exits with an error and emits neither the phase times nor deadline coverage. Distinguish deadline exhaustion from a normal discovery error, keep known IDs as skipped, mark the rest of the inventory unknown, and return a partial report. Add a slow-discovery regression through the guard.
+    4. Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1590–1658 sets report.partial solely from guard_rows. When all primary rows fit but the deadline prevents CI detail or landing history, the saved snapshot still reads as a complete run. Track supplementary deadline exhaustion separately and identify which supplementary observations were skipped.
+    5. Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1289–1291 and :1590–1615 prune red-detail memory using only covered red heads. Skipping a still-open red PR evicts its cached test names and observation timestamp. Use confirmed inventory and covered facts for eviction, and verify cache retention across a partial tick.
+    6. Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1889–1903 disables all routing and rerun cleanup on a partial pass. A covered stall can clear and recur on the same head without a new wake, and keys for known closed or superseded heads persist. Reconcile covered observations and discovered open heads separately, preserving entries with unknown status.
+    7. aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls into the per-seat job. When a previously routed stall is skipped and a new covered stall for that same seat arrives before the existing job is consumed, raise_due replaces the job's note and due_failure with the covered subset. The skipped stall remains marked routed, so a later observation will not restore its due evidence. Preserve outstanding due evidence for skipped PRs when coalescing a new partial route.
+    8. Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1515–1528 starts every tick in forge-list order. If the same prefix consumes the run budget, later PRs are skipped on every tick. Resume from the skipped suffix or prioritize the least recently covered PRs.
+    9. Deferred follow-up from prior review: landed aida-cli-lib/src/land.rs:855–860 refuses even brief contention on the fetch lock. The resulting missing pins lead to unknown mergeability, yet guard_rows can report these PRs covered and route_with can clear their previous stall deduplication. Retry contention within a bounded share of the deadline and preserve routing evidence whenever pins are unavailable.
+    10. Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes the previous default-branch forge metadata fallback. With no local origin/HEAD and unavailable Git transport, an authenticated GitHub host can no longer identify the branch even if the cached tracking ref has the landing history. This suppresses dry-window escalation. Restore the forge metadata fallback under the same absolute budget.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T12:04:14.209461826Z
+  modified_at: 2026-11-25T12:04:14.209461826Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
