@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:00:31.801480938Z
-modified_at: 2026-11-25T02:44:11.170289820Z
+modified_at: 2026-11-25T03:09:43.701247209Z
 req_type: Task
 tags:
 - review
@@ -199,6 +199,26 @@ comments:
   modified_at: 2026-11-25T02:44:11.170289820Z
   session_id: 01a21073f413
   harness_version: codex-cli 0.167.0
+- id: 01a210ae-7ab2-7e43-b3a5-80544ace578e
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4525 rebase round @ 6f4855915f (integration-30): PASS. The diff vs integration 48f3c087305 is 4 files, +261/-66. merge-tree is clean; GitHub reports it MERGEABLE.
+    Reconciliation (advisor 12:45):
+    - Compile-once: PlaybookRegistry holds (CompiledGlob, rule) pairs, review_prepare compiles exclusions once via compile_exclusions, and classify_with_exclusions takes the compiled set. GLOB_COMPILES in the test proves resolve() does not recompile.
+    - Oversize: H2a's token cap stays a fallback reason in the same per-entry decision (classify_compiled(...).or_else(token_cap)), with the same excluded_files reporting.
+    - F1: PlaybookRegistry::new returns Result, with the context 'invalid playbook <id> pattern <p>'. The review_prepare test proves the error names custom-check and the pattern.
+    - F2: compile_exclusions errors with 'invalid exclusion pattern <p>'; nothing matches all. classify_exclusion and classify_diff_inventory now return Result. Engine test with 257 alternatives.
+    - Brace bound: at most 256 alternatives and a 1 MiB expansion. expand_braces expands only the first group (no recursion), so no combinatorial blow-up. Regex size is bounded by the regex crate limit, which errors.
+    - F3: a KMP-style matching_spans. The LINE_COMPARISONS counter caps the work at 3*(n+m) on a 32000/16000 repeated-prefix case; the old sliding window would be about 2.5e8 comparisons, so the test detects it.
+    - F4: the guide names resolved_span.start_line/end_line and drops the sliding-window wording. Hints are preserved at the top level, and a test covers re-anchoring clearing a stale resolved_span.
+    - Digest amendment: the digest code is untouched in the diff. h2a_digest_frames_paths now pins 820722b3…24e5 for the fixed inventory.
+    - Ratchet set: pure union; 4 h2b_* names added, no removals.
+    No remaining external callers of the now-Result APIs other than review_prepare (updated). No new process or git calls, so no security surface.
+    Note: the merge commit 6f4855915f was committed by the product seat under the default git identity after the lane's host snapshot step failed (BUG-2756 class). Its content is the lane's resolution, and the squash title is unchanged (Refs TASK-3872). READY after FAST.
+  created_at: 2026-11-25T03:09:43.701247209Z
+  modified_at: 2026-11-25T03:09:43.701247209Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e13-15d8-7192-8c48-006617c031fe
   author: joe
