@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T06:11:59.024477244Z
+modified_at: 2026-11-25T06:12:06.586181712Z
 req_type: Bug
 tags:
 - leases
@@ -212,6 +212,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against protected main 2d346c274965961d1e187e5d48a6dbe611232393, landed tree daa7804c3df65ef42615d49384d5397bfac9c994. The PR head is one commit behind and no finding depends on that intervening review-watch change. Applied the latest advisor-approved BUG-2755 r3 attestation design, which supersedes the earlier mount-proof approach in the worksheet. AC1 partial: the helper covers release of an absent clone with a typed ID, but does not bind confirmation to the observed path state. AC2 partial: the helper uses nonreplacing atomic rename and exercises mail preservation and EXDEV refusal, but can move a replacement directory. AC3 partial: missing or wrong confirmation refuses in the helper and the CLI has an operator gate, but the stale decision can race lease updates and the CLI authority checks have no regression. Exact-head GitHub fast gates, fast compile and Build (ubuntu-latest) passed. Merge-hold clearance remained pending. No local tests or builds were run. The explicit review claim was refused.. No triage reason was given.'
   created_at: 2026-11-25T06:11:59.024465892Z
   modified_at: 2026-11-25T06:11:59.024465892Z
+- id: 01a21155-3499-7e10-b38d-ae15438ecd5f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2755):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: eb2e718dbedd
+    Recorded: 2026-11-25T06:08:06.707854266+00:00
+    Findings:
+    1. aida-cli-lib/src/doctor/worktrees.rs:1462 — BUG-2755 r3: Confirmation is tied to a path and a lease ID, but the command first inspects the directory after reading the typed ID. If a checkout is removed, recreated, or replaced at that path while the operator is stopping writers, the command can move the replacement and release the lease, even if the replacement now has a verified binding. The lease TOML need not change. Snapshot the path's absent/present state and directory identity before prompting and refuse if either changes before salvage. Exercise replacement and absent-to-present transitions during confirmation.
+    2. aida-cli-lib/src/doctor/worktrees.rs:1469 — BUG-2755 r3: The claimed stale-lease restriction is not held at the release boundary. A launcher can stamp a new holder into the same lease after the equality check, while this command checks paths or creates the salvage directory. The release helper then acts on that current lease by ID and can revoke the new child's grant and delete its lease. Serialize the final lease comparison and release with the existing lease-stamp lock, or use an equivalent conditional release. Also tie the initial snapshot to the lease that qualified for the stale finding, since doctor_cmd.rs:397–406 currently passes only an ID from that scan.
+    3. aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4614 — The regression calls attest_clone_lease directly, bypassing every new CLI authority check and the exact stale-finding lookup. It would still pass if doctor heal accepted a correct ID from piped stdin or a managed seat. Add coverage at the command dispatch boundary showing those invocations leave the clone and lease intact, with a positive operator control.
+    4. aida-cli-lib/src/doctor_cmd.rs:363 — The clone release validates a nonempty operator reason and then discards it. The release path records only the generic 'lease reaped' reason where it emits ownership events. Preserve the operator's reason with the lease ID and salvage outcome in the release audit so an attested override can be distinguished from an ordinary reap.
+    5. aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4617 — The EXDEV regression assumes the default temporary directory and /dev/shm are on different filesystems and that /dev/shm is writable. A supported Linux run with TMPDIR=/dev/shm can instead successfully move the fixture and release its lease, then panic at unwrap_err and leave a fixture under /dev/shm. Use managed fixture directories proven to be on different mounts or inject EXDEV at the rename boundary.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T06:12:06.425906321Z
+  modified_at: 2026-11-25T06:12:06.425906321Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
