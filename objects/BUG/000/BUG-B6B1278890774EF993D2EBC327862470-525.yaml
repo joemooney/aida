@@ -1,0 +1,32 @@
+id: 01a213e3-ba21-73e1-b295-65d98d31ac5f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-525
+agreed_id: BUG-2764
+title: 'Approved PRs do not get ci:full: review record --verdict approved and approved-head-full-ci leave approved heads on the fast tier (~1h landing delay per PR)'
+description: |
+  advisor-122 2026-11-25 11:05 (filed by product-15). An APPROVED PR does not reliably get the full CI tier, which costs about an hour per approved PR.
+  Evidence today: (1) the advisor's approval of p39 #4580 @ f4ed770f (11:02 MST) left only ci-tier: fast, with no ci:full (added by hand). (2) #4458 BUG-2710, approved by a Claude reviewer @ d5124472 (~10:20), got no CI label at all. (3) p38 #4574, approved 08:46, never got its full run; it sat about 1h before anyone noticed.
+  Expected (documented, BUG-2729 / TASK-3877): `aida review record … --verdict approved`, and the scheduled `approved-head-full-ci` job (`review --promote-approved-heads`, every 2m), add ci:full once the head's FAST run is complete, so the full tier runs.
+  Product-seat findings from .aida/schedule.log (imac primary): approved-head-full-ci appears only as FAILURES. status=127 on 2026-11-24 (18:38, 18:57 UTC; "unknown scheduled task command", because the live binary lacked it); status=1 with EMPTY stderr 4 times on 2026-11-25 15:58-16:19 UTC. A manual run at 11:10 MST exits 0 silently, so there is no evidence of what it did or skipped. Related: `stalled-reviews` failed status=127 ("this aida binary does not support the command of scheduled job") every 20m until the live binary was promoted to d738e6c at 11:05, because the tracked config was ahead of the live binary.
+
+  ## Acceptance
+  - AC1: an approval recorded at a head whose FAST run is complete adds ci:full (or re-triggers the full run), and a full run appears. An approval recorded while FAST is still running is promoted by approved-head-full-ci as soon as FAST completes, within one tick.
+  - AC2: a test covering both orders (approval after FAST completes; approval before FAST completes, then the job tick).
+  - AC3: `review --promote-approved-heads` prints one line per approved PR it considered (promoted / skipped + reason), and a non-zero exit always carries a stderr reason, so schedule.log is diagnosable.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T18:07:01.153149577Z
+modified_at: 2026-11-25T18:07:01.153149577Z
+req_type: Bug
+tags:
+- ci
+- landing
+- throughput
+filed_at:
+  code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d738e6c6f16
+  vendor: claude
