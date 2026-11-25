@@ -1168,7 +1168,7 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     }
     let still_held =
         || clone.exists() && ref_exists(&fx.main, &pin) && crate::lease_path(&fx.main, id).exists();
-    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
     for force in [false, true] {
         let refused = format!("{:#}", end_session(id, force).unwrap_err());
         assert!(refused.contains("submodules"), "{refused}");
@@ -1176,6 +1176,16 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     }
     crate::worktree_dismiss::handle_dismiss(Some(clone.to_str().unwrap()), None).unwrap();
     assert!(still_held());
+    // The reap re-observes exact-tip PR history first and keeps the seat when
+    // it is unknown; give it a forge with no closed PR so the submodule
+    // refusal is what keeps this clone. trace:STORY-3059 | ai:claude
+    drop(ambient);
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let _ambient = fixture_pr_history(&fx);
     let lease = crate::list_leases(&fx.main)
         .into_iter()
         .find(|l| l.id == id)
