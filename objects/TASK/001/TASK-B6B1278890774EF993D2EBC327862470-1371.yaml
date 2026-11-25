@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9fdf2f785ab41789129b76b62dab12d0c87a5b70
 
   Deferred follow-up from the prior review (F3), aida-cli-lib/src/review_watch.rs:4686. PR state reads the no-verdict deadline and cap alone. A capped pickup still projects retry_backoff=true and retry_exhausted=false, so reconciliation can keep reobserving a head that requires operator release. Project the pickup deadline and exhausted state into the PR facts.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T19:50:46.870248401Z
-modified_at: 2026-11-25T07:27:19.306328280Z
+modified_at: 2026-11-25T07:27:21.092432974Z
 req_type: Task
 tags:
 - carried-from:BUG-2720
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a2119a-1804-7a10-a620-eb06beeadee5
+  author: joe
+  timestamp: 2026-11-25T07:27:21.092428192Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9fdf2f785ab41789129b76b62dab12d0c87a5b70
   branch: pr-4413
