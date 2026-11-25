@@ -17,11 +17,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:38:27.540916722Z
-modified_at: 2026-11-16T06:33:14.064878335Z
+modified_at: 2026-11-25T21:19:45.237999444Z
 req_type: Spike
 tags:
 - area:architecture
 - source:aida-multinode
+comments:
+- id: 01a21494-2e56-7ce3-9bdf-9df66b81c77a
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): DEFERRED: not on the current throughput path. STORY-2997 needs a sketch; STORY-2852''s docs go via STORY-2839 d-slices.'
+  created_at: 2026-11-25T21:19:45.237999444Z
+  modified_at: 2026-11-25T21:19:45.237999444Z
 history:
 - id: 01a1e30f-50d6-7d40-b4ea-8f950a7db135
   author: joe
