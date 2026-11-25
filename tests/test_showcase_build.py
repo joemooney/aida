@@ -267,6 +267,35 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.assertNotIn('<table>', page)
         self.assertIn('<p>| not | a table | | still | prose |</p>', page)
 
+    # trace:STORY-2839 | ai:claude
+    def test_header_groups_pages_into_dropdowns_and_marks_the_current_one(self):
+        self.manifest['pages'][0]['output'] = 'workflow.html'
+        self.manifest['pages'].append({'source': 'guide.md', 'output': 'trust.html', 'label': 'Trust & evidence', 'category': 'human'})
+        self.save_manifest()
+        (self.site / 'code-review.html').write_text('<p>static</p>')
+        self.git('add', '.')
+        self.build()
+        page = (self.site / 'workflow.html').read_text()
+        how = ('<div class="nav-group nav-group-active"><button type="button" class="nav-trigger" aria-expanded="false">'
+               'How it works <span class="nav-caret" aria-hidden="true">▾</span></button>'
+               '<div class="nav-menu"><a href="workflow.html" aria-current="page">Guide</a><a href="code-review.html">Code review</a></div></div>')
+        self.assertIn(how, page)
+        self.assertIn('<div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Governance', page)
+        self.assertIn('<a href="trust.html">Trust &amp; evidence</a>', page)
+        self.assertNotIn('Operations', page)
+        self.assertNotIn('engineering-audit.html', page)
+        library = (self.site / 'library.html').read_text()
+        self.assertIn('Reference <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="library.html" aria-current="page">Library</a></div>', library)
+
+    # trace:STORY-2839 | ai:claude
+    def test_theme_preference_only_honours_the_dark_value(self):
+        template = (REPO / 'docs/showcase/page-template.html').read_text()
+        self.assertIn("if(localStorage.getItem('aida-theme')==='dark')document.documentElement.setAttribute('data-theme','terminal')", template)
+        script = (REPO / 'docs/showcase/app.js').read_text()
+        self.assertEqual(script.count("localStorage.setItem('aida-theme', next)"), 1)
+        self.assertIn("const next = isDark() ? 'light' : 'dark';", script)
+        self.assertNotIn('innerHTML', script)
+
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_term_cards_show_only_for_a_search(self):
         script = r'''
