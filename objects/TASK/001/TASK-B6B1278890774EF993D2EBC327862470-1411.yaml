@@ -19,7 +19,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T07:27:54.866346829Z
-modified_at: 2026-11-25T07:29:41.776331494Z
+modified_at: 2026-11-25T21:05:19.246536953Z
 req_type: Task
 tags:
 - review-debt
@@ -44,6 +44,16 @@ relationships:
   target_id: 01a20ba3-a91f-7210-88d0-89e24a63c385
   created_at: 2026-11-25T07:29:41.776278326Z
   created_by: joe
+comments:
+- id: 01a21486-f78e-7d71-a65e-ff15086cd1e0
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3401: Lane test link fails after compiler receives SIGKILL
+      Seeded lane 01a2110564b6 passed one focused test initially. FAST job j20261125T050848928-2-0 passed source checks but sccache reported the aida-cli-lib test compiler terminated by signal 9. The next targeted job j20261125T052623673-2-0 failed linking with undefined hidden LLVM symbols across unrelated modules. A clean host-managed target is needed to verify the final patch.
+  created_at: 2026-11-25T21:05:19.246536953Z
+  modified_at: 2026-11-25T21:05:19.246536953Z
 history:
 - id: 01a2119b-9408-73d1-b51b-3222a314d746
   author: joe
