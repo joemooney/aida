@@ -1,0 +1,30 @@
+id: 01a2119e-fb30-7733-b0c6-715b1261c0ef
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1416
+agreed_id: TASK-3901
+title: 'Review debt: launch/receipts (3 deferred findings)'
+description: |
+  Review debt for area 'launch/receipts' (folded from 3 reviewer 'Review follow-up:' drafts in the 2026-11-24 triage; Joe approved 2026-11-25 00:16; product-15). Each item below is a deferred review finding; the full text and file:line are on the original spec.
+
+  ## Items
+  - TASK-3384 (parent BUG-2748 / #4542 (open)): operator guidance vs new retirement refusal
+  - TASK-b6b1278890774ef993d2ebc327862470-1390 (parent TASK-3884 / #4538 (open)): contention fixtures can deadlock on regression
+  - TASK-b6b1278890774ef993d2ebc327862470-1393 (parent BUG-2747 / #4540 (open)): environ-unreadable unrelated process blocks admission
+
+  ## Acceptance
+  - AC1: each listed finding is fixed with a test, or explicitly closed with evidence that it no longer applies.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T07:32:41.392412659Z
+modified_at: 2026-11-25T07:32:41.392412659Z
+req_type: Task
+tags:
+- review-debt
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d346c27496
+  vendor: claude
