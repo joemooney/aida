@@ -8,7 +8,7 @@ priority: High
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-24T07:31:04.331376844Z
-modified_at: 2026-11-25T21:19:22.903984307Z
+modified_at: 2026-11-25T22:40:59.922465700Z
 req_type: Task
 tags:
 - from-advisor:STORY-3076
@@ -21,6 +21,18 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED HIGH, strict. A security observation (the review engine misses repository-root credential directories). Fold its AC into STORY-3120 S3a-2''s runner path inventory / refusal work.'
   created_at: 2026-11-25T21:19:19.324859398Z
   modified_at: 2026-11-25T21:19:19.324859398Z
+- id: 01a214de-e92f-7262-b6e9-b3cb51e673a3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:40):
+    # TASK-3320: the review engine misses repository-root credential directories (advisor-122 approved 2026-11-25 14:30, HIGH, STRICT; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-task-3320 (cut from the integration tip after STORY-3120 S3a #4582 merged). Completing (TASK-3320) trailer. <=200 lines.
+    READ: `aida show TASK-3320 --comments`. The advisor ruled its AC belongs with the S3a runner-path inventory: the review engine's file inventory and secret/credential screening must cover repository-ROOT credential directories (e.g. .aws/, .ssh/, .gnupg/, .config/gcloud, .docker/config.json, .netrc and similar at the repo root, not only nested). Findings that cite such paths must be flagged, and their contents must never be put into a runner prompt.
+    TESTS: a fixture repo with root-level credential dirs → excluded from the prompt and reported; nested equivalents are still handled.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-25T22:40:59.922465700Z
+  modified_at: 2026-11-25T22:40:59.922465700Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c83-b64f-7602-98cc-554db51f875e
   author: joe
