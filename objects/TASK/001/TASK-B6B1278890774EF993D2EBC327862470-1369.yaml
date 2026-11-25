@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: (F2) refusal summaries quote dirty-path filenames that have trailing spaces unambiguously. Test.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T03:56:58.483876212Z
+modified_at: 2026-11-25T04:24:10.952650878Z
 req_type: Task
 tags:
 - integration
@@ -29,6 +29,12 @@ comments:
   modified_at: 2026-11-25T03:56:58.483876212Z
   session_id: 01a210af7534
   harness_version: codex-cli 0.167.0
+- id: 01a210f2-65c8-7a60-b039-ba2390838ab0
+  author: aida-publication-done
+  content: Implementer push 876ace623dbe declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T04:24:10.952649806Z
+  modified_at: 2026-11-25T04:24:10.952649806Z
+  session_id: 01a210af7534
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
@@ -54,6 +60,14 @@ history:
   session_id: 01a210af7534
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a210f2-65c8-7a60-b039-ba12398d49de
+  author: aida-publication-done
+  timestamp: 2026-11-25T04:24:10.952641701Z
+  session_id: 01a210af7534
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
