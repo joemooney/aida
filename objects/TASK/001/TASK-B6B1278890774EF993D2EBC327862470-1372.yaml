@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9fdf2f785ab41789129b76b62dab12d0c87a5b70
 
   Deferred follow-up from the prior review (F4), aida-cli-lib/src/review_watch.rs:330 and :370. Even ordinary reservations serialize pickup_retries=0 into shared version-1 state. Rollback and mixed-version readers reject this field under deny_unknown_fields. Omit zero for unaffected receipts and define compatibility for receipts with active retry metadata.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T19:51:01.245678757Z
-modified_at: 2026-11-25T07:27:15.661828583Z
+modified_at: 2026-11-25T07:27:17.465742232Z
 req_type: Task
 tags:
 - carried-from:BUG-2720
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a2119a-09d9-7f03-8066-e6909c91b3cf
+  author: joe
+  timestamp: 2026-11-25T07:27:17.465738043Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9fdf2f785ab41789129b76b62dab12d0c87a5b70
   branch: pr-4413
