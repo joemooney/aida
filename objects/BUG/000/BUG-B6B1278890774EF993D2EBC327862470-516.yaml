@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T03:27:04.871967932Z
+modified_at: 2026-11-25T03:28:50.564609299Z
 req_type: Bug
 tags:
 - leases
@@ -165,6 +165,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T03:27:04.709264417Z
   modified_at: 2026-11-25T03:27:04.709264417Z
+- id: 01a210bf-f525-7a60-8c07-13eaf0edad1d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:28):
+    # BUG-2755 / PR #4541 r3: REDESIGN BY REMOVAL (advisor-122 ruling 2026-11-24 20:30 at a80ae09d; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=150 NET lines; this round should SHRINK the PR.
+    r2 drew 5 majors, all on "prove no process/holder/binding" (hidepid procfs, EACCES on /proc/*/root, unreadable ignored subtrees, binding-verify errors collapsed to absent, flock not fencing old binaries). Proof of absence is NOT achievable on a multi-user host, so STOP trying.
+    NEW DESIGN: the heal path for a stale lease whose seat clone is absent or unbound:
+     (a) REQUIRES an operator --attest (same pattern as `doctor heal repair-reservations`: require_direct_human + a TTY confirmation typing the id);
+     (b) MOVES the clone (if present) to ~/salvage/reaped/<spec>-<lease>-<ts>/ via an ATOMIC same-filesystem rename (else REFUSE) instead of deleting it;
+     (c) then ends the lease.
+    Keep only cheap best-effort checks as WARNINGS printed before the confirmation, never as a gate that's treated as proof. Any verification error = "unknown" → refuse WITHOUT --attest. REMOVE the procfs/mount/binding proof machinery from r1/r2.
+    Tests: no attest → refuse; attest → moved + lease ended; cross-fs target → refuse.
+    One targeted cargo run, then make check-ci-fast, then push to #4541. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T03:28:50.564609299Z
+  modified_at: 2026-11-25T03:28:50.564609299Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
