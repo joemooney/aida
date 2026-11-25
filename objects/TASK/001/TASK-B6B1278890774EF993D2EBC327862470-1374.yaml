@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T02:13:02.644898263Z
+modified_at: 2026-11-25T02:57:56.281559549Z
 req_type: Task
 tags:
 - launch
@@ -145,6 +145,13 @@ comments:
     AC2: [evidence: behavioral-test] incomplete. The existing reap_or_record test exercises the helper with writable storage. It does not prove bounded Drop or failed recovery handoff. Inspection found synchronous temp-directory publication, stderr and recursive TempDir cleanup, plus a separate mutation Session shutdown budget. F3/F4/F5 punted for a pre-spawn recovery owner and sufficient scope. Publication veto recorded. Rustfmt and git diff --check passed.
   created_at: 2026-11-25T02:13:02.644898263Z
   modified_at: 2026-11-25T02:13:02.644898263Z
+  session_id: 01a210732923
+  harness_version: codex-cli 0.167.0
+- id: 01a210a3-74bb-7f93-b66a-392573ecac3c
+  author: dirtlab
+  content: Implementer validation update for 345cb8782b plus working edits. All 56 targeted task_3884 and story_1888 tests passed. FAST initially flagged the temporary-file fixture as a production writer. Added explicit cfg(test), verified the 3880-site inventory and reran make check-ci-fast to exit 0 (job j20261125T022559271-3-0). Runner reported overlay-stale after teardown. AC2 and the publication veto remain open.
+  created_at: 2026-11-25T02:57:56.281559549Z
+  modified_at: 2026-11-25T02:57:56.281559549Z
   session_id: 01a210732923
   harness_version: codex-cli 0.167.0
 history:
