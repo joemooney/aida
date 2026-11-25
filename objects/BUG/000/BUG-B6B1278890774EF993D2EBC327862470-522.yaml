@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T09:34:46.672536505Z
+modified_at: 2026-11-25T10:50:41.917489611Z
 req_type: Bug
 tags:
 - lanes
@@ -307,6 +307,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21254-4566-7420-96e8-a7a17f097c98
+  author: dirtlab
+  timestamp: 2026-11-25T10:50:42.406674613Z
+  session_id: 01a2120e3646
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
@@ -315,3 +324,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5d24023de56
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: R3 finding 1 asked for a durable refresh before abort. I dispute retaining that refresh under the final R4 ruling and removed the abort and restart. The same-base publication and moved-base preservation regression passed. The draft still adds 413 lines against the 300-line PR limit, including 99 lines of dispatch fixture. Parking for the specified TASK-3895 fallback.
+  raised_by: implementer
+  raised_at: 2026-11-25T10:50:41.917489611Z
