@@ -169,6 +169,19 @@ comments:
   content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-25T19:49:44.022509756Z
   modified_at: 2026-11-25T19:49:44.022509756Z
+- id: 01a21442-6cf6-7232-b903-1e314f72cab8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:50):
+    # STORY-2839 slice (b): topbar dropdown submenus + Light/Dark theme toggle (integration-30 grooming, latest STORY-2839 comments; Joe's reference commit b5826a0f949 on branch story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-story-2839-b, cut from the integration tip AFTER slice (a) #4588 has merged. Title "(Refs STORY-2839)". <=300 HAND-WRITTEN lines. Regenerated pages don't count, but list them in the PR body.
+    PORT from b5826a0f949 ONLY: page-template.html dropdowns (How it works ▾, Governance ▾, Operations ▾, Reference ▾), app.js (+48), styles.css (+33), guide.css (+24), index.html, search-data.js; then regenerate the pages with `python3 docs/showcase/build.py`. Put Code review (code-review.html) in the How it works ▾ menu ONLY if code-review.html already exists on integration; otherwise leave that entry out.
+    ALSO: style .table-wrap (overflow-x: auto) in styles.css/guide.css; slice (a) left it unstyled.
+    SECURITY: the toggle only reads and writes localStorage key 'aida-theme', whitelisted to "light"/"dark" (anything else → the default). No innerHTML from search data (use textContent / DOM nodes).
+    `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-25T19:50:12.209394922Z
+  modified_at: 2026-11-25T19:50:12.209394922Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
