@@ -9,12 +9,12 @@ description: |
   - AC1: A malformed or invalid holder record is classified Unknown, never Dead, and is never reclaimed. A unit test covers truncated TOML, a wrong-type pid and a missing start identity.
   - AC2: A valid record whose holder is provably dead is still classified Dead (positive control).
   - AC3: The refusal for an Unknown holder names the record path and the read-only command that inspects it.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-25T11:48:12.446432211Z
+modified_at: 2026-11-25T11:48:14.704482222Z
 req_type: Bug
 tags:
 - authority
@@ -250,6 +250,11 @@ comments:
     NEEDS A SKETCH: lease identity = (id, generation, path) fenced end-to-end, before any new implementation.
   created_at: 2026-11-25T11:48:12.446432211Z
   modified_at: 2026-11-25T11:48:12.446432211Z
+- id: 01a21288-f2f0-7b40-9478-83171f081e63
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2715 (BUG-b6b1278890774ef993d2ebc327862470-476), request changes. Full landed diff reviewed against main 33a7b137a89c. The findings apply to the original head and remain present on the landed tree. None depends on the 49 intervening base commits. FAST gates and compilation succeeded. No local tests were run.. No triage reason was given.'
+  created_at: 2026-11-25T11:48:14.704474030Z
+  modified_at: 2026-11-25T11:48:14.704474030Z
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
@@ -382,6 +387,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21288-f2f0-7b40-9478-830f8e2316df
+  author: joe
+  timestamp: 2026-11-25T11:48:14.704464990Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -389,15 +401,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    BUG-2715 (BUG-b6b1278890774ef993d2ebc327862470-476), request changes. Full landed diff reviewed against main 33a7b137a89c. The findings apply to the original head and remain present on the landed tree. None depends on the 49 intervening base commits. FAST gates and compilation succeeded. No local tests were run.
-    AC1 — unverified. The supplied trace gaps have partial behavioral coverage in the diff: cargo test -p aida-cli-lib bug_2715 covers truncated TOML, wrong-type PID, missing start, a mixed lock/session and FIFOs. Remaining discovery and retirement paths can still omit or release ownership evidence.
-    AC2 — verified by the exited-child positive controls in cargo test -p aida-cli-lib bug_2715_force_claim_requires_original_holder_evidence, covering admitted and explicitly refused holders. The implementer reports the focused suite passed.
-    AC3 — unverified. The new assertions cover the normal malformed-file and invalid-holder hints. A mismatched filename or unreadable directory still produces an incorrect or incomplete inspection hint.
-  recovery_hint: address the review findings, move BUG-2715 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T11:43:11.106836658Z
