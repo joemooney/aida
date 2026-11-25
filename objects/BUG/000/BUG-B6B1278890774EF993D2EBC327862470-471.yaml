@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-471
 agreed_id: BUG-2710
 title: night-shift tick hangs in the reap phase and is killed at the 120 s budget on every run
 description: 'Since 2026-11-22 ~17:30 UTC, every night-shift tick is killed at 120 s (exit 124). All earlier phases finish within ~2 s (events 68ms, wave-progress ~1s, mailbox ~0.8s); last-phase=reap@~1990ms, then nothing for 118 s. Context: after a ~40h token outage there are 17 orphaned and 35 stale sessions (aida ps), plus a dead seat clone holding a staged, uncommitted merge (session-hygiene also fails on it). Probable cause: reap blocks on (or walks without a bound) one of these sessions or its worktree. Fix: give reap its own sub-budget, report which item it was on when the budget ran out, and skip or yield it rather than starving the whole tick. Evidence: scheduled job night-shift failures 2026-11-22 17:31 and 17:46 UTC (phases=[...] last-phase=reap).'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-25T18:44:32.626671308Z
+modified_at: 2026-11-25T19:04:08.258108912Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -503,6 +503,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a21418-052e-7490-a90f-6acb57511b5e
+  author: aida-auto-bump
+  timestamp: 2026-11-25T19:04:08.238072482Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21418-0542-76e0-b9e8-ad2d8fbe6906
+  timestamp: 2026-11-25T19:04:08.258107405Z
+  agent: aida
+  commit_sha: b56d4289944ae2dc1f2e2172c23e2b0effc7728d
+  summary: Completed via merge b56d4289
 execution_mode: drive
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
@@ -513,3 +526,7 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T19:04:08.238040833Z
+  completion_sha: b56d4289944ae2dc1f2e2172c23e2b0effc7728d
