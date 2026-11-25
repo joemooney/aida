@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-25T22:17:55.079592196Z
+modified_at: 2026-11-25T22:52:34.502148560Z
 req_type: Task
 tags:
 - ci
@@ -57,6 +57,12 @@ comments:
   modified_at: 2026-11-25T22:17:55.079591051Z
   session_id: 01a2149269a0
   harness_version: 2.1.319 (Claude Code)
+- id: 01a214e9-2946-75c2-852f-4da5f6e3a779
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3910-ci-cache-prune` at head `9a05bbe93970190e13a9f010fd8e9d0d78128a91`.'
+  created_at: 2026-11-25T22:52:34.502136487Z
+  modified_at: 2026-11-25T22:52:34.502136487Z
+  session_id: 01a2149269a0
 history:
 - id: 01a21461-a683-7013-a237-4532cbf94a9a
   author: joe
