@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T00:13:29.281606131Z
+modified_at: 2026-11-25T00:46:51.556238535Z
 req_type: Story
 tags:
 - hygiene
@@ -85,6 +85,15 @@ comments:
     Strict-tier inspection: scan checks holders, spec completion, clean state and branch. The destructive path re-fetches trusted origin, checks every ref tip in host Git, records the recovery pointer on the finished owning spec, rechecks dirt and holders, and compares the ref inventory before removal. Missing clone metadata now fails closed. Existing mail retirement remains mandatory. Actual Git probes verified new, unchanged, fast-forwarded and deleted branches. Formatting and whitespace checks passed. Lane regression and fast gate pending; no PR-head CI exists yet.
   created_at: 2026-11-25T00:13:29.281606131Z
   modified_at: 2026-11-25T00:13:29.281606131Z
+  session_id: 01a21000a7c5
+  harness_version: codex-cli 0.167.0
+- id: 01a2102b-7047-75e2-a3bc-43475d3311c4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 71bb63b62b39af8acab3724b1ec8d938c651df11; final working-tree validation supersedes the pending results above. AC1–AC5: four targeted tests executed, four passed (j20261125T001439715-2-0). The fast gate initially identified the new recovery-comment writer. Classified its lock, authority, destination and test evidence in scripts/store-writers.toml; the inventory reconciled 3873 sites. The complete make check-ci-fast rerun passed (j20261125T002027296-2-0). Diff check clean; five tracked files, 300 changed lines, no untracked additions. No PR-head CI exists before host publication. A slow or unavailable origin conservatively retains the seat.
+  created_at: 2026-11-25T00:46:51.556238535Z
+  modified_at: 2026-11-25T00:46:51.556238535Z
   session_id: 01a21000a7c5
   harness_version: codex-cli 0.167.0
 history:
