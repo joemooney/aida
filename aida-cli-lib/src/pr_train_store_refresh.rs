@@ -19,7 +19,7 @@ pub(super) fn pre_pass(root: &Path) {
 
 fn refresh(store: &Path, deadline: Instant) -> anyhow::Result<()> {
     anyhow::ensure!(store.join(".git").exists(), "missing store checkout");
-    let mut branch = aida_core::git_ops::host_git_command(store);
+    let mut branch = aida_core::git_ops::host_fetch_git_command(store);
     branch.args(["symbolic-ref", "--quiet", "HEAD"]);
     let head = crate::gate::kernel_deps::output_before(branch, Some(deadline))
         .map_err(|_| anyhow::anyhow!("store refresh timed out"))?;
@@ -28,7 +28,8 @@ fn refresh(store: &Path, deadline: Instant) -> anyhow::Result<()> {
     let branch = source
         .strip_prefix("refs/heads/")
         .ok_or_else(|| anyhow::anyhow!("unexpected store HEAD"))?;
-    let mut cmd = aida_core::git_ops::host_remote_git_command(store, "origin");
+    let mut cmd = aida_core::git_ops::host_fetch_git_command(store);
+    aida_core::git_ops::configure_remote_credentials(&mut cmd, store, "origin");
     let destination = format!("refs/remotes/origin/{branch}");
     cmd.args([
         "fetch",
@@ -121,7 +122,7 @@ mod tests {
         };
         std::fs::create_dir(store.join(".aida")).unwrap();
         let shim = root.join("git");
-        std::fs::write(&shim, "#!/bin/sh\ncase \" $* \" in *' rev-parse '*) if test -f metadata.yaml; then flock -n .aida/store-write.lock touch prep-stalled || exit 1; exec sleep 20; fi;; esac\nexec /usr/bin/git \"$@\"\n").unwrap();
+        std::fs::write(&shim, "#!/bin/sh\ncase \" $* \" in *' config --get-regexp '*) if test -f metadata.yaml; then flock -n .aida/store-write.lock touch prep-stalled || exit 1; exec sleep 20; fi;; esac\nexec /usr/bin/git \"$@\"\n").unwrap();
         std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o700)).unwrap();
         {
             let path = format!("{}:/usr/bin:/bin", root.display());
@@ -131,6 +132,13 @@ mod tests {
             assert!(store.join("prep-stalled").exists());
         }
         pre_pass(root);
+        assert!(!std::fs::read_dir(store.join(".git"))
+            .unwrap()
+            .any(|entry| entry
+                .unwrap()
+                .file_name()
+                .as_encoded_bytes()
+                .starts_with(b"aida-store-hooks-")));
         let head = crate::test_git::git_command()
             .current_dir(store)
             .args([

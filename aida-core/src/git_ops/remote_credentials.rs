@@ -359,7 +359,7 @@ pub fn with_config_read_deadline<T>(
 // remote-creds-ok(TASK-2001): `git config --get-regexp` reads the local
 // configuration only; it never contacts the remote.
 fn configured_remote_urls(dir: &Path, remote: &str) -> Option<Vec<String>> {
-    let mut cmd = super::host_git_command(dir);
+    let mut cmd = super::host_fetch_git_command(dir);
     cmd.args([
         "config",
         "--get-regexp",

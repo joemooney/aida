@@ -126,7 +126,19 @@ fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Res
 /// host. `aida-cli-lib`'s `bug_1929_store_git_guard` test enforces it.
 // trace:BUG-1929 | ai:claude
 pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
-    let cwd = cwd.as_ref();
+    build_host_git_command(cwd.as_ref(), true)
+}
+
+/// Build a fetch or read-only probe with store hooks disabled. Store writes
+/// must use the ordinary builder to establish the verified hooks profile.
+// trace:BUG-2750.AC1 | ai:codex
+pub fn host_fetch_git_command(cwd: &Path) -> Command {
+    let mut cmd = build_host_git_command(cwd, false);
+    cmd.args(["-c", "core.hooksPath=/dev/null"]);
+    cmd
+}
+
+fn build_host_git_command(cwd: &Path, enable_store_hooks: bool) -> Command {
     // Git never runs under the mailbox Lifecycle lock. trace:STORY-1843 | ai:claude
     #[cfg(all(unix, feature = "native"))]
     crate::mailbox_lifecycle::enter_lock_class("git");
@@ -155,7 +167,11 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     // below and the refusal check both need it; resolving it twice ran an
     // extra `git rev-parse` and re-verified the hooks on every store git call.
     // trace:BUG-2192 | ai:claude
-    let store_hooks = is_store_tree(cwd).then(|| resolve_store_hooks_dir(cwd));
+    let store_hooks = if enable_store_hooks {
+        is_store_tree(cwd).then(|| resolve_store_hooks_dir(cwd))
+    } else {
+        Some(Ok(None))
+    };
     let mut cmd = Command::new("git");
     cmd.current_dir(cwd)
         .args(host_git_hardening_with(cwd, store_hooks.as_ref()))
