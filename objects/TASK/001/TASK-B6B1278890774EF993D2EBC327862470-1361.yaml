@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T04:38:34.387023261Z
+modified_at: 2026-11-25T04:38:45.325711267Z
 req_type: Task
 tags:
 - ci
@@ -79,6 +79,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep of PR #4558 at dfdc2a82a951731a9174a3f8020e7d7a3b721ad7. The generated worksheet identifies TASK-3877 as completing, with two acceptance criteria.. No triage reason was given.'
   created_at: 2026-11-25T04:38:34.387012078Z
   modified_at: 2026-11-25T04:38:34.387012078Z
+- id: 01a210ff-bcb0-7c80-a917-103640f41dfc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3877):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dfdc2a82a951
+    Recorded: 2026-11-25T04:32:47.209602192+00:00
+    Findings:
+    1. TASK-b6b1278890774ef993d2ebc327862470-1361.AC1 (aida-cli-lib/src/review_watch.rs:3674–3709): A completed FAST marker from an earlier run on the same PR, base and SHA makes reviewed_fast_settled return true while a newer FAST run is queued and has yet to publish its tier check. For example, a close/reopen can start a new FAST run at the same SHA while the old marker remains visible. The code enumerates commit check rows, so it never reads the queued run's conclusion, and the unlabelled path in aida-cli-lib/src/full_tier.rs:225–231 can then add ci:full early. Select the current applicable PR/base workflow run from workflow-run inventory before deciding settlement. Cover an older concluded marker alongside a newer owned queued run with no job rows.
+    2. aida-cli-lib/src/review_watch.rs:3724–3738, 3760–3764: A successful FULL request writes a receipt containing only the head SHA. After a same-SHA retarget, that receipt short-circuits before the new base reaches the FAST ownership check. If the retargeted PR has completed FAST and still needs FULL, the old target's receipt suppresses the new request indefinitely. Include the base in the receipt identity, define how SHA-only receipts are handled, and test a completed request followed by a same-head retarget with its own settled FAST.
+    3. aida-cli-lib/src/review_watch.rs:3696–3703: The singleton pull_requests requirement stalls automatic promotion when Actions associates a run with multiple PRs sharing a head, including cases where the metadata contains enough independent information to distinguish branches. The integration pre-check records this limitation, and the fixture covers only mismatching singleton owners. Use additional authoritative run-to-PR evidence where available to distinguish those runs, retain refusal for genuinely ambiguous evidence, and test both cases with shared-head PRs.
+    4. aida-cli-lib/src/review_watch.rs:3674–3688 and aida-cli-lib/src/forge_commit_ci.rs:370–402: The commit-check reader already fetches Actions metadata for every referenced run. The new FAST selector fetches that same run again under the receipt lock each tick, increasing API traffic and combining marker/attempt metadata from separate observations. Obtain the owner and conclusion from a single pinned run observation when selecting the applicable FAST run.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T04:38:45.168495291Z
+  modified_at: 2026-11-25T04:38:45.168495291Z
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
