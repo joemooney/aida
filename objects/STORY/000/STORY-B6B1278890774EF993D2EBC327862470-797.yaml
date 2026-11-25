@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T20:33:08.392010023Z
+modified_at: 2026-11-25T21:08:40.667376308Z
 req_type: Story
 tags:
 - landing
@@ -1452,6 +1452,15 @@ comments:
   modified_at: 2026-11-25T20:33:08.392010023Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2148a-0a5b-7d51-a90a-4d29e28bfdd8
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3834: Deferred findings 3, 4, 6-10 from PR #4389 (STORY-2897 S3a) CR at adbac40e
+      Deferred from the PR #4389 (STORY-2897 S3a) CR at adbac40e under the advisor-122 ruling (2026-11-22 13:03 MST). The S3a final round fixes only findings 1, 2 and 5. ## Findings 3. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:1395. If A and then B are red and A reruns green while B remains red, A closes at the observation time and B opens at its earlier commit time on replay. Summing both episode durations counts the overlap twice, even in a window where main was red for the entire window. Compute red minutes from the union of the clipped intervals and assert the metric for this existing rerun scenario. 4. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:978. A failure of the act
+  created_at: 2026-11-25T21:08:40.667376308Z
+  modified_at: 2026-11-25T21:08:40.667376308Z
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
