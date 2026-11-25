@@ -1,0 +1,31 @@
+id: 01a21284-1699-7091-a949-85f9208e6d28
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1434
+title: 'Review follow-up: The inventory labels read_gate_candidate a blocked store writer pending authority review e'
+description: |-
+  From BUG-2715
+  Reviewed sha: 25068bcbcb24ea6875bbd63bec91ca7a9919cef6
+
+  The inventory labels read_gate_candidate a blocked store writer pending authority review even though its only open is read-only and cannot create a file. Record the read_only disposition and the concrete evidence, as the neighboring read_exact_lease entry does.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T11:42:56.153078448Z
+modified_at: 2026-11-25T11:42:56.153078448Z
+req_type: Task
+tags:
+- carried-from:BUG-2715
+- finding-hash:e5fe026e
+- from-review:BUG-2715
+relationships:
+- rel_type: References
+  target_id: 01a20525-9a9d-72f1-9273-2cd721ba2308
+  created_at: 2026-11-25T11:42:56.153141344Z
+filed_at:
+  code_sha: 25068bcbcb24ea6875bbd63bec91ca7a9919cef6
+  branch: pr-4397
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a2127ec607
