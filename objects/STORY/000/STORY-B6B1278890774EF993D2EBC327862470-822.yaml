@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T16:42:23.629984505Z
+modified_at: 2026-11-25T17:24:57.482476369Z
 req_type: Story
 tags:
 - hygiene
@@ -434,6 +434,22 @@ comments:
   modified_at: 2026-11-25T16:25:50.669462246Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213bd-380a-7003-9a18-cdbb7c0adfc9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a9b2089aaa (PR #4570, round 5 vs review of 9959be2951)
+    - F1: hint is now 'closed PR on branch `<b>` (published|publication unverified) is recoverable; manual recovery: see BUG-2755 / `aida session show <id>`'. No refusing command is emitted (session_reap.rs clone_history_veto).
+    - F2: 'published' is printed only when a bounded ls-remote --refs origin refs/heads/<b> (seat_clone::origin_branch_at, host git, 15s) returns exactly <tip>. Test rewinds and then deletes origin's feat while the clone's origin/feat still points at the tip, and checks for 'publication unverified'.
+    - F3: reap_one_clone re-runs the exact-tip closed/unknown veto before mail retirement and clone teardown. Test: scan sees an OPEN PR at the tip (reapable row saved), then the PR closes at the same SHA, and the real reap with the saved tip refuses ('recoverable'). The clone tar snapshot and the lease are unchanged.
+    - Hygiene's cache reclaim now leaves alone target/worktrees/<name> for clone-leased seats (ReapReport.clone_cache_names). Test: hygiene run keeps the retained cache and removes an unrelated orphan.
+    - F4: the fixture shim serves the historical merged row on every call, together with the --state all history. A closed exact-tip row is vetoed by the scan, the saved-tip reap and reap_quiet. Closed rows at HEAD^, a closed fork row at the tip and a merged-only row at the tip stay reapable, and the real reap removes the clone. A CLOSED row with an empty or non-full SHA and invalid JSON are unknown, so the seat is kept.
+    Validation: lane job cargo test bug_2473_bwrap_clean_pushed_clone + task_2053_bwrap_reap_one_clone_releases + task_1222 = 27 passed. The bwrap tests ran live (no SKIP with --nocapture and AIDA_REQUIRE_BWRAP_LIVE=1). make check-ci-fast exit 0.
+    Residual risks: a PR could still close between the reap-time veto and destroy_retained (a narrow TOCTOU window). Fork-closed rows don't veto, by design. With forge=None the veto is Known(false), which keeps the existing behaviour.
+  created_at: 2026-11-25T17:24:57.482476369Z
+  modified_at: 2026-11-25T17:24:57.482476369Z
+  session_id: 01a21395faa7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
