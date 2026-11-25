@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-25T22:31:44.753923736Z
+modified_at: 2026-11-25T22:35:02.179705166Z
 req_type: Bug
 tags:
 - landing
@@ -70,6 +70,22 @@ comments:
   content: Commit 9e55228e42 references this requirement
   created_at: 2026-11-25T22:31:44.753923736Z
   modified_at: 2026-11-25T22:31:44.753923736Z
+  session_id: 01a2149c38e5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a214d9-1aa3-7683-a0c6-b37d9b272558
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9e55228e42 (git diff origin/main...HEAD, 6 files, +289/-9).
+    Acceptance evidence:
+    - AC1 [behavioral-test]: base_patch_equivalents::tests::bug_2733_promotion_branch_resolves_only_the_new_commits_spec — branch carries two old commits (same patch-id on main), main merged in, one new commit; squash_commit_messages_body + pr_train::member_spec_ids resolve only BUG-3. Train (pr_train::member_body -> identity_gate) and ship (pr_service::ship_gate_spec_records) both filter via base_patch_equivalents::retain_new.
+    - AC2 [behavioral-test]: refusal text is built from the resolved ids, so it now lists only the new commits' specs; wording unchanged.
+    - Brief (linear promotion review boundary): bug_2733_linear_promotion_establishes_its_review_boundary — main + two (#N) cherry-picks yields delivered=[BUG-21], slice_refs=[STORY-22]; a commit without (#N) is still refused.
+    Probes: 0/1/N fork points (merges' parents ignored so 'merge main' does not empty the base window; no single-parent fork -> nothing dropped); unreadable history keeps every commit (tested); %h short shas matched by prefix; base window capped at 2000 commits.
+    Fix during review: function-pointer call in pr_service broke closure inference; replaced with a direct call.
+    Residual risks: patch-id matching cannot see N-to-1 squashes (a whole promotion squashed into one main commit), so non-linear promotions whose history landed as one combined squash still carry old specs; the linear build remains the reliable shape. make check-ci-fast passed on the pre-compaction head; the later compaction changed comments, one call site and one early return, and the 24 targeted tests passed on it.
+  created_at: 2026-11-25T22:35:02.179705166Z
+  modified_at: 2026-11-25T22:35:02.179705166Z
   session_id: 01a2149c38e5
   harness_version: 2.1.319 (Claude Code)
 history:
