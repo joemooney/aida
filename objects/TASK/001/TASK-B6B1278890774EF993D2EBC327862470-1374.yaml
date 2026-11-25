@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The lease_lock (session/lease_lock.rs:55) and seat_authority (gate/seat_authority.rs:189) exclusive locks gain a TRY-WITH-DEADLINE variant returning a typed Timeout. Existing callers keep their current blocking behaviour unless they opt in (NOT a global semantics change). Test: a lock held elsewhere → Timeout within the deadline.
   - AC2: The contained.rs:2312 error-unwind wait is bounded by a deadline; past it the attempt is recorded as RECOVERY WORK (never blocks forever, never silently drops) and the caller returns. Test: an unwind past the deadline → recovery recorded, caller returns.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T03:14:53.328289837Z
+modified_at: 2026-11-25T03:21:44.224691921Z
 req_type: Task
 tags:
 - launch
@@ -281,6 +281,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a210b9-3a20-7b82-ab52-dd4cf39581b0
+  author: aida-session-start
+  timestamp: 2026-11-25T03:21:44.224689960Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
