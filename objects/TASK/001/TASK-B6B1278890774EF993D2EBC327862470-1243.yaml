@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
 
   TASK-3195 — aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:665–668. The replay assertion counts events through read_journal, which deduplicates by UUID at main_watch.rs:586. A retry that appends the same transition twice would still satisfy both the count and ID assertions. Count physical committed records for the pending ID, as the adjacent boundary test does with the raw journal.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T09:41:56.468144559Z
-modified_at: 2026-11-25T07:20:34.529954014Z
+modified_at: 2026-11-25T07:20:36.896514052Z
 req_type: Task
 tags:
 - carried-from:TASK-3195
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21193-ed20-7c42-95b0-d1faaa8e105e
+  author: joe
+  timestamp: 2026-11-25T07:20:36.896506948Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
   branch: pr-4418
