@@ -116,9 +116,16 @@ struct Mock {
 }
 
 impl ShiftExec for Mock {
-    fn reap(&mut self) -> usize {
+    fn reap(
+        &mut self,
+        _: Option<&str>,
+        _: Option<std::time::Instant>,
+    ) -> crate::session_reap::ReapProgress {
         self.calls.push("reap".into());
-        self.reap_count
+        crate::session_reap::ReapProgress {
+            reaped: self.reap_count,
+            ..Default::default()
+        }
     }
     fn tag_batch(&mut self, batch: &str, specs: &[String]) -> Result<()> {
         self.calls.push("tag".into());
@@ -1468,9 +1475,13 @@ fn shift_budget_guard_uses_the_launch_path_vendor() {
 fn shift_deadline_rechecked_after_reap_before_spawn() {
     struct SlowReap(Mock);
     impl ShiftExec for SlowReap {
-        fn reap(&mut self) -> usize {
+        fn reap(
+            &mut self,
+            resume: Option<&str>,
+            deadline: Option<std::time::Instant>,
+        ) -> crate::session_reap::ReapProgress {
             std::thread::sleep(StdDuration::from_millis(300));
-            self.0.reap()
+            self.0.reap(resume, deadline)
         }
         fn tag_batch(&mut self, b: &str, s: &[String]) -> Result<()> {
             self.0.tag_batch(b, s)
@@ -1578,8 +1589,12 @@ fn shift_killed_between_spawn_and_pid_record_is_held_by_the_drain_lock() {
 fn shift_deadline_rechecked_between_tag_and_spawn() {
     struct SlowTag(Mock);
     impl ShiftExec for SlowTag {
-        fn reap(&mut self) -> usize {
-            self.0.reap()
+        fn reap(
+            &mut self,
+            resume: Option<&str>,
+            deadline: Option<std::time::Instant>,
+        ) -> crate::session_reap::ReapProgress {
+            self.0.reap(resume, deadline)
         }
         fn tag_batch(&mut self, b: &str, s: &[String]) -> Result<()> {
             std::thread::sleep(StdDuration::from_millis(400));
