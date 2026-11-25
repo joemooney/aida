@@ -1,5 +1,6 @@
 id: 01a212b9-8c83-7e22-8cc5-41ef822afc46
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-314
+agreed_id: STORY-3136
 title: 'Review PR-4576: [AI:codex] fix(review-watch): release admission during worktree and history probes (BUG-2757)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2127e`) for branch `bug-b6b1278890774ef993d2ebc327862470-518`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a213cc-a9b4-7662-9866-4d86d51d86db
+  author: joe
+  timestamp: 2026-11-25T17:41:49.620098017Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
   branch: main

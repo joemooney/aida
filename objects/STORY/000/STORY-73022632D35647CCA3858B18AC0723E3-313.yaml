@@ -1,5 +1,6 @@
 id: 01a212b9-652d-7bd1-ba11-e9bc839ad11c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-313
+agreed_id: STORY-3137
 title: 'Review PR-4575: [AI:codex] feat(review): export SARIF and gate findings by severity (Refs STORY-3120)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21285`) for branch `int39-story-3120-s2`.
@@ -50,6 +51,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a213cc-ea16-7e30-bcc1-52152ca0df68
+  author: joe
+  timestamp: 2026-11-25T17:42:06.102615653Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
   branch: main

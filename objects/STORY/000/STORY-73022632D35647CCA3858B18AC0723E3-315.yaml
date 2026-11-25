@@ -1,5 +1,6 @@
 id: 01a21395-af4d-7701-82fa-f8a0cadb569a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-315
+agreed_id: STORY-3135
 title: 'Review PR-4578: [AI:claude] chore(config): temporarily default agent vendor to claude (TASK-3908)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21380`) for branch `task-b6b1278890774ef993d2ebc327862470-1443`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-25T16:41:52.809034477Z
   session_id: 01a213800b55
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a213cc-6adc-76d1-8d0e-a4cc7f5ee72d
+  author: joe
+  timestamp: 2026-11-25T17:41:33.532011686Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: aa1bd0fab55455df677c5221e1e4be18274fd60b

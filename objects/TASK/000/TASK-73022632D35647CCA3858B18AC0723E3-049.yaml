@@ -1,5 +1,6 @@
 id: 01a21396-4457-7563-a292-3a1e7383d321
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-049
+agreed_id: TASK-3431
 title: Revert [agents] vendor to codex after codex usage limit resets (2026-11-29 10:41)
 description: |
   TASK-3908 (PR #4578) temporarily set `.aida/config.toml` `[agents] vendor = "claude"` because codex is usage-limited until 2026-11-29 10:41. Nothing reverts it automatically, so it needs a follow-up: restore `vendor = "codex"` and drop the TEMPORARY comment line once the limit resets.
@@ -17,6 +18,13 @@ tags:
 - from-implementer:TASK-3908
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a213cc-2131-7303-a1ec-7b1d833fa449
+  author: joe
+  timestamp: 2026-11-25T17:41:14.673443164Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: aa1bd0fab55455df677c5221e1e4be18274fd60b
   branch: task-b6b1278890774ef993d2ebc327862470-1443
