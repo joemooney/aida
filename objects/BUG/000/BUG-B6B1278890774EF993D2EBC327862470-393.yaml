@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-25T04:32:43.621277217Z
+modified_at: 2026-11-25T04:33:30.041764421Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1083,6 +1083,12 @@ comments:
   content: '#4380 CLOSED as superseded/oversized (advisor-122 19:36; +5883/-335, stale since 11-22; branch kept: bug-2629-fresh 864db73fc0). Back to Approved: reproduce on current main first; fresh <=300-line slice only if it still reproduces.'
   created_at: 2026-11-25T02:33:46.752936016Z
   modified_at: 2026-11-25T02:33:46.752936016Z
+- id: 01a210fa-edb9-7520-8530-6e23382c7cee
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-393` at head `e4a1ff24693d23898d7899b6bfa97f49acb0ca50`.'
+  created_at: 2026-11-25T04:33:30.041759071Z
+  modified_at: 2026-11-25T04:33:30.041759071Z
+  session_id: 01a210f8d435
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
