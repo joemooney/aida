@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-25T11:48:14.704482222Z
+modified_at: 2026-11-25T21:06:30.512117924Z
 req_type: Bug
 tags:
 - authority
@@ -255,6 +255,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2715 (BUG-b6b1278890774ef993d2ebc327862470-476), request changes. Full landed diff reviewed against main 33a7b137a89c. The findings apply to the original head and remain present on the landed tree. None depends on the 49 intervening base commits. FAST gates and compilation succeeded. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-25T11:48:14.704474030Z
   modified_at: 2026-11-25T11:48:14.704474030Z
+- id: 01a21488-0df0-72f0-80d1-26dcb205e64b
+  author: joe
+  content: "FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 2 stand-alone finding-specs are recorded here and rejected:\n\n- TASK-3415: Review follow-up: The final advisor brief requested the remaining best-effort list_leases callers in the PR \n  From BUG-2715 Reviewed sha: 25068bcbcb24ea6875bbd63bec91ca7a9919cef6 The final advisor brief requested the remaining best-effort list_leases callers in the PR body when limiting the fix to discovery. The current body describes the holder predicate only. Add that caller inventory so product can scope its follow-up.\n\n- TASK-3418: Review follow-up: The inventory labels read_gate_candidate a blocked store writer pending authority review e\n  From BUG-2715 Reviewed sha: 25068bcbcb24ea6875bbd63bec91ca7a9919cef6 The inventory labels read_gate_candidate a blocked store writer pending authority review even though its only open is read-only and cannot create a file. Record the read_only disposition and the concrete evidence, as the neighboring read_exact_lease entry does."
+  created_at: 2026-11-25T21:06:30.512117924Z
+  modified_at: 2026-11-25T21:06:30.512117924Z
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
