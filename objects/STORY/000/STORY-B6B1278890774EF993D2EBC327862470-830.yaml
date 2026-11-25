@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T23:46:20.623092481Z
+modified_at: 2026-11-25T23:48:25.650051722Z
 req_type: Story
 tags:
 - landing
@@ -162,6 +162,18 @@ comments:
     - landing_drought.rs scan(): open PRs are not filtered by baseRefName or isDraft, so an approved PR targeting a non-main base (for example an integration-track branch) or an approved draft can be reported as stuck and counted toward the main-branch drought, which can produce false advisor routes. Filter to PRs that target main and are not drafts, or name these as their own cause in S2.
   created_at: 2026-11-25T22:41:46.678863618Z
   modified_at: 2026-11-25T22:41:46.678863618Z
+- id: 01a2151c-8646-7a50-a8f0-984b4588c342
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:48):
+    # STORY-3131 S1 CI-red fix on #4584 (advisor-122 2026-11-25 16:50; product-15). Lane: CLAUDE. MAIN, existing branch story-3131-s1-landing-drought / PR #4584. <=30 lines. Keep the "(Refs STORY-3131)" title.
+    #4584 (approved @ 0459cd01) is RED on full CI (lib-0): `maintenance_schedule::tests::landing_health_tick_routes_to_live_codex_advisor_or_product` FAILS. The new landing-drought job/route (.aida/config.toml [[schedule.jobs]] pair, or maintenance_schedule.rs) almost certainly changed how the landing-health tick routes.
+    FIX the routing so that test passes UNCHANGED. Edit the test ONLY if its expectation is provably stale, and if you do, explain why in the PR body.
+    Run `cargo test -p aida-cli-lib maintenance_schedule` plus the landing-drought tests on this host, then make check-ci-fast, then push to #4584. COMMIT your work.
+  created_at: 2026-11-25T23:48:25.650051722Z
+  modified_at: 2026-11-25T23:48:25.650051722Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
