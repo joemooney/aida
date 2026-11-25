@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T09:19:29.650718644Z
+modified_at: 2026-11-25T09:27:01.764572684Z
 req_type: Bug
 tags:
 - lanes
@@ -255,6 +255,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a21207-a984-72d3-a5b1-8e625d666d0d
+  author: aida-orchestrator
+  timestamp: 2026-11-25T09:27:01.764586493Z
+  session_id: 01a212052647
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
@@ -267,7 +275,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Reviewed the complete landed diff against main at 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2761.AC1 is partial. Retained repairs select supervised launch, and setup checks the PR, predecessor lease, local head, merge base and conflict paths. Base refresh still strands valid retained repairs and has no retryable transition after abort. BUG-2761.AC2 is partial. The new real-ref queue-rework fixture asserts same-seat publication and both merge parents, but its happy path leaves the resolution unstaged and no successful run at this head was available. The preview dispatch returns before transferring ownership. Fast source gates passed and fast compilation was pending at review time. No local tests or builds were run.
+  detail: 'BUG-2761 review of the original PR head a0ecc2ae63c3960f862e9d972dd389742e08f011 as landed on pinned main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. AC1 FAIL: retained pickup selects host supervision and verifies lease and merge identity, but the advanced-base refresh mutates the merge before persisting required recovery state. AC2 PARTIAL: dispatch coverage exercises a punt and same-clone host publication to a bare origin, but omits the explicitly required first-lane staged conflict resolution. Fast source gates passed and fast compile was pending at review time. No local tests or builds were run per reviewer policy.'
   recovery_hint: address the review findings, move BUG-2761 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-25T07:59:17.968003Z
+  shelved_at: 2026-11-25T09:27:01.764572684Z
