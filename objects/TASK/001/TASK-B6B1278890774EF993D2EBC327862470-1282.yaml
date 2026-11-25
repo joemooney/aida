@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: eacfd4b52870557151340a24d44b1b772be6c929
 
   doctor_cmd.rs:275-319 routes the focused github-core-budget check through doctor_multi_agent, which requires a readable requirements store at doctor_cmd.rs:456-462 and runs unrelated cleanup, lease, and session discovery at doctor_root.rs:778-782 before querying GitHub. A store-load error therefore prevents this independent diagnostic from running, and a healthy store still incurs the full scan. Reuse the store-free focused-check path and share report construction with bare doctor.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T00:44:32.975509778Z
-modified_at: 2026-11-25T07:31:54.453751630Z
+modified_at: 2026-11-25T07:31:56.730421113Z
 req_type: Task
 tags:
 - carried-from:TASK-3847
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a2119e-4cba-7573-8ccf-64a16a91c470
+  author: joe
+  timestamp: 2026-11-25T07:31:56.730415009Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: eacfd4b52870557151340a24d44b1b772be6c929
   branch: pr-4470
