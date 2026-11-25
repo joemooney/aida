@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor check stalled-reviews` also reports every open PR whose GitHub mergeable state is CONFLICTING (with the base) and has no active implementer lane or queued rework, showing PR, spec and head, and how long it has conflicted where known. Approved PRs that conflict are flagged first (they block landing).
   - AC2: For a conflicting PR with no lane, the detector queues ONE conflict-repair rework for the implementer (merge the base, resolve, no scope change) and notifies the advisor, deduplicated per (PR, head, base tip). Tests for detection and dedup.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T08:17:26.750122200Z
+modified_at: 2026-11-25T09:11:01.307193027Z
 req_type: Task
 tags:
 - review
@@ -96,6 +96,12 @@ comments:
   modified_at: 2026-11-25T08:17:26.750122200Z
   session_id: 01a211a8118a
   harness_version: codex-cli 0.167.0
+- id: 01a211f9-01bb-7091-b735-ec978773a44f
+  author: aida-publication-done
+  content: Implementer push 2161550dbc3e declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T09:11:01.307192136Z
+  modified_at: 2026-11-25T09:11:01.307192136Z
+  session_id: 01a211a8118a
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
@@ -177,6 +183,14 @@ history:
   session_id: 01a211a8118a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a211f9-01bb-7091-b735-ec80fd6573fc
+  author: aida-publication-done
+  timestamp: 2026-11-25T09:11:01.307189134Z
+  session_id: 01a211a8118a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
