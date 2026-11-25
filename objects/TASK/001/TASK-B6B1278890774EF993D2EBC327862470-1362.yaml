@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T09:23:42.863468599Z
+modified_at: 2026-11-25T09:24:21.763900782Z
 req_type: Task
 tags:
 - review
@@ -173,6 +173,11 @@ comments:
   modified_at: 2026-11-25T09:20:03.844040717Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21205-3884-79f0-99b7-81f4a9c711ec
+  author: joe
+  content: 'DEFERRED AC2 (advisor-122 2026-11-25 02:27): the AUTO-HEAL (queue a conflict-repair rework from the detector) is cut from #4566 and becomes a deferred STRICT slice that needs a SKETCH first: a durable receipt, an admission fence (no race with lane admission), a per-change dedup key (not specs[0]), no lock held across children, and per-row failure isolation. Slice 2 (#4566) ships REPORT-ONLY (prints the exact `aida queue rework` command).'
+  created_at: 2026-11-25T09:24:21.763900782Z
+  modified_at: 2026-11-25T09:24:21.763900782Z
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
