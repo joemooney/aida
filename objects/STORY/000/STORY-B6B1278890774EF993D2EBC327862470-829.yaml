@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T20:32:38.303747947Z
+modified_at: 2026-11-25T21:59:12.574135098Z
 req_type: Story
 tags:
 - integration
@@ -428,6 +428,36 @@ comments:
   created_at: 2026-11-25T20:27:46.235940626Z
   modified_at: 2026-11-25T20:27:46.235940626Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a214b8-89cb-72e3-888f-2a6533a29d0f
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4582 r2 @ 59f30c4ac22 (STORY-3120 S3a, Refs-only). Own change vs d36df1471a9 (the integration merge): review_runner.rs +64/-7, plus one ratchet entry.
+
+    Result: PASS. STRICT tier, so it still needs an INDEPENDENT review at this head (no carry-over).
+
+    F1 (SIGPIPE), fixed:
+    - The writer thread blocks SIGPIPE with pthread_sigmask before write_all.
+    - SIGPIPE raised by write() is thread-directed. While it is blocked, it stays pending on that thread and write returns EPIPE. A pending thread-directed signal is discarded when the thread exits, so it can't be delivered to another thread later.
+    - Nothing else writes to the pipe. Dropping stdin (close) doesn't raise SIGPIPE.
+    - I also correct my own comment 25 item 4: "SIGPIPE is ignored by the Rust runtime" doesn't hold for the aida binary (BUG-99 restores SIG_DFL).
+
+    Test s3a_runner_survives_default_sigpipe:
+    - It re-executes the test binary filtered with --exact to this one test (the extra never-matching filter marks the child). The child sets SIGPIPE to SIG_DFL and runs three cases with a 200 KiB prompt: deaf runner, 1s deadline, stdout cap.
+    - The parent requires the child to exit successfully with "1 passed". Without the fix, the child would die from SIGPIPE and the parent assert would fail.
+    - This works the same under libtest and nextest.
+    - Ratchet entry added.
+
+    F2 (doc claim), fixed: the run() doc and the PR body row 4 now say an unread prompt is detected only above the pipe buffer (~64 KiB).
+
+    Test helper change (script() writes via install(1) to avoid ETXTBSY from a parallel fork inheriting a write fd): reasonable, test-only.
+
+    Still open for S3a-2, unchanged from comment 26: bounded joins (setsid descendant), the item-11 refusal test, git_text fixes, and vars_os passed unchanged.
+
+    Merge-tree against origin/integration: CLEAN. GitHub reports MERGEABLE.
+  created_at: 2026-11-25T21:59:12.574135098Z
+  modified_at: 2026-11-25T21:59:12.574135098Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
