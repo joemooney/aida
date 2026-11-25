@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T17:23:18.754192024Z
-modified_at: 2026-11-23T17:23:18.754192024Z
+modified_at: 2026-11-25T21:03:43.745040523Z
 req_type: Task
 tags:
 - carried-from:TASK-3155
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1f2e4-2e49-7053-b35a-0d432f76ac3c
   created_at: 2026-11-23T17:23:33.400471989Z
+comments:
+- id: 01a21485-8281-7a02-9dc1-76a2f8d39a33
+  author: joe
+  content: FOLDED into a comment on TASK-3155 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:03:43.745040523Z
+  modified_at: 2026-11-25T21:03:43.745040523Z
 history:
 - id: 01a20991-7eff-7193-84a6-864da65f82ed
   author: joe
