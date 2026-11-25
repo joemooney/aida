@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T19:01:33.099924753Z
+modified_at: 2026-11-25T19:04:56.091151930Z
 req_type: Story
 tags:
 - hygiene
@@ -490,6 +490,18 @@ comments:
     Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4570. COMMIT your work. Keep the PR title.
   created_at: 2026-11-25T18:37:17.853342765Z
   modified_at: 2026-11-25T18:37:17.853342765Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21418-fc40-7470-863e-1a93815b1317
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:04):
+    # STORY-3059 report-only r3 (advisor-122 ruling 2026-11-25 11:38 on #4570 @ a9b2089a; product-15). Lane: CLAUDE. MAIN, existing branch story-3059-report / PR #4570. <=50 lines.
+    (F1, test-gap major) ADD A TEST of the closed-unmerged exact-tip veto on the GitLab path (parse_terminal_branch with unmerged_only=true, GitLab MR JSON shape): a closed-unmerged MR at the exact tip → PRESERVED; a merged one → NOT vetoed.
+    (F2) Include the closed PR/MR number in the recoverable hint ("PR #N closed unmerged").
+    Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4570. COMMIT your work. Keep the PR title (already retitled to "(Refs STORY-3059)" per advisor 11:52; do not change it back).
+  created_at: 2026-11-25T19:04:56.091151930Z
+  modified_at: 2026-11-25T19:04:56.091151930Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
