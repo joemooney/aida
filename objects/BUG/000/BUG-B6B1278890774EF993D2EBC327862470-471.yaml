@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-25T16:30:38.797437671Z
+modified_at: 2026-11-25T17:09:30.806801435Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -290,6 +290,19 @@ comments:
   modified_at: 2026-11-25T16:25:11.495669405Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213af-1436-7df1-96d9-e941efcd9812
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d512447290 (PR #4458 r4)
+    Fix: reap_quiet now classifies every lease that shares a worktree in one step, the first time any of them is visited and before any teardown, and keeps those verdicts in the reapable map. A sibling that only becomes eligible after an earlier lease in the same pass removed the checkout (session_head_on_branch reads a gone path as on-branch) is kept until the next pass. This matches the unbounded scan, which classifies everything before reaping.
+    Evidence: bug_2710_ample_budget_matches_unbounded_reap_decisions now adds lease other4, a finished claim on the dead1 tree recorded on a different branch that is already merged. In both the budgeted and unbounded modes, other4's lease and its branch survive. bug_2710_ample_budget_matches_unbounded_reap_decisions and bug_2710_deadline_finishes_one_session_before_yield_and_resume pass in a targeted lane cargo run. make check-ci-fast exits 0.
+    Probes: (1) the sibling match is exact PathBuf equality on the recorded worktree_path, so two leases that record the same tree as different strings (a symlink, a trailing slash) are not grouped. That is a residual risk, the same as before this fix. (3) Multiplicity: N siblings are classified once each, guarded by the classified set. Siblings before a resume point were already handled by the earlier pass. Gone-tree release still runs first for trees that were missing at the start.
+    Not changed: as before, dead1's tree is still removed while an ineligible sibling claim stays on it. The existing equivalence test asserts this, and the unbounded pass behaves the same way.
+  created_at: 2026-11-25T17:09:30.806801435Z
+  modified_at: 2026-11-25T17:09:30.806801435Z
+  session_id: 01a2138b3114
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
