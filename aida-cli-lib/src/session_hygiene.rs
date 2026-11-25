@@ -342,6 +342,7 @@ fn reclaim(
     opts: &HygieneOptions,
     deadline: Instant,
     outcome: &mut HygieneOutcome,
+    clone_cache_names: &std::collections::HashSet<std::ffi::OsString>,
 ) {
     let ropts = reclaim_options(opts);
     let survey = match worktree_reclaim::survey_from_env(project_root, &ropts) {
@@ -351,7 +352,19 @@ fn reclaim(
             return;
         }
     };
-    let plan = worktree_reclaim::plan(&survey);
+    let mut plan = worktree_reclaim::plan(&survey);
+    // Private clones do not appear in git worktree list. A retained lease
+    // still owns its shared cargo cache even after the owner process exits.
+    // trace:STORY-3059 | ai:codex
+    if let Some(root) = &survey.cache_root {
+        plan.reclaim.retain(|entry| {
+            entry.target.parent() != Some(root)
+                || !entry
+                    .target
+                    .file_name()
+                    .is_some_and(|name| clone_cache_names.contains(name))
+        });
+    }
     if opts.dry_run {
         outcome.reclaimed = plan
             .reclaim
@@ -379,25 +392,26 @@ pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
     let project_root = crate::main_worktree_root_from(&crate::find_project_root()?);
     let mut outcome = HygieneOutcome::default();
 
-    if opts.dry_run {
+    let report = if opts.dry_run {
         outcome.agent_gc = Some(
             crate::agent_registry::gc_dead_agents(&project_root, true, None)
                 .map(|r| r.removed_count())
                 .map_err(|e| format!("{e:#}")),
         );
-        let report = crate::session_reap::scan_reapable(&project_root);
-        outcome.scan_skipped = report.skipped;
+        let mut report = crate::session_reap::scan_reapable(&project_root);
         outcome.reap = report
             .reapable
-            .into_iter()
+            .drain(..)
             .map(|row| (row.session, format!("reaped (dry run) — {}", row.reason)))
             .collect();
+        report
     } else {
-        let (quiet, skipped) = crate::session_reap::reap_quiet_with_skips(&project_root);
-        outcome.scan_skipped = skipped;
+        let (quiet, report) = crate::session_reap::reap_quiet_with_report(&project_root);
         outcome.agent_gc = Some(quiet.agent_gc);
         outcome.reap = quiet.leases;
-    }
+        report
+    };
+    outcome.scan_skipped = report.skipped;
 
     outcome.salvageable = salvage_candidates(&project_root, &mut outcome.unknown);
 
@@ -407,7 +421,13 @@ pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
             SOFT_BUDGET.as_secs()
         ));
     } else {
-        reclaim(&project_root, opts, started + SOFT_BUDGET, &mut outcome);
+        reclaim(
+            &project_root,
+            opts,
+            started + SOFT_BUDGET,
+            &mut outcome,
+            &report.clone_cache_names,
+        );
     }
 
     print!("{}", render_summary(&outcome, opts.dry_run));
