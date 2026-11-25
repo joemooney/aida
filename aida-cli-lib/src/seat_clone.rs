@@ -2386,19 +2386,6 @@ pub(crate) fn is_mirrored_handshake_entry(main: &Path, clone: &Path, line: &str)
     })
 }
 
-fn origin_fetch_command(main: &Path) -> std::process::Command {
-    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
-    fetch
-        .env(ACCESSOR_ENV, "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env(
-            "GIT_SSH_COMMAND",
-            crate::forge::batch_mode_ssh_command(main),
-        )
-        .stdin(std::process::Stdio::null());
-    fetch
-}
-
 /// Bring origin's copy of `branch` into `main`'s `refs/remotes/origin/<branch>`
 /// (host git in main only, bounded, no prompts), so a clone whose branch head
 /// is an ancestor of it reads as pushed: [`main_reachable_commits`] excuses
@@ -2430,8 +2417,15 @@ pub(crate) fn refresh_origin_branch(
         run(cmd, "read origin's branch in the main checkout").ok()
     };
     let before = tip();
-    let mut fetch = origin_fetch_command(main);
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
     fetch
+        .env(ACCESSOR_ENV, "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
+        .stdin(std::process::Stdio::null())
         .args([
             "fetch",
             "--quiet",
@@ -6019,178 +6013,107 @@ pub(crate) fn checked_out_branch(clone_root: &Path) -> Option<String> {
 }
 
 // trace:STORY-3059 | ai:codex
-pub(crate) struct ReapPublication {
-    inventory: String,
-    note: String,
-}
-
-fn reap_inventory(main: &Path, clone: &Path) -> Result<String> {
-    let args = [
-        "-c".as_ref(),
-        "git symbolic-ref HEAD && git show-ref --head && git rev-list --no-walk=unsorted --reflog"
-            .as_ref(),
-    ];
-    let bytes = run_sandboxed(clone, main, "sh", &args, PROBE_OUTPUT_CAP)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    Ok(String::from_utf8(bytes)?)
-}
-
-pub(crate) fn reap_publication(
+pub(crate) fn move_reaped_clone(
     main: &Path,
     clone: &Path,
+    scope: &str,
     branch: &str,
     tip: &str,
-) -> Result<ReapPublication> {
-    use std::collections::BTreeSet;
-    let inventory = reap_inventory(main, clone)?;
-    let mut refs = inventory.lines();
-    let expected = format!("refs/heads/{branch}");
-    anyhow::ensure!(refs.next() == Some(expected.as_str()), "seat branch moved");
-    anyhow::ensure!(
-        refs.next() == Some(format!("{tip} HEAD").as_str()),
-        "seat HEAD moved"
-    );
-    let mut tips = BTreeSet::from([tip]);
-    for line in refs {
-        let (oid, name) = line.split_once(' ').unwrap_or((line, "reflog"));
-        anyhow::ensure!(is_full_oid(oid), "invalid seat tip");
-        anyhow::ensure!(name != "refs/stash", "seat has a stash (refs/stash)");
-        tips.insert(oid);
-    }
-    // Observe origin without fetching objects or updating shared tracking refs.
-    let deadline = std::time::Instant::now() + ORIGIN_REFRESH_CAP;
-    let mut query = origin_fetch_command(main);
-    query.args(["ls-remote", "--heads", "origin"]);
-    let output = match crate::command_output_with_timeout_capped(
-        query,
-        ORIGIN_REFRESH_CAP,
-        PROBE_OUTPUT_CAP,
-    ) {
-        crate::BoundedCommandOutput::Completed(out)
-            if out.status.success() && out.stdout.len() as u64 <= PROBE_OUTPUT_CAP =>
-        {
-            String::from_utf8(out.stdout)?
-        }
-        _ => anyhow::bail!("publication unknown: origin lookup failed or exceeded its budget"),
-    };
-    let mut heads = Vec::new();
-    for row in output.lines() {
-        let (oid, name) = row
-            .split_once('\t')
-            .context("invalid origin advertisement")?;
-        let branch = name
-            .strip_prefix("refs/heads/")
-            .context("invalid origin branch")?;
-        anyhow::ensure!(is_full_oid(oid), "invalid origin head");
-        anyhow::ensure!(
-            heads.len() < ORIGIN_HEADS_CAP,
-            "origin branch inventory exceeds budget"
-        );
-        heads.push((oid, branch));
-    }
-    let mut note = format!("Seat reap: `{branch}` at `{tip}`.");
-    for oid in tips {
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "origin ancestry budget elapsed"
-        );
-        let (head, branch) = heads
-            .iter()
-            .find(|(head, _)| *head == oid)
-            .or_else(|| {
-                heads
-                    .iter()
-                    .take_while(|_| std::time::Instant::now() < deadline)
-                    .find(|(head, _)| {
-                        let mut cmd = aida_core::git_ops::host_git_command(main);
-                        cmd.env(ACCESSOR_ENV, "1")
-                            .env("GIT_NO_REPLACE_OBJECTS", "1")
-                            .env("GIT_NO_LAZY_FETCH", "1")
-                            .args(["merge-base", "--is-ancestor", oid, head]);
-                        run_bounded(cmd, "", Some(deadline)).is_some()
-                    })
-            })
-            .with_context(|| format!("origin does not have proven coverage for seat tip {oid}"))?;
-        use std::fmt::Write;
-        write!(note, " {head} origin/{branch} covers {oid}.")?;
-        anyhow::ensure!(
-            note.len() <= PROBE_OUTPUT_CAP as usize,
-            "recovery pointer exceeds budget"
-        );
-    }
-    Ok(ReapPublication { inventory, note })
-}
-
-// Moving the tree takes its lease path out of circulation for resume. Open
-// descriptors follow the inode into quarantine and remain visible to procfs.
-fn remove_quarantined(clone: &Path, verify: impl FnOnce(&Path) -> Result<()>) -> Result<()> {
+    root: &Path,
+) -> Result<PathBuf> {
     use aida_core::mailbox_lifecycle::rename_noreplace;
-    let parent = clone.parent().context("seat has no parent")?;
-    let tree = parent.join(format!(".aida-reap-{}", uuid::Uuid::new_v4()));
-    rename_noreplace(clone, &tree)?;
-    if let Err(error) = verify(&tree) {
-        rename_noreplace(&tree, clone).with_context(|| {
+    anyhow::ensure!(
+        is_seat_clone_location(main, clone),
+        "invalid seat clone location"
+    );
+    anyhow::ensure!(
+        Path::new(scope).file_name() == Some(scope.as_ref()),
+        "invalid recovery scope"
+    );
+    let lane = clone
+        .file_name()
+        .context("missing seat name")?
+        .to_string_lossy();
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ");
+    let path = root.join(format!("{scope}-{lane}-{stamp}"));
+    let refs = probe_run(
+        clone,
+        main,
+        &["show-ref".as_ref(), "--head".as_ref()],
+        "git",
+    )
+    .map_err(anyhow::Error::msg)?;
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(root)?;
+    if root.metadata()?.dev() != clone.symlink_metadata()?.dev() {
+        return Err(std::io::Error::from_raw_os_error(libc::EXDEV).into());
+    }
+    // The clone borrows base objects from main. Its seat pin becomes eligible for orphan cleanup.
+    let base = pinned_base(main, clone).context("seat base pin unavailable")?;
+    let recovery_pin = format!("refs/aida/salvage/{base}");
+    let mut pin = git(main);
+    pin.args(["update-ref", "--no-deref", &recovery_pin, &base]);
+    let origin_ref = format!("refs/heads/{branch}");
+    let observed = origin_oids(
+        main,
+        ORIGIN_REFRESH_CAP,
+        &["ls-remote", "--refs", "origin", &origin_ref],
+        1,
+    );
+    let origin_tip = observed
+        .first()
+        .map(String::as_str)
+        .unwrap_or("unavailable");
+    match probe(main, clone) {
+        Probe::Known(facts) => anyhow::ensure!(
+            facts.dirty.is_empty()
+                && facts.head.as_deref() == Some(tip)
+                && facts.branch.as_deref() == Some(branch),
+            "seat is dirty or its HEAD moved"
+        ),
+        Probe::Unknown(reason) | Probe::HasSubmodules(reason) => anyhow::bail!("{reason}"),
+    }
+    aida_core::worktree_holders::check_worktree_removal(clone)
+        .map_err(|why| anyhow::anyhow!("seat in use: {why}"))?;
+    run(pin, "pin the saved clone base")?;
+    rename_noreplace(clone, &path)
+        .with_context(|| format!("atomic rename to {}", path.display()))?;
+    let note = format!("Seat clone saved at `{}`. Scanned branch `{branch}` at `{tip}`. Origin `{origin_ref}` observed at `{origin_tip}`. Base pin `{recovery_pin}`. Seat refs (including cached origin tracking refs, which may be stale):\n{refs}", path.display());
+    if let Err(error) = record_reaped_clone(main, scope, note) {
+        rename_noreplace(&path, clone).with_context(|| {
             format!(
-                "{error:#}; retained seat at {} after restore failed",
-                tree.display()
+                "{error:#}; clone retained at {} after restore failed",
+                path.display()
             )
         })?;
         return Err(error);
     }
-    std::fs::remove_dir_all(&tree)
-        .with_context(|| format!("remove quarantined seat {}", tree.display()))
+    Ok(path)
 }
 
-impl ReapPublication {
-    fn verify_quarantined(&self, main: &Path, tree: &Path) -> Result<()> {
-        let holders = || {
-            aida_core::worktree_holders::check_worktree_removal(tree)
-                .map_err(|why| anyhow::anyhow!("seat in use: {why}"))
-        };
-        holders()?;
-        anyhow::ensure!(
-            reap_inventory(main, tree)? == self.inventory,
-            "seat refs or reflogs changed during publication check"
-        );
-        anyhow::ensure!(
-            matches!(probe(main, tree), Probe::Known(current) if current.dirty.is_empty()),
-            "seat changed during publication check"
-        );
-        holders()
-    }
-
-    fn record(&self, main: &Path, scope: &str) -> Result<()> {
-        let mut recorded = false;
-        let store =
-            crate::detect_distributed_store_from(main).context("owning store unavailable")?;
-        aida_core::Storage::new(store).update_atomically(|store| {
-            use aida_core::RequirementStatus::{Completed, Done};
-            if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(scope) {
-                if !matches!(req.status, Done | Completed) {
-                    return;
-                }
-                if !req.comments.iter().any(|c| c.content == self.note) {
-                    req.add_comment(aida_core::Comment::new(
-                        "session-reap".into(),
-                        self.note.clone(),
-                    ));
-                }
+fn record_reaped_clone(main: &Path, scope: &str, note: String) -> Result<()> {
+    let mut recorded = false;
+    let store = crate::detect_distributed_store_from(main).context("owning store unavailable")?;
+    aida_core::Storage::new(store).update_atomically(|store| {
+        use aida_core::RequirementStatus::{Completed, Done};
+        if let Ok(Some(req)) = store.get_requirement_unambiguous_mut(scope) {
+            if matches!(req.status, Done | Completed) {
+                req.add_comment(aida_core::Comment::new("session-reap".into(), note));
                 recorded = true;
             }
-        })?;
-        anyhow::ensure!(recorded, "cannot record publication on owning spec {scope}");
-        Ok(())
-    }
+        }
+    })?;
+    anyhow::ensure!(recorded, "cannot record salvage on owning spec {scope}");
+    Ok(())
 }
 
 /// How [`destroy`] treats a clone holding work origin does not have.
 // trace:TASK-2053 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DestroyMode {
-    PublishedReap {
-        scope: String,
-        branch: String,
-    },
     /// Reap: salvage a patch and KEEP the clone; also keep a clone a live
     /// process is using.
     KeepUnshipped,
@@ -6326,16 +6249,11 @@ fn destroy_inner(
         );
     }
     let mut salvaged = None;
-    if matches!(mode, DestroyMode::PublishedReap { .. }) || clone.symlink_metadata().is_ok() {
+    if std::fs::symlink_metadata(clone).is_ok() {
         // Recheck publication against origin, including explicit refspec pushes
         // that left no tracking ref. Keep fresh dirty/unpublished work protected.
         // trace:BUG-2630 | ai:codex
-        let initial = if matches!(mode, DestroyMode::PublishedReap { .. }) {
-            probe(main, clone)
-        } else {
-            probe_counting_origin(main, clone, None, shipped, None)
-        };
-        let mut facts = match initial {
+        let facts = match probe_counting_origin(main, clone, None, shipped, None) {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
@@ -6361,14 +6279,6 @@ fn destroy_inner(
                 });
             }
         }
-        let publication = if let DestroyMode::PublishedReap { branch, scope } = &mode {
-            let tip = expect_head.context("missing scanned HEAD")?;
-            let proof = reap_publication(main, clone, branch, tip)?;
-            facts.unpushed = 0;
-            Some((proof, scope))
-        } else {
-            None
-        };
         // Unpublished checkpoint history needs a recoverable bundle before removal.
         // Probe inside the same sandbox; unreadable evidence retains the clone.
         // trace:BUG-2491 | ai:codex
@@ -6439,9 +6349,6 @@ fn destroy_inner(
                 });
             }
         }
-        if let Some((proof, scope)) = &publication {
-            proof.record(main, scope)?;
-        }
         // Retire the clone's mail into main's anchor before the removal.
         // trace:STORY-1843 | ai:claude
         let retirement = match retired.take() {
@@ -6465,9 +6372,6 @@ fn destroy_inner(
             clone,
             retirement,
             || {
-                if let Some((proof, ..)) = &publication {
-                    return remove_quarantined(clone, |tree| proof.verify_quarantined(main, tree));
-                }
                 std::fs::remove_dir_all(clone)
                     .with_context(|| format!("remove the seat clone {}", clone.display()))
             },

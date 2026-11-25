@@ -208,18 +208,16 @@ fn the_probe_sandbox_is_read_only_networkless_and_hookless() {
 }
 
 #[test]
-fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unpublished() {
+fn clone_reap_verdicts_require_clean_idle_finished_seat() {
     use crate::session_reap::{classify_clone_reap, ReapVerdict};
     let clean = ProbeFacts {
         head: Some("a".repeat(40)),
         branch: Some("feat".into()),
-        dirty: vec![],
-        unpushed: 0,
-        unpushed_refs: vec![],
+        ..Default::default()
     };
-    let verdict = |probe: &Probe, exited, finished, published: bool| {
-        let evidence = published.then_some(()).context("publication unknown");
-        classify_clone_reap(|| probe.clone(), "feat", exited, finished, |_| evidence)
+    let verdict = |probe: &Probe, exited, finished, idle: bool| {
+        let evidence = idle.then_some(()).context("live holder");
+        classify_clone_reap(|| probe.clone(), "feat", exited, finished, || evidence)
     };
     let ok = Probe::Known(clean.clone());
     assert!(matches!(
@@ -244,29 +242,16 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unpublished() {
         ),
         "has submodules",
     );
-    let dirty = ProbeFacts {
-        dirty: vec!["? x".into()],
-        ..clean.clone()
-    };
+    let mut changed = clean;
+    changed.branch = Some("other".into());
     skip(
-        verdict(&Probe::Known(dirty), true, true, true),
-        "uncommitted",
-    );
-    let other = ProbeFacts {
-        branch: Some("other".into()),
-        ..clean.clone()
-    };
-    skip(
-        verdict(&Probe::Known(other), true, true, true),
+        verdict(&Probe::Known(changed.clone()), true, true, true),
         "session branch",
     );
-    let ahead = ProbeFacts {
-        unpushed: 2,
-        ..clean.clone()
-    };
+    changed.dirty.push("? x".into());
     skip(
-        verdict(&Probe::Known(ahead), true, true, false),
-        "2 commit(s)",
+        verdict(&Probe::Known(changed), true, true, true),
+        "uncommitted",
     );
     skip(verdict(&ok, false, true, true), "still running");
     skip(verdict(&ok, true, false, true), "not finished");
@@ -277,11 +262,11 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unpublished() {
             "feat",
             exited,
             finished,
-            |_| panic!("unexpected publication check"),
+            || panic!("unexpected holder check"),
         );
         assert!(matches!(verdict, ReapVerdict::Skip(_)));
     }
-    skip(verdict(&ok, true, true, false), "publication unknown");
+    skip(verdict(&ok, true, true, false), "live holder");
 }
 
 /// The lease is seat-writable through the store, so `destroy` refuses any
@@ -1687,9 +1672,7 @@ fn task_2053_bwrap_probe_reads_a_reftable_clone() {
     assert!(facts.unpushed >= 1, "{facts:?}");
 }
 
-/// Review round 5 (carried MINOR): reap's per-clone step skips a clone the
-/// scan recorded no HEAD for, keeps an unshipped clone and its lease, and
-/// releases the lease only once the clone is removed.
+/// Verify lease retention on refusal and recover local history from the moved clone.
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
@@ -1733,61 +1716,34 @@ fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
     req.status = aida_core::RequirementStatus::Completed;
     backend.add_requirement(req).unwrap();
     crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
-    let offline = fx.root.join("offline.git");
-    std::fs::rename(&fx.origin, &offline).unwrap();
-    assert!(reap(Some(&tip)).contains("publication unknown"));
-    std::fs::rename(offline, &fx.origin).unwrap();
-    std::fs::write(clone.join("README.md"), "stash-only").unwrap();
-    seat_git(&clone, &["stash"]);
-    assert!(reap(Some(&tip)).contains("refs/stash"));
-    seat_git(&clone, &["stash", "drop"]);
-    seat_git(&clone, &["checkout", "-qb", "side"]);
-    seat_commit(&clone, "side.txt");
-    let side = seat_git(&clone, &["rev-parse", "HEAD"]);
-    seat_git(&clone, &["checkout", "-q", "feat"]);
-    assert!(reap(Some(&tip)).contains(side.trim()));
-    seat_git(&clone, &["push", "origin", "side"]);
-    seat_commit(&clone, "current.txt");
-    let tip = seat_git(&clone, &["rev-parse", "HEAD"]).trim().to_owned();
-    assert!(reap(Some(&tip)).contains(&tip));
-    seat_git(&clone, &["push", "origin", "feat"]);
-    seat_git(&fx.main, &["fetch", "origin"]);
-    git_ok(&fx.origin, &["tag", "release", &tip]);
-    git_ok(&fx.origin, &["update-ref", "-d", "refs/heads/feat"]);
-    assert!(reap(Some(&tip)).contains(&tip));
-    assert_eq!(git_ok(&fx.main, &["rev-parse", "origin/feat"]).trim(), tip);
-    assert!(clone.exists() && lease().is_some());
-    seat_git(&clone, &["push", "origin", "feat"]);
     seat_commit(&clone, "reflog-only");
     let lost = seat_git(&clone, &["rev-parse", "HEAD"]);
     seat_git(&clone, &["reset", "--hard", &tip]);
-    assert!(reap(Some(&tip)).contains(lost.trim()));
+    let mut holder = std::process::Command::new("sleep")
+        .arg("60")
+        .current_dir(&clone)
+        .spawn()
+        .unwrap();
+    let result = reap(Some(&tip));
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+    assert!(result.contains("in use"), "{result}");
     assert!(clone.exists() && lease().is_some());
-    seat_git(
-        &clone,
-        &[
-            "push",
-            "origin",
-            &format!("{}:refs/heads/recovered", lost.trim()),
-        ],
+    let other = tempfile::tempdir_in("/dev/shm").unwrap();
+    let err =
+        move_reaped_clone(&fx.main, &clone, "TASK-2053", "feat", &tip, other.path()).unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<std::io::Error>().unwrap().raw_os_error(),
+        Some(libc::EXDEV)
     );
+    assert!(clone.exists() && lease().is_some());
     let mut missing_owner = lease().unwrap();
     missing_owner.scope = "absent-owner".into();
     assert!(
         crate::session_reap::reap_one_clone(&fx.main, &missing_owner, Some(&tip))
-            .contains("cannot record publication")
+            .contains("cannot record salvage")
     );
     assert!(clone.exists() && lease().is_some());
-    let proof = reap_publication(&fx.main, &clone, "feat", &tip).unwrap();
-    let error = remove_quarantined(&clone, |tree| {
-        assert!(!clone.exists());
-        std::fs::write(tree.join("late-edit"), "keep")?;
-        proof.verify_quarantined(&fx.main, tree)
-    })
-    .unwrap_err();
-    assert!(error.to_string().contains("seat changed"));
-    assert!(clone.join("late-edit").exists() && lease().is_some());
-    std::fs::remove_file(clone.join("late-edit")).unwrap();
     let row = reap(Some(&tip));
     assert!(row.starts_with("reaped"), "{row}");
     assert!(!clone.exists() && lease().is_none());
@@ -1795,12 +1751,19 @@ fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
         .get_requirement_by_spec_id("TASK-2053")
         .unwrap()
         .unwrap();
+    let path = Path::new(
+        row.strip_prefix("reaped — seat clone saved at ")
+            .unwrap()
+            .strip_suffix(", lease released")
+            .unwrap(),
+    );
+    assert!(path.starts_with(crate::home_dir().unwrap().join("salvage/reaped")));
+    assert_eq!(seat_git(path, &["rev-parse", "ORIG_HEAD"]), lost);
+    assert!(ref_exists(&fx.main, &format!("refs/aida/salvage/{tip}")));
     assert!(req
         .comments
         .iter()
-        .any(|c| c.content.contains("origin/feat")
-            && c.content.contains(&tip)
-            && c.content.contains(side.trim())));
+        .any(|c| c.content.contains(path.to_str().unwrap()) && c.content.contains(&tip)));
 }
 
 /// BUG-2224: the count parser names each ref, escapes seat-written names and
@@ -2862,6 +2825,12 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         .iter()
         .find(|row| row.session == lease.id)
         .unwrap_or_else(|| panic!("legacy clone must be reapable: {report:?}"));
+    crate::session_hygiene::run(&crate::session_hygiene::HygieneOptions {
+        dry_run: true,
+        idle_hours: 24,
+    })
+    .unwrap();
+    assert!(clone.is_dir() && crate::lease_path(&fx.main, &lease.id).exists());
     assert_eq!(git_ok(&fx.main, &["show-ref"]), before);
     assert_eq!(row.branch, "feat");
     assert!(row.branch_tip.is_some());
@@ -2913,8 +2882,8 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(crate::session_end::guard_remote_commits(&fx.main, &lease, false).is_err());
     let report = crate::session_reap::scan_reapable(&fx.main);
     assert!(
-        report.reapable.is_empty(),
-        "unpublished work must stay: {report:?}"
+        !report.reapable.is_empty(),
+        "local history can be moved intact: {report:?}"
     );
     std::fs::write(clone.join("published.txt"), "unsaved change\n").unwrap();
     let dirty = inspect();
@@ -2959,10 +2928,11 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         .get_requirement_by_spec_id(&lease.scope)
         .unwrap()
         .unwrap();
-    assert!(req
-        .comments
-        .iter()
-        .any(|c| c.content.contains(tip) && c.content.contains("origin/")));
+    assert!(req.comments.iter().any(|c| c
+        .content
+        .contains(&format!("Origin `refs/heads/feat` observed at `{tip}`"))
+        && c.content.contains("salvage/reaped/")
+        && c.content.contains("refs/remotes/origin/")));
 }
 
 /// A broken clone is unknown, and the guard's ordinary Display carries the
@@ -3373,15 +3343,6 @@ fn task_2053_bwrap_task_3858_stash_only_clone_hygiene_summary() {
         &Default::default(),
         lease.started_at,
     );
-    assert_eq!(row.verdict, "skip");
-    let outcome = crate::session_hygiene::HygieneOutcome {
-        scan_skipped: vec![row],
-        ..Default::default()
-    };
-    for dry_run in [false, true] {
-        let summary = crate::session_hygiene::render_summary(&outcome, dry_run);
-        assert!(summary.contains("origin does not have"), "{summary}");
-        assert!(summary.contains("commit(s) on refs/stash"), "{summary}");
-        assert!(!summary.contains("git "), "{summary}");
-    }
+    assert_eq!(row.verdict, "reap", "{}", row.reason);
+    assert!(ref_exists(&clone, "refs/stash"));
 }

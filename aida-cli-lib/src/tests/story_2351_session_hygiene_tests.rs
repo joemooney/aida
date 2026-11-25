@@ -241,12 +241,11 @@ fn scan_skipped_clone_guidance_survives_both_hygiene_summaries() {
     use crate::seat_clone::{Probe, ProbeFacts};
     use crate::session_reap::{classify_clone_reap, ReapRow, ReapVerdict};
 
-    for name in ["refs/stash", "refs/heads/side"] {
-        let detail = format!("1 commit(s) on {name}");
+    for name in ["live holder", "unknown holder"] {
+        let detail = format!("holder check: {name}");
         let facts = ProbeFacts {
             branch: Some("seat".into()),
-            unpushed: 1,
-            unpushed_refs: vec![detail.clone()],
+            head: Some("a".repeat(40)),
             ..Default::default()
         };
         let ReapVerdict::Skip(reason) = classify_clone_reap(
@@ -254,7 +253,7 @@ fn scan_skipped_clone_guidance_survives_both_hygiene_summaries() {
             "seat",
             true,
             true,
-            |_| anyhow::bail!("unpublished"),
+            || anyhow::bail!("{detail}"),
         ) else {
             panic!("expected the clone with {name} to be skipped")
         };

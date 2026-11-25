@@ -1,38 +1,14 @@
 //! Session reap — the substrate-state-driven cleanup pass for sessions that
 //! have genuinely finished.
 //!
-//! A scoped implementer session cannot tear down its own worktree (it is the
-//! live cwd — `aida session end` correctly refuses), so a headless agent that
-//! exits when its work lands leaves an orphaned worktree + lease + branch
-//! behind and every spec boundary needs a human. This pass closes that gap for
-//! the unambiguous case.
-//!
-//! # The reapable predicate
-//!
-//! A session is reapable when ALL of the following hold:
-//!   1. its spec is **Done or Completed** — the agent already reported "finished"
-//!      through AIDA (`aida queue done`, a merge auto-bump, …);
-//!   2. its branch is **merged** — either an ancestor of the default branch or a
-//!      forge-reported merged PR (the squash case), with zero unique unmerged
-//!      commits;
-//!   3. its process has **EXITED** — proven from the lease's recorded pids plus
-//!      the live-process probe, not guessed.
+//! After the spec reaches Done or Completed and the process exits, reap can
+//! remove a clean, merged ordinary worktree or move an idle, clean private
+//! seat clone intact to salvage. The process table and the lease supply exit evidence.
 //!
 //! # The hard boundaries
 //!
-//! * **No terminal scraping.** Completion is read from substrate state only —
-//!   spec status, branch-merged-ness, process liveness. Inferring "done" from
-//!   what a terminal printed is the same fragility class as acting on unreliable
-//!   session-state signals, one layer up.
-//! * **No force-kill.** A session whose process is still ALIVE is left entirely
-//!   untouched — its worktree is its cwd, and closing a live interactive agent is
-//!   the operator's job, never AIDA's. Detect-and-leave, never terminate.
-//! * **Doctor's merged-worktree safety checks are reused verbatim.** The final gate is the
-//!   `classify_agent_worktree` predicate used by doctor's merged-agent-worktrees
-//!   healer, so dirty worktrees and unique unmerged commits are never removed.
-//!
-//! Anything that is not provably reapable is SKIPPED with a reason — the pass
-//! defaults to preserve.
+//! Completion comes from the spec, Git and process evidence. A live session stays in place.
+//! Ordinary worktrees use doctor's merged-worktree safety checks; uncertain state is skipped.
 //
 // trace:TASK-1177 | ai:claude
 
@@ -41,7 +17,7 @@ use crate::{
     lease_owner_unknown, worktree,
 };
 use aida_core::DatabaseBackend;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 
 use crate::doctor_cmd::{
@@ -1307,15 +1283,14 @@ fn reap_one_with_clear_hooks(
 /// unfinished seat is never probed: a probe is two sandboxed git runs, and
 /// every reap scan, interactive or from the drive loop and night shift,
 /// visits every clone lease. Then the probe, in [`classify_session_reap`]'s
-/// order (unreadable or uncommitted state, the branch, work origin lacks),
-/// then publication coverage from freshly advertised origin branches.
+/// order, followed by a holder check before offering to move the clone.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn classify_clone_reap(
     probe: impl FnOnce() -> crate::seat_clone::Probe,
     branch: &str,
     process_exited: bool,
     spec_finished: bool,
-    publication: impl FnOnce(&str) -> anyhow::Result<()>,
+    holder_check: impl FnOnce() -> anyhow::Result<()>,
 ) -> ReapVerdict {
     if !process_exited {
         return ReapVerdict::Skip(
@@ -1340,22 +1315,13 @@ pub(crate) fn classify_clone_reap(
             "seat clone is not checked out on its session branch — operator decision".to_string(),
         );
     }
-    if let Err(error) = publication(facts.head.as_deref().unwrap_or("")) {
-        let detail = if facts.unpushed > 0 {
-            format!(
-                "; seat probe reports {} commit(s) origin does not have ({})",
-                facts.unpushed,
-                facts.unpushed_refs.join("; ")
-            )
-        } else {
-            String::new()
-        };
-        return ReapVerdict::Skip(format!("{error:#}{detail}"));
+    if facts.head.is_none() {
+        return ReapVerdict::Skip("seat HEAD unavailable".into());
     }
-    ReapVerdict::Reap(
-        "spec finished, process exited, fresh origin coverage, nothing beyond origin in the seat clone"
-            .to_string(),
-    )
+    if let Err(error) = holder_check() {
+        return ReapVerdict::Skip(format!("seat in use: {error:#}"));
+    }
+    ReapVerdict::Reap("finished session with an idle, clean seat clone to move to salvage".into())
 }
 
 /// Legacy MCP leases have no branch. Read it inside the clone sandbox before
@@ -1380,7 +1346,7 @@ fn clone_reap_branch(
 }
 
 /// Scan one `clone` lease. The row's `branch_tip` is the HEAD the probe saw;
-/// [`reap_one_clone`] removes the clone only while HEAD is still there.
+/// [`reap_one_clone`] moves the clone only while HEAD is still there.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn scan_clone_lease(
     project_root: &std::path::Path,
@@ -1419,9 +1385,9 @@ pub(crate) fn scan_clone_lease(
         branch,
         process_exited,
         spec_finished,
-        |tip| {
-            crate::seat_clone::reap_publication(project_root, &lease.worktree_path, branch, tip)
-                .map(|_| ())
+        || {
+            aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path)
+                .map_err(|why| anyhow::anyhow!("{why}"))
         },
     );
     ReapRow {
@@ -1457,9 +1423,8 @@ pub(crate) fn ending_retained_note(lease: &SessionLease, reason: String) -> Stri
     )
 }
 
-/// Reap ONE seat clone: [`crate::seat_clone::destroy`] re-probes it, keeps it
-/// (with a salvage patch) if work appeared or HEAD moved since the scan, and
-/// otherwise removes the clone, its cargo target directory and its base pin.
+/// Re-probe a seat clone, keep it when work appeared or HEAD moved, and
+/// otherwise moves the whole clone to salvage.
 /// The lease goes only once the clone is gone.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn reap_one_clone(
@@ -1497,42 +1462,48 @@ pub(crate) fn reap_one_clone(
             );
         }
     };
-    match crate::seat_clone::destroy_retained(
-        project_root,
-        &lease.worktree_path,
-        crate::seat_clone::DestroyMode::PublishedReap {
-            scope: lease.scope.clone(),
-            branch,
-        },
-        Some(tip),
-        &[],
+    let clone = &lease.worktree_path;
+    let moved = aida_core::mailbox_lifecycle::guard::remove_retired(
+        clone,
         retirement,
-    ) {
-        Ok(crate::seat_clone::Destroyed::Removed { .. }) => {
+        || {
+            let root = crate::home_dir()
+                .context("missing home directory")?
+                .join("salvage/reaped");
+            crate::seat_clone::move_reaped_clone(
+                project_root,
+                clone,
+                &lease.scope,
+                &branch,
+                tip,
+                &root,
+            )
+        },
+        aida_core::mailbox_lifecycle::guard::Retirement::complete,
+    );
+    match moved {
+        Ok(path) => {
             release_lease_files(project_root, &lease.id);
-            "reaped — seat clone removed, base pin released, lease released".to_string()
+            if !matches!(lease_path(project_root, &lease.id).try_exists(), Ok(false)) {
+                return format!(
+                    "failed — seat clone saved at {}, lease release unconfirmed",
+                    path.display()
+                );
+            }
+            format!(
+                "reaped — seat clone saved at {}, lease released",
+                path.display()
+            )
         }
-        Ok(crate::seat_clone::Destroyed::Kept {
-            reason,
-            salvage,
-            retention,
-        }) => {
-            // A retention refusal takes the recovery-ownership ending.
-            // trace:STORY-1843 | ai:claude
-            if let Some(refusal) = &retention {
+        Err(error) => {
+            if let Some(refusal) = crate::mail_retention::retention_refusal(&error) {
                 crate::mail_retention::keep_ending_retained(
                     &crate::lease_path(project_root, &lease.id),
                     refusal,
                 );
             }
-            format!(
-                "skipped — seat clone kept: {reason}{}",
-                salvage
-                    .map(|p| format!(" (salvage patch: {})", p.display()))
-                    .unwrap_or_default()
-            )
+            format!("skipped — seat clone kept: {error:#}")
         }
-        Err(error) => format!("failed — {error:#}"),
     }
 }
 
@@ -2303,10 +2274,10 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
             );
         }
         if report.reapable.is_empty() {
-            println!("No session is reapable (finished + process exited + merged worktree branch or published seat clone).");
+            println!("No session is reapable (finished + process exited + merged worktree branch or idle clean seat clone).");
         } else {
             println!(
-                "{} finished session(s) are reapable (spec finished + process exited + merged worktree branch or published seat clone):",
+                "{} finished session(s) are reapable (spec finished + process exited + merged worktree branch or idle clean seat clone):",
                 report.reapable.len()
             );
             for row in &report.reapable {
