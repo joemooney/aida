@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T18:14:43.862594688Z
+modified_at: 2026-11-25T18:19:19.719517852Z
 req_type: Bug
 tags:
 - ci
@@ -40,6 +40,28 @@ comments:
   modified_at: 2026-11-25T18:10:32.660845061Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213ee-ff27-7e50-a707-1ff8c3036d22
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Root cause (found)
+    1. `review --promote-approved-heads` reads only the `PR-<n>` verdict key. `aida review record <SPEC> --verdict approved` with no `--pr` and no reviewer lease records under the spec key (`review_record_change` returns None, so key = spec). The job then finds no verdict and skips silently.
+    2. Empty stderr on status=1: scheduled children are non-TTY, so `cli_entry` agent-output mode prints the error block to STDOUT, while `schedule.log` records only stderr.
+
+    ### Acceptance criteria and evidence
+    - AC1/AC2 **unit (command-level fixture with gh stub)**: new `bug2764_*` test in review_watch.rs. A spec-keyed approval at the exact PR head is promoted (a) when recorded after FAST completes: next tick adds ci:full; (b) when recorded while FAST is in progress: no edit, then the first tick after FAST completes adds ci:full. The existing PR-keyed test `test_apply_recorded_full_ci` still covers the reviewer-draft path.
+    - AC3 **unit**: the promotion returns one line per approved PR (promoted / skipped + reason), which the test asserts. The command prints them to stdout and writes every failure to stderr before exiting non-zero.
+
+    ### Expected files
+    - aida-cli-lib/src/review_watch.rs
+
+    ### Ambiguities
+    - Fallback scope: a spec-keyed approval is applied only when its reviewed_sha equals the PR head exactly, and only when the PR has no verdict of its own at that head. Recording an approval does not call the forge inline; the 2-minute job promotes within one tick.
+  created_at: 2026-11-25T18:19:19.719517852Z
+  modified_at: 2026-11-25T18:19:19.719517852Z
+  session_id: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
