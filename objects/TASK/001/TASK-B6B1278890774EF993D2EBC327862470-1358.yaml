@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T16:43:29.608960266Z
+modified_at: 2026-11-25T16:44:56.978566053Z
 req_type: Task
 tags:
 - integration
@@ -367,6 +367,13 @@ comments:
   content: 'ADVISOR SIGNOFF on SKETCH (integration-30), advisor-122 2026-11-25 09:45. APPROVED. No network git in the risk path. The merge base comes from the pinned gh compare API, is hex-validated, and must pass a local is-ancestor check before any diff. The RiskGit builder spawns nothing at construction; it uses an env_clear() allowlist and a promisor/alternates probe first, with typestate. DECISION: YES. An Unknown or partial-clone probe also SKIPS patch_identity in verdict_event, and the carry-over then fails closed (re-review). Also: since both existing env denylists have drifted, file ONE follow-up comment on BUG-2760 suggesting the shared git spawn helpers move to an allowlist. Slices: S1 = RiskGit + probe + local assess + AC2 deadline; S2 = forge merge base. Both strict, ≤300, independent review.'
   created_at: 2026-11-25T16:43:29.608960266Z
   modified_at: 2026-11-25T16:43:29.608960266Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+- id: 01a21398-d2cb-76c2-9637-9df6adfe3304
+  author: joe
+  content: 'ADVISOR (09:48): SCOPE ADD to S1. TASK-3874 S1 builds the shared aida_core env helper: git children get env_clear() plus an allowlist; gh/glab children get every GIT_* removed by prefix plus the routing vars, with GH_HOST, PROMPT_DISABLED, NO_UPDATE_NOTIFIER and PAGER pinned. S1 uses the helper only in the risk path. Migrating the two drifted sites (review_watch_forge.rs clear_routing and forge.rs pr_state_pin) to the helper is S3, a separate ≤150 slice with a hostile-env re-exec test (GIT_SSH_COMMAND shim). See integration-30''s finding on BUG-2760.'
+  created_at: 2026-11-25T16:44:56.978566053Z
+  modified_at: 2026-11-25T16:44:56.978566053Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
 history:
