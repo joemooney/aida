@@ -1116,27 +1116,99 @@ pub(crate) mod review_blocking {
             .collect()
     }
 
-    /// Whether one structured finding blocks under `set`. Security and
-    /// authority bypass block everywhere; test gaps block in gate, sandbox,
-    /// authority, seat or containment code (ADR-76); a finding without a
-    /// registry `blocking_tier` blocks; otherwise it blocks when its tier or
-    /// its class is on the list.
+    /// Why one structured finding blocks under a configured list.
+    // trace:BUG-2707 | ai:claude
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Blocker {
+        /// Blocks whatever the list says (security or authority bypass; an
+        /// ADR-76 test gap). The text names which.
+        Always(&'static str),
+        /// Its tier or class is on the list.
+        Listed(&'static str),
+        /// It carries no registry `blocking_tier`.
+        Unclassified,
+    }
+
+    /// Why one structured finding blocks under `set`, or `None` when it
+    /// defers. Security and authority bypass block everywhere; test gaps
+    /// block in gate, sandbox, authority, seat or containment code (ADR-76);
+    /// a finding without a registry `blocking_tier` blocks; otherwise it
+    /// blocks when its tier or its class is on the list.
     // trace:STORY-2913 | ai:claude
-    fn blocks(detail: &serde_json::Value, set: &BTreeSet<&'static str>) -> bool {
+    // trace:BUG-2707 | ai:claude
+    pub(crate) fn blocker(
+        detail: &serde_json::Value,
+        set: &BTreeSet<&'static str>,
+    ) -> Option<Blocker> {
         let tier_raw = detail.get("blocking_tier").and_then(|v| v.as_str());
         let tier = tier_raw.and_then(canonical);
         let class = class_of(detail);
         let either = |c: &str| tier == Some(c) || class == Some(c);
-        if either("security-authority-bypass")
-            || tier_raw.is_some_and(|t| ADR76_TIER_SPELLINGS.contains(&normalize(t).as_str()))
+        if either("security-authority-bypass") {
+            return Some(Blocker::Always("a security or authority-bypass finding"));
+        }
+        if tier_raw.is_some_and(|t| ADR76_TIER_SPELLINGS.contains(&normalize(t).as_str()))
             || (either("test-gap") && in_sensitive_code(detail))
         {
-            return true;
+            return Some(Blocker::Always(
+                "a test gap in gate, sandbox, authority, seat or containment code",
+            ));
         }
         let Some(tier) = tier else {
-            return true;
+            return Some(Blocker::Unclassified);
         };
-        set.contains(tier) || class.is_some_and(|c| set.contains(c))
+        if set.contains(tier) {
+            return Some(Blocker::Listed(tier));
+        }
+        class.filter(|c| set.contains(c)).map(Blocker::Listed)
+    }
+
+    fn blocks(detail: &serde_json::Value, set: &BTreeSet<&'static str>) -> bool {
+        blocker(detail, set).is_some()
+    }
+
+    /// The policy as data a launch hands its reviewer, so the reviewer's
+    /// submission is decided under the launching project's list wherever the
+    /// reviewer runs. Provenance is reduced to whether the list fails closed.
+    // trace:BUG-2707 | ai:claude
+    pub(crate) fn to_snapshot(effective: &Effective) -> serde_json::Value {
+        match &effective.policy {
+            _ if effective.fails_closed() => serde_json::json!({"blocking": "all"}),
+            Policy::Tiers(set) => serde_json::json!({"blocking": "tiers",
+                "tiers": set.iter().copied().collect::<Vec<_>>()}),
+            Policy::AllBlock => serde_json::json!({"blocking": "unset"}),
+        }
+    }
+
+    /// The inverse of [`to_snapshot`]. Anything it does not recognise fails
+    /// closed: every finding blocks, explicit deferrals included.
+    // trace:BUG-2707 | ai:claude
+    pub(crate) fn from_snapshot(value: &serde_json::Value) -> Effective {
+        let closed = |why: &str| Effective {
+            policy: Policy::AllBlock,
+            source: Source::Invalid(why.to_string()),
+        };
+        match value.get("blocking").and_then(|v| v.as_str()) {
+            Some("unset") => Effective {
+                policy: Policy::AllBlock,
+                source: Source::Unset,
+            },
+            Some("tiers") => {
+                let names: Option<Vec<String>> = value
+                    .get("tiers")
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.iter().map(|v| v.as_str().map(str::to_string)).collect());
+                match names.as_deref().map(parse_names) {
+                    Some(Ok(set)) => Effective {
+                        policy: Policy::Tiers(set),
+                        source: Source::DefaultBranch,
+                    },
+                    _ => closed("the launch's blocking-class list is not valid"),
+                }
+            }
+            Some("all") => closed("the launching project's list could not be honoured"),
+            _ => closed("the launch's blocking policy is not readable"),
+        }
     }
 
     /// [`apply`] with the positional `--finding-class` channel folded in first.

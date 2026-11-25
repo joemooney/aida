@@ -196,6 +196,8 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_BUG_1984_HOLDER_DIR",
     "AIDA_BUILD_GIT_DIRTY",
     "AIDA_BUILD_GIT_SHA",
+    // Compile-time build diagnostic only. trace:BUG-2728 | ai:codex
+    "AIDA_BUILD_GIT_STATUS",
     "AIDA_BUILD_UNIX_TIME",
     "AIDA_BURNDOWN_BG_WAIT_CEILING_MS",
     "AIDA_BURNDOWN_LOCK_HELD",
@@ -358,6 +360,8 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_SKIP_XPLAT_CHECK",
     "AIDA_SPINNING_AFTER_SECS",
     "AIDA_STALE_LOCKS_DEADLINE_SECS",
+    // Doctor threshold is local to the invoking process. trace:STORY-3095 | ai:codex
+    "AIDA_STALLED_REVIEW_MINUTES",
     "AIDA_STORE_GC_AGGRESSIVE_PACKS",
     "AIDA_STORE_GC_AUTO",
     "AIDA_STORE_GUARD_FLOOR",

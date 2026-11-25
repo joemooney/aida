@@ -121,6 +121,29 @@ pub(crate) fn handle_doctor_command(
             json,
             fail_on_findings,
         } => {
+            // trace:STORY-3095 | ai:codex
+            if normalize_doctor_category(category).as_deref().ok() == Some("stalled-reviews") {
+                let root = main_worktree_root_from(&find_project_root()?);
+                use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
+                let exec = ExecContext::new(
+                    Environment::capture(),
+                    None,
+                    root.clone(),
+                    root,
+                    ToolPaths::default(),
+                    std::sync::Arc::new(SystemClock::default()),
+                );
+                let report = DoctorReport::from_findings(crate::stalled_reviews::scan(&exec)?);
+                let reason = (*fail_on_findings && !report.findings.is_empty())
+                    .then(|| format!("{} stalled reviews", report.findings.len()));
+                return emit_doctor_report(
+                    report,
+                    reason,
+                    doctor_render_mode(*json),
+                    false,
+                    |_| {},
+                );
+            }
             // TASK-1473: `doctor check runaway-seats` is what the
             // maintenance scheduler dispatches every 15 minutes (the
             // watchdog job) — and the watchdog rule never touches the AIDA
@@ -320,13 +343,44 @@ pub(crate) fn handle_doctor_command(
             })
         }
         cli::DoctorCommand::Heal {
+            attest,
             id,
             category,
-            yes,
+            yes: sub_yes,
             force,
             all: sub_all,
-            json,
+            json: heal_json,
         } => {
+            // trace:BUG-2722 | ai:codex
+            if normalize_doctor_category(category)? == "repair-reservations" {
+                let root = main_worktree_root_from(&find_project_root()?);
+                anyhow::ensure!(!yes && !sub_yes, "repair release refuses --yes");
+                anyhow::ensure!(!json && !heal_json, "repair release refuses --json");
+                let id = id.as_deref().context("repair release requires one --id")?;
+                let reason = attest
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .context("repair release requires a nonempty --attest reason")?;
+                crate::gate::seat_authority::require_direct_human()?;
+                anyhow::ensure!(
+                    crate::gate::role_authority::has_integrity_floor_authority()
+                        && !crate::pr_service::ship_caller_is_drive_seat()
+                        && !doctor_running_autonomously(&root),
+                    "repair release requires a human operator"
+                );
+                crate::repair_journal::RepairGuard::attest_reservation(
+                    &root,
+                    id,
+                    reason,
+                    std::io::stdin().lock(),
+                )?;
+                println!("Released {id}");
+                return Ok(());
+            }
+            anyhow::ensure!(attest.is_none(), "--attest requires repair-reservations");
+            let yes = sub_yes;
+            let json = heal_json;
             if let Some(id) = id {
                 let root = main_worktree_root_from(&find_project_root()?);
                 let category = normalize_doctor_category(category)?;
@@ -460,6 +514,11 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let mut remote_drift_info = Vec::new();
     let mut landing_health_unknown = Vec::new();
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // Keep the locked journal scan out of routine status reads.
+    // trace:BUG-2722 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "repair-reservations")? {
+        collect_repair_findings(&project_root, opts.category.is_none(), &mut findings)?;
+    }
     // The tolerant loader leaves bad objects out; report each one separately
     // while retaining the other categories and safe heals.
     // trace:BUG-2490 | ai:codex
@@ -965,7 +1024,25 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         runaway_seats = Some(coverage);
     }
 
+    // trace:TASK-3847 | ai:codex
+    let mut budget_info = None;
+    if doctor_category_selected(opts.category.as_deref(), crate::forge::CORE_BUDGET_CATEGORY)? {
+        if let Some((summary, low)) = crate::forge::github_core_budget(&project_root) {
+            if low {
+                findings.push(DoctorFinding {
+                    category: crate::forge::CORE_BUDGET_CATEGORY.into(),
+                    id: "core".into(),
+                    summary,
+                    action: "Reduce watcher polling until the reset.".into(),
+                    safe_heal: false,
+                });
+            } else {
+                budget_info = Some(summary);
+            }
+        }
+    }
     let mut report = DoctorReport::from_findings(findings);
+    report.github_core_budget = budget_info;
     report.codex_token_lifetime = codex_token_lifetime(
         &aida_core::exec_context::Environment::capture(),
         opts.category.as_deref(),
@@ -1985,6 +2062,52 @@ fn doctor_heal_disposition(
     }
     // Destructive + --force --yes + interactive TTY = explicit human sign-off.
     HealDisposition::Proceed
+}
+
+fn collect_repair_findings(
+    project_root: &std::path::Path,
+    general: bool,
+    findings: &mut Vec<DoctorFinding>,
+) -> Result<()> {
+    let scan = match std::fs::symlink_metadata(project_root.join(".aida/repair-journal.json")) {
+        Ok(_) => {
+            crate::repair_journal::RepairGuard::lock(project_root).map(|j| j.repair_findings())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+    };
+    match scan {
+        Ok(rows) => findings.extend(rows),
+        Err(e) if general => findings.push(DoctorFinding {
+            category: "repair-reservations".into(),
+            id: "journal".into(),
+            summary: format!("repair journal unavailable: {e:#}"),
+            action: "aida doctor check repair-reservations".into(),
+            safe_heal: false,
+        }),
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2722_general_doctor_keeps_other_findings_on_invalid_journal() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".aida")).unwrap();
+    std::fs::write(root.path().join(".aida/repair-journal.json"), "{").unwrap();
+    let mut findings = vec![DoctorFinding {
+        category: "other".into(),
+        id: "safe".into(),
+        summary: String::new(),
+        action: String::new(),
+        safe_heal: true,
+    }];
+    collect_repair_findings(root.path(), true, &mut findings).unwrap();
+    assert_eq!(findings.len(), 2);
+    assert!(findings[0].safe_heal);
+    assert!(findings[1].summary.contains("invalid repair journal") && !findings[1].safe_heal);
+    assert!(collect_repair_findings(root.path(), false, &mut findings).is_err());
 }
 
 /// Heal status of a finding left alone because the run's deadline passed.

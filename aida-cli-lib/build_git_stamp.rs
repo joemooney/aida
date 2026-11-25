@@ -19,20 +19,43 @@ fn emit_git_stamps() {
     println!("cargo:rustc-env=AIDA_BUILD_GIT_SHA={}", sha);
 
     // Mark dirty if working tree has uncommitted changes (best-effort).
-    let dirty = std::process::Command::new("git")
+    // trace:BUG-2728 | ai:codex
+    let status = std::process::Command::new("git")
         // `--no-optional-locks`: without it `git status` opportunistically
         // rewrites a racy index (fresh after `git worktree add`), and since
         // the index is a rerun trigger the next build would be Dirty.
         // trace:BUG-1630 | ai:claude
-        .args(["--no-optional-locks", "status", "--porcelain"])
+        .args([
+            "--no-optional-locks",
+            "-c",
+            "core.quotePath=true",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=no",
+            "--ignore-submodules=untracked",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success())
-        .map(|o| !o.stdout.is_empty())
-        .unwrap_or(false);
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    // Git quotes unusual path bytes. Bound the single-line rustc environment
+    // entry as a checkout can have thousands of tracked changes.
+    let mut paths = String::new();
+    for line in status.lines() {
+        if paths.len() + line.len() > 32 * 1024 {
+            paths.push_str(" [additional changes omitted]");
+            break;
+        }
+        if !paths.is_empty() {
+            paths.push_str(" | ");
+        }
+        paths.push_str(line);
+    }
+    println!("cargo:rustc-env=AIDA_BUILD_GIT_STATUS={paths}");
     println!(
         "cargo:rustc-env=AIDA_BUILD_GIT_DIRTY={}",
-        if dirty { "1" } else { "0" }
+        if status.is_empty() { "0" } else { "1" }
     );
 
     // Re-run the build script when the git HEAD or the index changes so the

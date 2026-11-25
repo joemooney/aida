@@ -5,6 +5,7 @@ trace:STORY-2606 | ai:codex
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -24,6 +25,16 @@ INSTALL_STEPS = {
     "Install Linux dependencies", "Install zsh (shell-wrapper test matrix)",
     "Install awk engines", "Prepare Linux dependency cache",
 }
+# The adapter computes docs-only selection itself (`full_ci`) and supplies it as
+# `steps.changes.outputs.full_ci`; the upstream step that publishes that output
+# is validated byte-for-byte and never executed. trace:STORY-2695 | ai:claude
+SELECT_STEP = {
+    "name": "Select full or docs-only CI", "id": "changes",
+    "env": {"FULL_CI": "${{ runner.environment == 'self-hosted' && 'true' || steps.paths.outputs.full_ci }}"},
+    "run": 'echo "full_ci=$FULL_CI" >> "$GITHUB_OUTPUT"',
+}
+# Runner files only a dell1-only step may name; such a step never runs here.
+SELF_HOSTED_ONLY_VARIABLES = {"GITHUB_ENV", "GITHUB_WORKSPACE"}
 # Runner-owned shell inputs must be explicitly supplied, never inherited by accident.
 # trace:STORY-2606 | ai:codex
 RUNNER_VARIABLES = {"GITHUB_STEP_SUMMARY", "RUNNER_TEMP", "GITHUB_EVENT_NAME"}
@@ -189,6 +200,10 @@ def context(lane, full, failed=False, environ=None):
         # GitLab has no GitHub ref or cache result. Validate the save guard
         # without treating a GitLab pipeline as a GitHub cache writer.
         "github.ref": "",
+        # Only the dell1-only source step reads these. trace:STORY-2695 | ai:claude
+        "github.sha": environ.get("CI_COMMIT_SHA", ""),
+        "github.event.pull_request.head.sha": "",
+        "steps.paths.outputs.full_ci": "true" if full else "false",
         "steps.linux-dependency-cache.outputs.cache-hit": "",
         "steps.changes.outputs.full_ci": "true" if full else "false",
         "cancelled": False, "always": True, "success": not failed,
@@ -230,7 +245,11 @@ def validate_job(job, current):
     # trace:STORY-2672 | ai:codex
     # GitLab always uses its provisioned image; accept only the reviewed GitHub
     # routing policy, never arbitrary runner expressions.
-    guarded_runner = '${{ vars.AIDA_DELL1_CI == \'true\' && (github.event_name == \'push\' || (github.event_name == \'pull_request\' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(fromJSON(\'["lib-0","lib-1","cli-0","cli-1"]\'), matrix.shard) && fromJSON(\'["self-hosted","Linux","X64","aida-dell1"]\') || matrix.os }}'
+    guarded_runner = (
+        "${{ contains(fromJSON('[\"lib-0\",\"lib-1\",\"cli-0\",\"cli-1\"]'), matrix.shard) && "
+        "((needs.tier.outputs.dell1 == 'MAIN' && fromJSON('[\"self-hosted\",\"Linux\",\"X64\",\"aida-dell1\",\"MAIN\"]')) || "
+        "(needs.tier.outputs.dell1 == 'TRAIN' && fromJSON('[\"self-hosted\",\"Linux\",\"X64\",\"aida-dell1\",\"TRAIN\"]'))) "
+        "|| matrix.os }}")
     if job.get("runs-on", "${{ matrix.os }}") not in ("${{ matrix.os }}", guarded_runner):
         raise ValueError("Unsupported upstream runner")
     if set(job.get("defaults", {})) - {"run"}:
@@ -243,6 +262,7 @@ def validate_job(job, current):
     step_environment(job, job_context, {})
     if job.get("defaults", {}).get("run", {}) not in ({}, {"shell": "bash --noprofile --norc -e -o pipefail {0}"}):
         raise ValueError("Unsupported upstream run defaults")
+    validate_selection(job["steps"])
     for step in job["steps"]:
         if set(step) - allowed:
             raise ValueError("Unsupported upstream step settings")
@@ -255,10 +275,13 @@ def validate_job(job, current):
             if action == "dorny/paths-filter":
                 settings = step.get("with", {})
                 filters = yaml.safe_load(settings.get("filters", ""))
-                if (step.get("id") != "changes" or
+                if (step.get("id") != "paths" or
                         settings.get("predicate-quantifier") != "some-with-excludes" or
                         filters != {"full_ci": ["**", "!docs/**", "!**/*.md", "!LICENSE", "!.gitignore"]}):
                     raise ValueError("Unmapped upstream path-filter policy")
+        elif step.get("name") == SELECT_STEP["name"]:
+            if step != SELECT_STEP:
+                raise ValueError("Unmapped upstream full-CI selection step")
         elif "run" in step:
             if step.get("shell", "bash") not in {"bash", "bash --noprofile --norc -e -o pipefail {0}"}:
                 raise ValueError("Unsupported upstream shell")
@@ -269,12 +292,47 @@ def validate_job(job, current):
                 references = set(RUNNER_REFERENCE.findall(command))
                 # This step never executes in the hosted-equivalent adapter.
                 if step.get("if") == "runner.environment == 'self-hosted'":
-                    references.discard("GITHUB_ENV")
+                    references -= SELF_HOSTED_ONLY_VARIABLES
                 unknown = references - RUNNER_VARIABLES
                 if unknown:
                     raise ValueError(f"Unsupported runner variables: {', '.join(sorted(unknown))}")
         else:
             raise ValueError("Unmapped upstream step")
+
+
+def validate_selection(steps):
+    """Require one reviewed producer per selection output, before its readers.
+
+    The adapter supplies `steps.paths.outputs.full_ci` and
+    `steps.changes.outputs.full_ci` itself, so upstream must really define
+    them: a reader with no producer, a second producer, or a producer after
+    its first reader would make this adapter run steps GitHub would not.
+    trace:STORY-2695 | ai:claude
+    """
+    def producers(name):
+        return [index for index, step in enumerate(steps) if step.get("id") == name]
+
+    def readers(name):
+        # Every expression-bearing field: a condition, env, action input or command.
+        return [index for index, step in enumerate(steps)
+                if f"steps.{name}.outputs." in json.dumps(step, sort_keys=True)]
+
+    for name in ("paths", "changes"):
+        found, used = producers(name), readers(name)
+        if len(found) > 1:
+            raise ValueError(f"Upstream defines more than one {name} output producer")
+        if used and not found:
+            raise ValueError(f"Upstream reads {name} outputs that no step produces")
+        if used and found[0] >= used[0]:
+            raise ValueError(f"Upstream reads {name} outputs before their producer")
+    for index in producers("changes"):
+        if steps[index] != SELECT_STEP:
+            raise ValueError("Unmapped upstream full-CI selection step")
+    for index in producers("paths"):
+        step = steps[index]
+        if (step.get("uses", "").split("@", 1)[0] != "dorny/paths-filter" or
+                step.get("if") != "runner.environment != 'self-hosted'"):
+            raise ValueError("Unmapped upstream path-filter producer")
 
 
 def clean_artifacts():
@@ -359,7 +417,7 @@ def main(argv=None, environ=None):
             if action not in ACTIONS:
                 raise ValueError(f"Unmapped upstream action: {action}")
             continue
-        if name in INSTALL_STEPS:
+        if name in INSTALL_STEPS or name == SELECT_STEP["name"]:
             continue
         if "run" not in step:
             raise ValueError(f"Unmapped upstream step: {name}")

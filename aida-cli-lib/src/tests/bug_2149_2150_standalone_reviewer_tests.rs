@@ -1424,15 +1424,38 @@ fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() 
     let (result, project) = run_headless_reviewer_with_draft_slot(tmp.path(), |_, head| {
         let data = serde_json::json!({"version":1,"pr":59,"reviewed_sha":head,
             "verdict":"approved","summary":"data-only child complete rationale","findings":[]});
+        // The reviewer's `aida` is the CLI built beside this
+        // test, so the prompt's command runs the real submission.
+        // trace:BUG-2707 | ai:claude
+        std::os::unix::fs::symlink(
+            crate::test_exec::matching_aida_cli(),
+            tmp.path().join("bin/aida"),
+        )
+        .unwrap();
         format!(
             r#"#!/bin/sh
 unset AIDA_SESSION_GRANT AIDA_SESSION_ID AIDA_AGENT_TYPE AIDA_AGENT_NAME
 python3 - "$@" <<'PY'
-import json, pathlib, re, sys
-matches = [re.search(r'absolute path `([^`]+/draft.json)`', arg) for arg in sys.argv[1:]]
-path = next(match.group(1) for match in matches if match)
-assert pathlib.Path(path).is_absolute()
-pathlib.Path(path).write_text(json.dumps(json.loads(r'''{data}''')))
+import json, pathlib, re, subprocess, sys
+matches = [re.search(r'absolute path `([^`]+)/draft.json`', arg) for arg in sys.argv[1:]]
+launch = pathlib.Path(next(match.group(1) for match in matches if match))
+assert launch.is_absolute()
+# The submission is the command the prompt gives, run through a shell as written.
+commands = [re.search(r'exactly as written: (aida review submit-draft [^\n]+)\n', arg) for arg in sys.argv[1:]]
+command = next(match.group(1) for match in commands if match)
+def submit(draft):
+    (launch / "draft.json").write_text(json.dumps(draft))
+    return subprocess.run(command, shell=True, capture_output=True, text=True)
+draft = json.loads(r'''{data}''')
+# An approval that carries an unresolved finding is refused while this
+# reviewer still runs, and nothing is accepted from it.
+refused = submit(dict(draft, findings=["P3: rename the helper"]))
+assert refused.returncode != 0, refused
+assert "request-changes" in refused.stdout + refused.stderr, refused
+assert json.loads((launch / "draft.json").read_text())["findings"] == ["P3: rename the helper"]
+accepted = submit(draft)
+assert accepted.returncode == 0, accepted
+assert json.loads((launch / "draft.json").read_text()) == draft
 PY
 "#
         )
@@ -1505,4 +1528,33 @@ fn bug_2669_legacy_collection_without_a_draft_closes_the_receipt_as_unused() {
         .join(receipt["launch"].as_str().unwrap());
     assert!(slot.is_dir());
     assert!(!slot.join("draft.json").exists() && !slot.join("recorded.json").exists());
+}
+
+// trace:BUG-2669 | ai:codex
+#[test]
+fn bug_2669_marker_failure_surfaces_and_keeps_receipt_open() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, _) = run_headless_reviewer_with_draft_slot(tmp.path(), |_, head| {
+        format!(
+            r#"#!/bin/sh
+python3 - "$@" <<'PYTHON'
+import json, pathlib, re, sys
+slot = next(pathlib.Path(m[1]) for arg in sys.argv[1:]
+            if (m := re.search(r'absolute path `([^`]+)/draft.json`', arg)))
+(slot / "recorded.json").mkdir()
+(slot / "draft.json").write_text(json.dumps(dict(version=1, pr=59, reviewed_sha="{head}",
+    verdict="approved", summary="review complete", findings=[])))
+PYTHON
+"#
+        )
+    });
+    let error = format!("{:#}", result.unwrap_err());
+    assert!(error.contains("draft consumption marker failed"), "{error}");
+    let receipts = launch_receipts(tmp.path());
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0]["state"], "open");
+    assert!(receipts[0]["seal"]["sha256"].is_string());
 }

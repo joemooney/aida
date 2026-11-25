@@ -440,13 +440,16 @@ aida review claim --pr <N> --spec <SPEC>
 
 This is only needed here for entry points that don't already hold the marker themselves: `aida queue work PR-N --role reviewer` (standalone or orchestrated) and the drain's own reviewer phase hold it automatically for the life of the session, so `aida review claim` is a no-op safety net in those cases, not a duplicate claim. `aida review record` (step 6a) clears the marker as part of recording the verdict — no separate release needed on the happy path. If you abandon the review without recording a verdict, release it explicitly: `aida review claim --pr <N> --release`. The claim also expires on its own (`--ttl-mins`, capped at 1440/24h) so an abandoned review never wedges a PR indefinitely.
 
-### 2. Generate the per-spec checklist (STORY-67)
+### 2. Generate the per-spec checklist (STORY-67) & deterministic review preparation (STORY-3076)
 
 ```bash
 aida review prompt --pr <N> --write .aida/review-prompt-pr-<N>.md
+aida review prepare --pr <N> --write .aida/review-prepare-pr-<N>.md
 ```
 
-`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. Read the generated file; that's the worksheet.
+`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. `aida review prepare` deterministically classifies every changed file (`reviewable` vs `excluded` with reasons), bundles related source + test files into token-budgeted batches, injects path-scoped language playbooks (plus security/concurrency facets selected from file contents), and supports `--verify-coverage <ledger.json>` (100% file accountability) and `--anchor-findings <findings.json>` (exact line-number anchoring for quoted `existing_code` snippets). Use the preparation file to plan the review and record verdicts in the prompt worksheet. Running `aida review prepare` requires an AIDA CLI that includes the command; if it is unavailable (for example, “unexpected argument”), continue with the existing prompt worksheet.
+
+<!-- trace:TASK-3863 | ai:codex -->
 
 **Dim already-Completed specs — but only when they weren't subject of a commit in this PR.** Before walking the checklist, check each spec's current status AND whether it's the subject of a commit in `<base>..HEAD`:
 
@@ -696,6 +699,28 @@ aida orchestrator status               # `orchestrated` → also STOP before mer
   name the dependency, responsible actor and resume condition in the summary.
   Stop before merge or rework routing; resume only with a fresh review at the head.
 
+**Any unresolved finding means request-changes.** There is no approval with
+open findings: the recorder refuses an `approved` verdict that carries one and
+records nothing, so the round is wasted. Before choosing `Approved`, sort every
+finding you are about to record:
+
+- an unresolved finding, including a minor, p3, style or test-gap one that you
+  only want noted → the verdict is `RequestChanges`;
+- a finding the recorder will file as a deferred follow-up → it may ride an
+  `Approved` verdict. That takes the structured finding JSON described under
+  *Finding disposition and approval-time sweep*. While no blocking-class list
+  is in force: `text`, `severity`, an explicit `"disposition":"deferred"` and
+  a one-line `rationale` (no `blocking_tier` is needed). Under a configured
+  list: `text`, `severity` and a registry `blocking_tier` outside the listed
+  classes; the recorder sets the disposition. Security and authority-bypass
+  findings, and test gaps in gate, sandbox, authority, seat or containment
+  code, block under every list and cannot be written as follow-ups. Plain-text
+  findings never defer.
+
+A sentence such as "no finding is in a blocking class; follow-ups recorded" in
+the summary does not change this: the findings array decides.
+<!-- trace:BUG-2707 | ai:claude -->
+
 **Stamp the `mode`.** Corroborate orchestrator context with `aida
 orchestrator status` — a bare `AIDA_AUTO_COMPLETE` env var is not proof (an
 unverifiable stale value misfired both ways before BUG-233; only
@@ -705,17 +730,22 @@ unverifiable stale value misfired both ways before BUG-233; only
 - anything else → `"mode": "standalone"`
 
 **Standalone headless launch with a draft contract:** the launch prompt's
-absolute `draft.json` path and closed version-1 JSON contract supersede the
-recording and metadata-enrichment instructions below. Write the complete
-summary and all findings there, including an empty findings array when there
-are none, then exit. Do not run `aida review record` or add identity, grants,
+absolute `draft.json` path, its `aida review submit-draft <launch-dir>`
+command and its closed version-1 JSON contract supersede the recording and
+metadata-enrichment instructions below. Write the complete summary and all
+findings to `draft.json`, including an empty findings array when there are
+none, then submit the draft with the command exactly as the prompt gives it.
+The command validates the file under the launching project's review policy.
+If it refuses, correct the draft and rerun it. Exit only after the submission is accepted.
+The parent rechecks the current draft under its own copy of the policy. Do not run `aida review record` or add identity, grants,
 attestations, receipts, commands, covered specs, or ledger destinations. If a
-legacy record attempt was refused, still write the draft. The parent validates
-and records the draft; never claim recording succeeded inside the sandbox.
-Fresh and resumed launches each supply their own absolute draft path.
+legacy record attempt was refused, still submit the draft. The parent validates
+and records the accepted draft; never claim recording succeeded inside the sandbox.
+Fresh and resumed launches each supply their own launch directory.
 Interactive and orchestrated reviews without this contract retain the canonical
 record route below.
 <!-- trace:BUG-2564 | ai:codex -->
+<!-- trace:BUG-2707 | ai:claude -->
 
 Record the verdict through the canonical writer. It stamps `recorded_by`,
 `recorded_at`, the reviewed SHA, and any displaced round at write time. Raw
@@ -1394,15 +1424,21 @@ Review decision fixtures (same current head, no actionable defects):
 <!-- trace:TASK-3814 | ai:codex -->
 <!-- trace:STORY-2913 | ai:claude -->
 `[review] blocking_tiers` names the finding classes that block. The project
-policy section of `aida review prompt` quotes the active list. Apply that
-quoted list; never read the list from the branch under review. When the
-prompt says every finding blocks because the list is unset, keep the existing
-review behaviour. When it says the list cannot be honoured (invalid or
-unreadable), every finding blocks, including one you mark deferred: record
-request-changes while any finding remains. Otherwise, findings whose `blocking_tier` or `class` is listed
-block, and the rest approve with follow-ups.
-Record every finding, including mixed reviews, using structured `--finding`
-JSON with a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,
+policy section of `aida review prompt` quotes the active list. Use that
+list from the trusted default branch.
+<!-- trace:TASK-3257 | ai:codex -->
+
+- **Unset list.** Unresolved findings block approval. To defer a finding,
+  supply structured `--finding` JSON with `text`, `severity`,
+  `"disposition":"deferred"` and a nonempty one-line `rationale`.
+  The example below is complete without a `blocking_tier`.
+- **Invalid or unreadable policy.** Every finding blocks, including an
+  explicit deferral. Record request-changes while any finding remains.
+- **Configured list.** Findings whose `blocking_tier` or `class` is listed
+  block. Eligible findings outside the list become follow-ups.
+
+Under a configured list, record every finding, including mixed reviews, using
+structured `--finding` JSON with text, severity and a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,
 `security-authority-bypass`, `unmet-claimed-ac`, `test-gap`, `style`), plus a
 `class` when a second class applies. Use `security-authority-bypass` for
 security and authority-bypass findings at any priority; it always blocks.
@@ -1418,8 +1454,7 @@ approval. Name the source spec when recording. Do not drop any finding.
 Nonblocking observations do not downgrade passing acceptance rows; record them
 as follow-ups and derive the overall verdict from the remaining blockers.
 This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
-the general severity/disposition guidance below only when a list is in force; when every finding blocks, retain the existing review behavior and
-add no policy guidance to the review response. Delegated aggregate severity counts
+the general severity/disposition guidance below only when a list is in force. Delegated aggregate severity counts
 cannot establish these classifications: obtain individual findings or use a
 local review before applying this policy.
 

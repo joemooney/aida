@@ -779,6 +779,114 @@ pub(crate) fn finding_is_deferred(value: &serde_json::Value) -> bool {
         && value.get("disposition").and_then(|v| v.as_str()) == Some("deferred")
 }
 
+/// Why the recorder would refuse this draft's approval, or `None` when the
+/// draft is consistent. The contract: any unresolved finding means
+/// request-changes. An `approved` draft may carry only findings the recorder
+/// files as deferred follow-ups, decided by the same policy application and
+/// disposition rule the recorder runs (`apply_policy`, then
+/// [`incoming_disposition`]). The message names each unresolved finding and
+/// only the remedies that work for it.
+// trace:BUG-2707 | ai:claude
+pub(crate) fn approval_refusal(
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    verdict: &str,
+    findings: &[String],
+) -> Option<String> {
+    use crate::gate::kernel_deps::review_blocking as rb;
+    if VerdictKind::parse(verdict) != VerdictKind::Approved {
+        return None;
+    }
+    let decided = rb::apply_policy(effective, findings, &[]);
+    if incoming_disposition(verdict, &decided) == VerdictKind::Approved {
+        return None;
+    }
+    let listed = match &effective.policy {
+        rb::Policy::Tiers(set) if !effective.fails_closed() => Some(set),
+        _ => None,
+    };
+    // Each finding the recorder would not file as a deferred follow-up, with
+    // why it blocks when a list is in force.
+    let mut restructurable = 0usize;
+    let unresolved: Vec<String> = decided
+        .iter()
+        .enumerate()
+        .filter_map(|(i, raw)| {
+            let (texts, metadata) = finding_values(std::slice::from_ref(raw));
+            let detail = metadata.first().filter(|m| m.is_object());
+            if detail.is_some_and(finding_is_deferred) {
+                return None;
+            }
+            let text = texts
+                .first()
+                .and_then(|t| t.as_str())
+                .unwrap_or(raw.as_str());
+            let mut short: String = text.chars().take(60).collect();
+            if text.chars().count() > 60 {
+                short.push('…');
+            }
+            let why = match listed {
+                None => String::new(),
+                Some(set) => match detail
+                    .and_then(|d| rb::blocker(d, set))
+                    .unwrap_or(rb::Blocker::Unclassified)
+                {
+                    rb::Blocker::Always(what) => format!(": always blocking, {what}"),
+                    rb::Blocker::Listed(class) => format!(": in blocking class {class}"),
+                    rb::Blocker::Unclassified => {
+                        restructurable += 1;
+                        ": no registry \"blocking_tier\"".to_string()
+                    }
+                },
+            };
+            Some(format!("#{} \"{short}\"{why}", i + 1))
+        })
+        .collect();
+    let request_changes = "set \"verdict\" to \"request-changes\" and keep every finding";
+    let remedy = if effective.fails_closed() {
+        format!(
+            "Rewrite the draft: {request_changes}. This project's blocking-class list cannot be \
+             read, so every finding blocks and none can be deferred."
+        )
+    } else if let Some(set) = listed {
+        let classes = set.iter().copied().collect::<Vec<_>>().join(", ");
+        if restructurable == 0 {
+            format!(
+                "Rewrite the draft: {request_changes}. Every finding named here stays blocking \
+                 however it is written (the project's blocking classes are {classes}; security, \
+                 authority-bypass and gate-code test-gap findings always block), so \
+                 request-changes is the only remedy."
+            )
+        } else {
+            format!(
+                "Rewrite the draft: either (a) {request_changes}, or (b) only for a finding \
+                 marked `no registry \"blocking_tier\"` that is truly outside the project's \
+                 blocking classes ({classes}): write it as a JSON-object string with \"text\", \
+                 \"severity\", \"blocking_tier\" (one of {}) and, when a second class applies, \
+                 \"class\"; the recorder sets its disposition and files it as a follow-up task. \
+                 A finding marked `always blocking` or `in blocking class` stays blocking \
+                 however it is written: with one of those in the draft, request-changes is the \
+                 only remedy.",
+                rb::registry_names().join(", ")
+            )
+        }
+    } else {
+        format!(
+            "Rewrite the draft: either (a) {request_changes}, or (b) only for a finding that is \
+             acceptable as a follow-up: write it as a JSON-object string with \"text\", \
+             \"severity\", \"disposition\":\"deferred\" and a one-line \"rationale\" saying why \
+             a follow-up is acceptable; the recorder files it as a follow-up task."
+        )
+    };
+    Some(format!(
+        "reviewer draft refused: verdict \"approved\" carries {} unresolved finding{} ({}). Any \
+         unresolved finding means request-changes. {remedy} Never drop a finding to make the \
+         draft pass.",
+        unresolved.len(),
+        if unresolved.len() == 1 { "" } else { "s" },
+        unresolved.join(", "),
+    ))
+}
+
 // trace:STORY-2698 | ai:codex
 /// A durable delivery barrier, never an act of review refusal.
 pub(crate) fn delivery_pending(record: &serde_json::Value) -> bool {

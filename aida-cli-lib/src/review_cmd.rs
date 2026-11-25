@@ -55,6 +55,10 @@ pub(crate) struct ReviewArgs {
     #[clap(long, value_name = "BRANCH")]
     pub target_branch: Option<String>,
 
+    /// Apply recorded approvals whose FAST runs have finished.
+    #[arg(long, hide = true, exclusive = true)]
+    promote_approved_heads: bool,
+
     #[clap(subcommand)]
     pub cmd: Option<crate::cli::ReviewCommand>,
 }
@@ -72,8 +76,26 @@ fn run_review(
         return flow;
     }
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    if args.promote_approved_heads {
+        anyhow::ensure!(
+            args.cmd.is_none(),
+            "promotion cannot be combined with a review command"
+        );
+        crate::review_watch::promote_approved_heads(&crate::find_project_root()?)?;
+        return Ok(crate::cmdkit::Flow::Return);
+    }
     match &ctx.store {
-        None => Ok(crate::cmdkit::Flow::Continue),
+        // A reviewer's draft validation reads only the launch
+        // directory it is given: it runs before project discovery, so it
+        // works from any directory, inside a project or not.
+        // trace:BUG-2707 | ai:claude
+        None => match &args.cmd {
+            Some(crate::ReviewCommand::SubmitDraft { launch_dir }) => {
+                crate::review_draft::handle_submit_draft(launch_dir)?;
+                Ok(crate::cmdkit::Flow::Return)
+            }
+            _ => Ok(crate::cmdkit::Flow::Continue),
+        },
         Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
         Some(crate::cmdkit::StoreCtx::Git {
             store_path,
@@ -88,6 +110,7 @@ fn run_review(
                     allow_stale_base,
                     target_branch,
                     cmd,
+                    ..
                 } => {
                     // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
                     // human-decision review of a held spec (the dual of `aida queue
@@ -128,6 +151,7 @@ fn run_review(
                     allow_stale_base,
                     target_branch,
                     cmd,
+                    ..
                 } => {
                     // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
                     // human-decision review; `prompt` / `assemble` stay the helper
@@ -225,6 +249,8 @@ pub(crate) fn handle_review_command(
             );
             Ok(())
         }
+        // trace:STORY-3076 | ai:antigravity
+        ReviewCommand::Prepare(args) => crate::review_prepare::handle_review_prepare(args, storage),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Record {
             no_carry,
@@ -260,6 +286,10 @@ pub(crate) fn handle_review_command(
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
         ReviewCommand::List { json } => handle_review_list(*json),
+        // trace:BUG-2707 | ai:claude
+        ReviewCommand::SubmitDraft { launch_dir } => {
+            crate::review_draft::handle_submit_draft(launch_dir)
+        }
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude

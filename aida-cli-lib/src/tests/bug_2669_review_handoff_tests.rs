@@ -50,7 +50,7 @@ impl Fixture {
     }
 
     fn draft(&self) -> LaunchDraft {
-        LaunchDraft::prepare(&self.root, 59, HEAD.into()).unwrap()
+        LaunchDraft::prepare_local(&self.root, 59, HEAD.into()).unwrap()
     }
 
     fn registered(&self) -> (LaunchDraft, Receipt) {

@@ -16,6 +16,12 @@ spec.loader.exec_module(adapter)
 sources_spec = importlib.util.spec_from_file_location("gdma_sources", ROOT / "ci/gdma/check-sources.py")
 sources = importlib.util.module_from_spec(sources_spec)
 sources_spec.loader.exec_module(sources)
+# The reviewed producers of the path-filter and selection outputs, in order.
+# trace:STORY-2695 | ai:claude
+SELECTION = [step for step in yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+             ['jobs']['build']['steps'] if step.get('id') in ('paths', 'changes')]
+
+
 class ExpressionTests(unittest.TestCase):
     def test_boolean_and_string_values(self):
         context = adapter.context("gates", True)
@@ -77,11 +83,13 @@ class ExpressionTests(unittest.TestCase):
                             adapter.step_environment(step, context, {})
                             if 'uses' in step:
                                 self.assertIn(step['uses'].split('@')[0], adapter.ACTIONS)
+                            elif step.get('name') == adapter.SELECT_STEP['name']:
+                                self.assertEqual(step, adapter.SELECT_STEP)
                             elif 'run' in step and step.get('name') not in adapter.INSTALL_STEPS:
                                 command = adapter.shell(step['run'])
                                 references = set(adapter.RUNNER_REFERENCE.findall(command))
                                 if step.get('if') == "runner.environment == 'self-hosted'":
-                                    references.discard('GITHUB_ENV')
+                                    references -= adapter.SELF_HOSTED_ONLY_VARIABLES
                                 self.assertLessEqual(references, adapter.RUNNER_VARIABLES)
 
     # trace:STORY-2672 | ai:codex
@@ -91,8 +99,13 @@ class ExpressionTests(unittest.TestCase):
         current = adapter.context('lib-0', True)
         self.assertEqual(current['runner.environment'], 'github-hosted')
         adapter.validate_job(job, current)
+        # Includes a TRAIN job asking for the MAIN class label and a route
+        # that drops the class label altogether. trace:STORY-2695 | ai:claude
         for runner in ('self-hosted', ['self-hosted', 'Linux'],
-                       job['runs-on'].replace("github.event_name == 'push'", 'true')):
+                       job['runs-on'].replace('"aida-dell1","TRAIN"', '"aida-dell1","MAIN"'),
+                       job['runs-on'].replace(',"TRAIN"]', ']'),
+                       job['runs-on'].replace("needs.tier.outputs.dell1 == 'MAIN'", 'true')):
+            self.assertNotEqual(runner, job['runs-on'])
             changed = copy.deepcopy(job)
             changed['runs-on'] = runner
             with self.subTest(runner=runner), self.assertRaises(ValueError):
@@ -191,7 +204,7 @@ class ExecutionTests(unittest.TestCase):
         steps = [step for step in job["steps"] if step.get("name") in names]
         self.assertEqual({step["name"] for step in steps}, names)
         with patch.object(adapter.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
-            code, _ = self.run_workflow(steps, job_settings={"env": job["env"]})
+            code, _ = self.run_workflow(SELECTION + steps, job_settings={"env": job["env"]})
         self.assertEqual(code, 0)
         spawn.assert_not_called()
 
@@ -248,7 +261,7 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(code, 1)  # The push-only assertion must now refuse.
 
     def test_new_branch_without_baseline_runs_full_ci(self):
-        code, root = self.run_workflow([
+        code, root = self.run_workflow(SELECTION + [
             {"if": "steps.changes.outputs.full_ci == 'true'", "run": "touch full-ci-ran"},
         ], full=False, before="0" * 40)
         self.assertEqual(code, 0)
@@ -261,7 +274,7 @@ class ExecutionTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_docs_only_does_not_run_full_ci_step(self):
-        code, root = self.run_workflow([
+        code, root = self.run_workflow(SELECTION + [
             {"if": "steps.changes.outputs.full_ci == 'true'", "run": "exit 1"},
             {"run": "touch docs-guard-ran"},
         ], full=False)
@@ -282,6 +295,52 @@ class ExecutionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.run_workflow([{"run": "touch premature"}, step])
                 run.assert_not_called()
+
+    # trace:STORY-2695 | ai:claude
+    def test_selection_outputs_need_exactly_one_reviewed_producer_in_order(self):
+        import copy
+        paths, select = SELECTION
+        self.assertEqual((paths['id'], select['id']), ('paths', 'changes'))
+        reader = {"if": "steps.changes.outputs.full_ci == 'true'", "run": "touch premature"}
+        renamed = dict(copy.deepcopy(select), name='Another selector')
+        unconditional = {key: value for key, value in paths.items() if key != 'if'}
+        other_action = dict(copy.deepcopy(paths), uses='actions/checkout@v5')
+        early_reader = dict(copy.deepcopy(paths), env={
+            'VALUE': "${{ steps.changes.outputs.full_ci }}"})
+        cases = {
+            'removed selector': [paths, reader],
+            'removed path filter': [select, reader],
+            'both removed': [reader],
+            'selector after reader': [paths, reader, select],
+            'path filter after selector': [select, paths, reader],
+            'two selectors': [paths, select, select, reader],
+            'two path filters': [paths, paths, select, reader],
+            'unreviewed selector': [paths, renamed, reader],
+            'selector id on a command': [paths, {"id": "changes", "run": "true"}, reader],
+            'path filter also on dell1': [unconditional, select, reader],
+            'paths id on another action': [other_action, select, reader],
+            'path filter reads the selector': [early_reader, select, reader],
+        }
+        for name, steps in cases.items():
+            with self.subTest(case=name), patch.object(adapter.subprocess, "Popen") as run:
+                with self.assertRaises(ValueError):
+                    self.run_workflow(copy.deepcopy(steps))
+                run.assert_not_called()
+        code, root = self.run_workflow(copy.deepcopy([paths, select, reader]))
+        self.assertEqual(code, 0)
+        self.assertTrue((root / "premature").exists())
+
+    def test_real_workflow_refuses_once_its_selector_is_removed(self):
+        import copy
+        job = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']['build']
+        current = adapter.context('lib-0', True)
+        adapter.validate_job(job, current)
+        for removed in ('paths', 'changes'):
+            changed = copy.deepcopy(job)
+            changed['steps'] = [step for step in job['steps'] if step.get('id') != removed]
+            self.assertEqual(len(changed['steps']), len(job['steps']) - 1)
+            with self.subTest(removed=removed), self.assertRaises(ValueError):
+                adapter.validate_job(changed, current)
 
     def test_unsupported_job_settings_refuse_before_first_command(self):
         settings = [{key: value} for key, value in (

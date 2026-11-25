@@ -13455,6 +13455,9 @@ Options:
       --id <ID>
           Heal only this exact finding ID (as shown by doctor check)
 
+      --attest <ATTEST>
+          Operator's reason for releasing one conflict repair reservation
+
   -y, --yes
           Skip confirmation prompts
 
@@ -22321,6 +22324,9 @@ Commands:
                   criteria. Specs come either from an explicit `--specs` list (CSV) or from the
                   commit-range of a PR/MR (parsed `(REQ-ID)` trailers in commit messages)
   assemble        Assemble active review fragments into a root REVIEW.md file
+  prepare         Deterministically classify diff inventory, match path-scoped review playbooks,
+                  bundle token-budgeted review batches, verify 100% file coverage ledgers, and
+                  anchor quoted code snippets to exact 1-based line numbers
   record          Record a review verdict for a spec as first-class state
   claim           Mark a pull request as under review, so nothing merges it before your verdict
                   lands
@@ -22328,6 +22334,7 @@ Commands:
   list            List recorded review verdicts
   classes         Count review findings per defect class across every recorded verdict, including
                   archived rounds. Alias of `aida findings classes`
+  submit-draft    Submit a standalone reviewer's draft verdict (the reviewer runs this)
   normalize-shas  One-time repair: expand every abbreviated `reviewed_sha` on disk to its full
                   commit sha where this repo can still resolve it, and mark the rest explicitly
                   unresolvable. Never invents a value and never touches an already-full or sha-less
@@ -22776,6 +22783,72 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida review prepare
+Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted
+review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based
+line numbers
+
+Usage: aida review prepare [OPTIONS]
+
+Options:
+      --specs <SPEC-IDS>
+          Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria should be injected
+          into the review preparation bundle
+
+      --pr <N>
+          Pull spec IDs and base/head refs from PR/MR number N
+
+      --from <REF>
+          Base Git revision for range comparison (e.g. `main`)
+
+      --to <REF>
+          Target Git revision for range comparison (defaults to `HEAD` when `--from` is set)
+
+  -c, --commit <SHA>
+          Single commit SHA to inspect against its parent
+
+      --scan
+          Full-file scan mode (`aida review prepare --scan [--path <DIR_OR_FILE>...]`). Inventories
+          tracked files under the specified paths (or the entire repo if `--path` is omitted)
+          instead of computing a Git diff
+
+      --path <PATH>
+          Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable
+          (`--path aida-core/src --path aida-cli-lib/src`)
+
+      --exclude <GLOBS>
+          Additional comma-separated glob patterns to exclude from review
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --verify-coverage <LEDGER_JSON>
+          Verify a reviewer coverage ledger JSON file against the classified inventory. Exits
+          non-zero if any reviewable file is unaccounted for or skipped without a reason
+
+      --anchor-findings <FINDINGS_JSON>
+          Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact
+          1-based `(start_line, end_line)` spans on the target revision
+
+      --json
+          Emit machine-readable JSON output
+
+      --write <PATH>
+          Write output inside the repository (relative paths start at the project root)
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida review record
 Record a review verdict for a spec as first-class state.
 
@@ -22954,6 +23027,35 @@ Options:
       --json
           Emit the report as JSON
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review submit-draft
+Submit a standalone reviewer's draft verdict (the reviewer runs this).
+
+Write draft.json in the launch directory and run this command. Fix any reported errors and retry.
+After validation succeeds, exit so the launcher can recheck and record the current draft.
+
+Usage: aida review submit-draft [OPTIONS] <LAUNCH_DIR>
+
+Arguments:
+  <LAUNCH_DIR>
+          The launch directory the review prompt named
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -32114,6 +32216,10 @@ Commands:
   stalls   Print which open changes are stuck, why, and which seat can move them. Also lists recent
            landings and lanes per host. Nothing is routed
   mode     Show or change the landing mode, keeping the forge's required checks in step with it
+  watch    Check the default branch's CI once and report: name the first red commit, mail the
+           advisor, and recommend a revert only when main does not build or stays red past the fix
+           window. It writes nothing to the requirement store, and runs as its own scheduled job,
+           never inside the land loop or a train
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -32340,6 +32446,30 @@ Options:
 Re-apply the current mode's required checks to the forge
 
 Usage: aida land mode reconcile [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida land watch
+Check the default branch's CI once and report: name the first red commit, mail the advisor, and
+recommend a revert only when main does not build or stays red past the fix window. It writes nothing
+to the requirement store, and runs as its own scheduled job, never inside the land loop or a train
+
+Usage: aida land watch [OPTIONS]
 
 Options:
       --format <FORMAT>
@@ -46563,6 +46693,11 @@ Working on aida itself
         "help": "Show older completed-without-commit findings individually"
       },
       {
+        "name": "attest",
+        "takes_value": true,
+        "help": "Operator's reason for releasing one conflict repair reservation"
+      },
+      {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
@@ -55679,6 +55814,11 @@ Working on aida itself
         "help": "Skip the reviewer-agent analysis: just locate + report the review surface and the recommended next command. Useful in non-interactive contexts or when you only want the diff pointer"
       },
       {
+        "name": "promote-approved-heads",
+        "takes_value": false,
+        "help": "Apply recorded approvals whose FAST runs have finished"
+      },
+      {
         "name": "target-branch",
         "takes_value": true,
         "help": "Explicit base branch to target when AC-5 offers to open a change from a branch with no open PR/MR. Always wins over any base saved from a previous offer (`.aida/mr-recovery/<spec>.json`) — use this to correct a stuck recovery, e.g. when a GitLab project's default branch became the feature branch itself because remote `main` was never pushed"
@@ -56140,6 +56280,92 @@ Working on aida itself
     "path": [
       "aida",
       "review",
+      "prepare"
+    ],
+    "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
+    "flags": [
+      {
+        "name": "anchor-findings",
+        "takes_value": true,
+        "help": "Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact 1-based `(start_line, end_line)` spans on the target revision"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit",
+        "takes_value": true,
+        "help": "Single commit SHA to inspect against its parent"
+      },
+      {
+        "name": "exclude",
+        "takes_value": true,
+        "help": "Additional comma-separated glob patterns to exclude from review"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "from",
+        "takes_value": true,
+        "help": "Base Git revision for range comparison (e.g. `main`)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit machine-readable JSON output"
+      },
+      {
+        "name": "path",
+        "takes_value": true,
+        "help": "Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable (`--path aida-core/src --path aida-cli-lib/src`)"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "Pull spec IDs and base/head refs from PR/MR number N"
+      },
+      {
+        "name": "scan",
+        "takes_value": false,
+        "help": "Full-file scan mode (`aida review prepare --scan [--path <DIR_OR_FILE>...]`). Inventories tracked files under the specified paths (or the entire repo if `--path` is omitted) instead of computing a Git diff"
+      },
+      {
+        "name": "specs",
+        "takes_value": true,
+        "help": "Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria should be injected into the review preparation bundle"
+      },
+      {
+        "name": "to",
+        "takes_value": true,
+        "help": "Target Git revision for range comparison (defaults to `HEAD` when `--from` is set)"
+      },
+      {
+        "name": "verify-coverage",
+        "takes_value": true,
+        "help": "Verify a reviewer coverage ledger JSON file against the classified inventory. Exits non-zero if any reviewable file is unaccounted for or skipped without a reason"
+      },
+      {
+        "name": "write",
+        "takes_value": true,
+        "help": "Write output inside the repository (relative paths start at the project root)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
       "record"
     ],
     "about": "Record a review verdict for a spec as first-class state",
@@ -56347,6 +56573,32 @@ Working on aida itself
         "name": "since",
         "takes_value": true,
         "help": "Only count rounds recorded since this point: a relative window (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local time), or an RFC3339 timestamp"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "submit-draft"
+    ],
+    "about": "Submit a standalone reviewer's draft verdict (the reviewer runs this)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -65632,6 +65884,32 @@ Working on aida itself
       "reconcile"
     ],
     "about": "Re-apply the current mode's required checks to the forge",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "land",
+      "watch"
+    ],
+    "about": "Check the default branch's CI once and report: name the first red commit, mail the advisor, and recommend a revert only when main does not build or stays red past the fix window. It writes nothing to the requirement store, and runs as its own scheduled job, never inside the land loop or a train",
     "flags": [
       {
         "name": "canonical-ids",
