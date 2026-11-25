@@ -1,5 +1,6 @@
 id: 01a21064-a967-7210-bf43-4416ae29d80d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1390
+agreed_id: TASK-3386
 title: 'Review follow-up: aida-cli-lib/src/test_env.rs:166–181. Both contention fixtures hold a flock and attempt th'
 description: |-
   From TASK-3884
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20f30-8076-72d1-93a3-09d5d45452b7
   created_at: 2026-11-25T01:49:40.540273169Z
+history:
+- id: 01a2108e-8e11-74e0-a526-abbca0bdba55
+  author: joe
+  timestamp: 2026-11-25T02:35:07.665798658Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e71d9c6e1974bffe31b2776fa2ba72c71b933185
   branch: pr-4538

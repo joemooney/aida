@@ -1,5 +1,6 @@
 id: 01a21065-44e2-7bc3-82fd-218849a2c67d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1391
+agreed_id: TASK-3390
 title: 'Review follow-up: Removing the pre-add prune in aida-core/src/git_ops.rs:3989 drops the BUG-39 recovery for '
 description: |-
   From BUG-2749
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20df2-eabd-75c0-b007-ef8378a02015
   created_at: 2026-11-25T01:50:18.263813654Z
+history:
+- id: 01a2108f-5d52-75f3-9aa4-d950e945556e
+  author: joe
+  timestamp: 2026-11-25T02:36:00.722920507Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d25b5af04f87df8c3b029616494669bf94562d0b
   branch: pr-4537

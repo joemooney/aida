@@ -1,5 +1,6 @@
 id: 01a2106e-c6a2-7a03-8046-5ec66fae1972
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1394
+agreed_id: TASK-3385
 title: 'Review follow-up: Deferred follow-up TASK-3881. In aida-cli-lib/src/config_cmd.rs:1744,1762,1811–1823, the p'
 description: |-
   From BUG-2752
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
   created_at: 2026-11-25T02:00:41.274461860Z
+history:
+- id: 01a2108e-3fc0-7712-97d5-bc1a66690ef4
+  author: joe
+  timestamp: 2026-11-25T02:34:47.616443391Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c94fab4e76a9bdc47a49873dad310fc45bf5e06c
   branch: pr-4529
