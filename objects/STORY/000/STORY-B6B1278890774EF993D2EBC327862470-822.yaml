@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T04:57:31.770395255Z
+modified_at: 2026-11-25T05:00:08.006676388Z
 req_type: Story
 tags:
 - hygiene
@@ -267,6 +267,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T04:57:31.599356087Z
   modified_at: 2026-11-25T04:57:31.599356087Z
+- id: 01a21113-9b2e-79d1-aff5-2a0e0725a7d8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:00):
+    # STORY-3059 / PR #4552 r4 FINAL (advisor-122 ruling 2026-11-24 21:46 at 8e61bbfd; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=100 NET lines, removal-first. If still red after this, auto-reap is PARKED and only `--attest` manual reap remains.
+    (F1) Borrowed objects: after the move, make the salvaged clone SELF-CONTAINED (`git repack -a -d` inside it, then remove objects/info/alternates); on failure REFUSE and roll back the move. Test: a seat ref on a borrowed side-branch commit stays readable after the alternate is removed.
+    (F2) Crash between rename and comment: persist the recovery note FIRST ("moving <lane> to <dest>" on the owning spec), THEN rename. Also write a self-describing RECOVERY.txt (spec/lane/refs/origin) into the destination. Generic missing-worktree cleanup treats a lease whose note says "moving to <dest>" as RECOVERED-to-dest, not lost.
+    (F3) REMOVE the update-ref and ANY other mutation of the clone before the move. Reap must NOT write to the clone at all (a resumed process keeps writing into the moved inode; nothing is lost). The inventory/holder race is moot.
+    (F4, p2) Storage/rename/restore I/O errors → FAILED (routed to hygiene), never "skipped".
+    One targeted cargo run, then make check-ci-fast, then push to #4552. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T05:00:08.006676388Z
+  modified_at: 2026-11-25T05:00:08.006676388Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
