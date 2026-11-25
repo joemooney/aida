@@ -1341,9 +1341,273 @@ where
     out
 }
 
+/// Convert anchored review findings into a SARIF 2.1.0 JSON document suitable for
+/// GitHub Code Scanning (`github/codeql-action/upload-sarif`).
+// trace:STORY-3120 | ai:codex
+pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Value {
+    let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+    let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len());
+
+    for f in findings {
+        let cat_clean = if f.category.trim().is_empty() {
+            "general"
+        } else {
+            f.category.trim()
+        };
+        let rule_id = format!("aida.review.{cat_clean}");
+        rules_map.entry(rule_id.clone()).or_insert_with(|| {
+            serde_json::json!({
+                "id": rule_id,
+                "name": format!("AidaReview{}", cat_clean),
+                "shortDescription": {
+                    "text": format!("AIDA deterministic review finding ({cat_clean})")
+                }
+            })
+        });
+
+        let level = match severity_rank(&f.severity) {
+            Some(3..=4) => "error",
+            Some(2) => "warning",
+            _ => "note",
+        };
+
+        let (start, end) = match &f.resolved_span {
+            Some(span) => (span.start_line, span.end_line),
+            None => (f.start_line.unwrap_or(1), f.end_line.unwrap_or(1)),
+        };
+        let start_line = start.max(1);
+        let end_line = end.max(start_line);
+
+        // Encode path bytes so reserved characters remain part of the filename.
+        let mut uri = String::new();
+        for byte in f.path.bytes() {
+            if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
+                uri.push(char::from(byte));
+            } else {
+                use std::fmt::Write;
+                write!(uri, "%{byte:02X}").unwrap();
+            }
+        }
+
+        let mut message_text = f.message.clone();
+        if let Some(suggestion) = f.suggestion_code.as_deref() {
+            if !suggestion.trim().is_empty() {
+                message_text.push_str("\n\nSuggested fix:\n");
+                message_text.push_str(suggestion.trim());
+            }
+        }
+
+        // SARIF 2.1 §3.11.5 requires doubling literal braces in message strings.
+        let message_text = message_text.replace('{', "{{").replace('}', "}}");
+        results.push(serde_json::json!({
+            "ruleId": rule_id,
+            "level": level,
+            "message": {
+                "text": message_text
+            },
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": uri,
+                            "uriBaseId": "%SRCROOT%"
+                        },
+                        "region": {
+                            "startLine": start_line,
+                            "endLine": end_line
+                        }
+                    }
+                }
+            ]
+        }));
+    }
+
+    let rules: Vec<serde_json::Value> = rules_map.into_values().collect();
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "aida-review-engine",
+                        "informationUri": "https://github.com/joemooney/aida",
+                        "rules": rules
+                    }
+                },
+                "originalUriBaseIds": {
+                    "%SRCROOT%": {"description": {"text": "Repository root"}}
+                },
+                "results": results
+            }
+        ]
+    })
+}
+
+/// Envelope parsed from an automated batch review runner's stdout.
+#[derive(Deserialize)]
+struct BatchRunnerOutput {
+    findings: Vec<RawReviewFinding>,
+    #[serde(default)]
+    files: Vec<FileCoverageEntry>,
+}
+
+/// Parse JSON output from an automated batch review runner (`claude --print` or
+/// `AIDA_REVIEW_RUNNER_CMD`). Accepts either a `{ "findings": [...], "files": [...] }`
+/// object or a bare `[ RawReviewFinding, ... ]` array, stripping surrounding markdown
+/// code fences if present.
+// trace:STORY-3120 | ai:codex
+pub fn parse_runner_findings_json(
+    raw: &str,
+) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String> {
+    let raw = raw.trim();
+    let trimmed = if let Some(fenced) = raw.strip_prefix("```") {
+        let (language, body) = fenced.split_once('\n').ok_or("missing fenced JSON body")?;
+        if !language.trim().is_empty() && !language.trim().eq_ignore_ascii_case("json") {
+            return Err("expected a JSON code fence".into());
+        }
+        body.trim_end()
+            .strip_suffix("```")
+            .ok_or("unterminated JSON fence")?
+            .trim()
+    } else {
+        raw
+    };
+    if trimmed.starts_with('[') {
+        let findings: Vec<RawReviewFinding> = serde_json::from_str(trimmed)
+            .map_err(|e| format!("failed to parse runner findings array: {e}"))?;
+        return Ok((findings, CoverageLedger::default()));
+    }
+    let env: BatchRunnerOutput = serde_json::from_str(trimmed)
+        .map_err(|e| format!("failed to parse runner output object: {e}"))?;
+    Ok((env.findings, CoverageLedger { files: env.files }))
+}
+
+/// Numeric rank for a review finding severity (`critical`=4, `high`=3, `medium`=2, `low`=1).
+// trace:STORY-3120 | ai:codex
+pub fn severity_rank(severity: &str) -> Option<u8> {
+    match severity.trim().to_ascii_lowercase().as_str() {
+        "critical" => Some(4),
+        "high" | "error" => Some(3),
+        "medium" | "warning" | "warn" => Some(2),
+        "low" | "info" | "note" => Some(1),
+        _ => None,
+    }
+}
+
+/// Return all findings whose severity meets or exceeds `threshold` (`critical`, `high`, `medium`, `low`).
+// trace:STORY-3120 | ai:codex
+pub fn findings_exceeding_threshold<'a>(
+    findings: &'a [RawReviewFinding],
+    threshold: &str,
+) -> Result<Vec<&'a RawReviewFinding>, String> {
+    let min_rank = severity_rank(threshold).ok_or_else(|| {
+        format!(
+            "invalid --fail-on severity `{threshold}` (expected `critical`, `high`, `medium`, or `low`)"
+        )
+    })?;
+    Ok(findings
+        .iter()
+        .filter(|f| severity_rank(&f.severity).unwrap_or(4) >= min_rank)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-3120 | ai:codex
+    #[test]
+    fn s1_runner_findings_sarif_and_threshold() {
+        let raw_runner = r#"```json
+{
+  "findings": [
+    {
+      "path": "src/auth.rs",
+      "severity": "high",
+      "category": "fail-open",
+      "message": "Swallowed verification error allows unauthenticated access.",
+      "existing_code": "let _ = verify_token(tok);",
+      "suggestion_code": "verify_token(tok)?;",
+      "start_line": 42,
+      "end_line": 42
+    }
+  ],
+  "files": [
+    { "path": "src/auth.rs", "status": "reviewed" }
+  ]
+}
+```"#;
+
+        let (findings, ledger) =
+            parse_runner_findings_json(raw_runner).expect("runner JSON should parse");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(ledger.files.len(), 1);
+        assert_eq!(findings[0].path, "src/auth.rs");
+
+        let sarif = findings_to_sarif_json(&findings);
+        assert_eq!(sarif["version"], "2.1.0");
+        let result0 = &sarif["runs"][0]["results"][0];
+        assert_eq!(result0["ruleId"], "aida.review.fail-open");
+        assert_eq!(result0["level"], "error");
+        assert_eq!(
+            result0["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/auth.rs"
+        );
+        assert_eq!(
+            result0["locations"][0]["physicalLocation"]["region"]["startLine"],
+            42
+        );
+
+        let exceeded = findings_exceeding_threshold(&findings, "high").unwrap();
+        assert_eq!(exceeded.len(), 1);
+        assert!(findings_exceeding_threshold(&findings, "critical")
+            .unwrap()
+            .is_empty());
+        let mut moved = findings[0].clone();
+        moved.severity = " ERROR ".into();
+        moved.path = r"src/a\b #%.rs".into();
+        moved.message = "use {0}".into();
+        moved.suggestion_code = Some("if ok {}".into());
+        moved.resolved_span = Some(AnchoredSpan {
+            start_line: 8,
+            end_line: 10,
+            match_kind: "exact".into(),
+        });
+        let both = [findings[0].clone(), moved];
+        let run = &findings_to_sarif_json(&both)["runs"][0];
+        assert_eq!(run["tool"]["driver"]["rules"].as_array().unwrap().len(), 1);
+        let location = &run["results"][1]["locations"][0]["physicalLocation"];
+        assert_eq!(
+            location["region"],
+            serde_json::json!({"startLine":8,"endLine":10})
+        );
+        assert_eq!(location["artifactLocation"]["uri"], "src/a%5Cb%20%23%25.rs");
+        let base_id = location["artifactLocation"]["uriBaseId"].as_str().unwrap();
+        assert_eq!(base_id, "%SRCROOT%");
+        assert!(run["originalUriBaseIds"][base_id].is_object());
+        assert_eq!(
+            run["results"][1]["message"]["text"],
+            "use {{0}}\n\nSuggested fix:\nif ok {{}}"
+        );
+        assert_eq!(
+            findings_exceeding_threshold(&both, " HIGH ").unwrap().len(),
+            2
+        );
+        assert!(findings_exceeding_threshold(&both, "other").is_err());
+        for severity in ["blocker", ""] {
+            let mut unknown = findings[0].clone();
+            unknown.severity = severity.into();
+            assert_eq!(
+                findings_exceeding_threshold(&[unknown], "critical")
+                    .unwrap()
+                    .len(),
+                1
+            );
+        }
+        assert!(parse_runner_findings_json("[]").unwrap().0.is_empty());
+        assert!(parse_runner_findings_json(r#"{"error":"runner failed"}"#).is_err());
+    }
 
     // trace:TASK-3872 | ai:codex
     #[test]
