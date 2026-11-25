@@ -1,0 +1,32 @@
+id: 01a211f9-9b74-7892-8238-6c10a77c82b0
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-308
+title: 'Review PR-4566: [AI:codex] feat(doctor): detect conflicting PRs and queue repair rework (TASK-3878)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a211a8`) for branch `int38r-task-3878`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4566>
+  - Branch: `int38r-task-3878` → `integration`
+
+  ## Covers
+
+  - TASK-3878
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4566` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T09:11:40.660932573Z
+modified_at: 2026-11-25T09:11:40.660932573Z
+req_type: Story
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a8
+  session: 01a211a8118a
