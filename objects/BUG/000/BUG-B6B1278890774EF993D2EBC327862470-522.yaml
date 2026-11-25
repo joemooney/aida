@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T20:40:39.882483006Z
+modified_at: 2026-11-25T21:05:39.892693707Z
 req_type: Bug
 tags:
 - lanes
@@ -487,6 +487,11 @@ comments:
     - seat_clone.rs prepare_host_repair_routed (clean-merge bail after reserve): when an attempt slot is present the error says the reservation stays 'until this pickup's rollback removes the tree and retires it', but run_pickup_launch only retires it when the receipt owns the setup (fresh lease) and roll
   created_at: 2026-11-25T20:35:00.227114111Z
   modified_at: 2026-11-25T20:35:00.227114111Z
+- id: 01a21487-4834-7253-a48c-e6e4ac47b413
+  author: joe
+  content: "FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 2 stand-alone finding-specs are recorded here and rejected:\n\n- TASK-3404: Review follow-up: Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automa\n  From BUG-2761 Reviewed sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8 Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automatically selects retained repairs for --no-launch, --plan-only and --guided, and session_start.rs:3763-3784 transfers the journal and removes the predecessor. These modes skip host repair preparation and routing (queue_cmd/work.rs:6345); for --no-launch the command reports setup complete and prints a generic deferred launch with no repair instructions or host exit handler (6546-6596). A later real repair dispatch can then be blocked by the new live setup lease. Require a repair-capable launch before automatic transfer, or preserve the r\n\n- TASK-3411: Review follow-up: BUG-2761 r2 scope — the new commit adds 295 lines and removes 22 relative to 217841e559b. \n  From BUG-2761 Reviewed sha: c21f184762dd62cc8a97144e0fb97b4834ba1680 BUG-2761 r2 scope — the new commit adds 295 lines and removes 22 relative to 217841e559b. The new integration test alone adds 151 lines. This exceeds the authoritative brief's 150-line round limit. Reduce the revision using existing fixtures or record an accepted scope adjustment."
+  created_at: 2026-11-25T21:05:39.892693707Z
+  modified_at: 2026-11-25T21:05:39.892693707Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
