@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T03:02:46.660483828Z
+modified_at: 2026-11-25T03:05:15.993605412Z
 req_type: Story
 tags:
 - hygiene
@@ -179,6 +179,11 @@ comments:
   created_at: 2026-11-25T02:55:00.249714924Z
   modified_at: 2026-11-25T02:55:00.249714924Z
   session_id: 01a2105686ae
+- id: 01a210aa-25d9-7360-b19e-805f957a7305
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full six-file landing diff for STORY-3059 against protected main 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 (landed tree 651b8f77b9207ca58905f07669f61fb456224e2d). The PR head is two commits behind the pinned base. The findings apply to the landed tree and do not depend on either intervening base commit. AC1 is partial: the fixture verifies successful removal and the owning-spec comment for a directly advertised head, but published ancestors can be refused when the new remote tip is absent from the primary checkout. AC2–AC5 have corresponding source and fixture evidence for an unpublished current commit, unavailable origin, stash and an unpublished side branch. The final removal still has gaps in preserving late local and remote changes and commit recovery roots. The branch-only ruling is reflected in code and documentation. Exact-head FAST gates passed, FAST compile was pending at review time, full shards were skipped, and merge-hold clearance was pending. No local tests or builds were run.. No triage reason was given.'
+  created_at: 2026-11-25T03:05:15.993591022Z
+  modified_at: 2026-11-25T03:05:15.993591022Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
@@ -266,6 +271,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a210aa-25d9-7360-b19e-8042b3b1a909
+  author: joe
+  timestamp: 2026-11-25T03:05:15.993579430Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -274,11 +286,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Reviewed the full six-file landing diff for STORY-3059 against protected main 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 (landed tree 651b8f77b9207ca58905f07669f61fb456224e2d). The PR head is two commits behind the pinned base. The findings apply to the landed tree and do not depend on either intervening base commit. AC1 is partial: the fixture verifies successful removal and the owning-spec comment for a directly advertised head, but published ancestors can be refused when the new remote tip is absent from the primary checkout. AC2–AC5 have corresponding source and fixture evidence for an unpublished current commit, unavailable origin, stash and an unpublished side branch. The final removal still has gaps in preserving late local and remote changes and commit recovery roots. The branch-only ruling is reflected in code and documentation. Exact-head FAST gates passed, FAST compile was pending at review time, full shards were skipped, and merge-hold clearance was pending. No local tests or builds were run.'
-  recovery_hint: address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T03:02:46.660483828Z
