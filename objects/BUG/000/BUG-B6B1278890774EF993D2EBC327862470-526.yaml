@@ -1,0 +1,30 @@
+id: 01a21471-4e55-7201-be4e-604408724146
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-526
+agreed_id: BUG-2765
+title: review-watch holds the admission lock across per-PR forge (gh) reads, starving manual and auto trains
+description: |
+  advisor-122 2026-11-25 13:47 (filed by product-15). Joe asked why his manual `aida pr train` keeps waiting on admission. Diagnosis: (a) the auto-train (pid 365837) holds admission legitimately while landing #4533 on train #4592 (a train keeps admission through its CI run). (b) The review-watch worker (pid 428998, running the NEW binary that includes BUG-2757 / #4576, d9e1d55c3c3) held admission 19+ min making SERIAL `gh pr view` calls for every open PR. BUG-2757 moved the worktree/history probes out of the lock, but the per-PR FORGE reads are still inside it. Same starvation shape as BUG-2757 (the 00:01-04:30 and 05:00-09:30 droughts on 2026-11-25).
+
+  ## Acceptance
+  - AC1: review-watch collects the forge snapshot (per-PR gh/glab reads) OUTSIDE the admission lock, and takes admission only for the dispatch decision (recheck the snapshot is still current under the lock; if stale, release and retry).
+  - AC2: a test where the forge scan is slow (e.g. a stub forge that sleeps per PR) shows a manual train is admitted DURING the scan.
+  - AC3: hold time is bounded and logged: an admission hold by review-watch over N seconds writes a warning naming the phase.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T20:41:39.669506636Z
+modified_at: 2026-11-25T20:41:39.669506636Z
+req_type: Bug
+tags:
+- admission
+- landing
+- review-watch
+- throughput
+filed_at:
+  code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ea1b3c35df8
+  vendor: claude
