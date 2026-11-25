@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-25T09:03:27.251086720Z
+modified_at: 2026-11-25T09:25:27.774520431Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -527,6 +527,15 @@ comments:
   modified_at: 2026-11-25T08:32:58.165503014Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21206-434a-70c1-bffb-db47cf2bff7e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9013e193ace9e071f9b18ecc94e2fe2f16656dde plus the uncommitted native-seat patch. F1: [evidence: behavioral-test] review_handoff.rs:128 pins directories from / with no-follow openat, validates owners, and retains the directory handle across receipt I/O. System-owned prefixes above the user home are permitted. bug_2669_review_handoff_tests.rs:863 replaces the home with a symlink back to the original tree. Load, list and mark_consumed refuse. The one targeted cargo run executed 1 test and passed. The implementation was refined during compilation. Formatting and diff checks pass. Checked receipt and lock paths for matching filename rules, missing and multiple entries, traversal, and symlink substitution. No new grant path. The FAST gate on the final working tree is in progress. Remote FAST passed at 1a965aaa only. Pagination and recovery slices remain deferred.
+  created_at: 2026-11-25T09:25:27.774520431Z
+  modified_at: 2026-11-25T09:25:27.774520431Z
+  session_id: 01a211f1aaa4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
