@@ -1383,8 +1383,9 @@ fn bug_2511_occupancy_unreadable_foreign_cwd() {
     );
 }
 
-// trace:BUG-2747 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-508.AC1 | ai:codex
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2747_recovery_ancestry_only_exempts_argv() {
     let tmp = tempfile::tempdir().unwrap();
     let process = tmp.path().join("4242");
@@ -1403,6 +1404,10 @@ fn bug_2747_recovery_ancestry_only_exempts_argv() {
     };
     let scan = |probe: &_| receipt::scan_occupancy_in(tmp.path(), probe, &own);
     std::fs::write(process.join("environ"), b"TOKEN=attempt-10\0").unwrap();
+    std::os::unix::fs::symlink("/bin/sh", process.join("exe")).unwrap();
+    assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    std::fs::remove_file(process.join("exe")).unwrap();
+    std::os::unix::fs::symlink("/proc/self/exe", process.join("exe")).unwrap();
     assert_eq!(scan(&probe), receipt::Occupancy::Clear);
     std::fs::write(process.join("environ"), b"OTHER=x\0TOKEN=attempt-1\0").unwrap();
     assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));

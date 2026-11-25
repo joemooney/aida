@@ -280,18 +280,15 @@ pub(crate) fn scan_occupancy_in_with_owner(
             }
             match std::fs::read(base.join("cmdline")) {
                 Ok(raw) => {
-                    let mut after_agent = false;
-                    let mut recovery_args = false;
-                    let names_attempt = raw.split(|&b| b == 0).any(|arg| {
-                        if after_agent && arg == b"recover-launch" {
-                            recovery_args = true;
-                        }
-                        after_agent = exclude.contains(&pid) && arg == b"agent";
-                        if recovery_args && arg == attempt.as_bytes() {
-                            recovery_args = false;
-                            return false;
-                        }
-                        String::from_utf8_lossy(arg).contains(attempt)
+                    let args = raw.strip_suffix(&[0]).unwrap_or(&raw).split(|&b| b == 0);
+                    let operand = if probe.recovery && exclude.contains(&pid) {
+                        let command: Vec<_> = args.clone().take(7).collect();
+                        recovery_operand(&base, &command, attempt.as_bytes())
+                    } else {
+                        None
+                    };
+                    let names_attempt = args.enumerate().any(|(i, arg)| {
+                        Some(i) != operand && String::from_utf8_lossy(arg).contains(attempt)
                     });
                     if names_attempt {
                         return Occupancy::Occupied(format!("pid {pid} names attempt {attempt}"));
@@ -328,6 +325,23 @@ pub(crate) fn scan_occupancy_in_with_owner(
         return Occupancy::Unknown(format!("{} lists no processes", proc_root.display()));
     }
     Occupancy::Clear
+}
+
+// The recovery CLI has one positional UUID and one boolean switch.
+fn recovery_operand(base: &Path, args: &[&[u8]], attempt: &[u8]) -> Option<usize> {
+    use std::os::unix::fs::MetadataExt;
+    let [_, b"agent", b"recover-launch", tail @ ..] = args else {
+        return None;
+    };
+    let index = match tail {
+        [token] | [token, b"--retire-unknown"] if *token == attempt => 3,
+        [b"--" | b"--retire-unknown", token] if *token == attempt => 4,
+        [b"--retire-unknown", b"--", token] if *token == attempt => 5,
+        _ => return None,
+    };
+    let exe = std::fs::metadata(base.join("exe")).ok()?;
+    let current = std::fs::metadata("/proc/self/exe").ok()?;
+    ((exe.dev(), exe.ino()) == (current.dev(), current.ino())).then_some(index)
 }
 
 /// Who may perform destructive cleanup for an attempt. Exactly one owner;
