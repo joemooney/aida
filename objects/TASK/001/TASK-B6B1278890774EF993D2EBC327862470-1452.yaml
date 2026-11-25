@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 69cf3759d3c019700c639070d6e553dfe1941588
 
   Store-writer inventory coverage loss: after splitting promote_approved_heads into a private promotion_pass, the regenerated scripts/store-writers.toml drops the run_review -> promote_approved_heads wrapper row, and cli:review now lists sites = [] ('No qualified sink route'). The .aida/full-ci-requests Directory::open/shared write route reached from `aida review --promote-approved-heads` is no longer attributed to the cli:review operation. Disposition stays 'blocked', so no authority changes, but TASK-3223 cutover loses this route. Follow-up: teach the generator transitive wrappers through private helpers, or keep the sink in a pub(crate) fn.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T20:55:47.672188293Z
-modified_at: 2026-11-25T21:10:51.589735706Z
+modified_at: 2026-11-25T21:10:53.095821173Z
 req_type: Task
 tags:
 - carried-from:BUG-2764
@@ -27,6 +27,14 @@ comments:
   content: FOLDED into a comment on BUG-2764 (backlog cleanup 2026-11-25). Rejected as a stand-alone spec.
   created_at: 2026-11-25T21:10:51.589735706Z
   modified_at: 2026-11-25T21:10:51.589735706Z
+history:
+- id: 01a2148c-0fa7-7762-a1a4-06c020541421
+  author: joe
+  timestamp: 2026-11-25T21:10:53.095818664Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 69cf3759d3c019700c639070d6e553dfe1941588
   branch: pr-4587
