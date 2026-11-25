@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The lease_lock (session/lease_lock.rs:55) and seat_authority (gate/seat_authority.rs:189) exclusive locks gain a TRY-WITH-DEADLINE variant returning a typed Timeout. Existing callers keep their current blocking behaviour unless they opt in (NOT a global semantics change). Test: a lock held elsewhere → Timeout within the deadline.
   - AC2: The contained.rs:2312 error-unwind wait is bounded by a deadline; past it the attempt is recorded as RECOVERY WORK (never blocks forever, never silently drops) and the caller returns. Test: an unwind past the deadline → recovery recorded, caller returns.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T03:12:08.435844996Z
+modified_at: 2026-11-25T03:12:10.227606438Z
 req_type: Task
 tags:
 - launch
@@ -170,6 +170,11 @@ comments:
   content: 'advisor-122 20:18: SPLIT. This slice keeps F1 (deadline-aware public grant-binding entry point), F2 (post-try_lock deadline recheck), F6 (independent-thread contention fixtures) + the kernel_deps ratchet fix. F3-F5 moved to TASK-3893.'
   created_at: 2026-11-25T03:12:08.435844996Z
   modified_at: 2026-11-25T03:12:08.435844996Z
+- id: 01a210b0-77f3-7da0-98be-ce78ffaae537
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: F3/F4/F5: moving record publication off Drop alone does not bound destruction. ContainedChild owns a TempDir with recursive filesystem cleanup and an optional mutation Session with its own 200ms teardown. Drop cannot return the requested typed storage error. I dispute treating these as a Drop-local change within the strict 150-line whole-slice limit (the reviewed branch already adds 150 lines). The current timeout branch can still lose the recovery item. Hold publication.. No triage reason was given.'
+  created_at: 2026-11-25T03:12:10.227596759Z
+  modified_at: 2026-11-25T03:12:10.227596759Z
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
@@ -252,6 +257,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a210b0-77f3-7da0-98be-ce6f15020057
+  author: joe
+  timestamp: 2026-11-25T03:12:10.227584557Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
@@ -263,9 +275,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 841efeba1bc48f093c15d9ef5f362b0b5027f738
-attention_reason:
-  category: design-fork
-  detail: 'F3/F4/F5: moving record publication off Drop alone does not bound destruction. ContainedChild owns a TempDir with recursive filesystem cleanup and an optional mutation Session with its own 200ms teardown. Drop cannot return the requested typed storage error. I dispute treating these as a Drop-local change within the strict 150-line whole-slice limit (the reviewed branch already adds 150 lines). The current timeout branch can still lose the recovery item. Hold publication.'
-  lean: Pre-arm a host-owned recovery record with a bounded acknowledgement before spawn, return a typed setup error on failure, and transfer cleanup ownership for launch state and mutation session with a stuck-child Drop watchdog. Authorize a separate recovery slice or relax the line limit.
-  raised_by: implementer
-  raised_at: 2026-11-25T02:09:49.230461534Z
