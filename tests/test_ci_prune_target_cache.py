@@ -31,8 +31,9 @@ class PruneTargetCacheTest(unittest.TestCase):
         return crate
 
     def run_prune(self, **env):
-        full = dict(os.environ, CARGO_TARGET_DIR=str(self.target))
-        full.pop("AIDA_CI_CACHE_SLOT_CAP_KIB", None)
+        # Hermetic: no ambient AIDA_CI_CACHE_* override can reach the script.
+        full = {"PATH": "/usr/bin:/bin", "TMPDIR": self.tmp.name,
+                "CARGO_TARGET_DIR": str(self.target)}
         full.update({k: str(v) for k, v in env.items()})
         return subprocess.run([str(SCRIPT)], env=full, check=True,
                               capture_output=True, text=True).stdout
