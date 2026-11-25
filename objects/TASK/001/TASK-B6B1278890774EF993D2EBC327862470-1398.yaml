@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: c5f7b33e0117f37812644ab1ba3722431ddc902b
 
   docs/cli/06-roles-sessions.md:477 still tells operators that a dead unknown attempt can be recovered or retired once its processes have exited. With this PR a dead attempt with incomplete attribution stays reserved and both commands can refuse. Document the prerequisite for retirement and the inspection and evidence-restoration path.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T03:17:24.037252691Z
-modified_at: 2026-11-25T21:04:10.833614280Z
+modified_at: 2026-11-25T21:04:12.761586919Z
 req_type: Task
 tags:
 - carried-from:BUG-2748
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T05:37:23.702065962Z
   changes: []
+- id: 01a21485-f3d9-7bf3-b5ff-fbf08efa915e
+  author: joe
+  timestamp: 2026-11-25T21:04:12.761582012Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c5f7b33e0117f37812644ab1ba3722431ddc902b
   branch: pr-4542
