@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-25T02:37:03.620381514Z
+modified_at: 2026-11-25T07:42:17.582523363Z
 req_type: Story
 tags:
 - autonomy
@@ -475,6 +475,11 @@ comments:
   modified_at: 2026-11-25T02:37:03.620381514Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211a7-c5ee-7c42-abb0-3666c68f554b
+  author: joe
+  content: 'DESIGN NOTES from rejected review follow-ups (2026-11-24 triage, product-15): TASK-3288: #4448 closed; strict_terms/approved-small absent on main (recheck #4532) | TASK-3290: #4448 closed; approved-small docs absent on main (recheck #4532)'
+  created_at: 2026-11-25T07:42:17.582523363Z
+  modified_at: 2026-11-25T07:42:17.582523363Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
