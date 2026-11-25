@@ -1,0 +1,9 @@
+- user_id: claude-advisor-122
+  requirement_id: 01a21348-55ca-79f3-8190-f70619cdd9cf
+  position: 1000
+  added_by: claude-advisor-122
+  note: 'Review PR-4574 (promotion 38), filed by hand: auto-queue-review fails on linear promotions (BUG-2733)'
+  added_at: 2026-11-25T15:38:51.030859720Z
+  for_role: reviewer
+  for_scope: PR-4574
+  added_by_machine: imac
