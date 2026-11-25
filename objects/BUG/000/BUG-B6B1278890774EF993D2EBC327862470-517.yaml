@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-25T01:25:22.332662368Z
+modified_at: 2026-11-25T01:27:18.491139546Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -128,6 +128,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: PR #4533 host-staged conflict in aida-cli-lib/src/repair_journal.rs, require_validated_merges, overlaps publication behavior (round-2 findings 2 and 5). For a live repair with tree-matched failed advisory validation and a tree-bound deferred snapshot, 6d12ee31 accepts the seat-committed merge while main''s predicate refuses it. Both policies cannot hold for this case. Specify whether the advisory exception applies on the seat-committed route. The proven-dead refusal can be preserved in either case.. No triage reason was given.'
   created_at: 2026-11-25T01:25:22.332654720Z
   modified_at: 2026-11-25T01:25:22.332654720Z
+- id: 01a21050-b5ce-7c80-b2f3-cad13bd189db
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:27):
+    # BUG-2756 / PR #4533 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 18:22; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4533 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4533. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+    Keep your r2 content (6d12ee31) intact; only merge main.
+
+    CONFLICT RULING (advisor-122 2026-11-24 18:27, answering your punt): the advisory exception applies on the SEAT-COMMITTED route ONLY when BOTH hold for the SAME tree: (a) the failed validation is the advisory host cargo check (F2), recorded as advisory; and (b) the snapshot is recorded "deferred to CI" (F5). Any other failed validation, or a mismatched tree, keeps main's refusal (require_validated_merges); the proven-dead refusal is unchanged. Add a test for each: ACCEPTED (advisory + deferred, tree-matched), REFUSED (a non-advisory failure), REFUSED (tree mismatch). Resolve the host-staged merge accordingly (your staged tree is retained in place).
+  created_at: 2026-11-25T01:27:18.491139546Z
+  modified_at: 2026-11-25T01:27:18.491139546Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
