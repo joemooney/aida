@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T01:20:47.551673468Z
+modified_at: 2026-11-25T01:50:43.666711086Z
 req_type: Bug
 tags:
 - hubs
@@ -33,6 +33,17 @@ comments:
   content: 'advisor-122 18:18: HIGH. Slice 1 = print the full error chain (<=40). Slice 2 = STRICT design sketch for overlapping block allocations across hubs (re-home an unused range? fail closed for issued IDs?), advisor sign-off first. NOBODY hand-edits registry/blocks.yaml or counters on either hub meanwhile.'
   created_at: 2026-11-25T01:15:39.032400901Z
   modified_at: 2026-11-25T01:15:39.032400901Z
+- id: 01a21065-ea89-70f3-909f-2f652173cef3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dc27cf1f4cb49a050002334062efb59fe7d2b914 plus native working diff. Merge-base diff empty, no untracked additions.
+    AC1: [evidence: behavioral-test] Slice 1 covers merge diagnostics. remote_create.rs:4298 exercises merge validation and checks the ordinary display for rollback context, refusal reason and fixture email. One executed test passed. At remote_create.rs:2865 both rollback and evidence-stop feed the same full-chain formatter after classification. Evidence-stop coverage here is by inspection. Single and nested causes use standard anyhow formatting without parsing message content. Gates and publication decisions precede or bypass formatting as before.
+    Fixed the initial store-writer inventory failure by keeping the existing writer in its inventoried function. Repeated targeted test and make check-ci-fast passed. Push-race diagnostics and AC2 retry deferred beyond this slice.
+  created_at: 2026-11-25T01:50:43.666711086Z
+  modified_at: 2026-11-25T01:50:43.666711086Z
+  session_id: 01a21049e21b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
