@@ -1,0 +1,32 @@
+id: 01a21102-e2f1-7e62-9354-693f46b82d22
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-829
+agreed_id: STORY-3120
+title: Turnkey PR/MR & CI Review Runner and Exporter (aida review prepare --sarif / --post-comment / --run)
+description: |-
+  ## Summary
+  Extend `aida review prepare` into a turnkey PR/MR and CI review surface for GitHub and GitLab (the AIDA-native equivalent of running an external review CLI in CI):
+  1. SARIF 2.1.0 Export (`--sarif <PATH>`): Converts anchored `RawReviewFinding` entries (`aida_core::review_engine::findings_to_sarif_json`) into a valid SARIF 2.1.0 document for GitHub Code Scanning (`github/codeql-action/upload-sarif`) and GitLab SAST.
+  2. Consolidated Forge PR/MR Markdown Report & Comment Poster (`--post-comment` / `format_forge_review_comment`): Formats a concise, collapsible PR/MR review comment (or posts it to `--pr <N>` via `Forge::comment` for GitHub `gh pr comment` and GitLab `glab mr note`) containing linked AIDA spec acceptance criteria, file coverage verification status, and line-anchored findings (`path:start_line..end_line`).
+  3. Turnkey Batch Review Runner (`--run-review` / `build_batch_review_prompt`): Builds self-contained per-batch review prompts (diff hunks + matched playbooks/facets + linked spec acceptance criteria) and optionally executes them via `claude --print` (or configured `AIDA_REVIEW_RUNNER_CMD`) to produce structured findings, anchor their `existing_code` snippets to exact 1-based line numbers, and verify 100% file coverage in one command.
+
+  ## Acceptance
+  - `aida_core::review_engine` provides pure, unit-tested functions:
+    - `findings_to_sarif_json(&[RawReviewFinding]) -> serde_json::Value` emitting valid SARIF 2.1.0 (`$schema`, `version: "2.1.0"`, `runs[0].tool.driver`, `runs[0].results` with `physicalLocation.artifactLocation.uri` and `region.startLine`/`endLine`).
+    - `format_forge_review_markdown(...) -> String` producing a GitHub/GitLab PR/MR review comment summarizing inventory, coverage verification, linked spec acceptance criteria, and anchored findings.
+    - `parse_runner_findings_json(&str) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String>` parsing structured JSON findings and file coverage emitted by an automated batch review runner.
+  - `aida review prepare` in `aida-cli-lib` supports `--sarif <PATH>`, `--post-comment` (requires `--pr <N>`), and `--run-review` (executes per-batch review via `AIDA_REVIEW_RUNNER_CMD` or `claude --print`, anchors findings, and verifies coverage).
+  - Unit tests in `aida-core` and `aida-cli-lib` verify SARIF generation, forge markdown rendering, and runner JSON parsing.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T04:42:11.569133904Z
+modified_at: 2026-11-25T04:42:11.569133904Z
+req_type: Story
+filed_at:
+  code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45206d90a1d
+  vendor: antigravity
