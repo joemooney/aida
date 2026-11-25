@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T07:27:55.495515180Z
+modified_at: 2026-11-25T07:55:19.675965656Z
 req_type: Bug
 tags:
 - leases
@@ -242,6 +242,11 @@ comments:
   modified_at: 2026-11-25T06:14:11.443695690Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211b3-b4fc-74c1-9eb6-1eac489cdb9b
+  author: joe
+  content: 'REVIEW NOTE for #4541 r4 (advisor-122 2026-11-25 00:52, lesson from the parked STORY-3059): the attested MOVE must NOT repack and must NOT unlink objects/info/alternates. Move the clone AS-IS (alternates intact), so borrowed objects stay reachable through main exactly as before the move. Reviewer: verify there is no repack/alternates mutation in the move path, and require a test assertion that the alternates file is preserved after the move. (A repack + alternates removal was reproduced losing a borrowed commit reachable only via ORIG_HEAD.)'
+  created_at: 2026-11-25T07:55:19.675965656Z
+  modified_at: 2026-11-25T07:55:19.675965656Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
