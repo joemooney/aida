@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
 
   Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes the previous default-branch forge metadata fallback. With no local origin/HEAD and unavailable Git transport, an authenticated GitHub host can no longer identify the branch even if the cached tracking ref has the landing history. This suppresses dry-window escalation. Restore the forge metadata fallback under the same absolute budget.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T12:02:32.617343530Z
-modified_at: 2026-11-25T21:06:51.259608383Z
+modified_at: 2026-11-25T21:06:54.106844654Z
 req_type: Task
 tags:
 - carried-from:BUG-2730
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T12:08:20.768831424Z
   changes: []
+- id: 01a21488-6a1a-7931-8494-075264c466f2
+  author: joe
+  timestamp: 2026-11-25T21:06:54.106840201Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
   branch: pr-4457
