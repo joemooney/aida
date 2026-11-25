@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T03:12:10.227606438Z
+modified_at: 2026-11-25T03:14:53.328289837Z
 req_type: Task
 tags:
 - launch
@@ -175,6 +175,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: F3/F4/F5: moving record publication off Drop alone does not bound destruction. ContainedChild owns a TempDir with recursive filesystem cleanup and an optional mutation Session with its own 200ms teardown. Drop cannot return the requested typed storage error. I dispute treating these as a Drop-local change within the strict 150-line whole-slice limit (the reviewed branch already adds 150 lines). The current timeout branch can still lose the recovery item. Hold publication.. No triage reason was given.'
   created_at: 2026-11-25T03:12:10.227596759Z
   modified_at: 2026-11-25T03:12:10.227596759Z
+- id: 01a210b3-2dbe-70d0-b7c7-681a9fa6a57f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:14):
+    # TASK-3884 / PR #4538 r3, SPLIT scope (advisor-122 ruling 2026-11-24 20:18; STRICT prereq for STORY-3080; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines.
+    Your r2 partial work is COMMITTED on the branch (f48212c313); continue from it, trimmed to this scope.
+    KEEP in this slice ONLY:
+    (F1) a DEADLINE-AWARE PUBLIC entry point for grant binding (the one STORY-3080's critical section will call);
+    (F2) re-check the deadline AFTER a successful try_lock: expired → release and return Timeout; never run the closure past the deadline;
+    (F6) contention fixtures hold the lock on an INDEPENDENT thread/process (a blocking regression fails by assertion, not deadlock);
+    plus the CI fix: route lock_exclusive_until through a gate/kernel_deps.rs wrapper (story_1888 gate-paths ratchet).
+    REMOVED from this slice (now TASK-3893): F3-F5 (bounded unwind, recovery record, typed error via close()). Revert any partial F3-F5 code that is not needed for F1/F2/F6.
+    One targeted cargo run (incl. story_1888), then make check-ci-fast, then push to #4538. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T03:14:53.328289837Z
+  modified_at: 2026-11-25T03:14:53.328289837Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
