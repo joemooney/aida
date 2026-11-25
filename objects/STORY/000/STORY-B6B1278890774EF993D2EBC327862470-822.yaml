@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: Approved
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T03:44:36.131657001Z
+modified_at: 2026-11-25T04:23:49.619911553Z
 req_type: Story
 tags:
 - hygiene
@@ -235,6 +235,12 @@ comments:
   modified_at: 2026-11-25T03:44:36.131657001Z
   session_id: 01a210af4c2a
   harness_version: codex-cli 0.167.0
+- id: 01a210f2-1273-7ec2-8a37-14eaff862d32
+  author: aida-publication-done
+  content: Implementer push 8e61bbfdfcb8 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T04:23:49.619910682Z
+  modified_at: 2026-11-25T04:23:49.619910682Z
+  session_id: 01a210af4c2a
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
@@ -329,6 +335,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a210f2-1273-7ec2-8a37-14d73ba7c780
+  author: aida-publication-done
+  timestamp: 2026-11-25T04:23:49.619906945Z
+  session_id: 01a210af4c2a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
