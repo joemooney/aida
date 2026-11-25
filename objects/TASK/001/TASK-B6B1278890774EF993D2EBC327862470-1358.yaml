@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T05:10:19.052925420Z
+modified_at: 2026-11-25T05:10:31.116851290Z
 req_type: Task
 tags:
 - integration
@@ -162,6 +162,21 @@ comments:
   modified_at: 2026-11-25T05:06:35.892829778Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2111c-d12d-7ed3-a701-1d648d428dd8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4560):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7edd193406c8
+    Recorded: 2026-11-25T05:05:31.405794462+00:00
+    Findings:
+    1. F1 — aida-cli-lib/src/forge.rs:7159–7170. The preflight still bypasses credential-safe transport on supported Git builds that ignore GIT_NO_LAZY_FETCH, including upstream Git 2.40.0 through 2.44.0 at their initial releases. On a missing promised commit, cat-file can fetch before host_remote_git_command applies the credential rewrite, so a stored credential can reach a remote helper's argv. The Ubuntu Git 2.43 package in the pre-check has the backported guard, so that pass does not establish compatibility. Make the preflight local-only even when Git ignores the variable, or fail closed before running it. [Git 2.43.0 promisor implementation](https://github.com/git/git/blob/v2.43.0/promisor-remote.c) · [Git 2.43.7 backport](https://github.com/git/git/blob/v2.43.7/promisor-remote.c).
+    2. F2 — aida-cli-lib/src/gate/ledger/event.rs:291 and aida-cli-lib/src/review_risk.rs:55–79. After the bounded base lookup returns, risk assessment still runs ordinary git merge-base and raw git diff subprocesses with lazy fetching enabled. In a blobless checkout, an available base and head are enough to reach --numstat/--patch, which can implicitly fetch missing blobs outside the credential builder and the risk deadline. This inherited path leaves the same unsafe transport reachable even on Git versions that honor the new cat-file guard. Make risk comparison local-only and return STRICT when required objects are missing. Exercise the verdict risk path with missing blobs and a transport sentinel. [Git diff blob prefetch implementation](https://github.com/git/git/blob/v2.43.0/diff.c#L6904-L6936).
+    3. F3 — aida-cli-lib/src/tests/task_3874_review_risk.rs:48–54 and :95. The seat-refusal assertions still call review_risk_base_object directly, before the promisor, gh and transport fixtures are in place. The new production-entry test runs only after the checkout is renamed back to a trusted path. A regression that bypasses the helper in review_risk_pr_base can therefore evade the seat-refusal assertions. Call review_risk_pr_base against the seat path with valid forge evidence and assert refusal and zero Git transports. Retain the trusted-path positive control.
+    4. F4 — aida-cli-lib/src/tests/task_3874_review_risk.rs:76–98. The fixture checks the bundle override strings in Trace2 and counts SSH connections, but it never configures a nonempty fetch.bundleURI or observes bundle reads and HTTPS helper starts. It therefore does not verify that a configured bundle is suppressed while the pinned fetch succeeds. Add an observable configured-bundle fixture and demonstrate that the no-bundle-access assertion fails if the fetch.bundleURI override is removed. [Git configured bundle fetch implementation](https://github.com/git/git/blob/v2.43.0/builtin/fetch.c#L2329-L2334).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T05:10:30.957699242Z
+  modified_at: 2026-11-25T05:10:30.957699242Z
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
