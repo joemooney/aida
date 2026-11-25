@@ -1,0 +1,18 @@
+{
+  "id": "08a41052-61d3-4ee6-840e-0d5710be3f5b",
+  "thread_id": "08a41052-61d3-4ee6-840e-0d5710be3f5b",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795582724090,
+  "body": "- [STUCK-MERGE] #4537 is approved at 71b61e09, its hold can be released, and it has not landed for 88 min: rework hold: CHANGES REQUESTED for BUG-2749 at 71b61e09385f\n  -> release the hold on #4537, then land it\n- [STUCK-REVIEW] #4542 at 4b1328e7 has had no verdict and no reviewer for 40 min\n  -> launch a reviewer for #4542 at 4b1328e7\n- [STUCK-REVIEW] #4560 at 7edd1934 has had no verdict and no reviewer for 40 min\n  -> launch a reviewer for #4560 at 7edd1934\n- [STUCK-REWORK] #4533 has changes requested at 34c4972f (round 2) and no lane or session on it for 52 min\n  -> route rework of #4533 to a lane\n\n14 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 4 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
