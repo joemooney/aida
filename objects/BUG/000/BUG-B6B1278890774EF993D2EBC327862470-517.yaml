@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-25T02:23:08.319364464Z
+modified_at: 2026-11-25T03:05:41.149503162Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -173,6 +173,15 @@ comments:
   modified_at: 2026-11-25T02:23:08.319364464Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210aa-89d5-74b2-bd58-79735670856b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6d12ee315a plus working-tree merge with 260a82ae93. AC1: [evidence: behavioral-test] repair_journal.rs:800 exercises matching advisory and deferred evidence, non-advisory failure, a mismatched tree and proven-dead refusal. All six journal tests passed. AC2: existing warning delivery outside this conflict-only slice. Reviewed merge-base and working-tree changes, checked branch and parent filtering, legacy defaults and failure handling. No new untracked paths. Fast gate passed. Host staging and publication pending.
+  created_at: 2026-11-25T03:05:41.149503162Z
+  modified_at: 2026-11-25T03:05:41.149503162Z
+  session_id: 01a21086739d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
