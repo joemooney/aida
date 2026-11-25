@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T09:59:59.897128367Z
+modified_at: 2026-11-25T10:00:07.656219577Z
 req_type: Bug
 tags:
 - review-watch
@@ -55,6 +55,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for completing BUG-2763. Reviewed the full landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to landed tree 114e622e446e548ee50b978330ccfda2fb16cad0, attesting original head 14a5d0f2168490d925f2cf18dc924ac3a987b637.. No triage reason was given.'
   created_at: 2026-11-25T09:59:59.897119991Z
   modified_at: 2026-11-25T09:59:59.897119991Z
+- id: 01a21225-f657-73a0-b9df-149bd8b653a8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2763):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 14a5d0f21684
+    Recorded: 2026-11-25T09:57:38.710797212+00:00
+    Findings:
+    1. BUG-b6b1278890774ef993d2ebc327862470-524.AC1, review_watch.rs:1663 and :2712. A definite queue-work spawn failure leaves spawning=true and worker=None because the spawn error propagates immediately after the spawning marker is written. The dispatcher records Exited, and every later head returns EXIT_UNKNOWN even after the dispatcher dies. Persist definite no-child evidence for this error so moved heads can proceed while genuinely ambiguous spawns remain held.
+    2. review_watch.rs:1654 and :3628. A dispatcher that the watcher reaps before it claims its inherited setup retry is marked Failed with setup_retry and a diagnostic. The immediate reaping branch never saves its identity or PGID. moved_exit_hold reclassifies that proven pre-claim exit as ambiguous and strands the next head indefinitely. Differentiate confirmed pre-claim exits from failed setup receipts that may have launched work.
+    3. review_watch.rs:1654. The moved-head predicate includes retryable fetch failures whenever they inherited setup_retry, even though the existing setup-hold branch excludes retryable_fetch and retry accounting is per head. The fast path through execute_reservation in story_2401_review_exhausted_fetch_is_capped_per_head records the still-running test process as dispatcher, so its expected new-head dispatch at task_1993_review_watch_tests.rs:2986 now statically resolves to EXIT_ALIVE. Keep the fetch cap scoped to the old head and retain the coverage in cargo test -p aida-cli-lib story_2401_review_exhausted_fetch_is_capped_per_head.
+    4. BUG-b6b1278890774ef993d2ebc327862470-524.AC1, review_watch.rs:1680 and review_watch_signal.rs:329. Admission treats an empty group scan as exit proof, but group_members discards directory-entry errors and individual stat read or parse errors. With dead recorded identities and a surviving group member whose stat cannot be read, selection can drop the old receipt and reserve the new review instead of holding and surfacing unknown liveness. Use a group observation that distinguishes vanished processes from unreadable evidence and add coverage for the incomplete scan.
+    5. BUG-b6b1278890774ef993d2ebc327862470-524.AC1, review_watch.rs:1672–1682. The group probe uses a bare PGID after an identity verdict of Dead(Reboot). A group from the prior boot cannot survive, but a changed namespace yields EXIT_UNKNOWN and a reused numeric PGID can yield EXIT_ALIVE for an unrelated current-boot process. Use the anchored reboot proof to retire the old group, while preserving holds when any other recorded process is alive or unknown.
+    6. BUG-b6b1278890774ef993d2ebc327862470-524.AC1, stalled_reviews.rs:33–94. The new local review-watch finding is emitted only after GitHub discovery and the canonical store/queue scan succeed. The doctor command therefore hides a recorded unknown-liveness hold whenever the GitHub budget prevents discovery or the forge/store scan fails. Collect and emit the local diagnostic independently while preserving errors from the separate forge-backed scan.
+    7. review_watch.rs:928 and :1690. The doctor finding reads a cached display string without checking whether its hold survives. In particular, --release clears attempts and leaves skipped intact, so a released hold continues to emit a stalled-reviews finding and can fail the scheduled check until a later watcher pass. Tie the diagnostic to the current held receipt and its head, and cover clearing after release.
+    8. BUG-b6b1278890774ef993d2ebc327862470-524.AC2, task_1993_review_watch_tests.rs:5917–5967. The added test calls record_skip and unknown_exit_findings directly and never exercises the stalled-reviews doctor scan. It also has no PGID or second attempt, so it does not establish that a live or unknown process in a different receipt or an incomplete group observation keeps the hold. Extend the test coverage through the production doctor boundary and cover the multi-receipt and group cases. The supplied aida criteria list still applies to AC1 and AC2 because the new test has only the BUG-2763 spec trace. Add the corresponding criterion-level traces.
+    9. task_1993_review_watch_tests.rs:3289 and :3605. The existing backoff tests use previous-boot as a synthetic boot ID. ProcIdentity::from_record rejects it as malformed, so the Exited iterations reach EXIT_UNKNOWN at the final new-head dispatch assertions (lines 3326 and 3647). Give those fixtures real death evidence and retain both assertions. Affected commands are cargo test -p aida-cli-lib bug2518_no_verdict_backoff_cap_and_new_head and cargo test -p aida-cli-lib bug2521_waiting_backoff_cap_and_new_head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T10:00:07.511911343Z
+  modified_at: 2026-11-25T10:00:07.511911343Z
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
