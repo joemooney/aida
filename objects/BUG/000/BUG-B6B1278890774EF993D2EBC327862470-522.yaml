@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T07:31:57.038464379Z
+modified_at: 2026-11-25T07:32:53.017843420Z
 req_type: Bug
 tags:
 - lanes
@@ -91,6 +91,17 @@ comments:
   modified_at: 2026-11-25T06:59:10.290436014Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2119f-35b5-73f1-acd7-974bceded8f4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 217841e559b911d533f6e59dd96e658cee6d3f33 plus the native lane's uncommitted diff. Reviewed the merge-base diff, working tree, and untracked listing. No untracked additions.
+    AC1: [evidence: behavioral-test] Partial. A local-origin queue launch reached an actual punt and retained the conflicted private clone. A separate Git probe preserved different staged and working-tree resolutions and reproduced merge --abort exiting 128 on that intact merge. The draft selects supervision before unattended admission, checks the predecessor identity again, and preserves the historical parent pair for publication validation. The clean-abort refusal remains an F2 design decision.
+    AC2: [evidence: behavioral-test] Unverified. The new binary dispatch test ran and failed during fixture setup because its in-progress spec was unqueued. Corrected the setup to queue the spec. The successor and remote-parent assertions have no passing result at this writing. The combined draft exceeds the 150-line ceiling. Recorded a design-fork punt. No reviewer verdict or publication declaration.
+  created_at: 2026-11-25T07:32:53.017843420Z
+  modified_at: 2026-11-25T07:32:53.017843420Z
+  session_id: 01a211847f0e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
