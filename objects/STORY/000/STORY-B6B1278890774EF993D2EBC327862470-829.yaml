@@ -21,8 +21,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T04:42:11.569133904Z
+modified_at: 2026-11-25T05:10:42.152111310Z
 req_type: Story
+comments:
+- id: 01a2111c-fce8-75b3-b3f1-6b82c0da1ef7
+  author: joe
+  content: Implemented in worktree /home/joe/ai/aida-story-3120 on branch story-3120-ci-review (commit 34f18153493e6d8f24ef3021adfe79f08ea3452d). Added --run-review (turnkey batch review execution via AIDA_REVIEW_RUNNER_CMD or claude --print), --sarif <PATH> (SARIF 2.1.0 export for GitHub Code Scanning / GitLab SAST), and --post-comment (GitHub PR / GitLab MR Markdown review comment poster via Forge::comment). Verified all 18 tests in aida-core review_engine and all 8 tests in aida-cli-lib review_prepare pass.
+  created_at: 2026-11-25T05:10:42.152111310Z
+  modified_at: 2026-11-25T05:10:42.152111310Z
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
