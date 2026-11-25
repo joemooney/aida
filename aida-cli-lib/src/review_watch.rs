@@ -3205,7 +3205,7 @@ pub(crate) fn run_with_program(
         // Synchronization, discovery and every per-change forge read run
         // without the claim; it is retaken only for each dispatch decision.
         // trace:BUG-2765 | ai:claude
-        let mut claim = PassClaim::new(&root, args.once, &mut admission);
+        let mut claim = PassClaim::new(&root, &mut admission);
         sweep_on_first_claim(&root, claim.claim.is_some(), &mut swept);
         claim.release("pass setup");
         // trace:STORY-2492 | ai:codex
@@ -3421,7 +3421,6 @@ const SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 // trace:BUG-2765 | ai:claude
 struct PassClaim<'a> {
     root: &'a Path,
-    once: bool,
     claim: &'a mut Option<crate::admission_owner::Claim>,
     since: Option<std::time::Instant>,
     /// When the pass's discovery snapshot was read.
@@ -3429,20 +3428,31 @@ struct PassClaim<'a> {
 }
 
 impl<'a> PassClaim<'a> {
-    fn new(
-        root: &'a Path,
-        once: bool,
-        claim: &'a mut Option<crate::admission_owner::Claim>,
-    ) -> Self {
+    fn new(root: &'a Path, claim: &'a mut Option<crate::admission_owner::Claim>) -> Self {
         let now = std::time::Instant::now();
         let since = claim.is_some().then_some(now);
         Self {
             root,
-            once,
             claim,
             since,
             observed: now,
         }
+    }
+
+    /// Take the claim unless held. `Some(reason)` when admission yielded to a
+    /// waiting land, ship or drain: the caller defers, never fails, so a
+    /// `--once` pass yields mid-pass instead of erroring.
+    // trace:BUG-2765 | ai:claude
+    fn acquire(&mut self) -> Result<Option<String>> {
+        if self.claim.is_none() {
+            if let Some(reason) = hold_admission(self.root, self.claim, false)? {
+                return Ok(Some(format!(
+                    "admission yielded: {reason}; retrying next pass"
+                )));
+            }
+            self.since = Some(std::time::Instant::now());
+        }
+        Ok(None)
     }
 
     /// Give the claim up. A hold longer than [`HOLD_WARN`] is logged naming
@@ -3473,13 +3483,8 @@ impl<'a> PassClaim<'a> {
         let mut reread = Some(reread);
         let mut observed = self.observed;
         loop {
-            if self.claim.is_none() {
-                if let Some(reason) = hold_admission(self.root, self.claim, self.once)? {
-                    return Ok(Some(format!(
-                        "admission yielded: {reason}; retrying next pass"
-                    )));
-                }
-                self.since = Some(std::time::Instant::now());
+            if let Some(reason) = self.acquire()? {
+                return Ok(Some(reason));
             }
             if observed.elapsed() <= SNAPSHOT_TTL {
                 return Ok(None);
@@ -4439,20 +4444,36 @@ fn admit_change(
     // Which heads this covers follows the project's `[review] stale_base`
     // policy (see `stale_follow_up`), fast freshness or not.
     // trace:STORY-2821 | ai:claude
-    let follow_up = |change: &forge::Change, probed: bool| {
-        stale_follow_up(
+    // Its branch update is a forge write, so the follow-up runs under the
+    // claim, given up before the report reads the forge. trace:BUG-2765 | ai:claude
+    let claim = std::cell::RefCell::new(claim);
+    let follow_up = |change: &forge::Change, probed: bool| -> Result<Option<Admission>> {
+        let mut held = claim.borrow_mut();
+        let yielded = held.as_deref_mut().map(PassClaim::acquire).transpose()?;
+        if let Some(reason) = yielded.flatten() {
+            eprintln!("{key}: {reason}");
+            return Ok(Some(Admission::Skipped("deferred")));
+        }
+        let reason = stale_follow_up(
             root,
             store,
             change,
             probed,
             &|c| authors.author_live(root, c),
             &|c| update::forge_update(root, repo, c),
-        )
-    };
-    if let Some(reason) = follow_up(&change, false)? {
+        );
+        if let Some(held) = held.as_deref_mut() {
+            held.release(&format!("stale follow-up for {key}"));
+        }
+        let Some(reason) = reason? else {
+            return Ok(None);
+        };
         eprintln!("{key}: {reason}");
-        record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| Admission::Settled);
+        record_skip(store, change, Some(&reason))?;
+        report(root, store, change, &live).map(|_| Some(Admission::Settled))
+    };
+    if let Some(admission) = follow_up(&change, false)? {
+        return Ok(admission);
     }
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
@@ -4474,15 +4495,13 @@ fn admit_change(
         )?;
         return Ok(Admission::Settled);
     }
-    if let Some(reason) = follow_up(&change, true)? {
-        eprintln!("{key}: {reason}");
-        record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| Admission::Settled);
+    if let Some(admission) = follow_up(&change, true)? {
+        return Ok(admission);
     }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     // Every forge read above ran without the claim; only the decision, the
     // reservation and the launch below run under it. trace:BUG-2765 | ai:claude
-    let mut claim = claim;
+    let mut claim = claim.into_inner();
     if let Some(claim) = claim.as_deref_mut() {
         let id = change.id;
         if let Some(reason) = claim.decide(&change, || repo.change(root, id))? {
