@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
 
   Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:218–229,244–248,760–781: --anchor-findings computes results, but the default Markdown renderer omits the anchor outcomes and spans. JSON exposes them.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T11:56:00.852558282Z
-modified_at: 2026-11-25T07:26:49.666299481Z
+modified_at: 2026-11-25T07:26:51.699901114Z
 req_type: Task
 tags:
 - carried-from:TASK-3862
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21199-a533-7ea3-b6a8-c38283aea127
+  author: joe
+  timestamp: 2026-11-25T07:26:51.699894103Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
   branch: pr-4511
