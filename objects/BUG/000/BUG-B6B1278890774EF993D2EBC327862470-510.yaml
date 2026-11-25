@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Before clearing a missing-checkout worktree registration, inspect its registered index against the pinned tip; RETAIN the registration on any difference or unreadable evidence.
   - AC2: Test: a missing checkout with a staged-only file is retained, not cleared.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T01:51:00.000456437Z
+modified_at: 2026-11-25T01:57:54.960139145Z
 req_type: Bug
 tags:
 - data-loss
@@ -225,6 +225,11 @@ comments:
   created_at: 2026-11-25T00:42:17.875783794Z
   modified_at: 2026-11-25T00:42:17.875783794Z
   session_id: 01a20feb6197
+- id: 01a2106c-7c90-7f10-bacc-439ce84ce7fa
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2749 AC1 FAIL: ordinary session end and linked-store maintenance can still discard a staged-only index after its checkout disappears. AC2 PASS on source review: the regression checks byte-for-byte preservation of a staged-only index through the new guarded cleanup and checks that applied GC removes a clean sibling. The implementer reports targeted test passes. The exact PR head passed FAST compilation and source guards, with the merge-hold status pending in the observed check rollup. No local build or tests were run. Reviewed the full pinned landing diff against main at 260a82ae939faf34a8e6505a6f765f2151655610 and attest the original PR head, which is three commits behind. None of the findings depends on the two overlapping files changed by the base. The standalone claim command refused to mark the PR under review, and the checklist was generated.. It was punted on: design-fork: Round 2 CI instruction conflicts with the exact-count TASK-2143 ratchet. The guarded fixes for findings 1 and 2 remove raw Git builders: session_reap.rs now 6 (ledger 7), worktree_gc.rs now 12 (ledger 13). The executed guard requires lowering both counts, but the brief forbids any ratchet ledger edit. I dispute the CI requirement that the ledger can remain unchanged with these removals. No data-loss finding is disputed.. No triage reason was given.'
+  created_at: 2026-11-25T01:57:54.960130938Z
+  modified_at: 2026-11-25T01:57:54.960130938Z
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
@@ -300,6 +305,13 @@ history:
   timestamp: 2026-11-25T01:51:21.394772783Z
   session_id: 01a21060b38f
   changes: []
+- id: 01a2106c-7c90-7f10-bacc-43815fbaf801
+  author: joe
+  timestamp: 2026-11-25T01:57:54.960118547Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -311,17 +323,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 5665f7c661c7b100b06434132c000715144387e7
-attention_reason:
-  category: design-fork
-  detail: 'Round 2 CI instruction conflicts with the exact-count TASK-2143 ratchet. The guarded fixes for findings 1 and 2 remove raw Git builders: session_reap.rs now 6 (ledger 7), worktree_gc.rs now 12 (ledger 13). The executed guard requires lowering both counts, but the brief forbids any ratchet ledger edit. I dispute the CI requirement that the ledger can remain unchanged with these removals. No data-loss finding is disputed.'
-  lean: Authorize the two downward ratchet adjustments and rerun FAST validation.
-  raised_by: implementer
-  raised_at: 2026-11-24T22:44:28.045620302Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2749 AC1 FAIL: ordinary session end and linked-store maintenance can still discard a staged-only index after its checkout disappears. AC2 PASS on source review: the regression checks byte-for-byte preservation of a staged-only index through the new guarded cleanup and checks that applied GC removes a clean sibling. The implementer reports targeted test passes. The exact PR head passed FAST compilation and source guards, with the merge-hold status pending in the observed check rollup. No local build or tests were run. Reviewed the full pinned landing diff against main at 260a82ae939faf34a8e6505a6f765f2151655610 and attest the original PR head, which is three commits behind. None of the findings depends on the two overlapping files changed by the base. The standalone claim command refused to mark the PR under review, and the checklist was generated.'
-  recovery_hint: address the review findings, move BUG-2749 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T01:51:00.000456437Z
