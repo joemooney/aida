@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Before clearing a missing-checkout worktree registration, inspect its registered index against the pinned tip; RETAIN the registration on any difference or unreadable evidence.
   - AC2: Test: a missing checkout with a staged-only file is retained, not cleared.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T02:07:24.354573271Z
+modified_at: 2026-11-25T02:33:31.991389762Z
 req_type: Bug
 tags:
 - data-loss
@@ -259,6 +259,18 @@ comments:
   modified_at: 2026-11-25T02:00:49.255249532Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2108d-1c23-7021-8c15-84e30864a372
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4e3a99f82b157074b806df95ea647f58ecdbac07 plus the uncommitted native-lane diff and new aida-core/src/worktree_registration.rs. Compared origin/main...HEAD.
+    AC1: [evidence: behavioral-test] Partial. The registered-index lock, checksum, HEAD comparison and target-specific retirement protect a checkout already missing at the AIDA boundary. F1 remains open at aida-core/src/git_ops.rs:5157. A checkout can disappear between try_exists and Git acting on the registration. Explicit dirty cleanup and pushed-index authorization complicate guarding live removal. Publication punt recorded. F2 applies gc.worktreePruneExpire=never for both GC modes. F3 reattaches a clean store and retains staged and corrupt indexes.
+    AC2: [evidence: behavioral-test] Lane job j20261125T021309088-2-0 executed five BUG-2749 tests, all passed, including normal session end, disappearance after the GC scan, and compact with an expired staged sibling. Subsequent fixture refactoring and native feature gating are in the working diff. The store-writer inventory reconciled 3881 sites. A disposable Git control lost the index under configured expiry and retained the original bytes under the override.
+    The adversarial pass covered absolute-path matching, corrupt/split indexes, locked and missing indexes, zero and multiple registrations, and concurrent disappearance. The check-to-Git interval is outside the passing tests. Local FAST validation was submitted as j20261125T022405173-2-0. There is no new published head for CI.
+  created_at: 2026-11-25T02:33:31.991389762Z
+  modified_at: 2026-11-25T02:33:31.991389762Z
+  session_id: 01a21074d3cb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
@@ -348,6 +360,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2108b-3660-7633-a724-392021d6bb48
+  author: dirtlab
+  timestamp: 2026-11-25T02:31:28.608634694Z
+  session_id: 01a21074d3cb
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -359,3 +380,9 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 5665f7c661c7b100b06434132c000715144387e7
+attention_reason:
+  category: design-fork
+  detail: Round 3 F1 remains open at the live-to-missing transition. remove_worktree_unguarded samples checkout existence before spawning git worktree remove. If an index change and checkout disappearance occur between that sample and Git checking the checkout, the live path still deletes the registration. The missing-at-entry regressions pass. F2 and F3 are implemented. A strict fix needs synchronization across live removal while preserving explicitly authorized dirty-worktree removal and the existing pushed-index exception.
+  lean: Keep publication held. Bind the live removal decision to an index writer lock and the staged state authorized by the caller, or allow a separately reviewed change to live force-removal semantics.
+  raised_by: implementer
+  raised_at: 2026-11-25T02:31:27.720212660Z
