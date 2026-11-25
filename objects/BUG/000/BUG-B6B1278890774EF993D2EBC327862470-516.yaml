@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the recorded tree is verifiably ABSENT (ENOENT on the path AND no mount), the heal ends the lease and records "tree absent, nothing to salvage". Test.
   - AC2: An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T09:13:55.533573573Z
+modified_at: 2026-11-25T09:14:47.209880783Z
 req_type: Bug
 tags:
 - leases
@@ -278,6 +278,11 @@ comments:
   created_at: 2026-11-25T08:56:11.007822723Z
   modified_at: 2026-11-25T08:56:11.007822723Z
   session_id: 01a2119a3dad
+- id: 01a211fc-7429-7db3-addf-7c64e43c938b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, landed tree 9d629481b3c4dcc3103e2aab5eb319e66389f5bd, under the advisor''s operator-attested redesign and round-four brief. AC1 partial: an absent clone can be released with typed confirmation, but release can succeed with no durable outcome or reason. AC2 and present-clone recovery partial: non-ENOENT path lookup errors refuse and the move is atomic, nonreplacing and performs no repack or alternates mutation. The EXDEV fixture checks device identity, but the required alternates preservation assertion is missing. Round four partial: real CLI tests cover operator gating, directory replacement, absent-to-present changes and a lease stamp change, but stale-finding eligibility can still admit a live stamped worker. Fast source gates passed and fast compile was pending at review time. No local builds or tests run.. No triage reason was given.'
+  created_at: 2026-11-25T09:14:47.209872039Z
+  modified_at: 2026-11-25T09:14:47.209872039Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
@@ -414,6 +419,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a211fc-7429-7db3-addf-7c524c671ca0
+  author: joe
+  timestamp: 2026-11-25T09:14:47.209862417Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
@@ -422,11 +434,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Reviewed the complete landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, landed tree 9d629481b3c4dcc3103e2aab5eb319e66389f5bd, under the advisor''s operator-attested redesign and round-four brief. AC1 partial: an absent clone can be released with typed confirmation, but release can succeed with no durable outcome or reason. AC2 and present-clone recovery partial: non-ENOENT path lookup errors refuse and the move is atomic, nonreplacing and performs no repack or alternates mutation. The EXDEV fixture checks device identity, but the required alternates preservation assertion is missing. Round four partial: real CLI tests cover operator gating, directory replacement, absent-to-present changes and a lease stamp change, but stale-finding eligibility can still admit a live stamped worker. Fast source gates passed and fast compile was pending at review time. No local builds or tests run.'
-  recovery_hint: address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T09:13:55.533573573Z
