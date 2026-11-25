@@ -190,7 +190,7 @@ fn the_probe_sandbox_is_read_only_networkless_and_hookless() {
 }
 
 #[test]
-fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
+fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unpublished() {
     use crate::session_reap::{classify_clone_reap, ReapVerdict};
     let clean = ProbeFacts {
         head: Some("a".repeat(40)),
@@ -199,8 +199,9 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
         unpushed: 0,
         unpushed_refs: vec![],
     };
-    let verdict = |probe: &Probe, exited, finished, merged: bool| {
-        classify_clone_reap(|| probe.clone(), "feat", exited, finished, || merged)
+    let verdict = |probe: &Probe, exited, finished, published: bool| {
+        let evidence = published.then_some(()).context("publication unknown");
+        classify_clone_reap(|| probe.clone(), "feat", exited, finished, |_| evidence)
     };
     let ok = Probe::Known(clean.clone());
     assert!(matches!(
@@ -246,7 +247,7 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
         ..clean.clone()
     };
     skip(
-        verdict(&Probe::Known(ahead), true, true, true),
+        verdict(&Probe::Known(ahead), true, true, false),
         "2 commit(s)",
     );
     skip(verdict(&ok, false, true, true), "still running");
@@ -258,11 +259,11 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
             "feat",
             exited,
             finished,
-            || true,
+            |_| panic!("unexpected publication check"),
         );
         assert!(matches!(verdict, ReapVerdict::Skip(_)));
     }
-    skip(verdict(&ok, true, true, false), "no merged PR");
+    skip(verdict(&ok, true, true, false), "publication unknown");
 }
 
 /// The lease is seat-writable through the store, so `destroy` refuses any
@@ -1703,9 +1704,48 @@ fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
     assert!(clone.exists() && lease().is_some());
 
     std::fs::remove_file(clone.join("work.txt")).unwrap();
+    // trace:STORY-3059 | ai:codex
+    use aida_core::DatabaseBackend;
+    let store = fx.main.join(".aida-store");
+    aida_core::git_ops::init(&store).unwrap();
+    aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
+    let mut req = aida_core::Requirement::new("Finished work".into(), "body".into());
+    req.spec_id = Some(lease().unwrap().scope);
+    req.status = aida_core::RequirementStatus::Completed;
+    backend.add_requirement(req).unwrap();
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let offline = fx.root.join("offline.git");
+    std::fs::rename(&fx.origin, &offline).unwrap();
+    assert!(reap(Some(&tip)).contains("publication unknown"));
+    std::fs::rename(offline, &fx.origin).unwrap();
+    std::fs::write(clone.join("README.md"), "stash-only").unwrap();
+    seat_git(&clone, &["stash"]);
+    assert!(reap(Some(&tip)).contains("refs/stash"));
+    seat_git(&clone, &["stash", "drop"]);
+    seat_git(&clone, &["checkout", "-qb", "side"]);
+    seat_commit(&clone, "side.txt");
+    let side = seat_git(&clone, &["rev-parse", "HEAD"]);
+    seat_git(&clone, &["checkout", "-q", "feat"]);
+    assert!(reap(Some(&tip)).contains(side.trim()));
+    seat_git(&clone, &["push", "origin", "side"]);
+    seat_commit(&clone, "current.txt");
+    let tip = seat_git(&clone, &["rev-parse", "HEAD"]).trim().to_owned();
+    assert!(reap(Some(&tip)).contains(&tip));
+    seat_git(&clone, &["push", "origin", "feat"]);
     let row = reap(Some(&tip));
     assert!(row.starts_with("reaped"), "{row}");
     assert!(!clone.exists() && lease().is_none());
+    let req = backend
+        .get_requirement_by_spec_id("TASK-2053")
+        .unwrap()
+        .unwrap();
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("origin/feat")
+            && c.content.contains(&tip)
+            && c.content.contains(side.trim())));
 }
 
 /// BUG-2224: the count parser names each ref, escapes seat-written names and
@@ -2704,7 +2744,7 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(!hint.contains("branch ,"), "{hint}");
     assert!(!hint.contains("(no commits yet)"), "{hint}");
     // Exercise the exact scan hygiene calls, with the legacy lease persisted.
-    // A finished spec and merged PR are real fixture inputs, not classifier flags.
+    // The PR closed without merging, so a merged-only forge query has no rows.
     use aida_core::DatabaseBackend;
     let store = fx.main.join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
@@ -2732,10 +2772,10 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(persisted.branch.is_empty());
     let shims = fx.root.join("shims");
     std::fs::create_dir_all(&shims).unwrap();
-    // Refuse an empty/wrong branch and serve only a merged PR for feat.
+    // Closed PR 2473 is absent from merged-only results.
     crate::test_exec::write_executable(
         &shims.join("gh"),
-        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
+        "#!/bin/sh\ncase \"$*\" in *--version*) exit 0;; *merged*) exit 0;; *closed*) echo '2473';; *) exit 1;; esac\n",
     );
     let environment = aida_core::exec_context::Environment::capture();
     let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());

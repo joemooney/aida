@@ -1308,15 +1308,14 @@ fn reap_one_with_clear_hooks(
 /// every reap scan, interactive or from the drive loop and night shift,
 /// visits every clone lease. Then the probe, in [`classify_session_reap`]'s
 /// order (unreadable or uncommitted state, the branch, work origin lacks),
-/// and last the merge signal (a merged PR on the forge: the clone's branch
-/// is never in main).
+/// then publication coverage from a fresh origin fetch.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn classify_clone_reap(
     probe: impl FnOnce() -> crate::seat_clone::Probe,
     branch: &str,
     process_exited: bool,
     spec_finished: bool,
-    merged: impl FnOnce() -> bool,
+    publication: impl FnOnce(&str) -> anyhow::Result<()>,
 ) -> ReapVerdict {
     if !process_exited {
         return ReapVerdict::Skip(
@@ -1341,19 +1340,20 @@ pub(crate) fn classify_clone_reap(
             "seat clone is not checked out on its session branch — operator decision".to_string(),
         );
     }
-    if facts.unpushed > 0 {
-        // trace:TASK-3858 | ai:codex
-        return ReapVerdict::Skip(format!(
-            "seat clone holds {} commit(s) origin does not have ({})",
-            facts.unpushed,
-            facts.unpushed_refs.join("; ") // trace:BUG-2224 | ai:claude
-        ));
-    }
-    if !merged() {
-        return ReapVerdict::Skip(format!("no merged PR found for `{branch}`"));
+    if let Err(error) = publication(facts.head.as_deref().unwrap_or("")) {
+        let detail = if facts.unpushed > 0 {
+            format!(
+                "; seat probe reports {} commit(s) origin does not have ({})",
+                facts.unpushed,
+                facts.unpushed_refs.join("; ")
+            )
+        } else {
+            String::new()
+        };
+        return ReapVerdict::Skip(format!("{error:#}{detail}"));
     }
     ReapVerdict::Reap(
-        "spec finished, process exited, PR merged, nothing beyond origin in the seat clone"
+        "spec finished, process exited, fresh origin coverage, nothing beyond origin in the seat clone"
             .to_string(),
     )
 }
@@ -1410,18 +1410,7 @@ pub(crate) fn scan_clone_lease(
             if let Err(error) = &resolved_branch {
                 return crate::seat_clone::Probe::Unknown(format!("{error:#}"));
             }
-            // TASK-2110: a squash-merged PR's head counts as shipped.
-            // trace:TASK-2110 | ai:claude
-            let shipped = crate::seat_clone::merged_pr_heads(project_root, branch);
-            // BUG-051: the ancestor-of-origin rule session end applies.
-            // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-            let probe = crate::seat_clone::probe_counting_origin(
-                project_root,
-                &lease.worktree_path,
-                Some(branch),
-                &shipped,
-                None,
-            );
+            let probe = crate::seat_clone::probe(project_root, &lease.worktree_path);
             if let crate::seat_clone::Probe::Known(facts) = &probe {
                 branch_tip = facts.head.clone();
             }
@@ -1430,11 +1419,9 @@ pub(crate) fn scan_clone_lease(
         branch,
         process_exited,
         spec_finished,
-        || {
-            matches!(
-                detect_merged_pr_for_branch_via_forge(project_root, branch),
-                PrLookup::Found(_)
-            )
+        |tip| {
+            crate::seat_clone::reap_publication(project_root, &lease.worktree_path, branch, tip)
+                .map(|_| ())
         },
     );
     ReapRow {
@@ -1489,8 +1476,6 @@ pub(crate) fn reap_one_clone(
         Ok(branch) => branch,
         Err(error) => return format!("skipped — seat clone branch could not be read ({error:#})"),
     };
-    // trace:TASK-2110 | ai:claude
-    let shipped = crate::seat_clone::merged_pr_heads(project_root, &branch);
     // The clone's mail is retired first: a refusal keeps the session,
     // ending-retained with its grant revoked, as the worktree path does.
     // trace:STORY-1843 | ai:claude
@@ -1515,9 +1500,12 @@ pub(crate) fn reap_one_clone(
     match crate::seat_clone::destroy_retained(
         project_root,
         &lease.worktree_path,
-        crate::seat_clone::DestroyMode::KeepUnshipped,
+        crate::seat_clone::DestroyMode::PublishedReap {
+            scope: lease.scope.clone(),
+            branch,
+        },
         Some(tip),
-        &shipped,
+        &[],
         retirement,
     ) {
         Ok(crate::seat_clone::Destroyed::Removed { .. }) => {

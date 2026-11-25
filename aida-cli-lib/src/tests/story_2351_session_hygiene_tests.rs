@@ -249,9 +249,13 @@ fn scan_skipped_clone_guidance_survives_both_hygiene_summaries() {
             unpushed_refs: vec![detail.clone()],
             ..Default::default()
         };
-        let ReapVerdict::Skip(reason) =
-            classify_clone_reap(|| Probe::Known(facts), "seat", true, true, || true)
-        else {
+        let ReapVerdict::Skip(reason) = classify_clone_reap(
+            || Probe::Known(facts),
+            "seat",
+            true,
+            true,
+            |_| anyhow::bail!("unpublished"),
+        ) else {
             panic!("expected the clone with {name} to be skipped")
         };
         let outcome = HygieneOutcome {
