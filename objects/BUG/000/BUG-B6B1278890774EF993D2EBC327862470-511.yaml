@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T09:37:14.156102840Z
+modified_at: 2026-11-25T10:12:17.090761105Z
 req_type: Bug
 tags:
 - store
@@ -289,6 +289,15 @@ comments:
     Checked explicit ref namespaces, detached HEAD, alternative store names, repeated credential lookups, private-clone refusals, failed credential reads and timeout handling. The ordinary write builder retains hook verification, and the fetch retains attribute, PATH and submodule protections.
   created_at: 2026-11-25T09:37:14.156102840Z
   modified_at: 2026-11-25T09:37:14.156102840Z
+  session_id: 01a21207b0f2
+  harness_version: codex-cli 0.167.0
+- id: 01a21231-1c23-7f21-8d62-21c4e533dcd9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 41cf0a48d5e731799870082b19a6c70d2a65808a plus final native working diff. The fast gate identified two existing PATH reads under the renamed shared builder. Updated scripts/exec-context-legacy.json with their new enclosing function and original count. No untracked additions. AC1: [evidence: behavioral-test] AC2: [evidence: behavioral-test] The final train regression at pr_train_store_refresh.rs:71 passed in 10.18s (j20261125T101151803-2-0). make check-ci-fast passed (j20261125T094750185-2-0), including the corrected environment inventory and credential-routing ratchet. Fetched evidence admission remains BUG-2753.
+  created_at: 2026-11-25T10:12:17.090761105Z
+  modified_at: 2026-11-25T10:12:17.090761105Z
   session_id: 01a21207b0f2
   harness_version: codex-cli 0.167.0
 history:
