@@ -1645,6 +1645,62 @@ enum Action {
     Skip(String),
 }
 
+// trace:BUG-2763 | ai:codex
+const EXIT_UNKNOWN: &str = "earlier review process liveness is unknown";
+const EXIT_ALIVE: &str = "an earlier review process is still running";
+
+fn moved_exit_hold(attempts: &[Attempt], head: &str) -> Option<&'static str> {
+    use aida_core::proc_identity::Verdict;
+    if !attempts.iter().any(|a| {
+        a.head != head
+            && (a.phase == Phase::Exited
+                || (a.phase == Phase::Failed && a.setup_retry && a.diagnostic.is_some()))
+    }) {
+        return None;
+    }
+    let mut alive = false;
+    for attempt in attempts {
+        if attempt.unrecorded_descendant()
+            || (attempt.identity.is_none() && attempt.dispatcher.is_none())
+        {
+            return Some(EXIT_UNKNOWN);
+        }
+        for process in attempt.recorded() {
+            match process.verdict() {
+                Verdict::Alive => alive = true,
+                Verdict::ForeignUnknown(_) => return Some(EXIT_UNKNOWN),
+                Verdict::Dead(_) => {}
+            }
+        }
+        if let Some(pgid) = attempt.pgid {
+            let anchor = attempt.dispatcher.as_ref().or(attempt.identity.as_ref());
+            if !anchor.is_some_and(Identity::observable) {
+                return Some(EXIT_UNKNOWN);
+            }
+            match signal::group_members(pgid) {
+                Ok(members) => alive |= !members.is_empty(),
+                Err(_) => return Some(EXIT_UNKNOWN),
+            }
+        }
+    }
+    alive.then_some(EXIT_ALIVE)
+}
+
+// trace:BUG-2763 | ai:codex
+pub(crate) fn unknown_exit_findings(root: &Path) -> Vec<crate::doctor_root::DoctorFinding> {
+    skipped_changes(root)
+        .into_iter()
+        .filter(|(_, _, reason, _)| reason == EXIT_UNKNOWN)
+        .map(|(key, head, reason, _)| crate::doctor_root::DoctorFinding {
+            category: "stalled-reviews".into(),
+            id: format!("{key}/review-watch"),
+            summary: format!("{key} at {head}: {reason}"),
+            action: format!("Inspect review-watch receipts and process identities for {key}"),
+            safe_heal: false,
+        })
+        .collect()
+}
+
 /// Recheck a transient terminal refusal before spending another pickup attempt.
 /// None leaves ordinary review, fetch and setup outcomes to their existing policies.
 // trace:BUG-2720 | ai:codex
@@ -1899,6 +1955,13 @@ fn select_with_coverage(
             }
             anyhow::ensure!(known, "notification identity changed; pending message retained");
             return Ok(Action::Notify(notice.clone()));
+        }
+        // The reservation below replaces terminal receipts atomically. Require
+        // positive exit evidence before discarding an older exited hold.
+        // trace:BUG-2763 | ai:codex
+        if let Some(reason) = moved_exit_hold(&entry.attempts, &change.head) {
+            outcome = Admission::Skipped("held by exited attempts");
+            return Ok(Action::Skip(reason.into()));
         }
         let fetch_failures = entry.attempts.iter()
             .filter(|a| a.head == change.head)

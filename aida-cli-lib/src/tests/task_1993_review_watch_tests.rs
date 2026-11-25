@@ -5913,3 +5913,56 @@ fn bug2758_rollover_loads_additive_fields_and_omits_zero_retries() {
         2
     );
 }
+
+// trace:BUG-2763 | ai:codex
+#[test]
+fn bug2763_moved_exit_requires_verified_death() {
+    let (temp, store) = fixture();
+    let old = change(1, 1, false);
+    let new = change(1, 2, false);
+    let first = dispatch(select(&store, &old, None, 1).unwrap());
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dead = Identity::child(&child).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+
+    let mut unknown = dead.clone();
+    unknown.pid_namespace = None;
+    for (worker, reason) in [
+        (Identity::current().unwrap(), EXIT_ALIVE),
+        (unknown, EXIT_UNKNOWN),
+    ] {
+        store
+            .transaction("PR-1", |state| {
+                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                assert_eq!(attempt.token, first.token);
+                attempt.phase = Phase::Exited;
+                attempt.identity = Some(dead.clone());
+                attempt.worker = Some(worker);
+                attempt.spawning = true;
+                Ok(())
+            })
+            .unwrap();
+        let Action::Skip(message) = select(&store, &new, None, 1).unwrap() else {
+            panic!("unverified attempt released");
+        };
+        assert_eq!(message, reason);
+        record_skip(&store, &new, Some(&message)).unwrap();
+        let findings = unknown_exit_findings(temp.path());
+        if reason == EXIT_UNKNOWN {
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].id, "PR-1/review-watch");
+        } else {
+            assert!(findings.is_empty());
+        }
+    }
+    store
+        .transaction("PR-1", |state| {
+            state.entries.get_mut("PR-1").unwrap().attempts[0].worker = Some(dead);
+            Ok(())
+        })
+        .unwrap();
+    let next = dispatch(select(&store, &new, None, 1).unwrap());
+    assert_eq!(next.head, new.head);
+    assert_ne!(next.token, first.token);
+}
