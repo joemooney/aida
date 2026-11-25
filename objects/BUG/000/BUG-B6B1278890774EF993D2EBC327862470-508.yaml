@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The ancestry exemption applies only to the recovery-invocation argv itself; a descendant carrying the EXACT attempt token, or matching the recorded group/session, still counts as an occupant and blocks release.
   - AC2: Tests: an ancestor with independent holder evidence blocks release; a plain recovery invocation does not.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-25T08:21:02.209107098Z
+modified_at: 2026-11-25T12:12:45.361612385Z
 req_type: Bug
 tags:
 - launch
@@ -310,6 +310,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2129f-636b-7230-bb5d-ef0f4c8390ec
+  author: aida-auto-bump
+  timestamp: 2026-11-25T12:12:45.291083316Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2129f-63b1-7e72-a31d-089ad123a19d
+  timestamp: 2026-11-25T12:12:45.361606857Z
+  agent: aida
+  commit_sha: 664f260222408056dbef136fe156d48f843f1329
+  summary: 'BUG-2747 AC1 PASS: For known-receipt recovery and unknown-receipt retirement, the scan checks group, session, cwd and exact environment values for invocation ancestors. The exemption is limited to the exact recovery operand and requires a matching executable inode. AC2 PASS: Criterion-linked tests cover independent environment, group, session and argv evidence. The CLI integration test covers both release paths, asserting receipt preservation under a holder ancestor and release on a direct invocation. The implementer''s AIDA evidence reports the targeted CLI test passed before publication. The exact-head FAST source gates passed and CI compile was pending at review time. This review used source and existing evidence. Reviewed the supplied landed tree 9b4d25f7e71c8a10ef2854b4ac4a36de14b8e627 against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, one commit ahead of the original head''s base. The deferred finding applies to both the PR head and the landed tree.'
+  punted:
+  - 'punted: Request changes for completing BUG-2747. Reviewed all three files in the landed diff against protected main 260a82ae939faf34a8e6505a6f765f2151655610 and landed tree 71323ac7889846ea4554cde98627ce2d1448bea1. The PR head is eight commits behind that base. The findings apply to the landed tree and do not depend on code changed by those eight commits. The exact-head GitHub FAST gates and compile passed, and the test shards were skipped. No local tests were run. BUG-b6b1278890774ef993d2ebc327862470-508.AC1 — unverified BUG-b6b1278890774ef993d2ebc327862470-508.AC2 — unverified AC1 has partial source evidence for exact initial environment values and matching group/session IDs. The argv exception can also hide independent evidence on a non-recovery ancestor. For AC2 the new fixture covers individual scanner outcomes, including plain recovery argv and same-PID holder evidence, but it neither tests the production release decisions with that ancestry nor traces either criterion. The implementer reported a passing isolated fixture and a Cargo build that timed out before the focused test ran.'
+  - 'punted: Reviewed the full landed diff against protected main 45206d90a1df483c1caff91dee5abf345df4a8d2 (landed tree 0e55c5b5fb5b29394cf40557da0b05a9b92119af). BUG-2747 AC1 PASS by source inspection for the specified positional forms: recovery checks matching executable identity and exact operand bytes and still counts environment, group, session and cwd evidence. AC2 FAIL: the plain unknown-retirement control failed in the implementer’s focused run, and the tests lack end-to-end coverage of the actual CLI operand exemption and the newly specified argv negatives. Exact-head FAST gates and FAST compile both failed the executable-resolution guard, which also failed the aggregate Build check. No local tests ran in this review.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -318,11 +335,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Reviewed the full landed diff against protected main 45206d90a1df483c1caff91dee5abf345df4a8d2 (landed tree 0e55c5b5fb5b29394cf40557da0b05a9b92119af). BUG-2747 AC1 PASS by source inspection for the specified positional forms: recovery checks matching executable identity and exact operand bytes and still counts environment, group, session and cwd evidence. AC2 FAIL: the plain unknown-retirement control failed in the implementer’s focused run, and the tests lack end-to-end coverage of the actual CLI operand exemption and the newly specified argv negatives. Exact-head FAST gates and FAST compile both failed the executable-resolution guard, which also failed the aggregate Build check. No local tests ran in this review.'
-  recovery_hint: address the review findings, move BUG-2747 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T05:12:09.502882461Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T12:12:45.291076544Z
+  completion_sha: 664f260222408056dbef136fe156d48f843f1329
