@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T22:19:17.952730575Z
+modified_at: 2026-11-25T23:01:38.087567106Z
 req_type: Bug
 tags:
 - lanes
@@ -528,6 +528,74 @@ comments:
   modified_at: 2026-11-25T22:19:17.952730575Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a214f1-74a7-7aa2-9117-cf2da77f53e5
+  author: dirtlab
+  content: |-
+    S1 SPIKE REPORT: inherited owner-lock fd K (SPIKE-716; advisor-122 signoff condition 2). Measured on dell1, 2026-11-25, main @ a387b7e8. No production code and no PR. Scratch programs are in the lane's $TMPDIR/s1 (holder.py, launcher.py, daemonize.py, probe.sh, fdk.sh, wrap.sh).
+
+    ## Method
+    - holder.py / launcher.py open K with O_NOFOLLOW and take flock LOCK_EX. launcher.py models the sketch: the launcher's own K stays O_CLOEXEC, and only the worker gets a non-CLOEXEC dup at fd 9 (the pre_exec analogue).
+    - Liveness check from outside: `flock -n -E 1 K true` (1 = held). Holder pids come from scanning /proc/*/fd/9. `/proc/<pid>/fdinfo/9` shows `lock: FLOCK ADVISORY WRITE`.
+    - Limits of this seat (AIDA-contained, nested user namespaces and AF_UNIX denied): bwrap and the codex sandbox cannot run to completion here, and the sccache, git fsmonitor and gpg-agent daemons cannot start. Those rows rely on strace up to the exec boundary, on source reading, or on a structural proof. Each row's evidence class is labelled.
+
+    ## Table: spawn path × does K survive? × is K held after the lane exits? × holder
+
+    | Path | Survives into worker? | Survives into worker's tool children? | Held after lane exit? | Holder | Evidence |
+    |---|---|---|---|---|---|
+    | bwrap containment (headless.rs:2780 → launch/contained.rs:2132) | **NO** | no | no | n/a | SOURCE: the pre_exec calls `close_range(3,~0,CLOSE_RANGE_CLOEXEC)` and then clears CLOEXEC only on an allowlist (mounts, writer, accept_reader, oauth_denial, mutation). contained_host.py:692 uses `Popen(pass_fds=...)`, whose default close_fds=True closes everything else. EMULATED: holder `closerange` mode → child shows `fd9 absent`, probe=0. |
+    | bwrap itself (if K were allowlisted) | yes | yes | depends on descendants | — | OBSERVED: bwrap 0.9 passes non-CLOEXEC fds. Claude Code's own bwrap wrapper runs this seat's shell as `/proc/self/fd/3 /bin/bash -c 'exec 3<&-'…` (pid 1 here). contained_lane.py:389 then calls execve with no close. |
+    | plain headless (headless.rs:2841, Rust Command plus proc_identity pre_exec) | **YES** | per vendor (see the next two rows) | per vendor | worker | OBSERVED: `holder inherit` → child `fd9 -> K`, probe=1 while alive, probe=0 after exit. SOURCE: prepare_command (proc_identity.rs:573) writes a receipt and closes nothing. |
+    | codex native sandbox (`codex sandbox` / exec --sandbox, codex-cli 0.167.0) | **YES** | **YES** | **YES** when a tool command starts a daemon | codex, codex-linux-sandbox, bwrap, the tool command and any daemon it starts | STRACE: `strace -f -e close_range,close,fcntl,ioctl,execve` over codex → codex-linux-sandbox → /usr/bin/bwrap shows no close_range, no close(9), no F_SETFD/FIOCLEX on 9. The run was cut off at bwrap (no user namespace here), so the final in-sandbox exec was not observed. |
+    | claude headless lane (`claude -p`, 2.1.x, haiku, Bash tool) | **YES** | **NO** | **NO** | the claude process only | OBSERVED: probe=1 at t=4/8/12/16/20 s and the only fd9 holder was the claude pid. The Bash tool child printed `fd9 absent`. probe=0 within 4 s of exit. Run with sandbox disabled, because nested bwrap is impossible here. With the sandbox on, the same spawn adds a bwrap layer below an fd set that already lacks K. |
+    | cargo → rustc / RUSTC_WRAPPER (= sccache client) | — | **YES** | no from cargo/rustc themselves (they exit with the build) | — | OBSERVED: a wrapper.sh standing in for sccache logged `fd9: K` for every rustc invocation. A clean scratch build left no holders and probe=0 at +0/20/40 s. jobserver = a pipe (`--jobserver-auth=4,5`), not a daemon. |
+    | sccache-server (spawned by the first sccache client when no server is up) | — | **YES (inferred)** | **YES**, for SCCACHE_IDLE_TIMEOUT (default 600 s), and indefinitely while other lanes' builds keep the shared server busy | sccache-server | NOT OBSERVED: the client fails at `socket(AF_UNIX)` = EPERM in this seat. Structural argument: the client receives K (row above), and sccache starts its server with a plain Rust Command that has no fd close. Generic proxy measured: the same double-fork+setsid daemon (daemonize.py) held K at worker exit +2 s and released only when it exited (+11 s). ~/.cargo/config.toml sets rustc-wrapper = sccache, so every codex-native build is exposed. |
+    | git fsmonitor | — | — | **N/A on dell1** | — | `git fsmonitor--daemon start` → "not supported on this platform" (git 2.43, Linux). core.fsmonitor is unset in the repo and in global config. |
+    | gpg-agent | — | no | **NO** | — | STRACE: gpg-connect-agent calls close(9) immediately before execve gpg-agent --daemon. GnuPG's spawn closes fds ≥3. |
+    | lane-job runner jobs (lane_job.rs:1906, runner thread inside the launcher) | — | no **iff** the launcher's K is CLOEXEC | — | — | SOURCE: jobs use a plain Command with env_clear and close no fds. They are safe only because the sketch keeps the launcher's K CLOEXEC. Any launcher-side spawn that inherits K would leak it into cargo/sccache. |
+
+    ## Additional finding: any inheritor can release K for everyone
+    All holders share one open file description, so `flock(fd, LOCK_UN)` from any descendant frees the lock while the lane is still alive. OBSERVED: the worker was still running and a descendant ran `flock -u 9` → the outside probe returned 0 (free) within 2 s. This makes K's "free" state unreliable as death evidence in any path where untrusted model-issued commands inherit K, which is every codex-native lane. Passing K into the contained sandbox would also undo the host-handle hygiene that supervisor.rs:591-640 (TASK-2705) seeds and asserts. A descriptor opened read-only still permits LOCK_UN and a reopen through /proc/self/fd.
+
+    ## (3) Can daemon spawns be made to set CLOEXEC on K reliably?
+    - **Launcher side: yes.** Keeping the launcher's K O_CLOEXEC and handing only a dup to the direct child works (launcher.py `sketch`). Lane jobs and other launcher spawns never see K.
+    - **Worker side: no**, not reliably. The daemons are third-party code (cargo → sccache client → sccache-server, or tool commands inside codex). AIDA cannot set CLOEXEC on an fd inside processes it does not exec, and codex passes K through untouched. Only the claude vendor happens to drop it.
+    - **What does work: never give K to the worker.** launcher.py `shim` forks a per-lane holder process. The holder keeps K (CLOEXEC, never exec'd) and is the worker's parent, and the worker gets PR_SET_PDEATHSIG=SIGKILL. Measured:
+      - The worker and its daemon hold no K. probe=1 while the worker lived and 0 at worker exit +2 s, even though the daemon was still alive.
+      - SIGKILL on the holder killed the worker within 1 s, and probe=0 followed.
+      - For the contained path, contained_host.py is already this per-lane host process, outside bwrap and under PDEATHSIG from its launcher.
+      - Limitation: PDEATHSIG reaches only the direct worker. Orphaned grandchildren survive without K, so K then means "supervised worker dead", not "whole tree dead".
+
+    ## Verdict
+    **K as sketched (one fd inherited through the worker tree) is NOT viable.**
+    - On the contained path it does not survive at all. Making it survive would breach the TASK-2705 fd-hygiene invariant.
+    - On codex-native lanes it survives too far: sccache-server keeps it for ≥600 s after exit, so mandate release would always refuse. Any descendant can also LOCK_UN it, so a free K would not prove death.
+    - Only claude-plain lanes behave as K requires.
+    - Per signoff condition 2, the fallback is a **supervisor-held lock**. The measurements show that the supervisor-held lock can still be a kernel flock held by a per-lane holder outside the worker (launcher-side shim, or contained_host.py), with the worker bound by PDEATHSIG. That would make the heartbeat corroborating rather than load-bearing.
+
+    **DECISION FOR ADVISOR (not made here):** choose between (a) supervisor-held flock in a per-lane holder (no heartbeat needed for liveness; semantics narrowed to "supervised worker alive") and (b) supervisor lock plus heartbeat as in condition 2. A related question: does a per-lane holder change the S1 lease schema (owner_lock records the holder's HolderRecord, not the launcher's) enough to need a sketch amendment?
+
+    ## Evidence commands (run from $TMPDIR/s1)
+    - `./holder.py K.lock {inherit|cloexec|closerange} -- sh -c './fdk.sh; sleep 3' & sleep 1; ./probe.sh K.lock` → inherit: fd9→K, probe=1, then 0 after exit. cloexec and closerange: fd9 absent, probe=0.
+    - `./holder.py K.lock inherit -- sh -c 'cat /proc/$$/fdinfo/9'` → `lock: 1: FLOCK ADVISORY WRITE <pid> 103:02:<ino> 0 EOF`
+    - `CODEX_HOME=./ch strace -f -qq -e trace=close_range,close,fcntl,ioctl,execve -o st3.txt ./holder.py K.lock inherit -- codex sandbox -- sh -c true; grep -E 'close_range|close\(9\)|\(9, F_SETFD|FIOCLEX' st3.txt` → only `ioctl(3, FIOCLEX)` (python's own fd). The exec chain is codex → codex-linux-sandbox → /usr/bin/bwrap.
+    - `./holder.py K.lock inherit -- claude -p --model claude-haiku-5-5 --settings '{"sandbox":{"enabled":false}}' --allowedTools Bash "...fdk.sh; sleep 20"`, polling /proc/*/fd/9 every 4 s → the holder is the claude pid only. The tool child prints `fd9 absent`.
+    - `./launcher.py K.lock sketch -- sh -c 'cd cr && RUSTC_WRAPPER=$PWD/wrap.sh cargo build --offline -j4'` → wrap.log shows `fd9: K` for each wrapper call. A clean build then shows probe=0 at +0/20/40 s.
+    - `./launcher.py K.lock {sketch|shim} -- sh -c './daemonize.py 12; sleep 3'`, probing at t=1/5/14 → sketch: 1/1(daemon)/0. shim: 1/0/0.
+    - `./launcher.py K.lock sketch -- sh -c 'sleep 1; flock -u 9; sleep 5'`, probing at t=3 → 0 while the worker is alive.
+    - `./launcher.py K.lock shim -- sh -c 'exec sleep 31'`, then `kill -9 <shim>` → the worker is dead within 1 s and probe=0.
+    - `GNUPGHOME=./gh strace -f -e trace=execve,close_range,close ./holder.py K.lock inherit -- gpg-connect-agent /bye` → `close(9)` just before `execve("/usr/bin/gpg-agent"...)`.
+    - `git -c core.fsmonitor=true fsmonitor--daemon start` → "not supported on this platform".
+    - `stat -f -c %T /home/dirtlab/ai/aida/.aida/sessions` → ext2/ext3 (ext4, local). flock is supported, which settles open risk 2.
+
+    ## Not measured (residual)
+    - The live sccache-server hold time (AF_UNIX denied in this seat). Re-run the codex row and the sccache row from a host shell: `./launcher.py K sketch -- sh -c 'SCCACHE_SERVER_PORT=<free> cargo build -p aida-core'`, then poll `./probe.sh K` for 120 s.
+    - Codex tool-exec inside a working bwrap (the observation stops at the bwrap exec).
+    - Claude with its sandbox on, and MCP-server children of claude.
+    - The interactive exec path (interactive.rs:861/1488): K would sit in the exec'd vendor directly, so the vendor rows above apply.
+  created_at: 2026-11-25T23:01:38.087567106Z
+  modified_at: 2026-11-25T23:01:38.087567106Z
+  session_id: 01a214e72770
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe

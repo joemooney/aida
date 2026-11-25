@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:26:36.718610073Z
-modified_at: 2026-11-25T22:50:36.681109755Z
+modified_at: 2026-11-25T23:01:47.755401113Z
 req_type: Spike
 tags:
 - leases
@@ -23,6 +23,20 @@ relationships:
   target_id: 01a210b8-0b89-7b72-a5d9-49f67101d886
   created_at: 2026-11-25T21:27:06.680002838Z
   created_by: joe
+comments:
+- id: 01a214f1-9a6b-7092-8d37-305402ede8b3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a387b7e87b96 (no diff: git diff origin/main...HEAD and git diff HEAD are empty, no untracked additions; measurement-only spike, no PR by AC1).
+    AC1: [evidence: manual-inspection] S1 SPIKE REPORT posted on BUG-2761 with path × survives × held-after-exit × holder table, verdict (K as sketched not viable; supervisor-held fallback, with a per-lane flock-holder variant measured), decision for advisor, and evidence commands. Scratch programs in lane $TMPDIR/s1 only.
+    Probe findings: shared-OFD LOCK_UN lets any inheritor free K (observed); contained path closes K by construction (close_range CLOEXEC + Popen close_fds).
+    Residual risks: sccache-server hold time, codex tool exec past bwrap, claude-with-sandbox were not observable in this AF_UNIX/userns-denied seat — inferred or proxied, labelled per row; rerun commands given in the report.
+    Conflict noted: launch preamble asked for a docs/spikes report + PR; spec AC1 and the pickup brief say comment only, no PR — followed AC1.
+  created_at: 2026-11-25T23:01:47.755401113Z
+  modified_at: 2026-11-25T23:01:47.755401113Z
+  session_id: 01a214e72770
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2149a-f0e1-75e3-8505-a3c7cf379451
   author: joe
