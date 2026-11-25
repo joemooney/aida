@@ -13,10 +13,22 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:29:49.463570317Z
-modified_at: 2026-11-25T06:14:21.201309902Z
+modified_at: 2026-11-25T06:48:14.702027054Z
 req_type: Bug
 tags:
 - integration
+comments:
+- id: 01a21176-4c2a-7831-82f4-06a2f31eddae
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: afbea08b75a58cf8d9618068cb5efd495790b244 plus native working diff. Committed differences against origin/main are inherited from integration. No untracked additions.
+    AC1: [evidence: behavioral-test] maintenance_schedule.rs:3653 registers the exact spelling. maintenance_schedule_tests.rs:3834 verifies argv including JSON and the findings gate, and rejects hook eligibility.
+    AC2: [evidence: behavioral-test] maintenance_schedule_tests.rs:3821 parses the checked-in TOML with the production schema and resolves every command through the production parser. All 25 command-bearing entries across 40 jobs covered. Prompt-only jobs skipped. Whitespace normalization, case matching and extra-token rejection retain the existing parser behavior. No tests weakened or actionable defects found. Both filtered tests passed, make check-ci-fast exited 0, git diff --check passed. Live production alert delivery was outside this lane.
+  created_at: 2026-11-25T06:48:14.702027054Z
+  modified_at: 2026-11-25T06:48:14.702027054Z
+  session_id: 01a211569ece
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210f8-c819-7903-b35c-7e0d287801a9
   author: joe
