@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-837fda21243f45f1118ef7a6f2c815e2c6b6255683fbfeb77b82ffc5e524f0a9",
+  "thread_id": "review-watch-837fda21243f45f1118ef7a6f2c815e2c6b6255683fbfeb77b82ffc5e524f0a9",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795591902406,
+  "body": "PR-4559 at ac66c3106deff54e6cf7bb263323d815916e7da5 is behind `integration` with overlapping paths. Its author has no live session on the branch. The watcher asked the forge to update the branch and it did not: update-branch conflicts: X Cannot update PR branch due to conflicts. Merge `integration` into the branch (resolving conflicts) and push, or close the change; the watcher reviews the new head on its next pass.",
+  "subject": "PR-4559 behind `integration` with overlap; update-branch conflicts",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
