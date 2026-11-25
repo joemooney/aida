@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T10:29:29.644443284Z
+modified_at: 2026-11-25T10:37:07.620143087Z
 req_type: Bug
 tags:
 - leases
@@ -310,6 +310,18 @@ comments:
   modified_at: 2026-11-25T09:15:42.878673846Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21247-d889-7fd3-9288-2d0ff55719ed
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 04abb2b5add64b26864bed9e344cf1012e3dab00 plus the native working-tree changes for round 5. Reviewed the merge-base diff and untracked-file list.
+    AC1: [evidence: behavioral-test] bug_2722_real_cli_terminal_attestation passed, including legacy absent-lease release with a fresh durable event containing the ID, reason and absence outcome (repair_attestation.py:121).
+    AC2: [evidence: behavioral-test] ordinary unverified clone heal still refuses. This round tested checkout replacement, creation during confirmation and cross-device rename failure where available. No injected EIO in this run.
+    F1-F3: dead creator with namespace- and start-time-stamped live worker retained lease and tree. The locked exact snapshot and liveness checks precede apply (worktrees.rs:1505). Legacy salvage records its destination before rename and preserves exact alternates bytes and pending mail. Checked ID matching, structured JSON encoding, per-attempt event uniqueness and operator-only routing. A failed rename can retain a write-ahead destination record. Targeted integration run passed (1 Rust test, 2 Python cases). Store writer inventory passed. FAST gate submitted separately.
+  created_at: 2026-11-25T10:37:07.620143087Z
+  modified_at: 2026-11-25T10:37:07.620143087Z
+  session_id: 01a212407c12
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
