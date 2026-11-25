@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T11:54:06.356201885Z
+modified_at: 2026-11-25T11:54:19.571322651Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -98,6 +98,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full-sweep review of the TASK-3895 Refs slice. The generated worksheet lists AC1 and AC2 in full with no pre-marked deferrals. The PR body claims both the opt-in flow and its refusal conditions. I compared the complete 532-line review evidence with the pinned Git diff from protected base 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to landed tree cf3301866fe5fa415202e1858534d94210bdebf2 and attest the original PR head. The two base commits also touched the CLI help snapshot and store-writer inventory. The landed diff retained the flag in both help representations and the new writer entries. None of the findings depends on base changes.. It was punted on: blocked-dependency: Final validation needs a clean launcher target. FAST job j20261125T050848928-2-0 stopped on compiler signal 9. Focused rerun j20261125T052623673-2-0 failed linking undefined hidden LLVM symbols before executing tests. Initial focused run passed one test. Preserve the uncommitted implementation for host validation.. No triage reason was given.'
   created_at: 2026-11-25T11:54:06.356193156Z
   modified_at: 2026-11-25T11:54:06.356193156Z
+- id: 01a2128e-8388-79d3-9e69-1c9f0cf98f36
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3895):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3ff1519f6942
+    Recorded: 2026-11-25T11:53:03.488495520+00:00
+    Findings:
+    1. TASK-3895 AC1, aida-cli-lib/src/repair_journal.rs:272. The production scan requires cwd and environ for every numeric PID, including unrelated system processes. A regular advisor cannot inspect a root-owned PID 1 on an ordinary multi-user Linux host, and even a privileged observer can see kernel threads or zombies with no cwd. Either condition vetoes every release on that host before the mandate is checked, even for a known-dead lane. Use a host observation boundary that can certify which tasks cannot belong to the lane and preserve fail-closed behavior for relevant unreadable or ambiguous tasks.
+    2. TASK-3895 AC1, aida-cli-lib/src/repair_journal.rs:262-290, 492-501. A single /proc pass does not prove continuous lane quiescence. An existing process can enter the tree or a new matching process can start after its slot was checked and before save; a surviving process need not update the recorded owner's lease. The post-scan check only compares a constant dead-owner status, so it also cannot detect replacement with a different dead-owner lease record. Establish a stable admission and lease-evidence boundary through the release or refuse where the boundary cannot prove quiescence.
+    3. TASK-3895 AC1, aida-cli-lib/src/repair_journal.rs:280-286. Linux /proc/PID/environ exposes the initial exec environment and does not reliably reflect an AIDA_SESSION_ID subsequently exported into an existing shell, a handoff used by session_start.rs:4110. A surviving shell outside the tree can therefore go undetected by both checks even while it carries the lane's session ID. Bind process ownership to authoritative lane evidence covering this launch path, or refuse when the scan cannot certify it.
+    4. TASK-3895 AC1, aida-cli-lib/src/repair_journal.rs:460 and trusted_config.rs:135-150. The release opt-in uses the display-only local resolver, which can fall back to an unreviewed local main or master when the protected tracking ref is absent. A local config commit can therefore supply the project opt-in without the protected default branch having granted it. Require a pinned protected default-branch ref for this authority decision and leave the knob off when that evidence is unavailable.
+    5. TASK-3895 AC1, aida-cli-lib/src/repair_journal.rs:470-475, 500-512. The command reads the mandate and releases the journal without holding the mandate authority lock used by start/renew/stop (gate/mandate.rs:931,1120,1202). A concurrent stop can finish after the read and before the journal publication, allowing release under a stopped mandate. Serialize the final mandate revalidation and publication against stop, including expiry at the decision boundary.
+    6. TASK-3895 AC2, aida-cli-lib/src/repair_journal.rs:933 and gate/mandate.rs:405. The focused test injects a bool, a synthetic proc tree, and a fabricated grant ID into release_with. It cannot catch production opt-in from the wrong ref, the host-scan failure on normal Linux, or regressions in grant validation and the CLI-to-terminal fallback. Add coverage at the production boundary for protected config off/on, the terminal requirement when off, valid scoped authorization, rejected grant and mandate cases, and refusal or audited success on realistic host process evidence.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T11:54:19.400019590Z
+  modified_at: 2026-11-25T11:54:19.400019590Z
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
