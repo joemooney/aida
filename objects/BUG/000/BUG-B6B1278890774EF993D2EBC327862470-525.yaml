@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T21:18:46.258975844Z
+modified_at: 2026-11-25T21:19:44.904045330Z
 req_type: Bug
 tags:
 - ci
@@ -164,6 +164,12 @@ comments:
   content: Implementer push 69cf3759d3c0 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-25T21:18:46.258975372Z
   modified_at: 2026-11-25T21:18:46.258975372Z
+  session_id: 01a214529616
+- id: 01a21494-2d08-74f2-948e-c9f5309991aa
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `fix-approved-cifull` at head `69cf3759d3c019700c639070d6e553dfe1941588`.'
+  created_at: 2026-11-25T21:19:44.904042690Z
+  modified_at: 2026-11-25T21:19:44.904042690Z
   session_id: 01a214529616
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
