@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T11:52:16.288228286Z
+modified_at: 2026-11-25T12:34:46.109654297Z
 req_type: Task
 tags:
 - review
@@ -298,6 +298,40 @@ comments:
     Self-approve limits: this touches leases and git transport, so it needs the independent verdict at 67669eca.
   created_at: 2026-11-25T11:52:16.288228286Z
   modified_at: 2026-11-25T11:52:16.288228286Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a212b3-c8eb-7003-abf9-1670bdad7160
+  author: joe
+  content: |-
+    PARKED (advisor 05:41): slice 2 needs a SKETCH before any more implementation. #4566 is closed unmerged; branch int38r-task-3878 is kept.
+
+    Sketch requirements:
+    (1) A typed queue/claim lookup for 'repair already owned', with no free-text note matching.
+    (2) The live base comes through the sanctioned transport with a SANITIZED environment, covering the credential config reads as well, not just the outgoing command.
+    (3) Per-row error isolation: one malformed unrelated queue or lease entry must not suppress every conflict row.
+
+    Slice 1 (the doctor check) is already on main and stays. Slice 2 does NOT ride p38.
+
+    Independent CR @ 67669eca: request-changes with 9 findings (5 HIGH, 4 medium/p3), verbatim below.
+    - high security-authority-bypass | stalled_reviews.rs:56–61 clears GIT_DIR, GIT_WORK_TREE, GIT_COMMON_DIR, and Git config routing only on the outgoing ls-remote Command. Both credential lookups still inherit the process environment because configured_remote_urls builds an independent Git command (aida-core/src/git_ops/remote_credentials.rs:361–377). If ambient routing points that lookup at a different repository with a clean or absent origin while the actual root stores an HTTP(S) origin with userinfo, the credential rewrite is missing and the real URL can reach git-remote-http(s) argv. Make the credential lookup and transport use the same pinned repository and config environment. Keep seat-clone refusal and cover mismatched routing with synthetic credentials.
+
+    - high unmet-claimed-ac | AC1 and the advisor's retained-ownership condition: stalled_reviews.rs:170–215 only checks live holders. A matching dead lane lease or retained repair reservation is emitted as an ordinary conflict with a new queue-rework command. Restore read-only lookup of both kinds of retained ownership, render a repair-needed diagnostic with the specific blocker and recovery action, and test dead leases and retained reservations separately.
+
+    - high unmet-claimed-ac | AC1: stalled_reviews.rs:171–180 recognizes queued repair only by two spellings of a free-text note and the literal implementer role. An already queued repair for the PR with an operator-written reason or normal unrouted implementer pickup is reported again, triggering the scheduled advisor route. Conversely, a stale or session-targeted queue row can mask a real conflict when its note matches, because the Git backend ignores include_completed and the predicate ignores queue routing and eligibility. Identify applicable pending implementer rework for the change and cover both duplicate alerts and false suppression. Keep the ordinary queue-entry negative control.
+
+    - high unmet-claimed-ac | AC1: stalled_reviews.rs:182–190 suppresses a row on bare head branch equality. GitHub forks can each have a branch named fix, and a live project implementer on fix suppresses the unrelated fork's conflicting PR even if its backing spec differs. Carry source repository identity with the forge row and only use branch equality when it identifies the holder's change. Cover same-named branches across repositories.
+
+    - high unmet-claimed-ac | AC1: stalled_reviews.rs:94–112,170–181 caches a single fallible global queue and holder scan. One malformed unrelated queue file or a strict lease error in another clone makes every known conflict exit before the conflict finding is constructed. The generic evidence-unavailable rows lose the spec, head, conflict status and approved-first ordering. Preserve known conflict evidence with explicit unknown queue or lane status, suppress the rework action when ownership is uncertain, and test a mixed batch with unrelated corruption.
+
+    - medium p2 | stalled_reviews.rs:43–53,122 and 232 treat GitHub UNKNOWN mergeability as the ordinary non-conflict path. A PR without a verdict can then yield no finding and a clean scheduled check while GitHub is still computing mergeability. The spec's advisor brief calls for one bounded re-query followed by an explicit unknown result if it remains unsettled. Cover both UNKNOWN-to-CONFLICTING and persistent UNKNOWN.
+
+    - medium p2 | stalled_reviews.rs:212–215 emits the same spec-scoped queue command whenever one backing spec resolves, even when that spec has multiple open PRs. The PR number appears only in the reason, and queue rework upserts one row per spec (queue_cmd/rework.rs:1055–1097). Normal pickup then refuses multiple open changes without an explicit branch (session_start.rs:474–501). Surface the ambiguity and provide branch-specific pickup guidance for the reported PR instead of presenting the spec-only command as sufficient.
+
+    - medium p2 | stalled_reviews.rs:44–49,56–60 applies the 30-second deadline only after the builder has already done two credential config reads. Those reads call Command::output without a scoped config deadline (aida-core/src/git_ops/remote_credentials.rs:361–377), so a stalled config read can hang the scheduled check before any timeout applies. Bound command construction and the probe under one deadline.
+
+    - medium p3 | stalled_reviews.rs:166–169,203–213 renders known age only from an exact tuple-marked comment, but the report's manual command records an unmarked reason and neither the report nor another path in this diff writes the marked format. The test manufactures a comment the report-only workflow does not produce. When a live head and base are known, carry that evidence through the suggested manual command and verify age from evidence produced by that workflow.
+  created_at: 2026-11-25T12:34:46.109654297Z
+  modified_at: 2026-11-25T12:34:46.109654297Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
