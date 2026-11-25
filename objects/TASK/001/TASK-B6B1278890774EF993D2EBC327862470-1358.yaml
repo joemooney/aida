@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F1, event.rs:283) When the target branch advanced after the review checkout was prepared, review_risk_pr_base must still resolve the merge base correctly: fetch the advanced base OID, or fall back to a bounded remote merge-base, instead of a local-only `git merge-base` that misses it. Test with a base that advanced after preparation.
   - AC2: (F2, forge.rs:6971) The 15-second risk-evidence timeout must cover resolve_gh_binary_for_probe (`gh --version`) too, so a stalled resolver cannot block appending the verdict; the advisory evidence degrades to STRICT on timeout. Test with a stalled resolver.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T02:56:34.647026662Z
+modified_at: 2026-11-25T02:57:20.052332335Z
 req_type: Task
 tags:
 - integration
@@ -114,6 +114,11 @@ comments:
   modified_at: 2026-11-25T01:23:43.271083215Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210a2-e2b4-7ba2-9a9e-643c94df9656
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 and tree fe7c3246bc28b56f7e1cbfd235e9defdc9916cd5. TASK-3874 is a completing spec (origin TASK-b6b1278890774ef993d2ebc327862470-1358).. No triage reason was given.'
+  created_at: 2026-11-25T02:57:20.052324009Z
+  modified_at: 2026-11-25T02:57:20.052324009Z
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
@@ -188,6 +193,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a210a2-e2b4-7ba2-9a9e-642f2658586f
+  author: joe
+  timestamp: 2026-11-25T02:57:20.052314660Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
@@ -199,15 +211,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 52f38dc581ff9d426e78b26b457538c65bd97377
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Reviewed the complete landed diff against main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 and tree fe7c3246bc28b56f7e1cbfd235e9defdc9916cd5. TASK-3874 is a completing spec (origin TASK-b6b1278890774ef993d2ebc327862470-1358).
-    TASK-b6b1278890774ef993d2ebc327862470-1358.AC1 — unverified. The advanced-base test exercises the fetch helper and verifies the resulting merge base, but the production lookup-to-fetch path lacks a regression test and the initial probe can perform an implicit, unwrapped fetch.
-    TASK-b6b1278890774ef993d2ebc327862470-1358.AC2 — verified by source inspection of the production 15-second scope and `cargo test -p aida-cli-lib stalled_version_probe_exhausts_risk_budget`, reported passing in integration launcher job j20261125T003533022-2-0. The test stalls the actual version probe and checks that risk falls back to STRICT. The production and test functions are unchanged from that integration revision.
-    Exact-head FAST gates passed and FAST compile was pending at review time. Review used source and existing evidence.
-  recovery_hint: address the review findings, move TASK-3874 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T02:56:34.647026662Z
