@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T09:27:01.764572684Z
+modified_at: 2026-11-25T09:27:37.498089271Z
 req_type: Bug
 tags:
 - lanes
@@ -162,6 +162,11 @@ comments:
   created_at: 2026-11-25T09:19:29.650712655Z
   modified_at: 2026-11-25T09:19:29.650712655Z
   session_id: 01a211b9a1ca
+- id: 01a21208-351a-7700-bf4d-43fb6ff55c47
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2761 review of the original PR head a0ecc2ae63c3960f862e9d972dd389742e08f011 as landed on pinned main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. AC1 FAIL: retained pickup selects host supervision and verifies lease and merge identity, but the advanced-base refresh mutates the merge before persisting required recovery state. AC2 PARTIAL: dispatch coverage exercises a punt and same-clone host publication to a bare origin, but omits the explicitly required first-lane staged conflict resolution. Fast source gates passed and fast compile was pending at review time. No local tests or builds were run per reviewer policy.. No triage reason was given.'
+  created_at: 2026-11-25T09:27:37.498079950Z
+  modified_at: 2026-11-25T09:27:37.498079950Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
@@ -263,6 +268,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21208-351a-7700-bf4d-43e9358bf392
+  author: joe
+  timestamp: 2026-11-25T09:27:37.498067404Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
@@ -271,11 +283,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5d24023de56
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2761 review of the original PR head a0ecc2ae63c3960f862e9d972dd389742e08f011 as landed on pinned main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. AC1 FAIL: retained pickup selects host supervision and verifies lease and merge identity, but the advanced-base refresh mutates the merge before persisting required recovery state. AC2 PARTIAL: dispatch coverage exercises a punt and same-clone host publication to a bare origin, but omits the explicitly required first-lane staged conflict resolution. Fast source gates passed and fast compile was pending at review time. No local tests or builds were run per reviewer policy.'
-  recovery_hint: address the review findings, move BUG-2761 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T09:27:01.764572684Z
