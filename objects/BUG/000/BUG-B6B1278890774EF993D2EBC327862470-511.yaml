@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T07:19:41.928600896Z
+modified_at: 2026-11-25T08:02:08.620766160Z
 req_type: Bug
 tags:
 - store
@@ -225,6 +225,18 @@ comments:
   modified_at: 2026-11-25T02:37:29.075599401Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211b9-f436-7963-9931-c9b047893b5d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 94678935764aca0ccbd1e28f2d043d97cdffa341 plus the six native-lane working-tree edits. Reviewed origin/main...HEAD and git diff HEAD. No untracked additions.
+    AC1: [evidence: behavioral-test] pr_train.rs:5136 starts the pre-pass before candidate discovery. pr_train_store_refresh.rs:7 scopes discovery, hardened command construction, credential configuration and fetch to one five-second deadline. The handler continued to the fixture's missing code-origin gate after each simulated stall.
+    AC2: [evidence: behavioral-test] pr_train_store_refresh.rs:70 passed through the real handler with a store-shaped fixture, a stalled cold rev-parse and a stalled upload-pack. Both acquired the writer lock, emitted the timeout diagnostic, and continued within 5.75 seconds. One targeted test passed in 10.14 seconds.
+    Deep pass covered missing stores, repeated command construction, literal refspecs, process-group deadlines and the existing Git and credential refusal paths. Fixed a shadowed command and a fixture PATH inventory violation during validation. Fetched-ref admission is tracked separately under BUG-2753. The fast gate has passed the source checks and is running compiled ratchets.
+  created_at: 2026-11-25T08:02:08.620766160Z
+  modified_at: 2026-11-25T08:02:08.620766160Z
+  session_id: 01a21192b7c2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
