@@ -15,10 +15,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T07:32:06.350719660Z
-modified_at: 2026-11-25T07:32:06.350719660Z
+modified_at: 2026-11-25T07:32:37.738339427Z
 req_type: Task
 tags:
 - review-debt
+relationships:
+- rel_type: Supersedes
+  target_id: 01a2081f-555e-7821-93bd-21634d13730b
+  created_at: 2026-11-25T07:32:37.738248502Z
+  created_by: joe
+history:
+- id: 01a2119e-f469-78e2-bd00-addcde213ca0
+  author: joe
+  timestamp: 2026-11-25T07:32:39.657617812Z
+  changes: []
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
   branch: main
