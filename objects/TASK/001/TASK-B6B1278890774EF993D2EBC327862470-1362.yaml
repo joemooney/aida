@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T11:51:11.283948844Z
+modified_at: 2026-11-25T11:52:16.288228286Z
 req_type: Task
 tags:
 - review
@@ -276,6 +276,30 @@ comments:
   created_at: 2026-11-25T11:51:11.283944091Z
   modified_at: 2026-11-25T11:51:11.283944091Z
   session_id: 01a2126276b8
+- id: 01a2128c-dbb9-76c3-92d2-007f8fa4636f
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4566 r3 @ 67669eca40 (TASK-3878, report-only, Refs-only)
+
+    Result: PASS. All three r2 items are resolved. Merge-tree with integration is CLEAN; FAST is pending.
+
+    R1: the base-tip probe now builds on host_remote_git_command(root, "origin"), so it gets the seat-clone refusal and the -c hardening in argv. clear_routing then strips any inherited GIT_DIR, GIT_CONFIG_COUNT or GIT_CONFIG_PARAMETERS, and the credentials are re-applied. GIT_TERMINAL_PROMPT=0, stdin is null, and there's a 30s timeout. If the probe fails, the base shows as 'unknown' and nothing aborts.
+    - New test base_tip_probe_refuses_seat_clone runs the production builder.
+
+    R2: conflicting PRs are suppressed when a live implementer holder matches the PR's branch or spec (live_holders, factored out of review_implementer_gate unchanged), or when an implementer queue entry carries this PR's conflict-repair reason. The owner comes from the spec owner, and 'unknown' is used only when there isn't one. Tests cover a live lease and a queue entry with the conflict-repair note.
+
+    R3: approved-first now accepts either a ledger Approved verdict at the current head (not closed) or GitHub reviewDecision APPROVED. If the ledger is corrupt, the conflict is still reported, plus an 'evidence unavailable' row. Tests cover both kinds of approval and the corrupt ledger.
+
+    Observations (not blocking):
+    1. Narrower than the AC1 wording: an ordinary implementer rework (a non-conflict note) does NOT suppress the report. The test asserts that. It's defensible, since an ordinary rework may not merge the base, but it is stricter than the AC1 text. Record it on the spec if you keep it.
+    2. 'owner' is the requirement owner, which is effectively always the operator, so it says little. A later slice could show the lane or seat instead.
+    3. Nit: configure_remote_credentials now runs twice (once in host_remote_git_command and again after clear_routing), which means two remote-URL config reads. Harmless.
+
+    Self-approve limits: this touches leases and git transport, so it needs the independent verdict at 67669eca.
+  created_at: 2026-11-25T11:52:16.288228286Z
+  modified_at: 2026-11-25T11:52:16.288228286Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
