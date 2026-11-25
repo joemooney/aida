@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T03:10:25.070037218Z
+modified_at: 2026-11-25T03:12:08.435844996Z
 req_type: Task
 tags:
 - launch
@@ -165,6 +165,11 @@ comments:
   content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1374` at head `unavailable`.'
   created_at: 2026-11-25T03:10:25.070027717Z
   modified_at: 2026-11-25T03:10:25.070027717Z
+- id: 01a210b0-70f3-7541-a7d0-80b4f0b7a4fb
+  author: joe
+  content: 'advisor-122 20:18: SPLIT. This slice keeps F1 (deadline-aware public grant-binding entry point), F2 (post-try_lock deadline recheck), F6 (independent-thread contention fixtures) + the kernel_deps ratchet fix. F3-F5 moved to TASK-3893.'
+  created_at: 2026-11-25T03:12:08.435844996Z
+  modified_at: 2026-11-25T03:12:08.435844996Z
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
