@@ -1,0 +1,31 @@
+id: 01a211f7-a797-7790-9c6e-fdec61abb785
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1426
+title: 'Review follow-up: Deferred follow-up. The OccupancyProbe rustdoc at codex_bg_receipt.rs:108 links to scan_oc'
+description: |-
+  From BUG-2748
+  Reviewed sha: 55db4c1eaffcfc47bde99ab35bc685a31aea2bba
+
+  Deferred follow-up. The OccupancyProbe rustdoc at codex_bg_receipt.rs:108 links to scan_occupancy, which this change removes. Point the link to scan_occupancy_in.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T09:09:32.695631370Z
+modified_at: 2026-11-25T09:09:32.695631370Z
+req_type: Task
+tags:
+- carried-from:BUG-2748
+- finding-hash:358dd22c
+- from-review:BUG-2748
+relationships:
+- rel_type: References
+  target_id: 01a20df2-c61b-7940-9251-afb2b90e7879
+  created_at: 2026-11-25T09:09:47.597375755Z
+filed_at:
+  code_sha: 55db4c1eaffcfc47bde99ab35bc685a31aea2bba
+  branch: pr-4542
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a211f4ed6d
