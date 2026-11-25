@@ -58,6 +58,29 @@ comments:
   created_at: 2026-11-25T09:36:52.305505353Z
   modified_at: 2026-11-25T09:36:52.305505353Z
   session_id: 01a211d677cd
+- id: 01a21210-eba0-7902-ac29-d7f7b31a9a49
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4567 @ cb1b32ee93 (STORY-3120 S1, Refs-only)
+
+    Result: PASS for slice 1. This is pure aida-core logic: findings_to_sarif_json, parse_runner_findings_json, severity_rank and findings_exceeding_threshold, with one ratcheted test.
+
+    What I checked:
+    - SARIF 2.1.0 shape: $schema, version, runs[0].tool.driver.rules (deduplicated by category), results with artifactLocation uri, %SRCROOT% and region startLine/endLine. The span is clamped to start>=1 and end>=start.
+    - Path bytes are percent-encoded, and the test covers space, # and %.
+    - The runner parser accepts only a json or bare code fence, rejects an unterminated fence, and returns an error rather than an empty result for an error object.
+    - Security: no I/O, no process spawn, no network. Runner output is untrusted, but it is only deserialized here.
+
+    Observations for later slices (not blocking):
+    1. FAIL-OPEN risk: findings_exceeding_threshold ranks an UNKNOWN severity as low (unwrap_or(1)). A runner that emits 'blocker' or 'severe' would pass '--fail-on high'. A CI gate should fail closed: treat an unknown severity as critical, or reject the runner output. SARIF level for an unknown severity is also 'note'.
+    2. Paths are not normalised. An absolute path or a '..' path from the runner goes into the SARIF uri unchanged. When the CLI slice wires this up, drop or refuse findings whose path is outside the PR's changed-file inventory.
+    3. format_forge_review_markdown and the CLI flags (--sarif, --post-comment, --run-review) are still to come. --run-review will spawn 'claude --print' or AIDA_REVIEW_RUNNER_CMD, so give it the full security lens: an environment-supplied command, where the command runs, and credential exposure to the runner.
+
+    Self-approve limits: pure engine logic, so the advisor may self-merge it.
+  created_at: 2026-11-25T09:36:54.131865915Z
+  modified_at: 2026-11-25T09:36:54.131865915Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
