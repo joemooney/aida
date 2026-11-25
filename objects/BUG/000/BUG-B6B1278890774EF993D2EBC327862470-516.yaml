@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T22:34:30.855849760Z
+modified_at: 2026-11-25T22:34:39.885595775Z
 req_type: Bug
 tags:
 - leases
@@ -360,6 +360,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 5 (advisor exception round) review of BUG-2755 at 696fd842, applied to the landed tree f2e911b3 on pinned main f03f5255. The head is 12 commits behind; no finding depends on base changes to seat_clone.rs, session_reap.rs, store-writers.toml or the help snapshot. Under the advisor''s r3–r5 operator-attested redesign, all three r4 findings are fixed. F1: current_lease_state must be Stale under the lease write lock, and the CLI regression with a live stamped active_pid refuses (''holder is not stale''). F2: a durable <id>-<uuid>.attestation.json with lease_id, reason and outcome is written and fsynced before the move, independent of ownership mirroring, and is asserted for a legacy lease on both the salvage and absent paths. F3: alternates bytes are asserted identical after the salvage. AC1 is verified by repair_attestation.py case ''absent'': the lease ends and the ''tree absent, nothing to salvage'' event and stderr are present. The mount-proof clause was superseded by the advisor''s attestation ruling. AC2 is unverified: ordinary heal refusing an unverified clone is tested (the --yes case), but no test covers an unreadable-but-present tree, and the ENOENT-versus-EACCES distinction that keeps such a tree from being released as absent is not mutation-killed. That gap blocks. Two non-blocking follow-ups: the write-ahead event can overstate a salvage that failed, and the store-writers inventory lost the read-only classification for the exact-lease reader. CI: fast gates, fast compile and Build pass at the head; full shards not run; merge-hold-gate pending. No local builds or tests were run.. No triage reason was given.'
   created_at: 2026-11-25T22:34:30.855843046Z
   modified_at: 2026-11-25T22:34:30.855843046Z
+- id: 01a214d8-c2d1-7680-b53f-95f83e73b23d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2755):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 696fd8422f05
+    Recorded: 2026-11-25T22:33:34.978145431+00:00
+    Findings:
+    1. aida-cli-lib/src/doctor/worktrees.rs:1486 — BUG-2755 AC2 ("An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.") has no test in this diff. The earlier mode-000 Rust regression was removed in the r3 redesign, and repair_attestation.py only uses a readable tree. On the attested path, the only thing separating 'absent → release with no salvage' from 'present but inaccessible → refuse' is the ENOENT-only `continue` in pin(); every other error returns Err. A mutation that also continues on EACCES/EIO (or on all errors) would let an inaccessible but present checkout be reported as 'tree absent, nothing to salvage' and lose its lease, with no move, and every current test would still pass. Add a CLI regression in repair_attestation.py: put the clone under a parent directory set to mode 000 (skip when euid is 0), run the attested heal with the correct typed ID, and assert a nonzero exit, the lease bytes unchanged, no new *.attestation.json event, and the tree still in place once permissions are restored.
+    2. aida-cli-lib/src/doctor/worktrees.rs:1530-1540 — The write-ahead attestation event records outcome 'salvage destination <dest>' before rename_noreplace runs. When the rename then fails (EXDEV, EEXIST), or the lease-removal check fails, the command refuses and keeps the lease, but the durable event still says a salvage happened. Retries add more such events. Nothing in the record separates intent from completion. Record the event as an intent, or add a completion/failure record, so the audit trail shows what actually happened. The EXDEV case in repair_attestation.py should assert the event state.
+    3. scripts/store-writers.toml:1258 — The inventory row for the exact-lease reader (now read_exact_lease_snapshot|OpenOptions::new) was reclassified from disposition read_only to the generic caller-owned/blocked template. That drops its BUG-2655 gate description (read-only, O_NOFOLLOW, O_NONBLOCK) and its coordination::tests::bug2655_unknown_rebound_lease_refuses_force_and_heal evidence test, even though the function body is unchanged and still read-only. Carry the read_only classification over to the renamed item.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T22:34:39.697959133Z
+  modified_at: 2026-11-25T22:34:39.697959133Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
