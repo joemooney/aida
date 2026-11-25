@@ -14,12 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T03:03:00.704105673Z
-modified_at: 2026-11-25T03:03:00.704105673Z
+modified_at: 2026-11-25T03:03:49.892835355Z
 req_type: Bug
 tags:
 - data-loss
 - strict
 - worktrees
+history:
+- id: 01a210a8-d5f3-7f70-837f-115f437b6824
+  author: joe
+  timestamp: 2026-11-25T03:03:50.003900127Z
+  changes: []
+execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
   branch: main
