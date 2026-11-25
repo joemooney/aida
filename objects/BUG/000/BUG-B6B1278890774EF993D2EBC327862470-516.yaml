@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T22:34:39.885595775Z
+modified_at: 2026-11-25T22:37:58.931577524Z
 req_type: Bug
 tags:
 - leases
@@ -374,6 +374,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T22:34:39.697959133Z
   modified_at: 2026-11-25T22:34:39.697959133Z
+- id: 01a214dc-14cb-7c20-8cbb-c9095ef79b8c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:37):
+    # BUG-2755 r6 TEST-ONLY MICRO-ROUND on #4541 (advisor-122 ruling 2026-11-25 15:37 at 696fd842; product-15). Lane: CLAUDE. MAIN, existing branch / PR #4541. <=40 lines. NO production logic changes except the 1-line p3 fix below. Keep the PR title "(BUG-2755)".
+    (F1) ADD A TEST: a mode-000 (or injected-EACCES/EIO) but PRESENT tree on the attested path → the release REFUSES, and the lease is KEPT (AC2).
+    (F2, p3) The write-ahead attestation event records outcome "pending"; the final outcome is appended after the rename succeeds or fails (no premature "salvage destination" claim).
+    (F3, cosmetic) Restore read_exact_lease_snapshot's read_only disposition row in store-writers.toml.
+    If the new F1 test exposes a REAL refusal bug (the release proceeds), do NOT fix the behaviour: PUNT with the failing test output so the advisor can park it.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4541. COMMIT your work.
+  created_at: 2026-11-25T22:37:58.931577524Z
+  modified_at: 2026-11-25T22:37:58.931577524Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
