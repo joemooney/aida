@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-25T10:06:30.114197836Z
+modified_at: 2026-11-25T22:41:55.017606343Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -542,6 +542,16 @@ comments:
   created_at: 2026-11-25T10:06:30.114192773Z
   modified_at: 2026-11-25T10:06:30.114192773Z
   session_id: 01a211f1aaa4
+- id: 01a214df-6749-7242-a6a1-a7c369dfe0ba
+  author: joe
+  content: |-
+    PARKED (advisor-122 2026-11-25 15:46): #4376 r4 FINAL @ d469d3dc only partly closed the security F1. #4376 is closed (branch kept). NEEDS A SKETCH before any new lane: trusted-root resolution including symlinked-home hosts, an ownership-refusal test, and sweep pagination. r4 findings:
+    - F1 (prior round, security) is only partly closed (aida-cli-lib/src/review_handoff.rs:127-152, used by receipt_dir/lock/load/list/update/sweep_one). pinned_dir refuses a symlinked ancestor and an ancestor not owned by the effective uid. A contained lane runs as the same uid, so the remaining attack in the prior finding still works. When the canonical cache is bound writable at the AIDA home or abov
+    - The new ownership refusal in pinned_dir (review_handoff.rs:145-149, 'untrusted receipt ancestor') has no test. The r4 brief asked for refusal when an ancestor is a symlink OR not owned by the user, but only the symlink path is exercised (bug_2669_review_handoff_tests.rs:863). Add a test where a component is owned by another uid. As a non-root test user, AIDA_HOME pointing at a root-owned directory
+    - pinned_dir walks the unresolved $AIDA_HOME path with O_NOFOLLOW and requires an absolute path (review_handoff.rs:131, 144). Hosts whose home is reached through a symlink (for example Fedora Silverblue or CoreOS, where /home -> /var/home) or a symlinked ~/.aida, and a relative AIDA_HOME, now fail every receipt operation. Before r4 these worked. The failure is closed (register errors), but it is a r
+    - Retained from the prior round, still open at this head and explicitly deferred by the r4 brief: receipt maintenance does not advance across the whole directory (review_handoff.rs sweep_from). Each run takes a fresh read_dir prefix of at most 4,096 entries and picks the random pivot inside that prefix. Expired receipts beyond a prefix occupied by long-lived or unreadable entries can go unexamined i
+  created_at: 2026-11-25T22:41:55.017606343Z
+  modified_at: 2026-11-25T22:41:55.017606343Z
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
