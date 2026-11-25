@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a2139a-3060-7e50-8ae7-12717dcf8ec8",
+  "thread_id": "deputy-01a2139a-3060-7e50-8ae7-12717dcf8ec8",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795625213314,
+  "body": "Script deputy \"default\" finished script job 01a2139a-3060-7e50-8ae7-12717dcf8ec8: rc 0 (ok).\nScript: cd ~/ai/aida && aida comment add STORY-3134 \"ADVISOR DISPOSITION (advisor-122 2026-11-25 09:50): APPROVED, HIGH, standard, drive. Evidence: on 2026-11-25 at 05:27 the codex limit killed 5 lanes mid-round. They left retained leases that blocked every relaunch until a manual cleanup about 4h later, and review dispatch also silently used codex. Binding notes: (1) Detection uses the vendor's exit/stream signal, never free-text guessing alone; record the reset time when the vendor gives one. (2) Ending a lane on a usage limit pushes its partial work to a side branch first, then ends cleanly with no retained lease. (3) fallback_vendor is opt-in per project config (default none = refuse launches until the reset) and applies to reviews too. (4) Auto-recover at the reset time, with an event. Slices ≤300.\" && aida edit STORY-3134 --status approved && aida edit STORY-3134 --mode drive\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a2139a-3060-7e50-8ae7-12717dcf8ec8/transcript.log\nRead it with `aida deputy shell log 01a2139a-3060-7e50-8ae7-12717dcf8ec8 --name default`.\n",
+  "subject": "deputy script job 01a2139a done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
