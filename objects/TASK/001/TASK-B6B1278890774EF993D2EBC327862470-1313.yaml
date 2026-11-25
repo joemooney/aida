@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
 
   The FAST-only writer provides no shared warm cache for first runs of later PRs (.github/workflows/ci.yml:65, 141-145, 171-175). Non-PR runs always choose FULL, so this writer runs only on pull_request events. GitHub scopes its entries to the individual PR merge ref, as shown by the actual saved entry under refs/pull/4503/merge. Every new PR starts cold with this implementation, and a failed install on its first attempt leaves its retry cold too. As a follow-up, provide a trusted base-branch cache seed if first-run reuse is needed for the recurring timeout scenario. See https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:21:29.120681866Z
-modified_at: 2026-11-25T07:19:53.066229471Z
+modified_at: 2026-11-25T07:19:55.480502510Z
 req_type: Task
 tags:
 - carried-from:BUG-2744
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21193-4b58-7e13-b516-9d43a7a1ea6d
+  author: joe
+  timestamp: 2026-11-25T07:19:55.480494921Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
   branch: pr-4503
