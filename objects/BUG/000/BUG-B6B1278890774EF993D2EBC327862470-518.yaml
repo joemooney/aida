@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:52:59.317891783Z
-modified_at: 2026-11-25T11:37:27.473231241Z
+modified_at: 2026-11-25T12:00:12.473994982Z
 req_type: Bug
 tags:
 - admission
@@ -25,6 +25,19 @@ comments:
   content: 'ADVISOR (04:36): raised to HIGH. Evidence 2026-11-25 00:01-04:36: no landings for 4.5h. The review-watch worker (pid 1673606) held admission.lock while its reviewer child ran a slow  (>5 min). The auto-train failed 3 times on admission.lock busy, and the operator manual train waited and timed out. Fix direction: the review-watch must NOT hold admission across reviewer launches or store pulls; take admission only for the dispatch decision.'
   created_at: 2026-11-25T11:31:11.752765022Z
   modified_at: 2026-11-25T11:31:11.752765022Z
+- id: 01a21293-e9d0-7ad1-ace1-a0262651c181
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 33a7b137a89cf1fb813b2e7313cfe1de28da7594. Reviewed origin/main...HEAD (empty), git diff HEAD (SHA-256 01a65f56da66e61ccc5595ff39769b7fe899e956875f61fd79f92befd2d4bc91), and untracked files (none).
+    AC1: [evidence: behavioral-test] PASS. aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:64 and :5715 exercise train admission with a live sleeping child and with an in-flight worktree probe. Same-member exclusion during review still refuses. Worktree probes and history queries run before dispatch locking in aida-cli-lib/src/review_watch.rs:1908 and :1194.
+    AC2: [evidence: behavioral-test] PASS. The test at :5715 creates a real checkout after a successful Git probe. Selection refuses the stale result, retains the Exited receipt and admits one retry after the checkout is removed. Filesystem generation validation is at review_watch.rs:1706.
+    Cross-reference, format, multiplicity, race and authority probes covered diagnostic/branch matching, common-dir path bytes, absent and multiple inventory members, first-state initialization, receipt replacement, busy members, process identity, retry cap and backoff. Startup marker ordering and the replacement receipt fence were tightened. No new caller authority. An ownership change after reservation remains covered by ordinary queue-work preflight. Unrelated metadata changes can conservatively defer a retry.
+    Final targeted lane job j20261125T114822514-2-0 executed both tests, 2 passed. The initial fast gate found the renamed transaction missing from the writer inventory, corrected in scripts/store-writers.toml:1968. The fast-gate rerun is j20261125T115642579-2-0. No published PR head in this native lane.
+  created_at: 2026-11-25T12:00:12.473994982Z
+  modified_at: 2026-11-25T12:00:12.473994982Z
+  session_id: 01a2127ec8ae
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f1f-6a65-7bf3-92ce-039ace0e8804
   author: joe
