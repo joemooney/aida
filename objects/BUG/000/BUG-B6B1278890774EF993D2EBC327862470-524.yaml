@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When EVERY recorded attempt process for a change is verified DEAD and the PR head has MOVED past the attempt's head, review-watch auto-releases the hold and dispatches the new head. If liveness is UNKNOWN, it keeps holding and surfaces a doctor finding (stalled-reviews / review-watch).
   - AC2: Tests: dead + moved → released and dispatched; alive → held; unknown liveness → held + doctor finding.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T09:16:55.206235229Z
+modified_at: 2026-11-25T09:44:34.563969636Z
 req_type: Bug
 tags:
 - review-watch
@@ -32,6 +32,12 @@ comments:
   modified_at: 2026-11-25T09:16:55.206235229Z
   session_id: 01a211de6003
   harness_version: codex-cli 0.167.0
+- id: 01a21217-ba03-7500-aa2a-3375ca2b418f
+  author: aida-publication-done
+  content: Implementer push 14a5d0f21684 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T09:44:34.563969069Z
+  modified_at: 2026-11-25T09:44:34.563969069Z
+  session_id: 01a211de6003
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
@@ -50,6 +56,14 @@ history:
   session_id: 01a211de6003
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a21217-ba03-7500-aa2a-336c0aac5b7f
+  author: aida-publication-done
+  timestamp: 2026-11-25T09:44:34.563966514Z
+  session_id: 01a211de6003
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
