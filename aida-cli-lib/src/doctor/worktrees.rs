@@ -1502,7 +1502,12 @@ pub(super) fn attest_clone_lease(main: &std::path::Path, id: &str, reason: &str)
     let confirmed = reply.trim_end_matches(['\r', '\n']);
     anyhow::ensure!(confirmed == id, "lease ID confirmation mismatch");
     crate::session::with_lease_write_lock(main, || {
-        anyhow::ensure!(read()?.1 == raw, "lease changed during confirmation");
+        let (current, bytes) = read()?;
+        anyhow::ensure!(bytes == raw, "lease changed during confirmation");
+        anyhow::ensure!(
+            crate::ownership::reader::current_lease_state(&current) == crate::LeaseState::Stale,
+            "lease {id} holder is not stale"
+        );
         if before.is_some() {
             std::fs::create_dir_all(&salvage)?;
             let canonical = salvage.canonicalize()?;
@@ -1514,14 +1519,27 @@ pub(super) fn attest_clone_lease(main: &std::path::Path, id: &str, reason: &str)
             "clone changed during confirmation"
         );
         let outcome = if before.is_some() {
-            aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
-                .with_context(|| format!("atomic salvage to {}", dest.display()))?;
-            eprintln!("Clone saved at {}", dest.display());
-            format!("saved at {}", dest.display())
+            format!("salvage destination {}", dest.display())
         } else {
             "tree absent, nothing to salvage".into()
         };
         let audit = format!("operator attested {id}: {reason}; {outcome}");
+        // Immutable write-ahead lease event, including for pre-ownership leases.
+        let directory = main.join(".aida/sessions");
+        let event = directory.join(format!("{id}-{}.attestation.json", uuid::Uuid::new_v4()));
+        let pending = tempfile::NamedTempFile::new_in(&directory)?;
+        serde_json::to_writer(
+            pending.as_file(),
+            &serde_json::json!({ "lease_id": id, "reason": reason, "outcome": outcome }),
+        )?;
+        pending.as_file().sync_all()?;
+        pending.persist_noclobber(event)?;
+        std::fs::File::open(directory)?.sync_all()?;
+        if before.is_some() {
+            aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
+                .with_context(|| format!("atomic salvage to {}", dest.display()))?;
+        }
+        eprintln!("{outcome}");
         crate::session_reap::release_lease_files_with_reason(main, id, &audit);
         let removed = !crate::lease_path(main, id).try_exists()?;
         anyhow::ensure!(removed, "lease {id} could not be removed");

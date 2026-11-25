@@ -43,13 +43,16 @@ class RepairAttestation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "main"
             tree = Path(tmp) / "aida-seat-unbound"
-            tree.mkdir()
             env = dict(PATH=os.environ["PATH"], HOME=tmp, AIDA_OUTPUT_FORMAT="human")
             subprocess.run(["git", "init", "-q", str(root)], check=True, env=env)
             run = partial(subprocess.run, cwd=root, text=True, capture_output=True, timeout=30)
             binary = os.environ["AIDA_BIN"]
             run([binary, "init", "--no-skills", "--no-hooks"], env=env | dict(GIT_AUTHOR_NAME="test",
                 GIT_COMMITTER_NAME="test", GIT_AUTHOR_EMAIL="t@test", GIT_COMMITTER_EMAIL="t@test"), check=True)
+            run(["git", "clone", "--shared", str(root), str(tree)], env=env, check=True)
+            alternates = Path(".git/objects/info/alternates")
+            contents = os.fsencode(root / ".git/objects") + b"\n"
+            (tree / alternates).write_bytes(contents)
             id_ = "deadbeef2755"
             lease = root / ".aida" / "sessions" / (id_ + ".toml")
             lease.parent.mkdir(parents=True, exist_ok=True)
@@ -64,6 +67,16 @@ class RepairAttestation(unittest.TestCase):
                 self.assertIn(refusal, result.stderr + result.stdout)
                 self.assertTrue(tree.is_dir())
                 self.assertEqual(lease.read_text(), body)
+            ticks = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
+            namespace = Path("/proc/self/ns/pid").stat().st_ino
+            stamped = body + f"pid_namespace={namespace}\nactive_pid={os.getpid()}\nactive_pid_start_time='linux-starttime:{ticks}'\n"
+            lease.write_text(stamped)
+            result = run(tty, env=env, input=id_ + "\n")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("holder is not stale", result.stdout)
+            self.assertEqual(lease.read_text(), stamped)
+            self.assertTrue(tree.is_dir())
+            lease.write_text(body)
             # An ordinary heal refuses the unverified binding, even with --yes.
             result = run(args[:-2] + ["--yes"], env=env)
             self.assertNotEqual(result.returncode, 0)
@@ -84,6 +97,7 @@ class RepairAttestation(unittest.TestCase):
                 if change == "create":
                     tree.rmdir()
                 lease.write_text(body)
+                existing_events = set(lease.parent.glob("*.attestation.json"))
                 with confirming(args, root, env, b"to release its lease") as (reply, proc):
                     if change == "replace":
                         tree.rename(Path(tmp) / "original")
@@ -101,7 +115,12 @@ class RepairAttestation(unittest.TestCase):
                     (Path(tmp) / "original").rename(tree)
                 if change == "salvage":
                     saved, = (Path(tmp) / "salvage/reaped").iterdir()
+                    self.assertEqual((saved / alternates).read_bytes(), contents)
                     self.assertEqual((saved / "mail").read_text(), "pending")
+                if success:
+                    event, = set(lease.parent.glob("*.attestation.json")) - existing_events
+                    outcome = f"salvage destination {saved}" if change == "salvage" else "tree absent, nothing to salvage"
+                    self.assertEqual(json.loads(event.read_text()), dict(lease_id=id_, reason="stopped writers", outcome=outcome))
 
     def test_real_terminal_gates_and_concurrent_change(self):
         with tempfile.TemporaryDirectory() as tmp:
