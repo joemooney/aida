@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2718",
+  "publishes": [
+    {
+      "at": "2026-11-25T01:49:12.252771759Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T21:54:08.103516103Z",
+      "spec": "BUG-2718",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4411,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c871fba3c570f41e451caac1213c1b8b098ac5a2"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:54:11.625069624Z",
+      "spec": "BUG-2718",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2718 AC1 is partial: a valid signed cross-key approval can still leave the hold in place when the local branch ref lags the forge. AC2 fails when the other key has an approval at the wrong head. AC3 is covered by the added spec-less PR approval regression. The generated worksheet scopes this review to AC1–AC3. At review time, FAST CI passed for the original head and full test shards were skipped. No local tests were run. Reviewed landed tree 462552089a6d87f21986a724f9524d7ff60ffef9 against protected main 841efeba1bc48f093c15d9ef5f362b0b5027f738. The original head was 30 commits behind. Both findings reproduce from the pinned source without relying on the intervening base edit to approval.rs.",
+        "recovery_hint": "address the review findings, move BUG-2718 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:54:39.491519237Z",
+      "spec": "BUG-2718",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4411,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c871fba3c570f41e451caac1213c1b8b098ac5a2"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:44:03.670973089Z",
+      "spec": "BUG-2718",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4411
+      }
+    },
+    {
+      "ts": "2026-11-25T01:49:07.624886096Z",
+      "spec": "BUG-2718",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "260a82ae939faf34a8e6505a6f765f2151655610",
+        "pr": 4411,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
