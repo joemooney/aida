@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The guard's output includes per-phase timings, and its forge work has a bounded per-PR budget, so one slow PR or forge call can't consume the whole run.
   - AC2: At the deadline the guard reports its PARTIAL results (which PRs it covered and which it skipped) and exits normally instead of being killed. A test drives a slow fake forge and asserts partial output before the ceiling.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T12:03:35.224985147Z
+modified_at: 2026-11-25T12:04:06.814880062Z
 req_type: Bug
 tags:
 - doctor
@@ -252,6 +252,11 @@ comments:
   content: "DEFERRED p2s from #4457 r3 @f613bc9c (advisor-122 2026-11-25 05:10; one comment per the findings-as-comments rule):\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1590–1658 sets report.partial solely from guard_rows. When all primary rows fit but the deadline prevents CI detail or landing history, the saved snap\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1289–1291 and :1590–1615 prune red-detail memory using only covered red heads. Skipping a still-open red PR evicts its cached test names and observati\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1889–1903 disables all routing and rerun cleanup on a partial pass. A covered stall can clear and recur on the same head without a new wake, and keys \n- aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls into the per-seat job. When a previously routed stall is skipped and a new covered stall for that same seat arrives before the existi\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1515–1528 starts every tick in forge-list order. If the same prefix consumes the run budget, later PRs are skipped on every tick. Resume from the skip\n- Deferred follow-up from prior review: landed aida-cli-lib/src/land.rs:855–860 refuses even brief contention on the fetch lock. The resulting missing pins lead to unknown mergeability, yet guard_rows can report these PRs \n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes the previous default-branch forge metadata fallback. With no local origin/HEAD and unavailable Git transport, an authenticated GitHu"
   created_at: 2026-11-25T12:03:35.224985147Z
   modified_at: 2026-11-25T12:03:35.224985147Z
+- id: 01a21297-7a1e-7e71-9773-37d7e1e1a4bd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full sweep of the eight-file landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 0c2d297e23b055b15ce4630176359421083d2757, attesting original head f613bc9c207b12bb4de7a0db4356d3c738bf9d6a. The worksheet and completion declaration cover both BUG-2730 criteria. The supplied untraced list was used. The diff adds a BUG-2730-traced regression, cargo test -p aida-cli-lib bug_2730_slow_approval_forge_reports_partial_before_ceiling. Its assertions cover ordinary row exhaustion, but the pinned-base Actions change prevents the fixture from testing the claimed approval path. The signer fixture avoids the admitted slow transaction. FAST gates, compile, and the required aggregate passed at the original head. FAST skipped runtime shards. No local tests were run.. No triage reason was given.'
+  created_at: 2026-11-25T12:04:06.814871236Z
+  modified_at: 2026-11-25T12:04:06.814871236Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
@@ -388,6 +393,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21297-7a1e-7e71-9773-37c936ef4843
+  author: joe
+  timestamp: 2026-11-25T12:04:06.814774009Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
@@ -396,15 +408,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8018c42f8d5
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full sweep of the eight-file landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 0c2d297e23b055b15ce4630176359421083d2757, attesting original head f613bc9c207b12bb4de7a0db4356d3c738bf9d6a. The worksheet and completion declaration cover both BUG-2730 criteria. The supplied untraced list was used. The diff adds a BUG-2730-traced regression, cargo test -p aida-cli-lib bug_2730_slow_approval_forge_reports_partial_before_ceiling. Its assertions cover ordinary row exhaustion, but the pinned-base Actions change prevents the fixture from testing the claimed approval path. The signer fixture avoids the admitted slow transaction. FAST gates, compile, and the required aggregate passed at the original head. FAST skipped runtime shards. No local tests were run.
-    BUG-b6b1278890774ef993d2ebc327862470-491.AC1: unverified
-    BUG-b6b1278890774ef993d2ebc327862470-491.AC2: unverified
-    The source establishes scoped row deadlines and timings on successful observation, but discovery can spend the deadline and return before either timing or coverage output. Scheduled routing can still prevent a normal return after a partial snapshot is persisted. The approval regression finding depends on the newer protected base. The remaining findings reproduce by source inspection on the reviewed change without that base change. The lane's explicit review claim attempt was refused.
-  recovery_hint: address the review findings, move BUG-2730 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T12:02:47.831513227Z
