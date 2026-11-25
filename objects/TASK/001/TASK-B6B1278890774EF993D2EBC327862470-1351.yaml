@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 372c046ed782f4f1a660c89b9c71436a0444ec47
 
   Diagnostic I/O now gates admission in aida-cli-lib/src/review_watch.rs:659. A metadata write failure such as ENOSPC on an existing empty lock file returns an error after flock succeeds, so even the read-only controller or quiescence check refuses. Keep the successfully acquired guard usable when recording the optional diagnostic fails, and make any unusable activity evidence fall back to unknown.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T12:07:27.082625602Z
-modified_at: 2026-11-25T07:25:18.454559744Z
+modified_at: 2026-11-25T07:25:20.199807528Z
 req_type: Task
 tags:
 - carried-from:BUG-2746
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21198-3fc7-7971-940c-c125be3e2d92
+  author: joe
+  timestamp: 2026-11-25T07:25:20.199797287Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 372c046ed782f4f1a660c89b9c71436a0444ec47
   branch: pr-4514
