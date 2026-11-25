@@ -129,6 +129,8 @@ if a[0] == 'api':
     if endpoint == 'user':
         if option('--jq') == '.login': print('operator'); sys.exit(0)
         emit({'login': 'operator'})
+    if '/actions/runs?head_sha=' in endpoint:
+        emit({'total_count': 0, 'workflow_runs': []})
     if '/check-runs' in endpoint:
         sha = endpoint.split('/commits/')[1].split('/')[0]
         emit({'total_count': 1, 'check_runs': [dict(name='Build', head_sha=sha, status='completed', conclusion='success', html_url='https://ci.invalid')]})
