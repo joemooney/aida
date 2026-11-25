@@ -230,7 +230,7 @@ fn bug_2749_missing_checkout_preserves_registered_index() {
     std::fs::remove_dir_all(sibling).unwrap();
     crate::worktree_gc::session_gc_at(root.clone(), true, false).unwrap();
     assert!(root.join(".git/worktrees/clean-sibling/index").is_file());
-    crate::worktree_gc::lossless_prune_worktrees(&root);
+    crate::worktree_gc::session_gc_at(root.clone(), false, true).unwrap();
     assert!(!root.join(".git/worktrees/clean-sibling").exists());
     assert_eq!(std::fs::read(&index).unwrap(), staged);
 
@@ -251,4 +251,24 @@ fn bug_2749_missing_checkout_preserves_registered_index() {
     std::fs::remove_file(index).unwrap();
     assert_eq!(clear(), RegistrationClearOutcome::Declined);
     assert!(admin.exists());
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_retains_split_index_and_shared_snapshot() {
+    let (tmp, root) = create_fixture_repo();
+    let wt = tmp.path().join("split");
+    git(&root, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+    git(&wt, &["update-index", "--split-index"]);
+    let shared = wt
+        .join(git(&wt, &["rev-parse", "--shared-index-path"]))
+        .canonicalize()
+        .unwrap();
+    let snapshot = std::fs::read(&shared).unwrap();
+    std::fs::remove_dir_all(&wt).unwrap();
+    assert_eq!(
+        clear_missing_worktree_registration(&root, &wt, None, || {}, || {}),
+        RegistrationClearOutcome::Declined
+    );
+    assert_eq!(std::fs::read(shared).unwrap(), snapshot);
 }
