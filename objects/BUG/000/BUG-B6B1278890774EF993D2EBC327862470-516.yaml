@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T10:37:07.620143087Z
+modified_at: 2026-11-25T11:05:34.212125860Z
 req_type: Bug
 tags:
 - leases
@@ -320,6 +320,15 @@ comments:
     F1-F3: dead creator with namespace- and start-time-stamped live worker retained lease and tree. The locked exact snapshot and liveness checks precede apply (worktrees.rs:1505). Legacy salvage records its destination before rename and preserves exact alternates bytes and pending mail. Checked ID matching, structured JSON encoding, per-attempt event uniqueness and operator-only routing. A failed rename can retain a write-ahead destination record. Targeted integration run passed (1 Rust test, 2 Python cases). Store writer inventory passed. FAST gate submitted separately.
   created_at: 2026-11-25T10:37:07.620143087Z
   modified_at: 2026-11-25T10:37:07.620143087Z
+  session_id: 01a212407c12
+  harness_version: codex-cli 0.167.0
+- id: 01a21261-e2ba-73b1-bdb3-66590d706f89
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 04abb2b5add64b26864bed9e344cf1012e3dab00 and final native diff. FAST flagged the placement of the new liveness reader. Moved fresh observation into ownership/reader.rs:10 while keeping the exact-lease check inside the lock at doctor/worktrees.rs:1508. Repeated CLI regression passed (1 Rust test, both Python cases); make check-ci-fast passed, job j20261125T104302452-2-0. Audit and byte-preservation evidence from the previous comment still applies.
+  created_at: 2026-11-25T11:05:34.212125860Z
+  modified_at: 2026-11-25T11:05:34.212125860Z
   session_id: 01a212407c12
   harness_version: codex-cli 0.167.0
 history:
