@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21278-371f-7c62-91ec-b8d7ecc5694a",
+  "thread_id": "deputy-01a21278-371f-7c62-91ec-b8d7ecc5694a",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795606211640,
+  "body": "Script deputy \"default\" finished script job 01a21278-371f-7c62-91ec-b8d7ecc5694a: rc 0 (ok).\nScript: cd ~/ai/aida && aida comment add STORY-3131 \"ADVISOR DISPOSITION (advisor-122 2026-11-25 04:32): APPROVED HIGH, standard, drain. Joe asked for this directly. Additions: AC2's investigate diagnosis also lists ADMISSION HOLDERS (pid, role, held-for) and any manual train waiting on admission. AC3: the guard runs under its own hard timeout (default 60s). A timeout or error emits a 'landing guard unhealthy' alert to the advisor, and is never silent. Ship as ≤300-line slices.\" && aida edit STORY-3131 --status approved && aida edit STORY-3131 --mode drain\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21278-371f-7c62-91ec-b8d7ecc5694a/transcript.log\nRead it with `aida deputy shell log 01a21278-371f-7c62-91ec-b8d7ecc5694a --name default`.\n",
+  "subject": "deputy script job 01a21278 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
