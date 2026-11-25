@@ -26,12 +26,12 @@ description: |
   - knob on + dead lane + mandate → released, with an audit record.
 
   Tier: STRICT (authority/grants + repair journal). Size: ≤300 lines, one slice.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T12:00:05.659345368Z
+modified_at: 2026-11-25T12:06:25.448452727Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -228,6 +228,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21299-9ba4-79b3-806e-1a121d31e0b3
+  author: dirtlab
+  timestamp: 2026-11-25T12:06:26.468720013Z
+  session_id: 01a212937179
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
@@ -238,3 +247,8 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'F6 audited success conflicts with the required F1–F3 owner-lifetime lock: SessionLease has only the shared short-lived metadata writer lock, and session start hands an ID to an existing shell. No supported repair lease currently qualifies. Current changes refuse all such releases. A launch/adoption protocol covering surviving lane processes is required before enabling success and testing stop/publication serialization.'
+  raised_by: implementer
+  raised_at: 2026-11-25T12:06:25.448452727Z

@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T11:55:34.740293223Z
+modified_at: 2026-11-25T12:09:44.208986850Z
 req_type: Bug
 tags:
 - review-watch
@@ -156,6 +156,18 @@ comments:
   modified_at: 2026-11-25T11:51:23.209497079Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2129c-a462-74b3-afc0-048fb6096c83
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2753e3c99e8b00ce74a377dd77550baa87c92efd plus the three native-lane working-tree edits. Reviewed origin/main...HEAD, git diff HEAD and untracked inventory (empty).
+    AC1: [evidence: behavioral-test] review_watch.rs:1918 selects by head. admission.rs:274 and :538 validate ownership by head while preserving the single signed predecessor chain, token uniqueness and CAS. task_1993_review_watch_tests.rs:2554 covers sequential skip clearance on release.
+    AC2: [evidence: behavioral-test] task_1993_review_watch_tests.rs:5924 covers the same-head hold, moved head and late verdict. admission_tests.rs:226 exercises a lost descendant receipt, spawns the new dispatcher through the hub, then refuses duplicate claims for both heads. The targeted bug2763 run executed and passed both tests.
+    Checked canonical SHA comparison, serialized predecessor and token validation, empty and interleaved histories, retry cancellation pairs, duplicate claims and recovery with multiple active heads. Mixed-version validators can refuse the new interleaved history. Finding 3 (release racing a delayed skip write) is explicitly deferred by the r3 brief.
+  created_at: 2026-11-25T12:09:44.208986850Z
+  modified_at: 2026-11-25T12:09:44.208986850Z
+  session_id: 01a2128f4234
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
