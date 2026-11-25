@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   The supplied untraced list identifies TASK-b6b1278890774ef993d2ebc327862470-1309.AC1 and TASK-b6b1278890774ef993d2ebc327862470-1309.AC2. The diff has no criterion-traced check for source/author provenance or the PowerPoint exclusions and retained presentation assets. Capture the Git/forge comparison and docs-scope check as explicit criterion evidence, and add or link a focused check for the exclusions and retained assets if the project requires an automated trace.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:25:30.845695287Z
-modified_at: 2026-11-25T21:04:01.065931850Z
+modified_at: 2026-11-25T21:04:02.993489003Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21485-cdb1-7f10-bec5-2b8ec7c31267
+  author: joe
+  timestamp: 2026-11-25T21:04:02.993486923Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
