@@ -1,0 +1,30 @@
+id: 01a2148c-15aa-74a2-90f5-6b603346566c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-833
+agreed_id: STORY-3143
+title: 'aida report backlog: classify open specs by area, difficulty, priority and noise, with area hotness, landing-flow metrics, rework sinks, stale claims and prescribed cleanup'
+description: |
+  Joe 2026-11-25 13:45: "generate a report on all the open items ... categorize them, maybe several tags and difficulty and priority and area hotness ... so that we have a better idea of how plan to improve throughput." Product-15 built a one-off version (published report, 2026-11-25). It led straight to a cleanup: 245 → ~184 open by folding 60 review-finding specs and releasing 10 stale claims. Make it a built-in so planning uses live numbers.
+
+  ## Acceptance
+  - AC1: `aida report backlog [--format table|json|html]` classifies every open spec by area (from a configurable keyword/path map in config, with sensible defaults), difficulty (S/M/L/XL from type, tags, description size, ACs), priority, status, and a NOISE flag (review-finding specs: from-review:/carried-from:/kind:* tags).
+  - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
+  - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
+  - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T21:10:54.633999802Z
+modified_at: 2026-11-25T21:10:54.633999802Z
+req_type: Story
+tags:
+- planning
+- reporting
+- throughput
+filed_at:
+  code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ea1b3c35df8
+  vendor: claude
