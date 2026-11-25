@@ -146,6 +146,11 @@ pub struct ProjectReviewRulesConfig {
     // trace:STORY-3120 | ai:antigravity
     #[serde(default)]
     pub challenger_model: Option<String>,
+    /// Optional project-level severity threshold (`critical`, `high`, `medium`, `low`)
+    /// at or above which `aida review prepare` exits non-zero as a CI quality gate.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub fail_on: Option<String>,
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
 }
@@ -1335,6 +1340,8 @@ pub struct AdversarialReviewSummary {
     pub candidate_findings: usize,
     pub confirmed_findings: usize,
     pub dismissed_findings: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detected_author_agents: Vec<String>,
 }
 
 /// Format a consolidated GitHub PR / GitLab MR Markdown review comment from the
@@ -1414,6 +1421,18 @@ pub fn format_forge_review_markdown_with_adversarial(
             "- **Adversarial verification**: Finder {finder_label} → Challenger {challenger_label} — **{}** candidate(s) challenged → **{}** confirmed, **{}** dismissed as false positive(s)\n",
             adv.candidate_findings, adv.confirmed_findings, adv.dismissed_findings
         ));
+        if !adv.detected_author_agents.is_empty() {
+            let authors: Vec<String> = adv
+                .detected_author_agents
+                .iter()
+                .map(|a| format!("`{a}`"))
+                .collect();
+            out.push_str(&format!(
+                "- **Authorship separation**: Detected commit/trace author(s) {} → Reviewed by `{}`\n",
+                authors.join(", "),
+                adv.finder_agent
+            ));
+        }
     }
 
     if !linked_specs.is_empty() {
@@ -1576,6 +1595,87 @@ pub fn apply_adversarial_challenger_json(
     }
 
     Ok((confirmed, dismissed_count))
+}
+
+/// Numeric rank for a review finding severity (`critical`=4, `high`=3, `medium`=2, `low`=1).
+// trace:STORY-3120 | ai:antigravity
+pub fn severity_rank(severity: &str) -> Option<u8> {
+    match severity.trim().to_ascii_lowercase().as_str() {
+        "critical" => Some(4),
+        "high" => Some(3),
+        "medium" => Some(2),
+        "low" | "info" | "note" => Some(1),
+        _ => None,
+    }
+}
+
+/// Return all findings whose severity meets or exceeds `threshold` (`critical`, `high`, `medium`, `low`).
+// trace:STORY-3120 | ai:antigravity
+pub fn findings_exceeding_threshold<'a>(
+    findings: &'a [RawReviewFinding],
+    threshold: &str,
+) -> Result<Vec<&'a RawReviewFinding>, String> {
+    let min_rank = severity_rank(threshold).ok_or_else(|| {
+        format!(
+            "invalid --fail-on severity `{threshold}` (expected `critical`, `high`, `medium`, or `low`)"
+        )
+    })?;
+    Ok(findings
+        .iter()
+        .filter(|f| severity_rank(&f.severity).unwrap_or(1) >= min_rank)
+        .collect())
+}
+
+/// Detect AI author agent tokens (`claude`, `codex`, `agy`, `gemini`) from commit messages
+/// (`[AI:tool]` or `[AI:tool1+tool2:med]`) and file trace comments (`// trace:SPEC | ai:tool`).
+// trace:STORY-3120 | ai:antigravity
+pub fn detect_ai_authors(commit_messages: &[String], file_contents: &[&str]) -> Vec<String> {
+    static COMMIT_AI_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?i)\[AI:([A-Za-z0-9_+-]+)(?::[A-Za-z]+)?\]")
+            .expect("static commit AI regex is valid")
+    });
+    static TRACE_AI_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?i)trace:[A-Za-z0-9_-]+\s*\|\s*ai:([A-Za-z0-9_+-]+)")
+            .expect("static trace AI regex is valid")
+    });
+
+    let mut authors = BTreeSet::new();
+    let mut record_token = |raw_group: &str| {
+        for part in raw_group.split('+') {
+            match part.trim().to_ascii_lowercase().as_str() {
+                "claude" => {
+                    authors.insert("claude".to_string());
+                }
+                "codex" => {
+                    authors.insert("codex".to_string());
+                }
+                "antigravity" | "agy" => {
+                    authors.insert("agy".to_string());
+                }
+                "gemini" => {
+                    authors.insert("gemini".to_string());
+                }
+                _ => {}
+            }
+        }
+    };
+
+    for msg in commit_messages {
+        for cap in COMMIT_AI_RE.captures_iter(msg) {
+            if let Some(m) = cap.get(1) {
+                record_token(m.as_str());
+            }
+        }
+    }
+    for body in file_contents {
+        for cap in TRACE_AI_RE.captures_iter(body) {
+            if let Some(m) = cap.get(1) {
+                record_token(m.as_str());
+            }
+        }
+    }
+
+    authors.into_iter().collect()
 }
 
 fn extract_json_payload(raw: &str) -> &str {
@@ -2204,6 +2304,7 @@ fn beta() {
             candidate_findings: 2,
             confirmed_findings: 1,
             dismissed_findings: 1,
+            detected_author_agents: vec!["claude".to_string()],
         };
         let md = format_forge_review_markdown_with_adversarial(
             "range",
@@ -2217,9 +2318,25 @@ fn beta() {
         assert!(md.contains("## AIDA Deterministic Code Review"));
         assert!(md.contains("**PASSED** (100%"));
         assert!(md.contains("Adversarial verification"));
+        assert!(md.contains("Authorship separation"));
         assert!(md.contains("`codex` (`o3`)"));
         assert!(md.contains("`src/auth.rs:42`"));
         assert!(md.contains("verify_token(tok)?;"));
+
+        let exceeded = findings_exceeding_threshold(&findings, "high").unwrap();
+        assert_eq!(exceeded.len(), 1);
+        assert!(findings_exceeding_threshold(&findings, "critical")
+            .unwrap()
+            .is_empty());
+
+        let detected = detect_ai_authors(
+            &["[AI:claude+antigravity:med] feat(auth): add token verify (STORY-3120)".to_string()],
+            &["// trace:STORY-3120 | ai:codex\npub fn verify() {}"],
+        );
+        assert_eq!(
+            detected,
+            vec!["agy".to_string(), "claude".to_string(), "codex".to_string()]
+        );
 
         let candidates = vec![
             findings[0].clone(),

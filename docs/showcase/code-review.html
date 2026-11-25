@@ -308,6 +308,7 @@
       <a href="#slide-dogfood" onclick="goToSlide(3)">04. Self-Review Case Study</a>
       <a href="#slide-comparison" onclick="goToSlide(4)">05. Architecture Matrix</a>
       <a href="#slide-cli" onclick="goToSlide(5)">06. CLI &amp; Integration</a>
+      <a href="#slide-manual" onclick="goToSlide(6)">07. User Manual</a>
     </nav>
     <div class="top-actions">
       <button class="btn-ghost" id="top-deck-btn" type="button" onclick="toggleDeckMode()" title="Present Slide-by-Slide (Shortcut: D)">▣ Present</button>
@@ -820,10 +821,12 @@ aida review prepare --commit HEAD --specs STORY-3076
 aida review prepare --scan --path aida-core/src --write .aida/scan.md
 
 # 4. Turnkey CI / PR Adversarial Review (Red-Team Finder -> Blue-Team Challenger)
-#    Automatically uses the project's `aida init` default agent (e.g. codex or claude)
+#    Automatically uses the project's `aida init` default agent (e.g. codex or claude),
+#    files confirmed bugs into the AIDA store, and enforces a high-severity CI gate:
 aida review prepare --pr 42 \
   --run-review --adversarial \
   --model gpt-5.3-codex --challenger-model o3 \
+  --fail-on high --file-bugs \
   --sarif aida-review.sarif.json --post-comment
 
 # 5. Verify 100% file coverage &amp; anchor quoted code snippets to exact lines
@@ -837,7 +840,7 @@ aida review prepare --pr 42 \
           <div class="card-header">
             <div>
               <h3 class="card-title">Project Customization (<code>.aida/review-rules.toml</code>)</h3>
-              <p class="card-subtitle">DEFAULT AGENT/MODEL, ADVERSARIAL MODE &amp; PATH PLAYBOOKS</p>
+              <p class="card-subtitle">DEFAULT AGENT/MODEL, ADVERSARIAL MODE, CI GATE &amp; PLAYBOOKS</p>
             </div>
             <span class="badge badge-elite">Optional Config</span>
           </div>
@@ -846,6 +849,7 @@ default_agent = "codex"          # or auto-detected from `aida init`
 default_model = "gpt-5.3-codex"
 adversarial = true               # Red-Team Finder -> Blue-Team Challenger
 challenger_model = "o3"
+fail_on = "high"                 # Exit non-zero on high/critical findings
 
 exclude = [
   "docs/archive/**",
@@ -862,6 +866,269 @@ checklist = """
 - Verify every authority or lease check fails closed on missing files.
 - Require a negative unit test proving unauthorized callers are refused.
 """</code></pre>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 7: COMPLETE USER MANUAL & OPERATOR GUIDE -->
+  <div class="slide-section" id="slide-manual" data-slide-title="07 / 07 · Complete User Manual">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">07 / COMPLETE USER MANUAL &amp; OPERATOR GUIDE</div>
+          <h2>End-to-End Manual: From Local Changesets to Adversarial CI &amp; Bug Burndown</h2>
+        </div>
+        <p class="section-desc">
+          Everything an individual developer, enterprise team, or CI pipeline needs to run AIDA's deterministic and adversarial review engine.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">1. Selecting What to Review (Changeset Modes)</h3>
+              <p class="card-subtitle">WORKSPACE, COMMITS, BRANCHES, TAGS, PRS &amp; FULL SCANS</p>
+            </div>
+            <span class="badge badge-info">5 Scope Modes</span>
+          </div>
+<pre><code># A. Uncommitted Workspace (default: staged + unstaged + untracked)
+aida review prepare --run-review
+
+# B. Single Commit Hash or Release Tag (diffs against parent commit)
+aida review prepare -c 34f1815 --run-review
+aida review prepare --commit v0.16.0 --run-review
+
+# C. Branch, Commit Range, or Two Tags (merge-base comparison)
+aida review prepare --from main --run-review
+aida review prepare --from main --to feature/auth --run-review
+aida review prepare --from v0.15.0 --to v0.16.0 --run-review
+
+# D. GitHub Pull Request or GitLab Merge Request (via gh / glab)
+aida review prepare --pr 42 --run-review --post-comment
+
+# E. Full-Repository or Scoped Directory Audit (no git diff required)
+aida review prepare --scan --path aida-core/src --run-review</code></pre>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">2. Agent &amp; Model Resolution Hierarchy</h3>
+              <p class="card-subtitle">ZERO-CONFIG DEFAULTS FROM <code>aida init</code> + PER-RUN OVERRIDES</p>
+            </div>
+            <span class="badge badge-elite">Project-Aware</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Priority</th>
+                  <th>Source</th>
+                  <th>Behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>1 (Highest)</strong></td>
+                  <td><code>--agent</code> / <code>--model</code></td>
+                  <td>Per-command CLI override (<code>claude</code>, <code>codex</code>, <code>agy</code>, <code>gemini</code>).</td>
+                </tr>
+                <tr>
+                  <td><strong>2</strong></td>
+                  <td><code>AIDA_REVIEW_AGENT</code> / <code>_MODEL</code></td>
+                  <td>CI or shell environment variable override (or <code>AIDA_REVIEW_RUNNER_CMD</code>).</td>
+                </tr>
+                <tr>
+                  <td><strong>3</strong></td>
+                  <td><code>.aida/review-rules.toml</code></td>
+                  <td>Project review config (<code>default_agent</code>, <code>default_model</code>).</td>
+                </tr>
+                <tr>
+                  <td><strong>4</strong></td>
+                  <td><code>[agents] vendor</code> &amp; <code>seats.reviewer</code></td>
+                  <td><code>.aida/agents.toml</code> &gt; <code>.aida/config.toml</code> &gt; <code>~/.aida/agents.toml</code>.</td>
+                </tr>
+                <tr>
+                  <td><strong>5</strong></td>
+                  <td><code>[AI:author]</code> Auto-Opposition</td>
+                  <td>On dual-vendor repos (<code>claude</code> + <code>codex</code>), automatically picks the <strong>non-author</strong> vendor from commit/trace tags.</td>
+                </tr>
+                <tr>
+                  <td><strong>6</strong></td>
+                  <td><code>aida init</code> <code>[agents] enabled</code></td>
+                  <td>If initialized with <code>aida init --agents codex</code>, automatically defaults to <code>codex</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">3. Two-Pass Adversarial Review (<code>--adversarial</code>)</h3>
+              <p class="card-subtitle">RED-TEAM FINDER → BLUE-TEAM SKEPTICAL CHALLENGER</p>
+            </div>
+            <span class="badge badge-crit">Zero False-Positive Noise</span>
+          </div>
+          <p style="font-size:13px;color:var(--ink-secondary);margin-top:0;">
+            Single-pass AI reviews either miss subtle bugs or flood PRs with speculative noise. <code>--adversarial</code> runs two opposing passes per batch:
+          </p>
+          <ul style="font-size:13px;line-height:1.6;padding-left:18px;margin-bottom:14px;">
+            <li><strong>Pass 1 (Red-Team Finder)</strong>: Hunts aggressively for failure modes (<code>fail-open</code>, <code>absent-evidence-reads-as-good</code>, ANSSI/Tokio/SQL hazards, and AIDA <code>## Acceptance</code> drift) with mandatory verbatim <code>existing_code</code> quotes.</li>
+            <li><strong>Pass 2 (Blue-Team Challenger)</strong>: Inspects every candidate finding against full file context, type bounds, and callers to <strong>disprove</strong> false positives before they ever reach the developer.</li>
+          </ul>
+<pre><code># Enterprise Codex-only setup: pair fast Finder with high-reasoning Challenger
+aida review prepare --from main --run-review --adversarial \
+  --model gpt-5.3-codex --challenger-model o3
+
+# Dual-vendor setup: Claude finds -> Codex challenges (automatic when both enabled)
+aida review prepare --from main --run-review --adversarial</code></pre>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">4. Closing the Loop: CI Gates &amp; Auto-Filing AIDA Bugs</h3>
+              <p class="card-subtitle"><code>--fail-on</code>, <code>--file-bugs</code>, <code>--sarif</code> &amp; <code>--post-comment</code></p>
+            </div>
+            <span class="badge badge-elite">Review → Spec → Fix</span>
+          </div>
+          <p style="font-size:13px;color:var(--ink-secondary);margin-top:0;">
+            Turn confirmed review findings directly into tracked AIDA <code>BUG</code> requirements and enforce merge gates in GitHub Actions or GitLab CI:
+          </p>
+<pre><code># 1. Run adversarial review, file confirmed high/critical bugs into AIDA,
+#    export SARIF 2.1.0, post PR comment, and fail CI if high+ defects exist:
+aida review prepare --pr 42 \
+  --run-review --adversarial \
+  --fail-on high --file-bugs \
+  --sarif aida-review.sarif.json \
+  --post-comment
+
+# 2. Inspect or drain the newly filed BUG requirements in AIDA:
+aida list --type bug --status draft</code></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">5. Complete CLI Flag Reference (<code>aida review prepare</code>)</h3>
+            <p class="card-subtitle">ALL FLAGS SUPPORTED BY THE CLEAN-ROOM RUST ENGINE (STORY-3076 &amp; STORY-3120)</p>
+          </div>
+          <span class="badge badge-info">Reference Manual</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Flag</th>
+                <th>Category</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="code-cell">--pr &lt;N&gt;</td>
+                <td>Scope</td>
+                <td>Resolve base branch, head SHA, and linked specs from GitHub PR or GitLab MR <code>#N</code>.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--from &lt;REF&gt; [--to &lt;REF&gt;]</td>
+                <td>Scope</td>
+                <td>Compare branch, tag, or commit range <code>merge-base(from, to)..to</code> (<code>--to</code> defaults to <code>HEAD</code>).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">-c, --commit &lt;SHA|TAG&gt;</td>
+                <td>Scope</td>
+                <td>Inspect a single commit or tag against its parent commit (supports root commits).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--scan [--path &lt;PATH&gt;...]</td>
+                <td>Scope</td>
+                <td>Full-file audit of tracked files under <code>--path</code> (or entire repo) without computing a git diff.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--exclude &lt;GLOBS&gt;</td>
+                <td>Filter</td>
+                <td>Additional comma-separated glob patterns to exclude (merged with built-in and <code>.aida/review-rules.toml</code> exclusions).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--specs &lt;SPEC-IDS&gt;</td>
+                <td>Requirements</td>
+                <td>Comma-separated AIDA spec IDs whose <code>## Acceptance</code> criteria are injected (auto-discovered from commit messages when omitted).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--run-review</td>
+                <td>Execution</td>
+                <td>Execute automated batch reviews, anchor quoted snippets to exact 1-based lines, and verify 100% file coverage.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--agent &lt;AGENT&gt;</td>
+                <td>Execution</td>
+                <td>Agent CLI for <code>--run-review</code> (<code>claude</code>, <code>codex</code>, <code>antigravity</code>/<code>agy</code>, <code>gemini</code>). Defaults to project configuration.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--model &lt;MODEL&gt;</td>
+                <td>Execution</td>
+                <td>Model override passed to the review runner CLI (e.g. <code>gpt-5.3-codex</code>, <code>o3</code>, <code>claude-opus-4-6</code>).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--adversarial</td>
+                <td>Adversarial</td>
+                <td>Enable two-pass Red-Team Finder → Blue-Team Skeptical Challenger verification to eliminate false positives.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--challenger-agent &lt;AGENT&gt;</td>
+                <td>Adversarial</td>
+                <td>Agent CLI for Pass 2 Challenger (auto-selects opposing enabled vendor when omitted).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--challenger-model &lt;MODEL&gt;</td>
+                <td>Adversarial</td>
+                <td>Model override for Pass 2 Challenger (enables same-vendor, cross-model adversarial review).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--fail-on &lt;SEVERITY&gt;</td>
+                <td>CI Gate</td>
+                <td>Exit non-zero if any confirmed finding is at or above <code>critical</code>, <code>high</code>, <code>medium</code>, or <code>low</code>.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--file-bugs</td>
+                <td>AIDA Store</td>
+                <td>Auto-file confirmed findings (at or above <code>--fail-on</code>, default <code>high</code>) as draft <code>BUG</code> specs in the AIDA database.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--sarif &lt;SARIF_PATH&gt;</td>
+                <td>CI Export</td>
+                <td>Write anchored findings as a SARIF 2.1.0 JSON report for GitHub Code Scanning / GitLab SAST.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--post-comment</td>
+                <td>CI Export</td>
+                <td>Post consolidated Markdown review report (with coverage &amp; adversarial badges) to <code>--pr &lt;N&gt;</code>.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--verify-coverage &lt;JSON&gt;</td>
+                <td>Verification</td>
+                <td>Verify an external reviewer coverage ledger JSON file against the classified file inventory (100% accountability gate).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--anchor-findings &lt;JSON&gt;</td>
+                <td>Verification</td>
+                <td>Deterministically anchor <code>existing_code</code> snippets in an external findings JSON file to exact 1-based line numbers.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--json / --write &lt;PATH&gt;</td>
+                <td>Output</td>
+                <td>Emit machine-readable JSON bundle and/or write output to a repository-confined path.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>

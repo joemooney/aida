@@ -7,7 +7,8 @@
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
     anchor_findings_with, apply_adversarial_challenger_json, bundle_review_batches,
-    classify_diff_inventory, findings_to_sarif_json, format_forge_review_markdown_with_adversarial,
+    classify_diff_inventory, detect_ai_authors, findings_exceeding_threshold,
+    findings_to_sarif_json, format_forge_review_markdown_with_adversarial,
     parse_runner_findings_json, verify_coverage_ledger, AdversarialReviewSummary,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
     PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
@@ -117,6 +118,20 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "MODEL")]
     pub challenger_model: Option<String>,
 
+    /// Fail with a non-zero exit code if any confirmed finding has severity at or above
+    /// this threshold (`critical`, `high`, `medium`, or `low`). Also configurable via
+    /// `fail_on` in `.aida/review-rules.toml`.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "SEVERITY")]
+    pub fail_on: Option<String>,
+
+    /// Automatically file confirmed findings (at or above `--fail-on` severity, or `high`
+    /// by default) as draft `BUG` requirements in the AIDA store, pre-populated with the
+    /// anchored `file:line` location, quoted snippet, suggested fix, and linked spec tags.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long)]
+    pub file_bugs: bool,
+
     /// Export anchored findings as a SARIF 2.1.0 JSON file inside the repository
     /// (for GitHub Code Scanning / GitLab SAST).
     // trace:STORY-3120 | ai:antigravity
@@ -167,6 +182,10 @@ pub struct ReviewPreparationBundle {
     pub anchored_findings: Option<Vec<RawReviewFinding>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub adversarial_summary: Option<AdversarialReviewSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detected_author_agents: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filed_bug_ids: Vec<String>,
 }
 
 // trace:TASK-3862 | ai:codex
@@ -265,13 +284,28 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         head_ref.as_deref(),
     )?;
 
+    // 6b. Detect AI authorship (`[AI:tool]` in commit messages and `trace:... | ai:tool` in files)
+    //     for automatic cross-vendor author-opposition when multiple agents are enabled.
+    let detected_author_agents = detect_changed_ai_authors(
+        &project_root,
+        args,
+        merge_base.as_deref(),
+        head_ref.as_deref(),
+        &content_cache,
+    );
+
     // 7. Optional: execute automated batch review (`--run-review`), or load external
     //    coverage ledger (`--verify-coverage`) and findings (`--anchor-findings`).
     let mut runner_findings: Option<Vec<RawReviewFinding>> = None;
     let mut runner_ledger: Option<CoverageLedger> = None;
     let mut adversarial_summary: Option<AdversarialReviewSummary> = None;
     if args.run_review {
-        let resolved_agent = resolve_review_runner_agent(&project_root, args, &rules_cfg)?;
+        let resolved_agent = resolve_review_runner_agent_with_authors(
+            &project_root,
+            args,
+            &rules_cfg,
+            &detected_author_agents,
+        )?;
         let resolved_model =
             resolve_review_runner_model(&project_root, &resolved_agent, args, &rules_cfg);
         let is_adversarial = args.adversarial || rules_cfg.adversarial.unwrap_or(false);
@@ -286,7 +320,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         } else {
             None
         };
-        let (f, l, adv) = execute_automated_batch_reviews(
+        let (f, l, mut adv) = execute_automated_batch_reviews(
             &project_root,
             &resolved_agent,
             resolved_model.as_deref(),
@@ -299,6 +333,9 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             &linked_specs,
             &content_cache,
         )?;
+        if let Some(ref mut summary) = adv {
+            summary.detected_author_agents = detected_author_agents.clone();
+        }
         runner_findings = Some(f);
         runner_ledger = Some(l);
         adversarial_summary = adv;
@@ -365,6 +402,25 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         post_forge_review_comment(&project_root, pr_n, &comment_md)?;
     }
 
+    // 11. Optional: automatically file confirmed findings into the AIDA store as draft BUG requirements (`--file-bugs`).
+    let effective_fail_on = args
+        .fail_on
+        .as_deref()
+        .or(rules_cfg.fail_on.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let filed_bug_ids = if args.file_bugs {
+        let bug_min_sev = effective_fail_on.unwrap_or("high");
+        file_bugs_for_confirmed_findings(
+            storage,
+            anchored_findings.as_deref().unwrap_or(&[]),
+            bug_min_sev,
+            &linked_specs,
+        )?
+    } else {
+        Vec::new()
+    };
+
     let bundle = ReviewPreparationBundle {
         mode,
         base_ref,
@@ -377,6 +433,8 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         coverage_verification,
         anchored_findings,
         adversarial_summary,
+        detected_author_agents,
+        filed_bug_ids,
     };
 
     let rendered = if args.json {
@@ -400,6 +458,19 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
                 cov.ambiguous_files,
                 cov.skipped_without_reason
             );
+        }
+    }
+
+    if let Some(threshold) = effective_fail_on {
+        if let Some(findings) = &bundle.anchored_findings {
+            let failing = findings_exceeding_threshold(findings, threshold)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            if !failing.is_empty() {
+                anyhow::bail!(
+                    "review quality gate failed (--fail-on {threshold}): {} confirmed finding(s) at or above `{threshold}` severity",
+                    failing.len()
+                );
+            }
         }
     }
 
@@ -966,7 +1037,152 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         ));
     }
 
+    if !bundle.detected_author_agents.is_empty() {
+        out.push_str(&format!(
+            "- **Detected AI Author(s)**: `{}`\n\n",
+            bundle.detected_author_agents.join("`, `")
+        ));
+    }
+
+    if !bundle.filed_bug_ids.is_empty() {
+        out.push_str("## Auto-Filed AIDA Bug Requirements (`--file-bugs`)\n\n");
+        for bug_id in &bundle.filed_bug_ids {
+            out.push_str(&format!("- `{bug_id}`\n"));
+        }
+        out.push('\n');
+    }
+
     out
+}
+
+fn detect_changed_ai_authors(
+    project_root: &Path,
+    args: &ReviewPrepareArgs,
+    merge_base: Option<&str>,
+    head_ref: Option<&str>,
+    content_cache: &BTreeMap<String, String>,
+) -> Vec<String> {
+    let mut messages = Vec::new();
+    if let (Some(mb), Some(head)) = (merge_base, head_ref) {
+        if args.commit.is_some() {
+            if let Ok(m) = git_text(project_root, &["show", "-s", "--format=%B", head, "--"]) {
+                messages.push(m);
+            }
+        } else {
+            let range = format!("{mb}..{head}");
+            if let Ok(raw) = git_text(
+                project_root,
+                &["log", "-z", "--format=%B", "--end-of-options", &range, "--"],
+            ) {
+                messages.extend(raw.split_terminator('\0').map(str::to_owned));
+            }
+        }
+    } else if let Ok(m) = git_text(project_root, &["show", "-s", "--format=%B", "HEAD", "--"]) {
+        messages.push(m);
+    }
+    let samples: Vec<&str> = content_cache.values().map(String::as_str).collect();
+    detect_ai_authors(&messages, &samples)
+}
+
+/// File confirmed findings at or above `min_severity` as draft `BUG` requirements in the AIDA store.
+// trace:STORY-3120 | ai:antigravity
+fn file_bugs_for_confirmed_findings(
+    storage: &Storage,
+    findings: &[RawReviewFinding],
+    min_severity: &str,
+    linked_specs: &[LinkedSpecAcceptance],
+) -> Result<Vec<String>> {
+    let qualifying =
+        findings_exceeding_threshold(findings, min_severity).map_err(|e| anyhow::anyhow!(e))?;
+    if qualifying.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut store = storage.load().unwrap_or_default();
+    let mut filed_ids = Vec::with_capacity(qualifying.len());
+
+    for f in qualifying {
+        let loc = match (f.start_line, f.end_line) {
+            (Some(s), Some(e)) if s != e => format!("{}:{s}-{e}", f.path),
+            (Some(s), _) => format!("{}:{s}", f.path),
+            _ => f.path.clone(),
+        };
+        let short_msg: String = f
+            .message
+            .lines()
+            .next()
+            .unwrap_or(&f.message)
+            .chars()
+            .take(72)
+            .collect();
+        let title = format!(
+            "[review:{}] {}: {}",
+            f.category.trim(),
+            loc,
+            short_msg.trim()
+        );
+
+        let mut desc = String::new();
+        desc.push_str(&format!(
+            "## Problem\n\nConfirmed `{}` (`{}`) defect at `{loc}`:\n\n{}\n\n",
+            f.severity.trim().to_ascii_uppercase(),
+            f.category.trim(),
+            f.message.trim()
+        ));
+        if let Some(snippet) = f.existing_code.as_deref() {
+            if !snippet.trim().is_empty() {
+                desc.push_str(&format!(
+                    "### Existing Code\n\n```text\n{}\n```\n\n",
+                    snippet.trim_end()
+                ));
+            }
+        }
+        if let Some(sugg) = f.suggestion_code.as_deref() {
+            if !sugg.trim().is_empty() {
+                desc.push_str(&format!(
+                    "## Suggested Fix\n\n```text\n{}\n```\n\n",
+                    sugg.trim_end()
+                ));
+            }
+        }
+        desc.push_str(&format!(
+            "## Acceptance\n\n- [ ] Defect at `{loc}` (`{}`) is resolved and covered by a unit/regression test.\n",
+            f.category.trim()
+        ));
+
+        let mut req = aida_core::Requirement::new(title, desc);
+        req.req_type = aida_core::RequirementType::Bug;
+        req.status = aida_core::RequirementStatus::Draft;
+        req.owner = crate::get_default_author();
+        req.tags.insert("from-review".to_string());
+        req.tags.insert(format!(
+            "severity:{}",
+            f.severity.trim().to_ascii_lowercase()
+        ));
+        req.tags.insert(format!(
+            "category:{}",
+            f.category.trim().to_ascii_lowercase()
+        ));
+        for spec in linked_specs {
+            req.tags.insert(format!(
+                "spec:{}",
+                aida_core::node_alias::display_spec_id(&spec.spec_id)
+            ));
+        }
+
+        aida_core::provenance::stamp_if_absent(&mut req);
+        let id = req.id;
+        let type_prefix = store.get_type_prefix(&req.req_type);
+        store.add_requirement_with_id(req, None, type_prefix.as_deref());
+        let display_id = store
+            .get_requirement_by_id(&id)
+            .and_then(|r| r.spec_id.clone())
+            .unwrap_or_else(|| id.to_string());
+        filed_ids.push(display_id);
+    }
+
+    storage.save(&store)?;
+    Ok(filed_ids)
 }
 
 /// Post a consolidated Markdown review report to a GitHub PR or GitLab MR.
@@ -1004,6 +1220,15 @@ fn resolve_review_runner_agent(
     args: &ReviewPrepareArgs,
     rules_cfg: &ProjectReviewRulesConfig,
 ) -> Result<String> {
+    resolve_review_runner_agent_with_authors(project_root, args, rules_cfg, &[])
+}
+
+fn resolve_review_runner_agent_with_authors(
+    project_root: &Path,
+    args: &ReviewPrepareArgs,
+    rules_cfg: &ProjectReviewRulesConfig,
+    detected_authors: &[String],
+) -> Result<String> {
     if let Some(flag_agent) = &args.agent {
         return normalize_review_agent(flag_agent);
     }
@@ -1023,6 +1248,17 @@ fn resolve_review_runner_agent(
         return normalize_review_agent(&vendor);
     }
     if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(project_root) {
+        // When both claude and codex are enabled on the project and a single AI author
+        // is detected in the commit/trace metadata, automatically select the opposing vendor
+        // so an agent does not grade its own code.
+        if selection.claude && selection.codex && detected_authors.len() == 1 {
+            if detected_authors[0] == "claude" {
+                return Ok("codex".to_string());
+            }
+            if detected_authors[0] == "codex" {
+                return Ok("claude".to_string());
+            }
+        }
         if selection.codex && !selection.claude {
             return Ok("codex".to_string());
         }
@@ -1246,6 +1482,7 @@ fn execute_automated_batch_reviews(
                 candidate_findings: total_candidates,
                 confirmed_findings: all_findings.len(),
                 dismissed_findings: total_dismissed,
+                detected_author_agents: Vec::new(),
             },
         );
 
@@ -1874,6 +2111,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             path: vec!["lib.rs".into()],
             run_review: true,
             adversarial: true,
+            file_bugs: true,
             model: Some("gpt-5.3-codex".into()),
             challenger_model: Some("o3".into()),
             sarif: Some(PathBuf::from("review.sarif.json")),
@@ -1886,6 +2124,30 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let bundle: ReviewPreparationBundle =
             serde_json::from_slice(&std::fs::read(root.join("bundle.json")).unwrap()).unwrap();
         assert!(bundle.coverage_verification.as_ref().unwrap().passed);
+        assert_eq!(bundle.detected_author_agents, vec!["agy".to_string()]);
+        assert_eq!(bundle.filed_bug_ids.len(), 1);
+        let loaded_store = store.load().unwrap();
+        assert_eq!(loaded_store.requirements.len(), 1);
+        assert_eq!(
+            loaded_store.requirements[0].req_type,
+            aida_core::RequirementType::Bug
+        );
+
+        // Verify `--fail-on high` exits non-zero when a high-severity finding is confirmed:
+        let fail_args = ReviewPrepareArgs {
+            scan: true,
+            path: vec!["lib.rs".into()],
+            run_review: true,
+            adversarial: true,
+            fail_on: Some("high".into()),
+            ..Default::default()
+        };
+        let gate_err = handle_review_prepare(&fail_args, &store).unwrap_err();
+        assert!(
+            gate_err.to_string().contains("--fail-on high"),
+            "{gate_err}"
+        );
+
         let adv = bundle.adversarial_summary.as_ref().unwrap();
         assert_eq!(adv.candidate_findings, 2);
         assert_eq!(adv.confirmed_findings, 1);
@@ -1908,7 +2170,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             3
         );
 
-        // Verify project-level default agent resolution:
+        // Verify project-level default agent resolution & automatic commit-author opposition:
         // 1. When a project was initialized with only codex (`aida init --agents codex`),
         //    `resolve_review_runner_agent` defaults to `"codex"` automatically.
         crate::test_env::write_project_config_fixture(root, "[agents]\nenabled = [\"codex\"]\n");
@@ -1917,6 +2179,22 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 root,
                 &ReviewPrepareArgs::default(),
                 &ProjectReviewRulesConfig::default()
+            )
+            .unwrap(),
+            "codex"
+        );
+        // 1b. When both claude and codex are enabled and `[AI:claude]` authored the code,
+        //     `resolve_review_runner_agent_with_authors` automatically opposes with `"codex"`.
+        crate::test_env::write_project_config_fixture(
+            root,
+            "[agents]\nenabled = [\"claude\", \"codex\"]\n",
+        );
+        assert_eq!(
+            resolve_review_runner_agent_with_authors(
+                root,
+                &ReviewPrepareArgs::default(),
+                &ProjectReviewRulesConfig::default(),
+                &["claude".to_string()],
             )
             .unwrap(),
             "codex"
