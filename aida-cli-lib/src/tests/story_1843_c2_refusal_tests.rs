@@ -388,21 +388,7 @@ fn r3_f1_late_mail_before_a_session_end_removal_keeps_the_session() {
     );
     late_mail_before_removal(&wt, "late.json");
 
-    let refused = crate::session_end::session_end(
-        Some(id),
-        None,
-        None,
-        true,
-        true,
-        false,
-        false,
-        false,
-        true,
-        false,
-        true,
-        false,
-    )
-    .unwrap_err();
+    let refused = end_removing(id, true).unwrap_err();
     let text = format!("{refused:#}");
     assert!(text.contains("NOT ended"), "{text}");
     // R3-F2: the refusal never suggests an unfenced raw removal.
@@ -707,4 +693,48 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
         reaped[0],
         "Mailbox leftover: removed /w/.aida/.mailbox-tomb-b"
     );
+}
+
+fn end_removing(id: &str, force: bool) -> anyhow::Result<()> {
+    crate::session_end::session_end(
+        Some(id),
+        None,
+        None,
+        true,
+        force,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_session_end_retains_missing_checkout_with_staged_work() {
+    let repo = repo();
+    let root = repo.path();
+    let wt = worktree(root, "staged-end");
+    let id = "0019f1843a05";
+    let lease = write_lease(root, id, &wt, "staged-end", "");
+    std::fs::write(wt.join("only"), "staged").unwrap();
+    git(&wt, &["add", "only"]);
+    let index = PathBuf::from(git(&wt, &["rev-parse", "--absolute-git-dir"])).join("index");
+    let staged = std::fs::read(&index).unwrap();
+    std::fs::remove_dir_all(wt).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let err = end_removing(id, false).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("retained worktree registration"),
+        "{err:#}"
+    );
+    assert!(lease.exists());
+    assert_eq!(std::fs::read(index).unwrap(), staged);
 }

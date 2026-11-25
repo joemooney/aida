@@ -892,8 +892,6 @@ case_MU-504() {
     # Clean up any worktrees/leases we created so later cases aren't disturbed.
     aida_in "$CLONE_A" session end "$id" >/dev/null 2>&1 || true
     aida_in "$CLONE_B" session end "$id" >/dev/null 2>&1 || true
-    ( cd "$CLONE_A" && HOME="$WORKDIR/home" git worktree prune >/dev/null 2>&1 ) || true
-    ( cd "$CLONE_B" && HOME="$WORKDIR/home" git worktree prune >/dev/null 2>&1 ) || true
     rm -rf "$WORKDIR/wtA-$id" "$WORKDIR/wtB-$id" 2>/dev/null || true
 }
 
@@ -1109,8 +1107,6 @@ cleanup_multihost_lease() {
     rm -f "$store"/coordination/leases/"${stem}"-*.toml 2>/dev/null || true
     push_store_A
     pull_into "$CLONE_B"
-    ( cd "$CLONE_A" && HOME="$WORKDIR/home" git worktree prune >/dev/null 2>&1 ) || true
-    ( cd "$CLONE_B" && HOME="$WORKDIR/home" git worktree prune >/dev/null 2>&1 ) || true
     rm -rf "$WORKDIR/wtA-$id" "$WORKDIR/wtB-$id" 2>/dev/null || true
 }
 

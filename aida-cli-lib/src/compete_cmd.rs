@@ -727,10 +727,6 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
             println!("  loser branch `{}` deleted — work discarded.", r.branch);
         }
     }
-    let _ = std::process::Command::new("git")
-        .args(["worktree", "prune"])
-        .current_dir(&project_root)
-        .output();
 
     // ── RECORD: one CompeteOutcome event row + a spec comment — no new file
     // format. This is the dispatch-policy data point. ──
@@ -921,10 +917,6 @@ fn run_compete_arm(
         crate::mail_retention::remove_worktree(project_root, &worktree_dir, true, "compete reuse")
             .with_context(|| format!("clearing the stale compete worktree {worktree_str}"))?;
     }
-    let _ = std::process::Command::new("git")
-        .args(["worktree", "prune"])
-        .current_dir(project_root)
-        .output();
     // trace:BUG-2211 | ai:claude
     let git_in_root = || {
         let mut cmd = std::process::Command::new("git");
