@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T07:04:00.182315587Z
+modified_at: 2026-11-25T07:31:57.038464379Z
 req_type: Bug
 tags:
 - lanes
@@ -148,6 +148,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2119e-5120-7b63-8c37-44f0f85d5d9b
+  author: dirtlab
+  timestamp: 2026-11-25T07:31:57.856612867Z
+  session_id: 01a211847f0e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
@@ -156,3 +165,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5d24023de56
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'F2: I dispute unconditional automatic restart when Git refuses a clean abort. Reproduced with an intact retained merge, an advanced base, a stage-zero resolution and a later working-tree edit to the same path. Both patches can be captured, but git merge --abort exits 128 (Entry ''conflict'' not uptodate). The draft retains the merge and both versions in this case. F4 dispatch publication remains unverified, and the combined draft exceeds the strict 150-line limit.'
+  lean: Retain the clean-abort refusal for separately staged and unstaged work; authorize a separately tested index/worktree restoration design if this case must restart automatically.
+  raised_by: implementer
+  raised_at: 2026-11-25T07:31:57.038464379Z
