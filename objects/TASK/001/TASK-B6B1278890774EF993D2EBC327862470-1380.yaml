@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 35f4bef36bbebb0bc4f842951486de67b6bfcd93
 
   Deferred follow-up TASK-3881 (prior F6). aida-cli-lib/src/config_cmd.rs:1744–1758,1805–1817. The prompt-time comparison catches edits during consent. The clean check, initial read, save, and Git path commit still use separate snapshots, so an unrelated concurrent edit can be included in the policy commit. Bind that commit to the verified initial and intended final config in the existing follow-up.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T20:58:01.792111345Z
-modified_at: 2026-11-25T07:25:26.448669297Z
+modified_at: 2026-11-25T07:25:28.451842250Z
 req_type: Task
 tags:
 - carried-from:BUG-2752
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-24T21:06:46.533203299Z
   changes: []
+- id: 01a21198-6003-75a3-b1e0-7cf3450270c2
+  author: joe
+  timestamp: 2026-11-25T07:25:28.451832308Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 35f4bef36bbebb0bc4f842951486de67b6bfcd93
   branch: pr-4529
