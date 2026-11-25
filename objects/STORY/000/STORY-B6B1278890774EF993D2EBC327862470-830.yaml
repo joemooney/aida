@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T18:32:19.327200625Z
+modified_at: 2026-11-25T18:45:07.676795661Z
 req_type: Story
 tags:
 - landing
@@ -111,6 +111,12 @@ comments:
   modified_at: 2026-11-25T18:32:19.327200625Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21406-9ddc-7510-a457-3974004e4dab
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-3131-s1-landing-drought` at head `55061590afe7e1417dc2f83a5ca16c2677394d1b`.'
+  created_at: 2026-11-25T18:45:07.676791974Z
+  modified_at: 2026-11-25T18:45:07.676791974Z
+  session_id: 01a213c829f5
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
