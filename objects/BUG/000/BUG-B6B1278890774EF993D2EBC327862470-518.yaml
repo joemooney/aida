@@ -9,11 +9,11 @@ description: |
   - AC1: The occupied-worktree recheck in review_watch.rs (~:1699, :1836) runs its git probes OUTSIDE the global admission and train-member locks, then REVALIDATES the probed state cheaply inside the lock (refuse/retry if it changed). Test: a slow probe does not hold the admission lock (another admission proceeds meanwhile).
   - AC2: Test: a worktree state that changes between probe and revalidation is detected and not admitted on stale evidence.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T19:52:59.317891783Z
-modified_at: 2026-11-24T19:54:06.709617710Z
+modified_at: 2026-11-25T11:30:55.486201266Z
 req_type: Bug
 tags:
 - admission
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-24T19:54:06.821426405Z
   changes: []
+- id: 01a21279-177e-7461-8369-d88aa58a55d3
+  author: joe
+  timestamp: 2026-11-25T11:30:55.486200532Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
