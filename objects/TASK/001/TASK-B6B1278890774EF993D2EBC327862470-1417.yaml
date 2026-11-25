@@ -1,0 +1,29 @@
+id: 01a2119f-e6ab-7673-9bf0-51628576799f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1417
+agreed_id: TASK-3902
+title: 'Review debt: leases/session-reap (2 deferred findings)'
+description: |
+  Review debt for area 'leases/session-reap' (folded from 2 reviewer 'Review follow-up:' drafts in the 2026-11-24 triage; Joe approved 2026-11-25 00:16; product-15). Each item below is a deferred review finding; the full text and file:line are on the original spec.
+
+  ## Items
+  - TASK-3382 (parent STORY-3059 / #4552 (open)): scan force-fetches into shared origin refs; dry-run writes
+  - TASK-3383 (parent STORY-3059 / #4552 (open)): guide/messages still say merged-only
+
+  ## Acceptance
+  - AC1: each listed finding is fixed with a test, or explicitly closed with evidence that it no longer applies.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T07:33:41.675331742Z
+modified_at: 2026-11-25T07:33:41.675331742Z
+req_type: Task
+tags:
+- review-debt
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d346c27496
+  vendor: claude
