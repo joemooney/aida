@@ -1,0 +1,31 @@
+id: 01a214f3-87aa-7ea1-88bf-37aba2f409f9
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-324
+title: 'Review PR-4598: [AI:claude] fix(train): resolve promotion specs from patch-new commits; linear promotion review boundary (BUG-2733)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a2149c`) for branch `bug-2733-linear-promotion-specs`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4598>
+  - Branch: `bug-2733-linear-promotion-specs` → `main`
+
+  ## Covers
+
+  - BUG-2733
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4598` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T23:03:54.026960948Z
+modified_at: 2026-11-25T23:03:54.026960948Z
+req_type: Story
+filed_at:
+  code_sha: f03f5255aae977b47ceb09666ba5e0dc2024de6d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f03f5255aa
