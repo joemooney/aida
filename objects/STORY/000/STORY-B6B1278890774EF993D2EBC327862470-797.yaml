@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T05:15:59.705060769Z
+modified_at: 2026-11-25T05:19:03.915280571Z
 req_type: Story
 tags:
 - landing
@@ -1357,6 +1357,21 @@ comments:
   content: 'FRESH SLICE (advisor-122 22:08): #4401 closed (branch kept); re-implemented from main on story-2897-fresh; the new PR is recorded here when it opens. Leftover reservation pr-4401-…-01a210aa3746 was released; any new leftovers wait for TASK-3895/BUG-2761.'
   created_at: 2026-11-25T05:15:54.369153260Z
   modified_at: 2026-11-25T05:15:54.369153260Z
+- id: 01a21124-e0e2-7693-a506-3bed1dccdd03
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:19):
+    # STORY-2897: FRESH SLICE from current main (advisor-122 ruling 2026-11-24 22:08; supersedes #4401; product-15). Lane: CODEX. MAIN, NEW branch story-2897-fresh (cut from origin/main). <=300 lines. Ordinary implementer round: NOT a merge/conflict repair.
+    Re-implement the intent of the closed PR #4401 (old branch story-2897-s1b, read it with git log/diff origin/main...origin/story-2897-s1b) ON TOP of current main. Reference: the saved conflict state on dell1 at /home/dirtlab/salvage/STORY-2897-conflict-20261124T2123 (staged.patch, unmerged-worktree/).
+    SEMANTICS RULING (advisor-122): (20:30) the STRICTER rule wins: a STALE base requires exact-head latest FULL success even in review-gated mode; S1b's covered-red allowance applies ONLY to a fresh base. main_watch.rs pass-deadline/verdict-error overlap: whichever path WITHHOLDS readiness wins. Test at the intersection: review-gated + stale base + covered red → NOT ready.
+    Read `aida show STORY-2897` for the ACs. One targeted cargo run, then make check-ci-fast. Open a NEW PR to main with the completing (STORY-2897) trailer. COMMIT your work.
+    GUARD (advisor-122 02:52): those ratchet-set.json entries must name tests ADDED IN THIS SAME PR. No removals, no renames of existing entries, no filter widening that covers pre-existing tests; reviewers treat any other ratchet-set.json change as a gate edit.
+    TITLE TRAILER: ship with the COMPLETING "(SPEC-ID)" trailer when your work meets every acceptance criterion of the spec. Use "Refs SPEC-ID" ONLY if this brief explicitly says this is a partial slice (advisor-122 ruling 2026-11-24 09:35).
+    RATCHET LEDGERS: never add a site or RAISE a count; LOWERING an exact count to match sites you REMOVED is tightening and is allowed (product-15 2026-11-24, after BUG-2749 punted on an over-strict brief).
+  created_at: 2026-11-25T05:19:03.915280571Z
+  modified_at: 2026-11-25T05:19:03.915280571Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
