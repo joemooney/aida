@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: bb5f778f679f84d7e19ebd52b6986d597cd43aea
 
   aida-cli-lib/src/main_watch.rs:1292-1310,1326-1335. When a verified green commit arrives just before the shorter deadline, the closing Git range can time out solely because this pass has no time left. close() permanently records the outcome as unattributed, clears the episode, and never retries the range, leaving revert/recovery metrics wrong even if Git is healthy next pass. Retain the verified green observation and retry the unresolved attribution on the next pass, or preserve an explicit pending attribution. Add a fixture where the closing range exhausts this pass and is available on retry.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T10:19:43.463975808Z
-modified_at: 2026-11-25T07:35:53.625636929Z
+modified_at: 2026-11-25T07:35:57.112936794Z
 req_type: Task
 tags:
 - carried-from:TASK-3209
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a211a1-f7b8-7742-b96e-90ded065a69d
+  author: joe
+  timestamp: 2026-11-25T07:35:57.112926442Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: bb5f778f679f84d7e19ebd52b6986d597cd43aea
   branch: pr-4422
