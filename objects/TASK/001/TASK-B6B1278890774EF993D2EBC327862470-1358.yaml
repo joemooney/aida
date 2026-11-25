@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T05:56:17.985877927Z
+modified_at: 2026-11-25T06:36:33.481157179Z
 req_type: Task
 tags:
 - integration
@@ -190,6 +190,18 @@ comments:
   modified_at: 2026-11-25T05:13:01.790827648Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2116b-9a73-75b2-b183-74c03766caed
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 76b5aa691aadc0ae5c945ef55e46facafa621b53 plus the native worktree diff (68 additions, 12 deletions). Reviewed origin/main...HEAD and checked for untracked additions.
+    AC1: [evidence: behavioral-test] fetches_target_advanced_after_checkout at aida-cli-lib/src/tests/task_3874_review_risk.rs:27 passed. The trusted checkout resolves the advanced base over one SSH transport. Both seat cases refuse through the production entry. Both partial-clone markers refuse before object access with a missing topic blob and yield STRICT. The bundle access-time control detected reads. A separate two-clone mutation check changed only the fetch.bundleURI override and observed bundle access only without the override.
+    AC2: [evidence: behavioral-test] stalled_version_probe_exhausts_risk_budget passed. The configuration check at aida-cli-lib/src/forge.rs:7125 shares the resolver deadline. The final lane run executed 2 tests, both passed. make check-ci-fast exited 0.
+    Probes covered Git boolean normalization, any matching remote, marker presence, errors, missing blobs and seat refusal. No actionable defects found in the round. Prior hosted checks apply to 7edd193406 only. Independent review of the host-published commit is outstanding.
+  created_at: 2026-11-25T06:36:33.481157179Z
+  modified_at: 2026-11-25T06:36:33.481157179Z
+  session_id: 01a211465bf0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
