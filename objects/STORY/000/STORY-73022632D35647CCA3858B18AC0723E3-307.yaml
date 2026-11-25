@@ -1,0 +1,32 @@
+id: 01a2118c-4fbf-70b3-9d99-950395204fea
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-307
+title: 'Review PR-4565: [AI:codex] fix(schedule): allow the stalled-reviews doctor gate (BUG-2762)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21156`) for branch `int38-bug-2762`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4565>
+  - Branch: `int38-bug-2762` → `integration`
+
+  ## Covers
+
+  - BUG-2762
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4565` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T07:12:17.855868981Z
+modified_at: 2026-11-25T07:12:17.855868981Z
+req_type: Story
+filed_at:
+  code_sha: 2d346c274965961d1e187e5d48a6dbe611232393
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d346c2749
+  session: 01a211569ece
