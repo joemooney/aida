@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-24T03:22:53.586058397Z
+modified_at: 2026-11-25T21:03:24.186483671Z
 req_type: Bug
 tags:
 - conflicts
@@ -1276,6 +1276,15 @@ comments:
   content: 'Triage (product-15 2026-11-23 20:24): the watcher flagged unshipped work on bug-2688-journal-loop (first seen 03:22Z). This is the branch of the CLOSED PR #4388 (8 commits through 10c94367b4b, 2026-11-22 14:43 MST), parked deliberately when BUG-2688 was deferred to 2026-12-15 (needs a conflict-repair redesign; minimal slice split to BUG-2722). It is preserved on origin, and no lane or open PR uses it. Not loose: do not discard; resume from it when un-deferred.'
   created_at: 2026-11-24T03:22:53.586058397Z
   modified_at: 2026-11-24T03:22:53.586058397Z
+- id: 01a21485-361a-7261-a0e4-0709da0bc664
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3199: Follow-up to BUG-2688: --fresh moves a retained seat aside only after the live worktree-holder scan
+      Deferred from BUG-2688 (advisor-121 ruling AC4, PR #4388). --fresh should move a retained rework seat aside only after the same live worktree-holder scan that session end uses (the open round-4 P1 on closed PR #4306). PR #4388 fixed the repair-journal reservation loop (AC1-AC3) and did not touch --fresh. Related gap seen while working: a reservation left by a lane that ran and exited is only healable by 'aida doctor heal repair-journal' once its seat directory is gone, so a retained clean seat still needs ending first.
+  created_at: 2026-11-25T21:03:24.186483671Z
+  modified_at: 2026-11-25T21:03:24.186483671Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
