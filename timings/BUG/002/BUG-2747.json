@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2747",
+  "publishes": [
+    {
+      "at": "2026-11-25T12:13:27.520703320Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T02:00:11.277769155Z",
+      "spec": "BUG-2747",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4540,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "490b4f038373cee57d13037518da1b43d6c6da40"
+      }
+    },
+    {
+      "ts": "2026-11-25T02:00:45.730481639Z",
+      "spec": "BUG-2747",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes for completing BUG-2747. Reviewed all three files in the landed diff against protected main 260a82ae939faf34a8e6505a6f765f2151655610 and landed tree 71323ac7889846ea4554cde98627ce2d1448bea1. The PR head is eight commits behind that base. The findings apply to the landed tree and do not depend on code changed by those eight commits. The exact-head GitHub FAST gates and compile passed, and the test shards were skipped. No local tests were run.\n\nBUG-b6b1278890774ef993d2ebc327862470-508.AC1 — unverified\nBUG-b6b1278890774ef993d2ebc327862470-508.AC2 — unverified\n\nAC1 has partial source evidence for exact initial environment values and matching group/session IDs. The argv exception can also hide independent evidence on a non-recovery ancestor. For AC2 the new fixture covers individual scanner outcomes, including plain recovery argv and same-PID holder evidence, but it neither tests the production release decisions with that ancestry nor traces either criterion. The implementer reported a passing isolated fixture and a Cargo build that timed out before the focused test ran.",
+        "recovery_hint": "address the review findings, move BUG-2747 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T05:11:59.335588604Z",
+      "spec": "BUG-2747",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4540,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7654f1ed8b5f7819a31b89cc1b846b90cd24fa51"
+      }
+    },
+    {
+      "ts": "2026-11-25T05:12:27.248036992Z",
+      "spec": "BUG-2747",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the full landed diff against protected main 45206d90a1df483c1caff91dee5abf345df4a8d2 (landed tree 0e55c5b5fb5b29394cf40557da0b05a9b92119af). BUG-2747 AC1 PASS by source inspection for the specified positional forms: recovery checks matching executable identity and exact operand bytes and still counts environment, group, session and cwd evidence. AC2 FAIL: the plain unknown-retirement control failed in the implementer’s focused run, and the tests lack end-to-end coverage of the actual CLI operand exemption and the newly specified argv negatives. Exact-head FAST gates and FAST compile both failed the executable-resolution guard, which also failed the aggregate Build check. No local tests ran in this review.",
+        "recovery_hint": "address the review findings, move BUG-2747 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T08:34:38.759737229Z",
+      "spec": "BUG-2747",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4540,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ed120e3245ca0e75fe8b4bc97d863e8d734432d3"
+      }
+    },
+    {
+      "ts": "2026-11-25T12:07:39.546882102Z",
+      "spec": "BUG-2747",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4540
+      }
+    },
+    {
+      "ts": "2026-11-25T12:13:27.288669432Z",
+      "spec": "BUG-2747",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "664f260222408056dbef136fe156d48f843f1329",
+        "pr": 4540,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
