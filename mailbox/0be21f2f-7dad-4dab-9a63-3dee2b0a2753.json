@@ -1,0 +1,18 @@
+{
+  "id": "0be21f2f-7dad-4dab-9a63-3dee2b0a2753",
+  "thread_id": "0be21f2f-7dad-4dab-9a63-3dee2b0a2753",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795605648079,
+  "body": "- [STUCK-REVIEW] #4376 at d469d3dc has had no verdict and no reviewer for 97 min\n  -> rule on #4376: 3 content rounds of requested changes; needs an advisor ruling\n- [STUCK-REVIEW] #4559 at be1d46a9 has had no verdict and no reviewer for 84 min\n  -> launch a reviewer for #4559 at be1d46a9\n- [STUCK-REVIEW] #4566 at 2354441c has had no verdict and no reviewer for 48 min\n  -> launch a reviewer for #4566 at 2354441c\n- [STUCK-REVIEW] #4568 at 2753e3c9 has had no verdict and no reviewer for 35 min\n  -> launch a reviewer for #4568 at 2753e3c9\n- [STUCK-REVIEW] #4569 at ee393994 has had no verdict and no reviewer for 80 min\n  -> launch a reviewer for #4569 at ee393994\n- [STUCK-REVIEW] #4570 at 9959be29 has had no verdict and no reviewer for 38 min\n  -> launch a reviewer for #4570 at 9959be29\n\n18 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 6 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
