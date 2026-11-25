@@ -16,11 +16,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:15:19.669562997Z
-modified_at: 2026-11-22T19:15:19.669562997Z
+modified_at: 2026-11-25T21:08:30.366689837Z
 req_type: Task
 tags:
 - mass-change
 - review-follow-up
+comments:
+- id: 01a21489-e21e-7652-9604-5c0e8fa8f37d
+  author: joe
+  content: FOLDED into a comment on BUG-2629 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:08:30.366689837Z
+  modified_at: 2026-11-25T21:08:30.366689837Z
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
