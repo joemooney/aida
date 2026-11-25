@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-23T22:00:58.648555064Z
+modified_at: 2026-11-25T12:16:08.329489645Z
 req_type: Bug
 tags:
 - landing
@@ -27,6 +27,25 @@ comments:
   content: 'Also (integration-30, 15:00): the linear-promotion workaround breaks `aida pr auto-queue-review`. On PR-4461 (promotion 27, main + 3 cherry-picks) it failed with ''cannot read commits main..promote/integration-27 for PR-4461 — no reviewer story filed: promotion boundary could not be established within 500 commits''. The auto-queue looks for an integration-merge boundary that a linear promotion doesn''t have. The fix for this bug should cover both: resolve specs and the review story from the PR''s own new (patch-id-new) commits or its title trailer.'
   created_at: 2026-11-23T22:00:58.648555064Z
   modified_at: 2026-11-23T22:00:58.648555064Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a212a2-b69c-7a51-a0c5-589e4c155848
+  author: joe
+  content: |-
+    FINDING (integration seat, 2026-11-25 05:15; advisor asked me to file it here, not as a new spec, per findings-not-requirements): linear promotions break auto-queue-review.
+
+    Linear cherry-pick promotions (this BUG's workaround, standard since p30) make `aida pr auto-queue-review` fail:
+      auto-queue: cannot read commits main..promote/integration-38 for PR-4574 — no reviewer story filed: promotion boundary could not be established within 500 commits
+
+    The error comes from aida-cli-lib/src/review_git_evidence.rs:484. The boundary walk looks for 2-parent integration merge constituents (merged_pr(subject)), landed promotion receipts or tree matches in base..head. A linear build on main contains only single-parent cherry-picks, so it finds no constituent and no boundary.
+
+    Effect: no 'Review PR-N' story gets filed, and the advisor's reviewer launch can be refused. For p38 #4574 the advisor got round it with 'queue work PR-4574 --role reviewer'.
+
+    Fix options (pick one when BUG-2733 is fixed properly):
+    (a) When base..head has no merges and every commit subject carries a '(#N)' PR suffix, treat each single-parent commit as a constituent.
+    (b) Have the fix for this BUG's root cause, train spec resolution scoped to the promotion's constituents, make linear builds unnecessary.
+  created_at: 2026-11-25T12:16:08.329489645Z
+  modified_at: 2026-11-25T12:16:08.329489645Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 filed_at:
