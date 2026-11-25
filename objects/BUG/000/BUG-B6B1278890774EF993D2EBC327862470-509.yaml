@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T02:12:06.793774276Z
+modified_at: 2026-11-25T03:06:15.706557209Z
 req_type: Bug
 tags:
 - launch
@@ -165,6 +165,12 @@ comments:
   modified_at: 2026-11-25T02:12:06.793774276Z
   session_id: 01a210668cb9
   harness_version: codex-cli 0.167.0
+- id: 01a210ab-0f1a-7322-8022-1ab4c701772f
+  author: aida-publication-done
+  content: Implementer push c5f7b33e0117 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T03:06:15.706556642Z
+  modified_at: 2026-11-25T03:06:15.706556642Z
+  session_id: 01a210668cb9
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
@@ -222,6 +228,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a210ab-0f1a-7322-8022-1aa22e279436
+  author: aida-publication-done
+  timestamp: 2026-11-25T03:06:15.706552566Z
+  session_id: 01a210668cb9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
