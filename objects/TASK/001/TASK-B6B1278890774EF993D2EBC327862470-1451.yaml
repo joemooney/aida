@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-25T20:24:38.024274237Z
+modified_at: 2026-11-25T21:13:47.943693608Z
 req_type: Task
 tags:
 - ci
@@ -24,6 +24,19 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 13:27): APPROVED, HIGH, standard, drain. Evidence: /var/cache/aida-ci reached 255G (incremental target-v2 dirs, never pruned) and took the imac root to 90%. Prune is bounded (size + age), skips while a CI job holds the cache (lock or job check), and alerts at a configurable size. One slice, at most 300 lines.'
   created_at: 2026-11-25T20:24:28.789835945Z
   modified_at: 2026-11-25T20:24:28.789835945Z
+- id: 01a2148e-f496-76c2-b216-58293a5493b9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:13):
+    # TASK-3910: bound the local GitLab CI target cache (advisor-122 approved 2026-11-25 13:27, drain; product-15). Lane: CLAUDE. MAIN, NEW branch. STANDARD. <=200 lines. Completing (TASK-3910) trailer.
+    READ: `aida show TASK-3910` (evidence: /var/cache/aida-ci/cache/target-v2-{0,1} grew to 255G, with debug/incremental 64G+55G; CARGO_INCREMENTAL=1 is deliberate per STORY-1216, .gitlab-ci.yml ~line 75).
+    AC1: a bounded prune: remove incremental session dirs older than N days (default 7), or LRU above a per-slot cap (default 60G), ONLY when no CI job is running (e.g. a pre-job step in .gitlab-ci.yml scoped to its own CARGO_TARGET_DIR slot, which is naturally race-free, or a runner-host script). Prefer the in-job slot-local prune.
+    AC2: the existing disk-headroom guard/doctor reports the CI cache size and alerts above the cap.
+    Test the prune logic (a fixture dir tree with old/new incremental sessions). One targeted cargo test run on this host if Rust changes, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T21:13:47.943693608Z
+  modified_at: 2026-11-25T21:13:47.943693608Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21461-a683-7013-a237-4532cbf94a9a
   author: joe
