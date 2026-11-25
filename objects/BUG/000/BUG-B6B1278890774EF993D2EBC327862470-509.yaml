@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T04:53:49.542411220Z
+modified_at: 2026-11-25T05:16:50.143967946Z
 req_type: Bug
 tags:
 - launch
@@ -337,6 +337,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21122-9a5f-7ba2-af08-6c1cc3c344f8
+  author: aida-orchestrator
+  timestamp: 2026-11-25T05:16:50.143976807Z
+  session_id: 01a211200ee8
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -345,3 +353,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2748 AC1 fails. Incomplete attribution can still release a reservation through unknown retirement, ordinary recovery, or the terminal reader. AC2 passes source review. The grant-only success expectation was replaced with a regression checking Unknown, admission and retirement refusal, the inspection command, and receipt preservation. The legacy Prepared recovery fixture matches the old released receipt shape, and the operator guide now explains inspection and restoration. Reviewed the full landed diff for tree 7ef07198c4134b284caf861b677c4917bd0b714d against protected main 45206d90a1df483c1caff91dee5abf345df4a8d2. The attested PR head is one commit behind. That base commit changes remote_create.rs only, so no finding depends on the base advance. GitHub FAST source gates, compile, and the aggregate build passed. The merge-hold status was pending. The implementer reported passing targeted receipt cases and six failures in the broader live-process supervisor run. No local tests were run for this review.
+  recovery_hint: address the review findings, move BUG-2748 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T05:16:50.143967946Z
