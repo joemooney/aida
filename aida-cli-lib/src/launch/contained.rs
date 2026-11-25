@@ -118,6 +118,14 @@ pub struct ContainmentReceipt {
     mutation_ready: bool,
 }
 impl ContainmentReceipt {
+    #[cfg(test)]
+    pub(crate) fn current_process_test_receipt() -> Self {
+        let mut receipt = tests::binding_test_receipt();
+        receipt.accepted = true;
+        receipt.worker_pid = std::process::id();
+        receipt
+    }
+
     pub(crate) fn is_accepted(&self) -> bool {
         self.accepted
     }

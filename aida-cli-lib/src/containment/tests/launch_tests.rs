@@ -713,9 +713,7 @@ fn task_2708_relocated_codex_home_and_sqlite_home_are_masked() {
 // trace:TASK-2708 | ai:claude
 #[test]
 fn task_2708_bind_contained_launch_worker_refuses_unaccepted_receipt() {
-    let receipt: ContainmentReceipt = serde_json::from_value(serde_json::json!({"version":1,"posture":"aida","worker_pid":1,
-        "worker_start":"fake","wrapper_pid":2,"namespaces":{},"uid_map_identity":true,"seat_preflight":true,
-        "broker":"seccomp_notify_addfd","relay_port":3128,"policy_sha":"fake","keyring":"isolated_child_only"})).unwrap();
+    let receipt = binding_test_receipt();
     assert!(!receipt.is_accepted());
     // Refused before the grant id is considered: a grant-less launch holding
     // an unaccepted receipt is still a refused launch, not a silent no-op.
@@ -726,6 +724,13 @@ fn task_2708_bind_contained_launch_worker_refuses_unaccepted_receipt() {
         assert!(error.contains("receipt was not accepted"), "{error}");
     }
 }
+
+pub(crate) fn binding_test_receipt() -> ContainmentReceipt {
+    serde_json::from_value(serde_json::json!({"version":1,"posture":"aida","worker_pid":1,
+        "worker_start":"fake","wrapper_pid":2,"namespaces":{},"uid_map_identity":true,"seat_preflight":true,
+        "broker":"seccomp_notify_addfd","relay_port":3128,"policy_sha":"fake","keyring":"isolated_child_only"})).unwrap()
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2707_daemon_dies_with_supervisor_and_private_state_not_reused() {

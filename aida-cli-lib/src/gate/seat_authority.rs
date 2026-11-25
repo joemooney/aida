@@ -3384,10 +3384,14 @@ pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
 /// then stays unbound and is refused, never silently trusted.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
+    bind_pid_until(id, pid, None)
+}
+
+fn bind_pid_until(id: &str, pid: u32, deadline: Option<std::time::Instant>) -> Result<()> {
     let token = pid_binding_token(pid).with_context(|| {
         format!("cannot bind session grant to process {pid}: its start identity could not be read")
     })?;
-    bind_grant_token(id, &token)
+    bind_token_until(id, &token, deadline)
 }
 
 /// TASK-2708: bind a launch child's grant (minted by [`issue_child_for`])
@@ -3404,6 +3408,14 @@ pub(crate) fn bind_contained_launch_worker(
     grant_id: &str,
     receipt: &crate::gate::kernel_deps::ContainmentReceipt,
 ) -> Result<()> {
+    bind_contained_launch_worker_until(grant_id, receipt, None)
+}
+
+pub(crate) fn bind_contained_launch_worker_until(
+    grant_id: &str,
+    receipt: &crate::gate::kernel_deps::ContainmentReceipt,
+    deadline: Option<std::time::Instant>,
+) -> Result<()> {
     anyhow::ensure!(
         receipt.is_accepted(),
         "refusing to bind a session grant to a contained worker: its containment receipt was not accepted"
@@ -3416,14 +3428,20 @@ pub(crate) fn bind_contained_launch_worker(
     if grant_id.is_empty() {
         return Ok(());
     }
-    bind_grant_to_pid(grant_id, receipt.worker_pid())
+    bind_pid_until(grant_id, receipt.worker_pid(), deadline)
 }
 
 /// Token-level core of [`bind_grant_to_pid`].
 // trace:BUG-1934 | ai:claude
+#[cfg(test)]
 pub(crate) fn bind_grant_token(id: &str, token: &str) -> Result<()> {
-    update_grant(
+    bind_token_until(id, token, None)
+}
+
+fn bind_token_until(id: &str, token: &str, deadline: Option<std::time::Instant>) -> Result<()> {
+    update_grant_until(
         id,
+        deadline,
         |grant| {
             if grant.binding.iter().any(|b| b == token) {
                 return false;

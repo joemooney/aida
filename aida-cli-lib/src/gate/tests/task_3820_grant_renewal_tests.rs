@@ -586,6 +586,7 @@ fn task_3884_contended_grant_times_out() {
     let id = Uuid::new_v4().to_string();
     let path = grant_lock_dir().unwrap().join(format!("{id}.lock"));
     crate::test_env_base::assert_lock_timeout(&path, |end| {
-        update_grant_until(&id, Some(end), |_| false, |_| true)
+        let receipt = crate::gate::kernel_deps::ContainmentReceipt::current_process_test_receipt();
+        bind_contained_launch_worker_until(&id, &receipt, Some(end)).map(|()| true)
     });
 }

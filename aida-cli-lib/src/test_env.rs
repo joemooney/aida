@@ -172,6 +172,11 @@ pub(crate) fn assert_lock_timeout(
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let held = std::fs::File::create(path).unwrap();
     held.lock_exclusive().unwrap();
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    let holder = std::thread::spawn(move || {
+        let _ = wait.recv_timeout(Duration::from_secs(2));
+        drop(held);
+    });
     let start = Instant::now();
     let err = attempt(start + Duration::from_millis(20)).unwrap_err();
     assert_eq!(
@@ -179,4 +184,6 @@ pub(crate) fn assert_lock_timeout(
         std::io::ErrorKind::TimedOut
     );
     assert!((Duration::from_millis(20)..Duration::from_secs(1)).contains(&start.elapsed()));
+    drop(release);
+    holder.join().unwrap();
 }
