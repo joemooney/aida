@@ -1,0 +1,28 @@
+id: 01a210ef-5b29-7f90-b4d2-052588046ec8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1400
+agreed_id: TASK-3894
+title: Scrub the raw work email from BOTH hubs aida-store registry (block owners + nodes) and keep work nodes writing the redacted identity
+description: |
+  Joe 2026-11-24 21:15 chose "sync now, scrub later". BUG-715 (completed) added redaction support, but the existing registries were never scrubbed: the operator's raw WORK email is still in BOTH hubs' aida-store registry (registry/blocks.yaml block owners: 25 entries; registry/nodes.toml: 6 entries; identical on origin and gitlab), since ~July (BUG-724). Filed by product-15. HIGH, STRICT (rewrites store registry on both hubs; ID-allocation integrity), drive. SKETCH FIRST + advisor review before it runs.
+
+  ## Acceptance
+  - AC1: A reviewed, idempotent scrub replaces the raw work email in both hubs' registry (block owners, node entries) with the redaction placeholder / public identity, WITHOUT changing any block range, counter or node id, published through the normal reconcile path on both hubs. Dry-run first (redacted diff), then Joe signs off.
+  - AC2: Prevention: the work clone writes the public/redacted identity going forward (the BUG-715 knob is set and verified); a test shows a new block allocation from a work node records no raw email.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T04:20:51.625484185Z
+modified_at: 2026-11-25T04:20:51.625484185Z
+req_type: Task
+tags:
+- privacy
+- store
+- strict
+filed_at:
+  code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45206d90a1d
+  vendor: claude
