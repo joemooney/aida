@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T01:29:20.260111964Z
-modified_at: 2026-11-17T07:27:46.932846564Z
+modified_at: 2026-11-25T21:00:40.385803446Z
 req_type: Task
 tags:
 - locks
@@ -170,6 +170,11 @@ comments:
   modified_at: 2026-11-17T06:50:36.948665998Z
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
+- id: 01a21482-b642-7f33-af75-cacf1dc1fa5f
+  author: joe
+  content: 'STALE CLAIM RELEASED (product-15, 2026-11-25 14:05, under Joe''s full authorization; advisor-122 pre-read 14:02): InProgress with an idle driver for 2 or more days, and no open PR or live lease on the imac or dell1, so reset to Approved so it no longer blocks dispatch or counts as in flight. Epics stay Approved; only their children run.'
+  created_at: 2026-11-25T21:00:40.385803446Z
+  modified_at: 2026-11-25T21:00:40.385803446Z
 history:
 - id: 01a1e720-10be-7080-8533-68190f43451a
   author: joe
