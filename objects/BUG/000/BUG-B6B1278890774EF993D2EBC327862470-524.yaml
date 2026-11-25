@@ -13,12 +13,25 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T08:43:03.156609450Z
+modified_at: 2026-11-25T09:16:55.206235229Z
 req_type: Bug
 tags:
 - review-watch
 - strict
 - throughput
+comments:
+- id: 01a211fe-69e9-7f20-82b2-ec05639ab98e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 33a7b137a89cf1fb813b2e7313cfe1de28da7594 plus native working-tree diff; origin/main...HEAD empty, no untracked additions.
+    AC1: [evidence: behavioral-test] review_watch.rs:1653 and :1962 check all recorded identities before replacing an older exited receipt under the admission lock. Unknown takes precedence over live, including missing spawn evidence. stalled_reviews.rs:94 collects the persisted hold as a doctor finding.
+    AC2: [evidence: behavioral-test] tests/task_1993_review_watch_tests.rs:5919 exercised live, unknown and reaped worker identities, doctor output and replacement dispatch. One targeted test passed. make check-ci-fast exited 0.
+    Probes: admission and doctor share the unknown reason; existing receipt format and same-head retry policy are preserved. The check walks all attempts and all recorded roles. It grants no signal or hub authority. Existing tests retained. Doctor reports the last observed skip. No live forge incident replay or PR-head CI in this native lane.
+  created_at: 2026-11-25T09:16:55.206235229Z
+  modified_at: 2026-11-25T09:16:55.206235229Z
+  session_id: 01a211de6003
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
