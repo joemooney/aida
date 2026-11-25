@@ -1,0 +1,31 @@
+id: 01a214d7-f0c0-75e0-9495-7ea263dc9a82
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1462
+title: 'Review follow-up: scripts/store-writers.toml:1258 — The inventory row for the exact-lease reader (now read_e'
+description: |-
+  From BUG-2755
+  Reviewed sha: 696fd8422f05691585f0f2f06339b8f5a0aaa397
+
+  scripts/store-writers.toml:1258 — The inventory row for the exact-lease reader (now read_exact_lease_snapshot|OpenOptions::new) was reclassified from disposition read_only to the generic caller-owned/blocked template. That drops its BUG-2655 gate description (read-only, O_NOFOLLOW, O_NONBLOCK) and its coordination::tests::bug2655_unknown_rebound_lease_refuses_force_and_heal evidence test, even though the function body is unchanged and still read-only. Carry the read_only classification over to the renamed item.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T22:33:45.920572360Z
+modified_at: 2026-11-25T22:33:45.920572360Z
+req_type: Task
+tags:
+- carried-from:BUG-2755
+- finding-hash:10c658b0
+- from-review:BUG-2755
+relationships:
+- rel_type: References
+  target_id: 01a20efd-700f-73b2-b5e9-0a2875617f3f
+  created_at: 2026-11-25T22:33:45.920627295Z
+filed_at:
+  code_sha: 696fd8422f05691585f0f2f06339b8f5a0aaa397
+  branch: pr-4541
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 34c86b75a25
+  vendor: claude
+  session: 01a214d2aec9
