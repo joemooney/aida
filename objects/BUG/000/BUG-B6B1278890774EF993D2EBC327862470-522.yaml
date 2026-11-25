@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T10:50:41.917489611Z
+modified_at: 2026-11-25T10:52:55.413952574Z
 req_type: Bug
 tags:
 - lanes
@@ -192,6 +192,25 @@ comments:
   modified_at: 2026-11-25T09:30:31.481703630Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21255-5e84-7b93-83a3-67178d4ba853
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a0ecc2ae63c3960f862e9d972dd389742e08f011 plus the native working tree and untracked shell fixture. Reviewed the merge-base diff and working-tree diff.
+    AC1: [evidence: behavioral-test] seat_clone.rs:3937 compares the fetched base before claim acquisition. The preparation check at seat_clone.rs:4006 catches a later move. Queue previews report the reservation. The dispatch test refused both missing resolve-undo evidence and an advanced base, and checked the original lease, journal, index, MERGE_HEAD, MERGE_MSG and working file by SHA-256.
+    AC2: [evidence: behavioral-test] tests/support/retained_repair.sh:54 stages the conflict in the first vendor. The successor verified the staged blob and original seat, then published both expected parents and contents to the fixture origin. Targeted job j20261125T101117257-2-0 passed 1/1.
+    Deep pass inspected exact PR, branch, lease and journal comparisons, zero/duplicate conflict paths, NUL-delimited Git output, the shared claim replacement and its rollback. Test uses a fixture vendor and forge. The full PR adds 413 lines including the fixture, exceeding the R4 limit by 113. Parked for TASK-3895. Fast gate j20261125T102921193-2-0 passed source checks, built the CLI and was running CLI manual verification at handoff. Hosted CI has no new head.
+  created_at: 2026-11-25T10:51:53.508984503Z
+  modified_at: 2026-11-25T10:51:53.508984503Z
+  session_id: 01a2120e3646
+  harness_version: codex-cli 0.167.0
+- id: 01a21256-5094-7a42-a8da-c3db92c712e5
+  author: dirtlab
+  content: Implementer self-review validation update for a0ecc2ae63c3 plus the native draft. The final make check-ci-fast job j20261125T102921193-2-0 finished with exit 0. The size punt remains in effect.
+  created_at: 2026-11-25T10:52:55.413952574Z
+  modified_at: 2026-11-25T10:52:55.413952574Z
+  session_id: 01a2120e3646
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
