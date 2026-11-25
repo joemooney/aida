@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T09:43:54.423635355Z
+modified_at: 2026-11-25T09:49:59.474759312Z
 req_type: Bug
 tags:
 - launch
@@ -330,6 +330,17 @@ comments:
   modified_at: 2026-11-25T09:12:37.986324940Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2121c-b2b8-7c32-8e6c-128e71e6af6e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55db4c1eaffcfc47bde99ab35bc685a31aea2bba plus the native working tree. Reviewed the origin/main merge-base diff, working diff, and untracked inventory.
+    AC1: [evidence: behavioral-test] story_2254_bg_incomplete_prepared_and_recovered_attempts_stay_held (story_2254_codex_bg_receipt_tests.rs:120) passed for deleted Prepared keys, ambiguous Exited, and legacy missing dispatcher. Checked status, both recovery routes, and admission. Strict Serde fields, dispatcher validation and phase-specific terminal checks cover ordinary reads and the separate retirement projection. Corrected OccupancyProbe rustdoc.
+    AC2: [evidence: behavioral-test] story_2254_bg_corrupt_receipt_never_frees_scope (:165) passed for grant-only and individual missing fields, transferred UNKNOWN with restoration guidance, and complete clear-scan control. Checked null/absent and multiple-field mutations and the separate retirement authority path. No untracked additions. cargo job j20261125T091904403-2-0 had 34 passes and six supervisor failures (three explicit procfs denials, three RecoveryRequired). Parked under round-five rule. Fast gate job j20261125T093326741-2-0 started; no publication declaration.
+  created_at: 2026-11-25T09:49:59.474759312Z
+  modified_at: 2026-11-25T09:49:59.474759312Z
+  session_id: 01a211ff07bf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe

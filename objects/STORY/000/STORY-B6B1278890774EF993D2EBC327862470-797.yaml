@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T09:17:11.831566036Z
+modified_at: 2026-11-25T09:45:49.611364932Z
 req_type: Story
 tags:
 - landing
@@ -1387,6 +1387,22 @@ comments:
   modified_at: 2026-11-25T07:59:52.884528134Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21218-e32a-7ea0-8074-8ace62bd0d8d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 45206d90a1df483c1caff91dee5abf345df4a8d2 plus the native worktree diff (283 additions, 17 deletions). The merge-base diff is empty and there are no untracked additions. The patch applies cleanly to origin/main 33a7b137a8.
+    AC1: [evidence: behavioral-test] Existing head/authority refusals in gate/tests/pr_ship_gate_tests.rs:384 and bug_1918_review_authority_tests.rs:296. The new readiness test in tests/task_1945_review_watch_ready_tests.rs:1784 exercises fresh vs stale covered red. The report rechecks the head and does not merge.
+    AC2: [evidence: behavioral-test] Existing forge reconciliation fixtures in tests/story_2897_land_mode_tests.rs:114 verify before/after and readback.
+    AC3: [evidence: behavioral-test] Replacement S3a evidence in tests/story_2897_main_watch_tests.rs:355 and :386 checks the first red, specs and advisor notification. Deadline and authentication error fixtures at :1371 and :1428. The signed observational slice retains the documented 30-minute confirmation window. S3b store effects and the 15 historical follow-ups remain pending disposition.
+    AC4: [evidence: behavioral-test] Existing dev_build.rs:2879 and :2921 cover green-only promotion and last-green diagnostics.
+    AC5: [evidence: documentation-inspection] docs/advanced/landing.md:19 and .aida/discipline/two-seat-protocol.md:82 describe both modes. Both review templates now explain the fresh-base restriction and the structured WAITING dependency.
+    AC6: [evidence: behavioral-test] Targeted story_2897_s1b ran two tests, both passed. Prior AC fixtures cited above were inspected. Self-review added coverage for a second uncovered failure and a pending mandatory check; the final-tree rerun and full FAST result are pending.
+    Probes: verified exact check-name comparisons, legacy missing needs, repeated CLI dependencies, missing and unreadable episode state, multiple failing rows, mandatory hold checks, stale FULL identity, and same-launch replay matching. Existing hold and approval checks precede CI. No existing test weakened, no ratchet ledger edited. Local verdict lookup for PR-4389 and PR-4401 returned needs-review with no verdict. No closure inferred from the reverted integration merge.
+  created_at: 2026-11-25T09:45:49.611364932Z
+  modified_at: 2026-11-25T09:45:49.611364932Z
+  session_id: 01a211fe6afe
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
