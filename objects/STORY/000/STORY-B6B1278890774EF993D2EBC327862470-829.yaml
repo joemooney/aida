@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:55:45.601016322Z
+modified_at: 2026-11-25T18:03:02.249173779Z
 req_type: Story
 tags:
 - integration
@@ -333,6 +333,25 @@ comments:
   content: Added built-in C/C++ (c_cpp), Java (java), MATLAB (matlab), and Verilog/SystemVerilog/VHDL RTL (hdl_rtl) playbooks plus Java camelCase (*Test / *Tests) and HDL testbench (*_tb / tb_*) pairing in canonical_module_stem on branch story-3120-ci-review (commit 32a7ebd99153790301af9f58d38c9d4403eeabc7).
   created_at: 2026-11-25T16:55:45.601016322Z
   modified_at: 2026-11-25T16:55:45.601016322Z
+- id: 01a213e0-14e9-7700-a2b4-df13dd1fdda9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b39e428e49dde9ff26deec7cdff01c9f3fc01ad3 (int40-story-3120-s3a, base integration). S3a HELPER ONLY: the helper plus its required tests already come to about 390 lines, so --run-review and the git_text should-fixes (env scrub, --no-textconv, no silent fallback) move to the next slice. This follows the brief's 'ship the helper first' fallback.
+    Placement: the spawn helper is in aida-cli-lib/src/launch/review_runner.rs and the per-vendor argv and auth table in aida-cli-lib/src/vendors/review_runner.rs. The STORY-2326 launch ratchet and the STORY-2539 vendor-literal ratchet refuse a new vendor spawn or vendor literal anywhere else. AIDA_REVIEW_RUNNER_CMD, AIDA_REVIEW_PASS and AIDA_REVIEW_RESOLVED_AGENT are classified as DROPPED_AIDA_KEYS.
+    (1) [evidence: behavioral-test] s3a_runner_spawn_contract: for claude, codex and the custom command, a fake binary dumps its cwd, env, argv and stdin byte count. The cwd is an empty temp dir. A .claude/hook.sh planted in the checkout does not run. Claude's argv is exactly --print --setting-sources=user --settings {"disableAllHooks":true} --strict-mcp-config --tools '' --disable-slash-commands --no-session-persistence. Codex's argv is exec --sandbox=read-only --skip-git-repo-check --ephemeral -- -.
+    (2) [behavioral-test] env_clear plus PATH/HOME/LANG/TERM/LC_* and that vendor's auth only. A sentinel GH_TOKEN and AIDA_SESSION_GRANT never reach any runner, OPENAI_API_KEY never reaches claude, ANTHROPIC_API_KEY never reaches codex, and the custom command gets no vendor auth.
+    (3) [behavioral-test] Refused: a relative value (scripts/review), a runner inside the checkout, a directory, and an empty value with no agent. The vendor binary is also resolved to an absolute path outside the checkout, and only from absolute PATH entries.
+    (4) [behavioral-test] A 200 KiB prompt arrives on stdin from a writer thread, and argv equals the fixed table. A runner that exits 0 without reading the whole prompt fails.
+    (5) [behavioral-test] s3a_runner_deadline_and_output_caps_fail_closed: a 1 s deadline kills the 'sleep 30' process group in under 10 s, the stdout cap and the stderr cap each fail closed, and a non-zero exit surfaces stderr.
+    (6) [behavioral-test] gemini, agy, antigravity, '' and claude-x are refused; parsing goes through LaunchVendor::parse and a closed match.
+    Probes: exit is detected with waitid(WNOWAIT), so the group is killed before the child is reaped (no pgid reuse). A waitid error kills the group, and the run then fails on its exit status.
+    Residual risks: a runner that calls setsid escapes the group kill and could hold the pipes. Codex read-only can still read files on the host. Claude still loads the operator's own ~/.claude user settings, with hooks off. 'Unknown agent refused' is unit-level only until --run-review is wired.
+    Checks: the targeted cargo test passed 2/2, and make check-ci-fast exited 0 at this HEAD.
+  created_at: 2026-11-25T18:03:02.249173779Z
+  modified_at: 2026-11-25T18:03:02.249173779Z
+  session_id: 01a21396870a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
