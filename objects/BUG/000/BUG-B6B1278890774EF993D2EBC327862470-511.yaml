@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T09:05:25.798573074Z
+modified_at: 2026-11-25T09:07:22.004352689Z
 req_type: Bug
 tags:
 - store
@@ -266,6 +266,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T09:05:25.654406711Z
   modified_at: 2026-11-25T09:05:25.654406711Z
+- id: 01a211f5-e3c3-79d2-a887-af10ac3ff455
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:07):
+    # BUG-2750 slice A / PR #4544 r3 (advisor-122 ruling 2026-11-25 02:05 at 41cf0a48; product-15). Lane: CODEX. MAIN, existing branch. <=40 lines. REMOVE RATHER THAN PATCH.
+    One major: building the store-hooks profile calls getpwuid_r/getgrgid_r (which can block on NSS) BEFORE the deadline starts.
+    FIX: the train's store refresh is FETCH-ONLY, so it does NOT establish the store-hooks profile at all: run git with hooks disabled (`-c core.hooksPath=/dev/null`; hooks are irrelevant to a fetch) and NEVER touch the hooks module on this path.
+    Test: the refresh command builder NEVER calls the hooks establishment (a counter or an injected panic hook) and still fetches.
+    One targeted cargo run, then make check-ci-fast, then push to #4544. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T09:07:22.004352689Z
+  modified_at: 2026-11-25T09:07:22.004352689Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
