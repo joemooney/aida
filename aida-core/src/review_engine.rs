@@ -1380,7 +1380,7 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
 
         // Encode path bytes so reserved characters remain part of the filename.
         let mut uri = String::new();
-        for byte in f.path.replace('\\', "/").bytes() {
+        for byte in f.path.bytes() {
             if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
                 uri.push(char::from(byte));
             } else {
@@ -1397,6 +1397,8 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
             }
         }
 
+        // SARIF 2.1 §3.11.5 requires doubling literal braces in message strings.
+        let message_text = message_text.replace('{', "{{").replace('}', "}}");
         results.push(serde_json::json!({
             "ruleId": rule_id,
             "level": level,
@@ -1432,6 +1434,9 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
                         "informationUri": "https://github.com/joemooney/aida",
                         "rules": rules
                     }
+                },
+                "originalUriBaseIds": {
+                    "%SRCROOT%": {"description": {"text": "Repository root"}}
                 },
                 "results": results
             }
@@ -1503,7 +1508,7 @@ pub fn findings_exceeding_threshold<'a>(
     })?;
     Ok(findings
         .iter()
-        .filter(|f| severity_rank(&f.severity).unwrap_or(1) >= min_rank)
+        .filter(|f| severity_rank(&f.severity).unwrap_or(4) >= min_rank)
         .collect())
 }
 
@@ -1561,7 +1566,9 @@ mod tests {
             .is_empty());
         let mut moved = findings[0].clone();
         moved.severity = " ERROR ".into();
-        moved.path = "a #%.rs".into();
+        moved.path = r"src/a\b #%.rs".into();
+        moved.message = "use {0}".into();
+        moved.suggestion_code = Some("if ok {}".into());
         moved.resolved_span = Some(AnchoredSpan {
             start_line: 8,
             end_line: 10,
@@ -1575,12 +1582,29 @@ mod tests {
             location["region"],
             serde_json::json!({"startLine":8,"endLine":10})
         );
-        assert_eq!(location["artifactLocation"]["uri"], "a%20%23%25.rs");
+        assert_eq!(location["artifactLocation"]["uri"], "src/a%5Cb%20%23%25.rs");
+        let base_id = location["artifactLocation"]["uriBaseId"].as_str().unwrap();
+        assert_eq!(base_id, "%SRCROOT%");
+        assert!(run["originalUriBaseIds"][base_id].is_object());
+        assert_eq!(
+            run["results"][1]["message"]["text"],
+            "use {{0}}\n\nSuggested fix:\nif ok {{}}"
+        );
         assert_eq!(
             findings_exceeding_threshold(&both, " HIGH ").unwrap().len(),
             2
         );
         assert!(findings_exceeding_threshold(&both, "other").is_err());
+        for severity in ["blocker", ""] {
+            let mut unknown = findings[0].clone();
+            unknown.severity = severity.into();
+            assert_eq!(
+                findings_exceeding_threshold(&[unknown], "critical")
+                    .unwrap()
+                    .len(),
+                1
+            );
+        }
         assert!(parse_runner_findings_json("[]").unwrap().0.is_empty());
         assert!(parse_runner_findings_json(r#"{"error":"runner failed"}"#).is_err());
     }
