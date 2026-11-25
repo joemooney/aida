@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T11:48:45.228385091Z
+modified_at: 2026-11-25T11:48:56.407954532Z
 req_type: Story
 tags:
 - hygiene
@@ -368,6 +368,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: CHANGES REQUESTED for STORY-3059 (STORY-b6b1278890774ef993d2ebc327862470-822). Reviewed the entire three-file landing diff for original head 9959be29516640b22f8da733f61c467ff9bb27ec against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, using landed tree 27fa751f4aba14b9d03e95af28425c149dc3b579. The generated worksheet carries the original acceptance text. The latest advisor brief on the spec (comments 25, 27 and 30) parks automatic removal and explicitly makes the reporting slice completing.. No triage reason was given.'
   created_at: 2026-11-25T11:48:45.228376025Z
   modified_at: 2026-11-25T11:48:45.228376025Z
+- id: 01a21289-9533-77c0-bbfb-aa91b139bed5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3059):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9959be295166
+    Recorded: 2026-11-25T11:45:12.408967538+00:00
+    Findings:
+    1. aida-cli-lib/src/session_reap.rs:1451–1452 — The reported recovery command cannot recover the seats this slice identifies. On pinned main, doctor_cmd.rs:381 rejects `stale-leases --attest` outright. BUG-2755/PR #4541 is still open, and its current `attest_clone_lease` accepts only explicit clone leases without a verified host binding. The hygiene fixture uses a host-created clone and a legacy lease with omitted `tree_kind`. Align the operator recovery path with the seat types hygiene reports, and verify the emitted command against the code that would land.
+    2. aida-cli-lib/src/session_reap.rs:1421–1431,1451–1452 — A zero `facts.unpushed` count does not establish current publication on origin. `probe_counting_origin` returns before contacting origin when the first count is zero, and the count can be satisfied by stale tracking refs, refs in the primary checkout or shipped heads. A closed PR keeps its head SHA after its source branch is deleted, so hygiene can tell the operator a deleted branch is still published. Require a fresh, bounded, read-only origin observation that establishes that the branch preserves this tip, and cover deleted or rewound origin branches with stale tracking refs.
+    3. aida-cli-lib/src/session_reap.rs:1445–1456,1496–1542 — The closed-PR veto is enforced only during the scan. A branch name with an older merged PR can pass the scan while its exact-tip PR is open, then that PR can close unmerged without moving HEAD while hygiene processes another lease. `reap_one_clone` checks the saved tip and reads merged heads, but it never refreshes the new veto before attempting mail retirement and clone destruction. Recheck and honor exact-tip closed or unknown history before mutation, and cover a state transition at an unchanged SHA.
+    4. aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:2753–2833 — The new preservation test never supplies a valid exact-tip closed PR and a successful historical-merge lookup in the same scan. Its closed-case shim returns no merged row, so even if the new veto were changed to run only after a merge lookup misses, every added assertion would still pass. Exercise simultaneous closed-tip and historical-merge evidence through both scan and real reap. Include negative closed-row cases for mismatched head or repository and a merged-only row at the tip so the new destruction decision is tested in both directions.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T11:48:56.243552577Z
+  modified_at: 2026-11-25T11:48:56.243552577Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
