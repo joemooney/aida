@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: When `aida init` is run with codex as the only selected vendor, it writes `[contained.vendors] codex = "native"` into the committed default-branch config (the trusted location the check requires) and tells the user in one line what that means (codex's native sandbox, not AIDA containment). A test: init with codex-only → `aida agent new codex --role advisor` passes the containment check.
   - AC2: When a codex launch is refused for missing containment config in a project with NO claude vendor configured, the error names the exact one-line fix (`[contained.vendors] codex = "native"` in .aida/config.toml on the default branch) instead of suggesting claude. Test.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T07:45:25.320215718Z
+modified_at: 2026-11-25T12:12:51.013258503Z
 req_type: Bug
 tags:
 - codex
@@ -372,6 +372,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2129f-797b-7431-8acb-f24058e5e875
+  author: aida-auto-bump
+  timestamp: 2026-11-25T12:12:50.939717294Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2129f-79c5-7c33-ab28-d2323cc0a39a
+  timestamp: 2026-11-25T12:12:51.013254858Z
+  agent: aida
+  commit_sha: 0342dcf6cef6b8d89fbe36e7e9f3105afd45bfd5
+  summary: Reviewed the complete pinned landed diff for BUG-2752 against main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 and landed tree d66ed4e86b21de4ebd8f0b7052189b498d0ca34f. AC1 PASS. The PTY regression exercises real Codex-only init with consent, the one-line explanation, the committed default-branch policy and a controlled advisor launch with workspace-write. It also covers topic-branch refusal, clean re-init and continued setup after an optional policy error. Init reports the committed-but-unpublished policy before checking config cleanliness. The fixture checks the push hint and preservation of HEAD, the index and worktree in clean, staged and unstaged cases. AC2 PASS. The refusal tests cover the Codex-specific key, file and default-branch remedy, refusal with the push hint when only local main has the policy, and native posture after the tracking ref advances. The head is one commit behind main. The base advance, BUG-2749, does not affect the criteria or the deferred finding. CI pending at review time. FAST source gates passed and compilation was running. Behavioral evidence came from source and the recorded implementer runs. No local tests or builds were run.
+  punted:
+  - 'punted: Reviewed all six files of the pinned landed diff (protected base ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358, landed tree 2b22e48c1221eae047a36c8db5909e17a2c2c8b0) against the generated worksheet for the completing BUG-2752. The PR head is one commit behind main. The base advance, BUG-2729, changes CI and review scheduling. No finding depends on code it changed. BUG-b6b1278890774ef993d2ebc327862470-513.AC1 — unverified. The new helper test sets the scaffold-committed flag directly and manually advances the trusted ref in a prebuilt main-branch fixture. The init-to-advisor test required by the worksheet is absent, and the accepted opt-in still leaves affected existing projects and non-default-branch invocations without trusted policy. BUG-b6b1278890774ef993d2ebc327862470-513.AC2 — verified by the new Codex-only missing-policy assertions in bug_2752_codex_only_init_consent_supplies_trusted_seat_policy, the assertions in the_containment_refusal_names_the_vendor_fix_in_its_first_line, and the agent-new preference path through apply_agent_default_flags to containment_posture_in. The diagnostic gives the exact key, file and trusted branch. The stale BUG-2144 assertion is a separate test-suite regression. BUG-2752 bug protocol — PR touches at least one test file — met. The diff modifies task_2631_containment_tests.rs and bug_2223_orphan_seat_reentry_tests.rs. Both changes trace BUG-2752. The supplied untraced-criteria list was checked against the diff for AC1 and AC2. At review time, exact-head FAST source gates and merge-hold-gate had passed, FAST compile was pending and full test shards were skipped. The implementer reports targeted helper tests passed. No local tests were run under reviewer policy. The explicit review-claim command was refused by AIDA in this lane.'
+  - 'punted: Reviewed BUG-2752 against protected main 95eaccf328557402d176c0b41983afe1b677965f and landed tree d0d492aff5a75ff6331d1c78126f10b3b0bc1c08. AC1 is partial. The PTY fixture covers fresh Codex-only init, the committed policy and controlled advisor launch, plus topic refusal, clean local re-init and optional prompt error handling. Recovery still fails to guide users when the locally committed opt-in is absent from the trusted remote tip. AC2 is partial. Missing-policy refusals give Codex-specific guidance, but the manual remedy stops at a local commit even where launch requires the remote tip. The head is one commit behind main. Neither finding depends on code changed by the base advance. CI pending at review time. No local tests or builds were run.'
+  - 'punted: Reviewed the complete landed diff against protected main 260a82ae939faf34a8e6505a6f765f2151655610 and landed tree 013b40ee0972bff8521951575770ac21506d5c48. BUG-2752 AC1 is partial. The Codex-only PTY fixture covers consent, the committed default-branch policy, a controlled advisor launch, topic-branch refusal and clean re-init, but re-init loses the required publication hint when the working config is dirty. AC2 passes. A missing trusted policy gives the Codex-specific config remedy, and a local committed opt-in missing from the tracking ref gives the push hint while the launch continues to refuse. The head is four commits behind main. The base advance does not affect either finding. Exact-head FAST gates, compilation and Build (ubuntu-latest) passed. The merge-hold status was pending. Behavioral tests were assessed from source and the recorded implementer runs.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
@@ -380,3 +398,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T12:12:50.939710230Z
+  completion_sha: 0342dcf6cef6b8d89fbe36e7e9f3105afd45bfd5
