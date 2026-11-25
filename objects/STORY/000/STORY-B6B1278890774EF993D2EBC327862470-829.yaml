@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T05:10:42.152111310Z
+modified_at: 2026-11-25T07:43:57.487150298Z
 req_type: Story
 comments:
 - id: 01a2111c-fce8-75b3-b3f1-6b82c0da1ef7
@@ -29,6 +29,18 @@ comments:
   content: Implemented in worktree /home/joe/ai/aida-story-3120 on branch story-3120-ci-review (commit 34f18153493e6d8f24ef3021adfe79f08ea3452d). Added --run-review (turnkey batch review execution via AIDA_REVIEW_RUNNER_CMD or claude --print), --sarif <PATH> (SARIF 2.1.0 export for GitHub Code Scanning / GitLab SAST), and --post-comment (GitHub PR / GitLab MR Markdown review comment poster via Forge::comment). Verified all 18 tests in aida-core review_engine and all 8 tests in aida-cli-lib review_prepare pass.
   created_at: 2026-11-25T05:10:42.152111310Z
   modified_at: 2026-11-25T05:10:42.152111310Z
+- id: 01a211a9-4c2f-7633-82f2-50ddd66e766d
+  author: joe
+  content: |-
+    SLICE PLAN (advisor-122 routing 2026-11-25 00:46, Joe's request; recorded by product-15). Joe's branch story-3120-ci-review (1fba1625ef3, +2029/-4, 4 files) is kept as REFERENCE (now pushed to origin); it ships to INTEGRATION as <=300-line slices extracted by codex lanes, each with an INDEPENDENT codex review (antigravity authored it).
+    S1 review_engine pure logic: SARIF 2.1.0 export, severity_rank/findings_exceeding_threshold, parse_runner_findings_json + tests (pure; may merge on pre-check).
+    S2 `review prepare --sarif` + `--fail-on` wiring (the CI gate; no agent run).
+    S3 `--run-review` + `--agent/--model` resolution incl. codex-only repos (spawns agents; STANDARD+; careful review of the [agents] config resolution).
+    S4 `--adversarial` Finder→Challenger + detect_ai_authors/opposition.
+    S5 `--post-comment` (OUTWARD-FACING: an opt-in flag only, requires --pr, never enabled by any seat/CI default; test that the default posts nothing). The showcase slide 07 rides the last slice.
+    DROPPED: --file-bugs (conflicts with STORY-3118: findings are not requirements). A later slice may write findings records once STORY-3118 S1 lands.
+  created_at: 2026-11-25T07:43:57.487150298Z
+  modified_at: 2026-11-25T07:43:57.487150298Z
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
