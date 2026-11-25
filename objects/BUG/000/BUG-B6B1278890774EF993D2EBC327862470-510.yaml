@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T03:03:52.590543751Z
+modified_at: 2026-11-25T03:29:11.844707718Z
 req_type: Bug
 tags:
 - data-loss
@@ -380,6 +380,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a210c0-4e35-72d2-8c50-a1a4d7e23629
+  author: joe
+  timestamp: 2026-11-25T03:29:28.117961040Z
+  session_id: 01a210bc22fe
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -397,3 +402,11 @@ attention_reason:
   lean: Keep publication held. Bind the live removal decision to an index writer lock and the staged state authorized by the caller, or allow a separately reviewed change to live force-removal semantics.
   raised_by: implementer
   raised_at: 2026-11-25T02:31:27.720212660Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2749 AC1 FAIL. Guarded missing-at-entry cleanup compares the registered index and preserves staged or unreadable indexes, but direct removal and Git maintenance can still bypass the check, and relative backlinks prevent guarded store recovery. The live-to-missing race is separately tracked as BUG-2760 and is distinct from the other blockers. AC2 PASS on source review: the traced regressions assert staged index retention through the shared guard, session end, and applied GC. Exact-head FAST source guards and compilation passed in run 45537109508, full test shards were skipped, and merge-hold-gate was pending. No local tests or builds were run. Reviewed the entire pinned landing diff against main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3. The PR head is one commit behind and none of the findings depends on the intervening base change.'
+  recovery_hint: address the review findings, move BUG-2749 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T03:29:11.844707718Z
