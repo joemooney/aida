@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T10:12:17.090761105Z
+modified_at: 2026-11-25T10:36:02.822034814Z
 req_type: Bug
 tags:
 - store
@@ -300,6 +300,12 @@ comments:
   modified_at: 2026-11-25T10:12:17.090761105Z
   session_id: 01a21207b0f2
   harness_version: codex-cli 0.167.0
+- id: 01a21246-d986-7172-8ccb-30605457dc66
+  author: aida-publication-done
+  content: Implementer push 3c497182b289 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T10:36:02.822033858Z
+  modified_at: 2026-11-25T10:36:02.822033858Z
+  session_id: 01a21207b0f2
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -503,6 +509,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21246-d986-7172-8ccb-305490e01bc6
+  author: aida-publication-done
+  timestamp: 2026-11-25T10:36:02.822031352Z
+  session_id: 01a21207b0f2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
