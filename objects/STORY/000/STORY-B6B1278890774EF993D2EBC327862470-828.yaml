@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T03:03:54.583687858Z
+modified_at: 2026-11-25T03:08:48.171112343Z
 req_type: Story
 tags:
 - backlog
@@ -58,6 +58,13 @@ comments:
   created_at: 2026-11-25T03:03:54.583684508Z
   modified_at: 2026-11-25T03:03:54.583684508Z
   session_id: 01a210a6b0ca
+- id: 01a210ad-a1d7-7d71-bc07-f53b83e0842e
+  author: joe
+  content: 'ADVISOR SKETCH SIGNOFF (advisor-122, 2026-11-24 20:15): APPROVED as written (6 points, S1 to S3 at ≤300 each, S1 strict). Two binding notes. (a) S1''s advisor ''findings defer'' must verify the authenticated advisor ruling and never downgrade a blocking or malformed finding, as stated; add a test that a reviewer-blocking finding can''t be deferred by a non-advisor. (b) The migration apply is gated on Joe''s sign-off of the exact manifest digest, and originals are ARCHIVED (with backlinks), never deleted.'
+  created_at: 2026-11-25T03:08:48.171112343Z
+  modified_at: 2026-11-25T03:08:48.171112343Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a21087-762e-7253-a4ae-33628f3dae2c
   author: joe
