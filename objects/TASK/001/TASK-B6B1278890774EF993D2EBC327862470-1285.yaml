@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 7a4b585746c53d3c1e7166a9423f1ef9a3182180
 
   BUG-2734.AC2 — tests/test_python_discovery.py exercises a failing discovered suite and an unwired standalone suite but never exercises the known-failure exemption at scripts/discover-python-tests.py:74-80. The current FAST log proves the three valid entries are reported, but cannot detect a regression that accepts an exemption with a missing follow-up ID. Add coverage for reporting a dated linked exemption and refusing an exemption without a follow-up ID.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T03:40:04.767223592Z
-modified_at: 2026-11-25T07:29:34.989208430Z
+modified_at: 2026-11-25T07:29:36.780862528Z
 req_type: Task
 tags:
 - carried-from:BUG-2734
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-24T04:56:50.206965544Z
   changes: []
+- id: 01a2119c-2a0c-72e2-a943-a65170cf334e
+  author: joe
+  timestamp: 2026-11-25T07:29:36.780858129Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 7a4b585746c53d3c1e7166a9423f1ef9a3182180
   branch: pr-4479
