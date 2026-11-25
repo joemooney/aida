@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T02:13:13.691841876Z
+modified_at: 2026-11-25T02:26:44.983710448Z
 req_type: Bug
 tags:
 - hubs
@@ -50,6 +50,11 @@ comments:
   created_at: 2026-11-25T02:13:13.691838694Z
   modified_at: 2026-11-25T02:13:13.691838694Z
   session_id: 01a21049e21b
+- id: 01a21086-e278-77b0-9619-9d2cafa2d974
+  author: joe
+  content: 'advisor-122 19:28: #4555 slice 1 OVERRIDE->APPROVE (full cause chain on an interactive TTY). SLICE 2 must ALSO cover (new AC): in agent-output mode (redirected stdout, e.g. cron) the multiline cause chain is not truncated: join causes with " | " or emit all lines; test with redirected output.'
+  created_at: 2026-11-25T02:26:44.983710448Z
+  modified_at: 2026-11-25T02:26:44.983710448Z
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
