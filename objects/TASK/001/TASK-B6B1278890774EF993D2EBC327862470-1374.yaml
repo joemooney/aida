@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The lease_lock (session/lease_lock.rs:55) and seat_authority (gate/seat_authority.rs:189) exclusive locks gain a TRY-WITH-DEADLINE variant returning a typed Timeout. Existing callers keep their current blocking behaviour unless they opt in (NOT a global semantics change). Test: a lock held elsewhere → Timeout within the deadline.
   - AC2: The contained.rs:2312 error-unwind wait is bounded by a deadline; past it the attempt is recorded as RECOVERY WORK (never blocks forever, never silently drops) and the caller returns. Test: an unwind past the deadline → recovery recorded, caller returns.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T01:50:30.902228758Z
+modified_at: 2026-11-25T01:57:43.101524890Z
 req_type: Task
 tags:
 - launch
@@ -96,6 +96,11 @@ comments:
   created_at: 2026-11-24T23:28:08.408722971Z
   modified_at: 2026-11-24T23:28:08.408722971Z
   session_id: 01a20fa80e06
+- id: 01a2106c-4e3d-7b42-b292-7e52d9d49705
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for completing TASK-3884 (TASK-b6b1278890774ef993d2ebc327862470-1374). Reviewed the entire pinned landed diff from main 260a82ae939faf34a8e6505a6f765f2151655610 to tree 0b6d6698157b5f6e4b4300202ad6a420f1916ad5 and attested original head e71d9c6e1974bffe31b2776fa2ba72c71b933185. The branch is six commits behind. I checked the upstream edits to scripts/store-writers.toml against the landed inventory. No finding depends on stale base code.. No triage reason was given.'
+  created_at: 2026-11-25T01:57:43.101518480Z
+  modified_at: 2026-11-25T01:57:43.101518480Z
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
@@ -155,6 +160,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a2106c-4e3d-7b42-b292-7e479aff6c2a
+  author: joe
+  timestamp: 2026-11-25T01:57:43.101509439Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
@@ -166,20 +178,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 841efeba1bc48f093c15d9ef5f362b0b5027f738
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes for completing TASK-3884 (TASK-b6b1278890774ef993d2ebc327862470-1374). Reviewed the entire pinned landed diff from main 260a82ae939faf34a8e6505a6f765f2151655610 to tree 0b6d6698157b5f6e4b4300202ad6a420f1916ad5 and attested original head e71d9c6e1974bffe31b2776fa2ba72c71b933185. The branch is six commits behind. I checked the upstream edits to scripts/store-writers.toml against the landed inventory. No finding depends on stale base code.
-
-    TASK-b6b1278890774ef993d2ebc327862470-1374.AC1: unverified
-    The supplied untraced list calls for tests with both locks held elsewhere. The diff adds those fixtures and the exact-head implementer self-review reports both passed: cargo test -p aida-cli-lib task_3884_contended_lease_times_out and cargo test -p aida-cli-lib task_3884_contended_grant_times_out. They check the typed std::io::ErrorKind::TimedOut under sustained contention. The existing callers still take their blocking routes. The seat variant is private and the shared acquisition loop can grant a lock after the deadline.
-
-    TASK-b6b1278890774ef993d2ebc327862470-1374.AC2: unverified
-    The supplied untraced list calls for the real unwind to return with recovery recorded. The exact-head implementer self-review reports cargo test -p aida-cli-lib task_3884_unreaped_child_records_recovery passed. Its helper-level coverage leaves the production destructor and recovery failure paths unverified. The production destructor can still block after the deadline or return without a recovery record.
-
-    GitHub FAST compile, FAST gates, aggregate Build (ubuntu-latest), and merge-hold-gate passed on the PR head. FULL runtime shards were skipped. No local build or tests were run. The explicit review claim command refused. This is the standalone draft handoff.
-  recovery_hint: address the review findings, move TASK-3884 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T01:50:30.902228758Z
