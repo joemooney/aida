@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
 
   At the retired-grant cap, recover_closed_reviews forwards the expected low-budget condition as a recovery error (advisor_loop_service.rs:1177-1186). settle records it as a service failure (lines 821-829), and the third occurrence can send a repeated-service-failure alert (lines 1426-1446). Make the expected throttle a reported skip without counting it as a service failure. Keep actual discovery errors on the existing failure path.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T23:27:31.768345581Z
-modified_at: 2026-11-25T07:25:40.211793795Z
+modified_at: 2026-11-25T07:25:41.985800872Z
 req_type: Task
 tags:
 - carried-from:BUG-2735
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21198-94e1-76d2-ad5a-147173865249
+  author: joe
+  timestamp: 2026-11-25T07:25:41.985790806Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
   branch: pr-4464
