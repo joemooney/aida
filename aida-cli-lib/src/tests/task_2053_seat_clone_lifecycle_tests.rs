@@ -2822,7 +2822,11 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(reap_saved().contains("could not verify PR history"));
     std::fs::write(&history, pr("CLOSED", "", false)).unwrap();
     assert!(reap_saved().contains("could not verify PR history"));
-    std::fs::write(&history, pr("CLOSED", &head, false)).unwrap();
+    // The forge row's number is carried into the recovery hint.
+    // trace:STORY-3059 | ai:claude
+    let mut closed: serde_json::Value = serde_json::from_str(&pr("CLOSED", &head, false)).unwrap();
+    closed[0]["number"] = 4570.into();
+    std::fs::write(&history, closed.to_string()).unwrap();
     let snapshot = || {
         // Archive the entire fixture including loose/packed refs, index, files and alternate.
         assert!(clone.join(".git/objects/info/alternates").is_file());
@@ -2855,6 +2859,10 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     };
     let hint = report_line(dry.skipped, true);
     assert!(hint.contains("(published)"));
+    assert!(
+        hint.contains("PR #4570 closed unmerged on branch `feat`"),
+        "{hint}"
+    );
     assert!(hint.contains(&format!("BUG-2755 / `aida session show {}`", lease.id)));
     crate::session_misc::session_show(Some(&lease.id), false).unwrap();
     let caches = fx.main.join("target/worktrees");

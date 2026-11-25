@@ -1498,15 +1498,21 @@ fn clone_history_veto(
     let unknown = || Some(format!("could not verify PR history for `{branch}` — kept"));
     let Some(sha) = tip else { return unknown() };
     match crate::forge::observe_terminal_branch(root, branch, sha, true) {
-        Observed::Known(true) => {
+        Observed::Known(tip) if tip.matched => {
             let publication = if crate::seat_clone::origin_branch_at(root, branch, sha) {
                 "published"
             } else {
                 "publication unverified"
             };
-            Some(format!("closed PR on branch `{branch}` ({publication}) is recoverable; manual recovery: see BUG-2755 / `aida session show {}`", lease.id))
+            // Name the closed change so the operator can salvage it directly.
+            // trace:STORY-3059 | ai:claude
+            let change = match tip.number {
+                Some(n) => format!("PR #{n} closed unmerged"),
+                None => "closed PR".to_owned(),
+            };
+            Some(format!("{change} on branch `{branch}` ({publication}) is recoverable; manual recovery: see BUG-2755 / `aida session show {}`", lease.id))
         }
-        Observed::Known(false) => None,
+        Observed::Known(_) => None,
         _ => unknown(),
     }
 }
