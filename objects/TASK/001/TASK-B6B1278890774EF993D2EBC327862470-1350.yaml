@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
 
   Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:435–439,592–595: add explicit --no-textconv to the Git inspection boundaries so preparation consistently uses raw Git evidence.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T11:56:40.382658353Z
-modified_at: 2026-11-25T07:26:41.027224053Z
+modified_at: 2026-11-25T07:26:43.746587039Z
 req_type: Task
 tags:
 - carried-from:TASK-3862
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21199-8622-79c0-b0ef-91c6c99313fb
+  author: joe
+  timestamp: 2026-11-25T07:26:43.746585118Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
   branch: pr-4511
