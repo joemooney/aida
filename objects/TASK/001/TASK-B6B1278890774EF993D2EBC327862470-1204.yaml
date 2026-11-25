@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1a5f69f0aeaa47e7162649b5cacf05b59d781ed5
 
   aida-cli-lib/src/pr_train.rs train_infrastructure_failure: the change lists the two new dell1 workflow steps, but a dell1 host failure usually never reaches a completed step. When the job-started gate refuses (source fetch failure, policy changed during setup, assigned class changed), scripts/runner/controller.py stops the unit, so the job ends failed with no completed failing step. The function returns None for a step that is not completed, for an empty step list and for any unlisted step, so the train treats a host fault as a test red and bisects or ejects members. Follow-up: classify a dell1 job that ended before any workflow step ran as infrastructure, with a fixture built from a refused job's real API payload captured at operator acceptance.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-22T18:41:54.801223846Z
-modified_at: 2026-11-25T07:38:27.181620072Z
+modified_at: 2026-11-25T07:38:29.207656491Z
 req_type: Task
 tags:
 - carried-from:STORY-2695
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.602089925Z
   changes: []
+- id: 01a211a4-49d7-7fa2-a3cd-0c9cf277d2f9
+  author: joe
+  timestamp: 2026-11-25T07:38:29.207649219Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
