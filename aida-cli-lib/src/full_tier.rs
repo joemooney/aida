@@ -232,7 +232,8 @@ pub(crate) fn label_plan(view: &serde_json::Value) -> Result<LabelPlan, String> 
     let running = rollup.iter().any(|c| {
         let status = text(c, "status");
         (!status.is_empty() && status != "COMPLETED")
-            || matches!(text(c, "state").as_str(), "PENDING" | "EXPECTED")
+            || (text(c, "context") != "merge-hold-gate"
+                && matches!(text(c, "state").as_str(), "PENDING" | "EXPECTED"))
     });
     Ok(if running {
         LabelPlan::Leave
@@ -285,19 +286,16 @@ fn gh_pr(repo: &str, pr: u64, verb: &str, tail: &[&str]) -> Vec<String> {
 
 const VIEW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
+pub(crate) fn bounded(root: &Path, cli: &str, args: &[String]) -> Result<(bool, String), String> {
+    crate::merge_hold::run_forge_cli_stdout_bounded_with(root, cli, args, VIEW_TIMEOUT)
+}
+
 /// Start a full-tier CI run on PR `pr`'s current head through the `ci:full`
 /// label. `Ok(true)` when a label was edited; `Ok(false)` when the project has
 /// no GitHub forge to ask, or the head already has a run that an edit would
 /// cancel.
 pub(crate) fn request_full_ci(project_root: &Path, pr: u64) -> Result<bool, String> {
-    request_full_ci_with(
-        project_root,
-        pr,
-        |root, cli, args| {
-            crate::merge_hold::run_forge_cli_stdout_bounded_with(root, cli, args, VIEW_TIMEOUT)
-        },
-        crate::merge_hold::run_forge_cli,
-    )
+    request_full_ci_with(project_root, pr, bounded, crate::merge_hold::run_forge_cli)
 }
 
 /// [`request_full_ci`] with the forge CLI injected: `view` returns stdout on

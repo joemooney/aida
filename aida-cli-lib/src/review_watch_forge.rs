@@ -109,7 +109,7 @@ fn merge_conflicts(root: &Path, base: &str, head: &str) -> Option<bool> {
         _ => None,
     }
 }
-fn git(root: &Path, args: &[&str]) -> Result<String> {
+pub(super) fn git(root: &Path, args: &[&str]) -> Result<String> {
     String::from_utf8(output(root, "git", args)?).context("non-UTF8 Git probe output")
 }
 // Resolve the initial root with the same bounded, sanitized Git probes as all

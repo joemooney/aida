@@ -57,6 +57,24 @@ fn write_clone_lease(main: &Path, clone: &Path, id: &str) {
     .unwrap();
 }
 
+// trace:BUG-2722 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2722_unpushed_count_on_complete_branch() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "unpushed", "01a2053df3e6");
+    git_ok(&clone, &["update-ref", "refs/remotes/origin/base", "HEAD"]);
+    git_ok(&clone, &["checkout", "-b", "complete"]);
+    seat_commit(&clone, "local-only");
+    let patch = salvage_complete(&fx.main, &clone).unwrap();
+    std::fs::remove_file(patch.with_extension("bundle")).unwrap();
+    assert_eq!(repair_unpushed_count(&fx.main, &clone), Some(1));
+    git_ok(&clone, &["checkout", "feat"]);
+    assert_eq!(repair_unpushed_count(&fx.main, &clone), Some(0));
+}
+
 /// Commit a file in the clone (test-side git: the fixture plays the seat).
 fn seat_commit(clone: &Path, file: &str) {
     std::fs::write(clone.join(file), "seat work\n").unwrap();
@@ -3158,6 +3176,50 @@ fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
     assert!(
         fx.main.join(".aida/salvage").exists(),
         "cleanup reached salvage"
+    );
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_ignored_state_and_tracked_edits() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "ignored-state", "c0ffee002742");
+    let state = ".aida/hygiene-state.json";
+    std::fs::write(clone.join(state), "{}").unwrap();
+    assert_eq!(git_ok(&clone, &["check-ignore", state]), state);
+    let inspect = || crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    let clean = inspect();
+    assert!(clean.error.is_none() && !clean.dirty, "{clean:?}");
+    assert!(!known(probe(&fx.main, &clone)).unshipped());
+
+    std::fs::write(clone.join("README.md"), "pending edit").unwrap();
+    let dirty = inspect();
+    assert!(dirty.error.is_none() && dirty.dirty, "{dirty:?}");
+    assert!(known(probe(&fx.main, &clone)).unshipped());
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_untracked_file_blocks_reap() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "untracked", "c0ffee002742");
+    std::fs::write(clone.join("notes.txt"), "unfinished").unwrap();
+    let report = crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    assert!(report.error.is_none() && report.dirty, "{report:?}");
+    assert!(known(probe(&fx.main, &clone))
+        .dirty
+        .contains(&"? notes.txt".to_owned()));
+    let kept = destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap();
+    assert!(matches!(kept, Destroyed::Kept { .. }), "{kept:?}");
+    assert_eq!(
+        std::fs::read(clone.join("notes.txt")).unwrap(),
+        b"unfinished"
     );
 }
 
