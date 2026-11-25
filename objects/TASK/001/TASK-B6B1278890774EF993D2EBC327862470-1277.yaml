@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
 
   The fake budget fixture at lines 5660-5725 covers the repository discovery helper, a main-watch pass, and a direct commit_checks call. It does not run the review-watch worker, auto-train discovery or startup monitor, the seat CI waits, or supervisor recovery. The direct commit reader also does not prove that an active train still reaches that reader under low budget. Add low-budget entry-point coverage which checks the reported skip, absence of watcher requests, and continued CI reads for an active train.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T23:27:45.428304564Z
-modified_at: 2026-11-25T07:25:53.004877403Z
+modified_at: 2026-11-25T07:25:55.000322987Z
 req_type: Task
 tags:
 - carried-from:BUG-2735
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21198-c7b8-71d3-8d03-eae32f4010f8
+  author: joe
+  timestamp: 2026-11-25T07:25:55.000312308Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
   branch: pr-4464
