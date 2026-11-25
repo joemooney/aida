@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T17:37:23.064873003Z
+modified_at: 2026-11-25T18:17:45.210312621Z
 req_type: Story
 tags:
 - landing
@@ -64,6 +64,22 @@ comments:
   modified_at: 2026-11-25T17:33:48.516183340Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213ed-8dfa-70d3-8ac8-18175fcc393e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55061590af (S1, Refs STORY-3131)
+    Acceptance evidence (S1 brief):
+    - (1)/(2) [behavioral-test] landing_drought::evaluate: approved+ready past dwell, not on train → finding naming PR, ready age, cause + one prescribed action (red required check / full CI tier missing|cancelled / supervised → `aida pr train N` / unknown → investigate); drought finding when main idle > drought_minutes while ready PRs exist. Tests story_3131_old_approval_reported_with_cause_fresh_one_not, story_3131_full_tier_gap_from_rollup.
+    - (3) [behavioral-test] [landing_watchdog] Policy::read defaults when absent; invalid action/zero minutes refuse; action=report never fails --fail-on-findings (no route), investigate does. Tests story_3131_defaults_when_section_absent, story_3131_report_vs_investigate.
+    - (4) [configuration-validation] .aida/config.toml: landing-drought every 10m + landing-drought-route (advisor, CronJobFailed). Registered in the scheduler command table with its own 60s hard ceiling (LANDING_DROUGHT_TIMEOUT); a timeout/error exits non-zero, which routes as CronJobFailed, and the prompt tells the advisor to report 'landing guard unhealthy'.
+    Probe findings / fixes: the model job 'stalled-reviews' was listed by `aida schedule list` as invalid (unsupported) because its command was never in the scheduler table, so that guard has never run. Registered it in this PR. Fixed a closure lifetime compile error found by the first test run.
+    Validation: lane job cargo test -p aida-cli-lib --lib story_3131 → 4 passed; make check-ci-fast → exit 0.
+    Residual risks: the diff is ~456 lines (≈338 production + 118 test), over the ≤300 budget. Drought age uses the commit date of the local origin/main tip, so it depends on fetch freshness. Approved draft and merge-hold PRs are reported as cause 'unknown'. Unset execution_mode is not treated as supervised. The S2 causes (lock holders, review hold, vendor, conflict) and inbox delivery remain out of scope.
+  created_at: 2026-11-25T18:17:45.210312621Z
+  modified_at: 2026-11-25T18:17:45.210312621Z
+  session_id: 01a213c829f5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
