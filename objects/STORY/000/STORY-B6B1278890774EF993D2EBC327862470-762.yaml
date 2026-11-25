@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T20:51:51.403670722Z
+modified_at: 2026-11-25T22:45:06.963263091Z
 req_type: Story
 tags:
 - docs
@@ -231,6 +231,13 @@ comments:
   content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-25T20:51:51.403663289Z
   modified_at: 2026-11-25T20:51:51.403663289Z
+- id: 01a214e2-5513-7851-8f5a-cb593a51f273
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] a387b7e87b96
+    A reference merge (commit a387b7e87b96, `(Refs STORY-2839)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-25T22:45:06.963254181Z
+  modified_at: 2026-11-25T22:45:06.963254181Z
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
