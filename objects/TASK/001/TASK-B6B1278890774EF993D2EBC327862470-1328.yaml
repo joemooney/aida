@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   docs/showcase/code-review.html:231–232 and 257 leave inactive slides display:none in deck mode when the always-visible Print / PDF button calls window.print() at line 292. Printing in presentation mode silently omits five sections. Make print scope explicit or restore the full set of sections in print CSS.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:25:17.772117219Z
-modified_at: 2026-11-25T07:24:08.189137527Z
+modified_at: 2026-11-25T07:24:40.239041844Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21197-a3af-7e93-a471-e0806990ebe9
+  author: joe
+  timestamp: 2026-11-25T07:24:40.239034722Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
