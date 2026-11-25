@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-25T11:58:15.969463193Z
+modified_at: 2026-11-25T11:58:37.471712024Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -228,6 +228,18 @@ comments:
   created_at: 2026-11-24T18:15:32.797222761Z
   modified_at: 2026-11-24T18:15:32.797222761Z
   session_id: 01a20e9cd224
+- id: 01a21292-51e3-75a1-aa0d-f0e6b3bc4a1f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4458):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 05eddc1737ea
+    Recorded: 2026-11-25T11:57:38.615589612+00:00
+    Findings:
+    1. BUG-2710 — Reaping one lease can make a second, previously ineligible lease on the same worktree reapable and delete its branch. In aida-cli-lib/src/session_reap.rs:2538–2554, the initial missing-path snapshot only controls gone-tree release. The normal classifier still observes the path after an earlier lease has removed it. Consider a clean worktree currently on branch A, with a dead completed A lease and a later-sorting dead completed claim for branch B recorded when that worktree was on B. Both branch tips are already on main, and B has no other checkout. The unbounded pass classifies both before teardown and keeps B because its recorded branch differs from the worktree HEAD. The budgeted pass reaps A first, then session_head_on_branch at line 724 returns true for B because the path is gone. reap_one can then release B's lease and delete refs/heads/B. Preserve the off-branch keep decision when an earlier lease removes the checkout, and add a distinct-branch shared-worktree case to the ample-budget equivalence regression. BUG-2749 on the pinned base changes missing-registration cleanup, but after A removes the registration it does not prevent this deletion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T11:58:28.835039613Z
+  modified_at: 2026-11-25T11:58:28.835039613Z
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
