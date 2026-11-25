@@ -8,12 +8,12 @@ description: |
   - Expired/revoked grants, anything under them, and relay-managed grants (TASK-3119 replacements, superseded predecessors, their descendants) are `skipped` and do not make the command exit non-zero; only `refused` (unbound, roster/chain failures, concurrent revoke, lock/IO, unreadable relay receipts) does.
   - Extension runs on every `aida mandate renew`, with or without --for.
   Raised by the implementer while working TASK-3820.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T03:57:53.261021411Z
-modified_at: 2026-11-25T21:02:51.181359854Z
+modified_at: 2026-11-25T21:02:52.757616235Z
 req_type: Task
 tags:
 - from-implementer:TASK-3820
@@ -39,6 +39,13 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a21484-bb55-7882-adfc-c616dea9cef2
+  author: joe
+  timestamp: 2026-11-25T21:02:52.757613991Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: d790cb075a4eaedd9e914fb037265c1e7c0e409f
   branch: task-b6b1278890774ef993d2ebc327862470-1104
