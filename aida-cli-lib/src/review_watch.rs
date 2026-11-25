@@ -3834,47 +3834,101 @@ fn reviewed_fast_settled(
     Ok(false)
 }
 
-// Both recorders persist the PR and attested SHA in the verdict. Remember
-// a consumed intent while GitHub registers the FULL run.
+/// An approving, open spec-keyed verdict attested at its own reviewed head,
+/// indexed by that head. `aida review record <SPEC>` without `--pr` writes
+/// only the spec key; the exact head SHA identifies the PR it approved.
+// trace:BUG-2764 | ai:claude
+fn spec_approvals_by_head(root: &Path) -> std::collections::BTreeMap<String, String> {
+    use crate::gate::review_verdict::{read_recorded_verdict, verdict_keys};
+    let mut by_head = std::collections::BTreeMap::new();
+    for key in verdict_keys(root) {
+        if crate::gate::ledger::ChangeKey::parse(&key).is_some() {
+            continue;
+        }
+        let Some(v) = read_recorded_verdict(root, &key) else {
+            continue;
+        };
+        if let Some(head) = v.reviewed_sha.as_deref() {
+            if v.kind.approves()
+                && !v.is_closed()
+                && v.attestation.as_ref().is_some_and(|a| a.sha == head)
+            {
+                by_head.entry(head.to_string()).or_insert(key);
+            }
+        }
+    }
+    by_head
+}
+
+/// The promotion pass. Both recorders persist the PR and attested SHA in the
+/// verdict; a consumed intent is remembered while GitHub registers the FULL
+/// run. Returns one line per approved PR (promoted, or skipped with its
+/// reason). Each failure is written to stderr, which is all schedule.log
+/// keeps: agent output mode prints the final error on stdout.
 // trace:BUG-2729 | ai:codex
-pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
+// trace:BUG-2764 | ai:claude
+pub(crate) fn promote_approved_heads(root: &Path) -> Result<Vec<String>> {
     use crate::full_tier::{bounded, request_full_ci_with};
     use crate::gate::review_verdict::read_recorded_verdict;
     let repo = forge::Repository::load(root)?;
     let runtime = Directory::shared(&root.join(".aida"))?;
     let receipts = Directory::open(&runtime.path().join("full-ci-requests"))?;
-    let promote = |change: forge::Change| -> Result<()> {
+    let spec_approvals = std::cell::OnceCell::new();
+    let promote = |change: forge::Change| -> Result<Option<String>> {
         let pr = change.id;
         let key = change.key();
         let receipt = format!("{key}.full-ci");
         let _lock = receipts.lock(&format!("{receipt}.lock"))?;
-        let Some(v) = read_recorded_verdict(root, &key) else {
-            return Ok(());
+        let own = read_recorded_verdict(root, &key);
+        // A PR's own verdict for its current head wins; otherwise an
+        // approval recorded under a spec key at exactly this head counts.
+        let (v, source) = match own {
+            Some(v) if v.reviewed_sha.as_deref() == Some(change.head.as_str()) => (v, key.clone()),
+            own => match spec_approvals
+                .get_or_init(|| spec_approvals_by_head(root))
+                .get(&change.head)
+                .and_then(|spec: &String| Some((read_recorded_verdict(root, spec)?, spec.clone())))
+            {
+                Some(found) => found,
+                None => match own {
+                    Some(v) => (v, key.clone()),
+                    None => return Ok(None),
+                },
+            },
         };
-        let Some(head) = v.reviewed_sha.as_deref() else {
-            return Ok(());
+        let Some(head) = v.reviewed_sha.clone() else {
+            return Ok(None);
         };
+        let head = head.as_str();
+        if !v.kind.approves() || v.is_closed() {
+            return Ok(None);
+        }
+        let short = head.get(..12).unwrap_or(head);
+        let skipped = |reason: &str| -> Result<Option<String>> {
+            Ok(Some(format!(
+                "{key}: skipped ({reason}) [{source} @ {short}]"
+            )))
+        };
+        if v.attestation.as_ref().is_none_or(|a| a.sha != head) {
+            return skipped("approval carries no recorder attestation for its head");
+        }
         // Legacy SHA-only receipts lack base evidence and are retried once.
         let identity = format!("{head}\n{}", change.base);
-        if !v.kind.approves()
-            || v.is_closed()
-            || v.attestation.as_ref().is_none_or(|a| a.sha != head)
-            || receipts.read(&receipt)?.as_deref() == Some(identity.as_bytes())
-        {
-            return Ok(());
+        if receipts.read(&receipt)?.as_deref() == Some(identity.as_bytes()) {
+            return skipped("ci:full already requested for this head");
         }
         // Discovery can precede publication of a verdict for a newer head.
         // Consuming that verdict against the old snapshot loses its request.
         let current = repo.change(root, pr)?;
         if current.head != change.head || current.base != change.base {
-            return Ok(());
+            return skipped("head or base moved since discovery; retried next tick");
         }
         if head != change.head {
-            eprintln!("{key}: discarding FULL request for superseded head {head}");
-            return receipts.write(&receipt, identity.as_bytes());
+            receipts.write(&receipt, identity.as_bytes())?;
+            return skipped("approval is for a superseded head; discarded");
         }
         if !reviewed_fast_settled(root, &repo, &change)? {
-            return Ok(());
+            return skipped("FAST CI at this head has not finished");
         }
         let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
             let current = repo.change(root, pr).map_err(|e| e.to_string())?;
@@ -3884,50 +3938,39 @@ pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
             bounded(root, cli, args)
         })
         .map_err(anyhow::Error::msg)?;
-        if edited {
-            let current = repo.change(root, pr)?;
-            if current.head == head && current.base == change.base {
-                receipts.write(&receipt, identity.as_bytes())?;
-            }
+        if !edited {
+            return skipped("label left unchanged: a FULL run exists or a check is running");
         }
-        Ok(())
+        let current = repo.change(root, pr)?;
+        if current.head == head && current.base == change.base {
+            receipts.write(&receipt, identity.as_bytes())?;
+        }
+        Ok(Some(format!(
+            "{key}: promoted (ci:full requested) [{source} @ {short}]"
+        )))
     };
-    let mut failures = Vec::new();
+    let (mut lines, mut failures) = (Vec::new(), Vec::new());
     for change in repo.discover(root)?.into_iter().filter(|c| !c.gitlab) {
-        if let Err(error) = promote(change) {
-            failures.push(error.to_string());
+        let key = change.key();
+        match promote(change) {
+            Ok(line) => lines.extend(line),
+            Err(error) => failures.push(format!("{key}: failed: {error:#}")),
         }
     }
-    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
-    Ok(())
+    for failure in &failures {
+        eprintln!("{failure}");
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "{} approved PR(s) could not be promoted",
+        failures.len()
+    );
+    Ok(lines)
 }
 
 #[cfg(test)]
 pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, record: impl FnOnce()) {
-    use serde_json::json;
-    let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
-    let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
-    let script = format!(
-        r#"#!/bin/sh
-state=$(cat state)
-base=$(cat base 2>/dev/null || echo main)
-case "$*" in
-  *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
-  *"pr list"*) if [ "$state" = stale ]; then echo '[{change}]' | sed "s/{head}/$(cat old)/"; else echo '[{change}]' | sed "s/main/$base/"; fi;;
-  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed|newer) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
-  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/;s/main/$base/";;
-  *runs/1/attempts/1/jobs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"jobs":[]}}'; else echo '{{"total_count":1,"jobs":[{marker}]}}'; fi;;
-  *workflows/ci.yml/runs*) owner={pr}; conclusion=null; extra=; count=1
-    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; newer) extra=',{{"id":2,"run_number":2,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":{pr},"base":{{"ref":"main"}}}}],"status":"queued"}}'; count=2;; esac
-    case "$state" in absent|newer|foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; esac
-    printf '{{"total_count":%s,"workflow_runs":[{{"id":1,"run_number":1,"run_attempt":1,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":%s,"base":{{"ref":"%s"}}}}],"status":"%s","conclusion":%s}}%s]}}' "$count" "$owner" "$base" "$state" "$conclusion" "$extra";;
-  *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
-  *"pr edit"*) echo "$*" >> edits;;
-  *) exit 1;;
-esac"#
-    );
-    crate::test_exec::write_executable(&root.join("gh"), script);
-    forge::git(root, &["remote", "add", "origin", "git@github.com:o/r.git"]).unwrap();
+    install_full_ci_stub(root, pr, head);
     let write = |name, value: &str| std::fs::write(root.join(name), value).unwrap();
     write("state", "absent");
     record();
@@ -3967,6 +4010,103 @@ esac"#
         std::fs::read_to_string(root.join("edits")).unwrap(),
         format!("{expected}\n{expected}\n")
     );
+}
+
+/// AC2: an approval recorded under a spec key (`aida review record <SPEC>`
+/// without `--pr`) is promoted in both orders: recorded after FAST settled
+/// (the next tick adds ci:full) and recorded while FAST runs (no edit, then
+/// the first tick after FAST completes adds it). AC3: each tick reports one
+/// line naming the PR and its outcome.
+// trace:BUG-2764 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2764_spec_keyed_approval_promotes_in_both_orders() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for approve_first in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("project");
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let path = format!("{}:/usr/bin:/bin", root.display());
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("HOME", Some(home.to_str().unwrap())),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_PROJECT_ROOT", Some(root.to_str().unwrap())),
+            ("AIDA_DRIVE_ROOT", Some(root.to_str().unwrap())),
+            ("PATH", Some(path.as_str())),
+        ]);
+        let head = crate::test_git::commit_fixture(&root);
+        install_full_ci_stub(&root, 61, &head);
+        let write = |name: &str, value: &str| std::fs::write(root.join(name), value).unwrap();
+        write("current", &head);
+        let approve = || {
+            let dir = root.join(".aida/review-verdicts");
+            std::fs::create_dir_all(&dir).unwrap();
+            let body = serde_json::json!({"verdict":"approved","reviewed_sha":head,
+                "summary":"approved by hand","recorder_attestation":{"sha":head}});
+            std::fs::write(dir.join("BUG-1.json"), body.to_string()).unwrap();
+        };
+        let tick = || {
+            let lines = promote_approved_heads(&root).unwrap();
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            lines[0].clone()
+        };
+        let edits = || std::fs::read_to_string(root.join("edits")).unwrap_or_default();
+        if approve_first {
+            write("state", "in_progress");
+            approve();
+            let line = tick();
+            assert!(line.starts_with("PR-61: skipped (FAST CI"), "{line}");
+            assert!(line.contains("[BUG-1 @"), "{line}");
+            assert_eq!(edits(), "");
+            write("state", "completed");
+        } else {
+            write("state", "completed");
+            // No approval yet: nothing considered, nothing edited.
+            let lines = promote_approved_heads(&root).unwrap();
+            assert!(lines.is_empty(), "{lines:?}");
+            approve();
+        }
+        let line = tick();
+        assert!(line.starts_with("PR-61: promoted"), "{line}");
+        assert_eq!(edits().trim(), "pr edit 61 -R o/r --add-label ci:full");
+        // The receipt stops a second request for the same head.
+        let line = tick();
+        assert!(line.contains("already requested"), "{line}");
+        assert_eq!(edits().lines().count(), 1);
+    }
+}
+
+#[cfg(test)]
+fn install_full_ci_stub(root: &Path, pr: u64, head: &str) {
+    use serde_json::json;
+    let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
+    let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
+    let script = format!(
+        r#"#!/bin/sh
+state=$(cat state)
+base=$(cat base 2>/dev/null || echo main)
+case "$*" in
+  *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
+  *"pr list"*) if [ "$state" = stale ]; then echo '[{change}]' | sed "s/{head}/$(cat old)/"; else echo '[{change}]' | sed "s/main/$base/"; fi;;
+  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed|newer) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/;s/main/$base/";;
+  *runs/1/attempts/1/jobs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"jobs":[]}}'; else echo '{{"total_count":1,"jobs":[{marker}]}}'; fi;;
+  *workflows/ci.yml/runs*) owner={pr}; conclusion=null; extra=; count=1
+    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; newer) extra=',{{"id":2,"run_number":2,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":{pr},"base":{{"ref":"main"}}}}],"status":"queued"}}'; count=2;; esac
+    case "$state" in absent|newer|foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; esac
+    printf '{{"total_count":%s,"workflow_runs":[{{"id":1,"run_number":1,"run_attempt":1,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":%s,"base":{{"ref":"%s"}}}}],"status":"%s","conclusion":%s}}%s]}}' "$count" "$owner" "$base" "$state" "$conclusion" "$extra";;
+  *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
+  *"pr edit"*) echo "$*" >> edits;;
+  *) exit 1;;
+esac"#
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    forge::git(root, &["remote", "add", "origin", "git@github.com:o/r.git"]).unwrap();
 }
 
 // trace:TASK-1993 | ai:claude

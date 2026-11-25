@@ -75,7 +75,10 @@ fn run_review(
             args.cmd.is_none(),
             "promotion cannot be combined with a review command"
         );
-        crate::review_watch::promote_approved_heads(&crate::find_project_root()?)?;
+        // One line per approved PR it considered. trace:BUG-2764 | ai:claude
+        for line in crate::review_watch::promote_approved_heads(&crate::find_project_root()?)? {
+            println!("{line}");
+        }
         return Ok(crate::cmdkit::Flow::Return);
     }
     match &ctx.store {
