@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2758",
+  "publishes": [
+    {
+      "at": "2026-11-25T05:41:11.023412420Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T01:48:53.788977403Z",
+      "spec": "BUG-2758",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4550,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0ec9c312e7c18bc0ffbbdba200c79e964ebb5d5e"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:49:17.095555035Z",
+      "spec": "BUG-2758",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "REQUEST CHANGES. Reviewed PR #4550 at 0ec9c312e7c18bc0ffbbdba200c79e964ebb5d5e as it would land on protected main 260a82ae939faf34a8e6505a6f765f2151655610. The head is three commits behind the pinned base. All findings apply to both the original head and the landed tree.\nBUG-b6b1278890774ef993d2ebc327862470-519.AC1: unverified. The regression exercises unknown root, entry and attempt keys in the shared review-watch State used by the advisor restart reader. The advisor's separate service and failure readers and the pause journal still lack an unknown-field load regression. The test also leaves the nested admission hub unexercised.\nBUG-b6b1278890774ef993d2ebc327862470-519.AC2: verified by the new test's real reservation write and read assertions in `cargo test -p aida-cli-lib bug2758_rollover_loads_additive_fields_and_omits_zero_retries`. The test inspects the persisted attempt for absence of the zero count, reloads it as zero, and checks a nonzero count survives a transaction.\nExact-head GitHub FAST source gates, compile, aggregate Build and merge-hold-gate passed. FAST skipped test shards. The implementer reported the focused regression passed on the pre-publication patch. This review used source and existing evidence.",
+        "recovery_hint": "address the review findings, move BUG-2758 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:49:42.327737671Z",
+      "spec": "BUG-2758",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4550,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0ec9c312e7c18bc0ffbbdba200c79e964ebb5d5e"
+      }
+    },
+    {
+      "ts": "2026-11-25T05:37:05.380141014Z",
+      "spec": "BUG-2758",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4550
+      }
+    },
+    {
+      "ts": "2026-11-25T05:41:10.807020761Z",
+      "spec": "BUG-2758",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2d346c274965961d1e187e5d48a6dbe611232393",
+        "pr": 4550,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
