@@ -139,7 +139,6 @@ fn bounded_diagnostic(text: &str) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Identity {
     // Absent fields are omitted only so a legacy record round-trips
     // unchanged. New captures always stamp both, so state this binary writes
@@ -314,7 +313,6 @@ enum Phase {
 /// watchers never signal twice.
 // trace:TASK-1945 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 struct Supersede {
     by: String,
     requested_at: chrono::DateTime<chrono::Utc>,
@@ -326,8 +324,12 @@ struct Supersede {
     diagnostic: Option<String>,
 }
 
+// trace:BUG-2758 | ai:codex
+fn is_zero_retries(count: &u8) -> bool {
+    *count == 0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Attempt {
     // Pin distributed mode through child launch, even if configuration vanishes.
     // trace:STORY-2492 | ai:codex
@@ -366,7 +368,7 @@ struct Attempt {
     #[serde(default)]
     setup_retry: bool,
     // trace:BUG-2720 | ai:codex
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero_retries")]
     pickup_retries: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pickup_retry_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -451,13 +453,11 @@ impl Attempt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Notice {
     message: aida_core::mailbox::Message,
     sent: bool,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Entry {
     attempts: Vec<Attempt>,
     // Never written: retained rounds live in history/<key>.json. Still read
@@ -508,14 +508,12 @@ impl Entry {
 /// One readiness report: the head it judged, the verdict line, and when.
 // trace:TASK-1945 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 struct Reported {
     head: String,
     line: String,
     checked_at: chrono::DateTime<chrono::Utc>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct State {
     version: u8,
     repository: String,

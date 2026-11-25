@@ -50,17 +50,10 @@ pub(crate) fn is_agent_managed_worktree(path: &std::path::Path, branch: Option<&
     path_match || branch_match
 }
 
-/// BUG-614: lossless prune of dead worktree bookkeeping. `git worktree prune`
-/// only removes administrative entries for worktrees whose directories no
-/// longer exist — it never deletes a live worktree, so this is always safe.
-/// Best-effort and quiet: a spawn/exec failure is swallowed (the caller treats
-/// it as a non-event). trace:BUG-614 | ai:claude
+/// Inspect each missing registration before retiring its administrative data.
+/// trace:BUG-2749 | ai:codex
 pub(crate) fn lossless_prune_worktrees(project_root: &std::path::Path) {
-    let _ = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["worktree", "prune"])
-        .output();
+    let _ = crate::mail_retention::prune_removed_sources(project_root, false, false);
 }
 
 /// BUG-614: the GC eligibility verdict for one agent-managed worktree.
@@ -242,10 +235,17 @@ pub(crate) fn parse_worktree_lock_states_z(text: &str) -> Vec<(std::path::PathBu
 /// first. Never invoked on the hot `aida status` read path — only on this
 /// explicit operator command. trace:BUG-614 | ai:claude
 pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
-    let project_root = find_project_root()?;
+    session_gc_at(find_project_root()?, dry_run, yes)
+}
 
-    // Lossless first — clears dead bookkeeping cheaply regardless of the GC.
-    lossless_prune_worktrees(&project_root);
+pub(crate) fn session_gc_at(
+    project_root: std::path::PathBuf,
+    dry_run: bool,
+    yes: bool,
+) -> Result<()> {
+    if !dry_run {
+        lossless_prune_worktrees(&project_root);
+    }
 
     let default_ref = resolve_default_branch_ref(&project_root);
     let project_canon = project_root
@@ -297,6 +297,10 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
             (Some(_), None) => false,
         };
 
+        if !wt.path.is_dir() {
+            preserved.push((wt.path, "missing or unreadable checkout".into()));
+            continue;
+        }
         let facts = WorktreeGcFacts {
             is_agent_managed,
             merged_or_gone,
@@ -365,6 +369,7 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
     let mut removed = 0usize;
     let mut skipped = 0usize;
     for (path, _branch) in &eligible {
+        crate::mail_retention::before_guarded_removal();
         // A live process inside the tree (cwd, open file, running program)
         // keeps it: gc never removes a worktree that is in use, and has no
         // override. trace:BUG-1947 | ai:claude
@@ -2196,11 +2201,9 @@ fn log_registration_clear(
 ) {
     if outcome == crate::session_reap::RegistrationClearOutcome::Declined {
         eprintln!(
-            "  {} kept the git worktree registration for {} — the path could not be \
-             confirmed absent; if the add below refuses, check that path and remove the \
-             registration with `git worktree remove --force {}`",
+            "  {} kept the git worktree registration for {} — inspect the checkout path and its \
+             registered index for recoverable work before retrying",
             crate::glyph(crate::glyphs::Glyph::Warning),
-            path.display(),
             path.display()
         );
     }
@@ -2336,6 +2339,7 @@ pub(crate) fn ensure_spec_worktree(
                         crate::session_reap::clear_missing_worktree_registration(
                             &main_root,
                             &lease.worktree_path,
+                            None,
                             || {},
                             || {},
                         ),
@@ -2382,6 +2386,7 @@ pub(crate) fn ensure_spec_worktree(
             crate::session_reap::clear_missing_worktree_registration(
                 &main_root,
                 &default_path,
+                None,
                 || {},
                 || {},
             ),

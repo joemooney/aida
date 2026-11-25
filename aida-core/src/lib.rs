@@ -242,6 +242,8 @@ pub mod workspace;
 pub mod worktree_holders;
 pub mod worktree_hooks;
 pub mod worktree_pool;
+#[cfg(feature = "native")]
+pub mod worktree_registration;
 // Migration of pre-pool sibling worktrees into the registry (TASK-1009).
 pub mod worktree_pool_adopt;
 pub mod worktree_pool_destroy;
