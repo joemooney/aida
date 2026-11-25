@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When recording ci:full intent, RE-READ the PR head and skip if it moved since the snapshot (head-snapshot-then-verdict race). Use the workflow run's CONCLUSION, not the marker's run_in_progress flag, to decide settlement.
   - AC2: Key the FAST marker by PR number + base, not by SHA+name alone, so PRs sharing a head cannot match each other's marker. A test for each of the three cases.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T02:45:49.298136482Z
+modified_at: 2026-11-25T03:08:41.661603640Z
 req_type: Task
 tags:
 - ci
@@ -31,6 +31,13 @@ history:
   - field_name: tags
     old_value: ci, small
     new_value: ci, integration, small
+- id: 01a210ad-493d-7a90-9060-e8c4d176619b
+  author: aida-session-start
+  timestamp: 2026-11-25T03:08:41.661602618Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
