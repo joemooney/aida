@@ -225,11 +225,32 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     .unwrap();
     std::fs::create_dir(earlier.join("cmdline")).unwrap(); // EISDIR, even as root
     assert!(
-        matches!(attempt_occupancy(&dir, &attempt, proc_root), Occupancy::Unknown(why) if why.contains("command line"))
+        matches!(attempt_occupancy(&dir, &attempt, proc_root), Occupancy::Unknown(why) if why.contains("dispatcher"))
     );
     assert!(blocker().is_some());
     assert!(retire_unknown(&dir, proc_root, &attempt, proc_root).is_err());
+    let mut readable = receipt_for(&f, "implementer", "TASK-12");
+    readable.phase = Phase::SupervisorOwned;
+    readable.worker = serde_json::from_value(complete["worker"].clone()).unwrap();
+    readable.supervisor = serde_json::from_value(complete["supervisor"].clone()).unwrap();
+    readable.owner = Owner::Supervisor(readable.supervisor.clone().unwrap());
+    readable.dispatcher = None;
+    write_receipt(&dir, &readable).unwrap();
+    assert!(matches!(
+        crate::agent_launch::agent_codex_background::attempt_occupancy(&readable, &Default::default(), proc_root),
+        Occupancy::Unknown(why) if why.contains("dispatcher")
+    ));
+    let background = crate::agent_launch::agent_codex_background::recover_launch_at(
+        &dir,
+        proc_root,
+        &readable.attempt,
+        &Default::default(),
+    );
+    assert!(background.unwrap_err().to_string().contains("dispatcher"));
     std::fs::remove_dir_all(earlier).unwrap();
+    assert!(blocker().is_some());
+    assert!(retire_unknown(&dir, proc_root, &attempt, proc_root).is_err());
+    std::fs::write(&path, complete.to_string()).unwrap();
     let kept = retire_unknown(&dir, f.project.path(), &attempt, proc_root).unwrap();
     assert!(kept.starts_with(dir.join("retired")) && kept.exists());
     assert!(!path.exists());
@@ -278,6 +299,7 @@ fn story_2254_bg_terminal_receipt_retention_is_bounded() {
             &r.attempt,
             |_| Ok(()),
             |r| {
+                r.reason = Some(DISPATCHER_REFUSAL.into());
                 r.phase = Phase::RefusedBeforeExecution;
                 r.owner = Owner::Released;
             },

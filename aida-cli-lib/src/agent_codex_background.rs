@@ -584,7 +584,7 @@ impl Drop for DispatcherGuard {
                 r.phase = Phase::RefusedBeforeExecution;
                 r.owner = Owner::Released;
                 r.reason
-                    .get_or_insert_with(|| "refused before the worker was started".into());
+                    .get_or_insert_with(|| receipt::DISPATCHER_REFUSAL.into());
             },
         );
     }
@@ -1938,7 +1938,7 @@ pub(crate) fn exit_occupancy(
     let own = own_process_chain();
     let deadline = std::time::Instant::now() + EXIT_OCCUPANCY_GRACE;
     loop {
-        let why = match attempt_occupancy(&r, &own) {
+        let why = match attempt_occupancy(&r, &own, Path::new("/proc")) {
             receipt::Occupancy::Clear => return None,
             receipt::Occupancy::Occupied(what) => format!("attempt not provably over: {what}"),
             receipt::Occupancy::Unknown(why) => format!("attempt cannot be proven over ({why})"),
@@ -2141,10 +2141,12 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
 pub(crate) fn attempt_occupancy(
     r: &LaunchReceipt,
     own: &std::collections::HashSet<u32>,
+    proc_root: &Path,
 ) -> receipt::Occupancy {
-    let launcher = match &r.owner {
-        Owner::Dispatcher(p) => Some(p),
-        _ => None,
+    let Some(dispatcher) = receipt::dispatcher_tick(&r.owner, r.dispatcher.as_ref()) else {
+        return receipt::Occupancy::Unknown(
+            "incomplete receipt attribution: missing dispatcher identity".into(),
+        );
     };
     let probe = receipt::OccupancyProbe {
         worktree: Some(&r.worktree),
@@ -2153,13 +2155,14 @@ pub(crate) fn attempt_occupancy(
         attempt: Some(&r.attempt),
         // The launcher, supervisor and worker are the attempt's first
         // processes; nothing started before all of them is its work.
-        not_before: [launcher, r.supervisor.as_ref(), r.worker.as_ref()]
+        not_before: [r.supervisor.as_ref(), r.worker.as_ref()]
             .into_iter()
             .flatten()
             .filter_map(ProcId::start_tick)
+            .chain(Some(dispatcher))
             .min(),
     };
-    receipt::scan_occupancy(&probe, own)
+    receipt::scan_occupancy_in(proc_root, &probe, own)
 }
 
 /// This process and its ancestors: the recovering shell is not an occupant.
@@ -2225,13 +2228,13 @@ pub(crate) fn recover_launch_at(
             ),
         }
     }
-    match attempt_occupancy(&r, own) {
+    match attempt_occupancy(&r, own, Path::new("/proc")) {
         receipt::Occupancy::Clear => {}
         receipt::Occupancy::Occupied(what) => anyhow::bail!(
             "attempt {attempt} is not provably over: {what}; nothing was changed"
         ),
         receipt::Occupancy::Unknown(why) => anyhow::bail!(
-            "attempt {attempt} cannot be proven over ({why}); its state is UNKNOWN and nothing was changed"
+            "attempt {attempt} cannot be proven over ({why}); its state is UNKNOWN and nothing was changed. Inspect `aida agent launch-status {attempt}`"
         ),
     }
     if let Some(w) = &r.worker {

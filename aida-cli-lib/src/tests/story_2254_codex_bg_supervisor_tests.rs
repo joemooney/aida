@@ -667,6 +667,18 @@ fn story_2254_bg_strict_authorship_write_failure_refuses_before_exec() {
         (r.phase, r.owner),
         (Phase::RefusedBeforeExecution, Owner::Released)
     );
+    let path = h.dir.join("attempts").join(format!("{}.json", h.attempt));
+    let mut damaged: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    for key in ["worker", "supervisor"] {
+        damaged.as_object_mut().unwrap().remove(key);
+    }
+    std::fs::write(&path, damaged.to_string()).unwrap();
+    assert!(matches!(
+        receipt::read_receipt(&h.dir, h.root(), &h.attempt),
+        ReceiptRead::Unknown(_)
+    ));
+    assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2261").is_some());
     assert!(
         agent_registry::load_entries(h.root()).is_empty(),
         "never registered"
@@ -916,7 +928,7 @@ fn story_2254_bg_occupancy_scan_unreadable_is_unknown() {
         ..Default::default()
     };
     assert_eq!(
-        receipt::scan_occupancy(&probe, &own_process_chain()),
+        receipt::scan_occupancy_in(Path::new("/proc"), &probe, &own_process_chain()),
         receipt::Occupancy::Clear
     );
 }

@@ -136,13 +136,6 @@ impl ProcId {
 /// is present and unreadable makes the result `Unknown`. A process whose
 /// cwd was deleted but lay inside the tree still counts as occupying it.
 // trace:STORY-2254 | ai:claude
-pub(crate) fn scan_occupancy(
-    probe: &OccupancyProbe<'_>,
-    exclude: &std::collections::HashSet<u32>,
-) -> Occupancy {
-    scan_occupancy_in(Path::new("/proc"), probe, exclude)
-}
-
 pub(crate) fn scan_occupancy_in(
     proc_root: &Path,
     probe: &OccupancyProbe<'_>,
@@ -374,6 +367,8 @@ pub(crate) struct LaunchReceipt {
     pub scope: ScopeKey,
     pub phase: Phase,
     pub owner: Owner,
+    /// Original launcher identity, retained across ownership transfer.
+    pub dispatcher: Option<ProcId>,
     /// Bumped by every compare-update; a writer that read an older value
     /// never clobbers a newer one.
     pub generation: u64,
@@ -408,6 +403,7 @@ impl LaunchReceipt {
             project_root: project_root.to_path_buf(),
             scope,
             phase: Phase::Prepared,
+            dispatcher: Some(owner.clone()),
             owner: Owner::Dispatcher(owner),
             generation: 0,
             agent_name: agent_name.to_string(),
@@ -568,6 +564,7 @@ fn open_private(path: &Path, truncate: bool) -> Result<std::fs::File> {
         .with_context(|| format!("opening {}", path.display()))
 }
 
+pub(crate) const DISPATCHER_REFUSAL: &str = "refused before the worker was started";
 pub(crate) const RECOVERY_REASON: &str =
     "reconciled by `aida agent recover-launch`; worktree, branch and lease kept";
 pub(crate) const RECOVERY_OUTCOME: &str = "recovered after its processes were gone";
@@ -617,11 +614,14 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
         return ReceiptRead::Unknown("receipt attempt id does not match its file".into());
     }
     // The previous recovery writer marked reconciled Prepared attempts Exited.
-    let legacy_recovery = receipt.phase == Phase::Exited
-        && receipt.owner == Owner::Released
+    let recovered = receipt.owner == Owner::Released
         && receipt.generation > 0
         && receipt.reason.as_deref() == Some(RECOVERY_REASON)
-        && matches!(&receipt.terminal, Some(TerminalRecord { code: None, signal: None, unknown: Some(why) }) if why == RECOVERY_OUTCOME)
+        && matches!(&receipt.terminal, Some(TerminalRecord { code: None, signal: None, unknown: Some(why) }) if why == RECOVERY_OUTCOME);
+    let pre_transfer_terminal = receipt.owner == Owner::Released
+        && (recovered
+            || (receipt.phase == Phase::RefusedBeforeExecution
+                && receipt.reason.as_deref() == Some(DISPATCHER_REFUSAL)))
         && receipt.worker.is_none()
         && receipt.supervisor.is_none()
         && serde_json::from_slice::<serde_json::Value>(&body).is_ok_and(|raw| {
@@ -635,12 +635,16 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
             | Phase::Registered
             | Phase::AcceptedRunning
             | Phase::RecoveryRequired
-    ) || (receipt.phase == Phase::Exited && !legacy_recovery)
+    ) || (matches!(receipt.phase, Phase::Exited | Phase::RefusedBeforeExecution)
+        && !pre_transfer_terminal)
         || receipt.worker.is_some()
         || receipt.supervisor.is_some()
         || matches!(receipt.owner, Owner::Supervisor(_));
     let valid = |p: &ProcId| p.pid != 0 && p.start_tick().is_some();
-    if !receipt.worktree.is_absolute()
+    if (transferred
+        && !receipt.phase.holds_scope()
+        && dispatcher_tick(&receipt.owner, receipt.dispatcher.as_ref()).is_none())
+        || !receipt.worktree.is_absolute()
         || matches!(&receipt.owner, Owner::Dispatcher(p) | Owner::Supervisor(p) if !valid(p))
         || (transferred
             && !(receipt.worker.as_ref().is_some_and(valid)
@@ -766,6 +770,17 @@ pub(crate) fn unknown_receipt_scope(dir: &Path, attempt: &str) -> Option<ScopeKe
     (!role.trim().is_empty() && !spec.trim().is_empty()).then(|| ScopeKey::new(role, spec))
 }
 
+pub(crate) fn dispatcher_tick(owner: &Owner, recorded: Option<&ProcId>) -> Option<u64> {
+    let dispatcher = match owner {
+        Owner::Dispatcher(p) => p,
+        Owner::Supervisor(p) if p.pid == 0 || p.start_tick().is_none() => return None,
+        _ => recorded?,
+    };
+    (dispatcher.pid != 0)
+        .then(|| dispatcher.start_tick())
+        .flatten()
+}
+
 /// Whether a FRESH scan proves nothing runs for an unknown attempt: no
 /// process names it, and none occupies the worker group, supervisor session
 /// or worktree its receipt names (read leniently). Unreadable means NO.
@@ -778,6 +793,7 @@ fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
         supervisor: ProcId,
         worktree: PathBuf,
         owner: Owner,
+        dispatcher: Option<ProcId>,
     }
     let attribution = receipt_path(dir, attempt)
         .ok()
@@ -796,23 +812,17 @@ fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
         return Occupancy::Unknown("incomplete receipt attribution".into());
     }
     let first_process_tick = worker_tick.min(supervisor_tick);
-    let owner_tick = match fields.owner {
-        Owner::Dispatcher(p) => match p.start_tick() {
-            Some(t) if p.pid != 0 => Some(t.min(first_process_tick)),
-            _ => return Occupancy::Unknown("incomplete receipt attribution".into()),
-        },
-        Owner::Supervisor(p) if p.pid == 0 || p.start_tick().is_none() => {
-            return Occupancy::Unknown("incomplete receipt attribution".into());
-        }
-        // Transfer overwrites the dispatcher identity, losing the setup interval.
-        Owner::Supervisor(_) | Owner::Released => None,
+    let Some(dispatcher_tick) = dispatcher_tick(&fields.owner, fields.dispatcher.as_ref()) else {
+        return Occupancy::Unknown(
+            "incomplete receipt attribution: missing dispatcher identity".into(),
+        );
     };
     let probe = OccupancyProbe {
         worktree: Some(&fields.worktree),
         group: Some(fields.worker.pid),
         session: Some(fields.supervisor.pid),
         attempt: Some(attempt),
-        not_before: owner_tick,
+        not_before: Some(dispatcher_tick.min(first_process_tick)),
     };
     let mut own = std::collections::HashSet::new();
     own.insert(std::process::id());
