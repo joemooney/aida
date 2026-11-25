@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T03:21:08.366381476Z
+modified_at: 2026-11-25T03:21:15.718167411Z
 req_type: Bug
 tags:
 - launch
@@ -182,6 +182,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2748 AC1 is partial. Missing worker, supervisor, worktree and owner fields are refused in the covered cases, and CLI diagnostics retain the inspection command. The Supervisor-owner scan still uses a start-time bound without dispatcher evidence. AC2 passes source review. The replacement test exercises grant-only and individual missing-field refusals, with separate occupied, unknown and clear scanner outcomes. Review used protected main 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 and landed tree 3b8635f9365227ebc3d504bd53a7c72c3ba11d9c. The original head is one commit behind. None of the findings depends on code changed by that base advance. Fast gates passed and fast compile was pending at review time. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-25T03:21:08.366373725Z
   modified_at: 2026-11-25T03:21:08.366373725Z
+- id: 01a210b8-ca2a-7581-88f1-7a7c6744401f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2748):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c5f7b33e0117
+    Recorded: 2026-11-25T03:17:00.157669565+00:00
+    Findings:
+    1. BUG-2748 AC1 and round-two F2 — aida-cli-lib/src/codex_bg_receipt.rs:781–798 still uses the worker/supervisor start tick as a lower bound when the recorded owner is Supervisor. The transfer at aida-cli-lib/src/agent_codex_background.rs:989–994 replaces the Dispatcher owner, so this receipt has no evidence of the earlier dispatcher start. The scanner can suppress unreadable cwd or command-line evidence for a same-user process that predates the supervisor even though it could belong to dispatcher setup. A Clear result can then unblock an unscoped receipt or allow retirement. Use an unbounded scan when dispatcher start evidence is unavailable and cover that case with an earlier same-user process whose relevant details are unreadable.
+    2. aida-cli-lib/src/codex_bg_receipt.rs:615–632 reopens valid terminal reservations after upgrade. The protected-base recovery writer could reconcile a Prepared attempt as Exited with Owner::Released and no supervisor or worker. The new reader classifies that persisted receipt as Unknown. The named scope blocks again, and pruning, ordinary recovery and unknown retirement all refuse it. The revised writer only fixes receipts created after the upgrade. Preserve a verified compatibility path for already reconciled Prepared receipts and exercise it with a receipt in the old writer's format.
+    3. docs/cli/06-roles-sessions.md:477 still tells operators that a dead unknown attempt can be recovered or retired once its processes have exited. With this PR a dead attempt with incomplete attribution stays reserved and both commands can refuse. Document the prerequisite for retirement and the inspection and evidence-restoration path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T03:21:15.562738665Z
+  modified_at: 2026-11-25T03:21:15.562738665Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
