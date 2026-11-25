@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T10:04:44.681515845Z
+modified_at: 2026-11-25T10:04:48.454971785Z
 req_type: Bug
 tags:
 - launch
@@ -351,6 +351,11 @@ comments:
   content: 'PARKED at r5 (advisor-122 2026-11-25 03:02): #4542 closed; branch + bug-…-509-r5wip kept. r5wip has strict receipt deserialization + both receipt regressions passing. REMAINING: update the 3 supervisor fixtures that write incomplete receipts (they now hit RecoveryRequired) and rerun the 3 procfs-cwd EACCES tests on a non-sandboxed host. Not relaunched tonight; TASK-3895 (mandate release) covers the operational need meanwhile.'
   created_at: 2026-11-25T10:04:44.681515845Z
   modified_at: 2026-11-25T10:04:44.681515845Z
+- id: 01a2122a-3fc6-71c3-a3ab-a18937b435a7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Round 5 parking rule for PR #4542: both receipt regressions passed, but the prescribed targeted lane job j20261125T091904403-2-0 exited 101 (34 passed, six supervisor tests failed). Three failures report procfs cwd permission denials and three retained RecoveryRequired. All four findings are accepted. Preserve the native working-tree edits for host inspection.. No triage reason was given.'
+  created_at: 2026-11-25T10:04:48.454957156Z
+  modified_at: 2026-11-25T10:04:48.454957156Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
@@ -507,6 +512,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a2122a-3fc6-71c3-a3ab-a177359f4a3c
+  author: joe
+  timestamp: 2026-11-25T10:04:48.454950700Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -515,8 +527,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 5 parking rule for PR #4542: both receipt regressions passed, but the prescribed targeted lane job j20261125T091904403-2-0 exited 101 (34 passed, six supervisor tests failed). Three failures report procfs cwd permission denials and three retained RecoveryRequired. All four findings are accepted. Preserve the native working-tree edits for host inspection.'
-  raised_by: implementer
-  raised_at: 2026-11-25T09:43:54.423635355Z
