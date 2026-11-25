@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-25T01:47:36.112678767Z
+modified_at: 2026-11-25T02:20:30.685179107Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -152,6 +152,11 @@ comments:
   content: PR-4533 at 6d12ee315ae1725487a00592e72dad80de11fef0 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-25T01:47:35.928256490Z
   modified_at: 2026-11-25T01:47:35.928256490Z
+- id: 01a21081-2c5d-70d2-b210-48b3be4e965b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-517` at head `unavailable`.'
+  created_at: 2026-11-25T02:20:30.685173611Z
+  modified_at: 2026-11-25T02:20:30.685173611Z
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
