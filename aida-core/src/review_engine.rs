@@ -309,6 +309,50 @@ impl PlaybookRegistry {
                 active_facets: Vec::new(),
             },
             ResolvedPlaybook {
+                id: "c_cpp".to_string(),
+                title: "C & C++ Memory Lifetime, RAII, Buffer/Integer UB & Thread Safety (CERT / Core Guidelines)".to_string(),
+                pattern: "**/*.{c,cc,cpp,cxx,h,hh,hpp,hxx}".to_string(),
+                checklist: concat!(
+                    "- **Memory lifetime & RAII**: Flag raw owning pointers, missing destructors/cleanup on error paths, use-after-free, double-free, and dangling references/iterators or `std::string_view`/`std::span` outliving their backing storage.\n",
+                    "- **Buffer bounds & integer UB**: Flag unchecked array indexing, `memcpy`/`strcpy`/`sprintf` without bounds checks, signed integer overflow, shift-by-width UB, and uninitialized stack/struct fields.\n",
+                    "- **Concurrency & header contracts**: Verify mutex lock ordering, atomic memory ordering, `errno`/return-code checks on OS/POSIX calls, and header/implementation signature and `noexcept` parity."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
+                id: "java".to_string(),
+                title: "Java Resource Lifecycle, Concurrency, Nullability & Injection Safety".to_string(),
+                pattern: "**/*.java".to_string(),
+                checklist: concat!(
+                    "- **Resource lifecycle (`try-with-resources`)**: Ensure `AutoCloseable` streams, JDBC connections, statements, and sockets are closed via `try-with-resources` on all paths.\n",
+                    "- **Concurrency & immutability**: Flag unsynchronized mutation of shared collections/fields across threads, lock acquisition while calling external code, and broken `equals`/`hashCode` contracts.\n",
+                    "- **Nullability, exceptions & injection**: Flag swallowed exceptions, unchecked null dereferences across API boundaries, and unparameterized SQL, LDAP, command, or deserialization inputs."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
+                id: "matlab".to_string(),
+                title: "MATLAB Matrix Dimensions, Vectorization, Numerical Conditioning & Scope Hygiene".to_string(),
+                pattern: "**/*.m".to_string(),
+                checklist: concat!(
+                    "- **Dimensions, 1-based indexing & broadcasting**: Verify row-vs-column vector orientation, unintended implicit expansion (`bsxfun`/broadcasting) on mismatched dimensions, and off-by-one 1-based indexing bounds.\n",
+                    "- **Numerical stability & conditioning**: Flag explicit matrix inversion (`inv(A)*b` instead of `A\\b`), unguarded division by near-zero singular values, and silent `NaN`/`Inf` propagation.\n",
+                    "- **Preallocation & workspace hygiene**: Flag arrays grown dynamically inside loops without preallocation (`zeros`/`nan`), `eval`/`feval` on dynamic strings, and variables shadowing built-in MATLAB functions."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
+                id: "hdl_rtl".to_string(),
+                title: "Verilog, SystemVerilog & VHDL RTL Synthesis, CDC, Reset & Latch Safety".to_string(),
+                pattern: "**/*.{v,vh,sv,svh,vhd,vhdl}".to_string(),
+                checklist: concat!(
+                    "- **Inferred latches & combinational completeness**: Flag combinational `always @(*)` / `always_comb` / `process` blocks with incomplete `if`/`else` or `case` statements lacking default assignments on all outputs.\n",
+                    "- **Blocking vs. non-blocking & multiple drivers**: Verify sequential clocked logic uses non-blocking assignments (`<=`) while combinational logic uses blocking assignments (`=`), and flag signals driven from multiple `always`/process blocks.\n",
+                    "- **Clock-domain crossing (CDC), resets & bit widths**: Flag single-bit or multi-bit signals crossing asynchronous clock domains without proper synchronizers/FIFOs, incomplete reset initialization, and silent bit-width truncation or signed/unsigned mismatch."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
                 id: "shell".to_string(),
                 title: "Shell Script Quoting, Exit Traps & Portability".to_string(),
                 pattern: "**/*.sh".to_string(),
@@ -773,19 +817,33 @@ pub struct ReviewBatch {
 /// are not erroneously paired together.
 pub fn canonical_module_stem(path: &str) -> String {
     let norm = path.replace('\\', "/");
-    let file_name = Path::new(&norm)
+    let raw_file_name = Path::new(&norm)
         .file_name()
         .and_then(|s| s.to_str())
-        .unwrap_or(&norm)
-        .to_ascii_lowercase();
-
-    let without_ext = match file_name.rfind('.') {
-        Some(idx) if idx > 0 => &file_name[..idx],
-        _ => &file_name,
+        .unwrap_or(&norm);
+    let raw_without_ext = match raw_file_name.rfind('.') {
+        Some(idx) if idx > 0 => &raw_file_name[..idx],
+        _ => raw_file_name,
     };
+    // Strip camelCase Java/Kotlin test suffixes (`FooTest` -> `Foo`, `FooTests` -> `Foo`)
+    // before lowercasing so lowercase words ending in "test" (like `contest.rs`) are preserved.
+    let camel_stripped = raw_without_ext
+        .strip_suffix("Tests")
+        .or_else(|| raw_without_ext.strip_suffix("Test"))
+        .filter(|prefix| {
+            !prefix.is_empty()
+                && prefix
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+        })
+        .unwrap_or(raw_without_ext);
+
+    let without_ext_owned = camel_stripped.to_ascii_lowercase();
+    let without_ext = without_ext_owned.as_str();
 
     let mut core_stem = without_ext;
-    for suffix in ["_tests", "_test", ".test", ".spec"] {
+    for suffix in ["_tests", "_test", ".test", ".spec", "_tb"] {
         if let Some(stripped) = without_ext.strip_suffix(suffix) {
             if !stripped.is_empty() {
                 core_stem = stripped;
@@ -794,9 +852,12 @@ pub fn canonical_module_stem(path: &str) -> String {
         }
     }
     if core_stem == without_ext {
-        if let Some(stripped) = without_ext.strip_prefix("test_") {
-            if !stripped.is_empty() {
-                core_stem = stripped;
+        for prefix in ["test_", "tb_"] {
+            if let Some(stripped) = without_ext.strip_prefix(prefix) {
+                if !stripped.is_empty() {
+                    core_stem = stripped;
+                    break;
+                }
             }
         }
     }
@@ -2380,5 +2441,23 @@ fn beta() {
             apply_adversarial_challenger_json(candidates, challenger_json).unwrap();
         assert_eq!(confirmed.len(), 1);
         assert_eq!(dismissed, 1);
+
+        let reg = PlaybookRegistry::default();
+        assert_eq!(reg.resolve("src/engine.cpp").id, "c_cpp");
+        assert_eq!(reg.resolve("include/engine.hpp").id, "c_cpp");
+        assert_eq!(reg.resolve("src/main/java/com/acme/Parser.java").id, "java");
+        assert_eq!(reg.resolve("dsp/kalman_filter.m").id, "matlab");
+        assert_eq!(reg.resolve("rtl/axi_fifo.sv").id, "hdl_rtl");
+        assert_eq!(reg.resolve("rtl/uart_rx.vhd").id, "hdl_rtl");
+
+        assert_eq!(
+            canonical_module_stem("src/main/java/Parser.java"),
+            canonical_module_stem("src/test/java/ParserTest.java")
+        );
+        assert_eq!(
+            canonical_module_stem("rtl/axi_fifo.sv"),
+            canonical_module_stem("tb/axi_fifo_tb.sv")
+        );
+        assert_eq!(canonical_module_stem("src/contest.rs"), "contest");
     }
 }
