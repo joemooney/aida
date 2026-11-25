@@ -1,0 +1,32 @@
+id: 01a211a3-e214-7d50-8019-ce3c84a045fd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1421
+agreed_id: TASK-3906
+title: 'Review debt: train/mandate-check (5 deferred findings)'
+description: |
+  Review debt for area 'train/mandate-check' (folded from 5 reviewer 'Review follow-up:' drafts in the 2026-11-24 triage; Joe approved 2026-11-25 00:16; product-15). Each item below is a deferred review finding; the full text and file:line are on the original spec.
+
+  ## Items
+  - TASK-3220 (parent STORY-2695): train_infrastructure_failure returns None on non-completed step (pr_train.rs:1122)
+  - TASK-3284 (parent TASK-3115 / #4432): evidence=read vs unavailable classification; not covered by TASK-3871
+  - TASK-3285 (parent TASK-3115 / #4432): preview Git/retries outside --timeout; no later fix found
+  - TASK-3297 (parent TASK-3115 / #4432): label-read fail -> MarkerMissing still (mandate_ship.rs:841)
+  - TASK-3298 (parent TASK-3115 / #4432): cold rev-parse outside scoped deadline (git_ops.rs); fold with 3285
+
+  ## Acceptance
+  - AC1: each listed finding is fixed with a test, or explicitly closed with evidence that it no longer applies.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T07:38:02.644295738Z
+modified_at: 2026-11-25T07:38:02.644295738Z
+req_type: Task
+tags:
+- review-debt
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d346c27496
+  vendor: claude
