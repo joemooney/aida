@@ -80,6 +80,11 @@ pub enum DoctorCommand {
         #[clap(long, requires = "id", conflicts_with = "yes")]
         attest: Option<String>,
 
+        /// Release one dead repair reservation under a scoped advisor mandate.
+        // trace:TASK-3895 | ai:codex
+        #[clap(long, requires = "id", conflicts_with_all = ["attest", "yes"])]
+        attest_by_mandate: bool,
+
         /// Skip confirmation prompts.
         #[clap(long, short = 'y')]
         yes: bool,

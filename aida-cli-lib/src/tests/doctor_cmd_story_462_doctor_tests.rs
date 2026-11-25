@@ -1815,6 +1815,7 @@ fn doctor_check_and_heal_subcommands_parse() {
         cmd:
             Some(cli::DoctorCommand::Heal {
                 attest: None,
+                attest_by_mandate: false,
                 id: None,
                 category,
                 yes,

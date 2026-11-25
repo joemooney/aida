@@ -422,6 +422,10 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
 **Conflict repair reservations.** Find the entry with `aida doctor check repair-reservations`. At a direct human terminal, run `aida doctor heal repair-reservations --id <id> --attest "<reason>"`. Inspect the lease, tree path and informational unpushed HEAD count, then type the full entry ID. A live or unverifiable recorded owner blocks release. The journal records the effective user ID, time and reason alongside the release. A moved tree can be released without a worker receipt.
+
+Advisor release defaults off. To opt in, set `[repair_journal] mandate_attested_release = true` on the trusted default branch and grant the explicit scope with `aida mandate start --scope repair-reservation-release`.
+The advisor can then run `aida doctor heal repair-reservations --id <id> --attest-by-mandate`. Release requires a matching advisor grant, a verifiably dead local lease owner and a complete host process scan for lane markers and working directories. The journal records the mandate ID, grant ID and probe evidence and preserves the repair tree.
+<!-- trace:TASK-3895 | ai:codex -->
 <!-- trace:BUG-2722 | ai:codex -->
 
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared

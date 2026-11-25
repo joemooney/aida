@@ -104,22 +104,28 @@ pub(crate) enum Scope {
     /// Explicit only: a drive mandate never implies it.
     // trace:STORY-2913 | ai:claude
     ReviewPolicy,
+    // trace:TASK-3895 | ai:codex
+    RepairReservationRelease,
 }
 
 impl Scope {
-    pub(crate) const ALL: [Scope; 6] = [
+    pub(crate) const ALL: [Scope; 7] = [
         Scope::ShipHeld,
         Scope::SketchSignoff,
         Scope::Dispatch,
         Scope::RelayRestart,
         Scope::RelayParentRenewal,
         Scope::ReviewPolicy,
+        Scope::RepairReservationRelease,
     ];
 
     /// Scopes a drive mandate does not imply: each must be named.
     // trace:STORY-2913 | ai:claude
     pub(crate) fn explicit_only(self) -> bool {
-        matches!(self, Scope::RelayParentRenewal | Scope::ReviewPolicy)
+        matches!(
+            self,
+            Scope::RelayParentRenewal | Scope::ReviewPolicy | Scope::RepairReservationRelease
+        )
     }
 
     pub(crate) fn as_str(self) -> &'static str {
@@ -130,6 +136,7 @@ impl Scope {
             Self::RelayRestart => "relay-restart",
             Self::RelayParentRenewal => "relay-parent-renewal",
             Self::ReviewPolicy => "review-policy",
+            Self::RepairReservationRelease => "repair-reservation-release",
         }
     }
 
@@ -392,6 +399,23 @@ pub(crate) enum MandateState {
     Expired(Mandate),
     /// The newest mandate was stopped.
     Stopped(Mandate),
+}
+
+// trace:TASK-3895 | ai:codex
+impl MandateState {
+    pub(crate) fn repair_release_id(&self, seat: &str, principal: &str) -> Result<String> {
+        let Self::Active(m) = self else {
+            bail!("active repair release mandate required")
+        };
+        anyhow::ensure!(
+            m.is_active_at(Utc::now())
+                && m.covers(Scope::RepairReservationRelease)
+                && aida_core::team::canonical_role(seat) == MANDATE_SEAT
+                && principal == m.principal,
+            "matching advisor grant and scoped repair release mandate required"
+        );
+        Ok(m.id.clone())
+    }
 }
 
 /// `~/.aida/mandates`, through the hermetic-aware home lookup.

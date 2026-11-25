@@ -103,11 +103,23 @@ struct Journal {
 struct ReservationRelease {
     #[serde(default)]
     merge: Option<ReleasedMerge>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mandate: Option<MandateRelease>,
     id: String,
     uid: u32,
     at: String,
     reason: String,
 }
+// trace:TASK-3895 | ai:codex
+#[derive(Serialize, Deserialize)]
+struct MandateRelease {
+    mandate_id: String,
+    grant_id: String,
+    tree: PathBuf,
+    owner: String,
+    processes_checked: usize,
+}
+
 #[derive(Serialize, Deserialize)]
 struct ReleasedMerge {
     branch: String,
@@ -180,7 +192,7 @@ fn path_absent(path: &Path) -> Result<bool> {
     Ok(false)
 }
 
-fn reservation_lease(entry: &RepairEntry) -> Result<&'static str> {
+fn reservation_lease(entry: &RepairEntry, require_local: bool) -> Result<&'static str> {
     let id = &entry.lane_id;
     anyhow::ensure!(
         !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
@@ -203,12 +215,80 @@ fn reservation_lease(entry: &RepairEntry) -> Result<&'static str> {
         lease.id == *id && lease.worktree_path == entry.tree_path && lease.branch == entry.branch,
         "lease identity mismatch"
     );
+    if require_local {
+        let host = std::fs::read_to_string("/proc/sys/kernel/hostname")?;
+        anyhow::ensure!(
+            !host.trim().is_empty() && lease.hostname == host.trim(),
+            "unverified lease host"
+        );
+    }
     anyhow::ensure!(
         crate::leases::lease_recorded_owner(&lease)
             == aida_core::liveness::RecordedLeaseOwner::Dead,
         "lease {id} has a live or unverified owner"
     );
     Ok("present without a live recorded owner")
+}
+
+// trace:TASK-3895 | ai:codex
+fn host_scan(entry: &RepairEntry) -> Result<usize> {
+    anyhow::ensure!(
+        aida_core::pid_observer::PidObserver::current().can_observe(None),
+        "incomplete host PID view"
+    );
+    let mounts = std::fs::read_to_string("/proc/self/mountinfo")?;
+    let mut proc_mounts = mounts
+        .lines()
+        .filter(|l| l.split_whitespace().nth(4) == Some("/proc"));
+    let mount = proc_mounts.next().context("missing proc mount")?;
+    anyhow::ensure!(
+        proc_mounts.next().is_none() && mount.contains(" - proc ") && !mount.contains("hidepid="),
+        "restricted proc mount"
+    );
+    scan_lane(Path::new("/proc"), entry)
+}
+
+// Match byte-exact session markers and path components. Every numeric entry,
+// including the invoking process, must be observable.
+// trace:TASK-3895 | ai:codex
+fn scan_lane(proc_root: &Path, entry: &RepairEntry) -> Result<usize> {
+    let markers = [
+        crate::gate::review_authority::WORKER_SESSION_ENV,
+        crate::headless_background::LANE_MARKER_ENV,
+    ]
+    .map(|key| format!("{key}={}", entry.lane_id));
+    let mut checked = 0;
+    let mut saw_self = false;
+    for item in std::fs::read_dir(proc_root)? {
+        let item = item?;
+        let Some(pid) = item
+            .file_name()
+            .to_str()
+            .and_then(|s| s.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let path = item.path();
+        let cwd = std::fs::read_link(path.join("cwd"))
+            .with_context(|| format!("incomplete cwd probe for {pid}"))?;
+        anyhow::ensure!(
+            cwd.is_absolute()
+                && !cwd.as_os_str().as_encoded_bytes().ends_with(b" (deleted)")
+                && !cwd.starts_with(&entry.tree_path),
+            "process {pid} has matching or ambiguous cwd"
+        );
+        let env = std::fs::read(path.join("environ"))
+            .with_context(|| format!("incomplete session probe for {pid}"))?;
+        anyhow::ensure!(
+            !env.split(|b| *b == 0)
+                .any(|kv| markers.iter().any(|marker| kv == marker.as_bytes())),
+            "process {pid} carries repair lease"
+        );
+        saw_self |= pid == std::process::id();
+        checked += 1;
+    }
+    anyhow::ensure!(saw_self, "incomplete process enumeration");
+    Ok(checked)
 }
 
 impl Journal {
@@ -324,7 +404,7 @@ impl RepairGuard {
             entry.spawn != SpawnOutcome::ProvenDead,
             "reservation already released"
         );
-        let lease = reservation_lease(entry)?;
+        let lease = reservation_lease(entry, false)?;
         let absent = path_absent(&entry.tree_path)?;
         let count = if absent {
             None
@@ -346,21 +426,90 @@ impl RepairGuard {
             "reservation changed during confirmation"
         );
         anyhow::ensure!(
-            reservation_lease(entry)? == lease && path_absent(&entry.tree_path)? == absent,
+            reservation_lease(entry, false)? == lease && path_absent(&entry.tree_path)? == absent,
             "lease or tree changed during confirmation"
         );
+        guard.release(id, entry, reason, None)
+    }
+
+    fn release(
+        &mut self,
+        id: &str,
+        entry: &RepairEntry,
+        reason: &str,
+        mandate: Option<MandateRelease>,
+    ) -> Result<()> {
         let merge = ReleasedMerge::from(entry);
-        let entry = guard.entry_mut(&entry.key)?;
+        let entry = self.entry_mut(&entry.key)?;
         entry.validation = None;
         entry.spawn = SpawnOutcome::ProvenDead;
-        guard.journal.releases.push(ReservationRelease {
+        self.journal.releases.push(ReservationRelease {
+            mandate,
             merge: Some(merge),
             id: id.into(),
             uid: unsafe { libc::geteuid() },
             at: chrono::Utc::now().to_rfc3339(),
             reason: reason.into(),
         });
-        guard.save()
+        self.save()
+    }
+
+    // trace:TASK-3895 | ai:codex
+    pub(crate) fn release_by_mandate(main: &Path, id: &str) -> Result<()> {
+        let mut guard = Self::lock(main)?;
+        let config = crate::trusted_config::read_trusted_config_toml_local(main);
+        let enabled = config
+            .as_deref()
+            .and_then(|s| s.parse::<toml::Value>().ok())
+            .and_then(|v| {
+                v.get("repair_journal")?
+                    .get("mandate_attested_release")?
+                    .as_bool()
+            })
+            == Some(true);
+        guard.release_with(id, enabled, host_scan, || {
+            let grant = crate::gate::seat_authority::current_grant(main)
+                .context("valid advisor grant required")?;
+            let id = crate::gate::mandate::current_state()
+                .repair_release_id(&grant.seat, &grant.principal)?;
+            Ok((id, grant.id))
+        })
+    }
+
+    fn release_with(
+        &mut self,
+        id: &str,
+        enabled: bool,
+        probe: impl FnOnce(&RepairEntry) -> Result<usize>,
+        authority: impl FnOnce() -> Result<(String, String)>,
+    ) -> Result<()> {
+        anyhow::ensure!(enabled, "mandate release disabled; use terminal --attest");
+        let entry = self.journal.reservation(id)?.clone();
+        anyhow::ensure!(
+            entry.spawn != SpawnOutcome::ProvenDead,
+            "reservation already released"
+        );
+        let owner = reservation_lease(&entry, true)?;
+        anyhow::ensure!(owner != "absent", "no lease to verify owner");
+        path_absent(&entry.tree_path)?;
+        let processes_checked = probe(&entry)?;
+        anyhow::ensure!(
+            reservation_lease(&entry, true)? == owner,
+            "lease changed during scan"
+        );
+        let (mandate_id, grant_id) = authority()?;
+        self.release(
+            id,
+            &entry,
+            "mandate attestation",
+            Some(MandateRelease {
+                mandate_id,
+                grant_id,
+                tree: entry.tree_path.clone(),
+                owner: owner.into(),
+                processes_checked,
+            }),
+        )
     }
 
     fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
@@ -778,6 +927,87 @@ fn notify_refusal_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:TASK-3895 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn task_3895_mandate_release() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let key = reserved(main, "head");
+        let mut guard = RepairGuard::lock(main).unwrap();
+        let entry = guard.entry_mut(&key).unwrap().clone();
+        let id = reservation_id(&entry);
+        use crate::gate::mandate::{Mandate, MandateState, Scope};
+        let now = chrono::Utc::now();
+        let mut mandate: Mandate = serde_json::from_value(serde_json::json!({
+            "id":"mandate-1","principal":"joe","seat":"advisor","scope":"ship-held",
+            "issued_at":now,"expires_at":now + chrono::Duration::hours(1)
+        }))
+        .unwrap();
+        let check = |state: &MandateState| {
+            Ok((state.repair_release_id("advisor", "joe")?, "grant-1".into()))
+        };
+        assert!(check(&MandateState::Active(mandate.clone())).is_err());
+        mandate.scopes.insert(Scope::RepairReservationRelease);
+        let state = MandateState::Active(mandate);
+        let allow = || check(&state);
+        assert!(guard
+            .release_with(&id, false, |_| panic!(), allow)
+            .unwrap_err()
+            .to_string()
+            .contains("terminal"));
+        assert!(guard.release_with(&id, true, |_| panic!(), allow).is_err());
+        std::fs::create_dir(crate::leases::leases_dir(main)).unwrap();
+        let lease = serde_json::json!({"id":entry.lane_id,"scope":"pr","slug":"pr","owner":"implementer","worktree_path":entry.tree_path,"branch":entry.branch,"started_at":chrono::Utc::now(),"hostname":crate::hostname(),"pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"active_pid":2147483647,"active_pid_start_time":"linux-starttime:1"});
+        std::fs::write(
+            crate::leases::lease_path(main, &entry.lane_id),
+            toml::to_string(&lease).unwrap(),
+        )
+        .unwrap();
+        std::fs::create_dir(&entry.tree_path).unwrap();
+        let proc_root = main.join("proc");
+        let pid = proc_root.join(std::process::id().to_string());
+        std::fs::create_dir_all(&pid).unwrap();
+        let cwd = pid.join("cwd");
+        std::os::unix::fs::symlink(&entry.tree_path, &cwd).unwrap();
+        let probe = |e: &RepairEntry| scan_lane(&proc_root, e);
+        assert!(guard
+            .release_with(&id, true, probe, allow)
+            .unwrap_err()
+            .to_string()
+            .contains("cwd"));
+        std::fs::remove_file(&cwd).unwrap();
+        std::os::unix::fs::symlink(main, &cwd).unwrap();
+        assert!(guard
+            .release_with(&id, true, probe, allow)
+            .unwrap_err()
+            .to_string()
+            .contains("incomplete"));
+        std::fs::write(pid.join("environ"), b"AIDA_SESSION_ID=lane\0").unwrap();
+        assert!(guard
+            .release_with(&id, true, probe, allow)
+            .unwrap_err()
+            .to_string()
+            .contains("carries repair lease"));
+        std::fs::write(pid.join("environ"), b"AIDA_SESSION_ID=lane-other\0").unwrap();
+        assert!(guard
+            .release_with(&id, true, probe, || check(&MandateState::None))
+            .is_err());
+        assert!(guard.journal.releases.is_empty());
+        guard.release_with(&id, true, probe, allow).unwrap();
+        drop(guard);
+        let guard = RepairGuard::lock(main).unwrap();
+        let audit = guard.journal.releases[0].mandate.as_ref().unwrap();
+        assert_eq!(audit.mandate_id, "mandate-1");
+        assert_eq!(audit.grant_id, "grant-1");
+        assert_eq!(audit.processes_checked, 1);
+        assert_eq!(
+            guard.journal.reservation(&id).unwrap().spawn,
+            SpawnOutcome::ProvenDead
+        );
+        assert!(entry.tree_path.is_dir());
+    }
+
     // trace:TASK-3804 | ai:codex
     #[test]
     fn task_3804_repair_refusal_sends_once_per_pr_head() {

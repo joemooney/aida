@@ -13458,6 +13458,9 @@ Options:
       --attest <ATTEST>
           Operator's reason for releasing one conflict repair reservation
 
+      --attest-by-mandate
+          Release one dead repair reservation under a scoped advisor mandate
+
   -y, --yes
           Skip confirmation prompts
 
@@ -46638,6 +46641,11 @@ Working on aida itself
         "name": "attest",
         "takes_value": true,
         "help": "Operator's reason for releasing one conflict repair reservation"
+      },
+      {
+        "name": "attest-by-mandate",
+        "takes_value": false,
+        "help": "Release one dead repair reservation under a scoped advisor mandate"
       },
       {
         "name": "canonical-ids",

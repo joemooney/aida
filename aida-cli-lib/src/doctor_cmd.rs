@@ -344,6 +344,7 @@ pub(crate) fn handle_doctor_command(
         }
         cli::DoctorCommand::Heal {
             attest,
+            attest_by_mandate,
             id,
             category,
             yes: sub_yes,
@@ -357,6 +358,11 @@ pub(crate) fn handle_doctor_command(
                 anyhow::ensure!(!yes && !sub_yes, "repair release refuses --yes");
                 anyhow::ensure!(!json && !heal_json, "repair release refuses --json");
                 let id = id.as_deref().context("repair release requires one --id")?;
+                if *attest_by_mandate {
+                    crate::repair_journal::RepairGuard::release_by_mandate(&root, id)?;
+                    println!("Released {id}");
+                    return Ok(());
+                }
                 let reason = attest
                     .as_deref()
                     .map(str::trim)
@@ -378,6 +384,10 @@ pub(crate) fn handle_doctor_command(
                 println!("Released {id}");
                 return Ok(());
             }
+            anyhow::ensure!(
+                !attest_by_mandate,
+                "--attest-by-mandate requires repair-reservations"
+            );
             anyhow::ensure!(attest.is_none(), "--attest requires repair-reservations");
             let yes = sub_yes;
             let json = heal_json;

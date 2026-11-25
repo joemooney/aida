@@ -1137,3 +1137,7 @@ blocked_after_mins = "policy"
 
 [keys.trusted.seat_health]
 push_commands = "command"
+
+# trace:TASK-3895 | ai:codex
+[keys.trusted.repair_journal]
+mandate_attested_release = "policy"
