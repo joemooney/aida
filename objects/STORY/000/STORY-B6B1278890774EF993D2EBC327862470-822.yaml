@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: Done
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T11:05:45.688506195Z
+modified_at: 2026-11-25T11:45:24.636865493Z
 req_type: Story
 tags:
 - hygiene
@@ -523,6 +523,14 @@ history:
   timestamp: 2026-11-25T11:04:43.944658708Z
   session_id: 01a21226b039
   changes: []
+- id: 01a21286-5a9d-7bf2-8672-1c43f830205a
+  author: aida-orchestrator
+  timestamp: 2026-11-25T11:45:24.637012218Z
+  session_id: 01a212821c67
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -531,3 +539,27 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    CHANGES REQUESTED for STORY-3059 (STORY-b6b1278890774ef993d2ebc327862470-822). Reviewed the entire three-file landing diff for original head 9959be29516640b22f8da733f61c467ff9bb27ec against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, using landed tree 27fa751f4aba14b9d03e95af28425c149dc3b579. The generated worksheet carries the original acceptance text. The latest advisor brief on the spec (comments 25, 27 and 30) parks automatic removal and explicitly makes the reporting slice completing.
+
+    Worksheet AC1 (policy decision recorded) — verified by the advisor’s disposition on STORY-3059, comments 25, 27 and 30, selecting report-only hygiene and operator-attested recovery.
+    Worksheet AC2 (interim “parked” label before policy decision) — not-applicable-because the advisor decided the policy and replaced the interim label with “recoverable” and an attestation hint.
+
+    Superseded automatic-reap AC1 (closed and published clone reaped with owning-spec record) — not-applicable-because the advisor parked automatic removal and closed PR #4552.
+    Superseded automatic-reap AC2 (unpushed tip refuses) — not-applicable-because the old automatic-removal contract was parked.
+    Superseded automatic-reap AC3 (fetch failure refuses) — not-applicable-because the old automatic-removal contract was parked.
+    Superseded automatic-reap AC4 (stash-only clone refuses) — not-applicable-because the old automatic-removal contract was parked.
+    Superseded automatic-reap AC5 (unpublished off-branch work refuses) — not-applicable-because the old automatic-removal contract was parked.
+
+    Current report-only AC1 (identify a published closed-unmerged seat as recoverable and emit a usable operator-attestation hint) — unverified. The report substitutes the old local commit count for current publication and emits a command that pinned main rejects.
+    Current report-only AC2 (hygiene preserves the clone, tree, refs and alternates) — unverified. The stable no-merge fixture compares whole-clone tar archives and checks lease retention, but the destructive path does not recheck closed status and the fixture never makes the historical-merge predicate true alongside a valid close.
+    Current report-only AC3 (identical recovery line in dry and real hygiene) — verified by the matching scan/reap summary wiring and the stable closed-PR fixture in `cargo test -p aida-cli-lib bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates`, reported passed in implementer lane job j20261125T100740665-2-0. The fixture exercises the dry scan, the real quiet reap collector and summary rendering.
+
+    Exact-head FAST source gates, FAST compilation, required Ubuntu Build and merge-hold-gate passed. Full test shards were skipped by FAST CI. No local tests or builds were run.
+  recovery_hint: address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T11:45:24.636865493Z
