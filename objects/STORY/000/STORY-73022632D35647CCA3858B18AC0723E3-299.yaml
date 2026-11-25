@@ -1,0 +1,32 @@
+id: 01a21036-a639-7591-902e-1ee4eb0cb133
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-299
+title: 'Review PR-4550: [AI:codex] fix(review-watch): tolerate additive runtime state fields (BUG-2758)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21006`) for branch `bug-b6b1278890774ef993d2ebc327862470-519`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4550>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-519` → `main`
+
+  ## Covers
+
+  - BUG-2758
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4550` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T00:59:06.681492858Z
+modified_at: 2026-11-25T00:59:06.681492858Z
+req_type: Story
+filed_at:
+  code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b
+  session: 01a21006d380
