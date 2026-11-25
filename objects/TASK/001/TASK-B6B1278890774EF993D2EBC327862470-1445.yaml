@@ -1,5 +1,6 @@
 id: 01a213f6-46f2-75f2-ad38-183316031b3a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1445
+agreed_id: TASK-3434
 title: 'Review follow-up: Deferred follow-up (BUG-2730, p2): aida-cli-lib/src/land_stalls.rs scan_with_budgets (~:20'
 description: |-
   From BUG-2730
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
   created_at: 2026-11-25T18:27:16.850671540Z
+history:
+- id: 01a213f8-f380-7ad2-a3b5-a826c1bb06a6
+  author: joe
+  timestamp: 2026-11-25T18:30:12.096560008Z
+  changes: []
 filed_at:
   code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
   branch: pr-4457

@@ -1,5 +1,6 @@
 id: 01a213f6-48e6-7fc0-8ae8-202a95ac26a8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1447
+agreed_id: TASK-3435
 title: 'Review follow-up: Deferred follow-up (BUG-2730, p3): on GitHub, discover_rich -> forge::github_open_changes_'
 description: |-
   From BUG-2730
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
   created_at: 2026-11-25T18:27:17.350804367Z
+history:
+- id: 01a213f8-f3b6-7943-9785-3bd054f4c75f
+  author: joe
+  timestamp: 2026-11-25T18:30:12.150115693Z
+  changes: []
 filed_at:
   code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
   branch: pr-4457

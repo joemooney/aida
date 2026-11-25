@@ -1,5 +1,6 @@
 id: 01a213f6-481e-7fd1-b8e7-c91cbf4e8eb0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1446
+agreed_id: TASK-3433
 title: 'Review follow-up: Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_d'
 description: |-
   From BUG-2730
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
   created_at: 2026-11-25T18:27:17.150902554Z
+history:
+- id: 01a213f8-f363-7cc2-b0dc-2b972ac827e7
+  author: joe
+  timestamp: 2026-11-25T18:30:12.067092229Z
+  changes: []
 filed_at:
   code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
   branch: pr-4457
