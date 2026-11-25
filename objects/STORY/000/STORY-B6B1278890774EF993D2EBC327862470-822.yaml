@@ -541,6 +541,20 @@ comments:
       From STORY-3059 Reviewed sha: a9b2089aaaa9386cc3a859b5277bff50b5058548 aida-cli-lib/src/session_reap.rs:1494 — the recoverable hint names the branch and publication state but not the closed PR/MR number that AC2's wording ("PR #N closed unmerged") and the salvage-pointer intent of AC1 call for. The advisor's r2 brief fixed the hint wording, so this is not an unmet AC, but an operator still has to look the PR up by hand. Follow-up: carry the matched closed PR number out of parse_terminal_branch and include it in the hint.
   created_at: 2026-11-25T21:05:00.618989522Z
   modified_at: 2026-11-25T21:05:00.618989522Z
+- id: 01a21492-5eab-78a1-b576-d02f1a432d46
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:17):
+    # STORY-3059 r3 CI-red fix on #4570 (advisor-122 2026-11-25 14:15; product-15). Lane: CLAUDE. MAIN, existing branch story-3059-report / PR #4570. <=40 lines. Keep the "(Refs STORY-3059)" title.
+    #4570 (approved at its r3 head) went RED on full CI, run 45694664228: the live bwrap gate fails `task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone` (panic in task_2053_seat_clone_lifecycle_tests.rs, via aida-testkit test_env.rs:127), plus lib-0 and Build. That test covers the seat-clone/reap code this slice touches, so it is LIKELY A REAL REGRESSION.
+    1. `gh run view 45694664228 --log-failed` (also lib-0 and Build) to read the exact panic.
+    2. REPRODUCE: run that one test here (`cargo test -p aida-cli-lib task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone`, under the same live-bwrap env the gate uses), both on this branch AND on origin/main.
+    3. If it fails only on this branch: fix it within the slice scope. If it fails on main too: do NOT change code; PUNT with the evidence (both runs' output) so the advisor reruns.
+    make check-ci-fast, then push to #4570. COMMIT your work.
+  created_at: 2026-11-25T21:17:31.530369197Z
+  modified_at: 2026-11-25T21:17:31.530369197Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
