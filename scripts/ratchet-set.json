@@ -24,6 +24,7 @@
         "test_classify_diff_inventory_and_exclusions",
         "test_custom_playbook_merge_and_override",
         "test_diff_triggered_rust_content_facets_zero_overhead_when_absent",
+        "test_findings_to_sarif_json_and_forge_markdown_and_runner_parse",
         "test_glob_matches_with_braces_and_doublestar",
         "test_verify_coverage_ledger_enforces_100_percent_accountability",
         "test_verify_observation_citations"
@@ -43,6 +44,7 @@
         "option_like_endpoints_refuse_before_git",
         "prepare_excludes_credentials_before_revision_reads",
         "root_commit_preserves_unusual_git_paths",
+        "turnkey_run_review_sarif_and_post_comment_end_to_end",
         "write_confines_new_and_existing_paths"
       ],
       "scope": "module"

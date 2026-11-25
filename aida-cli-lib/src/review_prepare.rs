@@ -6,7 +6,8 @@
 
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
-    anchor_findings_with, bundle_review_batches, classify_diff_inventory, verify_coverage_ledger,
+    anchor_findings_with, bundle_review_batches, classify_diff_inventory, findings_to_sarif_json,
+    format_forge_review_markdown, parse_runner_findings_json, verify_coverage_ledger,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
     PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
     ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
@@ -72,6 +73,26 @@ pub struct ReviewPrepareArgs {
     /// file to exact 1-based `(start_line, end_line)` spans on the target revision.
     #[clap(long, value_name = "FINDINGS_JSON")]
     pub anchor_findings: Option<PathBuf>,
+
+    /// Execute automated batch code review across the prepared batches using
+    /// `AIDA_REVIEW_RUNNER_CMD` (if set in the environment) or `claude --print`,
+    /// automatically anchoring reported `existing_code` snippets to exact 1-based
+    /// line numbers and verifying 100% file coverage.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long)]
+    pub run_review: bool,
+
+    /// Export anchored findings as a SARIF 2.1.0 JSON file inside the repository
+    /// (for GitHub Code Scanning / GitLab SAST).
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "SARIF_PATH")]
+    pub sarif: Option<PathBuf>,
+
+    /// Post a consolidated Markdown review report as a comment on `--pr <N>`
+    /// (supports GitHub `gh pr comment` and GitLab `glab mr note`).
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, requires = "pr")]
+    pub post_comment: bool,
 
     /// Emit machine-readable JSON output.
     #[clap(long)]
@@ -207,13 +228,33 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         head_ref.as_deref(),
     )?;
 
-    // 7. Optional: verify a coverage ledger file.
+    // 7. Optional: execute automated batch review (`--run-review`), or load external
+    //    coverage ledger (`--verify-coverage`) and findings (`--anchor-findings`).
+    let mut runner_findings: Option<Vec<RawReviewFinding>> = None;
+    let mut runner_ledger: Option<CoverageLedger> = None;
+    if args.run_review {
+        let (f, l) = execute_automated_batch_reviews(
+            &project_root,
+            &mode,
+            merge_base.as_deref(),
+            head_ref.as_deref(),
+            &batches,
+            &playbooks,
+            &linked_specs,
+            &content_cache,
+        )?;
+        runner_findings = Some(f);
+        runner_ledger = Some(l);
+    }
+
     let coverage_verification = if let Some(ledger_path) = &args.verify_coverage {
         let raw_ledger = std::fs::read_to_string(ledger_path)
             .with_context(|| format!("read coverage ledger {}", ledger_path.display()))?;
         let ledger: CoverageLedger = serde_json::from_str(&raw_ledger)
             .with_context(|| format!("parse coverage ledger JSON {}", ledger_path.display()))?;
         Some(verify_coverage_ledger(&inventory, &ledger))
+    } else if let Some(ledger) = &runner_ledger {
+        Some(verify_coverage_ledger(&inventory, ledger))
     } else {
         None
     };
@@ -227,9 +268,44 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         Some(anchor_findings_with(&parsed, |path| {
             content_cache.get(path).cloned()
         }))
+    } else if let Some(parsed) = &runner_findings {
+        Some(anchor_findings_with(parsed, |path| {
+            content_cache.get(path).cloned()
+        }))
     } else {
         None
     };
+
+    // 9. Optional: write SARIF 2.1.0 report (`--sarif <PATH>`).
+    if let Some(sarif_path) = &args.sarif {
+        let findings_slice = anchored_findings.as_deref().unwrap_or(&[]);
+        let sarif_doc = findings_to_sarif_json(findings_slice);
+        let sarif_str = serde_json::to_string_pretty(&sarif_doc)?;
+        write_output(&project_root, sarif_path, &sarif_str)?;
+    }
+
+    // 10. Optional: post consolidated Markdown review report to GitHub PR / GitLab MR (`--post-comment`).
+    if args.post_comment {
+        let pr_n = args.pr.context("--post-comment requires --pr <N>")?;
+        let spec_pairs: Vec<(String, String)> = linked_specs
+            .iter()
+            .map(|s| {
+                (
+                    aida_core::node_alias::display_spec_id(&s.spec_id).to_string(),
+                    s.title.clone(),
+                )
+            })
+            .collect();
+        let comment_md = format_forge_review_markdown(
+            &mode,
+            head_ref.as_deref(),
+            &inventory,
+            coverage_verification.as_ref(),
+            &spec_pairs,
+            anchored_findings.as_deref().unwrap_or(&[]),
+        );
+        post_forge_review_comment(&project_root, pr_n, &comment_md)?;
+    }
 
     let bundle = ReviewPreparationBundle {
         mode,
@@ -818,6 +894,216 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
     out
 }
 
+/// Post a consolidated Markdown review report to a GitHub PR or GitLab MR.
+// trace:STORY-3120 | ai:antigravity
+fn post_forge_review_comment(project_root: &Path, pr_n: u64, comment_md: &str) -> Result<()> {
+    let forge = detect_forge_from_origin(project_root).context("cannot resolve PR forge")?;
+    let client: Box<dyn crate::forge::Forge> = match forge.forge_kind() {
+        crate::forge::ForgeKind::GitHub => {
+            Box::new(crate::forge::GitHubForge::for_review(project_root)?)
+        }
+        kind => crate::forge::forge_for_kind(project_root, kind),
+    };
+    let change_ref = crate::forge::ChangeRef {
+        id: pr_n,
+        url: String::new(),
+        branch: String::new(),
+        base: String::new(),
+        title: None,
+    };
+    client.comment(&change_ref, comment_md)
+}
+
+/// Execute automated batch code reviews over each prepared batch using either
+/// `AIDA_REVIEW_RUNNER_CMD` (invoked with prompt on stdin) or `claude --print`.
+// trace:STORY-3120 | ai:antigravity
+fn execute_automated_batch_reviews(
+    project_root: &Path,
+    mode: &str,
+    merge_base: Option<&str>,
+    head_ref: Option<&str>,
+    batches: &[ReviewBatch],
+    playbooks: &[ResolvedPlaybook],
+    linked_specs: &[LinkedSpecAcceptance],
+    content_cache: &BTreeMap<String, String>,
+) -> Result<(Vec<RawReviewFinding>, CoverageLedger)> {
+    let playbooks_map: BTreeMap<&str, &ResolvedPlaybook> =
+        playbooks.iter().map(|p| (p.id.as_str(), p)).collect();
+
+    let mut all_findings = Vec::new();
+    let mut all_coverage = Vec::new();
+
+    for batch in batches {
+        let prompt = build_batch_review_prompt(
+            project_root,
+            mode,
+            merge_base,
+            head_ref,
+            batch,
+            &playbooks_map,
+            linked_specs,
+            content_cache,
+        )?;
+        let raw_out = invoke_review_runner(project_root, &prompt)?;
+        let (batch_findings, batch_ledger) = parse_runner_findings_json(&raw_out)
+            .map_err(|e| anyhow::anyhow!("batch {} runner output error: {e}", batch.batch_index))?;
+        all_findings.extend(batch_findings);
+        all_coverage.extend(batch_ledger.files);
+    }
+
+    Ok((
+        all_findings,
+        CoverageLedger {
+            files: all_coverage,
+        },
+    ))
+}
+
+fn build_batch_review_prompt(
+    project_root: &Path,
+    mode: &str,
+    merge_base: Option<&str>,
+    head_ref: Option<&str>,
+    batch: &ReviewBatch,
+    playbooks_map: &BTreeMap<&str, &ResolvedPlaybook>,
+    linked_specs: &[LinkedSpecAcceptance],
+    content_cache: &BTreeMap<String, String>,
+) -> Result<String> {
+    let mut prompt = String::new();
+    prompt.push_str("You are an AIDA deterministic batch code reviewer. Review every file in this batch against the linked AIDA acceptance criteria and active playbooks.\n\n");
+    prompt.push_str(
+        "Return ONLY a valid JSON object matching this exact schema (no extra commentary):\n",
+    );
+    prompt.push_str("{\n  \"findings\": [\n    {\n      \"path\": \"relative/path.rs\",\n      \"severity\": \"critical|high|medium|low\",\n      \"category\": \"fail-open|absent-evidence-reads-as-good|incomplete-fix|untested-path|contract-drift|race|perf|portability|security|bug\",\n      \"message\": \"Concise explanation of the defect and its runtime/contract impact\",\n      \"existing_code\": \"Exact verbatim lines from the new file where the defect occurs\",\n      \"suggestion_code\": \"Optional replacement code\"\n    }\n  ],\n  \"files\": [\n    { \"path\": \"relative/path.rs\", \"status\": \"reviewed\" }\n  ]\n}\n\n");
+
+    if !linked_specs.is_empty() {
+        prompt.push_str("## Linked AIDA Requirement Acceptance Criteria\n\n");
+        for spec in linked_specs {
+            prompt.push_str(&format!(
+                "### {} — {}\n{}\n\n",
+                aida_core::node_alias::display_spec_id(&spec.spec_id),
+                spec.title,
+                spec.acceptance_markdown
+            ));
+        }
+    }
+
+    prompt.push_str("## Active Review Playbooks for This Batch\n\n");
+    for pb_id in &batch.playbook_ids {
+        if let Some(pb) = playbooks_map.get(pb_id.as_str()) {
+            prompt.push_str(&format!(
+                "### {} (`{}`)\n{}\n\n",
+                pb.title, pb.id, pb.checklist
+            ));
+        }
+    }
+
+    let range_arg = match (mode, merge_base, head_ref) {
+        ("commit" | "range", Some(mb), Some(head)) => Some(format!("{mb}..{head}")),
+        _ => None,
+    };
+
+    prompt.push_str(&format!(
+        "## Batch {} (`{}`) — Files Under Review\n\n",
+        batch.batch_index, batch.label
+    ));
+
+    for path in &batch.files {
+        prompt.push_str(&format!("### File: `{path}`\n\n"));
+        if mode == "scan" {
+            if let Some(body) = content_cache.get(path) {
+                prompt.push_str("```text\n");
+                prompt.push_str(body);
+                if !body.ends_with('\n') {
+                    prompt.push('\n');
+                }
+                prompt.push_str("```\n\n");
+            }
+        } else {
+            let patch = if let Some(r) = &range_arg {
+                git_text(
+                    project_root,
+                    &[
+                        "diff",
+                        "--no-ext-diff",
+                        "--no-color",
+                        "--end-of-options",
+                        r,
+                        "--",
+                        path,
+                    ],
+                )
+                .unwrap_or_default()
+            } else {
+                git_text(
+                    project_root,
+                    &["diff", "--no-ext-diff", "--no-color", "HEAD", "--", path],
+                )
+                .unwrap_or_default()
+            };
+            if !patch.trim().is_empty() {
+                prompt.push_str("```diff\n");
+                prompt.push_str(&patch);
+                if !patch.ends_with('\n') {
+                    prompt.push('\n');
+                }
+                prompt.push_str("```\n\n");
+            } else if let Some(body) = content_cache.get(path) {
+                prompt.push_str("```text\n");
+                prompt.push_str(body);
+                if !body.ends_with('\n') {
+                    prompt.push('\n');
+                }
+                prompt.push_str("```\n\n");
+            }
+        }
+    }
+
+    Ok(prompt)
+}
+
+fn invoke_review_runner(project_root: &Path, prompt: &str) -> Result<String> {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    if let Ok(custom_cmd) = std::env::var("AIDA_REVIEW_RUNNER_CMD") {
+        let trimmed = custom_cmd.trim();
+        if !trimmed.is_empty() {
+            let mut child = Command::new(trimmed)
+                .current_dir(project_root)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .with_context(|| format!("failed to spawn AIDA_REVIEW_RUNNER_CMD `{trimmed}`"))?;
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(prompt.as_bytes())?;
+            }
+            let out = child.wait_with_output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "AIDA_REVIEW_RUNNER_CMD exited non-zero: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            return Ok(String::from_utf8(out.stdout)?);
+        }
+    }
+
+    let out = Command::new("claude")
+        .current_dir(project_root)
+        .args(["--print", "-p", prompt])
+        .output()
+        .context(
+            "failed to run `claude --print` (set AIDA_REVIEW_RUNNER_CMD or install claude CLI)",
+        )?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`claude --print` failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8(out.stdout)?)
+}
+
 // trace:TASK-3862 | ai:codex
 #[cfg(test)]
 mod tests {
@@ -1078,5 +1364,91 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         ] {
             assert!(result.unwrap_err().to_string().contains(operation));
         }
+    }
+
+    // trace:STORY-3120 | ai:antigravity
+    #[test]
+    fn turnkey_run_review_sarif_and_post_comment_end_to_end() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+
+        // Mock runner script that returns a finding with `existing_code` and a 100% file coverage row
+        let runner = root.join("mock-runner.sh");
+        let runner_json = serde_json::json!({
+            "findings": [
+                {
+                    "path": "lib.rs",
+                    "severity": "high",
+                    "category": "fail-open",
+                    "message": "Avoid .unwrap() in production path.",
+                    "existing_code": "    let danger = Some(1).unwrap();",
+                    "suggestion_code": "    let danger = Some(1)?;"
+                }
+            ],
+            "files": [
+                { "path": "lib.rs", "status": "reviewed" }
+            ]
+        });
+        crate::test_exec::write_executable(
+            &runner,
+            &format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{runner_json}'\n"),
+        );
+
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(
+            root,
+            None,
+            &[("AIDA_REVIEW_RUNNER_CMD", Some(runner.to_str().unwrap()))],
+        );
+        let store = Storage::new(root.join("requirements.yaml"));
+
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(
+            root.join("lib.rs"),
+            "// trace:STORY-3120 | ai:antigravity\npub fn compute() {\n    let danger = Some(1).unwrap();\n    let _ = danger;\n}\n",
+        )
+        .unwrap();
+        git_text(root, &["add", "lib.rs"]).unwrap();
+        let head = crate::test_git::commit_fixture(root);
+        git_text(root, &["update-ref", "refs/remotes/origin/main", &head]).unwrap();
+        git_text(
+            root,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/fixture/repo.git",
+            ],
+        )
+        .unwrap();
+
+        let args = ReviewPrepareArgs {
+            scan: true,
+            path: vec!["lib.rs".into()],
+            run_review: true,
+            sarif: Some(PathBuf::from("review.sarif.json")),
+            write: Some(PathBuf::from("bundle.json")),
+            json: true,
+            ..Default::default()
+        };
+        handle_review_prepare(&args, &store).unwrap();
+
+        let bundle: ReviewPreparationBundle =
+            serde_json::from_slice(&std::fs::read(root.join("bundle.json")).unwrap()).unwrap();
+        assert!(bundle.coverage_verification.as_ref().unwrap().passed);
+        let anchored = bundle.anchored_findings.as_ref().unwrap();
+        assert_eq!(anchored.len(), 1);
+        assert_eq!(anchored[0].start_line, Some(3));
+        assert_eq!(anchored[0].end_line, Some(3));
+        assert_eq!(anchored[0].anchor_status.as_deref(), Some("exact"));
+
+        let sarif: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("review.sarif.json")).unwrap())
+                .unwrap();
+        assert_eq!(sarif["version"], "2.1.0");
+        assert_eq!(
+            sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"]
+                ["startLine"],
+            3
+        );
     }
 }

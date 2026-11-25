@@ -1218,6 +1218,239 @@ where
     out
 }
 
+/// Convert anchored review findings into a SARIF 2.1.0 JSON document suitable for
+/// GitHub Code Scanning (`github/codeql-action/upload-sarif`) and GitLab SAST.
+// trace:STORY-3120 | ai:antigravity
+pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Value {
+    let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+    let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len());
+
+    for f in findings {
+        let cat_clean = if f.category.trim().is_empty() {
+            "general"
+        } else {
+            f.category.trim()
+        };
+        let rule_id = format!("aida.review.{cat_clean}");
+        rules_map.entry(rule_id.clone()).or_insert_with(|| {
+            serde_json::json!({
+                "id": rule_id,
+                "name": format!("AidaReview{}", cat_clean),
+                "shortDescription": {
+                    "text": format!("AIDA deterministic review finding ({cat_clean})")
+                }
+            })
+        });
+
+        let level = match f.severity.trim().to_ascii_lowercase().as_str() {
+            "critical" | "high" | "error" => "error",
+            "medium" | "warning" | "warn" => "warning",
+            _ => "note",
+        };
+
+        let start_line = f.start_line.unwrap_or(1).max(1);
+        let end_line = f.end_line.unwrap_or(start_line).max(start_line);
+
+        let mut message_text = f.message.clone();
+        if let Some(suggestion) = f.suggestion_code.as_deref() {
+            if !suggestion.trim().is_empty() {
+                message_text.push_str("\n\nSuggested fix:\n");
+                message_text.push_str(suggestion.trim());
+            }
+        }
+
+        results.push(serde_json::json!({
+            "ruleId": rule_id,
+            "level": level,
+            "message": {
+                "text": message_text
+            },
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": f.path.replace('\\', "/"),
+                            "uriBaseId": "%SRCROOT%"
+                        },
+                        "region": {
+                            "startLine": start_line,
+                            "endLine": end_line
+                        }
+                    }
+                }
+            ]
+        }));
+    }
+
+    let rules: Vec<serde_json::Value> = rules_map.into_values().collect();
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "aida-review-engine",
+                        "informationUri": "https://github.com/joemooney/aida",
+                        "rules": rules
+                    }
+                },
+                "results": results
+            }
+        ]
+    })
+}
+
+/// Format a consolidated GitHub PR / GitLab MR Markdown review comment from the
+/// classified inventory, optional coverage report, linked spec `(spec_id, title)` list,
+/// and anchored findings.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_forge_review_markdown(
+    mode: &str,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+    coverage: Option<&CoverageVerificationReport>,
+    linked_specs: &[(String, String)],
+    findings: &[RawReviewFinding],
+) -> String {
+    let mut out = String::new();
+    out.push_str("## AIDA Deterministic Code Review\n\n");
+
+    let head_short = head_ref
+        .map(|h| if h.len() > 12 { &h[..12] } else { h })
+        .unwrap_or("workspace");
+    let inv_short = if inventory.inventory_sha256.len() > 12 {
+        &inventory.inventory_sha256[..12]
+    } else {
+        &inventory.inventory_sha256
+    };
+
+    out.push_str(&format!(
+        "- **Mode**: `{mode}` | **Head**: `{head_short}` | **Inventory SHA-256**: `{inv_short}`\n"
+    ));
+    out.push_str(&format!(
+        "- **Reviewable files**: {} | **Excluded files**: {}\n",
+        inventory.reviewable_files.len(),
+        inventory.excluded_files.len()
+    ));
+
+    if let Some(cov) = coverage {
+        let status_label = if cov.passed { "PASSED" } else { "INCOMPLETE" };
+        out.push_str(&format!(
+            "- **File coverage**: **{status_label}** ({}% — {} reviewed, {} skipped of {})\n",
+            cov.coverage_rate_pct, cov.reviewed_count, cov.skipped_count, cov.total_reviewable
+        ));
+    }
+
+    if !linked_specs.is_empty() {
+        let specs_str: Vec<String> = linked_specs
+            .iter()
+            .map(|(id, title)| format!("`{id}` ({title})"))
+            .collect();
+        out.push_str(&format!(
+            "- **Linked AIDA specs**: {}\n",
+            specs_str.join(", ")
+        ));
+    }
+    out.push('\n');
+
+    if findings.is_empty() {
+        out.push_str("### Findings\n\nNo actionable defects reported.\n");
+        return out;
+    }
+
+    let mut crit_high = 0usize;
+    let mut medium = 0usize;
+    let mut low = 0usize;
+    for f in findings {
+        match f.severity.trim().to_ascii_lowercase().as_str() {
+            "critical" | "high" => crit_high += 1,
+            "medium" => medium += 1,
+            _ => low += 1,
+        }
+    }
+
+    out.push_str(&format!(
+        "### Findings ({} critical/high, {} medium, {} low)\n\n",
+        crit_high, medium, low
+    ));
+
+    for f in findings {
+        let loc = match (f.start_line, f.end_line) {
+            (Some(s), Some(e)) if s != e => format!("{}:{s}-{e}", f.path),
+            (Some(s), _) => format!("{}:{s}", f.path),
+            _ => f.path.clone(),
+        };
+        let sev = f.severity.trim().to_ascii_uppercase();
+        let cat = f.category.trim();
+        out.push_str(&format!(
+            "- **[{}] `{}`** (`{}`) — {}\n",
+            sev,
+            loc,
+            cat,
+            f.message.trim()
+        ));
+        if let Some(sugg) = f.suggestion_code.as_deref() {
+            if !sugg.trim().is_empty() {
+                out.push_str("  ```suggestion\n");
+                for line in sugg.trim_end().lines() {
+                    out.push_str("  ");
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                out.push_str("  ```\n");
+            }
+        }
+    }
+
+    out
+}
+
+/// Envelope parsed from an automated batch review runner's stdout.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BatchRunnerOutput {
+    #[serde(default)]
+    pub findings: Vec<RawReviewFinding>,
+    #[serde(default)]
+    pub files: Vec<FileCoverageEntry>,
+}
+
+/// Parse JSON output from an automated batch review runner (`claude --print` or
+/// `AIDA_REVIEW_RUNNER_CMD`). Accepts either a `{ "findings": [...], "files": [...] }`
+/// object or a bare `[ RawReviewFinding, ... ]` array, stripping surrounding markdown
+/// code fences if present.
+// trace:STORY-3120 | ai:antigravity
+pub fn parse_runner_findings_json(
+    raw: &str,
+) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String> {
+    let trimmed = extract_json_payload(raw);
+    if trimmed.starts_with('[') {
+        let findings: Vec<RawReviewFinding> = serde_json::from_str(trimmed)
+            .map_err(|e| format!("failed to parse runner findings array: {e}"))?;
+        return Ok((findings, CoverageLedger::default()));
+    }
+    let env: BatchRunnerOutput = serde_json::from_str(trimmed)
+        .map_err(|e| format!("failed to parse runner output object: {e}"))?;
+    Ok((env.findings, CoverageLedger { files: env.files }))
+}
+
+fn extract_json_payload(raw: &str) -> &str {
+    let s = raw.trim();
+    if let Some(start_fence) = s.find("```json") {
+        let after = &s[start_fence + 7..];
+        if let Some(end_fence) = after.find("```") {
+            return after[..end_fence].trim();
+        }
+    }
+    if let Some(start_fence) = s.find("```") {
+        let after = &s[start_fence + 3..];
+        if let Some(end_fence) = after.find("```") {
+            return after[..end_fence].trim();
+        }
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1772,5 +2005,64 @@ fn beta() {
         assert!(!res_bad.valid);
         assert_eq!(res_bad.unknown_ids, vec!["obs-999999".to_string()]);
         assert_eq!(res_bad.errored_ids, vec!["obs-000002".to_string()]);
+    }
+
+    // trace:STORY-3120 | ai:antigravity
+    #[test]
+    fn test_findings_to_sarif_json_and_forge_markdown_and_runner_parse() {
+        let raw_runner = r#"```json
+{
+  "findings": [
+    {
+      "path": "src/auth.rs",
+      "severity": "high",
+      "category": "fail-open",
+      "message": "Swallowed verification error allows unauthenticated access.",
+      "existing_code": "let _ = verify_token(tok);",
+      "suggestion_code": "verify_token(tok)?;",
+      "start_line": 42,
+      "end_line": 42
+    }
+  ],
+  "files": [
+    { "path": "src/auth.rs", "status": "reviewed" }
+  ]
+}
+```"#;
+
+        let (findings, ledger) =
+            parse_runner_findings_json(raw_runner).expect("runner JSON should parse");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(ledger.files.len(), 1);
+        assert_eq!(findings[0].path, "src/auth.rs");
+
+        let sarif = findings_to_sarif_json(&findings);
+        assert_eq!(sarif["version"], "2.1.0");
+        let result0 = &sarif["runs"][0]["results"][0];
+        assert_eq!(result0["ruleId"], "aida.review.fail-open");
+        assert_eq!(result0["level"], "error");
+        assert_eq!(
+            result0["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/auth.rs"
+        );
+        assert_eq!(
+            result0["locations"][0]["physicalLocation"]["region"]["startLine"],
+            42
+        );
+
+        let inv = inventory(&["src/auth.rs"], false);
+        let cov = verify_coverage_ledger(&inv, &ledger);
+        let md = format_forge_review_markdown(
+            "range",
+            Some("deadbeef12345678"),
+            &inv,
+            Some(&cov),
+            &[("STORY-3120".to_string(), "Turnkey CI review".to_string())],
+            &findings,
+        );
+        assert!(md.contains("## AIDA Deterministic Code Review"));
+        assert!(md.contains("**PASSED** (100%"));
+        assert!(md.contains("`src/auth.rs:42`"));
+        assert!(md.contains("verify_token(tok)?;"));
     }
 }
