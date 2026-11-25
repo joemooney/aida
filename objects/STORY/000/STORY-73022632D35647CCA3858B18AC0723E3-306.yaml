@@ -1,5 +1,6 @@
 id: 01a2116d-90ad-7e82-b9bb-f57ddc0155b7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-306
+agreed_id: STORY-3125
 title: 'Review PR-4564: [AI:codex] fix(queue): resume retained conflict repairs in place (BUG-2761)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21112`) for branch `bug-b6b1278890774ef993d2ebc327862470-522`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T06:39:01.321665591Z
   session_id: 01a2111274b7
+  changes: []
+- id: 01a21186-dbfc-7452-8c7a-10ec5af96f59
+  author: joe
+  timestamp: 2026-11-25T07:06:20.540948223Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 2d346c274965961d1e187e5d48a6dbe611232393

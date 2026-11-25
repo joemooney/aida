@@ -1,5 +1,6 @@
 id: 01a2117d-88a5-78c2-84cd-da66906b578e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1410
+agreed_id: TASK-3404
 title: 'Review follow-up: Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automa'
 description: |-
   From BUG-2761
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a210b8-0b89-7b72-a5d9-49f67101d886
   created_at: 2026-11-25T06:56:24.555598963Z
+history:
+- id: 01a21186-9d53-7b70-b96f-8009ebfdca6f
+  author: joe
+  timestamp: 2026-11-25T07:06:04.499745246Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8
   branch: pr-4564
