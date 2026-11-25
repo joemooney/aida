@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T12:06:44.839380190Z
+modified_at: 2026-11-25T12:06:57.342083438Z
 req_type: Task
 tags:
 - integration
@@ -226,6 +226,20 @@ comments:
   modified_at: 2026-11-25T07:09:47.193420159Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a2129a-53da-7dc1-bb98-fe726c82e8fe
+  author: joe
+  content: |-
+    PARKED (advisor 05:13): needs a sketch before any further implementation. The r4 independent CR (#4560 @ 3e62e18b) found two HIGH issues:
+    (1) the probe is built with host_git_command, so .gitmodules discovery reads objects before the guard decides;
+    (2) it inherits GIT_CONFIG*, so the guard can be blinded.
+
+    Sketch requirement: the partial-clone guard runs with a SANITIZED environment (no GIT_CONFIG*), makes NO object access before its decision, and is built from a minimal raw command.
+
+    #4560 is closed unmerged. r2 (1bb67f0b4dd) is being reverted from integration via #4573, so p38 ships without TASK-3874.
+  created_at: 2026-11-25T12:06:57.342083438Z
+  modified_at: 2026-11-25T12:06:57.342083438Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
