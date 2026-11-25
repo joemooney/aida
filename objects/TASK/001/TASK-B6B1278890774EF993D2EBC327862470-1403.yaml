@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: dfdc2a82a951731a9174a3f8020e7d7a3b721ad7
 
   aida-cli-lib/src/review_watch.rs:3696–3703: The singleton pull_requests requirement stalls automatic promotion when Actions associates a run with multiple PRs sharing a head, including cases where the metadata contains enough independent information to distinguish branches. The integration pre-check records this limitation, and the fixture covers only mismatching singleton owners. Use additional authoritative run-to-PR evidence where available to distinguish those runs, retain refusal for genuinely ambiguous evidence, and test both cases with shared-head PRs.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T04:33:17.450815624Z
-modified_at: 2026-11-25T21:04:33.589817312Z
+modified_at: 2026-11-25T21:04:35.470361523Z
 req_type: Task
 tags:
 - carried-from:TASK-3877
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T05:37:23.795651843Z
   changes: []
+- id: 01a21486-4c8e-7d43-875a-6b1314cc5059
+  author: joe
+  timestamp: 2026-11-25T21:04:35.470359474Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: dfdc2a82a951731a9174a3f8020e7d7a3b721ad7
   branch: pr-4558
