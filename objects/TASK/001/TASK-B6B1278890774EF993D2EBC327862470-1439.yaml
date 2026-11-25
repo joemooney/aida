@@ -1,0 +1,31 @@
+id: 01a21296-06e0-7303-8f7d-b3f300e2de4f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1439
+title: 'Review follow-up: aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls int'
+description: |-
+  From BUG-2730
+  Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
+
+  aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls into the per-seat job. When a previously routed stall is skipped and a new covered stall for that same seat arrives before the existing job is consumed, raise_due replaces the job's note and due_failure with the covered subset. The skipped stall remains marked routed, so a later observation will not restore its due evidence. Preserve outstanding due evidence for skipped PRs when coalescing a new partial route.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T12:02:31.776785927Z
+modified_at: 2026-11-25T12:02:31.776785927Z
+req_type: Task
+tags:
+- carried-from:BUG-2730
+- finding-hash:4b9e1478
+- from-review:BUG-2730
+relationships:
+- rel_type: References
+  target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
+  created_at: 2026-11-25T12:02:31.776831819Z
+filed_at:
+  code_sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
+  branch: pr-4457
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a2129211e9

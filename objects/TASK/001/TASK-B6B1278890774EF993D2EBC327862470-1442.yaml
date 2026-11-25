@@ -1,0 +1,31 @@
+id: 01a21296-0a29-71e1-b589-d863419213e5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1442
+title: 'Review follow-up: Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes th'
+description: |-
+  From BUG-2730
+  Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
+
+  Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes the previous default-branch forge metadata fallback. With no local origin/HEAD and unavailable Git transport, an authenticated GitHub host can no longer identify the branch even if the cached tracking ref has the landing history. This suppresses dry-window escalation. Restore the forge metadata fallback under the same absolute budget.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T12:02:32.617343530Z
+modified_at: 2026-11-25T12:02:32.617343530Z
+req_type: Task
+tags:
+- carried-from:BUG-2730
+- finding-hash:89d4a4f5
+- from-review:BUG-2730
+relationships:
+- rel_type: References
+  target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
+  created_at: 2026-11-25T12:02:32.617385676Z
+filed_at:
+  code_sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
+  branch: pr-4457
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a2129211e9
