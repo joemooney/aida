@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-25T06:19:36.376539827Z
+modified_at: 2026-11-25T07:01:44.181662721Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -214,6 +214,18 @@ comments:
   modified_at: 2026-11-25T04:55:07.632891390Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21182-a7e2-7032-ba50-897f746f1b85
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e38746e467b9c378cf7a483dc5f1cb9b06421ba8 plus native-seat working diff. Reviewed origin/main...HEAD and the three modified files. No untracked additions.
+    AC1: [evidence: behavioral-test] The Python repair-generated suite passed all 20 tests, including failed snapshot restoration and merge push. lane_job.rs:2976 exercised exit 1, timeout and target-creation refusal through the production repair-check implementation using its unwrapped fixture. Only the completed command produced RepairCompileFailure. seat_clone.rs:5635 checks remaining stages after host add; marker probes still precede both staging operations. Existing BUG-2456 and TASK-3804 live-bubblewrap fixtures were unchanged and outside the targeted run.
+    AC2: [evidence: behavioral-test] bug_home_038_seat_publish_tests.rs:782 checks the leased-spec comment and :5466 covers failure during publication. Neither fixture was selected in this round. The Python suite verified the cause and CI warning.
+    Deep pass covered shell status ambiguity, wrapper startup and cleanup, missing completion evidence, timeouts, literal conflict paths, staged-tree binding, and defaulted journal fields. Missing or mismatched evidence refuses advisory credit. The inventory check identified the new read-only index probe; its explicit classification passed on rerun. Bounded output can cause a conservative refusal if wrapper diagnostics displace the completion line. Full PR-head CI belongs to host publication.
+  created_at: 2026-11-25T07:01:44.181662721Z
+  modified_at: 2026-11-25T07:01:44.181662721Z
+  session_id: 01a2115bb3c5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
