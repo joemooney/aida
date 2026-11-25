@@ -8,8 +8,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T16:26:48.938419383Z
-modified_at: 2026-11-25T21:19:58.606689418Z
+modified_at: 2026-11-25T21:20:26.459713272Z
 req_type: Bug
+tags:
+- operator-held
 comments:
 - id: 01a21494-628f-7850-9497-cfd27e79fa17
   author: joe
@@ -21,6 +23,14 @@ history:
   author: joe
   timestamp: 2026-11-24T17:03:44.739645896Z
   changes: []
+- id: 01a21494-cfda-7bb2-905d-7d6d7b0f4c63
+  author: joe
+  timestamp: 2026-11-25T21:20:26.586043914Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-25T21:20:26.459713272Z
+deferred_until: date:2026-12-09
+deferred_reason: 'advisor backlog pass 2026-11-25: off the current throughput path'
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: ea4cace77f
