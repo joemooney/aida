@@ -1,0 +1,28 @@
+id: 01a21065-2eef-70e0-8110-047a080ae84f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1392
+agreed_id: TASK-3892
+title: 'Rollover-tolerant persisted readers: unknown-field tests for advisor-loop Service/Binding/Failures, review_watch_pause, admission Hub; gate pickup_retry_at with the counter (BUG-2758 follow-up)'
+description: |
+  Follow-up from #4550 BUG-2758 (advisor-122 OVERRIDE->APPROVE 2026-11-24 18:52 at 0ec9c312; filed by product-15). MEDIUM. The 2026-11-24 review-watch outage class (an older binary rejecting a newer binary's persisted field) can recur in other persisted readers.
+
+  ## Acceptance
+  - AC1: Unknown-field regression tests (an extra field still loads) for each persisted reader: advisor_loop_service Service / Binding / Failures, the review_watch_pause journal, and the admission Hub deserializer; make each tolerate unknown fields where it does not yet.
+  - AC2: (F4) pickup_retry_at is not written before the pickup_retries counter is non-zero (or both are gated together). Test.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T01:49:56.335137299Z
+modified_at: 2026-11-25T01:49:56.335137299Z
+req_type: Task
+tags:
+- admission
+- review-watch
+- rollover
+filed_at:
+  code_sha: 260a82ae939faf34a8e6505a6f765f2151655610
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc27cf1f4cb
+  vendor: claude
