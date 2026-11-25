@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T11:25:52.041538394Z
+modified_at: 2026-11-25T11:26:01.169223505Z
 req_type: Bug
 tags:
 - store
@@ -317,6 +317,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2750 slice A AC1 fails because an account lookup in the Git attribute hardening fallback can outlive the refresh deadline. The fetch-only update and skipped hooks profile are present. AC2 passes for the covered stalled credential probe and transport cases. The train-handler fixture checks the writer lock, timeout diagnostic and continuation. The implementer reported the focused regression passed. FAST gates and compile passed on the exact head. No local tests or builds were run. The advisor split assigns fetched-evidence admission to BUG-2753.. No triage reason was given.'
   created_at: 2026-11-25T11:25:52.041528891Z
   modified_at: 2026-11-25T11:25:52.041528891Z
+- id: 01a21274-990f-74b1-8810-933438443276
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2750):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3c497182b289
+    Recorded: 2026-11-25T11:15:44.083053990+00:00
+    Findings:
+    1. BUG-2750.AC1 — aida-cli-lib/src/pr_train_store_refresh.rs:22 and aida-core/src/git_ops.rs:199–205. The fetch-specific builder skips hook profile installation, but it still runs ensure_attr_source synchronously. If the bounded Git version probe times out, its empty result takes the same fallback as Git older than 2.40. On a store without a containment marker, that fallback calls home_dir (aida-core/src/store_hooks.rs:607–626,645–652). With HOME and USERPROFILE unset or empty, Rust's Linux home lookup calls getpwuid_r on the train thread. A stalled NSS provider can still hang the pre-pass after the five-second deadline and prevent the timeout message and cached-store continuation. Treat an expired version probe as unavailable before entering the fallback and bound the fallback for older Git while retaining the containment refusal.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T11:26:00.975186369Z
+  modified_at: 2026-11-25T11:26:00.975186369Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
