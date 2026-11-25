@@ -76,7 +76,7 @@ pub(crate) struct TierSelection {
     pub selected: Vec<TierRun>,
 }
 
-fn list(
+pub(crate) fn list(
     path: &str,
     field: &str,
     api: &mut impl FnMut(&str) -> Result<Vec<u8>>,

@@ -3782,6 +3782,58 @@ fn watch_change(
     admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
 }
 
+// trace:TASK-3877 | ai:codex
+fn reviewed_fast_settled(
+    root: &Path,
+    repo: &forge::Repository,
+    change: &forge::Change,
+) -> Result<bool> {
+    use crate::forge::tier_runs::{list, outcome};
+    let slug = repo.github_slug().context("GitHub repository is unknown")?;
+    let (_, project) = slug.split_once('/').context("GitHub project is unknown")?;
+    let mut api =
+        |path: &str| crate::forge::landing_ci_api(root, repo, &format!("repos/{project}/{path}"));
+    let path = format!(
+        "actions/workflows/ci.yml/runs?event=pull_request&head_sha={}",
+        change.head
+    );
+    let mut owned = std::collections::BTreeMap::new();
+    for run in list(&path, "workflow_runs", &mut api)? {
+        anyhow::ensure!(
+            run["head_sha"] == change.head && run["event"] == "pull_request",
+            "unexpected CI run"
+        );
+        let owners = run["pull_requests"]
+            .as_array()
+            .context("missing CI owners")?;
+        let [owner] = owners.as_slice() else {
+            return Ok(false);
+        };
+        if owner["number"] == change.id && owner["base"]["ref"] == change.base {
+            let number = run["run_number"]
+                .as_u64()
+                .context("missing CI run number")?;
+            anyhow::ensure!(
+                owned.insert(number, run).is_none(),
+                "duplicate CI run number"
+            );
+        }
+    }
+    for run in owned.into_values().rev() {
+        if crate::forge::tier_runs::bucket(outcome(&run)?) == "pending" {
+            return Ok(false);
+        }
+        let id = run["id"].as_u64().context("missing CI run ID")?;
+        let attempt = run["run_attempt"].as_u64().context("missing CI attempt")?;
+        let path = format!("actions/runs/{id}/attempts/{attempt}/jobs");
+        let jobs = list(&path, "jobs", &mut api)?;
+        if jobs.iter().any(|job| job["name"] == "ci-tier: fast") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 // Both recorders persist the PR and attested SHA in the verdict. Remember
 // a consumed intent while GitHub registers the FULL run.
 // trace:BUG-2729 | ai:codex
@@ -3802,33 +3854,41 @@ pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
         let Some(head) = v.reviewed_sha.as_deref() else {
             return Ok(());
         };
+        // Legacy SHA-only receipts lack base evidence and are retried once.
+        let identity = format!("{head}\n{}", change.base);
         if !v.kind.approves()
             || v.is_closed()
             || v.attestation.as_ref().is_none_or(|a| a.sha != head)
-            || receipts.read(&receipt)?.as_deref() == Some(head.as_bytes())
+            || receipts.read(&receipt)?.as_deref() == Some(identity.as_bytes())
         {
+            return Ok(());
+        }
+        // Discovery can precede publication of a verdict for a newer head.
+        // Consuming that verdict against the old snapshot loses its request.
+        let current = repo.change(root, pr)?;
+        if current.head != change.head || current.base != change.base {
             return Ok(());
         }
         if head != change.head {
             eprintln!("{key}: discarding FULL request for superseded head {head}");
-            return receipts.write(&receipt, head.as_bytes());
+            return receipts.write(&receipt, identity.as_bytes());
         }
-        let rows = repo.commit_checks(root, head)?.checks;
-        let mut fast = rows.iter().filter(|c| c.name == "ci-tier: fast");
-        let incomplete =
-            |c: &crate::forge::CommitCheck| c.workflow_id.is_none() || c.run_in_progress;
-        if fast.clone().next().is_none() || fast.any(incomplete) {
+        if !reviewed_fast_settled(root, &repo, &change)? {
             return Ok(());
         }
         let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
-            if repo.change(root, pr).map_err(|e| e.to_string())?.head != head {
+            let current = repo.change(root, pr).map_err(|e| e.to_string())?;
+            if current.head != head || current.base != change.base {
                 return Err(format!("{key} moved from reviewed head {head}"));
             }
             bounded(root, cli, args)
         })
         .map_err(anyhow::Error::msg)?;
         if edited {
-            receipts.write(&receipt, head.as_bytes())?;
+            let current = repo.change(root, pr)?;
+            if current.head == head && current.base == change.base {
+                receipts.write(&receipt, identity.as_bytes())?;
+            }
         }
         Ok(())
     };
@@ -3850,13 +3910,17 @@ pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, reco
     let script = format!(
         r#"#!/bin/sh
 state=$(cat state)
+base=$(cat base 2>/dev/null || echo main)
 case "$*" in
   *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
-  *"pr list"*) echo '[{change}]';;
-  *statusCheckRollup*) case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
-  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/";;
-  *check-runs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"check_runs":[]}}'; else echo '{{"total_count":1,"check_runs":[{marker}]}}'; fi;;
-  *actions/runs*) printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","status":"%s"}}' "$state";;
+  *"pr list"*) if [ "$state" = stale ]; then echo '[{change}]' | sed "s/{head}/$(cat old)/"; else echo '[{change}]' | sed "s/main/$base/"; fi;;
+  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed|newer) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/;s/main/$base/";;
+  *runs/1/attempts/1/jobs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"jobs":[]}}'; else echo '{{"total_count":1,"jobs":[{marker}]}}'; fi;;
+  *workflows/ci.yml/runs*) owner={pr}; conclusion=null; extra=; count=1
+    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; newer) extra=',{{"id":2,"run_number":2,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":{pr},"base":{{"ref":"main"}}}}],"status":"queued"}}'; count=2;; esac
+    case "$state" in absent|newer|foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; esac
+    printf '{{"total_count":%s,"workflow_runs":[{{"id":1,"run_number":1,"run_attempt":1,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":%s,"base":{{"ref":"%s"}}}}],"status":"%s","conclusion":%s}}%s]}}' "$count" "$owner" "$base" "$state" "$conclusion" "$extra";;
   *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
   *"pr edit"*) echo "$*" >> edits;;
   *) exit 1;;
@@ -3869,19 +3933,40 @@ esac"#
     record();
     assert!(!root.join("edits").exists());
     let replacement = "a".repeat(40);
-    for state in ["absent", "queued", "in_progress", "moved", "done", "again"] {
-        let moved = state == "moved";
+    write("old", &replacement);
+    for state in [
+        "stale",
+        "absent",
+        "queued",
+        "newer",
+        "in_progress",
+        "foreign",
+        "retargeted",
+        "missing",
+        "moved",
+        "done",
+        "again",
+    ] {
         let completed = matches!(state, "done" | "again");
-        let settled = completed || moved;
-        write("state", if settled { "completed" } else { state });
-        write("current", if moved { &replacement } else { head });
+        write("state", if completed { "completed" } else { state });
+        write("current", head);
         let result = promote_approved_heads(root);
-        assert_eq!(result.is_err(), moved, "{result:?}");
+        assert_eq!(
+            result.is_err(),
+            matches!(state, "missing" | "moved"),
+            "{state}: {result:?}"
+        );
         assert_eq!(root.join("edits").exists(), completed);
     }
     let edits = std::fs::read_to_string(root.join("edits")).unwrap();
     let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
     assert_eq!(edits.trim(), expected);
+    write("base", "release");
+    promote_approved_heads(root).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.join("edits")).unwrap(),
+        format!("{expected}\n{expected}\n")
+    );
 }
 
 // trace:TASK-1993 | ai:claude
