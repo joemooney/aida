@@ -26,10 +26,12 @@ fn contained_request_on_codex_or_agy_is_refused_and_claude_passes() {
             "{msg}"
         );
         assert!(msg.contains(vendor.as_str()), "{msg}");
-        assert!(
-            msg.contains("--vendor claude"),
-            "hint names the recovery: {msg}"
-        );
+        if vendor == HeadlessVendor::Codex {
+            assert!(msg.contains("aida init --agent codex"), "{msg}");
+            assert!(!msg.contains("--vendor claude"), "{msg}");
+        } else {
+            assert!(msg.contains("--vendor claude"), "{msg}");
+        }
         // Uncontained launches on those vendors are untouched.
         session::require_vendor_containment(vendor, false, "queue-work session").unwrap();
     }

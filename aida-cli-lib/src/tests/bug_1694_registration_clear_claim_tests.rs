@@ -187,7 +187,7 @@ fn bug_1694_unreadable_repository_state_declines_registration_clear() {
     let not_a_repo = tmp.path().join("not-a-repo");
     std::fs::create_dir_all(&not_a_repo).unwrap();
     let missing = tmp.path().join("missing-wt");
-    let outcome = clear_missing_worktree_registration(&not_a_repo, &missing, || {}, || {});
+    let outcome = clear_missing_worktree_registration(&not_a_repo, &missing, None, || {}, || {});
     assert_eq!(outcome, RegistrationClearOutcome::Declined);
 }
 
@@ -198,6 +198,135 @@ fn bug_1694_unreadable_repository_state_declines_registration_clear() {
 fn bug_1694_absent_worktrees_dir_reports_no_registration() {
     let (tmp, root) = create_fixture_repo();
     let missing = tmp.path().join("missing-wt");
-    let outcome = clear_missing_worktree_registration(&root, &missing, || {}, || {});
+    let outcome = clear_missing_worktree_registration(&root, &missing, None, || {}, || {});
     assert_eq!(outcome, RegistrationClearOutcome::NoRegistration);
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_missing_checkout_preserves_registered_index() {
+    let (tmp, root) = create_fixture_repo();
+    let wt = tmp.path().join("linked");
+    git(&root, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+    let tip = git(&wt, &["rev-parse", "HEAD"]);
+    let clean = std::fs::read(root.join(".git/worktrees/linked/index")).unwrap();
+    std::fs::write(wt.join("staged-only"), "unique content").unwrap();
+    git(&wt, &["add", "staged-only"]);
+    let admin = root.join(".git/worktrees/linked");
+    let index = admin.join("index");
+    let staged = std::fs::read(&index).unwrap();
+    std::fs::remove_dir_all(&wt).unwrap();
+    let clear = || clear_missing_worktree_registration(&root, &wt, Some(&tip), || {}, || {});
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert_eq!(std::fs::read(&index).unwrap(), staged);
+    assert!(!wt.exists());
+
+    for preview in [true, false] {
+        let rows = crate::mail_retention::prune_removed_sources(&root, false, preview).unwrap();
+        assert_eq!(rows[0].1, crate::mail_retention::PruneOutcome::Declined);
+    }
+    let sibling = tmp.path().join("clean-sibling");
+    git(&root, &["worktree", "add", "-q", sibling.to_str().unwrap()]);
+    std::fs::remove_dir_all(sibling).unwrap();
+    crate::worktree_gc::session_gc_at(root.clone(), true, false).unwrap();
+    assert!(root.join(".git/worktrees/clean-sibling/index").is_file());
+    crate::worktree_gc::session_gc_at(root.clone(), false, true).unwrap();
+    assert!(!root.join(".git/worktrees/clean-sibling").exists());
+    assert_eq!(std::fs::read(&index).unwrap(), staged);
+
+    std::fs::write(&index, &clean).unwrap();
+    let lock = admin.join("index.lock");
+    std::fs::write(&lock, &staged).unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert_eq!(std::fs::read(&lock).unwrap(), staged);
+    std::fs::remove_file(lock).unwrap();
+
+    let mut damaged = clean;
+    *damaged.last_mut().unwrap() ^= 1;
+    std::fs::write(&index, &damaged).unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert_eq!(std::fs::read(&index).unwrap(), damaged);
+    std::fs::write(&index, "corrupt index").unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    std::fs::remove_file(index).unwrap();
+    assert_eq!(clear(), RegistrationClearOutcome::Declined);
+    assert!(admin.exists());
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_retains_split_index_and_shared_snapshot() {
+    let (tmp, root) = create_fixture_repo();
+    let wt = tmp.path().join("split");
+    git(&root, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+    git(&wt, &["update-index", "--split-index"]);
+    let shared = wt
+        .join(git(&wt, &["rev-parse", "--shared-index-path"]))
+        .canonicalize()
+        .unwrap();
+    let snapshot = std::fs::read(&shared).unwrap();
+    std::fs::remove_dir_all(&wt).unwrap();
+    assert_eq!(
+        clear_missing_worktree_registration(&root, &wt, None, || {}, || {}),
+        RegistrationClearOutcome::Declined
+    );
+    assert_eq!(std::fs::read(shared).unwrap(), snapshot);
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_gc_rechecks_after_scan() {
+    let (tmp, root) = create_fixture_repo();
+    let wt = tmp.path().join("worktree-agent-staged");
+    git(&root, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+    crate::mail_retention::on_before_guarded_removal(move || {
+        std::fs::write(wt.join("only"), "staged").unwrap();
+        git(&wt, &["add", "only"]);
+        std::fs::remove_dir_all(wt).unwrap();
+    });
+    crate::worktree_gc::session_gc_at(root.clone(), false, true).unwrap();
+    assert_eq!(
+        git(
+            &root,
+            &[
+                "--git-dir=.git/worktrees/worktree-agent-staged",
+                "show",
+                ":only"
+            ]
+        ),
+        "staged"
+    );
+}
+
+#[test]
+fn bug_2749_compact_and_store_reattach_preserve_staged_registrations() {
+    let (_tmp, root) = create_fixture_repo();
+    let attach = || aida_core::git_ops::create_store_worktree(&root, ".aida-store", "aida-store");
+    git(&root, &["branch", "aida-store"]);
+    let store = attach().unwrap();
+    let sibling = root.join("sibling");
+    git(&root, &["worktree", "add", "-q", sibling.to_str().unwrap()]);
+    std::fs::write(sibling.join("only"), "unique").unwrap();
+    git(&sibling, &["add", "only"]);
+    let index = root.join(".git/worktrees/sibling/index");
+    let staged = std::fs::read(&index).unwrap();
+    std::fs::remove_dir_all(sibling).unwrap();
+    git(&root, &["config", "gc.worktreePruneExpire", "now"]);
+    crate::store_cmd::store_compact_at(&store, false, false).unwrap();
+    std::fs::remove_dir_all(&store).unwrap();
+    assert_eq!(attach().unwrap(), store);
+    assert_eq!(std::fs::read(index).unwrap(), staged);
+    let store_index =
+        PathBuf::from(git(&store, &["rev-parse", "--absolute-git-dir"])).join("index");
+    std::fs::write(store.join("only"), "store staged").unwrap();
+    git(&store, &["add", "only"]);
+    std::fs::remove_dir_all(&store).unwrap();
+    for bytes in [std::fs::read(&store_index).unwrap(), b"corrupt".to_vec()] {
+        std::fs::write(&store_index, &bytes).unwrap();
+        assert!(attach()
+            .unwrap_err()
+            .to_string()
+            .contains("restore the checkout"));
+        assert_eq!(std::fs::read(&store_index).unwrap(), bytes);
+    }
 }

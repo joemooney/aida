@@ -16120,9 +16120,7 @@ branch (or it is detached/branchless), the worktree is CLEAN, it is NOT locked, 
 Removal uses `git worktree remove` (NOT --force), so git's own safety checks add a second guard; a
 worktree git refuses to remove is skipped, never forced.
 
-Always runs the lossless `git worktree prune` first (clears bookkeeping for already-deleted worktree
-dirs). Never runs on the hot `aida status` read path — only on this explicit operator command and on
-`aida session end`.
+Applied cleanup checks missing registrations for recoverable staged changes.
 
 Usage: aida session gc [OPTIONS]
 
@@ -22839,6 +22837,12 @@ Options:
       --anchor-findings <FINDINGS_JSON>
           Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact
           1-based `(start_line, end_line)` spans on the target revision
+
+      --sarif <PATH>
+          Write a SARIF 2.1.0 report inside the repository
+
+      --fail-on <SEVERITY>
+          Exit with an error when any finding meets or exceeds this severity
 
       --json
           Emit machine-readable JSON output
@@ -56250,6 +56254,11 @@ Working on aida itself
         "help": "Additional comma-separated glob patterns to exclude from review"
       },
       {
+        "name": "fail-on",
+        "takes_value": true,
+        "help": "Exit with an error when any finding meets or exceeds this severity"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -56278,6 +56287,11 @@ Working on aida itself
         "name": "pr",
         "takes_value": true,
         "help": "Pull spec IDs and base/head refs from PR/MR number N"
+      },
+      {
+        "name": "sarif",
+        "takes_value": true,
+        "help": "Write a SARIF 2.1.0 report inside the repository"
       },
       {
         "name": "scan",

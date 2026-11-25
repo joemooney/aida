@@ -139,7 +139,6 @@ fn bounded_diagnostic(text: &str) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Identity {
     // Absent fields are omitted only so a legacy record round-trips
     // unchanged. New captures always stamp both, so state this binary writes
@@ -314,7 +313,6 @@ enum Phase {
 /// watchers never signal twice.
 // trace:TASK-1945 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 struct Supersede {
     by: String,
     requested_at: chrono::DateTime<chrono::Utc>,
@@ -326,8 +324,12 @@ struct Supersede {
     diagnostic: Option<String>,
 }
 
+// trace:BUG-2758 | ai:codex
+fn is_zero_retries(count: &u8) -> bool {
+    *count == 0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Attempt {
     // Pin distributed mode through child launch, even if configuration vanishes.
     // trace:STORY-2492 | ai:codex
@@ -366,7 +368,7 @@ struct Attempt {
     #[serde(default)]
     setup_retry: bool,
     // trace:BUG-2720 | ai:codex
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero_retries")]
     pickup_retries: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pickup_retry_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -451,13 +453,11 @@ impl Attempt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Notice {
     message: aida_core::mailbox::Message,
     sent: bool,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Entry {
     attempts: Vec<Attempt>,
     // Never written: retained rounds live in history/<key>.json. Still read
@@ -508,14 +508,12 @@ impl Entry {
 /// One readiness report: the head it judged, the verdict line, and when.
 // trace:TASK-1945 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 struct Reported {
     head: String,
     line: String,
     checked_at: chrono::DateTime<chrono::Utc>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct State {
     version: u8,
     repository: String,
@@ -782,11 +780,12 @@ impl Store {
         self.load_unchecked().context(GlobalState)
     }
     fn load_unchecked(&self) -> Result<State> {
+        let initialized = self.dir.read("initialized")?.is_some();
         let state = match self.dir.read(STATE)? {
             Some(bytes) => serde_json::from_slice::<State>(&bytes)
                 .context("invalid review-watch state; inspect .aida/review-watch/state.json")?,
             None => {
-                anyhow::ensure!(self.dir.read("initialized")?.is_none(), "review-watch state is missing after initialization; inspect existing reviews before recovery");
+                anyhow::ensure!(!initialized, "review-watch state is missing after initialization; inspect existing reviews before recovery");
                 State {
                     version: 1,
                     repository: self.repository.clone(),
@@ -1193,6 +1192,10 @@ impl Store {
             .unwrap_or_else(|| "advisor".to_string())
     }
     fn round_for(&self, key: &str, attempt: &Attempt) -> Result<usize> {
+        let retained = self.retained(key)?;
+        let history = self.history_for_head(key, &attempt.head)?;
+        let fast = crate::gate::review_freshness::for_head(&self.root, &attempt.head)
+            == crate::gate::review_freshness::Freshness::Fast;
         self.transaction(key, |state| {
             let entry = state
                 .entries
@@ -1205,7 +1208,10 @@ impl Store {
                     .any(|a| a.token == attempt.token && a.head == attempt.head && admitted(a)),
                 "review reservation changed before queue work"
             );
-            let history = self.history_for_head(key, &attempt.head)?;
+            anyhow::ensure!(
+                self.retained(key)? == retained,
+                "review history changed before queue work"
+            );
             anyhow::ensure!(
                 !history.conclusive(&attempt.head),
                 "head already has a recorded review; route further work to the advisor"
@@ -1216,12 +1222,7 @@ impl Store {
                 "{}-round review cap reached outside watcher; route further work to the advisor",
                 self.max_rounds
             );
-            self.retain(
-                key,
-                history.all_blocking_keys(),
-                crate::gate::review_freshness::for_head(&self.root, &attempt.head)
-                    == crate::gate::review_freshness::Freshness::Fast,
-            )?;
+            self.retain(key, history.all_blocking_keys(), fast)?;
             Ok(used + 1)
         })
     }
@@ -1647,6 +1648,79 @@ enum Action {
     Skip(String),
 }
 
+// Pin filesystem generations before Git inventories ownership. Revalidation
+// needs only stat: the directories cover membership changes, each HEAD covers
+// branch switches, and leases plus their checkout paths cover private clones.
+// trace:BUG-2757 | ai:codex
+type PathStamp = Option<(u64, u64, i64, i64)>;
+
+fn path_stamp(path: &Path) -> Result<PathStamp> {
+    match std::fs::metadata(path) {
+        Ok(m) => Ok(Some((m.dev(), m.ino(), m.ctime(), m.ctime_nsec()))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+struct WorktreeProbe(Vec<(PathBuf, PathStamp)>);
+
+impl WorktreeProbe {
+    fn capture(root: &Path, branch: &str) -> Result<Self> {
+        let mut paths = Vec::new();
+        let mut pin = |path: PathBuf| -> Result<PathStamp> {
+            anyhow::ensure!(paths.len() < 4096, "worktree recheck inventory exceeded");
+            let stamp = path_stamp(&path)?;
+            paths.push((path, stamp));
+            Ok(stamp)
+        };
+        pin(root.join(".git"))?;
+        if let Some(gitdir) = aida_core::git_ops::worktree_gitdir_path(root) {
+            pin(gitdir.join("commondir"))?;
+        }
+        let common = crate::internal_cmd::git_common_dir(root)
+            .context("cannot locate worktree inventory")?;
+        anyhow::ensure!(pin(common.join("HEAD"))?.is_some(), "missing common HEAD");
+        for (dir, heads) in [
+            (common.join("worktrees"), true),
+            (crate::leases_dir(root), false),
+        ] {
+            if pin(dir.clone())?.is_some() {
+                for entry in std::fs::read_dir(dir)? {
+                    let path = entry?.path();
+                    if heads {
+                        pin(path.join("HEAD"))?;
+                    } else if path.extension().is_some_and(|e| e == "toml") {
+                        pin(path)?;
+                    }
+                }
+            }
+        }
+        for lease in crate::list_leases(root) {
+            if lease.branch == branch && lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+                pin(lease.worktree_path)?;
+            }
+        }
+        Ok(Self(paths))
+    }
+
+    fn revalidate(&self) -> Result<()> {
+        for (path, stamp) in &self.0 {
+            anyhow::ensure!(
+                path_stamp(path)? == *stamp,
+                "worktree ownership changed; retry next pass"
+            );
+        }
+        Ok(())
+    }
+}
+
+fn held_tree(diagnostic: &str, branch: &str) -> bool {
+    diagnostic.contains(&format!("branch `{branch}` is held by worktree "))
+        || diagnostic.contains(&format!(
+            "branch `{branch}` is held by a contained seat's private clone "
+        ))
+}
+
 /// Recheck a transient terminal refusal before spending another pickup attempt.
 /// None leaves ordinary review, fetch and setup outcomes to their existing policies.
 // trace:BUG-2720 | ai:codex
@@ -1655,6 +1729,7 @@ fn pickup_retry(
     key: &str,
     attempt: &mut Attempt,
     conclusive: bool,
+    tree_probe: Option<&(String, Result<WorktreeProbe>)>,
 ) -> Option<std::result::Result<(), String>> {
     if attempt.phase != Phase::Exited
         || attempt.reviewer_spawning
@@ -1666,10 +1741,7 @@ fn pickup_retry(
     }
     let diagnostic = attempt.diagnostic.as_deref()?;
     let branch = key.to_ascii_lowercase();
-    let held_tree = diagnostic.contains(&format!("branch `{branch}` is held by worktree "))
-        || diagnostic.contains(&format!(
-            "branch `{branch}` is held by a contained seat's private clone "
-        ));
+    let held_tree = held_tree(diagnostic, &branch);
     if !held_tree && !diagnostic.contains("lock busy") {
         return None;
     }
@@ -1697,7 +1769,13 @@ fn pickup_retry(
     // The receipt retains the producer's lock name. Only probe known locks
     // relative to this project, never a path supplied by diagnostic text.
     let available = if held_tree {
-        crate::queue_cmd::preflight_queue_work_branch(&store.root, Some(&branch))
+        match tree_probe {
+            Some((token, result)) if token == &attempt.token => result
+                .as_ref()
+                .map_err(|error| anyhow::anyhow!("{error:#}"))
+                .and_then(WorktreeProbe::revalidate),
+            _ => return Some(Err("pickup receipt changed; retry next pass".into())),
+        }
     } else if diagnostic.contains("handle allocation lock busy; retry after agent gc") {
         crate::agent_handle::lock_namespace_within(&store.root, std::time::Duration::ZERO).map(drop)
     } else {
@@ -1821,6 +1899,20 @@ fn select_with_coverage(
     max: u8,
     coverage: impl FnOnce() -> Option<String>,
 ) -> Result<(Action, Admission)> {
+    select_with_probes(store, change, vendor, max, coverage, |branch| {
+        crate::queue_cmd::preflight_queue_work_branch(&store.root, Some(branch))
+    })
+}
+
+// trace:BUG-2757 | ai:codex
+fn select_with_probes(
+    store: &Store,
+    change: &forge::Change,
+    vendor: Option<String>,
+    max: u8,
+    coverage: impl FnOnce() -> Option<String>,
+    probe_branch: impl FnOnce(&str) -> Result<()>,
+) -> Result<(Action, Admission)> {
     let key = change.key();
     // Resolve remote proof evidence before taking the shared runtime lock.
     // Suppression is review coverage only: readiness still checks CI at H2.
@@ -1828,9 +1920,37 @@ fn select_with_coverage(
     // Whether this head's staleness keeps it from review under the project's
     // `[review] stale_base` policy. trace:STORY-2821 | ai:claude
     let overlap = stale_refused(&store.root, change)?;
-    // The pause is a record read before, never a lock held inside, the
-    // admission transaction: it cannot block train reservations.
-    // trace:BUG-2650 | ai:claude
+    let retained = store.retained(&key)?;
+    let history = store.history_for_head(&key, &change.head)?;
+    let fast = crate::gate::review_freshness::for_head(&store.root, &change.head)
+        == crate::gate::review_freshness::Freshness::Fast;
+    let waiting = if history.contains(&change.head) && !history.conclusive(&change.head) {
+        review_publication::waiting_retry_at(&store.root, &key, &change.head)?
+    } else {
+        None
+    };
+    let recipient = overlap.then(|| store.notice_recipient(&change.author));
+    let branch = key.to_ascii_lowercase();
+    let tree_probe = store
+        .load()?
+        .entries
+        .get(&key)
+        .and_then(|entry| entry.attempts.iter().find(|a| a.head == change.head))
+        .filter(|a| {
+            a.phase == Phase::Exited
+                && a.pickup_retries < 3
+                && a.pickup_retry_at.is_some_and(|at| at <= chrono::Utc::now())
+                && a.diagnostic
+                    .as_deref()
+                    .is_some_and(|d| held_tree(d, &branch))
+        })
+        .map(|a| {
+            let result = WorktreeProbe::capture(&store.root, &branch).and_then(|probe| {
+                probe_branch(&branch)?;
+                Ok(probe)
+            });
+            (a.token.clone(), result)
+        });
     let paused = pause::current(store, chrono::Utc::now()).context(GlobalState)?;
     let mut outcome = Admission::Settled;
     let action = store.transaction(&key, |state| {
@@ -1857,6 +1977,9 @@ fn select_with_coverage(
         let repository = state.repository.clone();
         let holders = capacity_holders(state);
         let entry = state.entries.entry(key.clone()).or_default();
+        if tree_probe.as_ref().is_some_and(|(token, _)| !entry.attempts.iter().any(|a| &a.token == token)) {
+            return Ok(Action::Skip("pickup receipt changed; retry next pass".into()));
+        }
         // A notice is about one head; once the change moved on it is moot,
         // and keeping one per stale head grew to the 256 cap and then failed
         // every transaction for the change. trace:TASK-1955 | ai:claude (TASK-2064)
@@ -1865,12 +1988,9 @@ fn select_with_coverage(
         if entry.update.as_ref().is_some_and(|u| u.head != change.head) {
             entry.update = None;
         }
-        let history = store.history_for_head(&key, &change.head)?;
-        store.retain(&key, history.all_blocking_keys(),
-            crate::gate::review_freshness::for_head(&store.root, &change.head)
-                == crate::gate::review_freshness::Freshness::Fast)?;
-        if overlap {
-            let recipient = store.notice_recipient(&change.author);
+        anyhow::ensure!(store.retained(&key)? == retained, "review history changed; retry next pass");
+        store.retain(&key, history.all_blocking_keys(), fast)?;
+        if let Some(recipient) = recipient {
             let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
                 message: stale_message(&repository, &key, change, &recipient), sent: false,
             });
@@ -1922,7 +2042,7 @@ fn select_with_coverage(
             }
             no_verdict_attempts = attempt.no_verdict_attempts;
             pickup_retries = attempt.pickup_retries;
-            if let Some(result) = pickup_retry(store, &key, attempt, history.conclusive(&change.head)) {
+            if let Some(result) = pickup_retry(store, &key, attempt, history.conclusive(&change.head), tree_probe.as_ref()) {
                 if let Err(reason) = result {
                     outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(format!("held by exited attempt: {reason}")));
@@ -1974,7 +2094,7 @@ fn select_with_coverage(
         // A synced WAITING sets one deadline for every watcher, local attempt or not.
         // trace:BUG-2521 | ai:claude
         if history.contains(&change.head) {
-            if let Some(retry_at) = review_publication::waiting_retry_at(&store.root, &key, &change.head)? {
+            if let Some(retry_at) = waiting {
                 if chrono::Utc::now() < retry_at {
                     return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
                 }
@@ -2094,13 +2214,10 @@ fn probe_unneeded_with_coverage(
     if history.blocking() >= store.max_rounds {
         // A capped head never reaches selection, so preserve its consumed
         // rounds here before returning the skip. trace:TASK-3808 | ai:codex
+        let fast = crate::gate::review_freshness::for_head(&store.root, head)
+            == crate::gate::review_freshness::Freshness::Fast;
         store.transaction(&key, |_| {
-            store.retain(
-                &key,
-                history.all_blocking_keys(),
-                crate::gate::review_freshness::for_head(&store.root, head)
-                    == crate::gate::review_freshness::Freshness::Fast,
-            )
+            store.retain(&key, history.all_blocking_keys(), fast)
         })?;
         return Ok(Some(store.round_cap_reason()));
     }
@@ -3665,6 +3782,58 @@ fn watch_change(
     admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
 }
 
+// trace:TASK-3877 | ai:codex
+fn reviewed_fast_settled(
+    root: &Path,
+    repo: &forge::Repository,
+    change: &forge::Change,
+) -> Result<bool> {
+    use crate::forge::tier_runs::{list, outcome};
+    let slug = repo.github_slug().context("GitHub repository is unknown")?;
+    let (_, project) = slug.split_once('/').context("GitHub project is unknown")?;
+    let mut api =
+        |path: &str| crate::forge::landing_ci_api(root, repo, &format!("repos/{project}/{path}"));
+    let path = format!(
+        "actions/workflows/ci.yml/runs?event=pull_request&head_sha={}",
+        change.head
+    );
+    let mut owned = std::collections::BTreeMap::new();
+    for run in list(&path, "workflow_runs", &mut api)? {
+        anyhow::ensure!(
+            run["head_sha"] == change.head && run["event"] == "pull_request",
+            "unexpected CI run"
+        );
+        let owners = run["pull_requests"]
+            .as_array()
+            .context("missing CI owners")?;
+        let [owner] = owners.as_slice() else {
+            return Ok(false);
+        };
+        if owner["number"] == change.id && owner["base"]["ref"] == change.base {
+            let number = run["run_number"]
+                .as_u64()
+                .context("missing CI run number")?;
+            anyhow::ensure!(
+                owned.insert(number, run).is_none(),
+                "duplicate CI run number"
+            );
+        }
+    }
+    for run in owned.into_values().rev() {
+        if crate::forge::tier_runs::bucket(outcome(&run)?) == "pending" {
+            return Ok(false);
+        }
+        let id = run["id"].as_u64().context("missing CI run ID")?;
+        let attempt = run["run_attempt"].as_u64().context("missing CI attempt")?;
+        let path = format!("actions/runs/{id}/attempts/{attempt}/jobs");
+        let jobs = list(&path, "jobs", &mut api)?;
+        if jobs.iter().any(|job| job["name"] == "ci-tier: fast") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 // Both recorders persist the PR and attested SHA in the verdict. Remember
 // a consumed intent while GitHub registers the FULL run.
 // trace:BUG-2729 | ai:codex
@@ -3685,33 +3854,41 @@ pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
         let Some(head) = v.reviewed_sha.as_deref() else {
             return Ok(());
         };
+        // Legacy SHA-only receipts lack base evidence and are retried once.
+        let identity = format!("{head}\n{}", change.base);
         if !v.kind.approves()
             || v.is_closed()
             || v.attestation.as_ref().is_none_or(|a| a.sha != head)
-            || receipts.read(&receipt)?.as_deref() == Some(head.as_bytes())
+            || receipts.read(&receipt)?.as_deref() == Some(identity.as_bytes())
         {
+            return Ok(());
+        }
+        // Discovery can precede publication of a verdict for a newer head.
+        // Consuming that verdict against the old snapshot loses its request.
+        let current = repo.change(root, pr)?;
+        if current.head != change.head || current.base != change.base {
             return Ok(());
         }
         if head != change.head {
             eprintln!("{key}: discarding FULL request for superseded head {head}");
-            return receipts.write(&receipt, head.as_bytes());
+            return receipts.write(&receipt, identity.as_bytes());
         }
-        let rows = repo.commit_checks(root, head)?.checks;
-        let mut fast = rows.iter().filter(|c| c.name == "ci-tier: fast");
-        let incomplete =
-            |c: &crate::forge::CommitCheck| c.workflow_id.is_none() || c.run_in_progress;
-        if fast.clone().next().is_none() || fast.any(incomplete) {
+        if !reviewed_fast_settled(root, &repo, &change)? {
             return Ok(());
         }
         let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
-            if repo.change(root, pr).map_err(|e| e.to_string())?.head != head {
+            let current = repo.change(root, pr).map_err(|e| e.to_string())?;
+            if current.head != head || current.base != change.base {
                 return Err(format!("{key} moved from reviewed head {head}"));
             }
             bounded(root, cli, args)
         })
         .map_err(anyhow::Error::msg)?;
         if edited {
-            receipts.write(&receipt, head.as_bytes())?;
+            let current = repo.change(root, pr)?;
+            if current.head == head && current.base == change.base {
+                receipts.write(&receipt, identity.as_bytes())?;
+            }
         }
         Ok(())
     };
@@ -3733,13 +3910,17 @@ pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, reco
     let script = format!(
         r#"#!/bin/sh
 state=$(cat state)
+base=$(cat base 2>/dev/null || echo main)
 case "$*" in
   *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
-  *"pr list"*) echo '[{change}]';;
-  *statusCheckRollup*) case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
-  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/";;
-  *check-runs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"check_runs":[]}}'; else echo '{{"total_count":1,"check_runs":[{marker}]}}'; fi;;
-  *actions/runs*) printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","status":"%s"}}' "$state";;
+  *"pr list"*) if [ "$state" = stale ]; then echo '[{change}]' | sed "s/{head}/$(cat old)/"; else echo '[{change}]' | sed "s/main/$base/"; fi;;
+  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed|newer) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/;s/main/$base/";;
+  *runs/1/attempts/1/jobs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"jobs":[]}}'; else echo '{{"total_count":1,"jobs":[{marker}]}}'; fi;;
+  *workflows/ci.yml/runs*) owner={pr}; conclusion=null; extra=; count=1
+    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; newer) extra=',{{"id":2,"run_number":2,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":{pr},"base":{{"ref":"main"}}}}],"status":"queued"}}'; count=2;; esac
+    case "$state" in absent|newer|foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; esac
+    printf '{{"total_count":%s,"workflow_runs":[{{"id":1,"run_number":1,"run_attempt":1,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":%s,"base":{{"ref":"%s"}}}}],"status":"%s","conclusion":%s}}%s]}}' "$count" "$owner" "$base" "$state" "$conclusion" "$extra";;
   *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
   *"pr edit"*) echo "$*" >> edits;;
   *) exit 1;;
@@ -3752,19 +3933,40 @@ esac"#
     record();
     assert!(!root.join("edits").exists());
     let replacement = "a".repeat(40);
-    for state in ["absent", "queued", "in_progress", "moved", "done", "again"] {
-        let moved = state == "moved";
+    write("old", &replacement);
+    for state in [
+        "stale",
+        "absent",
+        "queued",
+        "newer",
+        "in_progress",
+        "foreign",
+        "retargeted",
+        "missing",
+        "moved",
+        "done",
+        "again",
+    ] {
         let completed = matches!(state, "done" | "again");
-        let settled = completed || moved;
-        write("state", if settled { "completed" } else { state });
-        write("current", if moved { &replacement } else { head });
+        write("state", if completed { "completed" } else { state });
+        write("current", head);
         let result = promote_approved_heads(root);
-        assert_eq!(result.is_err(), moved, "{result:?}");
+        assert_eq!(
+            result.is_err(),
+            matches!(state, "missing" | "moved"),
+            "{state}: {result:?}"
+        );
         assert_eq!(root.join("edits").exists(), completed);
     }
     let edits = std::fs::read_to_string(root.join("edits")).unwrap();
     let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
     assert_eq!(edits.trim(), expected);
+    write("base", "release");
+    promote_approved_heads(root).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.join("edits")).unwrap(),
+        format!("{expected}\n{expected}\n")
+    );
 }
 
 // trace:TASK-1993 | ai:claude
