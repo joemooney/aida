@@ -14,12 +14,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T03:03:00.704105673Z
-modified_at: 2026-11-25T03:03:49.892835355Z
+modified_at: 2026-11-25T03:32:52.820333793Z
 req_type: Bug
 tags:
 - data-loss
 - strict
 - worktrees
+comments:
+- id: 01a210c3-6dd4-7681-9968-bd81cc82de73
+  author: joe
+  content: |-
+    WIDENED (advisor-122 2026-11-24 20:37, on approving #4537 BUG-2749 r3 at the cap): "every worktree-registration removal path is guarded". Additional ACs (sketch first, then <=300-line slices):
+    (a) damaged/unreadable-gitdir-backlink prune, which git does BEFORE checking expiry: never call `git worktree prune` on a store/linked repo; run gc.auto=0 / maintenance.auto=false on ALL our fetches, not only in-transaction ones.
+    (b) docs_sweep.rs:1738's fetch runs outside the transaction with auto-maintenance on.
+    (c) docs_sweep.rs:1844's direct `git worktree remove --force` must route through guarded removal.
+    (d) the live-removal sample→git race (the original AC1/AC2).
+    (e) p2: worktree.useRelativePaths backlinks are resolved relative to the admin dir.
+    (f) p2: GC dry-run REPORTS the registration cleanup it would do.
+    Sketch direction: ONE guarded-removal choke point + a ratchet that bans raw `worktree remove` / `worktree prune` elsewhere.
+  created_at: 2026-11-25T03:32:52.820333793Z
+  modified_at: 2026-11-25T03:32:52.820333793Z
 history:
 - id: 01a210a8-d5f3-7f70-837f-115f437b6824
   author: joe
