@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T20:30:39.493138460Z
+modified_at: 2026-11-25T20:30:55.194487601Z
 req_type: Story
 tags:
 - landing
@@ -1421,6 +1421,22 @@ comments:
   content: 'Fresh slice opened as #4569 (replaces the closed #4401; branch story-2897-fresh).'
   created_at: 2026-11-25T10:29:40.657471412Z
   modified_at: 2026-11-25T10:29:40.657471412Z
+- id: 01a21467-77ea-7273-b8ef-4859f652f5b4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4569):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ee39399467af
+    Recorded: 2026-11-25T20:23:54.770968409+00:00
+    Findings:
+    1. [blocking_tier: untested-path; class: test-gap; file: aida-cli-lib/src/gate/review_verdict.rs] draft_matches_record (gate/review_verdict.rs ~3446) now also compares the record's `needs` with the draft's. No test covers this. The only updated test (bug2564_own_handoff_tests) passes `needs: &[]`. Add tests that (a) a record whose needs differ from the draft is not treated as this draft's replay and (b) a legacy record with no `needs` key matches only a draft with empty needs.
+    2. [blocking_tier: p2] `aida review submit-draft` does not check needs under the review-gated policy. parse_draft/validate_draft (review_draft.rs ~291-498) never call validate_waiting_needs. A review-gated `waiting` draft with no needs, with only `check:Build`, or with a whitespace-padded detail (serde Deserialize skips the trimming FromStr does) is accepted at submission. The parent's record_reviewer_draft then refuses it after the reviewer has exited, so the round is lost. This contradicts the contract that submission validates under the launching project's policy. Run validate_waiting_needs in validate_draft and add a test.
+    3. [blocking_tier: p3] --needs is accepted and persisted on non-WAITING verdicts. validate_waiting_needs runs only when kind == Waiting (review_commands.rs ~3062), but verdict_obj['needs'] is written unconditionally (~3337) and shown by `review verdict` (~4281). So an APPROVED or CHANGES REQUESTED record can carry stray dependencies. Refuse non-empty needs unless the verdict is waiting.
+    4. [blocking_tier: p3] The specificity check refuses an aggregate detail only when kind == check (review_commands.rs ~217-222). `--needs test:ci-tier:full`, `--needs artifact:Build` or `--needs actor:CI` therefore pass as specific, although the docs say an aggregate check or CI tier marker alone is refused. Apply the aggregate test to the detail whatever the kind, or document the narrower rule.
+    5. [blocking_tier: test-gap] Several new paths have no tests: main_watch::open_episode (the 40-hex red_sha guard, empty failed list and blank-name refusals); the copy of needs into the PR handshake (review_commands.rs ~3498); the `needs:` line in `review verdict` and the `needs: []` default in the JSON body; and ci_info in the readiness wake line and wake_message (review_watch.rs ~4397, review_watch_ready.rs ~373). Readiness is report-only, so this is a follow-up.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T20:30:54.954533050Z
+  modified_at: 2026-11-25T20:30:54.954533050Z
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
