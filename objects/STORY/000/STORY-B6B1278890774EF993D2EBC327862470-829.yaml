@@ -2,26 +2,15 @@ id: 01a21102-e2f1-7e62-9354-693f46b82d22
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-829
 agreed_id: STORY-3120
 title: Turnkey PR/MR & CI Review Runner and Exporter (aida review prepare --sarif / --post-comment / --run)
-description: |-
-  ## Summary
-  Extend `aida review prepare` into a turnkey PR/MR and CI review surface for GitHub and GitLab (the AIDA-native equivalent of running an external review CLI in CI):
-  1. SARIF 2.1.0 Export (`--sarif <PATH>`): Converts anchored `RawReviewFinding` entries (`aida_core::review_engine::findings_to_sarif_json`) into a valid SARIF 2.1.0 document for GitHub Code Scanning (`github/codeql-action/upload-sarif`) and GitLab SAST.
-  2. Consolidated Forge PR/MR Markdown Report & Comment Poster (`--post-comment` / `format_forge_review_comment`): Formats a concise, collapsible PR/MR review comment (or posts it to `--pr <N>` via `Forge::comment` for GitHub `gh pr comment` and GitLab `glab mr note`) containing linked AIDA spec acceptance criteria, file coverage verification status, and line-anchored findings (`path:start_line..end_line`).
-  3. Turnkey Batch Review Runner (`--run-review` / `build_batch_review_prompt`): Builds self-contained per-batch review prompts (diff hunks + matched playbooks/facets + linked spec acceptance criteria) and optionally executes them via `claude --print` (or configured `AIDA_REVIEW_RUNNER_CMD`) to produce structured findings, anchor their `existing_code` snippets to exact 1-based line numbers, and verify 100% file coverage in one command.
-
-  ## Acceptance
-  - `aida_core::review_engine` provides pure, unit-tested functions:
-    - `findings_to_sarif_json(&[RawReviewFinding]) -> serde_json::Value` emitting valid SARIF 2.1.0 (`$schema`, `version: "2.1.0"`, `runs[0].tool.driver`, `runs[0].results` with `physicalLocation.artifactLocation.uri` and `region.startLine`/`endLine`).
-    - `format_forge_review_markdown(...) -> String` producing a GitHub/GitLab PR/MR review comment summarizing inventory, coverage verification, linked spec acceptance criteria, and anchored findings.
-    - `parse_runner_findings_json(&str) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String>` parsing structured JSON findings and file coverage emitted by an automated batch review runner.
-  - `aida review prepare` in `aida-cli-lib` supports `--sarif <PATH>`, `--post-comment` (requires `--pr <N>`), and `--run-review` (executes per-batch review via `AIDA_REVIEW_RUNNER_CMD` or `claude --print`, anchors findings, and verifies coverage).
-  - Unit tests in `aida-core` and `aida-cli-lib` verify SARIF generation, forge markdown rendering, and runner JSON parsing.
+description: "## Summary\nExtend `aida review prepare` into a turnkey PR/MR and CI review surface for GitHub and GitLab (the AIDA-native equivalent of running an external review CLI in CI):\n1. SARIF 2.1.0 Export (`--sarif <PATH>`): Converts anchored `RawReviewFinding` entries (`aida_core::review_engine::findings_to_sarif_json`) into a valid SARIF 2.1.0 document for GitHub Code Scanning (`github/codeql-action/upload-sarif`) and GitLab SAST.\n2. Consolidated Forge PR/MR Markdown Report & Comment Poster (`--post-comment` / `format_forge_review_comment`): Formats a concise, collapsible PR/MR review comment (or posts it to `--pr <N>` via `Forge::comment` for GitHub `gh pr comment` and GitLab `glab mr note`) containing linked AIDA spec acceptance criteria, file coverage verification status, and line-anchored findings (`path:start_line..end_line`).\n3. Turnkey Batch Review Runner (`--run-review` / `build_batch_review_prompt`): Builds self-contained per-batch review prompts (diff hunks + matched\
+  \ playbooks/facets + linked spec acceptance criteria) and optionally executes them via `claude --print` (or configured `AIDA_REVIEW_RUNNER_CMD`) to produce structured findings, anchor their `existing_code` snippets to exact 1-based line numbers, and verify 100% file coverage in one command.\n\n## Acceptance\n- `aida_core::review_engine` provides pure, unit-tested functions:\n  - `findings_to_sarif_json(&[RawReviewFinding]) -> serde_json::Value` emitting valid SARIF 2.1.0 (`$schema`, `version: \"2.1.0\"`, `runs[0].tool.driver`, `runs[0].results` with `physicalLocation.artifactLocation.uri` and `region.startLine`/`endLine`).\n  - `format_forge_review_markdown(...) -> String` producing a GitHub/GitLab PR/MR review comment summarizing inventory, coverage verification, linked spec acceptance criteria, and anchored findings.\n  - `parse_runner_findings_json(&str) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String>` parsing structured JSON findings and file coverage emitted by an automated\
+  \ batch review runner.\n- `aida review prepare` in `aida-cli-lib` supports `--sarif <PATH>`, `--post-comment` (requires `--pr <N>`), and `--run-review` (executes per-batch review via `AIDA_REVIEW_RUNNER_CMD` or `claude --print`, anchors findings, and verifies coverage).\n- Unit tests in `aida-core` and `aida-cli-lib` verify SARIF generation, forge markdown rendering, and runner JSON parsing."
 status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T00:01:56.040519101Z
+created_at: 2026-11-25 04:42:11.569133+00:00
+modified_at: 2026-11-26 00:01:56.040519+00:00
 req_type: Story
 tags:
 - integration
@@ -29,601 +18,665 @@ comments:
 - id: 01a2111c-fce8-75b3-b3f1-6b82c0da1ef7
   author: joe
   content: Implemented in worktree /home/joe/ai/aida-story-3120 on branch story-3120-ci-review (commit 34f18153493e6d8f24ef3021adfe79f08ea3452d). Added --run-review (turnkey batch review execution via AIDA_REVIEW_RUNNER_CMD or claude --print), --sarif <PATH> (SARIF 2.1.0 export for GitHub Code Scanning / GitLab SAST), and --post-comment (GitHub PR / GitLab MR Markdown review comment poster via Forge::comment). Verified all 18 tests in aida-core review_engine and all 8 tests in aida-cli-lib review_prepare pass.
-  created_at: 2026-11-25T05:10:42.152111Z
-  modified_at: 2026-11-25T05:10:42.152111Z
+  created_at: 2026-11-25 05:10:42.152111+00:00
+  modified_at: 2026-11-25 05:10:42.152111+00:00
 - id: 01a211a9-4c2f-7633-82f2-50ddd66e766d
   author: joe
-  content: |-
-    SLICE PLAN (advisor-122 routing 2026-11-25 00:46, Joe's request; recorded by product-15). Joe's branch story-3120-ci-review (1fba1625ef3, +2029/-4, 4 files) is kept as REFERENCE (now pushed to origin); it ships to INTEGRATION as <=300-line slices extracted by codex lanes, each with an INDEPENDENT codex review (antigravity authored it).
+  content: 'SLICE PLAN (advisor-122 routing 2026-11-25 00:46, Joe''s request; recorded by product-15). Joe''s branch story-3120-ci-review (1fba1625ef3, +2029/-4, 4 files) is kept as REFERENCE (now pushed to origin); it ships to INTEGRATION as <=300-line slices extracted by codex lanes, each with an INDEPENDENT codex review (antigravity authored it).
+
     S1 review_engine pure logic: SARIF 2.1.0 export, severity_rank/findings_exceeding_threshold, parse_runner_findings_json + tests (pure; may merge on pre-check).
+
     S2 `review prepare --sarif` + `--fail-on` wiring (the CI gate; no agent run).
+
     S3 `--run-review` + `--agent/--model` resolution incl. codex-only repos (spawns agents; STANDARD+; careful review of the [agents] config resolution).
+
     S4 `--adversarial` Finder→Challenger + detect_ai_authors/opposition.
+
     S5 `--post-comment` (OUTWARD-FACING: an opt-in flag only, requires --pr, never enabled by any seat/CI default; test that the default posts nothing). The showcase slide 07 rides the last slice.
-    DROPPED: --file-bugs (conflicts with STORY-3118: findings are not requirements). A later slice may write findings records once STORY-3118 S1 lands.
-  created_at: 2026-11-25T07:43:57.487150Z
-  modified_at: 2026-11-25T07:43:57.487150Z
+
+    DROPPED: --file-bugs (conflicts with STORY-3118: findings are not requirements). A later slice may write findings records once STORY-3118 S1 lands.'
+  created_at: 2026-11-25 07:43:57.487150+00:00
+  modified_at: 2026-11-25 07:43:57.487150+00:00
 - id: 01a211f7-e5db-7c93-ac70-34543eb38ac0
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 1fef6c600c2ea8dd8fae5ed90e4c2056c18c5514 plus the native working diff. S1 only, targeting integration. AC1: [evidence: behavioral-test] review_engine.rs test s1_runner_findings_sarif_and_threshold covers runner envelope and array, invalid output, case and whitespace, threshold equality, duplicate categories, URI escaping and resolved span precedence over stale hints. Focused test passed, review_engine module 24/24 passed, make check-ci-fast exited 0. AC2: [evidence: configuration-validation] scripts/ratchet-set.json:13 registers the same test under the module filter. Deep pass aligned SARIF severity aliases with filtering and checked zero/one/multiple findings. Two tracked files, 241 additions, no untracked additions. Residual scope: no end-to-end forge upload tested, CLI and other story work deferred.
-  created_at: 2026-11-25T09:09:47.732749Z
-  modified_at: 2026-11-25T09:09:47.732749Z
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 1fef6c600c2ea8dd8fae5ed90e4c2056c18c5514 plus the native working diff. S1 only, targeting integration. AC1: [evidence: behavioral-test] review_engine.rs test s1_runner_findings_sarif_and_threshold covers runner envelope and array, invalid output, case and whitespace, threshold equality, duplicate categories, URI escaping and resolved span precedence over stale hints. Focused test passed, review_engine module 24/24 passed, make check-ci-fast exited 0. AC2: [evidence: configuration-validation] scripts/ratchet-set.json:13 registers the same test under the module filter. Deep pass aligned SARIF severity aliases with filtering and checked zero/one/multiple findings. Two tracked files, 241 additions, no untracked additions. Residual scope: no end-to-end forge upload tested, CLI and other story work deferred.'
+  created_at: 2026-11-25 09:09:47.732749+00:00
+  modified_at: 2026-11-25 09:09:47.732749+00:00
   session_id: 01a211d677cd
   harness_version: codex-cli 0.167.0
 - id: 01a21210-ac51-7801-868b-3f82d185f9df
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int39-story-3120-s1` at head `cb1b32ee93d96a9dcdebef9e24e8122565706748`.'
-  created_at: 2026-11-25T09:36:52.305505Z
-  modified_at: 2026-11-25T09:36:52.305505Z
+  created_at: 2026-11-25 09:36:52.305505+00:00
+  modified_at: 2026-11-25 09:36:52.305505+00:00
   session_id: 01a211d677cd
 - id: 01a21210-eba0-7902-ac29-d7f7b31a9a49
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4567 @ cb1b32ee93 (STORY-3120 S1, Refs-only)
+  content: 'AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4567 @ cb1b32ee93 (STORY-3120 S1, Refs-only)
+
 
     Result: PASS for slice 1. This is pure aida-core logic: findings_to_sarif_json, parse_runner_findings_json, severity_rank and findings_exceeding_threshold, with one ratcheted test.
 
+
     What I checked:
+
     - SARIF 2.1.0 shape: $schema, version, runs[0].tool.driver.rules (deduplicated by category), results with artifactLocation uri, %SRCROOT% and region startLine/endLine. The span is clamped to start>=1 and end>=start.
+
     - Path bytes are percent-encoded, and the test covers space, # and %.
+
     - The runner parser accepts only a json or bare code fence, rejects an unterminated fence, and returns an error rather than an empty result for an error object.
+
     - Security: no I/O, no process spawn, no network. Runner output is untrusted, but it is only deserialized here.
 
-    Observations for later slices (not blocking):
-    1. FAIL-OPEN risk: findings_exceeding_threshold ranks an UNKNOWN severity as low (unwrap_or(1)). A runner that emits 'blocker' or 'severe' would pass '--fail-on high'. A CI gate should fail closed: treat an unknown severity as critical, or reject the runner output. SARIF level for an unknown severity is also 'note'.
-    2. Paths are not normalised. An absolute path or a '..' path from the runner goes into the SARIF uri unchanged. When the CLI slice wires this up, drop or refuse findings whose path is outside the PR's changed-file inventory.
-    3. format_forge_review_markdown and the CLI flags (--sarif, --post-comment, --run-review) are still to come. --run-review will spawn 'claude --print' or AIDA_REVIEW_RUNNER_CMD, so give it the full security lens: an environment-supplied command, where the command runs, and credential exposure to the runner.
 
-    Self-approve limits: pure engine logic, so the advisor may self-merge it.
-  created_at: 2026-11-25T09:36:54.131865Z
-  modified_at: 2026-11-25T09:36:54.131865Z
+    Observations for later slices (not blocking):
+
+    1. FAIL-OPEN risk: findings_exceeding_threshold ranks an UNKNOWN severity as low (unwrap_or(1)). A runner that emits ''blocker'' or ''severe'' would pass ''--fail-on high''. A CI gate should fail closed: treat an unknown severity as critical, or reject the runner output. SARIF level for an unknown severity is also ''note''.
+
+    2. Paths are not normalised. An absolute path or a ''..'' path from the runner goes into the SARIF uri unchanged. When the CLI slice wires this up, drop or refuse findings whose path is outside the PR''s changed-file inventory.
+
+    3. format_forge_review_markdown and the CLI flags (--sarif, --post-comment, --run-review) are still to come. --run-review will spawn ''claude --print'' or AIDA_REVIEW_RUNNER_CMD, so give it the full security lens: an environment-supplied command, where the command runs, and credential exposure to the runner.
+
+
+    Self-approve limits: pure engine logic, so the advisor may self-merge it.'
+  created_at: 2026-11-25 09:36:54.131865+00:00
+  modified_at: 2026-11-25 09:36:54.131865+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21211-86ae-7702-93c1-7f6533990a09
   author: joe
-  content: |-
-    SLICE-BRIEF NOTES (advisor ruling 02:40, from the #4567 pre-check)
+  content: 'SLICE-BRIEF NOTES (advisor ruling 02:40, from the #4567 pre-check)
 
-    S1 micro-round (#4567, at most 15 lines, before merge): in findings_exceeding_threshold, an unknown or unparseable severity ranks as CRITICAL (4), so the gate fails closed. Add a test showing that severity 'blocker' or '' is caught by --fail-on critical. No other scope.
+
+    S1 micro-round (#4567, at most 15 lines, before merge): in findings_exceeding_threshold, an unknown or unparseable severity ranks as CRITICAL (4), so the gate fails closed. Add a test showing that severity ''blocker'' or '''' is caught by --fail-on critical. No other scope.
+
 
     S2/S3 briefs:
-    (a) The CLI must refuse, not silently drop, any runner-supplied finding path that is outside the PR's changed-file inventory, including absolute paths, '..' and paths that aren't in the batch.
-    (b) --run-review spawns 'claude --print' or AIDA_REVIEW_RUNNER_CMD, so it needs the full security lens:
+
+    (a) The CLI must refuse, not silently drop, any runner-supplied finding path that is outside the PR''s changed-file inventory, including absolute paths, ''..'' and paths that aren''t in the batch.
+
+    (b) --run-review spawns ''claude --print'' or AIDA_REVIEW_RUNNER_CMD, so it needs the full security lens:
+
     - where the command comes from (an environment-supplied command);
+
     - the working directory, which must not be an untrusted seat clone;
+
     - the environment and credentials the runner inherits;
+
     - output size bounds;
-    - untrusted runner output is never executed or used to choose the command.
-  created_at: 2026-11-25T09:37:33.579099Z
-  modified_at: 2026-11-25T09:37:33.579099Z
+
+    - untrusted runner output is never executed or used to choose the command.'
+  created_at: 2026-11-25 09:37:33.579099+00:00
+  modified_at: 2026-11-25 09:37:33.579099+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21214-4b94-71b1-936f-7b33bb4e6cef
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:40):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:40):
+
     # STORY-3120 S1 / PR #4567 MICRO-ROUND (advisor-122 2026-11-25 02:40; details from integration-30 on the spec; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int39-story-3120-s1. <=15 lines.
+
     In findings_exceeding_threshold (review_engine.rs), an UNKNOWN or UNPARSEABLE severity ranks as CRITICAL, so the CI gate FAILS CLOSED. Add a test: a finding with severity "bogus" exceeds any --fail-on threshold.
-    make check-ci-fast, then push to #4567. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
-  created_at: 2026-11-25T09:40:35.195468Z
-  modified_at: 2026-11-25T09:40:35.195468Z
+
+    make check-ci-fast, then push to #4567. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.'
+  created_at: 2026-11-25 09:40:35.195468+00:00
+  modified_at: 2026-11-25 09:40:35.195468+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2121b-3b30-7021-91f2-413c1145c3cb
   author: joe
   content: 'DEFERRED F5 (advisor-122 2026-11-25 02:50, #4567 S1 CR @cb1b32ee): failed or missing snippet anchors are emitted as PRECISE SARIF regions (anchor_findings_with keeps the input line hints even when anchoring failed). Emit no region (or a file-level location) when the anchor failed. For a later STORY-3120 slice.'
-  created_at: 2026-11-25T09:48:24.239829Z
-  modified_at: 2026-11-25T09:48:24.239829Z
+  created_at: 2026-11-25 09:48:24.239829+00:00
+  modified_at: 2026-11-25 09:48:24.239829+00:00
 - id: 01a2125f-2e57-7862-871c-28751ca6bcbf
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: cb1b32ee93d96a9dcdebef9e24e8122565706748 plus native working diff. S1 micro-round for #4567. File references are in aida-core/src/review_engine.rs.
+
     F1: [evidence: behavioral-test] Line 1599 exercises blocker and empty severity independently at critical. Known high stays below critical.
+
     F2: [evidence: behavioral-test] Line 1585 checks slash, backslash, space, # and % in the same Linux path.
+
     F3: [evidence: behavioral-test] Line 1589 checks literal braces in both the message and suggestion, including placeholder-shaped {0}.
+
     F4: [evidence: behavioral-test] Line 1586 checks the emitted base ID against the run dictionary. The symbolic root avoids embedding a host path.
-    Targeted test executed and passed. make check-ci-fast exited 0. Checked normalization, escaping, multiple results and gate refusal. No untracked additions. F5 deferred. Forge CI at cb1b32ee93 predates these edits.
-  created_at: 2026-11-25T11:02:36.914348Z
-  modified_at: 2026-11-25T11:02:36.914348Z
+
+    Targeted test executed and passed. make check-ci-fast exited 0. Checked normalization, escaping, multiple results and gate refusal. No untracked additions. F5 deferred. Forge CI at cb1b32ee93 predates these edits.'
+  created_at: 2026-11-25 11:02:36.914348+00:00
+  modified_at: 2026-11-25 11:02:36.914348+00:00
   session_id: 01a21242dde8
   harness_version: codex-cli 0.167.0
 - id: 01a2126f-da82-70d1-8e41-fe415feb9aba
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int39-story-3120-s1` at head `57910a34aa3bebb2b7fa354099cbd72f79de06d5`.'
-  created_at: 2026-11-25T11:20:50.050706Z
-  modified_at: 2026-11-25T11:20:50.050706Z
+  created_at: 2026-11-25 11:20:50.050706+00:00
+  modified_at: 2026-11-25 11:20:50.050706+00:00
   session_id: 01a21242dde8
 - id: 01a21270-4097-7570-b89d-529cbc9f8898
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4567 micro-round @ 57910a34aa (STORY-3120 S1)
+  content: 'AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4567 micro-round @ 57910a34aa (STORY-3120 S1)
+
 
     Result: PASS.
 
+
     The required fix:
+
     - findings_exceeding_threshold now ranks an unknown or unparseable severity as critical (unwrap_or(4)), so the gate fails closed.
-    - The test confirms that 'blocker' and '' are both caught by --fail-on critical.
+
+    - The test confirms that ''blocker'' and '''' are both caught by --fail-on critical.
+
 
     Beyond the 15-line micro-round scope (about 30 lines; all pure, all correct, so accepted):
+
     (a) SARIF message text doubles literal braces (SARIF 2.1 §3.11.5).
+
     (b) The run declares originalUriBaseIds for %SRCROOT%.
-    (c) Backslashes in a path are now percent-encoded (%5C) instead of being rewritten to '/'. The literal filename is kept, which is safer.
+
+    (c) Backslashes in a path are now percent-encoded (%5C) instead of being rewritten to ''/''. The literal filename is kept, which is safer.
+
     Each change has assertions in the test.
 
-    Remaining nit, for S2: the SARIF level for an unknown severity is still 'note'. 'error' would be consistent with the fail-closed rule.
 
-    FAST is pending. This is pure engine logic, so the advisor may self-merge it.
-  created_at: 2026-11-25T11:20:58.558444Z
-  modified_at: 2026-11-25T11:20:58.558444Z
+    Remaining nit, for S2: the SARIF level for an unknown severity is still ''note''. ''error'' would be consistent with the fail-closed rule.
+
+
+    FAST is pending. This is pure engine logic, so the advisor may self-merge it.'
+  created_at: 2026-11-25 11:20:58.558444+00:00
+  modified_at: 2026-11-25 11:20:58.558444+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21280-1d31-7b40-9523-1b68316cc75a
   author: joe
   content: 'SLICE-BRIEF NOTE for S2 (advisor 04:49): S1 merged into integration as 8e55ef94e2b. Launch S2 from the new integration tip. Add to the S2 brief: findings_to_sarif_json maps an unknown or unparseable severity to SARIF level ''error'', not ''note'', to match the fail-closed rank in findings_exceeding_threshold, with a test. The earlier S2/S3 notes still apply: refuse runner paths outside the PR inventory, and apply the full security lens to --run-review.'
-  created_at: 2026-11-25T11:38:18.183700Z
-  modified_at: 2026-11-25T11:38:18.183700Z
+  created_at: 2026-11-25 11:38:18.183700+00:00
+  modified_at: 2026-11-25 11:38:18.183700+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a212a8-2381-7103-98f0-08fc00a5073d
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 8e55ef94e2b0d8a5cc3cdfaba882060473b53f47 plus native working tree on int39-story-3120-s2. The integration merge-base diff is empty before host publication. Reviewed origin/main...HEAD context, git diff HEAD and untracked inventory (empty).
+
     AC1: [evidence: behavioral-test] review_prepare.rs:878 tests SARIF output and inclusive fail-on gating, including a passing higher threshold and a usable report after failure.
+
     AC2: [evidence: behavioral-test] review_engine.rs:1601 tests empty and unknown severity as SARIF error and fail-closed gating.
+
     AC3: [evidence: behavioral-test] review_prepare.rs:878 supplies a changed path and a real unchanged path together and verifies refusal before export. At review_prepare.rs:241 membership is exact and scoped to the classified reviewable paths; duplicates cannot bypass the check. Bare arrays and runner envelopes use the same S1 parser. Output uses the existing repository-confined writer and its symlink/metadata refusal tests. No test weakened. Updated the help golden after checking both user-visible surfaces.
-    AC4: [evidence: configuration-validation] scripts/ratchet-set.json:47 registers the CLI regression. Both targeted cargo tests executed and passed, make check-ci-fast exited 0 including help snapshot, all 8 CLI module tests and all 24 core module tests. git diff --check passed. Host PR CI pending publication. Refs-only S2; automated agent execution and forge posting are outside the slice.
-  created_at: 2026-11-25T12:22:18.099276Z
-  modified_at: 2026-11-25T12:22:18.099276Z
+
+    AC4: [evidence: configuration-validation] scripts/ratchet-set.json:47 registers the CLI regression. Both targeted cargo tests executed and passed, make check-ci-fast exited 0 including help snapshot, all 8 CLI module tests and all 24 core module tests. git diff --check passed. Host PR CI pending publication. Refs-only S2; automated agent execution and forge posting are outside the slice.'
+  created_at: 2026-11-25 12:22:18.099276+00:00
+  modified_at: 2026-11-25 12:22:18.099276+00:00
   session_id: 01a21285c99f
   harness_version: codex-cli 0.167.0
 - id: 01a212ba-6893-7f02-94e8-8dc8a27e1374
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int39-story-3120-s2` at head `48e4b95289aa45cce659b3ff7c9eb3708ce79d7b`.'
-  created_at: 2026-11-25T12:42:16.083462Z
-  modified_at: 2026-11-25T12:42:16.083462Z
+  created_at: 2026-11-25 12:42:16.083462+00:00
+  modified_at: 2026-11-25 12:42:16.083462+00:00
   session_id: 01a21285c99f
 - id: 01a212ba-a7dd-7e53-8a6e-6b0cc15bfcf5
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4575 @ 48e4b95289 (STORY-3120 S2: --sarif and --fail-on CLI wiring, Refs-only, +121/-2)
+  content: 'AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4575 @ 48e4b95289 (STORY-3120 S2: --sarif and --fail-on CLI wiring, Refs-only, +121/-2)
+
 
     Result: PASS.
 
+
     Brief notes:
-    (1) An unknown or unparseable severity gives SARIF level 'error' (Some(3..=4) | None), and the test asserts it for 'blocker' and ''.
-    (2) Every runner finding path must EXACTLY match a reviewable-inventory path. Anything else refuses the whole run before anchoring, and the test confirms no SARIF is written then. Absolute paths, '..' paths and unchanged files are all refused.
-    --run-review is not included (it's S3).
+
+    (1) An unknown or unparseable severity gives SARIF level ''error'' (Some(3..=4) | None), and the test asserts it for ''blocker'' and ''''.
+
+    (2) Every runner finding path must EXACTLY match a reviewable-inventory path. Anything else refuses the whole run before anchoring, and the test confirms no SARIF is written then. Absolute paths, ''..'' paths and unchanged files are all refused.
+
+    --run-review is not included (it''s S3).
+
 
     Behaviour:
+
     - The --fail-on threshold is validated before any output is written.
-    - The SARIF report is written before the gate fails, so CI can still upload it. The test confirms that 'high' fails with the report present and 'critical' passes.
+
+    - The SARIF report is written before the gate fails, so CI can still upload it. The test confirms that ''high'' fails with the report present and ''critical'' passes.
+
     - Both flags require --anchor-findings.
+
     - The SARIF goes through the existing hardened write_output: it must stay inside the repo, refuses Git metadata (both the absolute git dir and the common dir), and is written through an openat walk.
+
     - The help snapshot is updated.
+
     - --anchor-findings now takes the runner envelope or a fenced format (parse_runner_findings_json), and a bare array still works.
+
 
     Security: no network or process spawn added. The output path is user-supplied and goes through the confined writer.
 
-    Nits:
-    (a) write_output's errors say '--write …' even for --sarif.
-    (b) Like --write, --sarif can overwrite a tracked source file inside the repo. That's an operator choice, but S3 could refuse tracked paths.
 
-    Merge-tree with integration: CLEAN.
-  created_at: 2026-11-25T12:42:17.260539Z
-  modified_at: 2026-11-25T12:42:17.260539Z
+    Nits:
+
+    (a) write_output''s errors say ''--write …'' even for --sarif.
+
+    (b) Like --write, --sarif can overwrite a tracked source file inside the repo. That''s an operator choice, but S3 could refuse tracked paths.
+
+
+    Merge-tree with integration: CLEAN.'
+  created_at: 2026-11-25 12:42:17.260539+00:00
+  modified_at: 2026-11-25 12:42:17.260539+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2135f-0823-7770-bbf3-9378d1098d31
   author: joe
   content: 'Updated reference branch story-3120-ci-review in /home/joe/ai/aida-story-3120 (new head commit 0d21f696ebfd713a7e2652094e288068e0707c92) for S3/S4/S5: added --effort <LEVEL> and --challenger-effort <LEVEL> CLI flags plus default_effort and challenger_effort in .aida/review-rules.toml (ProjectReviewRulesConfig), finder_effort/challenger_effort on AdversarialReviewSummary, and vendor CLI effort wiring (-c model_reasoning_effort=<LEVEL> for codex, --effort <LEVEL> for claude and agy, plus AIDA_REVIEW_RESOLVED_EFFORT for custom runners). Updated docs/showcase/code-review.html user manual.'
-  created_at: 2026-11-25T15:42:04.835188Z
-  modified_at: 2026-11-25T15:42:04.835188Z
+  created_at: 2026-11-25 15:42:04.835188+00:00
+  modified_at: 2026-11-25 15:42:04.835188+00:00
 - id: 01a21370-449e-7d40-98c1-6a5f8b5f1c7c
   author: joe
   content: 'SLICE-BRIEF ADDENDUM (Joe, 2026-11-25 09:00; relayed by advisor-122). The reference branch story-3120-ci-review now has commit 0d21f696ebf, which adds reasoning-effort configuration. S3: add --effort <LEVEL>, resolved in this order: --effort > AIDA_REVIEW_EFFORT > .aida/review-rules.toml default_effort > [agents.<vendor>.seats.reviewer] effort. Pass it as -c model_reasoning_effort=<LEVEL> to codex and --effort <LEVEL> to claude/agy. S4: add --challenger-effort <LEVEL> (challenger_effort in review-rules.toml; finder_effort and challenger_effort in AdversarialReviewSummary) for asymmetric-effort adversarial reviews. S5: document --effort and --challenger-effort on showcase slide 07. Effort values are a fixed allowlist, validated before being passed to any vendor argv (no arbitrary strings).'
-  created_at: 2026-11-25T16:00:39.523996Z
-  modified_at: 2026-11-25T16:00:39.523996Z
+  created_at: 2026-11-25 16:00:39.523996+00:00
+  modified_at: 2026-11-25 16:00:39.523996+00:00
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
 - id: 01a21380-6929-77a2-98a1-a5c16d0aa6f3
   author: joe
   content: Integrated recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Dark/Light theme toggle, Getting Started installation prompts, and multi-seat workflow SVG diagrams (from /home/joe/ai/aida-story-2839-showcase, STORY-2839 / STORY-2852) with code-review.html on branch story-3120-ci-review (commit b5826a0f9497994ecb4e9b76ecbbc0746819fdc9). Wired ('code-review.html', 'Code review') under the 'How it works' dropdown submenu in docs/showcase/build.py and docs/showcase/index.html, synced localStorage('aida-theme') in code-review.html, rebuilt all showcase HTML pages via build.py, and verified all 17 tests in tests/test_showcase_build.py pass.
-  created_at: 2026-11-25T16:18:32.361359Z
-  modified_at: 2026-11-25T16:18:32.361359Z
+  created_at: 2026-11-25 16:18:32.361359+00:00
+  modified_at: 2026-11-25 16:18:32.361359+00:00
 - id: 01a21381-ce05-77f2-98d4-60dfeddd6ded
   author: joe
   content: 'REFERENCE COMMITS (Joe 2026-11-25 09:19; branch story-3120-ci-review): 0d21f696ebf adds --effort / --challenger-effort (default_effort and challenger_effort in .aida/review-rules.toml; finder_effort/challenger_effort on AdversarialReviewSummary; codex gets -c model_reasoning_effort=<LEVEL>, claude and agy get --effort <LEVEL>). It goes into S3 (--effort) and S4 (--challenger-effort). b5826a0f949 (37 files, +4159) is the unified showcase integration: S5 takes ONLY docs/showcase/code-review.html and its ''How it works ▾'' menu entry; the rest belongs to STORY-2839/STORY-2852 (see those comments). Product-15 slices briefs to <=300 lines.'
-  created_at: 2026-11-25T16:20:03.717015Z
-  modified_at: 2026-11-25T16:20:03.717015Z
+  created_at: 2026-11-25 16:20:03.717015+00:00
+  modified_at: 2026-11-25 16:20:03.717015+00:00
 - id: 01a2138a-1539-7111-9462-21b2f0d5f0da
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration-30 security-lens pre-check of the STORY-3120 S3 BRIEF (--run-review + --effort). Source: reference branch story-3120-ci-review @ 0d21f696ebf, aida-cli-lib/src/review_prepare.rs (invoke_review_runner ~1741, resolve_review_runner_effort ~1352, git_text ~731).
-
-    Result: the reference code is NOT shippable as S3. The S3 brief must require each item below. Items 1-8 are blocking.
-
-    1. RUNNER WORKING DIRECTORY = PR CHECKOUT (blocking). invoke_review_runner does current_dir(project_root), which is the checkout under review. `claude --print` then loads the PR's .claude/settings.json (hooks), .mcp.json and CLAUDE.md; gemini/agy load .gemini/ settings. All of that is PR-controlled, and it runs with the operator's credentials.
-       Required: run the runner in a fresh empty temp dir. Pass all PR content in the prompt only. For claude, disable project settings, hooks and MCP; the brief must name the exact flags and include a test proving a planted .claude/settings.json hook does not run. Give the agent NO tools (claude: an empty tool allowlist; codex: keep exec --sandbox read-only).
-
-    2. ENVIRONMENT PASSTHROUGH (blocking). Both spawn paths inherit the whole environment: GH_TOKEN/GITHUB_TOKEN, GITLAB_TOKEN, AIDA_SESSION_GRANT, cloud keys, GIT_DIR/GIT_CONFIG*. A prompt-injected runner could exfiltrate them.
-       Required: env_clear() plus an explicit allowlist: PATH, HOME, LANG/LC_*, TERM, the vendor's own auth vars only for that vendor (ANTHROPIC_API_KEY for claude, OPENAI_API_KEY/CODEX_HOME for codex, ...), and AIDA_REVIEW_RESOLVED_*/AIDA_REVIEW_PASS. Test: a sentinel GH_TOKEN never reaches the runner.
-
-    3. AIDA_REVIEW_RUNNER_CMD (blocking). Command::new(value) with cwd = PR checkout means a relative value containing '/' (e.g. scripts/review) resolves INSIDE the PR, so the PR chooses the executable.
-       Required:
-       - must be an absolute path to an existing regular file outside the reviewed checkout;
-       - no shell, no splitting (keep the single-program semantics), refuse anything else;
-       - read it from the operator's env only, never from repo config.
-       Test: a relative value is refused.
-
-    4. PROMPT IN ARGV (blocking). Every vendor path passes the whole prompt (diffs plus file bodies) as one argv element. That hits ARG_MAX/MAX_ARG_STRLEN (128 KiB per arg on Linux → E2BIG on any real PR) and exposes PR content in /proc/<pid>/cmdline.
-       Required: send the prompt on stdin for every vendor (claude -p reads stdin; codex exec reads `-` from stdin). Write it from a separate thread; the current custom-cmd path writes all of stdin before reading stdout, which deadlocks once the runner fills the pipe.
-
-    5. NO DEADLINE, NO OUTPUT BOUND (blocking). Both paths use output()/wait_with_output() with no timeout and unbounded stdout/stderr.
-       Required: a per-batch deadline (configurable, default e.g. 15 min) that kills the process group, plus stdout/stderr caps (e.g. 4 MiB stdout, 64 KiB stderr kept for the error). Exceeding either fails the run closed. Test both.
-
-    6. EFFORT ALLOWLIST (blocking; Joe's addendum). resolve_review_runner_effort passes any non-empty string through. Codex gets `-c model_reasoning_effort=<raw>`, which is TOML-parsed by codex, so <raw> can inject config values.
-       Required:
-       - a fixed allowlist (low|medium|high|xhigh, plus max only if that vendor supports it), validated for EVERY source in the precedence chain (flag, AIDA_REVIEW_EFFORT, review-rules.toml default_effort, agents seat effort) BEFORE any argv is built;
-       - an invalid value refuses the whole run and names its source;
-       - gemini, which has no effort flag, either refuses an explicit --effort or reports it as ignored, never silently;
-       - a test per source.
-
-    7. MODEL STRING (blocking, same class). --model/AIDA_REVIEW_MODEL/default_model/seat model reach argv unvalidated. A value starting with '-' is parsed as a flag by some vendor CLIs.
-       Required: charset [A-Za-z0-9._:/-], must not start with '-', max 128 chars, validated before spawn.
-
-    8. REPO-CONTROLLED REVIEW CONFIG (blocking). default_model, default_effort, default agent and challenger come from .aida/review-rules.toml in project_root, i.e. the PR head. The PR under review then picks its own reviewer, model and effort; for example it can downgrade effort, or pick the single-vendor fallback to defeat the opposing-author rule.
-       Required: resolve review-rules.toml from the trusted base (the merge-base or target-branch blob), not the PR working tree. Alternatively, refuse to run when the PR modifies .aida/review-rules.toml or .aida/config.toml [agents].
-
-    9. git_text USED TO BUILD THE PROMPT (should-fix in S3). It uses raw Command::new("git") with the inherited env (GIT_DIR/GIT_CONFIG*/GIT_INDEX_FILE). The diff has --no-ext-diff but not --no-textconv, so a textconv driver runs. `.unwrap_or_default()` silently falls back from diff to the full file.
-       Required: route it through aida_core::git_ops::host_git_command (or a sanitized builder), add --no-textconv, and make a diff failure an error, not a silent fallback.
-
-    10. RUNNER PATH INVENTORY. S3 must route EVERY spawn through ONE helper that applies items 1-7: custom-cmd, claude (the `_ =>` default arm), codex, agy, gemini, plus the S4 challenger pass that reuses invoke_review_runner. The brief should list these five spawn paths. A test enumerates them (one test per vendor, using a fake binary on PATH that dumps its argv/env/cwd) and asserts cwd/env/argv for each.
-        Also: the `_ =>` arm turns any unrecognised agent into claude. Make it an exhaustive match on the normalized enum so it can't default silently.
-
-    11. OUTPUT HANDLING (already OK, keep it). Runner stdout is only parsed (parse_runner_findings_json), never executed or used to choose a command, and S2 refuses paths outside the inventory. Keep that, and add a test showing that a runner emitting a path outside the inventory refuses the run when --run-review is used.
-
-    12. SCOPE. The reference diff is far over 300 lines. Suggested split:
-        - S3a: the sanitized spawn helper plus --run-review with the custom-cmd and claude/codex runners (items 1-5, 9, 10);
-        - S3b: --effort/--model resolution, the allowlists and trusted-base config (items 6-8).
-        agy and gemini can come in S3b or later.
-
-    Self-approve limits: S3 spawns agents with credentials in reach, so it needs an INDEPENDENT review at the final head, with no carry-over.
-  created_at: 2026-11-25T16:28:51.020426Z
-  modified_at: 2026-11-25T16:28:51.020426Z
+  content: "AUDIT VERDICT (not a lane instruction): integration-30 security-lens pre-check of the STORY-3120 S3 BRIEF (--run-review + --effort). Source: reference branch story-3120-ci-review @ 0d21f696ebf, aida-cli-lib/src/review_prepare.rs (invoke_review_runner ~1741, resolve_review_runner_effort ~1352, git_text ~731).\n\nResult: the reference code is NOT shippable as S3. The S3 brief must require each item below. Items 1-8 are blocking.\n\n1. RUNNER WORKING DIRECTORY = PR CHECKOUT (blocking). invoke_review_runner does current_dir(project_root), which is the checkout under review. `claude --print` then loads the PR's .claude/settings.json (hooks), .mcp.json and CLAUDE.md; gemini/agy load .gemini/ settings. All of that is PR-controlled, and it runs with the operator's credentials.\n   Required: run the runner in a fresh empty temp dir. Pass all PR content in the prompt only. For claude, disable project settings, hooks and MCP; the brief must name the exact flags and include a test proving\
+    \ a planted .claude/settings.json hook does not run. Give the agent NO tools (claude: an empty tool allowlist; codex: keep exec --sandbox read-only).\n\n2. ENVIRONMENT PASSTHROUGH (blocking). Both spawn paths inherit the whole environment: GH_TOKEN/GITHUB_TOKEN, GITLAB_TOKEN, AIDA_SESSION_GRANT, cloud keys, GIT_DIR/GIT_CONFIG*. A prompt-injected runner could exfiltrate them.\n   Required: env_clear() plus an explicit allowlist: PATH, HOME, LANG/LC_*, TERM, the vendor's own auth vars only for that vendor (ANTHROPIC_API_KEY for claude, OPENAI_API_KEY/CODEX_HOME for codex, ...), and AIDA_REVIEW_RESOLVED_*/AIDA_REVIEW_PASS. Test: a sentinel GH_TOKEN never reaches the runner.\n\n3. AIDA_REVIEW_RUNNER_CMD (blocking). Command::new(value) with cwd = PR checkout means a relative value containing '/' (e.g. scripts/review) resolves INSIDE the PR, so the PR chooses the executable.\n   Required:\n   - must be an absolute path to an existing regular file outside the reviewed checkout;\n   - no shell,\
+    \ no splitting (keep the single-program semantics), refuse anything else;\n   - read it from the operator's env only, never from repo config.\n   Test: a relative value is refused.\n\n4. PROMPT IN ARGV (blocking). Every vendor path passes the whole prompt (diffs plus file bodies) as one argv element. That hits ARG_MAX/MAX_ARG_STRLEN (128 KiB per arg on Linux → E2BIG on any real PR) and exposes PR content in /proc/<pid>/cmdline.\n   Required: send the prompt on stdin for every vendor (claude -p reads stdin; codex exec reads `-` from stdin). Write it from a separate thread; the current custom-cmd path writes all of stdin before reading stdout, which deadlocks once the runner fills the pipe.\n\n5. NO DEADLINE, NO OUTPUT BOUND (blocking). Both paths use output()/wait_with_output() with no timeout and unbounded stdout/stderr.\n   Required: a per-batch deadline (configurable, default e.g. 15 min) that kills the process group, plus stdout/stderr caps (e.g. 4 MiB stdout, 64 KiB stderr kept for\
+    \ the error). Exceeding either fails the run closed. Test both.\n\n6. EFFORT ALLOWLIST (blocking; Joe's addendum). resolve_review_runner_effort passes any non-empty string through. Codex gets `-c model_reasoning_effort=<raw>`, which is TOML-parsed by codex, so <raw> can inject config values.\n   Required:\n   - a fixed allowlist (low|medium|high|xhigh, plus max only if that vendor supports it), validated for EVERY source in the precedence chain (flag, AIDA_REVIEW_EFFORT, review-rules.toml default_effort, agents seat effort) BEFORE any argv is built;\n   - an invalid value refuses the whole run and names its source;\n   - gemini, which has no effort flag, either refuses an explicit --effort or reports it as ignored, never silently;\n   - a test per source.\n\n7. MODEL STRING (blocking, same class). --model/AIDA_REVIEW_MODEL/default_model/seat model reach argv unvalidated. A value starting with '-' is parsed as a flag by some vendor CLIs.\n   Required: charset [A-Za-z0-9._:/-], must not\
+    \ start with '-', max 128 chars, validated before spawn.\n\n8. REPO-CONTROLLED REVIEW CONFIG (blocking). default_model, default_effort, default agent and challenger come from .aida/review-rules.toml in project_root, i.e. the PR head. The PR under review then picks its own reviewer, model and effort; for example it can downgrade effort, or pick the single-vendor fallback to defeat the opposing-author rule.\n   Required: resolve review-rules.toml from the trusted base (the merge-base or target-branch blob), not the PR working tree. Alternatively, refuse to run when the PR modifies .aida/review-rules.toml or .aida/config.toml [agents].\n\n9. git_text USED TO BUILD THE PROMPT (should-fix in S3). It uses raw Command::new(\"git\") with the inherited env (GIT_DIR/GIT_CONFIG*/GIT_INDEX_FILE). The diff has --no-ext-diff but not --no-textconv, so a textconv driver runs. `.unwrap_or_default()` silently falls back from diff to the full file.\n   Required: route it through aida_core::git_ops::host_git_command\
+    \ (or a sanitized builder), add --no-textconv, and make a diff failure an error, not a silent fallback.\n\n10. RUNNER PATH INVENTORY. S3 must route EVERY spawn through ONE helper that applies items 1-7: custom-cmd, claude (the `_ =>` default arm), codex, agy, gemini, plus the S4 challenger pass that reuses invoke_review_runner. The brief should list these five spawn paths. A test enumerates them (one test per vendor, using a fake binary on PATH that dumps its argv/env/cwd) and asserts cwd/env/argv for each.\n    Also: the `_ =>` arm turns any unrecognised agent into claude. Make it an exhaustive match on the normalized enum so it can't default silently.\n\n11. OUTPUT HANDLING (already OK, keep it). Runner stdout is only parsed (parse_runner_findings_json), never executed or used to choose a command, and S2 refuses paths outside the inventory. Keep that, and add a test showing that a runner emitting a path outside the inventory refuses the run when --run-review is used.\n\n12. SCOPE.\
+    \ The reference diff is far over 300 lines. Suggested split:\n    - S3a: the sanitized spawn helper plus --run-review with the custom-cmd and claude/codex runners (items 1-5, 9, 10);\n    - S3b: --effort/--model resolution, the allowlists and trusted-base config (items 6-8).\n    agy and gemini can come in S3b or later.\n\nSelf-approve limits: S3 spawns agents with credentials in reach, so it needs an INDEPENDENT review at the final head, with no carry-over."
+  created_at: 2026-11-25 16:28:51.020426+00:00
+  modified_at: 2026-11-25 16:28:51.020426+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2138a-b4b5-73b2-bf75-a019e915ba69
   author: joe
   content: 'ADVISOR RULING (advisor-122 2026-11-25 09:33): integration-30''s S3 security pre-check is ACCEPTED in full. All 8 blocking items are binding ACs, and S3 is STRICT tier. SPLIT S3 into two slices. S3a: one hardened spawn helper used by every runner path, including S4''s challenger. It runs in an empty temp cwd with no project settings or tools; clears the environment and passes a per-vendor allowlist; requires an absolute runner path outside the checkout; sends the prompt on stdin from a writer thread; enforces a deadline and an output cap; and has no default-to-claude arm (unknown agent → refuse). Then --run-review on top of it. S3b: --effort/--model with allowlists validated at every precedence source before argv is built, codex effort only from a fixed enum, and review-rules.toml read from the trusted base (refuse if the PR modifies it). The should-fixes (git_text env/--no-textconv/no silent full-file fallback) go in S3a. Each ≤300, independent review.'
-  created_at: 2026-11-25T16:29:28.028340Z
-  modified_at: 2026-11-25T16:29:28.028340Z
+  created_at: 2026-11-25 16:29:28.028340+00:00
+  modified_at: 2026-11-25 16:29:28.028340+00:00
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
 - id: 01a2138f-a825-7dd1-8616-d5caadf9c7d5
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:34):
-    # STORY-3120 S3a: hardened review-runner spawn helper + `--run-review` (advisor-122 ruling 2026-11-25 09:33; integration-30 security pre-check accepted in full; product-15). Lane: CLAUDE. STRICT TIER. Base: INTEGRATION, NEW branch int40-story-3120-s3a (cut from the current integration tip). Title: "(Refs STORY-3120)" only; S3a does NOT complete the story. <=300 changed lines; if it won't fit, ship the spawn helper alone and say so in the PR body.
-    READ FIRST: `aida show STORY-3120 --comments`, comment 19 (integration-30's security pre-check: items 1-8 blocking, plus should-fixes) and comment 20 (the advisor's S3a/S3b split). Those are BINDING ACs. Reference code ONLY (never merge or cherry-pick wholesale): branch story-3120-ci-review, aida-cli-lib/src/review_prepare.rs (invoke_review_runner ~1741, git_text ~731).
-    S3a SCOPE: ONE spawn helper used by EVERY runner path (S4's challenger will reuse it):
-     (1) cwd = a fresh empty temp dir, never the PR checkout; all PR content goes in the prompt only. For claude: disable project settings, hooks and MCP, with an empty tool allowlist (name the exact flags); codex keeps exec --sandbox read-only. TEST: a planted .claude/settings.json hook in the checkout does NOT run.
-     (2) env_clear() + an explicit per-vendor allowlist (PATH, HOME, LANG/LC_*, TERM, that vendor's own auth vars only, AIDA_REVIEW_RESOLVED_*/AIDA_REVIEW_PASS). TEST: a sentinel GH_TOKEN never reaches the runner.
-     (3) AIDA_REVIEW_RUNNER_CMD: an absolute path to an existing regular file outside the checkout; no shell, no splitting; env only, never repo config. TEST: a relative value is refused.
-     (4) The prompt goes on STDIN from a writer thread, for every vendor; nothing in argv. TEST: a prompt larger than 128 KiB works.
-     (5) A per-batch deadline that kills the process group, plus stdout/stderr caps; exceeding either fails closed. TEST both.
-     (6) No default-to-claude arm: an unknown agent is REFUSED.
-     Then `--run-review` on top of the helper. Should-fixes from comment 19: git_text env / --no-textconv / no silent full-file fallback.
-    OUT OF SCOPE (S3b): --effort / --model / review-rules.toml. Do NOT add the effort flags here.
-    One targeted cargo test run (on this host), then make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
-  created_at: 2026-11-25T16:34:56.367520Z
-  modified_at: 2026-11-25T16:34:56.367520Z
+  content: "AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:34):\n# STORY-3120 S3a: hardened review-runner spawn helper + `--run-review` (advisor-122 ruling 2026-11-25 09:33; integration-30 security pre-check accepted in full; product-15). Lane: CLAUDE. STRICT TIER. Base: INTEGRATION, NEW branch int40-story-3120-s3a (cut from the current integration tip). Title: \"(Refs STORY-3120)\" only; S3a does NOT complete the story. <=300 changed lines; if it won't fit, ship the spawn helper alone and say so in the PR body.\nREAD FIRST: `aida show STORY-3120 --comments`, comment 19 (integration-30's security pre-check: items 1-8 blocking, plus should-fixes) and comment 20 (the advisor's S3a/S3b split). Those are BINDING ACs. Reference code ONLY (never merge or cherry-pick wholesale): branch story-3120-ci-review, aida-cli-lib/src/review_prepare.rs (invoke_review_runner ~1741, git_text ~731).\nS3a SCOPE: ONE spawn helper used by EVERY runner path (S4's challenger will reuse it):\n (1) cwd\
+    \ = a fresh empty temp dir, never the PR checkout; all PR content goes in the prompt only. For claude: disable project settings, hooks and MCP, with an empty tool allowlist (name the exact flags); codex keeps exec --sandbox read-only. TEST: a planted .claude/settings.json hook in the checkout does NOT run.\n (2) env_clear() + an explicit per-vendor allowlist (PATH, HOME, LANG/LC_*, TERM, that vendor's own auth vars only, AIDA_REVIEW_RESOLVED_*/AIDA_REVIEW_PASS). TEST: a sentinel GH_TOKEN never reaches the runner.\n (3) AIDA_REVIEW_RUNNER_CMD: an absolute path to an existing regular file outside the checkout; no shell, no splitting; env only, never repo config. TEST: a relative value is refused.\n (4) The prompt goes on STDIN from a writer thread, for every vendor; nothing in argv. TEST: a prompt larger than 128 KiB works.\n (5) A per-batch deadline that kills the process group, plus stdout/stderr caps; exceeding either fails closed. TEST both.\n (6) No default-to-claude arm: an unknown\
+    \ agent is REFUSED.\n Then `--run-review` on top of the helper. Should-fixes from comment 19: git_text env / --no-textconv / no silent full-file fallback.\nOUT OF SCOPE (S3b): --effort / --model / review-rules.toml. Do NOT add the effort flags here.\nOne targeted cargo test run (on this host), then make check-ci-fast, then publish a NEW PR to integration. COMMIT your work."
+  created_at: 2026-11-25 16:34:56.367520+00:00
+  modified_at: 2026-11-25 16:34:56.367520+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21399-0780-7390-b656-35182d1ed256
   author: joe
   content: 'S3a BRIEF ADDENDUM (integration-30 09:46): add these TESTS too. (a) Per vendor, a fake binary on PATH that dumps argv/env/cwd, asserting the helper contract (empty temp cwd, cleared env + allowlist, prompt on stdin, nothing in argv) for claude, codex AND the custom-cmd path (pre-check item 10, the runner-path inventory). (b) --run-review refuses the run when the runner emits a finding whose path is outside the PR inventory (item 11). If you reach 300 lines, ship the helper first.'
-  created_at: 2026-11-25T16:45:25.760249Z
-  modified_at: 2026-11-25T16:45:25.760249Z
+  created_at: 2026-11-25 16:45:25.760249+00:00
+  modified_at: 2026-11-25 16:45:25.760249+00:00
 - id: 01a213a2-7cc1-76b3-957d-35c92077e509
   author: joe
   content: Added built-in C/C++ (c_cpp), Java (java), MATLAB (matlab), and Verilog/SystemVerilog/VHDL RTL (hdl_rtl) playbooks plus Java camelCase (*Test / *Tests) and HDL testbench (*_tb / tb_*) pairing in canonical_module_stem on branch story-3120-ci-review (commit 32a7ebd99153790301af9f58d38c9d4403eeabc7).
-  created_at: 2026-11-25T16:55:45.601016Z
-  modified_at: 2026-11-25T16:55:45.601016Z
+  created_at: 2026-11-25 16:55:45.601016+00:00
+  modified_at: 2026-11-25 16:55:45.601016+00:00
 - id: 01a213e0-14e9-7700-a2b4-df13dd1fdda9
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: b39e428e49dde9ff26deec7cdff01c9f3fc01ad3 (int40-story-3120-s3a, base integration). S3a HELPER ONLY: the helper plus its required tests already come to about 390 lines, so --run-review and the git_text should-fixes (env scrub, --no-textconv, no silent fallback) move to the next slice. This follows the brief's 'ship the helper first' fallback.
+  content: '## Implementer self-review
+
+    Reviewed HEAD: b39e428e49dde9ff26deec7cdff01c9f3fc01ad3 (int40-story-3120-s3a, base integration). S3a HELPER ONLY: the helper plus its required tests already come to about 390 lines, so --run-review and the git_text should-fixes (env scrub, --no-textconv, no silent fallback) move to the next slice. This follows the brief''s ''ship the helper first'' fallback.
+
     Placement: the spawn helper is in aida-cli-lib/src/launch/review_runner.rs and the per-vendor argv and auth table in aida-cli-lib/src/vendors/review_runner.rs. The STORY-2326 launch ratchet and the STORY-2539 vendor-literal ratchet refuse a new vendor spawn or vendor literal anywhere else. AIDA_REVIEW_RUNNER_CMD, AIDA_REVIEW_PASS and AIDA_REVIEW_RESOLVED_AGENT are classified as DROPPED_AIDA_KEYS.
-    (1) [evidence: behavioral-test] s3a_runner_spawn_contract: for claude, codex and the custom command, a fake binary dumps its cwd, env, argv and stdin byte count. The cwd is an empty temp dir. A .claude/hook.sh planted in the checkout does not run. Claude's argv is exactly --print --setting-sources=user --settings {"disableAllHooks":true} --strict-mcp-config --tools '' --disable-slash-commands --no-session-persistence. Codex's argv is exec --sandbox=read-only --skip-git-repo-check --ephemeral -- -.
-    (2) [behavioral-test] env_clear plus PATH/HOME/LANG/TERM/LC_* and that vendor's auth only. A sentinel GH_TOKEN and AIDA_SESSION_GRANT never reach any runner, OPENAI_API_KEY never reaches claude, ANTHROPIC_API_KEY never reaches codex, and the custom command gets no vendor auth.
+
+    (1) [evidence: behavioral-test] s3a_runner_spawn_contract: for claude, codex and the custom command, a fake binary dumps its cwd, env, argv and stdin byte count. The cwd is an empty temp dir. A .claude/hook.sh planted in the checkout does not run. Claude''s argv is exactly --print --setting-sources=user --settings {"disableAllHooks":true} --strict-mcp-config --tools '''' --disable-slash-commands --no-session-persistence. Codex''s argv is exec --sandbox=read-only --skip-git-repo-check --ephemeral -- -.
+
+    (2) [behavioral-test] env_clear plus PATH/HOME/LANG/TERM/LC_* and that vendor''s auth only. A sentinel GH_TOKEN and AIDA_SESSION_GRANT never reach any runner, OPENAI_API_KEY never reaches claude, ANTHROPIC_API_KEY never reaches codex, and the custom command gets no vendor auth.
+
     (3) [behavioral-test] Refused: a relative value (scripts/review), a runner inside the checkout, a directory, and an empty value with no agent. The vendor binary is also resolved to an absolute path outside the checkout, and only from absolute PATH entries.
+
     (4) [behavioral-test] A 200 KiB prompt arrives on stdin from a writer thread, and argv equals the fixed table. A runner that exits 0 without reading the whole prompt fails.
-    (5) [behavioral-test] s3a_runner_deadline_and_output_caps_fail_closed: a 1 s deadline kills the 'sleep 30' process group in under 10 s, the stdout cap and the stderr cap each fail closed, and a non-zero exit surfaces stderr.
-    (6) [behavioral-test] gemini, agy, antigravity, '' and claude-x are refused; parsing goes through LaunchVendor::parse and a closed match.
+
+    (5) [behavioral-test] s3a_runner_deadline_and_output_caps_fail_closed: a 1 s deadline kills the ''sleep 30'' process group in under 10 s, the stdout cap and the stderr cap each fail closed, and a non-zero exit surfaces stderr.
+
+    (6) [behavioral-test] gemini, agy, antigravity, '''' and claude-x are refused; parsing goes through LaunchVendor::parse and a closed match.
+
     Probes: exit is detected with waitid(WNOWAIT), so the group is killed before the child is reaped (no pgid reuse). A waitid error kills the group, and the run then fails on its exit status.
-    Residual risks: a runner that calls setsid escapes the group kill and could hold the pipes. Codex read-only can still read files on the host. Claude still loads the operator's own ~/.claude user settings, with hooks off. 'Unknown agent refused' is unit-level only until --run-review is wired.
-    Checks: the targeted cargo test passed 2/2, and make check-ci-fast exited 0 at this HEAD.
-  created_at: 2026-11-25T18:03:02.249173Z
-  modified_at: 2026-11-25T18:03:02.249173Z
+
+    Residual risks: a runner that calls setsid escapes the group kill and could hold the pipes. Codex read-only can still read files on the host. Claude still loads the operator''s own ~/.claude user settings, with hooks off. ''Unknown agent refused'' is unit-level only until --run-review is wired.
+
+    Checks: the targeted cargo test passed 2/2, and make check-ci-fast exited 0 at this HEAD.'
+  created_at: 2026-11-25 18:03:02.249173+00:00
+  modified_at: 2026-11-25 18:03:02.249173+00:00
   session_id: 01a21396870a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a213e5-562e-7c20-bd63-c85819e53607
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4582 @ b39e428e49 (STORY-3120 S3a, hardened review-runner spawn helper only; Refs-only; +396, of which about 150 are tests and 13 are ratchet entries).
+  content: 'AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4582 @ b39e428e49 (STORY-3120 S3a, hardened review-runner spawn helper only; Refs-only; +396, of which about 150 are tests and 13 are ratchet entries).
+
 
     Result: PASS as a helper slice. STRICT tier, so it still needs an INDEPENDENT review at the final head (no self-approve, no carry-over).
 
+
     Binding items from comment 19:
+
     1. cwd: a fresh tempdir. For claude: --setting-sources=user, --settings {"disableAllHooks":true}, --strict-mcp-config with no --mcp-config (so no servers), --tools "" (no tools), --disable-slash-commands, --no-session-persistence. For codex: exec --sandbox=read-only --ephemeral. The test plants .claude/settings.json + hook.sh in the checkout and asserts the marker is absent. ✔
-    2. env: env_clear(), then PATH/HOME/LANG/TERM/LC_* and that vendor's auth vars only. The custom cmd gets NO vendor auth. The test uses sentinels for GH_TOKEN, AIDA_SESSION_GRANT and the cross-vendor key, and checks each never arrives. The three AIDA_REVIEW_* keys are added to DROPPED_AIDA_KEYS, so seats never inherit the operator's runner cmd. ✔
+
+    2. env: env_clear(), then PATH/HOME/LANG/TERM/LC_* and that vendor''s auth vars only. The custom cmd gets NO vendor auth. The test uses sentinels for GH_TOKEN, AIDA_SESSION_GRANT and the cross-vendor key, and checks each never arrives. The three AIDA_REVIEW_* keys are added to DROPPED_AIDA_KEYS, so seats never inherit the operator''s runner cmd. ✔
+
     3. AIDA_REVIEW_RUNNER_CMD: read only from the operator env; must be absolute; canonicalised (symlinks resolved) before the regular-file check and the outside-checkout check. The PATH-resolved vendor binary gets the same checks, and relative PATH entries are skipped. Tests cover relative, inside-checkout, directory and empty values. ✔
-    4. stdin: the prompt goes in from a writer thread; argv must equal the fixed table exactly. Tests: a 200 KiB prompt, and a "deaf" runner that doesn't read stdin is an error. SIGPIPE is ignored by the Rust runtime, so the deaf case gives EPIPE, not a kill. ✔
-    5. Deadline: process_group(0); waitid(WNOWAIT) polling, so the leader stays unreaped and the pgid can't be reused before kill(-pgid). Caps: 4 MiB stdout, 64 KiB stderr; the reader stops at cap+1, then the group is killed. Tests: a 1s deadline finishes in under 10s; each cap overflows; a non-zero exit puts stderr in the error. ✔
-    6. Closed match over LaunchVendor::parse with no default arm. gemini, agy, antigravity, '' and claude-x are refused. ✔
+
+    4. stdin: the prompt goes in from a writer thread; argv must equal the fixed table exactly. Tests: a 200 KiB prompt, and a "deaf" runner that doesn''t read stdin is an error. SIGPIPE is ignored by the Rust runtime, so the deaf case gives EPIPE, not a kill. ✔
+
+    5. Deadline: process_group(0); waitid(WNOWAIT) polling, so the leader stays unreaped and the pgid can''t be reused before kill(-pgid). Caps: 4 MiB stdout, 64 KiB stderr; the reader stops at cap+1, then the group is killed. Tests: a 1s deadline finishes in under 10s; each cap overflows; a non-zero exit puts stderr in the error. ✔
+
+    6. Closed match over LaunchVendor::parse with no default arm. gemini, agy, antigravity, '''' and claude-x are refused. ✔
+
 
     SHOULD-FIX, before or in the --run-review slice:
-    (a) UNBOUNDED JOINS. The stdout/stderr reader joins and the stdin writer join have no deadline. A descendant that calls setsid() (or a double-forked daemon) leaves the group and keeps the pipe fds, so read_to_end/write_all never return and `run` hangs past its deadline. This fails as a hang, not open, but a CI gate needs a bound. Fix: after kill(-pgid), wait for each thread with a short grace (poll JoinHandle::is_finished for about 5s). If one hasn't finished, return "review runner left descendants holding its pipes" and leak the thread. Test: a runner that runs `setsid sleep 60 &` with inherited stdout, then exits.
+
+    (a) UNBOUNDED JOINS. The stdout/stderr reader joins and the stdin writer join have no deadline. A descendant that calls setsid() (or a double-forked daemon) leaves the group and keeps the pipe fds, so read_to_end/write_all never return and `run` hangs past its deadline. This fails as a hang, not open, but a CI gate needs a bound. Fix: after kill(-pgid), wait for each thread with a short grace (poll JoinHandle::is_finished for about 5s). If one hasn''t finished, return "review runner left descendants holding its pipes" and leak the thread. Test: a runner that runs `setsid sleep 60 &` with inherited stdout, then exits.
+
     (b) The out-of-inventory refusal test (item 11) and the git_text should-fixes (env scrub, --no-textconv, no silent full-file fallback) are deferred to the --run-review slice. The PR body says so, and the next brief must carry them.
+
     (c) Nit: var() returns the FIRST non-empty match, while cmd.env applies the LAST duplicate. std::env::vars_os never yields duplicate keys, so the --run-review caller must pass vars_os() unchanged.
 
-    Residual risks the PR body states (accepted): codex read-only can still read host files; claude loads the operator's ~/.claude user settings with hooks disabled; a setsid escape (see (a)).
-    Merge-tree against integration: CLEAN (new files only, plus additive lines in launch/mod.rs, vendors/mod.rs, launch_env_keys.rs, ratchet-set.json and store-writers.toml).
-  created_at: 2026-11-25T18:08:29.596043Z
-  modified_at: 2026-11-25T18:08:29.596043Z
+
+    Residual risks the PR body states (accepted): codex read-only can still read host files; claude loads the operator''s ~/.claude user settings with hooks disabled; a setsid escape (see (a)).
+
+    Merge-tree against integration: CLEAN (new files only, plus additive lines in launch/mod.rs, vendors/mod.rs, launch_env_keys.rs, ratchet-set.json and store-writers.toml).'
+  created_at: 2026-11-25 18:08:29.596043+00:00
+  modified_at: 2026-11-25 18:08:29.596043+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a213ea-739d-72a2-96ca-b33bca8b768f
   author: joe
-  content: |-
-    SLICE-BRIEF NOTE for S3a-2, the --run-review slice (advisor ruling 11:18; recorded by integration-30). S3a-2 must carry, in addition to wiring --run-review onto launch::review_runner::RunnerCall:
-    (1) BOUNDED JOINS (#4582 pre-check should-fix a). After kill(-pgid), wait for the stdout/stderr reader threads and the stdin writer thread with a short grace (poll JoinHandle::is_finished, about 5s). If any thread is still running, fail closed with 'review runner left descendants holding its pipes' and leak that thread. TEST: a runner that starts a setsid'd (or double-forked) descendant that inherits stdout/stdin, then exits. run() must return an error within deadline + grace.
+  content: 'SLICE-BRIEF NOTE for S3a-2, the --run-review slice (advisor ruling 11:18; recorded by integration-30). S3a-2 must carry, in addition to wiring --run-review onto launch::review_runner::RunnerCall:
+
+    (1) BOUNDED JOINS (#4582 pre-check should-fix a). After kill(-pgid), wait for the stdout/stderr reader threads and the stdin writer thread with a short grace (poll JoinHandle::is_finished, about 5s). If any thread is still running, fail closed with ''review runner left descendants holding its pipes'' and leak that thread. TEST: a runner that starts a setsid''d (or double-forked) descendant that inherits stdout/stdin, then exits. run() must return an error within deadline + grace.
+
     (2) Item 11: a runner finding path outside the PR inventory refuses the whole --run-review run. Add a test.
+
     (3) git_text should-fixes: route through a sanitized git builder (the env allowlist, see the BUG-2760 note and the TASK-3874 sketch), add --no-textconv, and make a diff failure an error, with no silent full-file fallback.
+
     (4) The caller passes std::env::vars_os() unchanged as parent_env.
-    S3b (--effort/--model allowlists, review-rules.toml from the trusted base) follows after S3a-2.
-  created_at: 2026-11-25T18:13:57.136366Z
-  modified_at: 2026-11-25T18:13:57.136366Z
+
+    S3b (--effort/--model allowlists, review-rules.toml from the trusted base) follows after S3a-2.'
+  created_at: 2026-11-25 18:13:57.136366+00:00
+  modified_at: 2026-11-25 18:13:57.136366+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a213f8-7d0f-7bd3-9302-66a1d9c98042
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int40-story-3120-s3a` at head `b39e428e49dde9ff26deec7cdff01c9f3fc01ad3`.'
-  created_at: 2026-11-25T18:29:41.775858Z
-  modified_at: 2026-11-25T18:29:41.775858Z
+  created_at: 2026-11-25 18:29:41.775858+00:00
+  modified_at: 2026-11-25 18:29:41.775858+00:00
   session_id: 01a21396870a
 - id: 01a21420-3e8e-76b1-ba40-0cbbc3d44905
   author: aida-auto-bump
-  content: |-
-    [aida:refs-landing] bd150e16c1ee
-    A reference merge (commit bd150e16c1ee, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
-  created_at: 2026-11-25T19:13:07.214877Z
-  modified_at: 2026-11-25T19:13:07.214877Z
+  content: '[aida:refs-landing] bd150e16c1ee
+
+    A reference merge (commit bd150e16c1ee, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
+  created_at: 2026-11-25 19:13:07.214877+00:00
+  modified_at: 2026-11-25 19:13:07.214877+00:00
 - id: 01a21462-5d6c-7833-b11d-2473481f7e61
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #4582):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #4582):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: b39e428e49dd
+
     Recorded: 2026-11-25T20:20:11.649937564+00:00
+
     Findings:
-    1. aida-cli-lib/src/launch/review_runner.rs:109-110,131-135: the stdin writer thread writes to the runner pipe with the process's default SIGPIPE disposition. The aida binary restores SIGPIPE to SIG_DFL at startup (cli_entry.rs install_sigpipe_handler, BUG-99; agent_claude_background.rs:83 already works around this with MSG_NOSIGNAL). So in production, every 'fail closed' path where the prompt is not fully consumed kills the whole aida process with signal 141 instead of returning the documented error: (a) a 'deaf' runner that exits without reading a prompt larger than the 64 KiB pipe buffer; (b) a deadline kill, or (c) a stdout/stderr cap trip, while the writer is still blocked in write_all (kill(-pgid) closes the read end and the next write raises SIGPIPE). The caller gets no diagnostic, and the temp workdir is not cleaned up. The tests pass only because libtest leaves SIGPIPE ignored; the integration-30 pre-check (comment 25, item 4) made the same assumption ('SIGPIPE is ignored by the Rust runtime'). Fix: block SIGPIPE in the writer thread (pthread_sigmask SIG_BLOCK before write_all) or write through a path that cannot raise it, and prove it with a test that runs the deaf, deadline and cap cases in a subprocess or thread with SIGPIPE set to SIG_DFL. This is an untested refusal path in the hardened spawn (containment) helper, so it blocks under ADR-76. Not affected by the stale base: none of the base's changes touch this module or cli_entry.rs.
-    2. aida-cli-lib/src/launch/review_runner.rs:150 and the PR body / self-review item 4: 'a runner that exits without reading the whole prompt fails' holds only when the prompt is larger than the pipe buffer (about 64 KiB). For a smaller prompt write_all completes into the kernel buffer, so a runner that ignores stdin and prints canned output (for example '{}') with exit 0 passes. The test uses a 1 MiB prompt, so it does not show this. Either narrow the claim in the docs and PR, or detect the unread prompt (for example check the pipe is drained before exit). Follow-up for the --run-review slice.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-25T20:25:20.492577Z
-  modified_at: 2026-11-25T20:25:20.492577Z
+
+    1. aida-cli-lib/src/launch/review_runner.rs:109-110,131-135: the stdin writer thread writes to the runner pipe with the process''s default SIGPIPE disposition. The aida binary restores SIGPIPE to SIG_DFL at startup (cli_entry.rs install_sigpipe_handler, BUG-99; agent_claude_background.rs:83 already works around this with MSG_NOSIGNAL). So in production, every ''fail closed'' path where the prompt is not fully consumed kills the whole aida process with signal 141 instead of returning the documented error: (a) a ''deaf'' runner that exits without reading a prompt larger than the 64 KiB pipe buffer; (b) a deadline kill, or (c) a stdout/stderr cap trip, while the writer is still blocked in write_all (kill(-pgid) closes the read end and the next write raises SIGPIPE). The caller gets no diagnostic, and the temp workdir is not cleaned up. The tests pass only because libtest leaves SIGPIPE ignored; the integration-30 pre-check (comment 25, item 4) made the same assumption (''SIGPIPE is ignored
+    by the Rust runtime''). Fix: block SIGPIPE in the writer thread (pthread_sigmask SIG_BLOCK before write_all) or write through a path that cannot raise it, and prove it with a test that runs the deaf, deadline and cap cases in a subprocess or thread with SIGPIPE set to SIG_DFL. This is an untested refusal path in the hardened spawn (containment) helper, so it blocks under ADR-76. Not affected by the stale base: none of the base''s changes touch this module or cli_entry.rs.
+
+    2. aida-cli-lib/src/launch/review_runner.rs:150 and the PR body / self-review item 4: ''a runner that exits without reading the whole prompt fails'' holds only when the prompt is larger than the pipe buffer (about 64 KiB). For a smaller prompt write_all completes into the kernel buffer, so a runner that ignores stdin and prints canned output (for example ''{}'') with exit 0 passes. The test uses a 1 MiB prompt, so it does not show this. Either narrow the claim in the docs and PR, or detect the unread prompt (for example check the pipe is drained before exit). Follow-up for the --run-review slice.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-25 20:25:20.492577+00:00
+  modified_at: 2026-11-25 20:25:20.492577+00:00
 - id: 01a21464-f379-76e0-b2f5-eec285c707fc
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:27):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:27):
+
     # STORY-3120 S3a r2 (advisor-122 ruling 2026-11-25 13:27 on #4582 @ b39e428e; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int40-story-3120-s3a / PR #4582. <=40 lines. Keep the "(Refs STORY-3120)" title.
+
     (F1, real) The stdin writer thread must NOT die from SIGPIPE (the aida binary restores SIG_DFL, so a runner that closes stdin early KILLS aida). Block SIGPIPE in the writer thread (pthread_sigmask) so write returns EPIPE, and treat EPIPE as "runner refused input" → a run error. TEST: a runner that exits immediately, given a 200 KiB prompt → aida survives and reports the error.
+
     (F2) Fix the doc/PR-body claim: an early exit is detected only when the prompt exceeds the pipe buffer. For smaller prompts, a runner exiting before reading counts as an ordinary non-zero/empty-output failure; say so.
-    Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4582. COMMIT your work.
-  created_at: 2026-11-25T20:27:46.235940Z
-  modified_at: 2026-11-25T20:27:46.235940Z
+
+    Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4582. COMMIT your work.'
+  created_at: 2026-11-25 20:27:46.235940+00:00
+  modified_at: 2026-11-25 20:27:46.235940+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a214b6-0f0f-7853-bb52-e0ab7116a915
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 59f30c4ac229 (S3a r2, PR #4582)
-    F1 (SIGPIPE): the stdin writer thread blocks SIGPIPE with pthread_sigmask, so a closed runner stdin gives EPIPE, which is a run error, not a killed aida (the binary runs with SIG_DFL, BUG-99). [evidence: behavioral-test] s3a_runner_survives_default_sigpipe re-execs the test binary as a child at SIG_DFL and covers the deaf (exits immediately), deadline and stdout-cap cases with a 200 KiB prompt. The parent requires the child to exit cleanly with '1 passed'.
+
+    F1 (SIGPIPE): the stdin writer thread blocks SIGPIPE with pthread_sigmask, so a closed runner stdin gives EPIPE, which is a run error, not a killed aida (the binary runs with SIG_DFL, BUG-99). [evidence: behavioral-test] s3a_runner_survives_default_sigpipe re-execs the test binary as a child at SIG_DFL and covers the deaf (exits immediately), deadline and stdout-cap cases with a 200 KiB prompt. The parent requires the child to exit cleanly with ''1 passed''.
+
     F2: the run() doc and the PR body now say an unread prompt is detected only above the pipe buffer (~64 KiB). Below that, a runner that exits early fails only on its own exit status or output.
+
     Also: the test helper writes scripts through install(1), fixing an ETXTBSY race with forking parallel tests that the new test exposed. The new test is listed in ratchet-set.json.
+
     Checks: cargo test -p aida-cli-lib --lib launch::review_runner: 3 passed. make check-ci-fast: exit 0.
-    Residual: a pending blocked SIGPIPE is discarded when the writer thread exits (Linux thread-directed semantics). Over the 40-line budget: about 56 lines in review_runner.rs, mostly the child-process test.
-  created_at: 2026-11-25T21:56:45.455740Z
-  modified_at: 2026-11-25T21:56:45.455740Z
+
+    Residual: a pending blocked SIGPIPE is discarded when the writer thread exits (Linux thread-directed semantics). Over the 40-line budget: about 56 lines in review_runner.rs, mostly the child-process test.'
+  created_at: 2026-11-25 21:56:45.455740+00:00
+  modified_at: 2026-11-25 21:56:45.455740+00:00
   session_id: 01a21468abcc
   harness_version: 2.1.319 (Claude Code)
 - id: 01a214b8-89cb-72e3-888f-2a6533a29d0f
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4582 r2 @ 59f30c4ac22 (STORY-3120 S3a, Refs-only). Own change vs d36df1471a9 (the integration merge): review_runner.rs +64/-7, plus one ratchet entry.
+  content: 'AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4582 r2 @ 59f30c4ac22 (STORY-3120 S3a, Refs-only). Own change vs d36df1471a9 (the integration merge): review_runner.rs +64/-7, plus one ratchet entry.
+
 
     Result: PASS. STRICT tier, so it still needs an INDEPENDENT review at this head (no carry-over).
 
+
     F1 (SIGPIPE), fixed:
+
     - The writer thread blocks SIGPIPE with pthread_sigmask before write_all.
-    - SIGPIPE raised by write() is thread-directed. While it is blocked, it stays pending on that thread and write returns EPIPE. A pending thread-directed signal is discarded when the thread exits, so it can't be delivered to another thread later.
-    - Nothing else writes to the pipe. Dropping stdin (close) doesn't raise SIGPIPE.
-    - I also correct my own comment 25 item 4: "SIGPIPE is ignored by the Rust runtime" doesn't hold for the aida binary (BUG-99 restores SIG_DFL).
+
+    - SIGPIPE raised by write() is thread-directed. While it is blocked, it stays pending on that thread and write returns EPIPE. A pending thread-directed signal is discarded when the thread exits, so it can''t be delivered to another thread later.
+
+    - Nothing else writes to the pipe. Dropping stdin (close) doesn''t raise SIGPIPE.
+
+    - I also correct my own comment 25 item 4: "SIGPIPE is ignored by the Rust runtime" doesn''t hold for the aida binary (BUG-99 restores SIG_DFL).
+
 
     Test s3a_runner_survives_default_sigpipe:
+
     - It re-executes the test binary filtered with --exact to this one test (the extra never-matching filter marks the child). The child sets SIGPIPE to SIG_DFL and runs three cases with a 200 KiB prompt: deaf runner, 1s deadline, stdout cap.
+
     - The parent requires the child to exit successfully with "1 passed". Without the fix, the child would die from SIGPIPE and the parent assert would fail.
+
     - This works the same under libtest and nextest.
+
     - Ratchet entry added.
+
 
     F2 (doc claim), fixed: the run() doc and the PR body row 4 now say an unread prompt is detected only above the pipe buffer (~64 KiB).
 
+
     Test helper change (script() writes via install(1) to avoid ETXTBSY from a parallel fork inheriting a write fd): reasonable, test-only.
+
 
     Still open for S3a-2, unchanged from comment 26: bounded joins (setsid descendant), the item-11 refusal test, git_text fixes, and vars_os passed unchanged.
 
-    Merge-tree against origin/integration: CLEAN. GitHub reports MERGEABLE.
-  created_at: 2026-11-25T21:59:12.574135Z
-  modified_at: 2026-11-25T21:59:12.574135Z
+
+    Merge-tree against origin/integration: CLEAN. GitHub reports MERGEABLE.'
+  created_at: 2026-11-25 21:59:12.574135+00:00
+  modified_at: 2026-11-25 21:59:12.574135+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a214d4-79f4-75a1-8312-7effb1353f5c
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int40-story-3120-s3a` at head `59f30c4ac229cab0859b8ebe115d80efd3fa477b`.'
-  created_at: 2026-11-25T22:29:58.900761247Z
-  modified_at: 2026-11-25T22:29:58.900761247Z
+  created_at: 2026-11-25 22:29:58.900761+00:00
+  modified_at: 2026-11-25 22:29:58.900761+00:00
   session_id: 01a21468abcc
 - id: 01a214d5-06cb-7f20-b448-5a97e0a176dc
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `int40-story-3120-s3a` at head `59f30c4ac229cab0859b8ebe115d80efd3fa477b`.'
-  created_at: 2026-11-25T22:30:34.955773488Z
-  modified_at: 2026-11-25T22:30:34.955773488Z
+  created_at: 2026-11-25 22:30:34.955773+00:00
+  modified_at: 2026-11-25 22:30:34.955773+00:00
   session_id: 01a21468abcc
 - id: 01a214de-4463-7721-a7c4-804224b36070
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:40):
-    # STORY-3120 S3b: --effort / --model with allowlists (advisor-122 ruling 2026-11-25 09:33; Joe's 0d21f696ebf addendum; product-15). Lane: CLAUDE. STRICT. Base: INTEGRATION after S3a merged, NEW branch int40-story-3120-s3b (cut from the integration tip). Reuse S3a's spawn helper. Title "(Refs STORY-3120)". <=300 lines.
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:40):
+
+    # STORY-3120 S3b: --effort / --model with allowlists (advisor-122 ruling 2026-11-25 09:33; Joe''s 0d21f696ebf addendum; product-15). Lane: CLAUDE. STRICT. Base: INTEGRATION after S3a merged, NEW branch int40-story-3120-s3b (cut from the integration tip). Reuse S3a''s spawn helper. Title "(Refs STORY-3120)". <=300 lines.
+
     READ: `aida show STORY-3120 --comments`, comments 16, 18, 19 (item 6 onward) and 20. Reference: commit 0d21f696ebf on story-3120-ci-review.
-    Precedence: flag > AIDA_REVIEW_EFFORT > review-rules.toml default_effort > the [agents] seat effort. Validate EVERY source against a fixed allowlist (low|medium|high|xhigh, plus max only where that vendor supports it) BEFORE argv is built. codex gets -c model_reasoning_effort=<enum> from the fixed enum only; claude/agy get --effort <enum>. --model is allowlisted the same way. review-rules.toml is read from the TRUSTED BASE, and the run is refused if the PR modifies it. Uses S3a's spawn helper. TESTS: an injected value (e.g. 'high"\nfoo=1') is refused from each source; refusal when the PR edits review-rules.toml.
-    One targeted cargo run, make check-ci-fast, new PR to integration. COMMIT.
-  created_at: 2026-11-25T22:40:14.179249364Z
-  modified_at: 2026-11-25T22:40:14.179249364Z
+
+    Precedence: flag > AIDA_REVIEW_EFFORT > review-rules.toml default_effort > the [agents] seat effort. Validate EVERY source against a fixed allowlist (low|medium|high|xhigh, plus max only where that vendor supports it) BEFORE argv is built. codex gets -c model_reasoning_effort=<enum> from the fixed enum only; claude/agy get --effort <enum>. --model is allowlisted the same way. review-rules.toml is read from the TRUSTED BASE, and the run is refused if the PR modifies it. Uses S3a''s spawn helper. TESTS: an injected value (e.g. ''high"\nfoo=1'') is refused from each source; refusal when the PR edits review-rules.toml.
+
+    One targeted cargo run, make check-ci-fast, new PR to integration. COMMIT.'
+  created_at: 2026-11-25 22:40:14.179249+00:00
+  modified_at: 2026-11-25 22:40:14.179249+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21523-261d-78c2-ad9b-7473b1eb5f5b
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 7dd897021efb82368b6f436053fe65de1acd2413 (int40-story-3120-s3b, base integration). S3b: --effort/--model tuning on the S3a spawn helper, Refs-only.
+
+    Round-2 findings on #4582 (SIGPIPE, unread-prompt claim) were already fixed in merged S3a (launch/review_runner.rs SIGPIPE block + s3a_runner_survives_default_sigpipe; doc narrowed), so this round has nothing to redo there.
+
+    AC effort allowlist: [evidence: behavioral-test] launch/review_tuning.rs resolve() validates EVERY source (a valid higher source does not mask a bad lower one) against the per-vendor enum (vendors/review_runner.rs efforts; max only for claude), and the error names the source. s3b_tuning_refuses_injected_values_from_every_source: ''high"\nfoo=1'' is refused from flag/env/rules/seat for claude, codex and custom runners; the real chain is exercised through resolve_for_run with AIDA_REVIEW_EFFORT and a .aida/config.toml reviewer seat.
+
+    AC codex enum only: [evidence: behavioral-test] argv_with emits -c model_reasoning_effort=<static enum str> before codex''s ''--''; claude gets --effort. RunnerCall::run refuses an effort the running vendor lacks (s3b_runner_argv_carries_only_validated_tuning: claude-resolved max with codex is refused).
+
+    AC model allowlist: [evidence: behavioral-test] [A-Za-z0-9._:/-], no leading ''-'', <=128, refused per source.
+
+    AC trusted base: [evidence: behavioral-test] trusted_review_rules reads the blob from base^{commit} via host git; refused when head or the working tree modifies or deletes it; leading ''-'' revisions are refused (s3b_review_rules_come_from_the_trusted_base).
+
+    Probes: case-sensitive enum (fail closed); a non-UTF-8 env value maps to an invalid marker so it refuses rather than unsets; a symlink/non-blob at base is refused.
+
+    Residual risks: (1) --effort/--model clap flags and the call site land with --run-review (S3a-2, not yet merged); the resolver takes flag values as inputs. (2) The [agents] seat source still reads .aida/config.toml from the checkout; it is validated, so it cannot inject, but a PR could pick another valid level. (3) The diff is ~400 lines (about 230 of them tests plus ratchet JSON), over the 300 budget.
+
+    Checks: targeted cargo test launch::review_ 6/6 pass; make check-ci-fast exit 0.'
+  created_at: 2026-11-25 23:55:54.781700+00:00
+  modified_at: 2026-11-25 23:55:54.781700+00:00
+  session_id: 01a214f27665
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21528-ea12-7de2-b1e8-c3b748f71f07
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4603 @ 7dd897021ef (STORY-3120 S3b: --effort/--model tuning plus trusted-base review rules; Refs-only; +401/-2, of which about 190 are tests).
-
-    Result: FAIL, with ONE blocking item (B1). Everything else passes. STRICT tier, so it needs an INDEPENDENT review at the final head.
-
-    Scope guard (product 16:14): PASS. There is no new runner spawn path and no --run-review wiring; review_tuning is dead code outside tests, like S3a. The only new child processes are `git diff/ls-tree/cat-file`, run through host_git_command, which refuses seat clones.
-
-    B1 (blocking; comment 19 item 8 / advisor 09:33 "the PR under review cannot pick its own reviewer, model and effort"):
-    - resolve_for_run takes the 4th precedence source, the reviewer seat's effort and model, from aida_core::agents_config::resolve_agent_tuning(project_root, ...). That reads project_root/.aida/config.toml and project_root/.aida/agents.toml from the WORKING TREE, which is the checkout under review (agents_config.rs:358-372).
-    - So a PR that adds `[agents.codex.seats.reviewer] effort = "low"` (or a weak model) downgrades its own review whenever no flag, env value or review-rules default is set.
-    - The allowlist stops injection but not a downgrade.
-    - Required:
-      - read the project [agents] tuning from the trusted base, the same way as review-rules.toml: the base blobs of .aida/config.toml and .aida/agents.toml, passed to resolve_agent_tuning_from. The global ~/.aida/agents.toml stays as is.
-      - AND extend the trusted_review_rules diff guard to refuse when the change modifies .aida/config.toml [agents] or .aida/agents.toml. Refusing on any change to either file is acceptable.
-      - TEST: a head commit that sets a reviewer-seat effort in .aida/config.toml either refuses or has no effect on the resolved tuning.
-
-    Passes:
-    1. The effort allowlist is fixed per vendor (claude low..max, codex low..xhigh, custom cmd low..xhigh). EVERY source is validated before the first set value is taken, so a valid flag doesn't mask a bad lower source. The error names the source. Tests cover the injected `high"\nfoo=1` at flag, env, rules and seat, for claude, codex and the custom cmd. run() re-checks effort against the vendor actually spawned, so claude's max can't reach codex (tested).
-    2. The model is checked against [A-Za-z0-9._:/-], at most 128 characters and no leading '-', for every source. It goes in as its own argv element after --model.
-    3. Codex effort becomes `-c model_reasoning_effort=<enum>`, built only from the &'static allowlist entry, never the raw string. Flags are inserted before `--`, so the stdin `-` stays last for codex.
-    4. review-rules.toml is read via ls-tree/cat-file at `base^{commit}`. A symlink or non-blob is refused. A diff of base..head (or base..worktree) touching the file refuses the run, and that covers edits, additions and deletions. A revision starting with '-' is refused (tested).
-    5. The four new AIDA_REVIEW_* keys are added to DROPPED_AIDA_KEYS.
-
-    Should-fix (non-blocking, may ride the B1 round or S3a-2):
-    (a) The trusted-base git calls should pass --no-replace-objects (`git --no-replace-objects ls-tree/cat-file`). Otherwise a refs/replace entry substitutes the "base" blob (the S2 #4511 lesson).
-    (b) The diff guard compares the trees base and head directly. If `base` is the moving target tip and the target branch changed review-rules.toml after the PR forked, the run is refused spuriously. That fails closed, but S3a-2 should pass the merge-base as `base`.
-    (c) For S3a-2 wiring: `base` must come from the forge target or the local default ref, never from a PR-supplied value. `head` must be the reviewed head SHA (not None) in CI, so uncommitted working-tree state doesn't matter.
-
-    Merge-tree against origin/integration: CLEAN. FAST is green so far (2 SUCCESS, remainder pending or skipped).
-  created_at: 2026-11-26T00:01:56.040519101Z
-  modified_at: 2026-11-26T00:01:56.040519101Z
+  content: "AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4603 @ 7dd897021ef (STORY-3120 S3b: --effort/--model tuning plus trusted-base review rules; Refs-only; +401/-2, of which about 190 are tests).\n\nResult: FAIL, with ONE blocking item (B1). Everything else passes. STRICT tier, so it needs an INDEPENDENT review at the final head.\n\nScope guard (product 16:14): PASS. There is no new runner spawn path and no --run-review wiring; review_tuning is dead code outside tests, like S3a. The only new child processes are `git diff/ls-tree/cat-file`, run through host_git_command, which refuses seat clones.\n\nB1 (blocking; comment 19 item 8 / advisor 09:33 \"the PR under review cannot pick its own reviewer, model and effort\"):\n- resolve_for_run takes the 4th precedence source, the reviewer seat's effort and model, from aida_core::agents_config::resolve_agent_tuning(project_root, ...). That reads project_root/.aida/config.toml and project_root/.aida/agents.toml from\
+    \ the WORKING TREE, which is the checkout under review (agents_config.rs:358-372).\n- So a PR that adds `[agents.codex.seats.reviewer] effort = \"low\"` (or a weak model) downgrades its own review whenever no flag, env value or review-rules default is set.\n- The allowlist stops injection but not a downgrade.\n- Required:\n  - read the project [agents] tuning from the trusted base, the same way as review-rules.toml: the base blobs of .aida/config.toml and .aida/agents.toml, passed to resolve_agent_tuning_from. The global ~/.aida/agents.toml stays as is.\n  - AND extend the trusted_review_rules diff guard to refuse when the change modifies .aida/config.toml [agents] or .aida/agents.toml. Refusing on any change to either file is acceptable.\n  - TEST: a head commit that sets a reviewer-seat effort in .aida/config.toml either refuses or has no effect on the resolved tuning.\n\nPasses:\n1. The effort allowlist is fixed per vendor (claude low..max, codex low..xhigh, custom cmd low..xhigh).\
+    \ EVERY source is validated before the first set value is taken, so a valid flag doesn't mask a bad lower source. The error names the source. Tests cover the injected `high\"\\nfoo=1` at flag, env, rules and seat, for claude, codex and the custom cmd. run() re-checks effort against the vendor actually spawned, so claude's max can't reach codex (tested).\n2. The model is checked against [A-Za-z0-9._:/-], at most 128 characters and no leading '-', for every source. It goes in as its own argv element after --model.\n3. Codex effort becomes `-c model_reasoning_effort=<enum>`, built only from the &'static allowlist entry, never the raw string. Flags are inserted before `--`, so the stdin `-` stays last for codex.\n4. review-rules.toml is read via ls-tree/cat-file at `base^{commit}`. A symlink or non-blob is refused. A diff of base..head (or base..worktree) touching the file refuses the run, and that covers edits, additions and deletions. A revision starting with '-' is refused (tested).\n\
+    5. The four new AIDA_REVIEW_* keys are added to DROPPED_AIDA_KEYS.\n\nShould-fix (non-blocking, may ride the B1 round or S3a-2):\n(a) The trusted-base git calls should pass --no-replace-objects (`git --no-replace-objects ls-tree/cat-file`). Otherwise a refs/replace entry substitutes the \"base\" blob (the S2 #4511 lesson).\n(b) The diff guard compares the trees base and head directly. If `base` is the moving target tip and the target branch changed review-rules.toml after the PR forked, the run is refused spuriously. That fails closed, but S3a-2 should pass the merge-base as `base`.\n(c) For S3a-2 wiring: `base` must come from the forge target or the local default ref, never from a PR-supplied value. `head` must be the reviewed head SHA (not None) in CI, so uncommitted working-tree state doesn't matter.\n\nMerge-tree against origin/integration: CLEAN. FAST is green so far (2 SUCCESS, remainder pending or skipped)."
+  created_at: 2026-11-26 00:01:56.040519+00:00
+  modified_at: 2026-11-26 00:01:56.040519+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
-  timestamp: 2026-11-25T07:44:00.166801Z
+  timestamp: 2026-11-25 07:44:00.166801+00:00
   changes:
   - field_name: tags
     old_value: ''
     new_value: integration
 - id: 01a211d6-d24e-74a1-bcd8-c15d7ffb38c2
   author: aida-session-start
-  timestamp: 2026-11-25T08:33:40.942941Z
+  timestamp: 2026-11-25 08:33:40.942941+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a211d7-8b00-73e3-b5ed-4ba493725e1e
   author: dirtlab
-  timestamp: 2026-11-25T08:34:28.224422Z
+  timestamp: 2026-11-25 08:34:28.224422+00:00
   session_id: 01a211d677cd
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a21211-5437-7722-9783-ae72787dc397
   author: joe
-  timestamp: 2026-11-25T09:37:35.287479Z
+  timestamp: 2026-11-25 09:37:35.287479+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21243-9d68-7df1-bd4b-f4c8e7ecff0b
   author: dirtlab
-  timestamp: 2026-11-25T10:32:30.824072Z
+  timestamp: 2026-11-25 10:32:30.824072+00:00
   session_id: 01a21242dde8
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a21280-891e-77d3-a3d1-dbc26974f82e
   author: joe
-  timestamp: 2026-11-25T11:39:03.326391Z
+  timestamp: 2026-11-25 11:39:03.326391+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21285-ff4b-7201-9417-0a030c6ff1d1
   author: aida-session-start
-  timestamp: 2026-11-25T11:45:01.259468Z
+  timestamp: 2026-11-25 11:45:01.259468+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21286-8aee-7b01-b394-f36636f2f022
   author: dirtlab
-  timestamp: 2026-11-25T11:45:37.006738Z
+  timestamp: 2026-11-25 11:45:37.006738+00:00
   session_id: 01a21285c99f
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a2138b-830d-7782-baa1-d5278ffe7622
   author: joe
-  timestamp: 2026-11-25T16:30:39.885933Z
+  timestamp: 2026-11-25 16:30:39.885933+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21396-bc17-7f82-b2d2-a6aaaee87883
   author: aida-session-start
-  timestamp: 2026-11-25T16:42:55.383291Z
+  timestamp: 2026-11-25 16:42:55.383291+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21462-4ee2-7741-96e9-590b36921993
   author: joe
-  timestamp: 2026-11-25T20:25:16.770564Z
+  timestamp: 2026-11-25 20:25:16.770564+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21469-0b9f-7472-99eb-a43ac8e90333
   author: aida-session-start
-  timestamp: 2026-11-25T20:32:38.303745Z
+  timestamp: 2026-11-25 20:32:38.303745+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a214da-aa54-71f2-9eb8-f5782ce7c92c
   author: joe
-  timestamp: 2026-11-25T22:36:44.500349515Z
+  timestamp: 2026-11-25 22:36:44.500349+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a214f2-a99d-7e82-af1a-e39ae98dccd8
   author: aida-session-start
-  timestamp: 2026-11-25T23:02:57.181214702Z
+  timestamp: 2026-11-25 23:02:57.181214+00:00
   changes:
   - field_name: status
     old_value: Approved
