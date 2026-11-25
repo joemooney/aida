@@ -1,0 +1,34 @@
+id: 01a2110c-e7f7-7110-a6f4-fc17721c6fe8
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-304
+title: 'Review PR-4560: [AI:codex] fix(review): prevent implicit fetches during risk base resolution (Refs TASK-3874)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a210c5`) for branch `int38-task-3874-r3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4560>
+  - Branch: `int38-task-3874-r3` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3874
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4560` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T04:53:08.215656547Z
+modified_at: 2026-11-25T04:53:08.215656547Z
+req_type: Story
+filed_at:
+  code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45206d90a1
+  session: 01a210c5f448
