@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 833284c12f44606b5f680b675adc6d851eceb167
 
   aida-cli-lib/src/lane_admission.rs:405 and aida-cli-lib/src/queue_cmd/work.rs:5153. Early acquisition immediately starts the 30-minute release timer, so store sync and pickup setup now consume the cold-start reservation budget. If setup outlasts it, the timer drops the socket and standalone run still accepts the expired Startup, allowing spawn without a reservation. Start the launch timeout after setup or detect expiry and re-admit outside the store lock before spawning.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T04:06:58.675648986Z
-modified_at: 2026-11-25T07:19:32.457283940Z
+modified_at: 2026-11-25T07:19:35.432878124Z
 req_type: Task
 tags:
 - carried-from:BUG-2740
@@ -39,6 +39,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21192-fd08-7ad2-b1ff-cfdc7f77e800
+  author: joe
+  timestamp: 2026-11-25T07:19:35.432873636Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 833284c12f44606b5f680b675adc6d851eceb167
   branch: pr-4481
