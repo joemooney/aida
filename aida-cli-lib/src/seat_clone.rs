@@ -1589,7 +1589,7 @@ fi
 printf '\0'
 ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || git rev-list --count main..HEAD 2>/dev/null || printf '0')
 printf '%s\0' "$ahead"
-git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
+git status --porcelain=v1 -z --ignored=no --untracked-files=all --ignore-submodules=all
 "#;
     run_sandboxed_until(
         clone,
@@ -2096,6 +2096,7 @@ pub(crate) fn probe_until(
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
             "--branch".as_ref(),
+            "--ignored=no".as_ref(), // trace:BUG-2742 | ai:codex
             "--untracked-files=all".as_ref(),
             "--ignore-submodules=none".as_ref(),
             // Match commit_pending: the host marker is never seat work.
@@ -3068,6 +3069,26 @@ pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
     salvage_capped(main, clone, SALVAGE_OUTPUT_CAP, false)
 }
 
+/// Informational only. Keep Git from the seat inside the salvage read sandbox.
+// trace:BUG-2722 | ai:codex
+pub(crate) fn repair_unpushed_count(main: &Path, tree: &Path) -> Option<u64> {
+    let output = run_sandboxed(
+        tree,
+        main,
+        "git",
+        &[
+            "rev-list".as_ref(),
+            "--count".as_ref(),
+            "HEAD".as_ref(),
+            "--not".as_ref(),
+            "--remotes".as_ref(),
+        ],
+        128,
+    )
+    .ok()?;
+    std::str::from_utf8(&output).ok()?.trim().parse().ok()
+}
+
 /// [`salvage`] for a caller that gives up the lane's lease once the patch
 /// exists: a staged version that neither HEAD nor the working tree holds
 /// fails it, checked inside the sandbox, so no patch claims to be the whole
@@ -3906,8 +3927,12 @@ fn prepare_host_repair_with(
         let guard = RepairGuard::lock(main)?;
         let entry = guard.for_tree(tree, branch, &head, &merge)?;
         anyhow::ensure!(
-            resume && entry.lane_id == lane_id && pr_head == head,
-            "pending repair belongs to a different lane or head"
+            resume
+                && entry.lane_id == lane_id
+                && entry.key.pr == pr
+                && pr_head == head
+                && merge == base,
+            "pending repair belongs to a different lane, PR, head or base"
         );
         let paths = entry.original_conflict_paths.clone();
         let key = entry.key.clone();
