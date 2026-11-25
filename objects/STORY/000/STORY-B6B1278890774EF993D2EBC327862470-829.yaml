@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T11:20:50.050711941Z
+modified_at: 2026-11-25T11:38:18.183700013Z
 req_type: Story
 tags:
 - integration
@@ -158,6 +158,13 @@ comments:
     FAST is pending. This is pure engine logic, so the advisor may self-merge it.
   created_at: 2026-11-25T11:20:58.558444375Z
   modified_at: 2026-11-25T11:20:58.558444375Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21280-1d31-7b40-9523-1b68316cc75a
+  author: joe
+  content: 'SLICE-BRIEF NOTE for S2 (advisor 04:49): S1 merged into integration as 8e55ef94e2b. Launch S2 from the new integration tip. Add to the S2 brief: findings_to_sarif_json maps an unknown or unparseable severity to SARIF level ''error'', not ''note'', to match the fail-closed rank in findings_exceeding_threshold, with a test. The earlier S2/S3 notes still apply: refuse runner paths outside the PR inventory, and apply the full security lens to --run-review.'
+  created_at: 2026-11-25T11:38:18.183700013Z
+  modified_at: 2026-11-25T11:38:18.183700013Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
