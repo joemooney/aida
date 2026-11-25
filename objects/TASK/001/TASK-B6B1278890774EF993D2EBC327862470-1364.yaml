@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: same-stem batching is scoped to the directory/package: files that share a stem in different directories or packages are not batched together. Test.
   - AC2: Rust review facets are keyed on the file's LANGUAGE, not on the playbook ID prefix. Test.
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T05:22:16.482413186Z
+modified_at: 2026-11-25T05:33:18.373143326Z
 req_type: Task
 tags:
 - integration
@@ -145,6 +145,13 @@ history:
   timestamp: 2026-11-25T05:22:04.303738256Z
   session_id: 01a21124b641
   changes: []
+- id: 01a21131-aea5-7fb3-a227-0822f35bb809
+  author: aida-session-start
+  timestamp: 2026-11-25T05:33:18.373140309Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
