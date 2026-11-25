@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T05:23:24.060531824Z
+modified_at: 2026-11-25T08:31:36.038446769Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -750,6 +750,11 @@ comments:
   modified_at: 2026-11-23T05:23:24.060531824Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a211d4-ea66-7692-a59a-24fef50843bc
+  author: joe
+  content: 'PARKED #4387 (advisor-122 01:20, at the round cap; branch kept: task-73022632d35647cca3858b18ac0723e3-027). 3 blocking fixture issues to fix in ONE <=150 test slice later: (1) a /var/tmp live fixture; (2) a /tmp libtest exe; (3) the preflight excluding temp grants.'
+  created_at: 2026-11-25T08:31:36.038446769Z
+  modified_at: 2026-11-25T08:31:36.038446769Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
