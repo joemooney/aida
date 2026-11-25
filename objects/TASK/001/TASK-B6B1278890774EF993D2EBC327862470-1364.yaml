@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T05:10:04.978461053Z
+modified_at: 2026-11-25T05:12:42.802692221Z
 req_type: Task
 tags:
 - integration
@@ -76,6 +76,20 @@ comments:
   created_at: 2026-11-25T05:06:54.382749754Z
   modified_at: 2026-11-25T05:06:54.382749754Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a2111f-1227-7322-9adf-29f254530132
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:12):
+    # TASK-3880 (H2c) / PR #4561 r2 (advisor-122 ruling 2026-11-24 21:58 via integration-30; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int38-task-3880. <=10 lines.
+    - A trailing tests/ or test/ directory keys as its PARENT for canonical_module_stem.
+    - Add a test that src/foo.rs pairs with src/tests/foo_tests.rs.
+    - RESTORE the original test case (tests/parser_test.rs) instead of editing it to fit.
+    - Fix docs/internal/presentation/aida-code-review-engine.md:79-80 (it still says only lib/mod/main are dir-qualified).
+    make check-ci-fast, then push to #4561. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T05:12:42.802692221Z
+  modified_at: 2026-11-25T05:12:42.802692221Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e94-a407-75a0-baf4-38e2a3232a5d
