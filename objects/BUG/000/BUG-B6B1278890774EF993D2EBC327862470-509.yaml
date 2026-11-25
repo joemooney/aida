@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T09:10:32.131443479Z
+modified_at: 2026-11-25T09:10:39.550717320Z
 req_type: Bug
 tags:
 - launch
@@ -302,6 +302,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2748 AC1 fails source review. Ordinary recovery can release a Prepared receipt with absent attribution keys, the inspection surface reports a normal phase for a held transfer without dispatcher attribution, and the legacy terminal exception cannot distinguish a partially corrupted post-transfer recovery from a Prepared recovery. AC2 passes source review. The grant-only success case now tests refusal and evidence preservation, and complete attribution has occupied, unreadable and clear scanner controls. Reviewed the full landed diff for acfa405338a5c0594f539768d81d12aa1b80b537 against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. The two trees at the landed result and original PR head have identical content. FAST source gates passed and compilation was pending when checked. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-25T09:10:32.131434872Z
   modified_at: 2026-11-25T09:10:32.131434872Z
+- id: 01a211f8-ac23-71e0-8e45-4bf3434c992e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2748):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 55db4c1eaffc
+    Recorded: 2026-11-25T09:09:25.775601178+00:00
+    Findings:
+    1. BUG-2748 AC1. A Prepared receipt with a valid Dispatcher owner and both worker and supervisor keys deleted still reads as Known (codex_bg_receipt.rs:621–655). The explicit-null check applies only to terminal receipts, so Serde collapses these deleted keys into the same values as a complete Prepared receipt. After the dispatcher dies, ordinary recovery permits the absent worker for Prepared (agent_codex_background.rs:2204–2237) and can release the reservation on a Clear scan. Require the writer's explicit nulls for the legitimate pre-transfer shape and cover status and both recovery routes after deleting the keys from a persisted Prepared receipt.
+    2. BUG-2748 AC1. A transferred receipt missing the original dispatcher still returns Known while its phase holds scope. The dispatcher check at codex_bg_receipt.rs:644–646 is limited to terminal phases. Admission and recovery retain the reservation in this case, but launch-status prints the ordinary phase and omits the missing attribution and evidence-restoration guidance (agent_codex_background.rs:2049–2102). Surface UNKNOWN with the missing-dispatcher diagnosis at the inspection boundary and extend the readable transferred fixture to assert the operator-visible result.
+    3. BUG-2748 AC1. The legacy Prepared recovery exception at codex_bg_receipt.rs:616–635 can also accept a partially corrupted post-transfer Exited receipt. Ordinary recovery writes the same RECOVERY_REASON and, when terminal evidence is absent, RECOVERY_OUTCOME for transferred attempts whose worker and supervisor disappeared before recording an exit (agent_codex_background.rs:2262–2274). If both process identities in that receipt are null, the marker and explicit-null checks classify it as pre-transfer, bypassing dispatcher and transferred-attribution validation. It can then free admission and be pruned. Distinguish the pre-transfer terminal record from the post-transfer recovery record using positive provenance and cover the ambiguous record alongside a genuine legacy Prepared fixture. The current legacy fixture still serializes the new dispatcher field.
+    4. Deferred follow-up. The OccupancyProbe rustdoc at codex_bg_receipt.rs:108 links to scan_occupancy, which this change removes. Point the link to scan_occupancy_in.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T09:10:39.395481781Z
+  modified_at: 2026-11-25T09:10:39.395481781Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
