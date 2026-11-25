@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T01:57:54.960139145Z
+modified_at: 2026-11-25T01:58:03.479705158Z
 req_type: Bug
 tags:
 - data-loss
@@ -230,6 +230,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2749 AC1 FAIL: ordinary session end and linked-store maintenance can still discard a staged-only index after its checkout disappears. AC2 PASS on source review: the regression checks byte-for-byte preservation of a staged-only index through the new guarded cleanup and checks that applied GC removes a clean sibling. The implementer reports targeted test passes. The exact PR head passed FAST compilation and source guards, with the merge-hold status pending in the observed check rollup. No local build or tests were run. Reviewed the full pinned landing diff against main at 260a82ae939faf34a8e6505a6f765f2151655610 and attest the original PR head, which is three commits behind. None of the findings depends on the two overlapping files changed by the base. The standalone claim command refused to mark the PR under review, and the checklist was generated.. It was punted on: design-fork: Round 2 CI instruction conflicts with the exact-count TASK-2143 ratchet. The guarded fixes for findings 1 and 2 remove raw Git builders: session_reap.rs now 6 (ledger 7), worktree_gc.rs now 12 (ledger 13). The executed guard requires lowering both counts, but the brief forbids any ratchet ledger edit. I dispute the CI requirement that the ledger can remain unchanged with these removals. No data-loss finding is disputed.. No triage reason was given.'
   created_at: 2026-11-25T01:57:54.960130938Z
   modified_at: 2026-11-25T01:57:54.960130938Z
+- id: 01a2106c-9d1a-73e1-9ecd-23738de3c0d8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2749):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d25b5af04f87
+    Recorded: 2026-11-25T01:49:09.610208159+00:00
+    Findings:
+    1. BUG-2749 AC1: Ending the session that owns a missing linked checkout can still delete its staged index. At aida-cli-lib/src/session_end.rs:1583, worktree_dirty_entries returns an empty list for an absent checkout. At :1701 the commit-coverage check intentionally skips that path, but :2039 still calls the forced linked-worktree removal before the new guarded prune at :2296. Git accepts an absent checkout and deletes its registration without a cleanliness check, even without --force. Session GC can reach the same removal path at aida-cli-lib/src/worktree_gc.rs:391 if a checkout disappears with a newly staged change after the scan or during confirmation. Enforce the staged-index check at the deletion boundary or retain the registration, and cover normal session end with a staged-only missing checkout plus disappearance after the GC scan. Git removal source: https://github.com/git/git/blob/v2.43.0/builtin/worktree.c#L1258-L1273
+    2. BUG-2749 AC1: Store maintenance still invokes repository-wide worktree prune indirectly. aida store compact calls gc_aggressive (aida-cli-lib/src/store_cmd.rs:119 and aida-core/src/git_ops.rs:5657). Opportunistic store GC also invokes git gc --auto at aida-core/src/git_ops.rs:5534. With the linked .aida-store layout, these commands share the project's Git common directory. When GC runs, Git invokes worktree prune with its configured expiration, so an unlocked missing sibling with an old staged-only index can lose its registration even after AIDA's new check retained it. Disable the worktree-prune phase for these maintenance invocations and cover compaction with an expired staged-only sibling. Git GC source: https://github.com/git/git/blob/v2.43.0/builtin/gc.c#L691-L697
+    3. Removing the pre-add prune in aida-core/src/git_ops.rs:3989 drops the BUG-39 recovery for a manually deleted .aida-store checkout even when its registered index is provably clean. create_store_worktree now calls git worktree add directly, which refuses a path that is still registered. Restore guarded, path-specific retirement before reattaching a clean store checkout, while retaining staged and unreadable indexes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T01:58:03.290547466Z
+  modified_at: 2026-11-25T01:58:03.290547466Z
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
