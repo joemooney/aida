@@ -1,0 +1,27 @@
+id: 01a21353-0946-7d90-b4a4-9f84a5c8da08
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1444
+agreed_id: TASK-3909
+title: Revert agent vendor to codex on/after 2026-11-29 10:41 (codex usage limit reset)
+description: |
+  Revert the TEMPORARY `[agents] vendor = "claude"` switch back to "codex" once the codex usage limit resets (2026-11-29 10:41 AM). Also flip the product launcher (.aida/tmp/product-wave.sh LANE_VENDOR default) back to codex. Filed by product-15 per advisor-122 2026-11-25 08:34.
+
+  ## Acceptance
+  - AC1: on or after 2026-11-29 10:41, `[agents] vendor = "codex"` restored (comment removed), after confirming a codex lane runs without the usage-limit error.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T15:28:58.694156811Z
+modified_at: 2026-11-25T15:28:58.694156811Z
+req_type: Task
+tags:
+- codex-limit
+- config
+- due-2026-11-29
+filed_at:
+  code_sha: 664f260222408056dbef136fe156d48f843f1329
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 664f2602224
+  vendor: claude
