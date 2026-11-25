@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T04:54:49.958620555Z
-modified_at: 2026-11-24T04:54:49.958620555Z
+modified_at: 2026-11-25T07:19:02.447993972Z
 req_type: Task
 tags:
 - carried-from:BUG-2742
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20b98-35f8-7b01-9f98-bc1e520d84bb
   created_at: 2026-11-24T04:55:02.607700818Z
+comments:
+- id: 01a21192-7c30-7610-b5e2-34c64d6139b3
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: BUG-2742 / #4487. Evidence: landed 71bb63b is only --ignored=no; stash classifier not landed. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:19:02.447993972Z
+  modified_at: 2026-11-25T07:19:02.447993972Z
 history:
 - id: 01a20be9-ef24-72e3-b2e5-5f414ca2f0bd
   author: joe
