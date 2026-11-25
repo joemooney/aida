@@ -1709,12 +1709,12 @@ description: |
   ### finding-hash:43ca64d9
 
   [P2] zero-test nextest JUnit from the rest shard rejected (promotion_failures.rs:290-292,595-600): deferred to BUG-2695.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-25T21:09:04.810535997Z
+modified_at: 2026-11-25T21:09:06.730952131Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -3082,6 +3082,13 @@ history:
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a2148a-702a-75b0-8ea0-5181ce4058a1
+  author: joe
+  timestamp: 2026-11-25T21:09:06.730950106Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 91fe1e337894199f15365d3f8ecfaf81366f8291
   branch: main
