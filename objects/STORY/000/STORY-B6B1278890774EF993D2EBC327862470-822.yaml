@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T11:04:37.497671154Z
+modified_at: 2026-11-25T11:05:45.688506195Z
 req_type: Story
 tags:
 - hygiene
@@ -356,6 +356,12 @@ comments:
   content: Implementer push 9959be295166 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-25T11:03:59.458653728Z
   modified_at: 2026-11-25T11:03:59.458653728Z
+  session_id: 01a21226b039
+- id: 01a21262-0dd8-7da1-93d4-74294cac8249
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-3059-report` at head `9959be29516640b22f8da733f61c467ff9bb27ec`.'
+  created_at: 2026-11-25T11:05:45.688503076Z
+  modified_at: 2026-11-25T11:05:45.688503076Z
   session_id: 01a21226b039
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
