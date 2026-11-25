@@ -2,6 +2,7 @@
   requirement_id: 01a210f2-2c2e-7730-b276-d9e8d2555732
   position: -1238000
   added_by: role:implementer
+  note: 'deferred: disk below floor at 2026-11-25T05:57:54Z'
   added_at: 2026-11-25T05:50:26.349919108Z
   for_role: implementer
 - user_id: role:implementer
