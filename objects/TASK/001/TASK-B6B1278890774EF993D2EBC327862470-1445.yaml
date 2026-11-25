@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
 
   Deferred follow-up (BUG-2730, p2): aida-cli-lib/src/land_stalls.rs scan_with_budgets (~:2019-2039) still routes synchronously on a COMPLETE pass whenever more than 5s of the 220s run budget remain. route() -> raise_due -> schedule_ledger::write_local_bounded bounds only lock admission; write_cas_opts(push=false) then runs a git commit whose signer has no deadline, and mailbox_store::write_message is also a store write. The advisor's r4 F1 brief said the guard pass should not route at all. The margin before the 300s scheduler ceiling is at least 85s, and main already routed synchronously (and pushed), so this is pre-existing. A signer that hangs past the ceiling can still kill a complete guard run after the snapshot is saved and before the doctor finding is printed. Fix: move routing to the per-seat job that reads the snapshot, or put the commit under the remaining budget.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T18:27:16.850612408Z
-modified_at: 2026-11-25T21:07:22.407655013Z
+modified_at: 2026-11-25T21:07:24.355651547Z
 req_type: Task
 tags:
 - carried-from:BUG-2730
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T18:30:12.096560008Z
   changes: []
+- id: 01a21488-e043-71f3-9f4a-3f19ebd12de9
+  author: joe
+  timestamp: 2026-11-25T21:07:24.355649527Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
   branch: pr-4457
