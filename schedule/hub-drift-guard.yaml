@@ -1,9 +1,9 @@
 job: hub-drift-guard
-last_run: 2026-11-25T07:18:39.577768705Z
+last_run: 2026-11-25T13:24:07.977535613Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:1
+result: ok
 failure_trips:
 - trip_id: hub-drift-guard@2026-11-18T02:40:32.926570923Z
   at: 2026-11-18T02:40:32.926570923Z
