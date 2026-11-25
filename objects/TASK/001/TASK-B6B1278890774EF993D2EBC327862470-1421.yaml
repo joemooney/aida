@@ -19,7 +19,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T07:38:02.644295738Z
-modified_at: 2026-11-25T07:39:08.936447900Z
+modified_at: 2026-11-25T07:39:21.069849194Z
 req_type: Task
 tags:
 - review-debt
@@ -40,6 +40,10 @@ relationships:
   target_id: 01a20a87-c411-7670-9703-076c0b3a4292
   created_at: 2026-11-25T07:39:08.936393037Z
   created_by: joe
+- rel_type: Supersedes
+  target_id: 01a20a87-8f64-7662-997e-4ab5f491386e
+  created_at: 2026-11-25T07:39:21.069776925Z
+  created_by: joe
 history:
 - id: 01a211a4-66a0-7ae3-b3d2-4fb54c91b3f6
   author: joe
@@ -56,6 +60,10 @@ history:
 - id: 01a211a4-ec10-7ea3-80aa-926f62de4273
   author: joe
   timestamp: 2026-11-25T07:39:10.736733924Z
+  changes: []
+- id: 01a211a5-1bfc-7450-b4ea-be6a4f651093
+  author: joe
+  timestamp: 2026-11-25T07:39:23.004817500Z
   changes: []
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
