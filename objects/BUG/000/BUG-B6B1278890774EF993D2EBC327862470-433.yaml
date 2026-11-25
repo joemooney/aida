@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-25T08:31:38.288723790Z
+modified_at: 2026-11-25T08:32:58.165503014Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -515,6 +515,18 @@ comments:
   created_at: 2026-11-25T06:00:37.381478161Z
   modified_at: 2026-11-25T06:00:37.381478161Z
   session_id: 01a211005429
+- id: 01a211d6-6418-7ac0-b5cf-bc2a87a2e8b8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:32):
+    # BUG-2669 / PR #4376 r4 FINAL (advisor-122 sweep ruling 2026-11-25 01:20 at 1a965aaa; product-15). Lane: CODEX. MAIN, existing branch. <=60 lines.
+    F1 (security): resolve the receipt dir from a TRUSTED root with openat / O_NOFOLLOW; REFUSE if any ancestor is a symlink or not owned by the user. Test: an ancestor swapped to a symlink → refuse.
+    DEFERRED (do NOT do): the p2 pagination.
+    One targeted cargo run, then make check-ci-fast, then push to #4376. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T08:32:58.165503014Z
+  modified_at: 2026-11-25T08:32:58.165503014Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
