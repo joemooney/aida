@@ -8,12 +8,18 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-25T05:34:09.290123636Z
-modified_at: 2026-11-25T05:34:09.290123636Z
+modified_at: 2026-11-25T21:05:21.081475307Z
 req_type: Task
 tags:
 - from-advisor:TASK-3895
 - kind:observation
 - linked:TASK-3895
+comments:
+- id: 01a21486-feb9-74e0-95ee-23441758e8cb
+  author: joe
+  content: FOLDED into a comment on TASK-3896 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:05:21.081475307Z
+  modified_at: 2026-11-25T21:05:21.081475307Z
 history:
 - id: 01a2113a-a577-79d1-b531-b518e15991aa
   author: joe
