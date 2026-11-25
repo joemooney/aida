@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F4) the snapshot-regeneration fallback warning records the actual compiler/Cargo diagnostic (captured stderr tail), not only argv + exit status. Test.
   - AC2: (F7) the Rust seat-publish fixture drives a real failing regeneration command instead of a fabricated warning. Test.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:53:36.980920917Z
-modified_at: 2026-11-25T02:46:20.278494047Z
+modified_at: 2026-11-25T03:17:35.454556331Z
 req_type: Task
 tags:
 - conflict-repair
@@ -31,6 +31,13 @@ history:
   - field_name: tags
     old_value: conflict-repair, lanes
     new_value: conflict-repair, integration, lanes
+- id: 01a210b5-6e5e-7bc2-abf4-9099ed18a00a
+  author: aida-session-start
+  timestamp: 2026-11-25T03:17:35.454555654Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
