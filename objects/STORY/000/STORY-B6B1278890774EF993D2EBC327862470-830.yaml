@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T16:38:17.592026718Z
+modified_at: 2026-11-25T17:33:48.516183340Z
 req_type: Story
 tags:
 - landing
@@ -46,6 +46,24 @@ comments:
     - Knobs in .aida/config.toml [landing_watchdog]: enabled (default true), drought_minutes, ready_dwell_minutes, lock_hold_minutes, action = report|investigate (default investigate).
   created_at: 2026-11-25T16:38:17.592026718Z
   modified_at: 2026-11-25T16:38:17.592026718Z
+- id: 01a213c5-8fb3-7332-be6f-a1ed3337a728
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:33):
+    # STORY-3131 S1: landing-drought + ready-dwell doctor check, scheduled with an investigate route (Joe 2026-11-25: "baked into aida ... configurable ... an associated action like investigate"; ACs on STORY-3131 incl. the 09:33 additions A-D; product-15). Lane: CLAUDE. MAIN, NEW branch. Title "(Refs STORY-3131)" (S2 completes it). <=300 changed lines.
+    READ: `aida show STORY-3131 --comments`. MODEL IT ON the existing stalled-reviews check: aida-cli-lib/src/stalled_reviews.rs, its doctor wiring (doctor_cmd.rs / doctor_root.rs), and its [[schedule.jobs]] pair in .aida/config.toml (`stalled-reviews` + `stalled-reviews-route`).
+    S1 SCOPE:
+     (1) `aida doctor check landing-drought [--fail-on-findings]` reports findings when (a) a PR has been APPROVED at its current head with green required checks for more than `ready_dwell_minutes` and is not on an open train (AC-A); or (b) no PR has landed on main for `drought_minutes` while (a)-type PRs exist.
+     (2) Each finding names the PR, how long it has been ready, and a FIRST-PASS cause from what the check can see cheaply: supervised/not drain-eligible → "needs operator train: `aida pr train N`"; full CI tier missing or cancelled at the approved head; red required check; otherwise "unknown → investigate". It also prints one prescribed next action per cause.
+     (3) Config `[landing_watchdog]` in config: enabled (default true), drought_minutes (default 60), ready_dwell_minutes (default 30), action = "report"|"investigate" (default investigate). Defaults apply when the section is absent (future users get it).
+     (4) Tracked .aida/config.toml: a `landing-drought` job every 10m running the check with --fail-on-findings, plus a `landing-drought-route` job (seats ["advisor"], on CronJobFailed:landing-drought) whose prompt says INVESTIGATE: classify each stuck PR, act on the prescribed action, or page the operator.
+    TESTS: a fixture with an approved PR older than the dwell is reported with the right cause; a fresh approval is not reported; action=report vs investigate; defaults when the section is absent.
+    OUT OF SCOPE (S2): lock-holder diagnosis, review-hold, vendor-outage and conflict causes; operator inbox delivery; event-driven approval→train (AC-D).
+    One targeted cargo test run on this host, make check-ci-fast, publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T17:33:48.516183340Z
+  modified_at: 2026-11-25T17:33:48.516183340Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
