@@ -12,12 +12,12 @@ description: |
   - AC1: an approval recorded at a head whose FAST run is complete adds ci:full (or re-triggers the full run), and a full run appears. An approval recorded while FAST is still running is promoted by approved-head-full-ci as soon as FAST completes, within one tick.
   - AC2: a test covering both orders (approval after FAST completes; approval before FAST completes, then the job tick).
   - AC3: `review --promote-approved-heads` prints one line per approved PR it considered (promoted / skipped + reason), and a non-zero exit always carries a stderr reason, so schedule.log is diagnosable.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T21:19:44.904045330Z
+modified_at: 2026-11-25T22:45:28.170497293Z
 req_type: Bug
 tags:
 - ci
@@ -238,6 +238,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a214e2-a7a0-7f12-affc-6098c21755d9
+  author: aida-auto-bump
+  timestamp: 2026-11-25T22:45:28.096397733Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a214e2-a7ea-7f10-806f-4943437c4383
+  timestamp: 2026-11-25T22:45:28.170492759Z
+  agent: aida
+  commit_sha: f4c76a579072168f16d69503a31b1874b66e3930
+  summary: 'BUG-2764 PASS at 69cf3759d3c0, 1 commit behind main (base only added 2 independent store-writers.toml rows; no finding depends on it). AC1: spec_approvals_by_head (review_watch.rs) maps attested, open, approving spec-keyed verdicts to their exact reviewed head, and promotion_pass uses one only when the PR has no verdict of its own at its current head. The PR''s own verdict at that head, including request-changes, still wins. FAST-settled, receipt and moved-head checks are unchanged. AC2: bug2764_spec_keyed_approval_promotes_in_both_orders covers approval after FAST completes and approval during FAST followed by a tick, plus receipt dedupe. AC3 (round-1 F1-F3 fixed): one stdout line per approved PR (promoted, or skipped with a reason). Per-PR lines print before failures. Each per-PR failure goes to stderr as ''PR-N: failed: <chain>''. Pass-level load/open/discover failures and a missing project root go to stderr with context before a non-zero exit. bug2764_promotion_failures_reach_stderr covers a per-PR failure and a discovery failure. test_apply_recorded_full_ci was refactored behavior-preserving via install_full_ci_stub. The only finding is a deferred p3 store-writer inventory coverage note. CI fast gates passed; fast compile pending at review time.'
+  punted:
+  - 'punted: BUG-2764 at 6719a945 (2 commits behind main; no finding depends on base changes). AC1: verified by spec_approvals_by_head plus the head-exact fallback in promote_approved_heads; the scheduled job (maintenance_schedule.rs:3482, every 2m) promotes within one tick once FAST settles. AC2: verified by bug2764_spec_keyed_approval_promotes_in_both_orders (both orders, plus receipt dedupe). AC3: partially met. Per-PR stdout lines and per-PR stderr failures were added, but pass-level failures (load/discover) still exit non-zero with the error only on stdout in agent mode, and per-PR lines are dropped whenever any PR fails. Precedence (a PR''s own verdict at its head wins, including request-changes) and SHA-exact matching look correct. Fast CI green at the head. Request changes for the AC3 gaps.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
@@ -250,3 +266,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-25T19:08:45.047961375Z
   implemented_by: dirtlab
+  completed_at: 2026-11-25T22:45:28.096388727Z
+  completion_sha: f4c76a579072168f16d69503a31b1874b66e3930
