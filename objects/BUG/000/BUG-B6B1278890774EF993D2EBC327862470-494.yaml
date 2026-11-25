@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: The train (and `aida pr ship`) resolve a PR's specs from its title/squash trailer, or from base..head commits whose patch-id is not already on the base, never from history whose change is already on main. Test: a promotion-shaped branch (main merged into a branch carrying old squashed-history commits plus one new commit) resolves only the new commit's spec.
   - AC2: The refusal text lists only the specs that drove it (unchanged wording otherwise).
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-25T23:04:04.597523336Z
+modified_at: 2026-11-25T23:42:25.931144783Z
 req_type: Bug
 tags:
 - landing
@@ -139,6 +139,13 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T23:04:06.714875997Z
   changes: []
+- id: 01a21516-ce8b-7e72-9788-55ead5026f90
+  author: joe
+  timestamp: 2026-11-25T23:42:25.931141520Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   code_sha: ef906ec7464cf1b3100c4383085280c203722941
   branch: main
@@ -148,3 +155,6 @@ filed_at:
   vendor: claude
   session: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+implementation_info:
+  implemented: false
+  reopened_at_sha: a387b7e87b96e611ba9da42e196f44f36b538739
