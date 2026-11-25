@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T07:24:10.635879426Z
-modified_at: 2026-11-25T21:24:18.766847621Z
+modified_at: 2026-11-25T21:53:57.993360387Z
 req_type: Bug
 comments:
 - id: 01a21493-6f47-7ed1-8c8e-85fdd72abf7f
@@ -26,6 +26,18 @@ comments:
     Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
   created_at: 2026-11-25T21:24:18.766847621Z
   modified_at: 2026-11-25T21:24:18.766847621Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a214b3-bb59-7ba2-8595-7197f997442e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:53):
+    # BUG-2745 (advisor-122 approved 2026-11-25 14:30, launch priority; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2745-hold-marker-refusal. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2745) and say what remains. Otherwise use the completing (BUG-2745) trailer.
+    READ FIRST: `aida show BUG-2745 --comments` (evidence, ACs, rulings).
+
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T21:53:57.993360387Z
+  modified_at: 2026-11-25T21:53:57.993360387Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
