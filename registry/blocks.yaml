@@ -669,7 +669,7 @@ blocks:
   type_prefix: SPIKE
   range_start: 710
   range_end: 809
-  next: 716
+  next: 717
   allocated_at: 2026-10-31T22:53:56.205123936Z
 - node_id: '1'
   owner: joe

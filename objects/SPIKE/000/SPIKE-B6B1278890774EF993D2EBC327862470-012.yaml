@@ -1,0 +1,28 @@
+id: 01a2149a-75ae-73f2-b8d0-0912e510adbc
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-012
+agreed_id: SPIKE-716
+title: 'BUG-2761 S1 spike: does an inherited owner-lock fd survive each lane spawn path, and do daemons keep it held after exit?'
+description: |
+  BUG-2761 S1 spike, signed off by advisor-122 2026-11-25 09:42 (condition 2), with its own spec ID so the lane is not bound to BUG-2761's open PR #4583 (twice today the spike was refused or absorbed by that PR's rework round). Full brief: .aida/tmp/brief-BUG-2761-S1spike.md (product-15).
+
+  ## Acceptance
+  - AC1: one `aida comment add BUG-2761 "S1 SPIKE REPORT: ..."` with a table (spawn path × fd survives? × held after exit? × holder) for bwrap containment, plain headless, the codex native sandbox and a claude headless lane, plus inherited daemons (sccache-server, cargo jobserver, git fsmonitor); a verdict (owner-lock fd K viable, or fall back to a supervisor-held lock with heartbeat); and the evidence commands. No PR, no production code.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T21:26:36.718610073Z
+modified_at: 2026-11-25T21:26:36.718610073Z
+req_type: Spike
+tags:
+- leases
+- repair
+- spike
+filed_at:
+  code_sha: 34c86b75a25da79cf648a68dfdd1d593949567b4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ea1b3c35df8
+  vendor: claude
+human_only: true
