@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T10:32:29.270007607Z
+modified_at: 2026-11-25T11:02:36.914348725Z
 req_type: Story
 tags:
 - integration
@@ -116,6 +116,20 @@ comments:
   content: 'DEFERRED F5 (advisor-122 2026-11-25 02:50, #4567 S1 CR @cb1b32ee): failed or missing snippet anchors are emitted as PRECISE SARIF regions (anchor_findings_with keeps the input line hints even when anchoring failed). Emit no region (or a file-level location) when the anchor failed. For a later STORY-3120 slice.'
   created_at: 2026-11-25T09:48:24.239829337Z
   modified_at: 2026-11-25T09:48:24.239829337Z
+- id: 01a2125f-2e57-7862-871c-28751ca6bcbf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cb1b32ee93d96a9dcdebef9e24e8122565706748 plus native working diff. S1 micro-round for #4567. File references are in aida-core/src/review_engine.rs.
+    F1: [evidence: behavioral-test] Line 1599 exercises blocker and empty severity independently at critical. Known high stays below critical.
+    F2: [evidence: behavioral-test] Line 1585 checks slash, backslash, space, # and % in the same Linux path.
+    F3: [evidence: behavioral-test] Line 1589 checks literal braces in both the message and suggestion, including placeholder-shaped {0}.
+    F4: [evidence: behavioral-test] Line 1586 checks the emitted base ID against the run dictionary. The symbolic root avoids embedding a host path.
+    Targeted test executed and passed. make check-ci-fast exited 0. Checked normalization, escaping, multiple results and gate refusal. No untracked additions. F5 deferred. Forge CI at cb1b32ee93 predates these edits.
+  created_at: 2026-11-25T11:02:36.914348725Z
+  modified_at: 2026-11-25T11:02:36.914348725Z
+  session_id: 01a21242dde8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
