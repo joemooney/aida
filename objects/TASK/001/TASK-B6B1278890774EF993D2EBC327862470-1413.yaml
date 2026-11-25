@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T07:30:44.209861504Z
-modified_at: 2026-11-25T07:31:13.572340627Z
+modified_at: 2026-11-25T21:03:49.135120434Z
 req_type: Task
 tags:
 - review-debt
@@ -24,6 +24,19 @@ relationships:
   target_id: 01a20a43-3577-77c2-9bea-3f9c09f2a4db
   created_at: 2026-11-25T07:31:13.572281052Z
   created_by: joe
+comments:
+- id: 01a21485-978f-7402-8e32-756e26f47ab2
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 2 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3319: Clarify advisory batch and citation contracts before CLI integration
+      review_engine.rs:795 emits an oversized file alone even when it exceeds the token cap. At line 1058 only double-bracket observation markers are validated, while the story uses single brackets. Cover these cases and document or resolve the intended behavior.
+
+    - TASK-3329: Review citation syntax differs between story and reference implementation
+      The story specifies [obs-N]. review_engine.rs:1058 recognizes only [[obs-ID]], so [obs-999999] yields no citations and valid=true. Reconcile syntax in the CLI slice and exercise an unknown single-bracket citation. The preserved S1 reference test covers double brackets.
+  created_at: 2026-11-25T21:03:49.135120434Z
+  modified_at: 2026-11-25T21:03:49.135120434Z
 history:
 - id: 01a2119d-aaee-79c2-a0d5-b3f3e68f3160
   author: joe
