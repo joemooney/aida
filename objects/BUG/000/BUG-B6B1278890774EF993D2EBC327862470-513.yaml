@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T00:15:45.591139098Z
+modified_at: 2026-11-25T00:17:04.082541596Z
 req_type: Bug
 tags:
 - codex
@@ -184,6 +184,12 @@ comments:
   content: Implementer push c94fab4e76a9 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-25T00:15:45.591134608Z
   modified_at: 2026-11-25T00:15:45.591134608Z
+  session_id: 01a20fc57342
+- id: 01a21010-2852-7d40-b4f9-8462ce4beb65
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-513` at head `c94fab4e76a9bdc47a49873dad310fc45bf5e06c`.'
+  created_at: 2026-11-25T00:17:04.082536531Z
+  modified_at: 2026-11-25T00:17:04.082536531Z
   session_id: 01a20fc57342
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
