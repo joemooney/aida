@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the merge is fully resolved and snapshot regeneration fails, the host STILL commits and pushes the resolved merge, and reports "snapshot regeneration failed: <cause>; CI will verify", instead of refusing.
   - AC2: The regeneration error is recorded on the spec (comment). A test with a failing regeneration command.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-25T07:25:27.641756713Z
+modified_at: 2026-11-25T21:15:58.612215964Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -366,6 +366,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21490-b8fe-7e63-9bf3-d89bfa50c303
+  author: aida-auto-bump
+  timestamp: 2026-11-25T21:15:58.590493819Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21490-b914-7660-b7a0-1a043fae2f27
+  timestamp: 2026-11-25T21:15:58.612214437Z
+  agent: aida
+  commit_sha: 8177ad276f68cdeff7f68ff8ff931a6db4eb1559
+  summary: Completed via merge 8177ad27
 execution_mode: drain
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
@@ -376,4 +389,6 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
+  completed_at: 2026-11-25T21:15:58.590484368Z
+  completion_sha: 8177ad276f68cdeff7f68ff8ff931a6db4eb1559
   reopened_at_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
