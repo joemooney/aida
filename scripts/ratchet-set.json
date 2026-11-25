@@ -64,7 +64,8 @@
       "source": "aida-cli-lib/src/launch/review_runner.rs",
       "tests": [
         "s3a_runner_deadline_and_output_caps_fail_closed",
-        "s3a_runner_spawn_contract"
+        "s3a_runner_spawn_contract",
+        "s3a_runner_survives_default_sigpipe"
       ],
       "scope": "module"
     },

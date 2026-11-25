@@ -62,7 +62,9 @@ impl RunnerCall<'_> {
     }
 
     /// Run the runner on `prompt` and return its stdout. A spawn failure,
-    /// overrun, non-zero exit or unread prompt is an error.
+    /// overrun or non-zero exit is an error. An unread prompt is detected only
+    /// when it exceeds the pipe buffer (about 64 KiB); a runner that exits before
+    /// reading a smaller prompt fails only on its own exit status or output.
     pub(crate) fn run(&self, prompt: &str) -> Result<String> {
         let program = self.program()?;
         let vendor = self.agent.filter(|_| self.var(RUNNER_CMD).is_none());
@@ -107,7 +109,19 @@ impl RunnerCall<'_> {
             self.stderr_cap,
         )?;
         let (mut stdin, body) = (child.stdin.take().context("stdin")?, prompt.to_owned());
-        let writer = std::thread::spawn(move || stdin.write_all(body.as_bytes()));
+        let writer = std::thread::spawn(move || {
+            // The aida binary restores SIGPIPE to SIG_DFL (BUG-99). Block it on this
+            // thread so a runner that closes stdin early yields EPIPE (a run error),
+            // not a killed aida. A pending SIGPIPE is discarded when the thread exits.
+            // SAFETY: a local sigset; pthread_sigmask changes only this thread's mask.
+            unsafe {
+                let mut set: libc::sigset_t = std::mem::zeroed();
+                libc::sigemptyset(&mut set);
+                libc::sigaddset(&mut set, libc::SIGPIPE);
+                libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut());
+            }
+            stdin.write_all(body.as_bytes())
+        });
         let deadline = Instant::now() + self.deadline;
         let finished = loop {
             // Peek without reaping, so the group id cannot be reused before the kill.
@@ -156,7 +170,6 @@ impl RunnerCall<'_> {
 mod tests {
     use super::*;
     use crate::vendors::review_runner::review_vendor;
-    use std::os::unix::fs::PermissionsExt;
 
     // Fake vendor binary: runs a planted hook in its cwd if one exists, then
     // dumps its cwd listing, env, argv and the byte count read on stdin.
@@ -179,10 +192,16 @@ mod tests {
         }
     }
 
+    // Copy via install(1): a parallel test's fork can inherit a write fd we hold
+    // on the executable itself, and exec would then fail with ETXTBSY.
     fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
-        let path = dir.join(name);
-        std::fs::write(&path, body).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let (src, path) = (dir.join(format!("{name}.src")), dir.join(name));
+        std::fs::write(&src, body).unwrap();
+        let ok = Command::new("install")
+            .arg("-m755")
+            .args([&src, &path])
+            .status();
+        assert!(ok.unwrap().success(), "install {}", path.display());
         path
     }
 
@@ -307,5 +326,45 @@ mod tests {
         assert!(run("#!/bin/sh\necho boom >&2\nexit 3\n", "p", 20, full).contains("boom"));
         let deaf = run("#!/bin/sh\necho '{}'\n", &"x".repeat(1 << 20), 20, full);
         assert!(deaf.contains("whole prompt"), "{deaf}");
+    }
+
+    /// Re-runs itself in a child test process with SIGPIPE at SIG_DFL, as the
+    /// aida binary has it; libtest ignores SIGPIPE and would hide a kill.
+    #[test]
+    fn s3a_runner_survives_default_sigpipe() {
+        // A second, never-matching filter marks the child run.
+        const CHILD: &str = "s3a-sigpipe-child";
+        if !std::env::args().any(|arg| arg == CHILD) {
+            let name = format!("{}::s3a_runner_survives_default_sigpipe", module_path!());
+            let name = name.split_once("::").unwrap().1;
+            let out = Command::new(std::env::args_os().next().unwrap())
+                .args(["--exact", name, CHILD, "--nocapture", "--test-threads=1"])
+                .output()
+                .unwrap();
+            let text = String::from_utf8_lossy(&out.stdout);
+            assert!(out.status.success() && text.contains("1 passed"), "{out:?}");
+            return;
+        }
+        // SAFETY: sets the aida binary's own disposition, in this child process only.
+        unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let prompt = "x".repeat(200 << 10);
+        let noisy = "#!/bin/sh\nhead -c 50000 /dev/zero\nsleep 30\n";
+        let cases = [
+            ("#!/bin/sh\nexit 0\n", 20, 1024, "whole prompt"),
+            ("#!/bin/sh\nsleep 30\n", 1, STDOUT_CAP, "1s deadline"),
+            (noisy, 20, 1024, "exceeded its cap"),
+        ];
+        for (body, secs, stdout_cap, want) in cases {
+            let cmd = script(bin.path(), "runner", body).display().to_string();
+            let env = vars(&[("PATH", "/usr/bin:/bin"), (RUNNER_CMD, &cmd)]);
+            let runner = RunnerCall {
+                deadline: Duration::from_secs(secs),
+                stdout_cap,
+                ..call(checkout.path(), &env)
+            };
+            let err = runner.run(&prompt).unwrap_err().to_string();
+            assert!(err.contains(want), "{want}: {err}");
+        }
     }
 }
