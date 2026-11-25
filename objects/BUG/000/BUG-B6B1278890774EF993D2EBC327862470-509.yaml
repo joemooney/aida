@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T09:17:52.071055924Z
+modified_at: 2026-11-25T09:43:54.423635355Z
 req_type: Bug
 tags:
 - launch
@@ -477,6 +477,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21217-20c8-7500-88ba-1ac7f068e852
+  author: dirtlab
+  timestamp: 2026-11-25T09:43:55.336235711Z
+  session_id: 01a211ff07bf
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -485,3 +494,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 5 parking rule for PR #4542: both receipt regressions passed, but the prescribed targeted lane job j20261125T091904403-2-0 exited 101 (34 passed, six supervisor tests failed). Three failures report procfs cwd permission denials and three retained RecoveryRequired. All four findings are accepted. Preserve the native working-tree edits for host inspection.'
+  raised_by: implementer
+  raised_at: 2026-11-25T09:43:54.423635355Z
