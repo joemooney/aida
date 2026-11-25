@@ -242,6 +242,18 @@ comments:
   modified_at: 2026-11-25T06:14:11.443695690Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211b3-5341-7122-a82e-88706d18d1f0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d5a00f65b594bd11e561e5aac2942b2b07ac743c plus the native worktree changes. Reviewed origin/main...HEAD, git diff HEAD and untracked files.
+    AC1: [evidence: behavioral-test] The real doctor CLI accepted the exact ID from an operator terminal for an absent clone and salvaged pending mail from a present one. AC2: [evidence: behavioral-test] The ordinary heal refused an unverified binding. Attested release has the narrower operator override in the round-four brief. Directory lookup errors propagate. The fixture does not inject EIO.
+    Round 4: aida-cli/tests/support/repair_attestation.py exercises exact typed confirmation, pipe and managed-seat refusals, replaced and newly present directories, and a successor grant stamp. It verifies lease and checkout preservation and gates EXDEV on a writable managed fixture on a different device. The lane integration test passed (one Rust target invoking two Python tests).
+    Deep pass: checked canonical paths, symlinks, absent/present cases, exact ID matching and TOML fields the typed lease omits. The exact local snapshot supplies the stale finding. The lease write lock spans final comparison, rename and release. Ownership release reasons carry the ID, reason and salvage outcome. The operator must stop filesystem writers outside the lease protocol. The first FAST run caught a duplicate liveness probe. The shared scanner now accepts the pinned lease and the liveness ratchet passes. The full FAST retry is in progress.
+  created_at: 2026-11-25T07:54:53.345054473Z
+  modified_at: 2026-11-25T07:54:53.345054473Z
+  session_id: 01a2119a3dad
+  harness_version: codex-cli 0.167.0
 - id: 01a211b3-b4fc-74c1-9eb6-1eac489cdb9b
   author: joe
   content: 'REVIEW NOTE for #4541 r4 (advisor-122 2026-11-25 00:52, lesson from the parked STORY-3059): the attested MOVE must NOT repack and must NOT unlink objects/info/alternates. Move the clone AS-IS (alternates intact), so borrowed objects stay reachable through main exactly as before the move. Reviewer: verify there is no repack/alternates mutation in the move path, and require a test assertion that the alternates file is preserved after the move. (A repack + alternates removal was reproduced losing a borrowed commit reachable only via ORIG_HEAD.)'

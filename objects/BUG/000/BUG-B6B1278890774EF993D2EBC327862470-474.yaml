@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-25T07:19:36.571019488Z
+modified_at: 2026-11-25T07:53:43.707126718Z
 req_type: Bug
 tags:
 - hygiene
@@ -255,6 +255,27 @@ comments:
   modified_at: 2026-11-25T07:13:46.854582448Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211b0-c20b-77d0-a783-b5a5e534704f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2ba09f28b0b1a54438ab431a2e40d653ddb43289 and the working-tree merge of 33a7b137a89c. Refs-only repair for PR #4416.
+    AC1: [evidence: behavioral-test] The two requested regressions each ran and passed. task_2053_seat_clone_lifecycle_tests.rs:3288 checks the final space immediately before the TOON closing quote after a real session-end refusal. bug_1986_teardown_recheck_tests.rs:189 checks individual symlinks alongside the collapsed-directory and real-file cases.
+    AC2: [evidence: behavioral-test] Existing private clone and ignored-state regressions retained. This round changed worktree status collection and refusal formatting.
+    AC3: [evidence: behavioral-test] The rendered agent refusal retains the exact path. End-to-end hygiene was outside this repair.
+    AC4: [evidence: manual-inspection] Historical seat teardown deferred.
+    Reviewed Git NUL records, rename ordering, C quoting, collapsed and expanded status, symlinks, multiple changes and failed probes. Shared status uses --no-optional-locks and still propagates Git errors. The refusal keeps the worktree and lease. No untracked additions. Fast gate and core quoting test pending at comment time.
+  created_at: 2026-11-25T07:52:05.242307097Z
+  modified_at: 2026-11-25T07:52:05.242307097Z
+  session_id: 01a21192b336
+  harness_version: codex-cli 0.167.0
+- id: 01a211b2-425c-7b73-aca0-917b281593f5
+  author: dirtlab
+  content: 'Self-review validation update for 2ba09f28b0 and its resolved working-tree merge: make check-ci-fast exited 0 (j20261125T072148560-2-0). The contained status quoting regression executed and passed (j20261125T072213080-2-0). Both review-finding regressions passed.'
+  created_at: 2026-11-25T07:53:43.707126718Z
+  modified_at: 2026-11-25T07:53:43.707126718Z
+  session_id: 01a21192b336
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
