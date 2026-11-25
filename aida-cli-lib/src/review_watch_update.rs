@@ -18,7 +18,6 @@ use super::*;
 /// and, when the forge refused it or it could not run, why, plus the
 /// advisor routing it produced.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(super) struct BranchUpdate {
     pub head: String,
     pub at: chrono::DateTime<chrono::Utc>,
