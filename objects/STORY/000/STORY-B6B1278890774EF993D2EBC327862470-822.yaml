@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T07:35:10.125281651Z
+modified_at: 2026-11-25T07:36:54.258778942Z
 req_type: Story
 tags:
 - hygiene
@@ -405,6 +405,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a211a2-da95-7751-8428-6c78f1d0d004
+  author: dirtlab
+  timestamp: 2026-11-25T07:36:55.189233038Z
+  session_id: 01a211a0cb7e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -413,3 +422,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'Round 4: dispute the F3 ruling that the holder race is moot when combined with F1 dissociation. A resumed writer can add a ref to a borrowed side commit after repack selects its objects and before alternates removal. Rename preserves open inodes but does not preserve the borrowed object. Independently reproduced F1 recovery loss with a borrowed commit reachable only via ORIG_HEAD: repack -a -d, unlink alternates, rev-parse succeeds, cat-file -t fails (128). The prescribed sequence therefore cannot establish whole-clone recovery.'
+  lean: Park auto-reap and retain the manual --attest gate per the final brief. Reopening automatic dissociation needs an admission boundary and explicit recovery-root coverage.
+  raised_by: implementer
+  raised_at: 2026-11-25T07:36:54.258778942Z
