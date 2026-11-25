@@ -1,0 +1,30 @@
+id: 01a21392-8b22-7f00-9352-5f1c50dc6682
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-832
+agreed_id: STORY-3134
+title: 'Agent vendor usage-limit is a typed outage: detect it, end lanes cleanly, refuse launches until reset, optional fallback vendor, auto-recover'
+description: |
+  Joe 2026-11-25 09:33 (lessons codified). At ~05:27 codex hit its usage limit ("try again at Nov 29th 10:41 AM"). Every codex lane and every codex reviewer then failed immediately with a generic "implementer exited (code 1)". Lanes retried and left retained leases that blocked the Claude relaunches, review-watch kept dispatching codex (it falls back to [agents] vendor), and nobody noticed for ~3h (05:27-08:15).
+
+  ## Acceptance
+  - AC1: a vendor usage-limit / quota error in a lane's or reviewer's headless output (codex "You've hit your usage limit ... try again at <time>", claude/agy equivalents) is recognised as a typed VendorUnavailable{vendor, until} outcome, distinct from an implementer failure. The lane ends cleanly: its work is committed and pushed to a side branch, and its lease and reservation are released (no retained lease that blocks a relaunch).
+  - AC2: AIDA records the vendor as unavailable until <time> (in the substrate, visible in `aida status` / `aida doctor`), and launches/reviews for that vendor are REFUSED up front, with a clear message, instead of starting and failing.
+  - AC3: a knob `[agents] fallback_vendor` (default unset = alert only, the old behaviour) names a vendor to use while the primary is unavailable, for lanes AND review-watch. When it is unset, the operator gets ONE notification with the reset time and the exact command to switch.
+  - AC4: when the reset time passes, the vendor becomes available again automatically, with no manual revert (this replaces TASK-3908/TASK-3909-style config flips).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T16:38:20.706287492Z
+modified_at: 2026-11-25T16:38:20.706287492Z
+req_type: Story
+tags:
+- agents
+- landing
+- throughput
+filed_at:
+  code_sha: 664f260222408056dbef136fe156d48f843f1329
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 664f2602224
+  vendor: claude
