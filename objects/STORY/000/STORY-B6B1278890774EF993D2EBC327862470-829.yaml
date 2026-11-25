@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:00:39.523996725Z
+modified_at: 2026-11-25T16:18:32.361359913Z
 req_type: Story
 tags:
 - integration
@@ -229,6 +229,11 @@ comments:
   modified_at: 2026-11-25T16:00:39.523996725Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21380-6929-77a2-98a1-a5c16d0aa6f3
+  author: joe
+  content: Integrated recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Dark/Light theme toggle, Getting Started installation prompts, and multi-seat workflow SVG diagrams (from /home/joe/ai/aida-story-2839-showcase, STORY-2839 / STORY-2852) with code-review.html on branch story-3120-ci-review (commit b5826a0f9497994ecb4e9b76ecbbc0746819fdc9). Wired ('code-review.html', 'Code review') under the 'How it works' dropdown submenu in docs/showcase/build.py and docs/showcase/index.html, synced localStorage('aida-theme') in code-review.html, rebuilt all showcase HTML pages via build.py, and verified all 17 tests in tests/test_showcase_build.py pass.
+  created_at: 2026-11-25T16:18:32.361359913Z
+  modified_at: 2026-11-25T16:18:32.361359913Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
