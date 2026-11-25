@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T18:27:07.759718084Z
+modified_at: 2026-11-25T18:28:49.309639926Z
 req_type: Bug
 tags:
 - review-watch
@@ -231,6 +231,11 @@ comments:
   created_at: 2026-11-25T17:19:31.721498525Z
   modified_at: 2026-11-25T17:19:31.721498525Z
   session_id: 01a21389cc20
+- id: 01a213f7-b01d-7f01-b787-24818ea08299
+  author: joe
+  content: 'DEFERRED minor test gaps (advisor-122 override-approval of #4568 r3 @ abbcff0a, 2026-11-25 11:30; one comment per the findings-as-comments rule): (1) a test that --release REFUSES when multiple heads are held for the PR (multi-head --release refusal); (2) Retry/Cancelled peeling is exercised without the predecessor check; add a test that peeling only follows a verified predecessor.'
+  created_at: 2026-11-25T18:28:49.309639926Z
+  modified_at: 2026-11-25T18:28:49.309639926Z
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
