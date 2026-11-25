@@ -1,0 +1,30 @@
+id: 01a21509-d29d-75f2-9eb0-fdf1204a9fd0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-527
+agreed_id: BUG-2766
+title: approved-head-full-ci misses override approvals, misreads label-event check rows as unfinished FAST CI, and fails on train PRs (BUG-2764 follow-up)
+description: |
+  Follow-up to BUG-2764 (#4587 landed 15:34; the live binary a387b7e includes it). Found 2026-11-25 16:20 by product-15 running `aida review --promote-approved-heads` on the live binary; the advisor recorded all three on BUG-2764 at 16:27 and asked for one small HIGH slice. Manual ci:full relabels are still needed.
+
+  ## Acceptance
+  - AC1: OVERRIDE/advisor approval records at the current head are included (#4600, approved @ f24ccdbb by an override, was absent from the list).
+  - AC2: label-event check rows ("label event (fast compile not rerun)", status skipping) are ignored when judging whether FAST CI finished; when ci:full is already present with a full run in progress or done, the line says so instead of "FAST CI at this head has not finished".
+  - AC3: train PRs (head train/*, "[train]" titles) are skipped entirely, and a busy per-PR full-ci lock is reported as "skipped (busy)", not a failure that makes the job exit non-zero.
+  - AC4: tests for AC1-AC3.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T23:28:15.005813754Z
+modified_at: 2026-11-25T23:28:15.005813754Z
+req_type: Bug
+tags:
+- ci
+- landing
+- throughput
+filed_at:
+  code_sha: a387b7e87b96e611ba9da42e196f44f36b538739
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a387b7e87b9
+  vendor: claude
