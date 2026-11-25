@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T21:23:14.391553462Z
+modified_at: 2026-11-25T21:23:46.693184820Z
 req_type: Bug
 tags:
 - lanes
@@ -506,6 +506,11 @@ comments:
   modified_at: 2026-11-25T21:10:02.713658825Z
   session_id: 01a214701072
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21497-dcec-7963-852a-f25bcf9d2d20
+  author: joe
+  content: PR-4583 at c5538b6d6e694a79e4f195a4f755fb5c10ca22ff conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-25T21:23:46.540620587Z
+  modified_at: 2026-11-25T21:23:46.540620587Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
