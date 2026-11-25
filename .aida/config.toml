@@ -249,6 +249,20 @@ on = ["CronJobFailed:red-main-watch"]
 prompt = "The red-main-watch job failed. Inspect the routed trip diagnostic for the failed land watch step and consult .aida/schedule.log for its command output."
 enabled = true
 
+# trace:STORY-3095 | ai:codex
+[[schedule.jobs]]
+name = "stalled-reviews"
+command = "doctor check stalled-reviews --fail-on-findings"
+every = "20m"
+enabled = true
+
+[[schedule.jobs]]
+name = "stalled-reviews-route"
+seats = ["advisor"]
+on = ["CronJobFailed:stalled-reviews"]
+prompt = "Inspect the stalled-reviews failure and its PR findings in .aida/schedule.log."
+enabled = true
+
 [[schedule.jobs]]
 name = "hub-drift-guard-route"
 seats = ["advisor"]
