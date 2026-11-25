@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T15:24:26.711885347Z
+modified_at: 2026-11-25T15:27:30.416082917Z
 req_type: Task
 tags:
 - integration
@@ -294,6 +294,11 @@ comments:
   modified_at: 2026-11-25T15:24:26.711885347Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21351-b070-7402-87fd-b5be975018e5
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int38-task-3882` at head `af1a20ba6efd3baedce231dcfb91ed31a5214711`.'
+  created_at: 2026-11-25T15:27:30.416079594Z
+  modified_at: 2026-11-25T15:27:30.416079594Z
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
