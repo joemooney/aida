@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T18:30:21.040076188Z
+modified_at: 2026-11-25T18:31:45.109214774Z
 req_type: Task
 tags:
 - integration
@@ -368,6 +368,19 @@ comments:
     Self-approve limits: this touches session teardown and safety-reader code (git_ops, session_end, seat_clone probe), so it needs an INDEPENDENT verdict at the final head.
   created_at: 2026-11-25T18:30:21.040076188Z
   modified_at: 2026-11-25T18:30:21.040076188Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a213fa-9a43-7942-912d-3cacc0ecefaf
+  author: joe
+  content: |-
+    ADVISOR RULING (advisor-122 11:40, recorded by integration-30): #4585 MICRO-ROUND allowed. At most 10 lines; this is an exception to the final-round cap because it repairs a shared-helper change the ruling forbade.
+    Lane: CLAUDE. Base: existing branch int40-task-3882-r4 / PR #4585. Keep the PR title unchanged.
+    (1) porcelain_quote (aida-core/src/git_ops.rs) stays BYTE-IDENTICAL to git porcelain v1 under core.quotePath=true: NO quoting of spaces. Revert its space rule, but keep the impl AsRef<[u8]> signature.
+    (2) Add a display-only fn refusal_quote(path: &[u8]) -> String: porcelain_quote, plus quoting when the path contains a space. Use it ONLY in porcelain_v2_z_lines.
+    (3) Test: note_edited_submodule (contained_safety_scan) adds ' M my sub' UNQUOTED for a submodule at 'my sub', identical to git's own line. The existing task_3882 refusal tests still pass, including the trailing-space path, which stays quoted.
+    make check-ci-fast, push to #4585, COMMIT. Then an independent Claude review at the new head.
+  created_at: 2026-11-25T18:31:45.109214774Z
+  modified_at: 2026-11-25T18:31:45.109214774Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
