@@ -618,6 +618,15 @@ fn bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation() {
         *agent.repair.borrow_mut() = Some(attempt);
     };
 
+    // Another PR's reservation, already journaled, must survive every
+    // rollback below: retirement is scoped to the attempt, not the journal.
+    let other_tree = fx.main.join("other-pr-tree");
+    std::fs::create_dir_all(&other_tree).unwrap();
+    RepairGuard::lock(&fx.main)
+        .unwrap()
+        .reserve(entry(27600, "other-lane", &other_tree))
+        .unwrap();
+
     // A failed spawn after the reservation: tree and reservation both go.
     let scope = "TASK-927611";
     let receipt = launching_setup(scope);
@@ -636,6 +645,29 @@ fn bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation() {
         !reserved(&tree),
         "the unspawned attempt's reservation is retired"
     );
+    assert!(
+        reserved(&other_tree),
+        "another PR's reservation survives the attempt's rollback"
+    );
+
+    // No spawn, but the reserved tree survives the rollback (it is not the
+    // setup's tree): the reservation stays, since its tree is still live.
+    let scope = "TASK-927613";
+    let receipt = launching_setup(scope);
+    let (lease_id, _) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+    let survivor = fx.main.join("surviving-repair-tree");
+    std::fs::create_dir_all(&survivor).unwrap();
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |agent| {
+        reserve(agent, 27613, &lease_id, &survivor);
+        anyhow::bail!("launch refused before any spawn")
+    });
+    assert!(result.is_err());
+    assert!(rolled_back);
+    assert!(
+        reserved(&survivor),
+        "a reservation whose tree survived is retained"
+    );
+    assert!(reserved(&other_tree));
 
     // A spawned child: tree and reservation both stay, even on a later error.
     let scope = "TASK-927612";
@@ -654,4 +686,5 @@ fn bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation() {
         reserved(&tree),
         "a spawned attempt's reservation is retained"
     );
+    assert!(reserved(&other_tree));
 }
