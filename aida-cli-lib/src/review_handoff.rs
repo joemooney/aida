@@ -124,8 +124,36 @@ fn aida_dir() -> Result<PathBuf> {
         .to_path_buf())
 }
 
-pub(crate) fn receipt_dir() -> Result<PathBuf> {
-    Ok(aida_dir()?.join(RECEIPT_DIR))
+/// Walk from the filesystem root, pinning each directory before descending.
+fn pinned_dir(path: &Path, create: bool) -> std::io::Result<(PathBuf, std::fs::File)> {
+    use std::{io::Error, os::fd::AsRawFd};
+    let fd_path = |dir: &std::fs::File| PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
+    let relative = path.strip_prefix("/").map_err(Error::other)?;
+    let mut dir = std::fs::File::open("/")?;
+    let uid = unsafe { libc::geteuid() };
+    let mut user_tree = false;
+    // The final three components are the user home, .aida and the store.
+    let system_components = relative.components().count().saturating_sub(3);
+    for (index, component) in relative.components().enumerate() {
+        let std::path::Component::Normal(name) = component else {
+            return Err(Error::other("invalid receipt directory component"));
+        };
+        if create && user_tree {
+            create_private_dir(&fd_path(&dir).join(name)).map_err(Error::other)?;
+        }
+        dir = crate::gate::review_verdict::open_verdict_entry(&dir, name, libc::O_DIRECTORY)?;
+        let owner = dir.metadata()?.uid();
+        user_tree |= owner == uid || index >= system_components;
+        if owner != uid && (user_tree || owner != 0) {
+            return Err(Error::other("untrusted receipt ancestor"));
+        }
+    }
+    Ok((fd_path(&dir), dir))
+}
+
+fn receipt_dir(create: bool) -> std::io::Result<(PathBuf, std::fs::File)> {
+    let home = aida_dir().map_err(std::io::Error::other)?;
+    pinned_dir(&home.join(RECEIPT_DIR), create)
 }
 
 /// The receipt file name for a launch: only a canonical `draft-<uuid>`.
@@ -150,6 +178,7 @@ fn create_private_dir(dir: &Path) -> Result<()> {
         .with_context(|| format!("cannot create {}", dir.display()))
 }
 
+#[cfg(test)]
 fn lock_path(launch: &str) -> Result<PathBuf> {
     let name = file_name(launch)?.replace(".json", ".lock");
     Ok(aida_dir()?.join(LOCK_DIR).join(name))
@@ -163,8 +192,8 @@ fn lock_path(launch: &str) -> Result<PathBuf> {
 fn lock(launch: &str, wait: Duration) -> Result<std::fs::File> {
     use fs2::FileExt;
     let deadline = Instant::now() + wait;
-    let path = lock_path(launch)?;
-    create_private_dir(path.parent().context("lock path has no parent")?)?;
+    let (dir, _pin) = pinned_dir(&aida_dir()?.join(LOCK_DIR), true)?;
+    let path = dir.join(file_name(launch)?.replace(".json", ".lock"));
     let file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -286,7 +315,8 @@ pub(crate) fn automatic_recovery_eligible(receipt: &Receipt) -> bool {
 
 /// The receipt registered for `launch` (`draft-<uuid>`).
 pub(crate) fn load(launch: &str) -> Result<Receipt> {
-    parse(&receipt_dir()?.join(file_name(launch)?), launch)
+    let (dir, _pin) = receipt_dir(false)?;
+    parse(&dir.join(file_name(launch)?), launch)
 }
 
 /// Register the draft slot before the reviewer is spawned. `Ok(None)` when
@@ -330,9 +360,8 @@ pub(crate) fn register(
         seal: None,
     };
     validate(&receipt)?;
-    let dir = receipt_dir()?;
+    let (dir, _pin) = receipt_dir(true)?;
     let dest = dir.join(file_name(&receipt.launch)?);
-    create_private_dir(&dir)?;
     let tmp = stage(&dir, &receipt)?;
     // The staged file moves to its final name only when that name is free,
     // and never has a second link once this returns `Ok`.
@@ -390,7 +419,7 @@ pub(crate) fn sweep() -> usize {
 
 fn sweep_from(now: DateTime<Utc>, pivot: &str, limits: SweepLimits) -> usize {
     let started = Instant::now();
-    let Ok(dir) = receipt_dir() else {
+    let Ok((dir, _pin)) = receipt_dir(false) else {
         return 0;
     };
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -439,7 +468,8 @@ fn sweep_one(dir: &Path, launch: &str, now: DateTime<Utc>) -> Result<bool> {
         return Ok(false);
     }
     std::fs::remove_file(&path)?;
-    let _ = std::fs::remove_file(lock_path(launch)?);
+    let (locks, _pin) = pinned_dir(&aida_dir()?.join(LOCK_DIR), false)?;
+    let _ = std::fs::remove_file(locks.join(file_name(launch)?.replace(".json", ".lock")));
     drop(held);
     Ok(true)
 }
@@ -448,7 +478,7 @@ fn sweep_one(dir: &Path, launch: &str, now: DateTime<Utc>) -> Result<bool> {
 /// there is anything to write.
 fn update(launch: &str, change: impl FnOnce(&mut Receipt) -> Result<bool>) -> Result<Receipt> {
     let name = file_name(launch)?;
-    let dir = receipt_dir()?;
+    let (dir, _pin) = receipt_dir(false)?;
     // No lock file is created for a launch that was never registered.
     std::fs::symlink_metadata(dir.join(&name))
         .context("review handoff receipt is missing or unreadable")?;
@@ -527,12 +557,12 @@ pub(crate) fn mark_unused(launch: &str) -> Result<Receipt> {
 /// Every receipt in the store, oldest first, and the files that could not
 /// be read as one (`file name`, `why`).
 pub(crate) fn list() -> Result<(Vec<Receipt>, Vec<(String, String)>)> {
-    let dir = receipt_dir()?;
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
+    let (dir, _pin) = match receipt_dir(false) {
+        Ok(pinned) => pinned,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
-        Err(e) => return Err(e).with_context(|| format!("cannot read {}", dir.display())),
+        Err(e) => return Err(e).context("cannot open receipt directory"),
     };
+    let entries = std::fs::read_dir(&dir)?;
     let (mut receipts, mut unreadable) = (Vec::new(), Vec::new());
     for entry in entries {
         let name = entry?.file_name().to_string_lossy().to_string();
@@ -666,7 +696,7 @@ pub(crate) fn host_only_roots_beneath(path: &Path) -> Vec<PathBuf> {
 /// bound read-only: an absent directory under a writable mount is one the
 /// lane could create.
 pub(crate) fn provision_host_only_root(root: &Path) -> Result<()> {
-    create_private_dir(root)
+    pinned_dir(root, true).map(drop).map_err(Into::into)
 }
 
 /// `path` with its longest existing prefix canonicalized, so a directory

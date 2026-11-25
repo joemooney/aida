@@ -858,3 +858,18 @@ fn bug_2669_review_draft_is_registered_from_its_own_module_under_review() {
         .try_get_matches_from(["review", "draft"])
         .is_err());
 }
+
+#[test]
+fn bug_2669_swapped_receipt_ancestor_refuses_existing_receipt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(&["reviewer"]);
+    let (_, receipt) = f.registered();
+    let moved = f.home.with_extension("moved");
+    std::fs::rename(&f.home, &moved).unwrap();
+    std::os::unix::fs::symlink(&moved, &f.home).unwrap();
+    assert!(load(&receipt.launch).is_err());
+    assert!(list().is_err());
+    assert!(mark_consumed(&receipt.launch).is_err());
+}
