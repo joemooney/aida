@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8
 
   Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automatically selects retained repairs for --no-launch, --plan-only and --guided, and session_start.rs:3763-3784 transfers the journal and removes the predecessor. These modes skip host repair preparation and routing (queue_cmd/work.rs:6345); for --no-launch the command reports setup complete and prints a generic deferred launch with no repair instructions or host exit handler (6546-6596). A later real repair dispatch can then be blocked by the new live setup lease. Require a repair-capable launch before automatic transfer, or preserve the repair handoff through deferral with the same preparation and publication gates.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T06:56:09.381367346Z
-modified_at: 2026-11-25T21:05:41.588366933Z
+modified_at: 2026-11-25T21:05:43.416083337Z
 req_type: Task
 tags:
 - carried-from:BUG-2761
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21487-55f8-72e2-8104-257928114d07
+  author: joe
+  timestamp: 2026-11-25T21:05:43.416081519Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8
   branch: pr-4564
