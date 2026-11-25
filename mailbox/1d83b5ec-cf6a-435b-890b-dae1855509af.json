@@ -1,0 +1,18 @@
+{
+  "id": "1d83b5ec-cf6a-435b-890b-dae1855509af",
+  "thread_id": "1d83b5ec-cf6a-435b-890b-dae1855509af",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795649442015,
+  "body": "- [STUCK-MERGE] #4475 is approved at dfa658dd and has not landed for 50 min (approved at dfa658dd96d9)\n  -> land #4475 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4482 is approved at 04aa3b22 and has not landed for 49 min (approved at 04aa3b22f906)\n  -> land #4482 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4570 is approved at 25f566de and has not landed for 68 min (approved at 25f566de3e3e)\n  -> land #4570 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4584 is approved at 0459cd01 and has not landed for 48 min (approved at 0459cd012b4f)\n  -> land #4584 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4596 is approved at 9a05bbe9 and has not landed for 56 min (approved at 9a05bbe93970)\n  -> land #4596 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4597 is approved at 5f2421b5 and has not landed for 59 min (approved at 5f2421b51c82)\n  -> land #4597 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4598 is approved at 9e55228e and has not landed for 40 min (approved at 9e55228e4279)\n  -> land #4598 (the reconciler shows BLOCKED: wait)\n- [STUCK-MERGE] #4600 is approved at f24ccdbb and has not landed for 22 min (approved at f24ccdbb0c97)\n  -> land #4600 (the reconciler shows READY: add to next train)\n\n10 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 8 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
