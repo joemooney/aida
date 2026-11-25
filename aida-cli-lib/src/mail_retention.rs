@@ -271,7 +271,7 @@ pub(crate) fn prune_removed_sources(
             let outcome = if source.locked && !include_locked {
                 PruneOutcome::KeptLocked
             } else {
-                match crate::session_reap::inspect_missing_registration(
+                match aida_core::worktree_registration::inspect_missing_registration(
                     project_root,
                     &source.path,
                     None,

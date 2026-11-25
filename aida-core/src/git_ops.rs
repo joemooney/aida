@@ -3950,6 +3950,19 @@ pub fn restore_stranded_autostash(repo: &Path, pre_stash_top: Option<&str>) -> A
 // Orphan Branch + Worktree
 // ---------------------------------------------------------------------------
 
+// trace:BUG-2749 | ai:codex
+fn retire_missing_registration(repo: &Path, path: &Path) -> Result<()> {
+    use crate::worktree_registration::{inspect_missing_registration, RegistrationClearOutcome};
+    let path = repo.canonicalize()?.join(path);
+    let outcome = inspect_missing_registration(repo, &path, None, false, false, || {}, || {});
+    anyhow::ensure!(
+        outcome != RegistrationClearOutcome::Declined,
+        "retained worktree registration for {}: restore the checkout and inspect its index before retrying",
+        path.display()
+    );
+    Ok(())
+}
+
 /// Create an orphan branch and worktree for the AIDA store.
 ///
 /// This is the recommended approach for single-repo projects:
@@ -3980,6 +3993,8 @@ pub fn create_store_worktree(
             worktree_path.display()
         );
     }
+
+    retire_missing_registration(repo_root, Path::new(worktree_dir))?;
 
     // Check if the orphan branch already exists (e.g., after clone)
     let branch_exists = git(repo_root, &["rev-parse", "--verify", branch_name])
@@ -5138,6 +5153,10 @@ pub fn remove_worktree_unguarded(
     worktree_path: &Path,
     force: bool,
 ) -> Result<()> {
+    let target = repo_root.join(worktree_path);
+    if !target.try_exists()? {
+        return retire_missing_registration(repo_root, worktree_path);
+    }
     let path_str = worktree_path.to_string_lossy();
     let mut args: Vec<&str> = vec!["worktree", "remove"];
     // `--` below keeps a dash-led path a path. trace:BUG-1622 | ai:claude
@@ -5517,6 +5536,8 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
     }
 }
 
+const KEEP_WORKTREES: &str = "gc.worktreePruneExpire=never";
+
 /// Run `git gc --auto` on the store repo — a cheap no-op unless the (lowered)
 /// `gc.auto` threshold is exceeded, in which case git repacks loose objects.
 /// Best-effort: failures are swallowed.
@@ -5531,7 +5552,7 @@ pub fn gc_auto(repo: &Path) -> bool {
     {
         return false;
     }
-    git(repo, &["gc", "--auto"])
+    git(repo, &["-c", KEEP_WORKTREES, "gc", "--auto"])
         .map(|out| out.success)
         .unwrap_or(false)
 }
@@ -5654,7 +5675,7 @@ pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
         !crate::db::any_store_write_lock_held(),
         "store GC must run outside the store writer transaction"
     );
-    git(repo, &["gc", "--aggressive"])
+    git(repo, &["-c", KEEP_WORKTREES, "gc", "--aggressive"])
 }
 
 /// Outcome of squashing the orphan store branch to a single snapshot commit.

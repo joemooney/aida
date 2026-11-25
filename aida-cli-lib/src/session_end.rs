@@ -2053,7 +2053,7 @@ pub(crate) fn session_end_with_discard_unpushed(
             }
             Err(e) => match crate::mail_retention::retention_refusal(&e) {
                 Some(refusal) => late_refusal = Some(refusal.clone()),
-                None if had_retirement => {
+                None if had_retirement || !target.worktree_path.exists() => {
                     failed_step = Some(format!("the worktree could not be removed: {e:#}"))
                 }
                 // R3-F2: never a raw `git worktree remove --force`, which
@@ -2093,7 +2093,7 @@ pub(crate) fn session_end_with_discard_unpushed(
     };
     if let Some((lines, refusal)) = kept {
         #[cfg(unix)]
-        if !is_clone {
+        if !is_clone && target.worktree_path.is_dir() {
             if let Err(err) = crate::worktree_gc::link_worktree_runtime_state(
                 &project_root,
                 &target.worktree_path,

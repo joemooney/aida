@@ -369,6 +369,7 @@ pub(crate) fn session_gc_at(
     let mut removed = 0usize;
     let mut skipped = 0usize;
     for (path, _branch) in &eligible {
+        crate::mail_retention::before_guarded_removal();
         // A live process inside the tree (cwd, open file, running program)
         // keeps it: gc never removes a worktree that is in use, and has no
         // override. trace:BUG-1947 | ai:claude
