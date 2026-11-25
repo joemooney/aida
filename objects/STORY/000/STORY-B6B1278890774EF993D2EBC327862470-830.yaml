@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T19:04:37.060924440Z
+modified_at: 2026-11-25T19:44:16.431266816Z
 req_type: Story
 tags:
 - landing
@@ -132,6 +132,22 @@ comments:
   modified_at: 2026-11-25T19:04:37.060924440Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2143c-c42f-7562-b5b2-1a5177343352
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0459cd012b (PR #4584 round 2)
+    - F1: supervision now fails closed through gate::ship::merge_requires_supervision. Unset mode, an unresolved spec ID and a PR with no spec ID all count as supervised. Test: story_3131_unset_or_unresolved_spec_is_supervised.
+    - F2: removed the duplicate stalled-reviews command_table row; the test asserts both rows are registered once.
+    - F3: a missing full tier is reported only when CI is Green. A cancelled full tier, which holds the rollup Pending, still reports. A Pending/missing case is added to the evaluate test.
+    - F4: the drought finding counts and requires only landable PRs (green, no full-tier gap), with a red-only case that asserts no drought line.
+    - F5: story_3131_landing_drought_has_own_timeout pins the 60s LANDING_DROUGHT_TIMEOUT. The ledger selection is extracted to approved_at_head and tested: the latest record wins, the approval must be at the head, and closed verdicts are skipped.
+    Evidence: lane job cargo test story_3131 7/7 passed; make check-ci-fast exit 0.
+    Residual: scan() itself (gh and store I/O) is still covered only through its helpers; the tiered-repo gating is an inline tiered.then().
+  created_at: 2026-11-25T19:44:16.431266816Z
+  modified_at: 2026-11-25T19:44:16.431266816Z
+  session_id: 01a2141c118c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
