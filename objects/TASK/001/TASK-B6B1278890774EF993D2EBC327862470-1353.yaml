@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: b3fe0fe9f31fb80280a9599406e9b479a5dd1826
 
   Deferred reporting follow-up: a failed human-gate config read still renders evidence=read for a mandate-dependent PR with ordinary changed paths. aida-cli-lib/src/gate/mandate_gates.rs:256–266 folds the read error into a gate reason, aida-cli-lib/src/gate/mandate.rs:1514–1515 wraps it as HumanGated, and aida-cli-lib/src/pr_train.rs:2280–2287 maps that to Refused. Preserve the typed evidence failure through preview and distinguish it in JSON from a configured human gate.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T14:31:43.993469Z
-modified_at: 2026-11-25T07:27:34.783762871Z
+modified_at: 2026-11-25T07:27:36.747450703Z
 req_type: Task
 tags:
 - carried-from:TASK-3115
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-24T14:50:07.073072305Z
   changes: []
+- id: 01a2119a-552b-7651-a4f0-e4078d01d497
+  author: joe
+  timestamp: 2026-11-25T07:27:36.747445941Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: b3fe0fe9f31fb80280a9599406e9b479a5dd1826
   branch: pr-4432
