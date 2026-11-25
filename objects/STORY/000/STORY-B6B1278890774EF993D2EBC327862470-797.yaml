@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T21:08:40.667376308Z
+modified_at: 2026-11-25T21:20:03.500128726Z
 req_type: Story
 tags:
 - landing
@@ -1461,6 +1461,22 @@ comments:
       Deferred from the PR #4389 (STORY-2897 S3a) CR at adbac40e under the advisor-122 ruling (2026-11-22 13:03 MST). The S3a final round fixes only findings 1, 2 and 5. ## Findings 3. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:1395. If A and then B are red and A reruns green while B remains red, A closes at the observation time and B opens at its earlier commit time on replay. Summing both episode durations counts the overlap twice, even in a window where main was red for the entire window. Compute red minutes from the union of the clipped intervals and assert the metric for this existing rerun scenario. 4. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:978. A failure of the act
   created_at: 2026-11-25T21:08:40.667376308Z
   modified_at: 2026-11-25T21:08:40.667376308Z
+- id: 01a21494-75ac-78e1-a409-c67cb81b8827
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a6f5aba454 (PR #4569, round 2 findings).
+    - F1: story_2897_draft_matches_record_compares_needs — differing needs → no match; legacy record without needs matches only empty-needs drafts.
+    - F2: launch.json now carries a landing snapshot (mode + ci_gated_checks; absent → fails closed to review-gated); validate_draft (submit-draft and parent read) runs validate_verdict_needs. Test: story_2897_submit_draft_validates_needs_under_the_launch_landing_policy (no needs / check:Build / whitespace-padded detail refused; stray needs on request-changes refused; legacy launch record fails closed).
+    - F3: validate_verdict_needs refuses non-empty needs on any non-waiting verdict (record path and draft path). Test: story_2897_needs_only_on_waiting_verdicts.
+    - F4: aggregate rule applies to every kind (test:ci-tier:*, artifact:Build, actor:CI). Extended story_2897_s1b_waiting_dependencies.
+    - F5: open_episode split into open_episode_at; test covers the short/non-hex red_sha, empty failed list, blank check/diagnostic name and closed-episode refusals. Other F5 items (handshake needs copy, verdict needs line, ci_info wake line) left as the reviewer-stated report-only follow-up.
+    Evidence: lane cargo test story_2897 34 passed; open_episode_refuses + review_draft:: 39 passed (1 unrelated process fixture failed for want of a built CLI binary); make check-ci-fast exit 0.
+    Residual risk: the parent read uses the launch-time landing snapshot and the record path reloads the live policy, so a policy change during a review applies the stricter of the two.
+  created_at: 2026-11-25T21:20:03.500128726Z
+  modified_at: 2026-11-25T21:20:03.500128726Z
+  session_id: 01a2146b4fa4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
