@@ -1,0 +1,53 @@
+id: 01a2141b-9294-7bb2-b60d-ee963d63e674
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-320
+title: 'Review PR-4587: [AI:claude] fix(review): promote spec-keyed approvals to ci:full and report each PR (BUG-2764)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a213ea`) for branch `fix-approved-cifull`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4587>
+  - Branch: `fix-approved-cifull` → `main`
+
+  ## Covers
+
+  - BUG-2764
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2710
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4587` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T19:08:01.044566245Z
+modified_at: 2026-11-25T19:08:10.613062869Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a213e3-ba21-73e1-b295-65d98d31ac5f
+  created_at: 2026-11-25T19:08:10.613013388Z
+  created_by: dirtlab
+history:
+- id: 01a2141b-c059-70c1-96a6-eaed45da4900
+  author: dirtlab
+  timestamp: 2026-11-25T19:08:12.761187006Z
+  session_id: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 6719a94592e6bf03948325240c4a38f8e310f068
+  branch: fix-approved-cifull
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b56d428994
+  vendor: claude
+  session: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
