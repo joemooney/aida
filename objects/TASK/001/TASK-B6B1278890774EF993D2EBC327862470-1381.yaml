@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F4) throttling restores the terminal with a bounded graceful stop before SIGKILL of the interactive gh child (ci_watch.rs:62); (F5) intentionally throttled time does not count toward CI inactivity (ci_probe.rs:658). Tests.
   - AC2: (F6) a throttle is reported as a distinct throttle state, not a generic discovery error (advisor_loop_service.rs:1183, review_watch.rs:2988); (F7) the review-watch fixture exercises the real throttled discovery path end to end (task_1993_review_watch_tests.rs:5709). Tests.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T21:04:03.035149773Z
-modified_at: 2026-11-24T22:15:05.837535474Z
+modified_at: 2026-11-25T00:03:15.337077500Z
 req_type: Task
 tags:
 - forge
@@ -31,6 +31,13 @@ history:
   - field_name: tags
     old_value: forge, throughput
     new_value: forge, integration, throughput
+- id: 01a21003-8309-7d20-a805-2dab4224a94e
+  author: aida-session-start
+  timestamp: 2026-11-25T00:03:15.337075162Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
