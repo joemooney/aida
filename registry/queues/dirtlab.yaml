@@ -1272,7 +1272,7 @@
   requirement_id: 01a2120f-964d-7eb2-b451-37e699fed71e
   position: 1339000
   added_by: dirtlab
-  note: auto-queued by `aida pr` (01a211d6); covers 0 specs
-  added_at: 2026-11-25T09:35:52.297275115Z
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-25T09:39:30.521933259Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
