@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T11:30:09.687749816Z
+modified_at: 2026-11-25T16:38:17.592026718Z
 req_type: Story
 tags:
 - landing
@@ -27,6 +27,25 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 04:32): APPROVED HIGH, standard, drain. Joe asked for this directly. Additions: AC2''s investigate diagnosis also lists ADMISSION HOLDERS (pid, role, held-for) and any manual train waiting on admission. AC3: the guard runs under its own hard timeout (default 60s). A timeout or error emits a ''landing guard unhealthy'' alert to the advisor, and is never silent. Ship as ≤300-line slices.'
   created_at: 2026-11-25T11:30:00.523920544Z
   modified_at: 2026-11-25T11:30:00.523920544Z
+- id: 01a21392-7ef8-7a90-8df1-0959726a0eb3
+  author: joe
+  content: |-
+    SCOPE ADDITIONS (Joe 2026-11-25 09:33: "what lessons can we learn so that we have codified this ... in future sessions, and for future users of aida"; product-15). Lessons from today's two droughts (00:01-04:30 and 05:00-09:30), as ACs:
+    - AC-A, PER-PR READY DWELL is the primary trigger, not only "no landing in N min". Any PR that has been approved with green required checks for more than `ready_dwell_minutes` (knob, default 30) and is not on a train raises an alert naming the PR and why it is stuck. Today: #4574 was approved at 08:46 and #4576 by 09:04, and neither moved for nearly an hour, unnoticed.
+    - AC-B, the INVESTIGATE action classifies the cause, with evidence, from a fixed list:
+      (1) a supervised PR needs a human train (show the exact command, and send it to the operator inbox/notification);
+      (2) approved, but the full CI tier never ran or was cancelled (e.g. the label was added while fast CI was still running; TASK-3877 fixes the root);
+      (3) the train/admission lock has been held more than M min (name the holder pid/command; the BUG-2757 shape);
+      (4) red required checks on an approved PR;
+      (5) review verdict missing or held (exited-attempt hold, BUG-2763);
+      (6) agent vendor unavailable (usage limit; see the new vendor-limit story);
+      (7) merge conflict with no repair lane.
+      Each cause carries one prescribed next action.
+    - AC-C, the watchdog runs as a SCHEDULED aida job (not a seat's memory or timer), and the output goes to the operator inbox + `aida status`. It must fire even when every agent seat is idle or rate-limited.
+    - AC-D, approved → train handoff is EVENT-driven: an approval verdict on a drain/auto-train-eligible PR enqueues it at once; supervised PRs produce one operator prompt. Nothing depends on a seat noticing an approval.
+    - Knobs in .aida/config.toml [landing_watchdog]: enabled (default true), drought_minutes, ready_dwell_minutes, lock_hold_minutes, action = report|investigate (default investigate).
+  created_at: 2026-11-25T16:38:17.592026718Z
+  modified_at: 2026-11-25T16:38:17.592026718Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
