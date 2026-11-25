@@ -165,6 +165,11 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // The operator's reasoned host-limit override for one launch command;
     // a vendor child must never inherit it. trace:BUG-2682 | ai:claude
     "AIDA_OVER_HOST_LIMIT",
+    // The operator's review-runner program and the per-run signals that
+    // launch::review_runner sets on that runner alone. trace:STORY-3120 | ai:claude
+    "AIDA_REVIEW_RUNNER_CMD",
+    "AIDA_REVIEW_PASS",
+    "AIDA_REVIEW_RESOLVED_AGENT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
