@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T23:04:58.698675936Z
-modified_at: 2026-11-25T05:17:40.434813008Z
+modified_at: 2026-11-25T05:18:19.418602641Z
 req_type: Story
 relationships:
 - rel_type:
@@ -31,11 +31,11 @@ relationships:
   created_at: 2026-11-22T23:05:04.387048167Z
   created_by: dirtlab
 comments:
-- id: 01a21123-63ae-7d60-9084-11048289fdf0
+- id: 01a21124-0ca0-7ee2-88cb-f09d60e76b5a
   author: aida-auto-bump
   content: 'Auto-rejected: PR #4396 closed on the forge without merging.'
-  created_at: 2026-11-25T05:17:41.678055694Z
-  modified_at: 2026-11-25T05:17:41.678055694Z
+  created_at: 2026-11-25T05:18:24.928093866Z
+  modified_at: 2026-11-25T05:18:24.928093866Z
 history:
 - id: 01a20581-8de3-7872-a193-0d09b066522d
   author: dirtlab
@@ -48,9 +48,9 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
-- id: 01a21123-63ae-7d60-9084-111d4824bad3
+- id: 01a21124-0ca0-7ee2-88cb-f0aff9ceea2d
   author: aida-auto-bump
-  timestamp: 2026-11-25T05:17:41.678061703Z
+  timestamp: 2026-11-25T05:18:24.928100791Z
   changes:
   - field_name: status
     old_value: Draft
