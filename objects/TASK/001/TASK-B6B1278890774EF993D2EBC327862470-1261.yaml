@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
 
   The supplied untraced-criteria list still applies to the added assertions. `tests/test_closeout_audit_wording.py:8` and `aida-cli-lib/src/tests/task_492_brief_tests.rs:693` use bare spec traces, so the criterion-to-test map cannot credit AC1 or AC2. Attach criterion-qualified traces to the wording check and to the test covering the actual pickup path, using the criterion IDs recognized by AIDA.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T18:08:28.336222661Z
-modified_at: 2026-11-25T07:37:39.993983492Z
+modified_at: 2026-11-25T07:37:53.249616413Z
 req_type: Task
 tags:
 - carried-from:BUG-2731
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a211a3-bd61-7222-a026-63613572291c
+  author: joe
+  timestamp: 2026-11-25T07:37:53.249612046Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
   branch: pr-4450
