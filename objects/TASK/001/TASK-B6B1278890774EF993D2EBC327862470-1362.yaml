@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T10:55:01.775216483Z
+modified_at: 2026-11-25T11:00:42.186459572Z
 req_type: Task
 tags:
 - review
@@ -248,6 +248,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T10:57:32.992175494Z
   modified_at: 2026-11-25T10:57:32.992175494Z
+- id: 01a2125d-afd7-73b2-97c1-1e78c53c16d9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:00):
+    # TASK-3878 / PR #4566 r3 (integration-30 pre-check 2026-11-25 03:56 at 2354441c; within advisor-122's 02:27 REPORT-ONLY ruling; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int38r-task-3878. <=80 lines.
+    R1 SECURITY: scan() runs a RAW Command::new("git") ls-remote, bypassing host_remote_git_command (no seat-clone refusal, no config hardening). FIX: build it with aida_core::git_ops::host_remote_git_command(root, "origin") (keeps the advisor's LIVE base tip requirement). Add a test that the seat-clone refusal applies.
+    R2 (AC1 regression): it reports EVERY conflicting PR as "owner unknown". RESTORE r1's suppression: SKIP PRs with a live implementer lane or a queued rework, and SHOW the owner when known; print "owner unknown" ONLY when it genuinely can't be determined. (Otherwise the scheduled --fail-on-findings job pages the advisor every 20 min while lanes are mid-repair.) Test both.
+    R3: "approved first" uses only GitHub reviewDecision; RESTORE r1's ledger-Approved-at-current-head check. Test.
+    Still REPORT-ONLY: writes nothing, no journal lock, no children. make check-ci-fast, then push to #4566. COMMIT your work. TITLE TRAILER: keep the existing PR title.
+  created_at: 2026-11-25T11:00:42.186459572Z
+  modified_at: 2026-11-25T11:00:42.186459572Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
