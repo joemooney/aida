@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T00:35:03.591486216Z
+modified_at: 2026-11-25T01:02:14.564309139Z
 req_type: Task
 tags:
 - integration
@@ -83,6 +83,18 @@ comments:
   modified_at: 2026-11-25T00:30:09.024368263Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21039-865a-7cc2-8e80-d4296080b2e2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 41cf8a79533a84324fb972a00317b8110f5b262b plus the native working diff. The integration-base task diff touches forge.rs and tests/task_3874_review_risk.rs. No untracked additions.
+    AC1: [evidence: behavioral-test] tests/task_3874_review_risk.rs:26 exercises the advanced target and verifies the original merge base. Lines 45–50 exercise refusal for a present commit and a fetchable missing commit in the same checkout under a seat name. forge.rs:7157 and 7166 use the host builders for both paths.
+    AC2: [evidence: behavioral-test] tests/task_3874_review_risk.rs:59 stalls the resolver and verifies the bounded STRICT fallback. Both tests passed in j20261125T003533022-2-0.
+    Checked hex OID validation, exact origin selection, unchanged fetch flags, failed subprocess handling and the trusted versus seat-clone paths. No further actionable defects found in the fix. make check-ci-fast exited 0 in j20261125T003538135-2-0, including all 48 fast source gates. Published-head CI follows host publication.
+  created_at: 2026-11-25T01:02:14.564309139Z
+  modified_at: 2026-11-25T01:02:14.564309139Z
+  session_id: 01a2101f9226
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
