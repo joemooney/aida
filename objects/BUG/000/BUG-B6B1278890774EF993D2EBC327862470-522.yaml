@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T16:41:47.081588837Z
+modified_at: 2026-11-25T16:42:04.862379244Z
 req_type: Bug
 tags:
 - lanes
@@ -374,6 +374,20 @@ comments:
   modified_at: 2026-11-25T16:38:42.781750710Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21395-f16a-74f2-a7eb-09acb98e2633
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2761):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2d7195ae48ed
+    Recorded: 2026-11-25T11:32:36.806391429+00:00
+    Findings:
+    1. BUG-2761.AC1 / R4 F1 — A retained repair can become unresumable again after a recorded-thread successor punts. queue_cmd/work.rs:6989 sends that successor through the Codex resume runner. session/headless.rs:3478–3482 waits and ends the conversation registry entry, but never registers or finishes a lease-bound HeadlessLaneRecord for the new lease or releases that lease's exact shared claim. The pending repair and successor claim remain, and coordination.rs:1123–1128 requires the missing record on the next pickup, even if that pickup cold-launches. Record the successor's worker lifecycle under its new lease and cover a recorded-thread re-punt followed by another same-base dispatch.
+    2. BUG-2761 R4 base-moved fallback — The refusal preserves the retained merge, but the stated ordinary fresh round cannot start while the PR head stays the same. queue_cmd/work.rs:4688–4704 selects the same retained repair even for --fresh, and seat_clone.rs:3937 refuses it again. Even a dispatch that skips adoption would still hit the live journal reservation for the same repository, PR and head in repair_journal.rs:374–376, because a new base does not change that key. The fixture bypasses the fallback by resetting origin/main to the old base. Make the supported fresh-round handoff actionable while preserving the old merge and its recovery evidence, and exercise it with the new base still on origin.
+    3. A first-time interactive conflict pickup can strand a new reservation before any worker starts. queue_cmd/work.rs:6370 prepares the merge before the new interactive refusal at line 897. seat_clone.rs:4064–4081 has already saved the journal reservation with SpawnOutcome::Unknown and staged the merge. The refusal reaches pre-agent rollback (queue_cmd/work.rs:7468–7480), which can remove the new tree and lease while leaving the journal reservation active. Retrying headless at the same PR head then fails at repair_journal.rs:374–376, despite the new error advising a retry. Select supervision or refuse before reserving and staging, or make pre-spawn rollback retire exactly the reservation it created. Cover an initial interactive conflict followed by a headless retry.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T16:42:03.498851990Z
+  modified_at: 2026-11-25T16:42:03.498851990Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
