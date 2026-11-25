@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the recorded tree is verifiably ABSENT (ENOENT on the path AND no mount), the heal ends the lease and records "tree absent, nothing to salvage". Test.
   - AC2: An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T03:24:13.910174236Z
+modified_at: 2026-11-25T03:26:57.717369836Z
 req_type: Bug
 tags:
 - leases
@@ -144,6 +144,11 @@ comments:
   created_at: 2026-11-25T03:08:24.540875416Z
   modified_at: 2026-11-25T03:08:24.540875416Z
   session_id: 01a2105e6a47
+- id: 01a210be-02b5-7ea0-ad81-277bc63b0561
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for BUG-2755. Reviewed the complete landed diff against protected main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3, landed tree dc9f04b094cbba6b98e1695c3a4122786cacd85b, attesting original head a80ae09d4a0842c44224d0792aa59325e99fe332. The head is two commits behind and none of the findings depends on the intervening base changes. AC1 fails on incomplete or unusable production mount evidence. AC2 partially passes for reported Git traversal failures but fails when status omits an unreadable subtree. AC3 partially passes for the clean fixture and cooperating writers but fails on uncertain binding evidence and writers outside the new fence. Exact-head fast gates passed and fast compile was running at review time. Source and existing CI reviewed. No local tests run. The explicit review claim was refused.. No triage reason was given.'
+  created_at: 2026-11-25T03:26:57.717362230Z
+  modified_at: 2026-11-25T03:26:57.717362230Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
@@ -220,6 +225,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a210be-02b5-7ea0-ad81-276e2b92be00
+  author: joe
+  timestamp: 2026-11-25T03:26:57.717353540Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
@@ -228,11 +240,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Request changes for BUG-2755. Reviewed the complete landed diff against protected main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3, landed tree dc9f04b094cbba6b98e1695c3a4122786cacd85b, attesting original head a80ae09d4a0842c44224d0792aa59325e99fe332. The head is two commits behind and none of the findings depends on the intervening base changes. AC1 fails on incomplete or unusable production mount evidence. AC2 partially passes for reported Git traversal failures but fails when status omits an unreadable subtree. AC3 partially passes for the clean fixture and cooperating writers but fails on uncertain binding evidence and writers outside the new fence. Exact-head fast gates passed and fast compile was running at review time. Source and existing CI reviewed. No local tests run. The explicit review claim was refused.
-  recovery_hint: address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T03:24:13.910174236Z
