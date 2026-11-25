@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T03:56:12.665368984Z
+modified_at: 2026-11-25T04:19:41.437377608Z
 req_type: Bug
 tags:
 - hubs
@@ -67,6 +67,11 @@ comments:
     A reference merge (commit 45206d90a1df, `(Refs BUG-2759)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-25T03:56:12.665362315Z
   modified_at: 2026-11-25T03:56:12.665362315Z
+- id: 01a210ee-48fd-79a0-80e5-3a85c50a4607
+  author: joe
+  content: 'SLICE 2 scope update (product-15 2026-11-24 21:20): the reconcile refusal cause is now KNOWN, NOT a block-range collision. It was the one-hub email-consent gate (remote_create.rs ~3110: `emails_in(newly_published_registry)` over the ADDED registry diff lines), which FALSE-POSITIVES: it flags any added registry line carrying an email even when that email is already present on EVERY hub (here, the operator''s address, already in both hubs'' blocks/nodes). Slice 2 AC replaces the block-range design: (1) the gate refuses only for emails not already present on the receiving hub''s registry; (2) its message must not say "on one hub only" unless that is true; (3) the agent-mode multiline output AC (advisor 19:28). Tests for each.'
+  created_at: 2026-11-25T04:19:41.437377608Z
+  modified_at: 2026-11-25T04:19:41.437377608Z
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
