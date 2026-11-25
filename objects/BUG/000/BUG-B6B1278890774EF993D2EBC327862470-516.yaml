@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T03:26:57.717369836Z
+modified_at: 2026-11-25T03:27:04.871967932Z
 req_type: Bug
 tags:
 - leases
@@ -149,6 +149,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for BUG-2755. Reviewed the complete landed diff against protected main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3, landed tree dc9f04b094cbba6b98e1695c3a4122786cacd85b, attesting original head a80ae09d4a0842c44224d0792aa59325e99fe332. The head is two commits behind and none of the findings depends on the intervening base changes. AC1 fails on incomplete or unusable production mount evidence. AC2 partially passes for reported Git traversal failures but fails when status omits an unreadable subtree. AC3 partially passes for the clean fixture and cooperating writers but fails on uncertain binding evidence and writers outside the new fence. Exact-head fast gates passed and fast compile was running at review time. Source and existing CI reviewed. No local tests run. The explicit review claim was refused.. No triage reason was given.'
   created_at: 2026-11-25T03:26:57.717362230Z
   modified_at: 2026-11-25T03:26:57.717362230Z
+- id: 01a210be-1e05-7a53-ac00-4daf8dc9ca61
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2755):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a80ae09d4a08
+    Recorded: 2026-11-25T03:24:06.942287354+00:00
+    Findings:
+    1. aida-cli-lib/src/doctor/worktrees.rs:1447 — BUG-2755 AC1: Verify that the procfs view actually exposes the relevant host processes. The reader’s initial PID namespace does not establish procfs visibility. A hidepid mount can omit another user’s processes entirely, so the loop can see only readable entries and release the lease while an omitted process’s namespace still has the recorded path mounted. Use a verified host-wide inventory or refuse when visibility is restricted. Exercise the production inventory decision with a restricted view.
+    2. aida-cli-lib/src/doctor/worktrees.rs:1453 — BUG-2755 AC1: A real absent clone cannot be healed through this path on an ordinary multi-user host. It requires readlink on every visible /proc/<pid>/root, including privileged system processes for which an unprivileged healer gets EACCES and kernel tasks that have no usable filesystem root. One such task aborts every heal, even if the relevant mount inventory is otherwise available. Keep genuinely unknown namespaces fail-closed, distinguish verified tasks without mount namespaces, and establish an authorized host evidence path. The injected success fixture skips check_namespace_mounts entirely.
+    3. aida-cli-lib/src/seat_clone.rs:2108 — BUG-2755 AC2: Successful Git status with empty stderr does not establish readability. An ignored directory containing unreadable data is pruned from the untracked traversal, so chmod 000 on an ignored subtree can produce neither a status entry nor the warning this patch depends on. With reachable refs and an empty mailbox, doctor can release that present clone’s lease. Verify readability separately for the release decision and add an otherwise clean ignored-subtree regression.
+    4. aida-cli-lib/src/doctor/worktrees.rs:1506 — BUG-2755 AC3: The lease-only path treats failure to verify a binding as evidence that the clone has no binding. verified_clone_main collapses an absent marker, EACCES or EIO reading an existing marker or alternates file, and a binding to a different main into None. The Git status probe explicitly excludes the marker. An otherwise clean bound clone with an unreadable marker can therefore reach lease release. Distinguish a confirmed missing binding from unreadable or conflicting binding evidence and refuse the latter.
+    5. aida-cli-lib/src/doctor/worktrees.rs:1535 — BUG-2755 AC3: An exclusive checkout-directory flock only fences writers that take the new shared lock. The existing mailbox activation code explicitly anticipates already-running older AIDA binaries. A writer without the new lock can begin after the holder scan and publish after the empty-mail check while doctor releases the lease. The new fixture holds the same flock helper and cannot detect this case. Reuse a mailbox fence that covers supported writer versions or require evidence that every possible writer participates before releasing ownership.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T03:27:04.709264417Z
+  modified_at: 2026-11-25T03:27:04.709264417Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
