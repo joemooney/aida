@@ -11,12 +11,12 @@ description: |
 
   ## Acceptance
   - AC1: Each finding above is fixed with a regression test that fails before the fix, or explicitly closed with advisor sign-off as not applicable to the landed code.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:16:21.498334452Z
-modified_at: 2026-11-25T21:08:35.833270334Z
+modified_at: 2026-11-25T21:08:37.791899534Z
 req_type: Task
 tags:
 - mass-change
@@ -32,6 +32,14 @@ comments:
   content: FOLDED into a comment on TASK-3133 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
   created_at: 2026-11-25T21:08:35.833270334Z
   modified_at: 2026-11-25T21:08:35.833270334Z
+history:
+- id: 01a21489-ff1f-7b73-a186-aceeba26ba77
+  author: joe
+  timestamp: 2026-11-25T21:08:37.791895266Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
