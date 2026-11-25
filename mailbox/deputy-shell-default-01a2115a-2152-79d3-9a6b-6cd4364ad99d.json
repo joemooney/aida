@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a2115a-2152-79d3-9a6b-6cd4364ad99d",
+  "thread_id": "deputy-01a2115a-2152-79d3-9a6b-6cd4364ad99d",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795587449801,
+  "body": "Script deputy \"default\" finished script job 01a2115a-2152-79d3-9a6b-6cd4364ad99d: rc 2 (exit).\nScript: cd ~/ai/aida && aida merge-hold clear 4537 --reason \"Advisor override at the 4-round cap recorded at 71b61e09 (approved 03:29Z); remaining findings folded into BUG-2760. Full CI green.\"\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a2115a-2152-79d3-9a6b-6cd4364ad99d/transcript.log\nRead it with `aida deputy shell log 01a2115a-2152-79d3-9a6b-6cd4364ad99d --name default`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a2115a-2152-79d3-9a6b-6cd4364ad99d --name default`.\n",
+  "subject": "deputy script job 01a2115a FAILED: rc 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
