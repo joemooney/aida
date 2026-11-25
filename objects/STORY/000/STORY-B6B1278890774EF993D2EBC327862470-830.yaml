@@ -1,0 +1,30 @@
+id: 01a21272-0001-7041-9d91-e0fef9f67516
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-830
+agreed_id: STORY-3131
+title: 'Built-in landing-drought watchdog: no landing for N minutes while ready PRs exist → configurable action (report / investigate with diagnosis); a silent or hung guard is itself an alert'
+description: |
+  Joe 2026-11-25 04:17: "4h and no merges, what is happening?" … "this should not be a memory but baked into aida and maybe configurable with maybe an associated action like investigate, it seems that I need to ask about it in order for it to happen sometimes even though you have timers". Filed by product-15.
+  What happened: from 00:01 to 04:17+ nothing landed on main although 4 PRs (#4540, #4529, #4449, #4398) were approved at their current head with green full CI and cleared holds. Their specs are supervised (drive/unset), so only a mandate-covered auto-train or a human can land them. The auto-train was "running" with "last exit 1", and `aida doctor check landing-health` (the check behind the scheduled landing-health-guard) HUNG >120s when run by hand, so the guard never raised an alert. No seat noticed until the operator asked.
+
+  ## Acceptance
+  - AC1: A built-in, configurable LANDING-DROUGHT check: `[landing.drought] max_minutes` (default 60) + `action = "report" | "investigate"` (default "investigate"). When main has had no landing for max_minutes AND at least one PR is landable (approved at head + required CI green + holds cleared), it fires once per drought episode. Runs from the existing scheduler.
+  - AC2: action="investigate" produces a DIAGNOSIS without operator prompting: per ready PR, the `aida pr train --dry-run` refusal reason; the auto-train controller's last exit + its error; the mandate coverage; the guard's own health. It routes the diagnosis to the advisor (mail + CronJobFailed-style route) and records it as a doctor finding.
+  - AC3: The guard is itself bounded and watched: the drought check has a hard deadline; a timeout or error is ITSELF a finding/alert ("landing guard unhealthy"), never silent. Tests: drought + ready PR → fires once with the diagnosis; no ready PR → silent; the check times out → a "guard unhealthy" alert.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T11:23:10.721031318Z
+modified_at: 2026-11-25T11:23:10.721031318Z
+req_type: Story
+tags:
+- landing
+- scheduler
+- throughput
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
