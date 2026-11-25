@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T01:34:10.389216874Z
+modified_at: 2026-11-25T01:54:54.945587677Z
 req_type: Story
 tags:
 - hygiene
@@ -155,6 +155,18 @@ comments:
   modified_at: 2026-11-25T01:30:26.519654751Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21069-bf12-7290-a68f-f67d49c82793
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 423189493fe0ee64536b36823c37fbe32aa9b120 plus the five native-lane working-tree edits. Reviewed the origin/main merge-base diff, local diff and untracked listing.
+    AC1: [evidence: behavioral-test] task_2053_seat_clone_lifecycle_tests.rs:1695 and :2724 both passed in launcher job j20261125T015237580-2-0. The closed-unmerged fixture verifies the forge state and head, scan, actual removal, release and owning-spec pointer. The destructive negatives preserve the seat and lease for stale/tag-only coverage, reflog-only work and a refused pointer. A late edit survives quarantine rollback.
+    AC2: [evidence: documentation-inspection] The advisor has decided the policy, ending interim parking. docs/cli/06-roles-sessions.md:193 and session_reap.rs explain branch publication for clones and merge evidence for ordinary worktrees. F3 follows the explicit branch-only ruling.
+    Deep pass: origin names and OIDs are read together; failed, empty, stale, oversized or unprovable observations cannot authorize removal. Ref and reflog inventory is compared after rename, with holder checks bracketing the verification. Restore cannot replace another directory. Missing local ancestry evidence can conservatively retain a clone. The store comment must persist before deletion. The legacy fixture deliberately exercises the verified host lease for successful mail retirement. Corrected an unguarded fixture fetch after the first fast-gate run; the maintenance ratchet passed independently. Exact PR-head CI awaits host publication.
+  created_at: 2026-11-25T01:54:54.945587677Z
+  modified_at: 2026-11-25T01:54:54.945587677Z
+  session_id: 01a2105686ae
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe

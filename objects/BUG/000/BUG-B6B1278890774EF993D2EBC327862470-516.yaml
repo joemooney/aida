@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T01:42:48.047162123Z
+modified_at: 2026-11-25T01:54:19.850157917Z
 req_type: Bug
 tags:
 - leases
@@ -112,6 +112,19 @@ comments:
   modified_at: 2026-11-25T01:39:06.266465836Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21069-3607-7db2-98e9-a64dff376b71
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4d98f0674998 plus the six native-lane working-tree files. Reviewed the origin/main merge-base diff, unstaged changes and untracked inventory.
+    AC1: [evidence: behavioral-test] bug_2755_absent_tree_ends_lease and bug_2755_dangling_slash_keeps_lease check the heal decision, retained lease and success diagnostic. Production requires a verified host process view and checks each numeric process root and mount inventory.
+    AC2: [evidence: behavioral-test] bug_2755_recreated_clean_tree_releases_only_lease exercises a valid clone, EACCES during directory enumeration and a successful clean control. Git status stderr now makes the probe unknown.
+    AC3: [evidence: behavioral-test] The same fixture covers ignored local mail, the ending-retained reason and an active writer. The final fixture additionally checks grant revocation. Release pins checkout and Git directory identities, takes the exclusive writer lock, and repeats holder inspection after the probe.
+    Targeted lane job j20261125T014604139-2-0 executed three passing tests. Some final edits occurred during that build. The fast gate is running. Residual limits include conservative refusals when any process inventory is inaccessible and advisory locking among participating mailbox writers. No live lease was exercised.
+  created_at: 2026-11-25T01:54:19.850157917Z
+  modified_at: 2026-11-25T01:54:19.850157917Z
+  session_id: 01a2105e6a47
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
