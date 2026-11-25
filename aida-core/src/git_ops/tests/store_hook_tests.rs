@@ -1725,3 +1725,81 @@ fn bug_2490_union_refusal(block_abort: bool) {
     );
     assert!(!has_changes_checked(&store).unwrap());
 }
+
+// TASK-3882: with `core.quotePath=false`, the refusal reader quotes each raw
+// path exactly once (a tab and trailing space, distinct non-UTF-8 names,
+// both rename endpoints), lists untracked files on their own, and agrees
+// with git's porcelain v1; the shared safety reader keeps its collapsed
+// untracked directory but pins quoting too.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_3882_refusal_lines_quote_each_raw_path_once() {
+    use std::os::unix::ffi::OsStrExt;
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("r");
+    init(&repo).unwrap();
+    std::fs::write(repo.join("old  "), "x").unwrap();
+    run_git(&repo, &["add", "--", "old  "]);
+    run_git(
+        &repo,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "base",
+        ],
+    );
+    run_git(&repo, &["mv", "--", "old  ", "new "]);
+    run_git(&repo, &["config", "core.quotePath", "false"]);
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    std::fs::write(repo.join("notes/todo "), "x").unwrap();
+    for name in [b"a\t ".as_slice(), b"\xfe ", b"\xff "] {
+        std::fs::write(repo.join(std::ffi::OsStr::from_bytes(name)), "x").unwrap();
+    }
+    let rename = r#"R  "old  " -> "new ""#;
+    assert_eq!(
+        refusal_status_lines(&repo).unwrap(),
+        [
+            rename,
+            r#"?? "a\t ""#,
+            r#"?? "notes/todo ""#,
+            r#"?? "\376 ""#,
+            r#"?? "\377 ""#
+        ]
+    );
+    let v1 = run_git(
+        &repo,
+        &["-c", "core.quotePath=true", "status", "--porcelain"],
+    );
+    assert!(v1.lines().any(|l| l == rename), "matches git's v1: {v1}");
+    assert_eq!(
+        worktree_status_porcelain_lines(&repo).unwrap(),
+        [
+            rename,
+            r#"?? "a\t ""#,
+            "?? notes/",
+            r#"?? "\376 ""#,
+            r#"?? "\377 ""#
+        ]
+    );
+    let raw = crate::test_git::git_command()
+        .current_dir(&repo)
+        .args(["status", "--porcelain=v2", "-z", "--untracked-files=all"])
+        .output()
+        .unwrap()
+        .stdout;
+    let v2 = porcelain_v2_z_lines(&raw, false, |line| line == "? a\t ");
+    assert!(v2[0].starts_with("2 R. ") && v2[0].ends_with("\"new \"\t\"old  \""));
+    assert_eq!(
+        v2[1..],
+        [r#"? "notes/todo ""#, r#"? "\376 ""#, r#"? "\377 ""#]
+    );
+}
