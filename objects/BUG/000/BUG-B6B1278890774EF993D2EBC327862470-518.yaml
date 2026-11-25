@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The occupied-worktree recheck in review_watch.rs (~:1699, :1836) runs its git probes OUTSIDE the global admission and train-member locks, then REVALIDATES the probed state cheaply inside the lock (refuse/retry if it changed). Test: a slow probe does not hold the admission lock (another admission proceeds meanwhile).
   - AC2: Test: a worktree state that changes between probe and revalidation is detected and not admitted on stale evidence.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:52:59.317891783Z
-modified_at: 2026-11-25T12:00:12.473994982Z
+modified_at: 2026-11-25T12:41:02.691327Z
 req_type: Bug
 tags:
 - admission
@@ -38,6 +38,12 @@ comments:
   modified_at: 2026-11-25T12:00:12.473994982Z
   session_id: 01a2127ec8ae
   harness_version: codex-cli 0.167.0
+- id: 01a212b9-49e3-74a2-93dd-3432de244563
+  author: aida-publication-done
+  content: Implementer push ed0f7d4f23b5 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T12:41:02.691326461Z
+  modified_at: 2026-11-25T12:41:02.691326461Z
+  session_id: 01a2127ec8ae
 history:
 - id: 01a20f1f-6a65-7bf3-92ce-039ace0e8804
   author: joe
@@ -61,6 +67,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a212b9-49e3-74a2-93dd-3425612f868b
+  author: aida-publication-done
+  timestamp: 2026-11-25T12:41:02.691323223Z
+  session_id: 01a2127ec8ae
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
