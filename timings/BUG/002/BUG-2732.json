@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2732",
+  "publishes": [
+    {
+      "at": "2026-11-25T12:13:26.348550371Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T17:58:08.915447918Z",
+      "spec": "BUG-2732",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4449,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7a751a02a101c89f3b2bd6d6a2dbc003afa58f5a"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:59:14.406495215Z",
+      "spec": "BUG-2732",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2732 (BUG-b6b1278890774ef993d2ebc327862470-493) — PARTIAL. The test covers pruning and the live-holder refusal. It leaves immediate admission with stale receipts present unverified.\nBUG-b6b1278890774ef993d2ebc327862470-493.AC1 — unverified. Pinned landed source inspection confirms receipts() prunes confirmed dead or reused PID identities before the busy decision. The test never attempts admission with stale receipts as the only holders.\nBUG-b6b1278890774ef993d2ebc327862470-493.AC2 — unverified. The implementer reported a passing lane run of `cargo test -p aida-cli-lib bug2732_manual_train_releases_stale_legacy_receipts`. The test observes a live auto-train refusal and reused-PID pruning, then succeeds only after both stale entries are gone. The supplied untraced-criteria list names AC1 and AC2, and the diff adds only the spec-level trace.\nReviewed the whole landed diff on protected base ef906ec7464cf1b3100c4383085280c203722941 (landed tree 003fd914bc3a12da06f2798b3623a383fe002212) while attesting the original head. Main is four commits ahead. Its changes in admission_owner.rs leave the tested stale-receipt path intact, and neither finding depends on those changes. At review time, exact-head fast gates and the merge-hold gate passed, fast compile was pending, and the full test shards were skipped. No local tests or builds were run.",
+        "recovery_hint": "address the review findings, move BUG-2732 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:08:31.883309698Z",
+      "spec": "BUG-2732",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4449,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d697b21cee8abb941042cfd96b5bc6d01c69167c"
+      }
+    },
+    {
+      "ts": "2026-11-25T12:07:28.827481477Z",
+      "spec": "BUG-2732",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4449
+      }
+    },
+    {
+      "ts": "2026-11-25T12:13:26.119569471Z",
+      "spec": "BUG-2732",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "05e44004589d32a6743173766ee25eb805f5c7a5",
+        "pr": 4449,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
