@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T06:56:39.714802322Z
+modified_at: 2026-11-25T06:56:57.732940884Z
 req_type: Bug
 tags:
 - lanes
@@ -57,6 +57,11 @@ comments:
   created_at: 2026-11-25T06:40:07.739527278Z
   modified_at: 2026-11-25T06:40:07.739527278Z
   session_id: 01a2111274b7
+- id: 01a2117e-4584-7700-b3f3-cea65032206a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes. BUG-2761 is a completing spec. Reviewed all six files in the landed diff against pinned main 2d346c274965961d1e187e5d48a6dbe611232393 and attested original PR head 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8.. No triage reason was given.'
+  created_at: 2026-11-25T06:56:57.732928031Z
+  modified_at: 2026-11-25T06:56:57.732928031Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
@@ -100,6 +105,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a2117e-4584-7700-b3f3-ce9f49e0f097
+  author: joe
+  timestamp: 2026-11-25T06:56:57.732917153Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
@@ -108,18 +120,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5d24023de56
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes. BUG-2761 is a completing spec. Reviewed all six files in the landed diff against pinned main 2d346c274965961d1e187e5d48a6dbe611232393 and attested original PR head 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8.
-
-    BUG-b6b1278890774ef993d2ebc327862470-522.AC1 — unverified. The diff contains component assertions for mismatched PR, original head and conflict paths, plus journal transfer and rollback. The worksheet's untraced criterion remains uncovered at dispatch level. Interactive queue rework lacks host completion, and an unrelated remote base advance blocks a journal-matching repair.
-    BUG-b6b1278890774ef993d2ebc327862470-522.AC2 — unverified. The worksheet's untraced criterion requires a punt followed by another real dispatch that finishes in the same seat. The modified fixture directly constructs, adopts and commits the repair.
-    BUG-2761 bug protocol — met. The PR modifies aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs.
-
-    The head is one commit behind the pinned base. That commit changes reviewer/watch code. No finding depends on code changed by that commit. Exact-head FAST gates, compile, aggregate Build and merge-hold-gate passed. The full test shards were skipped. Review used the landed source, hosted CI and the implementer's reported focused fixture result. No local tests were run.
-  recovery_hint: address the review findings, move BUG-2761 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T06:56:39.714802322Z
