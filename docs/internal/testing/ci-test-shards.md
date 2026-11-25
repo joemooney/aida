@@ -15,20 +15,27 @@ target is six minutes; cold compilation can take longer. The compile job keeps
 
 A PR with the `ci:full` label, or repository Actions variable
 `AIDA_PR_CI_TIER=full`, runs **FULL** instead. Unset, `fast`, or unrecognized
-variable values select FAST for ordinary PRs. Adding the label requests FULL. The scheduled approved-head job waits for the approved head’s FAST aggregate to finish before adding or reapplying the label. Removing it skips CI.
-No other label does: an `aida:merge-hold*` change, for instance, starts a run in
-a concurrency group of its own that skips every job within seconds, under
-`label event (...)` check names, so the head's running CI, its `ci-tier:` marker
-and its `Build (ubuntu-latest)` result are left as they were. Main pushes, train PRs, merge groups,
-scheduled runs and manual dispatches always select FULL. The `tier` job selects
-once and emits a `ci-tier: fast` or `ci-tier: full` check name.
+variable values select FAST for ordinary PRs. Adding `ci:full` starts FULL in a
+separate per-PR concurrency group, so an active FAST run can finish. Removing
+a label triggers no CI workflow. Adding another label (such as a merge hold)
+starts a run with its own concurrency group and skipped jobs named
+`label event (...)`. Main pushes, train PRs, merge groups, scheduled runs and
+manual dispatches always select FULL. The `tier` job selects once and emits
+a `ci-tier: fast` or `ci-tier: full` check name.
 
 <!-- trace:STORY-2809 | ai:claude -->
-The label selects FULL for the head it was applied to. A `synchronize` event (a
-push) selects FAST even while the label is present. `aida review record` with
-an approving verdict adds the label (or re-applies a stale one when no check is
-running on the head), which starts FULL on the approved head, and `aida pr train` admits a member only when its exact head has a green
-FULL run. See [Landing approved work](../../advanced/landing.md).
+<!-- trace:TASK-3282 | ai:codex -->
+A push to an ordinary PR selects FAST under the default configuration, even
+when the PR inherited `ci:full`. Manual and review-watch approvals record the
+reviewed SHA. The scheduled `approved-head-full-ci` job waits for FAST to
+finish on that exact head before adding or reapplying the label. Train admission
+requires a green FULL run on the member's exact head. See
+[Landing approved work](../../advanced/landing.md).
+
+<!-- trace:TASK-3266 | ai:codex -->
+After `gh pr update-branch`, wait for FAST on the updated head to finish before
+manually removing and re-adding an inherited `ci:full` label. Re-adding it
+starts FULL on the updated head.
 
 Both tiers report `Build (ubuntu-latest)`. The aggregate requires successful
 selection and every selected job; failed, cancelled or unexpectedly skipped
