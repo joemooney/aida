@@ -172,6 +172,7 @@ impl Case {
             root.path(),
             &self.hold,
             AutoReleaseIo {
+                change_key: None,
                 coverage: &|_| Ok(None),
                 live_head: &|| {
                     Ok(Some(mh::PinnedChange {
@@ -196,7 +197,7 @@ impl Case {
                     mh::corpus_gate_bodies(&[root.path()], PR, ids).map_err(anyhow::Error::msg)
                 },
                 grant_check: &|_, _| sa::GrantCheck::Valid(self.grant.clone()),
-                approval_authority: &|head| {
+                approval_authority: &|head, _| {
                     approval_attested(&self.candidates, &self.policy, head, PR)
                 },
                 mandate: &|| {
@@ -615,6 +616,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
         root,
         &hold,
         AutoReleaseIo {
+            change_key: None,
             coverage: &|_| Ok(None),
             live_head: &|| {
                 Ok(Some(mh::PinnedChange {
@@ -632,7 +634,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
             read_history: &|_| Ok(RetainedHistory::default()),
             read_corpus: &|_| Ok(vec![("TASK-37".into(), body.clone())]),
             grant_check: &|id, subject| sa::grant_check_for(root, id, subject),
-            approval_authority: &|live| {
+            approval_authority: &|live, _| {
                 approval_attested(std::slice::from_ref(&v), &policy, live, PR)
             },
             mandate: &|| panic!("ungranted artifact reached mandate"),
@@ -644,4 +646,25 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
     assert!(result.is_err());
     assert!(mh::hold_is_open(root, PR));
     assert!(mh::recorded_clearance(root, PR).is_none());
+}
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_selected_approval_needs_membership_and_own_authority() {
+    let case = Case::ok();
+    let valid = case.candidates[0].clone();
+    let mut absent = valid.clone();
+    absent.summary = Some("different review".into());
+    assert!(
+        selected_approval_attested(&case.candidates, Some(&absent), &case.policy, HEAD, PR)
+            .is_err()
+    );
+    let mut unattested = valid.clone();
+    unattested.attestation = None;
+    unattested.recorded_at = Some("2026-10-14T01:00:01Z".into());
+    let candidates = vec![valid.clone(), unattested.clone()];
+    assert!(selected_approval_attested(&candidates, Some(&valid), &case.policy, HEAD, PR).is_ok());
+    assert!(
+        selected_approval_attested(&candidates, Some(&unattested), &case.policy, HEAD, PR).is_err()
+    );
 }
