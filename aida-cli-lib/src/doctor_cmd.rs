@@ -352,7 +352,8 @@ pub(crate) fn handle_doctor_command(
             json: heal_json,
         } => {
             // trace:BUG-2722 | ai:codex
-            let repair = normalize_doctor_category(category)? == "repair-reservations";
+            let category = normalize_doctor_category(category)?;
+            let repair = category == "repair-reservations";
             if repair || attest.is_some() {
                 let root = main_worktree_root_from(&find_project_root()?);
                 anyhow::ensure!(!yes && !sub_yes, "attested release refuses --yes");
@@ -379,15 +380,20 @@ pub(crate) fn handle_doctor_command(
                         reason,
                         std::io::stdin().lock(),
                     )?;
-                    println!("Released {id}");
-                    return Ok(());
+                } else {
+                    anyhow::ensure!(
+                        category == "stale-leases",
+                        "--attest requires stale-leases or repair-reservations"
+                    );
+                    attest_clone_lease(&root, id, reason)?;
                 }
+                println!("Released {id}");
+                return Ok(());
             }
             let yes = sub_yes;
             let json = heal_json;
             if let Some(id) = id {
                 let root = main_worktree_root_from(&find_project_root()?);
-                let category = normalize_doctor_category(category)?;
                 anyhow::ensure!(
                     category == "stale-leases",
                     "--id currently requires stale-leases"
@@ -399,14 +405,6 @@ pub(crate) fn handle_doctor_command(
                     .iter()
                     .find(|f| &f.id == id)
                     .ok_or_else(|| anyhow::anyhow!("no eligible stale lease finding `{id}`"))?;
-                if attest.is_some() {
-                    let salvage = crate::home_dir()
-                        .context("home directory unavailable")?
-                        .join("salvage/reaped");
-                    attest_clone_lease(&root, id, &salvage, std::io::stdin().lock())?;
-                    println!("Released {id}");
-                    return Ok(());
-                }
                 if !yes && !confirm_doctor_category(&category, 1)? {
                     return Ok(());
                 }

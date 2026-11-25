@@ -576,11 +576,12 @@ pub(crate) fn is_store_tracked_runtime_path(path: &str) -> bool {
 }
 
 pub(crate) fn collect_doctor_findings(
-    project_root: &std::path::Path,
+    root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
-    category_filter: Option<&str>,
+    category: Option<&str>,
 ) -> Result<Vec<DoctorFinding>> {
-    collect_doctor_findings_at(project_root, store, category_filter, &doctor_proc_root())
+    let proc = doctor_proc_root();
+    collect_doctor_findings_at(root, store, category, &proc, None)
 }
 
 /// The `stale-locks` findings: the cache lock-info sidecar (and any unshared
@@ -774,11 +775,14 @@ pub(crate) fn collect_doctor_findings_at(
     store: &aida_core::models::RequirementsStore,
     category_filter: Option<&str>,
     proc_root: &std::path::Path,
+    exact: Option<&crate::leases::SessionLease>,
 ) -> Result<Vec<DoctorFinding>> {
     let filter = category_filter.map(normalize_doctor_category).transpose()?;
     let mut out = Vec::new();
     let cleanup = collect_cleanup_report(project_root, store);
-    let leases = list_leases(project_root);
+    let leases = exact
+        .map(|lease| vec![lease.clone()])
+        .unwrap_or_else(|| list_leases(project_root));
     let live_sessions = process_probe::probe_live_claude_sessions();
     let now = chrono::Utc::now();
 
@@ -1082,9 +1086,10 @@ pub(crate) fn collect_doctor_findings_at(
     // trace:BUG-2655 | ai:codex
     if let Some(root) =
         aida_core::store_locate::detect_distributed_store_from(project_root).filter(|_| {
-            filter
-                .as_deref()
-                .is_none_or(|category| category == "stale-leases")
+            exact.is_none()
+                && filter
+                    .as_deref()
+                    .is_none_or(|category| category == "stale-leases")
         })
     {
         for claim in crate::coordination::list_claims(&root) {

@@ -1425,14 +1425,27 @@ pub(super) fn heal_doctor_dead_agent(
 }
 
 // trace:BUG-2755 | ai:codex
-pub(super) fn attest_clone_lease(
-    main: &std::path::Path,
-    id: &str,
-    salvage: &std::path::Path,
-    mut input: impl std::io::BufRead,
-) -> Result<()> {
-    let read = || crate::leases::read_exact_lease(main, id)?.context("lease disappeared");
-    let lease = read()?;
+pub(super) fn attest_clone_lease(main: &std::path::Path, id: &str, reason: &str) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let read =
+        || crate::leases::read_exact_lease_snapshot(main, id)?.context("no matching local lease");
+    let (lease, raw) = read()?;
+    let store = Storage::new(main.join(".aida-store")).load()?;
+    let proc = crate::doctor_root::doctor_proc_root();
+    let findings = crate::doctor_root::collect_doctor_findings_at(
+        main,
+        &store,
+        Some("stale-leases"),
+        &proc,
+        Some(&lease),
+    )?;
+    anyhow::ensure!(
+        findings.iter().any(|f| f.id == id),
+        "no eligible stale lease finding `{id}`"
+    );
+    let salvage = crate::home_dir()
+        .context("home directory unavailable")?
+        .join("salvage/reaped");
     let tree = &lease.worktree_path;
     anyhow::ensure!(
         lease.tree_kind == crate::seat_clone::TreeKind::Clone
@@ -1459,41 +1472,61 @@ pub(super) fn attest_clone_lease(
         lease.scope,
         chrono::Utc::now().timestamp()
     ));
+    let pin = || -> Result<Option<std::fs::File>> {
+        for ancestor in tree.ancestors() {
+            match std::fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW)
+                .open(ancestor)
+            {
+                Ok(dir) => {
+                    anyhow::ensure!(ancestor.canonicalize()? == ancestor, "ambiguous clone path");
+                    return Ok((ancestor == tree).then_some(dir));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        anyhow::bail!("missing clone path ancestors")
+    };
+    let identity = |dir: &Option<std::fs::File>| {
+        dir.as_ref()
+            .map(|f| f.metadata().map(|m| (m.dev(), m.ino())))
+            .transpose()
+    };
+    // Keep the inode allocated even if the checkout is unlinked during confirmation.
+    let before = pin()?;
     eprintln!("Warning: clone binding and other users of {} are unverified. Stop all writers. If present, the entire directory will move to {}. Type {id} to release its lease.", tree.display(), dest.display());
     let mut reply = String::new();
-    input.read_line(&mut reply)?;
-    anyhow::ensure!(
-        reply.trim_end_matches(['\r', '\n']) == id,
-        "lease ID confirmation mismatch"
-    );
-    anyhow::ensure!(
-        serde_json::to_value(read()?)? == serde_json::to_value(&lease)?,
-        "lease changed during confirmation"
-    );
-    for ancestor in tree.ancestors() {
-        match std::fs::symlink_metadata(ancestor) {
-            Ok(m) => {
-                anyhow::ensure!(
-                    m.is_dir() && ancestor.canonicalize()? == ancestor,
-                    "ambiguous clone path"
-                );
-                if ancestor == tree {
-                    std::fs::create_dir_all(salvage)?;
-                    anyhow::ensure!(
-                        salvage.canonicalize()? == salvage,
-                        "ambiguous salvage directory"
-                    );
-                    aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
-                        .with_context(|| format!("atomic salvage to {}", dest.display()))?;
-                    eprintln!("Clone saved at {}", dest.display());
-                }
-                break;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.into()),
+    std::io::stdin().read_line(&mut reply)?;
+    let confirmed = reply.trim_end_matches(['\r', '\n']);
+    anyhow::ensure!(confirmed == id, "lease ID confirmation mismatch");
+    crate::session::with_lease_write_lock(main, || {
+        anyhow::ensure!(read()?.1 == raw, "lease changed during confirmation");
+        if before.is_some() {
+            std::fs::create_dir_all(&salvage)?;
+            let canonical = salvage.canonicalize()?;
+            anyhow::ensure!(canonical == salvage, "ambiguous salvage directory");
         }
-    }
-    crate::land::run::release_lease(main, id)
+        anyhow::ensure!(
+            crate::mail_retention::verified_clone_main(main, tree).is_none()
+                && identity(&pin()?)? == identity(&before)?,
+            "clone changed during confirmation"
+        );
+        let outcome = if before.is_some() {
+            aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
+                .with_context(|| format!("atomic salvage to {}", dest.display()))?;
+            eprintln!("Clone saved at {}", dest.display());
+            format!("saved at {}", dest.display())
+        } else {
+            "tree absent, nothing to salvage".into()
+        };
+        let audit = format!("operator attested {id}: {reason}; {outcome}");
+        crate::session_reap::release_lease_files_with_reason(main, id, &audit);
+        let removed = !crate::lease_path(main, id).try_exists()?;
+        anyhow::ensure!(removed, "lease {id} could not be removed");
+        Ok(())
+    })
 }
 
 pub(super) fn heal_doctor_lease(
