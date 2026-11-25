@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T21:55:01.118382444Z
+modified_at: 2026-11-25T22:24:19.978232769Z
 req_type: Bug
 tags:
 - doctor
@@ -25,6 +25,11 @@ relationships:
     custom: implemented-by
   target_id: 01a20a3f-5cf7-7521-9f9c-c64404eecd3c
   created_at: 2026-11-24T17:55:12.851705312Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a214ce-ec70-7720-9d1f-725549e16ef9
+  created_at: 2026-11-25T22:24:19.978173798Z
   created_by: dirtlab
 comments:
 - id: 01a2084b-6601-7601-87a1-9e667d151685
@@ -600,6 +605,12 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a214cf-5ae3-7550-afa9-270d48db5c23
+  author: dirtlab
+  timestamp: 2026-11-25T22:24:23.267924280Z
+  session_id: 01a2147671bd
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a214b4-777e-7122-a82e-93ea323abb66
   timestamp: 2026-11-25T21:55:01.118379824Z

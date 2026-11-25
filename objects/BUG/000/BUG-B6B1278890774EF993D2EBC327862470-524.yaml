@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T21:22:12.529044507Z
+modified_at: 2026-11-25T22:24:36.269647278Z
 req_type: Bug
 tags:
 - review-watch
@@ -26,6 +26,11 @@ relationships:
     custom: implemented-by
   target_id: 01a21218-1244-70b1-9895-7070ec6d046c
   created_at: 2026-11-25T09:45:43.866010695Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a214ce-ec70-7720-9d1f-725549e16ef9
+  created_at: 2026-11-25T22:24:36.269623559Z
   created_by: dirtlab
 comments:
 - id: 01a211fe-69e9-7f20-82b2-ec05639ab98e
@@ -394,6 +399,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a214cf-9616-7230-90b1-eaf21455d802
+  author: dirtlab
+  timestamp: 2026-11-25T22:24:38.422765640Z
+  session_id: 01a2147671bd
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a21496-6db1-7a52-b378-f94e3ae55874
   timestamp: 2026-11-25T21:22:12.529041773Z
