@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T15:42:04.835188554Z
+modified_at: 2026-11-25T16:00:39.523996725Z
 req_type: Story
 tags:
 - integration
@@ -222,6 +222,13 @@ comments:
   content: 'Updated reference branch story-3120-ci-review in /home/joe/ai/aida-story-3120 (new head commit 0d21f696ebfd713a7e2652094e288068e0707c92) for S3/S4/S5: added --effort <LEVEL> and --challenger-effort <LEVEL> CLI flags plus default_effort and challenger_effort in .aida/review-rules.toml (ProjectReviewRulesConfig), finder_effort/challenger_effort on AdversarialReviewSummary, and vendor CLI effort wiring (-c model_reasoning_effort=<LEVEL> for codex, --effort <LEVEL> for claude and agy, plus AIDA_REVIEW_RESOLVED_EFFORT for custom runners). Updated docs/showcase/code-review.html user manual.'
   created_at: 2026-11-25T15:42:04.835188554Z
   modified_at: 2026-11-25T15:42:04.835188554Z
+- id: 01a21370-449e-7d40-98c1-6a5f8b5f1c7c
+  author: joe
+  content: 'SLICE-BRIEF ADDENDUM (Joe, 2026-11-25 09:00; relayed by advisor-122). The reference branch story-3120-ci-review now has commit 0d21f696ebf, which adds reasoning-effort configuration. S3: add --effort <LEVEL>, resolved in this order: --effort > AIDA_REVIEW_EFFORT > .aida/review-rules.toml default_effort > [agents.<vendor>.seats.reviewer] effort. Pass it as -c model_reasoning_effort=<LEVEL> to codex and --effort <LEVEL> to claude/agy. S4: add --challenger-effort <LEVEL> (challenger_effort in review-rules.toml; finder_effort and challenger_effort in AdversarialReviewSummary) for asymmetric-effort adversarial reviews. S5: document --effort and --challenger-effort on showcase slide 07. Effort values are a fixed allowlist, validated before being passed to any vendor argv (no arbitrary strings).'
+  created_at: 2026-11-25T16:00:39.523996725Z
+  modified_at: 2026-11-25T16:00:39.523996725Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
