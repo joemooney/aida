@@ -1438,6 +1438,28 @@ fn short(sha: &str) -> &str {
 }
 
 /// CI summed over a GitHub `statusCheckRollup`.
+// trace:STORY-3095 | ai:codex
+pub(crate) fn green_rollup_at(
+    rollup: &serde_json::Value,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let rows = rollup.as_array()?;
+    if !matches!(ci_of_checks(rows), Ci::Green) {
+        return None;
+    }
+    let mut latest = None;
+    for check in newest_checks(rows) {
+        let timestamp = if check["state"].is_string() {
+            &check["createdAt"]
+        } else {
+            &check["completedAt"]
+        };
+        latest = latest.max(Some(
+            chrono::DateTime::parse_from_rfc3339(timestamp.as_str()?).ok()?,
+        ));
+    }
+    latest
+}
+
 #[cfg(test)]
 fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     ci_of_checks(rollup.as_array().into_iter().flatten())

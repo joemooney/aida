@@ -57,7 +57,7 @@ pub(crate) fn require_pinned(root: &Path, expected: &Option<Hub>) -> Result<()> 
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+// Persisted in review-watch reservations. trace:BUG-2758 | ai:codex
 pub(crate) struct Hub {
     repository: String,
     url: String,
