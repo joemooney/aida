@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T05:00:43.606428254Z
+modified_at: 2026-11-25T05:26:30.827367542Z
 req_type: Task
 tags:
 - integration
@@ -100,6 +100,15 @@ comments:
   modified_at: 2026-11-25T04:45:44.041474439Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2112b-7b63-7730-b7f9-76772fb0d122
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 741d861b07775b5e679a96b64229b19109c7acc3 plus the uncommitted native-seat diff. AC1: [evidence: behavioral-test] Both CLI regressions passed (task_2053_seat_clone_lifecycle_tests.rs:1914 and :1930), including the sole nested filename in the first summary line, separate rename endpoints, delimiter-containing filename, and retained lease and tree. The core regression passed (git_ops.rs:12843) for a validated submodule with internal dirt only. Confirmed Git porcelain output independently. Reviewed the merge-base diff, local diff and untracked inventory. The shared line reader expands untracked paths, which can increase output on large dirty trees. Existing runtime-link filtering, submodule validation and error handling still govern refusal. git diff --check passed. The fast gate is running under the launcher.
+  created_at: 2026-11-25T05:26:30.827367542Z
+  modified_at: 2026-11-25T05:26:30.827367542Z
+  session_id: 01a211137e61
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe

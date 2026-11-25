@@ -13,12 +13,25 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T05:04:31.670999205Z
+modified_at: 2026-11-25T05:28:42.597984715Z
 req_type: Bug
 tags:
 - lanes
 - repair
 - strict
+comments:
+- id: 01a2112d-7dd4-7ac0-a9a8-47f8f4aab437
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 45206d90a1df483c1caff91dee5abf345df4a8d2 and the five uncommitted native-seat edits. The merge-base diff was empty. No untracked additions.
+    AC1: [evidence: behavioral-test] queue_cmd/work.rs:4960 selects the retained repair independently of conversation resume. seat_clone.rs:3920 verifies the lease, PR, branch, original head, merge base and index paths. session_start.rs:2384 binds the predecessor and rechecks the journal at transfer. The regression refuses mismatched PR, original head and paths.
+    AC2: [evidence: behavioral-test] tests/bug_2223_orphan_seat_reentry_tests.rs:267 exercises adoption, failed setup rollback, regeneration retry, staging the resolution and committing in the retained tree. Both merge parents are asserted. Final targeted lane job j20261125T052122915-2-0 ran one test and passed. Real sandbox probe assertions use the existing bwrap availability check.
+    Deep pass covered scope casing, exact Git and journal identifiers, NUL-delimited paths, resolved index stages, duplicate claims and concurrent journal changes. Fixed a selection-to-transfer race by pinning the predecessor and comparing the checked journal entry under the transfer lock. Existing dead-owner, containment and publication checks still apply. Fixed fixture Git auto-maintenance flags; all eight maintenance ratchet tests passed. The fast gate rerun is job j20261125T052825789-2-0. Hosted PR-head CI is unavailable before publication.
+  created_at: 2026-11-25T05:28:42.597984715Z
+  modified_at: 2026-11-25T05:28:42.597984715Z
+  session_id: 01a2111274b7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
