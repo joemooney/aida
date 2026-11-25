@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T15:17:17.386340590Z
-modified_at: 2026-11-25T15:17:43.526623569Z
+modified_at: 2026-11-25T15:17:48.552880967Z
 req_type: Story
 tags:
 - review
@@ -46,6 +46,11 @@ relationships:
   target_id: 01a20e12-a1b9-7f62-be73-a220ead857e1
   created_at: 2026-11-25T15:17:43.526578950Z
   created_by: joe
+- rel_type:
+    custom: covers
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-25T15:17:48.552833306Z
+  created_by: joe
 history:
 - id: 01a21348-8ccb-7052-aeb7-bd30766a8a18
   author: joe
@@ -62,6 +67,10 @@ history:
 - id: 01a21348-c211-7971-a871-34bce4262389
   author: joe
   timestamp: 2026-11-25T15:17:45.105066989Z
+  changes: []
+- id: 01a21348-d5b3-7bd2-beb1-fd11d3b890a1
+  author: joe
+  timestamp: 2026-11-25T15:17:50.131180539Z
   changes: []
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
