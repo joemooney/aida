@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T07:42:51.342828174Z
+modified_at: 2026-11-25T07:58:54.886695800Z
 req_type: Bug
 tags:
 - launch
@@ -273,6 +273,18 @@ comments:
   modified_at: 2026-11-25T05:23:08.709298003Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211b7-015e-7c61-adf1-68f0b211aedc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3d38be57a8c8197e164cf6227285bca016674537 plus the native working-tree changes. Reviewed the merge-base diff, working diff and untracked inventory.
+    AC1: [evidence: behavioral-test] story_2254_bg_corrupt_receipt_never_frees_scope and story_2254_bg_strict_authorship_write_failure_refuses_before_exec passed. Both ordinary release callers require the original dispatcher identity. Tested unreadable earlier evidence, an empty process table, a persisted refusal with deleted keys and the real dispatcher refusal control. Checked null versus absent keys and the terminal pruning filter.
+    AC2: [evidence: behavioral-test] The corrupt receipt test verifies named and unscoped admission, refusal to retire incomplete attribution, preserving the receipt, and successful retirement with complete attribution.
+    Validation limitation: targeted story_2254_bg run executed 40 tests, 34 passed and 6 live-process scan tests failed. Diagnostics included permission denied reading same-user cwd and RecoveryRequired where tests expected Exited. Release continues to fail closed on that evidence. No exact publication-head CI is available before the host commit.
+  created_at: 2026-11-25T07:58:54.886695800Z
+  modified_at: 2026-11-25T07:58:54.886695800Z
+  session_id: 01a211a7ecbc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
