@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T16:22:24.290674846Z
+modified_at: 2026-11-25T16:24:53.521466525Z
 req_type: Bug
 tags:
 - review-watch
@@ -189,6 +189,22 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-524` at head `e727f322c56907d55dc0e75628414a49b710ecfe`.'
   created_at: 2026-11-25T15:26:33.202108152Z
   modified_at: 2026-11-25T15:26:33.202108152Z
+- id: 01a21386-74dc-7091-baed-e5a9319447c1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:24):
+    # BUG-2763 / PR #4568 r3 (advisor-122 ruling 2026-11-25 04:55 at 2753e3c9; ACs AMENDED to the redesign; TOP priority, the stall preventer; product-15). Lane: CLAUDE. MAIN, existing branch. <=60 lines.
+    Read the AMENDED ACs: `aida show BUG-2763` (head-keyed hold, no liveness proof, no doctor finding; AC2 includes a hub-enabled case).
+    (F2) An OLD head's hub/review-publication claim (Running or not) NEVER blocks a DIFFERENT head: key the claim check by head too. Test: A's claim left Running → B dispatched.
+    (F1) Fix the test traces to match the amended ACs.
+    DEFERRED (do NOT do): the p2 release-vs-record_skip race.
+    One targeted cargo run, then make check-ci-fast, then push to #4568. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+
+    RESUME NOTE (product-15 08:35): a previous codex attempt was interrupted by the codex usage limit; its partial work is on branch bug-b6b1278890774ef993d2ebc327862470-524-limitwip (reference only; review it and keep what fits the ruling).
+  created_at: 2026-11-25T16:24:53.521466525Z
+  modified_at: 2026-11-25T16:24:53.521466525Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
