@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-25T07:52:02.598029511Z
+modified_at: 2026-11-25T08:21:02.506843966Z
 req_type: Story
 tags:
 - autonomy
@@ -493,6 +493,17 @@ comments:
   modified_at: 2026-11-25T07:52:02.598029511Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211cb-4221-73b0-9b67-b034178b1b83
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1e76b539207009e0192e29045a4f3bb444658b34 plus the round-7 worktree diff. Reviewed origin/main...HEAD and unstaged changes. No untracked additions.
+    AC1: [evidence: behavioral-test] Slice 1 only. gate/unset_mode.rs:692 reads committed raw tree modes with submodule filtering and rename detection disabled through host Git. The approved-small landing resolver at :299 still requires supervision. Approval and show use one preview label. Human and TOON field selection share label_fields at :682.
+    AC2: [evidence: behavioral-test] Both approved_small tests passed in lane job j20261125T080053868-2-0. gate/tests/story_2884_unset_mode_tests.rs:570 covers policy opt-in, strict paths, and explicit mode. The Git fixture at :626 exercises docs eligibility, ambiguous branches, an unchanged excluded-source rename, a non-UTF-8 filename, and a registered gitlink under diff.ignoreSubmodules=all. Reviewed NUL framing, both tree modes, missing/multiple refs, and the trusted policy and landing boundary. The diff adds no landing authority. Base/head revalidation and unattended landing remain deferred to TASK-3890. PR Build succeeded at the prior head 5c4150371109. Host publication and CI on the new head are pending.
+  created_at: 2026-11-25T08:21:02.506843966Z
+  modified_at: 2026-11-25T08:21:02.506843966Z
+  session_id: 01a211b66540
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
