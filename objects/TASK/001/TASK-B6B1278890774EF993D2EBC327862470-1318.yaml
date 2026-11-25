@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   docs/review-process.md:293, docs/showcase/code-review.html:416 and the Marp deck at line 110 claim facets are triggered by the diff. Reference review_prepare.rs:143–179 scans full target file contents and enriches a shared playbook using samples from all its files. Unchanged text or comments can trigger a facet. Describe whole-file substring matching and the playbook scope, including when a project replacement suppresses built-in Rust facets.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:23:08.021931769Z
-modified_at: 2026-11-25T07:22:27.960352448Z
+modified_at: 2026-11-25T07:22:32.259460468Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21195-afc3-79d2-8cc7-21b19ca383f0
+  author: joe
+  timestamp: 2026-11-25T07:22:32.259457887Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
