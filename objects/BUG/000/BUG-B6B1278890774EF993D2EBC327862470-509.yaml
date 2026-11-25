@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T05:21:06.718625862Z
+modified_at: 2026-11-25T05:21:15.294411566Z
 req_type: Bug
 tags:
 - launch
@@ -247,6 +247,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2748 AC1 fails. Incomplete attribution can still release a reservation through unknown retirement, ordinary recovery, or the terminal reader. AC2 passes source review. The grant-only success expectation was replaced with a regression checking Unknown, admission and retirement refusal, the inspection command, and receipt preservation. The legacy Prepared recovery fixture matches the old released receipt shape, and the operator guide now explains inspection and restoration. Reviewed the full landed diff for tree 7ef07198c4134b284caf861b677c4917bd0b714d against protected main 45206d90a1df483c1caff91dee5abf345df4a8d2. The attested PR head is one commit behind. That base commit changes remote_create.rs only, so no finding depends on the base advance. GitHub FAST source gates, compile, and the aggregate build passed. The merge-hold status was pending. The implementer reported passing targeted receipt cases and six failures in the broader live-process supervisor run. No local tests were run for this review.. No triage reason was given.'
   created_at: 2026-11-25T05:21:06.718617229Z
   modified_at: 2026-11-25T05:21:06.718617229Z
+- id: 01a21126-a587-7432-ace9-3b6c35d0ce2f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2748):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4b1328e76143
+    Recorded: 2026-11-25T05:16:42.849287972+00:00
+    Findings:
+    1. BUG-2748 AC1 and round-three F1. In aida-cli-lib/src/codex_bg_receipt.rs:798–819, a Supervisor-owned unknown receipt lacks dispatcher attribution after the ownership transfer, yet the unbounded scan can return Clear. The unscoped admission path at lines 733–739 then stops blocking, and retire_unknown at lines 906–914 renames the evidence out of admission. The changed regression at aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:215–235 explicitly expects retirement of the transferred receipt after the synthetic process exits, the case the round-three brief requires to remain reserved. Retain the reservation when the dispatcher interval cannot be attributed, and assert both admission and retirement refusal with a clear process table.
+    2. BUG-2748 AC1 and round-three F1. Ordinary recovery and supervisor exit still use aida-cli-lib/src/agent_codex_background.rs:2141–2162, which derives a lower bound from the later worker or supervisor start when ownership transfer discarded the dispatcher identity. The scanner can ignore unreadable cwd or command-line evidence from a same-user process that started during dispatcher setup. Ordinary recovery accepts the resulting Clear at lines 2228–2236 and can release the reservation. Supervisor exit uses the same scan at lines 1932–1952. Apply the dispatcher-attribution rule to the shared release decision and cover a readable transferred receipt with earlier unreadable process evidence.
+    3. BUG-2748 AC1. In aida-cli-lib/src/codex_bg_receipt.rs:632–651, RefusedBeforeExecution with Owner::Released is considered pre-transfer if both optional process identities are absent. Both the pre-transfer dispatcher refusal and the post-transfer supervisor refusal write that same phase and owner (aida-cli-lib/src/agent_codex_background.rs:584–587 and 1541–1543). A persisted supervisor refusal with both attribution keys missing therefore reads as Known and is eligible to free admission and be pruned, bypassing the incomplete-receipt check. Require positive evidence for the legitimate pre-transfer shape and add a regression that removes both keys from a persisted post-transfer refusal while preserving the valid pre-transfer control.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T05:21:15.143660746Z
+  modified_at: 2026-11-25T05:21:15.143660746Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
