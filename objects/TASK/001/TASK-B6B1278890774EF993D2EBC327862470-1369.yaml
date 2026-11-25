@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T10:22:45.197565679Z
+modified_at: 2026-11-25T11:40:36.979147131Z
 req_type: Task
 tags:
 - integration
@@ -234,6 +234,18 @@ comments:
     - FAST is pending at the new head. This is session/git code, so under the self-approve limits the independent verdict needs to cover be1d46a9 (no carry-over), unless the advisor rules that a merge-only re-sync is enough.
   created_at: 2026-11-25T10:25:17.184920326Z
   modified_at: 2026-11-25T10:25:17.184920326Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21282-390a-71d2-8749-75244a169cc5
+  author: joe
+  content: |-
+    ADVISOR RULING 04:52, FINAL r4 (60 lines or fewer, via product), after the independent CR on #4559 @ be1d46a9.
+    The CR's p1: r3 expanded untracked files in the SHARED safety readers (git_ops.rs:4837 contained_safety_scan and :5068 worktree_status_porcelain_lines), which brings back the BUG-2713 teardown regression.
+    (1) Revert both shared readers to their previous untracked mode. The expanded '--untracked-files=all' lives ONLY in the refusal-summary status call. bug_1986's teardown test must pass unchanged.
+    (2) The summary reads 'git status --porcelain=v2 -z' (raw, unquoted, NUL-separated paths) and applies porcelain_quote exactly ONCE at render: no double quoting, and no dependence on core.quotePath or from_utf8_lossy for paths. Test with a path of 'a<TAB><space>' and with a non-UTF-8 byte name.
+    When this lands, #4416 (BUG-2713) is superseded and should be closed.
+  created_at: 2026-11-25T11:40:36.979147131Z
+  modified_at: 2026-11-25T11:40:36.979147131Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
