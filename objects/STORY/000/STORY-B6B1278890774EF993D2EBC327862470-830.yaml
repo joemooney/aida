@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T18:30:24.899657148Z
+modified_at: 2026-11-25T18:30:27.738722619Z
 req_type: Story
 tags:
 - landing
@@ -80,6 +80,22 @@ comments:
   modified_at: 2026-11-25T18:17:45.210312621Z
   session_id: 01a213c829f5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a213f9-2fe1-7f13-bedd-b6fafdc3603a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4584):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 55061590afe7
+    Recorded: 2026-11-25T18:24:13.432656841+00:00
+    Findings:
+    1. landing_drought.rs scan(): the supervised check uses `r.execution_mode.is_some_and(|m| m != Drain)`, so a spec with an UNSET execution_mode counts as drain-eligible. The ship gate treats unset as supervised (gate::ship::merge_requires_supervision: mode != Some(Drain); supervision_mode_label 'unset (supervised)'). A PR whose spec IDs do not resolve in the store (filter_map drops them) or that carries no spec ID is also classified not-supervised, while burndown_run::supervision_hold_label fails closed (BUG-1163). The incident behind STORY-3131 involved drive/unset specs: a stuck approved PR with an unset-mode spec is reported as cause 'unknown' instead of 'supervised, not drain-eligible' with `aida pr train N`. This fails the PR's claimed first-pass cause classification (brief item 2). Fix: use crate::gate::ship::merge_requires_supervision(r.execution_mode), treat an unresolved spec or a missing spec ID as supervised, and add a test for the unset and unresolved cases.
+    2. Stale base duplicate: main at d738e6c (BUG-2762) already added the `doctor check stalled-reviews --fail-on-findings` row to maintenance_schedule.rs command_table(). The landed tree f04132f has two identical rows (lines ~3655 and ~3774). parse_scheduled_command takes the first match, so this is harmless at runtime, but the PR's row and the PR-body claim that it 'registers' stalled-reviews are redundant. Drop the PR's row when rebasing.
+    3. landing_drought.rs cause(): the `_ if ready.full_tier_gap.is_some()` arm sits before the `_ => return None` 'CI still running: not ready yet' arm, so a PR whose fast CI is still Pending is reported as 'full CI tier missing' once 30 minutes have passed since approval. `since` falls back to the approval time when no green rollup exists. That contradicts the comment and the brief's 'green required checks' precondition. Restrict the full-tier arm to Ci::Green, or to the 'cancelled' case, so running CI is not reported.
+    4. landing_drought.rs evaluate(): the main-branch drought finding says 'while N ready PRs wait' using findings.len(), which includes PRs with red required checks and missing full tiers, not only landable PRs. Count only Ci::Green PRs with no full-tier gap, or reword the message to 'stuck approved PRs'.
+    5. Test gap (scheduler and reporting code, not gate code): no test pins command_timeout() returning LANDING_DROUGHT_TIMEOUT (60s) for the landing-drought command, which is the PR's guard-bounded claim. scan()'s ledger selection (latest record wins, approval must be at the current head, closed verdicts skipped) and full_tier_gap only being applied in tiered repos are also untested. Add a command_timeout assertion and a scan-level fixture or extracted helper test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T18:30:27.553413Z
+  modified_at: 2026-11-25T18:30:27.553413Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
