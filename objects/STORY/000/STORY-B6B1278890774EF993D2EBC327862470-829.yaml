@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:30:39.751282658Z
+modified_at: 2026-11-25T16:34:56.367520731Z
 req_type: Story
 tags:
 - integration
@@ -303,6 +303,26 @@ comments:
   modified_at: 2026-11-25T16:29:28.028340390Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a2138f-a825-7dd1-8616-d5caadf9c7d5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:34):
+    # STORY-3120 S3a: hardened review-runner spawn helper + `--run-review` (advisor-122 ruling 2026-11-25 09:33; integration-30 security pre-check accepted in full; product-15). Lane: CLAUDE. STRICT TIER. Base: INTEGRATION, NEW branch int40-story-3120-s3a (cut from the current integration tip). Title: "(Refs STORY-3120)" only; S3a does NOT complete the story. <=300 changed lines; if it won't fit, ship the spawn helper alone and say so in the PR body.
+    READ FIRST: `aida show STORY-3120 --comments`, comment 19 (integration-30's security pre-check: items 1-8 blocking, plus should-fixes) and comment 20 (the advisor's S3a/S3b split). Those are BINDING ACs. Reference code ONLY (never merge or cherry-pick wholesale): branch story-3120-ci-review, aida-cli-lib/src/review_prepare.rs (invoke_review_runner ~1741, git_text ~731).
+    S3a SCOPE: ONE spawn helper used by EVERY runner path (S4's challenger will reuse it):
+     (1) cwd = a fresh empty temp dir, never the PR checkout; all PR content goes in the prompt only. For claude: disable project settings, hooks and MCP, with an empty tool allowlist (name the exact flags); codex keeps exec --sandbox read-only. TEST: a planted .claude/settings.json hook in the checkout does NOT run.
+     (2) env_clear() + an explicit per-vendor allowlist (PATH, HOME, LANG/LC_*, TERM, that vendor's own auth vars only, AIDA_REVIEW_RESOLVED_*/AIDA_REVIEW_PASS). TEST: a sentinel GH_TOKEN never reaches the runner.
+     (3) AIDA_REVIEW_RUNNER_CMD: an absolute path to an existing regular file outside the checkout; no shell, no splitting; env only, never repo config. TEST: a relative value is refused.
+     (4) The prompt goes on STDIN from a writer thread, for every vendor; nothing in argv. TEST: a prompt larger than 128 KiB works.
+     (5) A per-batch deadline that kills the process group, plus stdout/stderr caps; exceeding either fails closed. TEST both.
+     (6) No default-to-claude arm: an unknown agent is REFUSED.
+     Then `--run-review` on top of the helper. Should-fixes from comment 19: git_text env / --no-textconv / no silent full-file fallback.
+    OUT OF SCOPE (S3b): --effort / --model / review-rules.toml. Do NOT add the effort flags here.
+    One targeted cargo test run (on this host), then make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-25T16:34:56.367520731Z
+  modified_at: 2026-11-25T16:34:56.367520731Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
