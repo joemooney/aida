@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T12:12:51.013258503Z
+modified_at: 2026-11-25T21:06:22.721814867Z
 req_type: Bug
 tags:
 - codex
@@ -244,6 +244,15 @@ comments:
   created_at: 2026-11-25T07:45:25.320209310Z
   modified_at: 2026-11-25T07:45:25.320209310Z
   session_id: 01a21173cb1a
+- id: 01a21487-ef81-7780-bd4e-f1fed8efadbe
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3413: Review follow-up: Deferred follow-up TASK-3881 (F6), aida-cli-lib/src/config_cmd.rs:1750,1762,1787,1811–1823
+      From BUG-2752 Reviewed sha: 0b6c3b11e21ca26cdaf15c5de0ce0341d87f70f9 Deferred follow-up TASK-3881 (F6), aida-cli-lib/src/config_cmd.rs:1750,1762,1787,1811–1823. The config clean check, initial read and path commit use separate snapshots. An unrelated concurrent edit before the initial read or after saving can be included in the native-policy commit. Bind the commit to the verified starting config and intended output under TASK-3881.
+  created_at: 2026-11-25T21:06:22.721814867Z
+  modified_at: 2026-11-25T21:06:22.721814867Z
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
