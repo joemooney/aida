@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
 
   The new AC1 regression assertion is conditional on finding the existing job and step names in AptBounds.steps() (tests/test_self_hosted_runner.py:638-657). Deleting that step or moving the apt commands into a helper lets the timeout assertion disappear while the suite still passes against the other apt steps. Require exactly one matching fast-compile install step before asserting its timeout.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:21:42.100768525Z
-modified_at: 2026-11-25T07:22:19.911578639Z
+modified_at: 2026-11-25T07:22:24.414285954Z
 req_type: Task
 tags:
 - carried-from:BUG-2744
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21195-911e-7182-8342-c3acf8d15e5a
+  author: joe
+  timestamp: 2026-11-25T07:22:24.414281119Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
   branch: pr-4503
