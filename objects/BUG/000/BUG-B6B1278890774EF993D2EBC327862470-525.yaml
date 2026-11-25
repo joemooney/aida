@@ -17,16 +17,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T18:07:55.257957391Z
+modified_at: 2026-11-25T18:08:00.367805448Z
 req_type: Bug
 tags:
 - ci
 - landing
 - throughput
+relationships:
+- rel_type: References
+  target_id: 01a21272-0001-7041-9d91-e0fef9f67516
+  created_at: 2026-11-25T18:08:00.367742364Z
+  created_by: joe
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
   timestamp: 2026-11-25T18:07:55.412395059Z
+  changes: []
+- id: 01a213e4-a980-7ce1-95cd-cb19c678d987
+  author: joe
+  timestamp: 2026-11-25T18:08:02.432108272Z
   changes: []
 execution_mode: drain
 filed_at:
