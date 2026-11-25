@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T05:21:15.294411566Z
+modified_at: 2026-11-25T05:23:08.709298003Z
 req_type: Bug
 tags:
 - launch
@@ -261,6 +261,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T05:21:15.143660746Z
   modified_at: 2026-11-25T05:21:15.143660746Z
+- id: 01a21128-9c34-7062-a108-dfbcbd1e1056
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:23):
+    # BUG-2748 / PR #4542 r4 FINAL (advisor-122 ruling 2026-11-24 22:12 at 4b1328e7; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=80 NET lines (expected to SHRINK). REMOVE RATHER THAN PATCH.
+    DELETE the lower-bound/scan heuristics for receipts lacking complete attribution. RULE: if a receipt lacks the dispatcher identity (transferred to Supervisor, or both optional identities absent, INCLUDING the ambiguous RefusedBeforeExecution + Released case), it is RETAINED, full stop. No scan may return Clear for it; admission keeps blocking; retire_unknown REFUSES. Only an explicit operator attest (later: TASK-3895's mandate release) clears it. Keep the fully-attributed paths as they are.
+    Tests: a transferred receipt with dead processes → RETAINED; ambiguous RefusedBeforeExecution → RETAINED; fully attributed + dead → RELEASED (control).
+    One targeted cargo run, then make check-ci-fast, then push to #4542. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T05:23:08.709298003Z
+  modified_at: 2026-11-25T05:23:08.709298003Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
