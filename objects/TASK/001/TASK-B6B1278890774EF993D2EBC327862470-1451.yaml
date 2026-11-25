@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-25T21:18:31.095158465Z
+modified_at: 2026-11-25T22:17:25.653985857Z
 req_type: Task
 tags:
 - ci
@@ -37,6 +37,19 @@ comments:
   modified_at: 2026-11-25T21:13:47.943693608Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a214c8-fb96-72b1-834d-2e14e130ffde
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2eed8e572e (git diff origin/main...HEAD; 7 files).
+    - AC1 [evidence: behavioral-test]: ci/prune-target-cache runs first in the default before_script (.gitlab-ci.yml) and is scoped to the job's own CARGO_TARGET_DIR slot (keyed by CI_CONCURRENT_ID, which only one job holds at a time). In a single LRU pass it removes incremental crate dirs older than AIDA_CI_CACHE_MAX_AGE_DAYS (default 7), then the least recently used ones while the slot exceeds AIDA_CI_CACHE_SLOT_CAP_GIB (default 60). If the slot is still over the cap, it clears the whole slot. tests/test_ci_prune_target_cache.py has 6 fixture tests covering the age limit, a cross-target incremental dir, deps kept, a configurable age, LRU order under a cap, slot clearing and a missing target. They pass locally, and GitHub CI picks them up via discover-python-tests.
+    - AC2 [evidence: behavioral-test]: disk_headroom_light_report (doctor check and the scheduled guard) adds a disk-headroom-ci-cache finding when /var/cache/aida-ci exceeds [doctor.disk_headroom] ci_cache_max_gib (default 150; 0 disables), with ci_cache_dir configurable. The walk stops early above the cap and gives up after 10 s, which counts as inconclusive and stays silent. The finding is not a floor finding, so it never triggers worktree reclaim. task_3910_ci_cache_tests has 5 tests; together with the existing bug_1675 tests, 21 passed (lane job). make check-ci-fast passes at 2eed8e572e.
+    - Probes: (1) the env var names agree across the script, the yml comment and the docs. (2) A TOML inline comment in the config is covered by a test. (3) 0, 1 and N incremental dirs are handled; the loop stops once the slot is under the cap. (4) Paths with spaces are read whole; a non-numeric env override fails the job loudly. The gate found an ambient os.environ read in the Python test; it now uses a hermetic env.
+    - Residual risks: if a full non-incremental build alone exceeds 60 GiB, the last-resort clear would force a cold build on every job. The doctor alert surfaces this, and the cap can be raised. The manual doctor check can now spend up to 10 s walking, but only on a host that has the CI cache. Slot exclusivity assumes one runner registration shares /ci-cache, which is the same assumption restore-git-mtimes makes. The diff is about 400 lines including tests and docs, against a brief of 200 or fewer; the implementation itself is about 195.
+  created_at: 2026-11-25T22:17:25.653985857Z
+  modified_at: 2026-11-25T22:17:25.653985857Z
+  session_id: 01a2149269a0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21461-a683-7013-a237-4532cbf94a9a
   author: joe
