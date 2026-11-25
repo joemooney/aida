@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T09:27:37.498089271Z
+modified_at: 2026-11-25T09:27:44.601114094Z
 req_type: Bug
 tags:
 - lanes
@@ -167,6 +167,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2761 review of the original PR head a0ecc2ae63c3960f862e9d972dd389742e08f011 as landed on pinned main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. AC1 FAIL: retained pickup selects host supervision and verifies lease and merge identity, but the advanced-base refresh mutates the merge before persisting required recovery state. AC2 PARTIAL: dispatch coverage exercises a punt and same-clone host publication to a bare origin, but omits the explicitly required first-lane staged conflict resolution. Fast source gates passed and fast compile was pending at review time. No local tests or builds were run per reviewer policy.. No triage reason was given.'
   created_at: 2026-11-25T09:27:37.498079950Z
   modified_at: 2026-11-25T09:27:37.498079950Z
+- id: 01a21208-503d-7712-82cd-1f0139eb6fa8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2761):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a0ecc2ae63c3
+    Recorded: 2026-11-25T09:26:54.967798481+00:00
+    Findings:
+    1. BUG-2761.AC1 / r3 F2 and addendum (b): Persist the refresh intent before aborting the retained merge. At aida-cli-lib/src/seat_clone.rs:4060-4078 both patches are written, then Git clears MERGE_HEAD before the journal records the old and new state at lines 4153-4158 or 4186-4192. A process exit immediately after a successful abort, or an error in the intervening status or merge-tree probe, leaves an active reservation for the old base with no MERGE_HEAD and no journal link to either saved patch. The next pickup rejects at verified_retained_repair / verify_retained_index, so the repair is stranded again. Durably save both patch paths and the old/new merge identities in a refreshing record before abort, reconcile it on retry, and cover interruption after abort and before journal replacement.
+    2. BUG-2761.AC2 / r3 addendum (a) and (c): Stage a real resolution in the first lane of the dispatch regression. At aida-cli/tests/story_1662_queue_work_wiring.rs:494-497 the first vendor writes conflict and punts without staging it. The abort-refusal variant edits base-only at line 569, so its stage-zero entry comes from Git auto-merging an unrelated file. The test can therefore pass while refresh loses the staged version of a resolved conflict or fails to re-enter after the path moves to resolve-undo. Stage the conflict resolution before the first punt, then use a distinct working-tree edit on that same path in the refusal case and assert that the index, working tree and both saved patches keep their respective versions.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T09:27:44.445422031Z
+  modified_at: 2026-11-25T09:27:44.445422031Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
