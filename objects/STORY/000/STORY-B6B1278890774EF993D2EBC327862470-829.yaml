@@ -186,6 +186,37 @@ comments:
   created_at: 2026-11-25T12:42:16.083462360Z
   modified_at: 2026-11-25T12:42:16.083462360Z
   session_id: 01a21285c99f
+- id: 01a212ba-a7dd-7e53-8a6e-6b0cc15bfcf5
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4575 @ 48e4b95289 (STORY-3120 S2: --sarif and --fail-on CLI wiring, Refs-only, +121/-2)
+
+    Result: PASS.
+
+    Brief notes:
+    (1) An unknown or unparseable severity gives SARIF level 'error' (Some(3..=4) | None), and the test asserts it for 'blocker' and ''.
+    (2) Every runner finding path must EXACTLY match a reviewable-inventory path. Anything else refuses the whole run before anchoring, and the test confirms no SARIF is written then. Absolute paths, '..' paths and unchanged files are all refused.
+    --run-review is not included (it's S3).
+
+    Behaviour:
+    - The --fail-on threshold is validated before any output is written.
+    - The SARIF report is written before the gate fails, so CI can still upload it. The test confirms that 'high' fails with the report present and 'critical' passes.
+    - Both flags require --anchor-findings.
+    - The SARIF goes through the existing hardened write_output: it must stay inside the repo, refuses Git metadata (both the absolute git dir and the common dir), and is written through an openat walk.
+    - The help snapshot is updated.
+    - --anchor-findings now takes the runner envelope or a fenced format (parse_runner_findings_json), and a bare array still works.
+
+    Security: no network or process spawn added. The output path is user-supplied and goes through the confined writer.
+
+    Nits:
+    (a) write_output's errors say '--write …' even for --sarif.
+    (b) Like --write, --sarif can overwrite a tracked source file inside the repo. That's an operator choice, but S3 could refuse tracked paths.
+
+    Merge-tree with integration: CLEAN.
+  created_at: 2026-11-25T12:42:17.260539927Z
+  modified_at: 2026-11-25T12:42:17.260539927Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
