@@ -904,13 +904,15 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
 // trace:BUG-2626 | ai:codex
 fn scan_reapable_leases(project_root: &std::path::Path) -> ReapReport {
     let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
-    scan_reapable_with(project_root, |pr| {
-        crate::queue_cmd::review_pr_is_merged_or_closed(
-            project_root,
-            pr,
-            &mut crate::network_retry::NoopSink,
-        )
-    })
+    scan_reapable_with(project_root, |pr| reap_pr_terminal(project_root, pr))
+}
+
+fn reap_pr_terminal(project_root: &std::path::Path, pr: u32) -> Option<bool> {
+    crate::queue_cmd::review_pr_is_merged_or_closed(
+        project_root,
+        pr,
+        &mut crate::network_retry::NoopSink,
+    )
 }
 
 /// [`scan_reapable`] with the forge's PR-state lookup injected:
@@ -928,6 +930,22 @@ pub(crate) fn scan_reapable_with(
         return report;
     }
 
+    let mut scan = lease_scanner(project_root, &leases, pr_terminal);
+    for lease in &leases {
+        scan(lease, &mut report);
+    }
+    report.reapable.sort_by(|a, b| a.scope.cmp(&b.scope));
+    report.skipped.sort_by(|a, b| a.scope.cmp(&b.scope));
+    report.notifiable.sort_by(|a, b| a.scope.cmp(&b.scope));
+    report
+}
+
+// trace:BUG-2710 | ai:codex
+fn lease_scanner<'a>(
+    project_root: &'a std::path::Path,
+    leases: &[SessionLease],
+    pr_terminal: impl Fn(u32) -> Option<bool> + 'a,
+) -> impl FnMut(&SessionLease, &mut ReapReport) + 'a {
     let default_ref = resolve_default_branch_ref(project_root);
     let live = process_probe::probe_live_claude_sessions();
     let active = active_worktree_paths(project_root);
@@ -939,7 +957,7 @@ pub(crate) fn scan_reapable_with(
         .unwrap_or_else(|_| project_root.to_path_buf());
     let this_host = crate::coordination::hostname();
 
-    for lease in &leases {
+    move |lease, report| {
         let lease = &reap_view(lease, project_root);
         let has_worktree = !lease.worktree_path.as_os_str().is_empty();
         // HARD FLOOR: the main checkout and the store worktree are never reap
@@ -986,7 +1004,7 @@ pub(crate) fn scan_reapable_with(
                 ProtectedLeaseVerdict::UnknownOwner(_) => report.unknown_owner.push(row),
                 ProtectedLeaseVerdict::Keep(_) => report.skipped.push(row),
             }
-            continue;
+            return;
         }
 
         let spec_finished = finished.contains(&lease.scope.to_ascii_uppercase());
@@ -1004,7 +1022,7 @@ pub(crate) fn scan_reapable_with(
                 "reap" => report.reapable.push(row),
                 _ => report.skipped.push(row),
             }
-            continue;
+            return;
         }
 
         // Liveness — the shipped detection, not a second notion. An advisory
@@ -1101,11 +1119,6 @@ pub(crate) fn scan_reapable_with(
             ReapVerdict::Skip(_) => report.skipped.push(row),
         }
     }
-
-    report.reapable.sort_by(|a, b| a.scope.cmp(&b.scope));
-    report.skipped.sort_by(|a, b| a.scope.cmp(&b.scope));
-    report.notifiable.sort_by(|a, b| a.scope.cmp(&b.scope));
-    report
 }
 
 /// Does the review branch hold nothing the reap would lose? True when its
@@ -1703,20 +1716,27 @@ pub(crate) fn release_gone_worktree_leases_among(
     project_root: &std::path::Path,
     leases: Vec<SessionLease>,
 ) -> (Vec<SessionLease>, Vec<SessionLease>) {
-    let tree_gone =
-        |l: &SessionLease| !l.worktree_path.as_os_str().is_empty() && !l.worktree_path.exists();
-    if !leases.iter().any(tree_gone) {
-        return (Vec::new(), leases);
-    }
-    let live = process_probe::probe_live_claude_sessions();
-    leases.into_iter().partition(|l| {
-        tree_gone(l)
+    leases
+        .into_iter()
+        .partition(gone_tree_releaser(project_root))
+}
+
+// trace:BUG-2710 | ai:codex
+fn gone_tree_releaser(project_root: &std::path::Path) -> impl FnMut(&SessionLease) -> bool + '_ {
+    let mut live = None;
+    move |lease| {
+        !lease.worktree_path.as_os_str().is_empty()
+            && !lease.worktree_path.exists()
             && release_gone_worktree_lease(
                 project_root,
-                l,
-                &crate::leases::stale_lease_recovery_for_lease_with(l, &live).verdict,
+                lease,
+                &crate::leases::stale_lease_recovery_for_lease_with(
+                    lease,
+                    live.get_or_insert_with(process_probe::probe_live_claude_sessions),
+                )
+                .verdict,
             )
-    })
+    }
 }
 
 /// Release every dead lease in `project_root` whose tree is gone, returning
@@ -2499,12 +2519,100 @@ fn short_id(id: &str) -> &str {
 /// printing nothing. A live process is never touched (the predicate requires
 /// an exited process); the worktree-gc predicate is unchanged.
 // trace:STORY-1218 | ai:claude
-pub(crate) fn reap_quiet(project_root: &std::path::Path) -> usize {
-    reap_quiet_outcomes(project_root)
-        .leases
+// trace:BUG-2710 | ai:codex
+pub(crate) fn reap_quiet(
+    project_root: &std::path::Path,
+    resume: Option<&str>,
+    expired: impl FnMut() -> bool,
+) -> ReapProgress {
+    let _sweep = crate::forge_confirmation::Sweep::new();
+    let _ = agent_registry::gc_dead_agents(project_root, false, None);
+    let mut leases = list_leases(project_root);
+    leases.sort_by(|a, b| a.id.cmp(&b.id));
+    let start = resume.map_or(0, |id| leases.partition_point(|l| l.id.as_str() < id));
+    let mut scan = None;
+    // The unbounded pass checks for gone trees before any session teardown.
+    // A sibling lease must still pass classification if we remove its tree.
+    let initially_missing: HashSet<_> = leases[start..]
         .iter()
-        .filter(|(_, outcome)| outcome.starts_with("reaped"))
-        .count()
+        .map(|lease| &lease.worktree_path)
+        .filter(|path| !path.as_os_str().is_empty() && matches!(path.try_exists(), Ok(false)))
+        .collect();
+    let mut release_gone = gone_tree_releaser(project_root);
+    // Every lease on one worktree is classified together, before any of them
+    // is torn down: reaping one must not make a sibling look on-branch (its
+    // checkout gone) and so reapable. A later sibling waits for the next pass.
+    let mut classified: HashSet<String> = HashSet::new();
+    let mut reapable: std::collections::HashMap<String, Option<String>> =
+        std::collections::HashMap::new();
+    let progress = visit_sessions(&leases[start..], expired, |listed| {
+        let Ok(Some(lease)) = leases::read_exact_lease(project_root, &listed.id) else {
+            return false;
+        };
+        if initially_missing.contains(&lease.worktree_path) && release_gone(&lease) {
+            return true;
+        }
+        if !classified.contains(&lease.id) {
+            let classify = scan.get_or_insert_with(|| {
+                lease_scanner(project_root, &leases, |pr| {
+                    reap_pr_terminal(project_root, pr)
+                })
+            });
+            let tree = &listed.worktree_path;
+            let mut report = ReapReport::default();
+            for sibling in leases[start..].iter().filter(|l| {
+                l.id == listed.id || (!tree.as_os_str().is_empty() && l.worktree_path == *tree)
+            }) {
+                if classified.insert(sibling.id.clone()) {
+                    if let Ok(Some(current)) = leases::read_exact_lease(project_root, &sibling.id) {
+                        classify(&current, &mut report);
+                    }
+                }
+            }
+            reapable.extend(
+                report
+                    .reapable
+                    .into_iter()
+                    .map(|r| (r.session, r.branch_tip)),
+            );
+        }
+        reapable.remove(&lease.id).is_some_and(|tip| {
+            leases::read_exact_lease(project_root, &lease.id)
+                .ok()
+                .flatten()
+                .is_some_and(|current| {
+                    reap_one(project_root, &current, tip.as_deref()).starts_with("reaped")
+                })
+        })
+    });
+    if progress.next_session.is_none() {
+        release_orphan_pins(project_root, &crate::seat_clone::orphan_pins(project_root));
+    }
+    progress
+}
+
+#[derive(Default, Debug)]
+pub(crate) struct ReapProgress {
+    pub visited: usize,
+    pub reaped: usize,
+    pub next_session: Option<String>,
+}
+
+fn visit_sessions(
+    leases: &[SessionLease],
+    mut expired: impl FnMut() -> bool,
+    mut visit: impl FnMut(&SessionLease) -> bool,
+) -> ReapProgress {
+    let mut progress = ReapProgress::default();
+    for lease in leases {
+        if expired() {
+            progress.next_session = Some(lease.id.clone());
+            break;
+        }
+        progress.reaped += usize::from(visit(lease));
+        progress.visited += 1;
+    }
+    progress
 }
 
 /// What one quiet reap did: the agent-registry GC (removed count, or why it

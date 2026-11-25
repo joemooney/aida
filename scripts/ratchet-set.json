@@ -10,8 +10,15 @@
       "scope": "module",
       "source": "aida-core/src/review_engine.rs",
       "tests": [
+        "s1_runner_findings_sarif_and_threshold",
         "config_defaults_only_when_absent",
         "credential_components_at_any_depth",
+        "h2b_compiled_globs_bound_expansion",
+        "h2b_crlf_padding",
+        "h2b_resolved_span_preserves_hints",
+        "h2b_linear_repeated_prefix",
+        "h2c_equal_stems_in_different_directories_stay_separate",
+        "h2c_rust_facets_follow_sample_paths",
         "h2a_budget_is_a_cap",
         "h2a_digest_frames_paths",
         "h2a_duplicates_are_ambiguous",
@@ -37,6 +44,7 @@
       "filter": "review_prepare::tests::",
       "source": "aida-cli-lib/src/review_prepare.rs",
       "tests": [
+        "s2_export_gate_checks_changed_paths",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",

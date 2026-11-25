@@ -2430,7 +2430,8 @@ fn landing_github_call(
         .current_dir(root)
         .stdin(std::process::Stdio::null());
     repo.pin_command(&mut command);
-    match command_output_with_timeout_capped(command, std::time::Duration::from_secs(10), CAP) {
+    let timeout = crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(10))?;
+    match command_output_with_timeout_capped(command, timeout, CAP) {
         BoundedCommandOutput::Completed(out)
             if out.stdout.len() as u64 <= CAP && out.stderr.len() as u64 <= CAP =>
         {
@@ -2573,7 +2574,8 @@ pub(crate) fn github_open_changes_detailed(
         .current_dir(root)
         .stdin(std::process::Stdio::null());
     pin(&mut command);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
+    let timeout = crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(60))?;
+    let out = crate::command_output_with_timeout(command, timeout)
         .context("the forge listing of open changes failed to run or timed out")?;
     anyhow::ensure!(
         out.status.success(),
@@ -7678,6 +7680,7 @@ pub(crate) fn github_stall_read(
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null())
         .args(args);
+    let timeout = crate::forge_lookup::remaining_call_budget(timeout).map_err(|e| e.to_string())?;
     let out = crate::command_output_with_timeout(command, timeout)
         .ok_or_else(|| format!("gh timed out after {}s or did not start", timeout.as_secs()))?;
     if !out.status.success() {

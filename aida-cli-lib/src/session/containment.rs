@@ -339,6 +339,12 @@ pub(crate) fn containment_posture_in(
         return Ok(ContainmentPosture::None);
     }
     let setting = crate::agent_config::load_contained_vendor(root, vendor)?;
+    if setting.is_none() && vendor == crate::vendors::native_setup::KEY {
+        let branch = crate::forge::default_branch_of(root);
+        if let Some(hint) = crate::vendors::native_setup::unpublished_hint(root, &branch) {
+            anyhow::bail!("`{vendor}` has no trusted native policy; refusing to launch: {hint}");
+        }
+    }
     vendor_containment_posture(vendor, setting.as_deref())
 }
 
@@ -359,6 +365,11 @@ fn vendor_containment_posture(vendor: &str, setting: Option<&str>) -> Result<Con
         (Some(HeadlessVendor::Claude), None | Some("aida")) => Ok(ContainmentPosture::Aida),
         (Some(HeadlessVendor::Codex), Some("aida")) => Ok(ContainmentPosture::Aida),
         (Some(HeadlessVendor::Codex), Some("native")) => Ok(ContainmentPosture::Native),
+        // trace:BUG-2752 | ai:codex
+        (Some(parsed), None) if parsed.as_str() == crate::vendors::native_setup::KEY => anyhow::bail!(
+            "`{vendor}` cannot run an AIDA-contained session without a trusted policy; refusing to launch it. For the native sandbox (not AIDA-contained): {}.",
+            crate::vendors::native_setup::FIX
+        ),
         (_, Some("native")) => anyhow::bail!(
             "[contained.vendors] {vendor} = \"native\" is unsupported: `{vendor}` has no supported native sandbox; refusing to launch it. {SUPPORTED_CONTAINMENT_VENDORS}"
         ),
@@ -603,11 +614,22 @@ pub(crate) fn require_vendor_containment(
 ) -> Result<()> {
     // trace:TASK-2631 | ai:codex
     if contained {
-        crate::refuse_uncontainable_agent_tool(vendor.as_str()).with_context(|| format!(
-            "the `{}` vendor cannot run a contained session: {SUPPORTED_CONTAINMENT_VENDORS}\n  [contained] refusing to launch the {what} uncontained", vendor.as_str()
-        ))?;
+        crate::refuse_uncontainable_agent_tool(vendor.as_str())
+            .map_err(|error| child_vendor_refusal(vendor.as_str(), what, error))?;
     }
     Ok(())
+}
+
+// trace:BUG-2752 | ai:codex
+fn child_vendor_refusal(vendor: &str, child: &str, error: anyhow::Error) -> anyhow::Error {
+    let guidance = if vendor == crate::vendors::native_setup::KEY {
+        error.to_string()
+    } else {
+        SUPPORTED_CONTAINMENT_VENDORS.to_owned()
+    };
+    error.context(format!(
+        "the `{vendor}` vendor cannot run a contained session: {guidance}\n  [contained] refusing to launch the {child} uncontained"
+    ))
 }
 
 /// BUG-2133: fail closed. A child launch that was asked to run contained must
@@ -644,9 +666,8 @@ pub(crate) fn child_containment_preflight(
     }
     // trace:BUG-2223 | ai:claude
     // trace:TASK-2631 | ai:codex
-    let posture = containment_posture(vendor, true).with_context(|| format!(
-        "the `{}` vendor cannot run a contained session: {SUPPORTED_CONTAINMENT_VENDORS}\n  [contained] refusing to launch the {child} uncontained", vendor.as_str()
-    ))?;
+    let posture = containment_posture(vendor, true)
+        .map_err(|error| child_vendor_refusal(vendor.as_str(), child, error))?;
     if posture == ContainmentPosture::Native {
         return Ok(());
     }

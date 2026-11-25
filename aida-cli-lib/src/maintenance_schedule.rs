@@ -3650,6 +3650,21 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // trace:BUG-2762 | ai:codex
+        (
+            &["doctor check stalled-reviews --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check stalled-reviews --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "stalled-reviews",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         (
             &["doctor check disk-headroom --fail-on-findings"],
             ScheduledCommand {

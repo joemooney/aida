@@ -61,7 +61,7 @@ fn task3809_runtime_lock_is_close_on_exec() {
 
 // trace:BUG-2746 | ai:codex
 #[test]
-fn bug2746_train_admission_during_reviewer_launch() {
+fn bug2757_bug2746_train_admission_during_reviewer_launch() {
     let (temp, store) = fixture();
     let attempt = dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
     execute_reservation(
@@ -70,12 +70,16 @@ fn bug2746_train_admission_during_reviewer_launch() {
         &attempt.token,
         |_| Ok(()),
         |_| {
-            // Admission runs before the synchronous launch callback can return.
+            let mut reviewer = Command::new("sleep").arg("30").spawn()?;
+            // The unrelated train reserves while the review child is still running.
             let train_dir = Directory::open(&temp.path().join(".aida/auto-train"))?;
             let _tick = train_dir.admission_lock("auto-train supervising worker")?;
             let _train = crate::admission_owner::cooperative_train(temp.path(), false)?;
             let _members = train_members(temp.path(), &[1])?;
             assert!(train_members(temp.path(), &[2]).is_err());
+            assert!(reviewer.try_wait()?.is_none());
+            reviewer.kill()?;
+            reviewer.wait()?;
             Ok(())
         },
     )
@@ -2551,7 +2555,10 @@ fn release_retries_an_exited_head_and_refuses_a_live_one() {
             Ok(())
         })
         .unwrap();
+    record_skip(&store, &c, Some(&reason)).unwrap();
+    assert_eq!(skipped_changes(&store.root).len(), 1);
     assert_eq!(store.release("PR-1").unwrap(), 1);
+    assert!(skipped_changes(&store.root).is_empty());
     let again = dispatch(select(&store, &c, None, 2).unwrap());
     assert_ne!(again.token, attempt.token);
 }
@@ -3280,14 +3287,15 @@ fn bug2518_no_verdict_backoff_cap_and_new_head() {
         let (_temp, store) = fixture();
         let c = change(1, 1, false);
         let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let (dead, input, exited) = bug2703_review_process();
+        drop(input);
+        assert!(exited.join().unwrap().success());
         for count in 1..=3 {
             store
                 .transaction("PR-1", |state| {
                     let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
                     a.phase = phase.clone();
-                    let mut dead = Identity::current()?;
-                    dead.boot = "previous-boot".into();
-                    a.identity = Some(dead);
+                    a.identity = Some(dead.clone());
                     a.diagnostic = Some("reviewer ended without recording".into());
                     Ok(())
                 })
@@ -3596,14 +3604,15 @@ fn bug2521_waiting_backoff_cap_and_new_head() {
             &verdicts.path().join("PR-1.json"),
             &verdict_json(&c.head, "WAITING"),
         );
+        let (dead, input, exited) = bug2703_review_process();
+        drop(input);
+        assert!(exited.join().unwrap().success());
         for count in 1..=3 {
             store
                 .transaction("PR-1", |state| {
                     let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
                     a.phase = phase.clone();
-                    let mut dead = Identity::current()?;
-                    dead.boot = "previous-boot".into();
-                    a.identity = Some(dead);
+                    a.identity = Some(dead.clone());
                     a.diagnostic = Some("reviewer ended without recording".into());
                     Ok(())
                 })
@@ -5708,7 +5717,7 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
 
 // trace:BUG-2720 | ai:codex
 #[test]
-fn bug2720_exited_pickup_retries_after_worktree_release() {
+fn bug2757_bug2720_exited_pickup_retries_after_worktree_release() {
     let (temp, store) = fixture();
     let git = |args: &[&str]| {
         let out = crate::test_git::git_command()
@@ -5778,6 +5787,24 @@ fn bug2720_exited_pickup_retries_after_worktree_release() {
     git(&["worktree", "remove", "held"]);
     receipt(&dead, true, 3);
     skip("retry cap");
+    receipt(&dead, true, 0);
+    // The probe observes a free branch. A train can reserve even this member
+    // while the probe is in flight, and a new checkout invalidates its result.
+    let occupy = |branch: &str| {
+        crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some(branch))?;
+        let _train = train_members(temp.path(), &[1])?;
+        git(&["worktree", "add", "-q", "raced", branch]);
+        Ok(())
+    };
+    let (action, _) = select_with_probes(&store, &c, None, 1, || None, occupy).unwrap();
+    assert!(
+        matches!(action, Action::Skip(reason) if reason.contains("worktree ownership changed"))
+    );
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Exited
+    );
+    git(&["worktree", "remove", "raced"]);
     receipt(&dead, true, 0);
     let retry = dispatch(select(&store, &c, None, 1).unwrap());
     assert_eq!(retry.pickup_retries, 1);
@@ -5912,4 +5939,39 @@ fn bug2758_rollover_loads_additive_fields_and_omits_zero_retries() {
         store.load().unwrap().entries[&c.key()].attempts[0].pickup_retries,
         2
     );
+}
+
+// Local half of the head-keyed hold: no liveness probe, same head held until
+// --release, a moved head dispatched, and the old head's verdict not counted.
+// trace:BUG-2763.AC1 | ai:claude
+// trace:BUG-2763.AC2 | ai:codex
+#[test]
+fn bug2763_exited_hold_is_scoped_to_reviewed_head() {
+    let (_temp, store) = fixture();
+    let old = change(1, 1, false);
+    let new = change(1, 2, false);
+    let first = dispatch(select(&store, &old, None, 1).unwrap());
+    store
+        .transaction("PR-1", |state| {
+            let attempt = attempt_mut(state, "PR-1", &first.token).unwrap();
+            attempt.phase = Phase::Exited;
+            attempt.setup_retry = true;
+            attempt.spawning = true;
+            Ok(())
+        })
+        .unwrap();
+    let Action::Skip(reason) = select(&store, &old, None, 1).unwrap() else {
+        panic!("expected same-head hold");
+    };
+    assert!(reason.contains("aida review watch --release PR-1"));
+    let next = dispatch(select(&store, &new, None, 1).unwrap());
+    assert_eq!(next.head, new.head);
+    let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+    write_verdict(
+        &verdicts.path().join("PR-1.json"),
+        &verdict_json(&old.head, "approved"),
+    );
+    let history = store.history_for_head("PR-1", &new.head).unwrap();
+    assert!(history.conclusive(&old.head));
+    assert!(!history.conclusive(&new.head));
 }
