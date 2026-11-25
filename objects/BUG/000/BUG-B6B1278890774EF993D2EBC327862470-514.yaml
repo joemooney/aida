@@ -35,7 +35,6 @@ history:
   author: joe
   timestamp: 2026-11-24T18:08:53.653988172Z
   changes: []
-execution_mode: drive
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
   branch: main
