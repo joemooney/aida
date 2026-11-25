@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:31:30.451226600Z
-modified_at: 2026-11-25T02:20:55.970991526Z
+modified_at: 2026-11-25T02:23:08.319364464Z
 req_type: Bug
 tags:
 - conflict-repair
@@ -157,6 +157,22 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-517` at head `unavailable`.'
   created_at: 2026-11-25T02:20:30.685173611Z
   modified_at: 2026-11-25T02:20:30.685173611Z
+- id: 01a21083-cd7a-7843-8c60-7ef0c7a82244
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:23):
+    # BUG-2756 / PR #4533 CONFLICT REPAIR (product-15 conflict sweep 2026-11-24 18:22; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4533 now CONFLICTS with main (found by the product conflict check). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4533. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+    Keep your r2 content (6d12ee31) intact; only merge main.
+
+    CONFLICT RULING (advisor-122 2026-11-24 18:27, answering your punt): the advisory exception applies on the SEAT-COMMITTED route ONLY when BOTH hold for the SAME tree: (a) the failed validation is the advisory host cargo check (F2), recorded as advisory; and (b) the snapshot is recorded "deferred to CI" (F5). Any other failed validation, or a mismatched tree, keeps main's refusal (require_validated_merges); the proven-dead refusal is unchanged. Add a test for each: ACCEPTED (advisory + deferred, tree-matched), REFUSED (a non-advisory failure), REFUSED (tree mismatch). Resolve the host-staged merge accordingly (your staged tree is retained in place).
+
+    FRESH ROUND (product-15 19:25): the previous attempt's host-staged merge is saved on dell1 at /home/dirtlab/salvage/BUG-2756-4533-20261124T1919 (staged.patch re-applies cleanly onto 6d12ee31; unmerged-worktree/aida-cli-lib/src/repair_journal.rs holds the conflicted file). Start the merge of current origin/main FRESH, use the salvage as reference, and resolve repair_journal.rs require_validated_merges under the ruling above.
+  created_at: 2026-11-25T02:23:08.319364464Z
+  modified_at: 2026-11-25T02:23:08.319364464Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f0b-247e-7710-a4e4-1e5ec7d926a0
   author: joe
