@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T12:02:47.831513227Z
+modified_at: 2026-11-25T12:03:35.224985147Z
 req_type: Bug
 tags:
 - doctor
@@ -247,6 +247,11 @@ comments:
   created_at: 2026-11-24T17:56:48.425087895Z
   modified_at: 2026-11-24T17:56:48.425087895Z
   session_id: 01a20e8758ef
+- id: 01a21296-feb9-7e52-ad5d-52701764f1a8
+  author: joe
+  content: "DEFERRED p2s from #4457 r3 @f613bc9c (advisor-122 2026-11-25 05:10; one comment per the findings-as-comments rule):\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1590–1658 sets report.partial solely from guard_rows. When all primary rows fit but the deadline prevents CI detail or landing history, the saved snap\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1289–1291 and :1590–1615 prune red-detail memory using only covered red heads. Skipping a still-open red PR evicts its cached test names and observati\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1889–1903 disables all routing and rerun cleanup on a partial pass. A covered stall can clear and recur on the same head without a new wake, and keys \n- aida-cli-lib/src/land_stalls.rs:1856–1862 and :1904–1927 route only the covered stalls into the per-seat job. When a previously routed stall is skipped and a new covered stall for that same seat arrives before the existi\n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1515–1528 starts every tick in forge-list order. If the same prefix consumes the run budget, later PRs are skipped on every tick. Resume from the skip\n- Deferred follow-up from prior review: landed aida-cli-lib/src/land.rs:855–860 refuses even brief contention on the fetch lock. The resulting missing pins lead to unknown mergeability, yet guard_rows can report these PRs \n- Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1576–1589 removes the previous default-branch forge metadata fallback. With no local origin/HEAD and unavailable Git transport, an authenticated GitHu"
+  created_at: 2026-11-25T12:03:35.224985147Z
+  modified_at: 2026-11-25T12:03:35.224985147Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
