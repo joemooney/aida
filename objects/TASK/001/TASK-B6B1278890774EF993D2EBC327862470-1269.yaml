@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T22:29:59.441148307Z
-modified_at: 2026-11-23T22:29:59.441148307Z
+modified_at: 2026-11-25T07:39:01.373085931Z
 req_type: Task
 tags:
 - carried-from:TASK-3115
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1db6f-92aa-7252-a56e-51eb4f30ba07
   created_at: 2026-11-23T22:30:13.177723262Z
+comments:
+- id: 01a211a4-c77d-76d3-976f-eb3b753dcc5b
+  author: joe
+  content: 'Folded into TASK-3906 (review debt: train/mandate-check) in the 2026-11-24 triage (Joe approved).'
+  created_at: 2026-11-25T07:39:01.373085931Z
+  modified_at: 2026-11-25T07:39:01.373085931Z
 history:
 - id: 01a20aa9-d737-7851-896d-374928051af7
   author: joe
