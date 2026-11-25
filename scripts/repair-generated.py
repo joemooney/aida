@@ -101,7 +101,11 @@ def expected_mirrors(masters):
     return result
 
 
-def run_generator(argv, timeout):
+class GeneratorLaunchError(OSError):
+    pass
+
+
+def run_generator(argv, timeout, quiet=False):
     """Reap recipe descendants before inspecting or restoring any output.
 
     Linux subreaping retains orphaned recipes even when make exits first.
@@ -112,7 +116,11 @@ def run_generator(argv, timeout):
     libc = ctypes.CDLL(None, use_errno=True)
     if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
         raise OSError(ctypes.get_errno(), "could not enable generator subreaping")
-    child = subprocess.Popen(argv, start_new_session=True)
+    output = subprocess.DEVNULL if quiet else None
+    try:
+        child = subprocess.Popen(argv, start_new_session=True, stdout=output, stderr=output)
+    except OSError as error:
+        raise GeneratorLaunchError(str(error)) from error
     try:
         child.wait(timeout=timeout)
         if child.returncode:
@@ -296,6 +304,7 @@ def main(base, phase, pack_outputs=(), budget=100.0):
     contents = {}
     before = snapshot(contents)
     deadline = time.monotonic() + budget
+    warning = None
     try:
         for name, products, _, argv in REGISTRY:
             if name == "templates":
@@ -310,7 +319,25 @@ def main(base, phase, pack_outputs=(), budget=100.0):
                 ):
                     raise RuntimeError("CLI help golden must be a regular file: " + str(golden))
             # Stay inside the host's bound so a slow generator is rolled back here.
-            run_generator(argv, max(0.01, deadline - time.monotonic()))
+            # trace:BUG-2756 | ai:codex
+            if phase == "publish" and name == "cli-help" and golden.is_file():
+                previous = snapshot()
+                original = golden.read_bytes()
+                try:
+                    # Leave time for the final exec-context ledger check.
+                    reserve = min(30.0, budget / 4) if EXEC_CONTEXT_LEDGER in outputs else 0
+                    run_generator(argv, max(0.01, deadline - time.monotonic() - reserve), quiet=True)
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GeneratorLaunchError) as error:
+                    current = snapshot()
+                    changed = {p for p in current.keys() | previous.keys()
+                               if current.get(p) != previous.get(p)}
+                    if changed - {CLI_HELP_GOLDEN}:
+                        raise RuntimeError("failed snapshot command changed other files") from error
+                    if roll_back(previous, current, {CLI_HELP_GOLDEN: original}):
+                        raise RuntimeError("could not restore CLI help golden") from error
+                    warning = f"snapshot regeneration failed: {error}; CI will verify"
+            else:
+                run_generator(argv, max(0.01, deadline - time.monotonic()))
         after = snapshot()
         unexpected = sorted(
             p for p in before.keys() | after.keys()
@@ -335,8 +362,12 @@ def main(base, phase, pack_outputs=(), budget=100.0):
         if kept:
             note += "; not restorable from the snapshot: " + repr(kept)
         raise RuntimeError(f"{error}{note}") from error
+    return warning
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else (),
+    warning = main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else (),
          float(sys.argv[4]) if len(sys.argv) > 4 else 100.0)
+    if warning:
+        print("\n" + warning, file=sys.stderr)
+        sys.exit(75)
