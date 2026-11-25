@@ -193,6 +193,33 @@ comments:
   created_at: 2026-11-25T10:55:01.775211370Z
   modified_at: 2026-11-25T10:55:01.775211370Z
   session_id: 01a2121f438f
+- id: 01a21259-cedf-7d03-9e3e-4378f3d5eb9f
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4566 r2 @ 2354441c3f (TASK-3878, report-only re-scope, Refs-only commit)
+
+    Result: FAIL. Three items are required before merge.
+
+    R1 SECURITY (required): `scan()` now runs a raw `std::process::Command::new("git") ls-remote --heads origin` in the project root. It adds remote_credentials, clear_routing and GIT_TERMINAL_PROMPT=0, but it bypasses `aida_core::git_ops::host_remote_git_command`, which refuses to run in a seat clone and applies the config hardening (core.sshCommand, aliases, fsmonitor, url.insteadOf and so on). This is the same class of issue as TASK-3874 r1.
+    - This check also runs from the scheduled job and from any cwd.
+    - Fix: use `host_remote_git_command(root, "origin")`. Simpler still: drop the network call and restore gh's `baseRefOid`, which r1 already fetched through the pinned forge read. Either way, add a test showing that the check refuses, or makes no network call, inside a seat clone.
+
+    R2 AC1 regression (required): AC1 reports conflicting PRs "with no active implementer lane or queued rework". r2 reports EVERY conflicting PR and prints "owner unknown" unconditionally.
+    - With the scheduled `--fail-on-findings` job, a PR whose lane is already merging the base keeps the job red, and CronJobFailed pages the advisor every 20 minutes. That is the BUG-2762 noise pattern again.
+    - Fix: restore r1's live-lease and queued-rework suppression, and show the owner when a lease exists.
+
+    R3 AC1 ranking (required): "approved first" now uses only GitHub `reviewDecision`. AIDA approvals live in the gate ledger (`aida review record`), and r1 also checked ledger Approved at the current head. As written, an AIDA-approved conflicting PR ranks as unapproved. Fix: restore the ledger check, which is fail-soft and won't abort the row.
+
+    Other notes:
+    - Spec bookkeeping: AC2 (auto-queue plus advisor notice and dedup) was cut, but the spec's ACs still list it, and the commit is Refs-only, so nothing completes. The product should either split AC2 into a follow-up spec (a parent comment per findings-not-requirements) and rewrite AC2 here, or keep TASK-3878 open. Also check why TASK-3878 already shows status `done`.
+    - Conflict age now matches only `conflict-repair-…` comments, which nothing writes any more, so it is effectively always "unknown". Either drop it or note that it is reserved for the AC2 follow-up.
+    - Good: report-only writes nothing (the test checks that the state dir count is unchanged), a per-row error becomes a finding instead of aborting the scan, the printed action is an aida command (safe), and spec IDs are validated against the store.
+
+    Self-approve limits: this touches leases and git transport, so it needs the independent verdict at the final head.
+  created_at: 2026-11-25T10:56:30.044403891Z
+  modified_at: 2026-11-25T10:56:30.044403891Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
