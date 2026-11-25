@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T20:25:20.686156971Z
+modified_at: 2026-11-25T20:27:46.235940626Z
 req_type: Story
 tags:
 - integration
@@ -417,6 +417,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T20:25:20.492577616Z
   modified_at: 2026-11-25T20:25:20.492577616Z
+- id: 01a21464-f379-76e0-b2f5-eec285c707fc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:27):
+    # STORY-3120 S3a r2 (advisor-122 ruling 2026-11-25 13:27 on #4582 @ b39e428e; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int40-story-3120-s3a / PR #4582. <=40 lines. Keep the "(Refs STORY-3120)" title.
+    (F1, real) The stdin writer thread must NOT die from SIGPIPE (the aida binary restores SIG_DFL, so a runner that closes stdin early KILLS aida). Block SIGPIPE in the writer thread (pthread_sigmask) so write returns EPIPE, and treat EPIPE as "runner refused input" → a run error. TEST: a runner that exits immediately, given a 200 KiB prompt → aida survives and reports the error.
+    (F2) Fix the doc/PR-body claim: an early exit is detected only when the prompt exceeds the pipe buffer. For smaller prompts, a runner exiting before reading counts as an ordinary non-zero/empty-output failure; say so.
+    Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4582. COMMIT your work.
+  created_at: 2026-11-25T20:27:46.235940626Z
+  modified_at: 2026-11-25T20:27:46.235940626Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
