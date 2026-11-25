@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-471
 agreed_id: BUG-2710
 title: night-shift tick hangs in the reap phase and is killed at the 120 s budget on every run
 description: 'Since 2026-11-22 ~17:30 UTC, every night-shift tick is killed at 120 s (exit 124). All earlier phases finish within ~2 s (events 68ms, wave-progress ~1s, mailbox ~0.8s); last-phase=reap@~1990ms, then nothing for 118 s. Context: after a ~40h token outage there are 17 orphaned and 35 stale sessions (aida ps), plus a dead seat clone holding a staged, uncommitted merge (session-hygiene also fails on it). Probable cause: reap blocks on (or walks without a bound) one of these sessions or its worktree. Fix: give reap its own sub-budget, report which item it was on when the budget ran out, and skip or yield it rather than starving the whole tick. Evidence: scheduled job night-shift failures 2026-11-22 17:31 and 17:46 UTC (phases=[...] last-phase=reap).'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-25T17:26:54.140771720Z
+modified_at: 2026-11-25T18:33:35.235753980Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -309,6 +309,11 @@ comments:
   created_at: 2026-11-25T17:26:54.140768945Z
   modified_at: 2026-11-25T17:26:54.140768945Z
   session_id: 01a2138b3114
+- id: 01a213fc-0d03-7360-b2fc-1f47e06c536d
+  author: lane-recovery
+  content: Reference merge `b56d4289944ae2dc1f2e2172c23e2b0effc7728d` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-25T18:33:35.235746886Z
+  modified_at: 2026-11-25T18:33:35.235746886Z
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
@@ -472,6 +477,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a213fc-0d03-7360-b2fc-1f55e4588560
+  author: lane-recovery
+  timestamp: 2026-11-25T18:33:35.235753919Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
