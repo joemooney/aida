@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T21:19:48.619140467Z
+modified_at: 2026-11-25T22:13:32.375320681Z
 req_type: Story
 tags:
 - hygiene
@@ -555,6 +555,16 @@ comments:
   modified_at: 2026-11-25T21:17:31.530369197Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a214c5-6c57-7b73-8228-eea3cea11f41
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 25f566de3e
+    CI-red fix for #4570 (run 45694664228). The bwrap gate failure in task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone reproduced locally on this branch: panic at line 1185, row 'skipped — could not verify PR history for `feat` — kept'. The new reap-time closed-tip veto (clone_history_veto, which origin/main doesn't have) fails closed when no forge is configured, so it refused the reap before the submodule refusal the test asserts. This regression is specific to this branch. The production behavior is intended, so the fix is test-only: configure a GitHub forge with empty PR history (fixture_pr_history) before reap_one_clone, matching the sibling reap test. After the fix, that test and 137 other reap/lifecycle tests pass in the lane. Two lane failures come from the lane environment, not this branch: task_2053_bwrap_probe_runs_no_seat_filter (tempdir_in(cwd) ENOENT in the sandbox) and bug_2197 dead_reviewer (mail writer-admission scan refused in the sandbox; worktree reap path, untouched by this diff). make check-ci-fast passed. Round-6 findings 1 and 2 were already addressed in 8d24c593ef (GitLab unmerged-only parse tests; PR #N in the hint). Residual risk: I could not read the lib-0 and Build logs because the sandbox blocks the log blob host. I assume they fail on the same test; the full CI rerun will confirm.
+  created_at: 2026-11-25T22:13:32.375320681Z
+  modified_at: 2026-11-25T22:13:32.375320681Z
+  session_id: 01a21493f5a1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
