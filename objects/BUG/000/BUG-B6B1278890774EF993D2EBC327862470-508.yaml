@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-25T05:02:44.875672084Z
+modified_at: 2026-11-25T05:06:51.926460566Z
 req_type: Bug
 tags:
 - launch
@@ -180,6 +180,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 2 F1 requires the exemption only for --attempt TOKEN. The shipped recover-launch parser accepts only a positional UUID. Enforcing that literal requirement prevents documented plain recovery and retirement from releasing their own reservations. Should F1 use the existing positional operand or should the public CLI and help contract change?. No triage reason was given.'
   created_at: 2026-11-25T05:02:44.875661921Z
   modified_at: 2026-11-25T05:02:44.875661921Z
+- id: 01a21119-c35c-7142-90de-c4cc325a9723
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:06):
+    # BUG-2747 / PR #4540 r3 (advisor-122 ruling 2026-11-24 21:50; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=80 lines.
+    Your r2 partial work is committed on the branch (7654f1ed8b); continue from it.
+    RULING on your punt: use the EXISTING POSITIONAL operand. The ancestry exemption matches EXACTLY `<aida exe> agent recover-launch <uuid>` (subcommand position, the uuid EQUAL to THIS attempt, exe = the AIDA binary path). The same applies to retire if it shares the path. NO CLI/help change.
+    Tests: matching uuid → exempt; a different uuid → NOT exempt; the uuid in a non-operand position (e.g. as a flag value) → NOT exempt; a spoofed argv in a non-AIDA ancestor → NOT exempt. Keep the criterion-level trace markers (F2).
+    One targeted cargo run, then make check-ci-fast, then push to #4540. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T05:06:51.926460566Z
+  modified_at: 2026-11-25T05:06:51.926460566Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-134f-7401-800a-606c9060db24
   author: joe
