@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T07:22:30.563746265Z
+modified_at: 2026-11-25T07:25:44.252176483Z
 req_type: Task
 tags:
 - integration
@@ -172,6 +172,17 @@ comments:
   created_at: 2026-11-25T07:22:30.563733716Z
   modified_at: 2026-11-25T07:22:30.563733716Z
   session_id: 01a2115d7ee6
+- id: 01a21198-da11-7b83-978c-e7496ed45788
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4559 r3 @ ac66c3106d (integration-30): PASS. merge-tree is clean vs integration 64e694616cb.
+    describe_status_entry now uses aida_core::git_ops::porcelain_quote (made pub) for every path, and the trailing-space closure is deleted. ONE helper with git's porcelain v1 predicate: any space, control byte, quote, backslash or non-ASCII byte gets C-quoted. Seat-written control bytes such as ESC become octal escapes, so the display stays terminal-safe like the old escape_debug.
+    Tests: a leading-space '?  notes' renders as untracked: " notes". The BUG-051 expectation is updated: a mid-path space now quotes ("src/a b.rs"), consistent with git.
+    Nit (pre-existing, not blocking): porcelain v2 already C-quotes paths with special bytes, so such a path is quoted twice for display. READY after FAST plus the independent review.
+  created_at: 2026-11-25T07:25:44.252176483Z
+  modified_at: 2026-11-25T07:25:44.252176483Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
