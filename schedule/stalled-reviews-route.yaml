@@ -2,6 +2,6 @@ job: stalled-reviews-route
 due_since: 2026-11-25T02:52:27.535383706Z
 due_reason: on CronJobFailed:stalled-reviews
 due_failure:
-  trip_id: stalled-reviews@2026-11-25T11:33:33.935299705Z
+  trip_id: stalled-reviews@2026-11-25T11:58:34.676589463Z
   job: stalled-reviews
   error: 'exit 127: this aida binary does not support the command of scheduled job ''stalled-reviews'': unknown scheduled task command ''doctor check stalled-reviews --fail-on-findings''; valid commands: defer resurface, cache verify, review --promote-approved-heads, cache refresh --history --if-behind, cache refresh --if-requested, session reap, session hygiene, queue gc, notify check, doctor, doctor check performance --fail-on-findings, fetch --code-only, store compact, store gc, doctor check remote-drift --fail-on-findings, doctor check stale-remote-branches --fail-on-findings, doctor check runaway-seats --fail-on-findings, doctor check disk-headroom --fail-on-findings, doctor check codex-mail-wake --fail-on-findings, worktree gc --fail-on-findings, fleet drive --tick, dispatch tick, docs sweep, doctor check landing-health --fail-on-findings, doctor check relay-stall --fail-on-findings, doctor check lane-liveness, lane-liveness, doctor check mail-backlog, mail-backlog, doctor check throughput-guard, throughput-guard, remote mirror-sync, shift tick, dev build --if-main-green, land watch, remote reconcile --execute'
