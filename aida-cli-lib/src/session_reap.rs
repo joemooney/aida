@@ -1406,7 +1406,8 @@ pub(crate) fn scan_clone_lease(
     };
     let branch = resolved_branch.as_deref().unwrap_or(&lease.branch);
     let mut branch_tip = None;
-    let verdict = classify_clone_reap(
+    let mut checked_merge = false;
+    let mut verdict = classify_clone_reap(
         || {
             if let Err(error) = &resolved_branch {
                 return crate::seat_clone::Probe::Unknown(format!("{error:#}"));
@@ -1432,12 +1433,28 @@ pub(crate) fn scan_clone_lease(
         process_exited,
         spec_finished,
         || {
+            checked_merge = true;
             matches!(
                 detect_merged_pr_for_branch_via_forge(project_root, branch),
                 PrLookup::Found(_)
             )
         },
     );
+    // A closed PR at this tip takes precedence over a historical merge on the same branch.
+    // trace:STORY-3059 | ai:codex
+    if checked_merge {
+        use crate::forge_observed::Observed;
+        let closed = branch_tip
+            .as_deref()
+            .map(|head| crate::forge::observe_terminal_branch(project_root, branch, head, true));
+        verdict = match closed {
+            Some(Observed::Known(true)) => ReapVerdict::Skip(format!(
+                "closed PR on published branch `{branch}` is recoverable; run `aida doctor heal stale-leases --id {} --attest '<reason>'`", lease.id
+            )),
+            Some(Observed::Known(false)) => verdict,
+            _ => ReapVerdict::Skip(format!("could not verify PR history for `{branch}` — kept")),
+        };
+    }
     ReapRow {
         session: lease.id.clone(),
         scope: lease.scope.clone(),

@@ -2753,7 +2753,7 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     // Refuse an empty/wrong branch and serve only a merged PR for feat.
     crate::test_exec::write_executable(
         &shims.join("gh"),
-        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
+        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *'--state all'*) echo '[]'; exit 0;; *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
     );
     let environment = aida_core::exec_context::Environment::capture();
     let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
@@ -2777,6 +2777,60 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(outcome.salvageable.is_empty(), "{outcome:?}");
     assert!(outcome.unknown.is_empty(), "{outcome:?}");
     assert!(crate::session_hygiene::keep_items(&outcome, 24).is_empty());
+
+    // trace:STORY-3059 | ai:codex
+    // Missing exact-tip history cannot authorize reap through the historical merge.
+    crate::test_exec::write_executable(&shims.join("gh"), "#!/bin/sh\ncase \" $* \" in *' --state all '*) echo invalid;; *' --state merged '*) printf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n';; esac\n");
+    let unknown = crate::session_reap::scan_reapable(&fx.main);
+    assert!(unknown.reapable.is_empty());
+    assert!(unknown
+        .skipped
+        .iter()
+        .any(|r| r.session == lease.id && r.reason.contains("could not verify PR history")));
+    let head = row.branch_tip.as_ref().unwrap();
+    let closed = serde_json::json!([{
+        "state": "CLOSED", "headRefName": "feat", "headRefOid": head, "isCrossRepository": false
+    }]);
+    crate::test_exec::write_executable(
+        &shims.join("gh"),
+        &format!("#!/bin/sh\ncase \" $* \" in *' --state all '*) echo '{closed}';; esac\n"),
+    );
+    let snapshot = || {
+        // Archive the entire fixture including loose/packed refs, index, files and alternate.
+        assert!(clone.join(".git/objects/info/alternates").is_file());
+        let archive = std::process::Command::new("tar")
+            .current_dir(&clone)
+            .args(["--sort=name", "--format=gnu", "-cf", "-", "."])
+            .output()
+            .unwrap();
+        assert!(archive.status.success());
+        archive.stdout
+    };
+    let before = snapshot();
+    let dry = crate::session_reap::scan_reapable(&fx.main);
+    assert!(dry.reapable.is_empty());
+    assert!(snapshot() == before, "hygiene changed the seat clone");
+    let (real, skipped) = crate::session_reap::reap_quiet_with_skips(&fx.main);
+    assert!(real.leases.is_empty());
+    let report_line = |rows, dry_run| {
+        let outcome = crate::session_hygiene::HygieneOutcome {
+            scan_skipped: rows,
+            ..Default::default()
+        };
+        crate::session_hygiene::render_summary(&outcome, dry_run)
+            .lines()
+            .find(|line| line.contains(&lease.id) && line.contains("recoverable"))
+            .expect("missing recovery hint")
+            .to_owned()
+    };
+    let hint = report_line(dry.skipped, true);
+    assert!(hint.contains(&format!(
+        "aida doctor heal stale-leases --id {} --attest",
+        lease.id
+    )));
+    assert_eq!(report_line(skipped, false), hint);
+    assert!(snapshot() == before, "hygiene changed the seat clone");
+    assert!(crate::lease_path(&fx.main, &lease.id).is_file());
 
     // Leave real dirt in place while collection gathers and re-probes the
     // persisted dead lease. Age the file so the normal 24h route is exercised.

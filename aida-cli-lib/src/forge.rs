@@ -6928,24 +6928,37 @@ mod fast_gate_tests;
 /// must pin this HEAD. A capped history is unknown, never deletion authority.
 // trace:TASK-1222 | ai:codex
 pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) -> Observed<bool> {
+    observe_terminal_branch(root, branch, head, false)
+}
+
+// trace:STORY-3059 | ai:codex
+pub(crate) fn observe_terminal_branch(
+    root: &Path,
+    branch: &str,
+    head: &str,
+    unmerged_only: bool,
+) -> Observed<bool> {
     let kind = resolve_forge_kind(root);
     let Some(binary) = crate::resolve_forge_cli(kind) else {
         return Observed::Transient("forge CLI unavailable".into());
     };
     let mut cmd = forge_read_command(&binary);
     cmd.current_dir(root).stdin(std::process::Stdio::null());
-    match kind {
-        ForgeKind::GitHub if gc_reviewer_pr_number(branch).is_some() => {
+    let reviewer = (!unmerged_only)
+        .then(|| gc_reviewer_pr_number(branch))
+        .flatten();
+    match (kind, reviewer) {
+        (ForgeKind::GitHub, Some(number)) => {
             // Reviewer checkouts use a local alias, not the forge head ref.
             cmd.args([
                 "pr",
                 "view",
-                &gc_reviewer_pr_number(branch).unwrap().to_string(),
+                &number.to_string(),
                 "--json",
                 "number,state,headRefName,headRefOid,isCrossRepository",
             ]);
         }
-        ForgeKind::GitHub => {
+        (ForgeKind::GitHub, None) => {
             cmd.args([
                 "pr",
                 "list",
@@ -6959,7 +6972,7 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
                 "state,headRefName,headRefOid,isCrossRepository",
             ]);
         }
-        ForgeKind::GitLab => {
+        (ForgeKind::GitLab, _) => {
             cmd.args([
                 "api",
                 "-X",
@@ -6973,7 +6986,7 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
                 "per_page=100",
             ]);
         }
-        ForgeKind::None => return Observed::Known(false),
+        (ForgeKind::None, _) => return Observed::Known(false),
     }
     let Some(out) = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))
     else {
@@ -6985,8 +6998,9 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
             String::from_utf8_lossy(&out.stderr)
         ));
     }
-    let closed = match (kind, gc_reviewer_pr_number(branch)) {
+    let closed = match (kind, reviewer) {
         (ForgeKind::GitHub, Some(number)) => parse_gc_reviewer_pr_closed(&out.stdout, number, head),
+        _ if unmerged_only => parse_terminal_branch(&out.stdout, kind, branch, head, true),
         _ => parse_gc_branch_closed(&out.stdout, kind, branch, head),
     };
     match closed {
@@ -7021,6 +7035,17 @@ fn parse_gc_reviewer_pr_closed(body: &[u8], number: u64, head: &str) -> Option<b
 
 // trace:TASK-1222 | ai:codex
 fn parse_gc_branch_closed(body: &[u8], kind: ForgeKind, branch: &str, head: &str) -> Option<bool> {
+    parse_terminal_branch(body, kind, branch, head, false)
+}
+
+// trace:STORY-3059 | ai:codex
+fn parse_terminal_branch(
+    body: &[u8],
+    kind: ForgeKind,
+    branch: &str,
+    head: &str,
+    unmerged_only: bool,
+) -> Option<bool> {
     let rows: Vec<serde_json::Value> = serde_json::from_slice(body).ok()?;
     if rows.len() >= 100 {
         return None;
@@ -7051,9 +7076,12 @@ fn parse_gc_branch_closed(body: &[u8], kind: ForgeKind, branch: &str, head: &str
             return None;
         }
         open |= is_open && same_repo;
-        found |= closed && same_repo && sha == head;
+        found |= closed
+            && same_repo
+            && sha == head
+            && (!unmerged_only || matches!(state, "CLOSED" | "closed"));
     }
-    Some(found && !open)
+    Some(found && (unmerged_only || !open))
 }
 
 #[cfg(test)]
