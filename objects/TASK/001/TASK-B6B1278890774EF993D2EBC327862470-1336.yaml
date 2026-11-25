@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 657d34438854ca176e867083c1dd1ed17f388050
 
   9. aida-cli-lib/src/review_prepare.rs:142–144,506–548 — Scan takes Git pathspecs, while diff modes compare a hand-normalized destination string. A common repository-wide scope such as --path . produces an empty diff inventory and can yield 100% coverage over zero files. A rename out of the selected directory also disappears. Use consistent repository-relative scoping and account for applicable rename endpoints.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T11:07:29.759209463Z
-modified_at: 2026-11-25T07:26:11.707338041Z
+modified_at: 2026-11-25T07:26:13.836687307Z
 req_type: Task
 tags:
 - carried-from:TASK-3862
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21199-114c-7a51-8c14-981d8066f8e0
+  author: joe
+  timestamp: 2026-11-25T07:26:13.836683169Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 657d34438854ca176e867083c1dd1ed17f388050
   branch: pr-4511
