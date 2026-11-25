@@ -1409,6 +1409,19 @@ fn bug_2747_recovery_ancestry_only_exempts_argv() {
     std::fs::remove_file(process.join("exe")).unwrap();
     std::os::unix::fs::symlink("/proc/self/exe", process.join("exe")).unwrap();
     assert_eq!(scan(&probe), receipt::Occupancy::Clear);
+    for tail in ["attempt-10", "another-attempt\0--config\0attempt-1"] {
+        std::fs::write(
+            process.join("cmdline"),
+            format!("aida\0agent\0recover-launch\0{tail}\0"),
+        )
+        .unwrap();
+        assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    }
+    std::fs::write(
+        process.join("cmdline"),
+        b"aida\0agent\0recover-launch\0attempt-1\0",
+    )
+    .unwrap();
     std::fs::write(process.join("environ"), b"OTHER=x\0TOKEN=attempt-1\0").unwrap();
     assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
     std::fs::write(process.join("environ"), []).unwrap();
@@ -1424,4 +1437,9 @@ fn bug_2747_recovery_ancestry_only_exempts_argv() {
     std::fs::remove_file(process.join("environ")).unwrap();
     std::fs::create_dir(process.join("environ")).unwrap();
     assert!(matches!(scan(&probe), receipt::Occupancy::Unknown(_)));
+    // The same PID is unrelated with no birth bound and no ancestry evidence.
+    assert_eq!(
+        receipt::scan_occupancy_in(tmp.path(), &probe, &Default::default()),
+        receipt::Occupancy::Clear
+    );
 }

@@ -271,6 +271,9 @@ pub(crate) fn scan_occupancy_in_with_owner(
                         }
                     }
                     Err(e) if gone(&e) || !ours || predates => {}
+                    // Unreadable environ alone cannot implicate a non-ancestor.
+                    // Its argv, group, session and cwd checks still apply.
+                    Err(_) if !exclude.contains(&pid) => {}
                     Err(e) => {
                         return Occupancy::Unknown(format!(
                             "process {pid}'s environment is unreadable: {e}"
@@ -808,13 +811,14 @@ fn log_birth_tick(dir: &Path, attempt: &str) -> Option<u64> {
 /// or worktree its receipt names (read leniently). Unreadable means NO.
 // trace:STORY-2254 | ai:claude
 pub(crate) fn unknown_attempt_is_dead(dir: &Path, attempt: &str) -> bool {
-    unknown_attempt_is_dead_for(dir, attempt, &[std::process::id()].into())
+    unknown_attempt_is_dead_for(dir, attempt, &[std::process::id()].into(), false)
 }
 
 fn unknown_attempt_is_dead_for(
     dir: &Path,
     attempt: &str,
     own: &std::collections::HashSet<u32>,
+    recovery: bool,
 ) -> bool {
     let lenient = receipt_path(dir, attempt)
         .ok()
@@ -838,7 +842,7 @@ fn unknown_attempt_is_dead_for(
     };
     let field = |name: &str| lenient.as_ref().and_then(|v| v.get(name));
     let probe = OccupancyProbe {
-        recovery: true,
+        recovery,
         worktree: worktree.as_deref(),
         group: field_pid("worker"),
         session: field_pid("supervisor"),
@@ -936,7 +940,7 @@ pub(crate) fn retire_unknown(dir: &Path, project_root: &Path, attempt: &str) -> 
             "attempt {attempt} has no receipt to retire"
         );
         anyhow::ensure!(
-            unknown_attempt_is_dead_for(dir, attempt, &super::agent_codex_background::own_process_chain()),
+            unknown_attempt_is_dead_for(dir, attempt, &super::agent_codex_background::own_process_chain(), true),
             "attempt {attempt} ({why}) cannot be proven dead: a process may still run for it, or the process table could not be fully read; nothing was changed"
         );
         let retired = dir.join(RETIRED_DIR);
