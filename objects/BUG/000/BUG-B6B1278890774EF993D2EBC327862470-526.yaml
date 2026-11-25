@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T23:18:05.077576033Z
+modified_at: 2026-11-25T23:48:06.301660255Z
 req_type: Bug
 tags:
 - admission
@@ -138,6 +138,27 @@ comments:
   modified_at: 2026-11-25T23:18:05.077576033Z
   session_id: 01a214f7261f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2151b-b980-7ec1-9827-15e959886df1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6657fe5651 (r1: advisor-122 F1-F3).
+
+    Acceptance evidence:
+    - F1 [behavioral-test]: admit_change wraps the stale-head follow-up in PassClaim::acquire/release (review_watch.rs follow_up closure), so gh pr update-branch runs under the claim, released before the readiness report; select/reserve/spawn still run under the claim taken by decide(). Test bug2765_admit_change_reads_unclaimed_then_writes_under_the_claim asserts the exact call log ["gh pr update-branch 2 claim=held", "fetch claim=free", "launch review watch claim=held"].
+    - F2 [behavioral-test]: same test drives production admit_change with Some(claim) against real git + fake gh/launcher; the base-probe fetch (forge read) precedes the launch and runs unclaimed.
+    - F3 [behavioral-test]: PassClaim lost its once flag; acquire() calls hold_admission(.., false), so a mid-pass yield returns Skipped(deferred) in --once as well. Covered by bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan (the deferred-refusal path).
+    Validation: lane job cargo test review_watch::tests::bug27 -> 20 passed, 0 failed (incl. all bug2703/2746/2757 regressions and the new test). make check-ci-fast exit 0.
+
+    Probe findings:
+    - P3: follow-up now takes/releases the claim per change even when no notice is sent (short local store read). With a land waiting, changes defer at the follow-up rather than at decide, same outcome, one probe saved.
+    - P5: a yield at acquire never launches or updates (returns deferred); Err propagates. No tests weakened; three existing tests only lost the removed once argument.
+
+    Residual risks: liveness and advisor-route mailbox delivery inside the follow-up now run under the claim (local, bounded). route_rework (queue write, not forge) stays unclaimed. A --once pass still refuses when admission is already yielded at pass START (pre-existing, unchanged). TTL item deferred per ruling.
+  created_at: 2026-11-25T23:47:48.224686233Z
+  modified_at: 2026-11-25T23:47:48.224686233Z
+  session_id: 01a214f7261f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
@@ -190,6 +211,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a2151c-0474-7113-935b-8c219c961b1d
+  author: dirtlab
+  timestamp: 2026-11-25T23:48:07.412384257Z
+  session_id: 01a214f7261f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
