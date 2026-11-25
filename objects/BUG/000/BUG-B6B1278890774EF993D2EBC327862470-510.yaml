@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T01:58:03.479705158Z
+modified_at: 2026-11-25T02:00:49.255249532Z
 req_type: Bug
 tags:
 - data-loss
@@ -244,6 +244,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T01:58:03.290547466Z
   modified_at: 2026-11-25T01:58:03.290547466Z
+- id: 01a2106f-616a-7001-8f76-9beffc85a3bc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:00):
+    # BUG-2749 / PR #4537 r3, LAST regular round (advisor-122 ruling 2026-11-24 18:58 at d25b5af0; STRICT data-loss; round 3 of 4; product-15). Lane: CODEX. MAIN, existing branch. <=120 lines.
+    MUST:
+    (F1) Session end of the OWNING session for a MISSING linked checkout runs the same staged-index retention check BEFORE removing worktree metadata. An absent checkout gives NO "clean" evidence: staged entries or an unverifiable index means RETAIN. Test.
+    (F2) EVERY git gc / gc --auto / gc_aggressive invocation (store compact, opportunistic store GC) passes `-c gc.worktreePruneExpire=never`, so gc never prunes worktrees implicitly. Test: a missing checkout with staged changes survives `aida store compact`.
+    (F3) Restore BUG-39's pre-add recovery for a manually deleted .aida-store checkout, but PER-WORKTREE and ONLY when its registered index passes the retention check (provably clean); otherwise refuse with guidance. Test both.
+    Ratchet ledgers: lowering a count to match removed sites is allowed; never raise or add. One targeted cargo run, then make check-ci-fast, then push to #4537. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T02:00:49.255249532Z
+  modified_at: 2026-11-25T02:00:49.255249532Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
