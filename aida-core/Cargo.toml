@@ -17,7 +17,7 @@ default = ["native"]
 mailbox-test-support = []
 # Native platform features - file system, SQLite, etc.
 # `sysinfo` backs the /proc process-liveness probe in `liveness` (BUG-677).
-native = ["rusqlite", "fs2", "dirs", "sysinfo"]
+native = ["rusqlite", "fs2", "dirs", "sysinfo", "dep:ring", "dep:tempfile"]
 # Retain the previous optional feature name for downstream consumers.
 dirs = ["dep:etcetera"]
 # PostgreSQL database backend
@@ -30,6 +30,8 @@ github = ["dep:reqwest", "dep:tokio"]
 jira = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
+ring = { version = "0.17", optional = true }
+tempfile = { version = "3.8", optional = true }
 # Core dependencies (all platforms)
 serde = { workspace = true }
 serde_yaml = { workspace = true }
