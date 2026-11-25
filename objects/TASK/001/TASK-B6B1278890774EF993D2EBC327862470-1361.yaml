@@ -13,12 +13,22 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T03:09:09.507243782Z
+modified_at: 2026-11-25T03:14:25.809878764Z
 req_type: Task
 tags:
 - ci
 - integration
 - small
+comments:
+- id: 01a210b2-8ced-70b0-941d-1bd8a9f6ec9f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4 plus native worktree diff. AC1: [evidence: behavioral-test] review_watch.rs:3739 rechecks discovery before consuming a verdict and checks again at label edit. The stale and moved fixture cases exercise both boundaries. review_watch.rs:3704 uses the Actions workflow conclusion. The missing-conclusion case refuses a completed marker. AC2: [evidence: behavioral-test] review_watch.rs:3699 matches a single owner by PR number and exact base. Foreign PR and retargeted base fixture cases precede a matching positive control. Reviewed empty and multiple rows, repeated IDs, malformed conclusion, SHA comparison, and movement between reads. Preserved the late-move refusal test during self-review. GitHub label edits have no atomic head precondition. No ratchet edits or new authority. git diff --check passed. Lane validation in progress.
+  created_at: 2026-11-25T03:14:25.809878764Z
+  modified_at: 2026-11-25T03:14:25.809878764Z
+  session_id: 01a210ad058e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
