@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2764",
+  "publishes": [
+    {
+      "at": "2026-11-25T22:45:37.728492601Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T20:01:27.151362282Z",
+      "spec": "BUG-2764",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4587,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "6719a94592e6bf03948325240c4a38f8e310f068"
+      }
+    },
+    {
+      "ts": "2026-11-25T20:01:44.266767400Z",
+      "spec": "BUG-2764",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2764 at 6719a945 (2 commits behind main; no finding depends on base changes). AC1: verified by spec_approvals_by_head plus the head-exact fallback in promote_approved_heads; the scheduled job (maintenance_schedule.rs:3482, every 2m) promotes within one tick once FAST settles. AC2: verified by bug2764_spec_keyed_approval_promotes_in_both_orders (both orders, plus receipt dedupe). AC3: partially met. Per-PR stdout lines and per-PR stderr failures were added, but pass-level failures (load/discover) still exit non-zero with the error only on stdout in agent mode, and per-PR lines are dropped whenever any PR fails. Precedence (a PR's own verdict at its head wins, including request-changes) and SHA-exact matching look correct. Fast CI green at the head. Request changes for the AC3 gaps.",
+        "recovery_hint": "address the review findings, move BUG-2764 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T20:56:08.990313294Z",
+      "spec": "BUG-2764",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4587,
+        "verdict": "APPROVED",
+        "reviewed_sha": "69cf3759d3c019700c639070d6e553dfe1941588"
+      }
+    },
+    {
+      "ts": "2026-11-25T22:34:58.883577190Z",
+      "spec": "BUG-2764",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4587
+      }
+    },
+    {
+      "ts": "2026-11-25T22:45:37.467660547Z",
+      "spec": "BUG-2764",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f4c76a579072168f16d69503a31b1874b66e3930",
+        "pr": 4587,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
