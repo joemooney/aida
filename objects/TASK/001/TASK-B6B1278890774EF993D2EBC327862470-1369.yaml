@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T18:34:24.748096205Z
+modified_at: 2026-11-25T18:39:06.551748113Z
 req_type: Task
 tags:
 - integration
@@ -382,6 +382,19 @@ comments:
   created_at: 2026-11-25T18:31:45.109214774Z
   modified_at: 2026-11-25T18:31:45.109214774Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21401-55f1-7521-ad5d-173d6403976a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:39):
+    # TASK-3882 r4 MICRO-ROUND on #4585 (advisor 11:40 via integration-30; full text in the latest TASK-3882 comment "ADVISOR RULING ... MICRO-ROUND"; product-15). Lane: CLAUDE. INTEGRATION, existing branch int40-task-3882-r4. <=10 lines, an exception to the round cap.
+    - Keep porcelain_quote BYTE-IDENTICAL to git v1 (no space quoting).
+    - Add a display-only refusal_quote (porcelain_quote plus quoting when the path contains a space), used ONLY in porcelain_v2_z_lines.
+    - Add a test: note_edited_submodule renders ' M my sub' UNquoted.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4585. COMMIT your work. Keep the PR title.
+  created_at: 2026-11-25T18:39:06.551748113Z
+  modified_at: 2026-11-25T18:39:06.551748113Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
