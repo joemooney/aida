@@ -220,6 +220,11 @@ comments:
   modified_at: 2026-11-25T10:56:30.044403891Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2125a-1764-78a2-97c8-ce1192adb32d
+  author: joe
+  content: 'BOOKKEEPING (product-15 2026-11-25 04:00, per integration-30): AC2 (auto-queue a conflict-repair rework) was CUT from this slice by advisor-122 02:27 and is DEFERRED to a later STRICT slice (sketch first: durable receipt, admission fence, per-change key). This spec''s remaining scope is AC1 REPORT-ONLY (doctor check stalled-reviews lists conflicting PRs + prints the exact `aida queue rework` command). Status reset from done → approved: #4566 is not yet merged (r3 in progress).'
+  created_at: 2026-11-25T10:57:03.844239904Z
+  modified_at: 2026-11-25T10:57:03.844239904Z
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
