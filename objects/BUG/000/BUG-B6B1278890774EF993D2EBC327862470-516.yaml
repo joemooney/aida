@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T11:24:33.710609442Z
+modified_at: 2026-11-25T21:05:24.981860536Z
 req_type: Bug
 tags:
 - leases
@@ -343,6 +343,18 @@ comments:
   created_at: 2026-11-25T11:24:33.710606280Z
   modified_at: 2026-11-25T11:24:33.710606280Z
   session_id: 01a212407c12
+- id: 01a21487-0df5-7f72-a914-c96d80f5d5e2
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 2 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3402: Review follow-up: aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4617 — The EXDEV regression as
+      From BUG-2755 Reviewed sha: eb2e718dbedddf53460aab314d05c520db5e6c2c aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4617 — The EXDEV regression assumes the default temporary directory and /dev/shm are on different filesystems and that /dev/shm is writable. A supported Linux run with TMPDIR=/dev/shm can instead successfully move the fixture and release its lease, then panic at unwrap_err and leave a fixture under /dev/shm. Use managed fixture directories proven to be on different mounts or inject EXDEV at the rename boundary.
+
+    - TASK-3403: Review follow-up: aida-cli-lib/src/doctor_cmd.rs:363 — The clone release validates a nonempty operator reaso
+      From BUG-2755 Reviewed sha: eb2e718dbedddf53460aab314d05c520db5e6c2c aida-cli-lib/src/doctor_cmd.rs:363 — The clone release validates a nonempty operator reason and then discards it. The release path records only the generic 'lease reaped' reason where it emits ownership events. Preserve the operator's reason with the lease ID and salvage outcome in the release audit so an attested override can be distinguished from an ordinary reap.
+  created_at: 2026-11-25T21:05:24.981860536Z
+  modified_at: 2026-11-25T21:05:24.981860536Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
