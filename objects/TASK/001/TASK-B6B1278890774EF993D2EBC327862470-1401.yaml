@@ -67,6 +67,11 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `task-b6b1278890774ef993d2ebc327862470-1401` at head `unavailable`.'
   created_at: 2026-11-25T05:49:28.228818628Z
   modified_at: 2026-11-25T05:49:28.228818628Z
+- id: 01a21141-2758-75c0-b427-5af22532d909
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Final validation needs a clean launcher target. FAST job j20261125T050848928-2-0 stopped on compiler signal 9. Focused rerun j20261125T052623673-2-0 failed linking undefined hidden LLVM symbols before executing tests. Initial focused run passed one test. Preserve the uncommitted implementation for host validation.. No triage reason was given.'
+  created_at: 2026-11-25T05:50:12.312680033Z
+  modified_at: 2026-11-25T05:50:12.312680033Z
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
@@ -137,6 +142,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21141-2758-75c0-b427-5ae981b8e286
+  author: joe
+  timestamp: 2026-11-25T05:50:12.312671757Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
