@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T18:46:00.523715818Z
+modified_at: 2026-11-25T18:58:02.932615037Z
 req_type: Story
 tags:
 - docs
@@ -119,6 +119,21 @@ comments:
   modified_at: 2026-11-25T18:42:58.912562252Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21412-7234-7333-aaf6-ad5f2361d343
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e22768ff97 (slice a, Refs STORY-2839: Markdown table renderer in docs/showcase/build.py + tests; ported from b5826a0f949, renderer only — no nav dropdowns, theme, pages or SVGs).
+
+    Acceptance evidence (brief): [evidence: behavioral-test] tests/test_showcase_build.py — test_markdown_tables_render_headers_cells_and_links (thead/tbody, code + link cells, short rows padded, search text without pipes/separator), test_table_cells_are_html_escaped (`<b>` and `<script>` cells render as &lt;…&gt;), test_escaped_pipe_stays_inside_one_cell (`\|` in code span and prose), test_pipe_lines_without_a_separator_stay_paragraphs (no separator / width-mismatched separator ⇒ no table). All 20 tests in the file pass under python3 -m unittest (pytest is not installed on this host). python3 docs/showcase/build.py --check passes; no published source contains a table, so no generated page changed.
+
+    Probes: (1) row/cell parsing shared by render and search_text (same is_table_row/parse_table_row). (2) GFM: separator must match the header cell count; `\|` is literal; extra cells are truncated, missing cells padded (GFM behaviour). (3) 0 body rows renders a header-only table; table at EOF closes. (4) Cells go through inline(), which html.escape()s first, so HTML stays inert. Departures from the reference: separator accepts 1+ dashes (GFM) instead of 3+, and search_text strips pipes only on table rows, not globally (prose like `a | b` keeps its search text).
+
+    Residual risks: rows need leading and trailing pipes (pipe-less GFM rows aren't detected); a row ending in an escaped backslash followed by a pipe (`\\\\|`) is read as an escaped pipe, so it isn't treated as a row.
+  created_at: 2026-11-25T18:58:02.932615037Z
+  modified_at: 2026-11-25T18:58:02.932615037Z
+  session_id: 01a214073970
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
