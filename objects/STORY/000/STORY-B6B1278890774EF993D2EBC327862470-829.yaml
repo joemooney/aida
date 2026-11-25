@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:45:25.760249325Z
+modified_at: 2026-11-25T16:55:45.601016322Z
 req_type: Story
 tags:
 - integration
@@ -328,6 +328,11 @@ comments:
   content: 'S3a BRIEF ADDENDUM (integration-30 09:46): add these TESTS too. (a) Per vendor, a fake binary on PATH that dumps argv/env/cwd, asserting the helper contract (empty temp cwd, cleared env + allowlist, prompt on stdin, nothing in argv) for claude, codex AND the custom-cmd path (pre-check item 10, the runner-path inventory). (b) --run-review refuses the run when the runner emits a finding whose path is outside the PR inventory (item 11). If you reach 300 lines, ship the helper first.'
   created_at: 2026-11-25T16:45:25.760249325Z
   modified_at: 2026-11-25T16:45:25.760249325Z
+- id: 01a213a2-7cc1-76b3-957d-35c92077e509
+  author: joe
+  content: Added built-in C/C++ (c_cpp), Java (java), MATLAB (matlab), and Verilog/SystemVerilog/VHDL RTL (hdl_rtl) playbooks plus Java camelCase (*Test / *Tests) and HDL testbench (*_tb / tb_*) pairing in canonical_module_stem on branch story-3120-ci-review (commit 32a7ebd99153790301af9f58d38c9d4403eeabc7).
+  created_at: 2026-11-25T16:55:45.601016322Z
+  modified_at: 2026-11-25T16:55:45.601016322Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
