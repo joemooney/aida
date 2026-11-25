@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-24T20:13:18.378240204Z
+modified_at: 2026-11-25T07:42:15.061792185Z
 req_type: Story
 tags:
 - admission
@@ -349,6 +349,11 @@ comments:
   content: 'advisor-122 13:15: option (B). PREREQUISITE slice TASK-3884 (deadline-aware lease/seat locks + bounded contained unwind) lands FIRST; then the critical-section slice uses the deadline variants, unchanged from the signed sketch + the 3 binding conditions. Option (A) rejected (reopens the authority window).'
   created_at: 2026-11-24T20:13:18.378240204Z
   modified_at: 2026-11-24T20:13:18.378240204Z
+- id: 01a211a7-bc15-7e53-924a-1b57c6da83ab
+  author: joe
+  content: 'DESIGN NOTES from rejected review follow-ups (2026-11-24 triage, product-15): TASK-3327: #4502 closed | TASK-3328: #4502 closed'
+  created_at: 2026-11-25T07:42:15.061792185Z
+  modified_at: 2026-11-25T07:42:15.061792185Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
