@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T22:56:22.497201970Z
+modified_at: 2026-11-25T22:56:45.565772970Z
 req_type: Bug
 tags:
 - admission
@@ -111,6 +111,12 @@ comments:
   content: Implementer push 5f2421b51c82 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-25T22:56:22.497201405Z
   modified_at: 2026-11-25T22:56:22.497201405Z
+  session_id: 01a2147671bd
+- id: 01a214ec-fdfd-7120-8b94-401da5e00acc
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `fix-review-watch-forge-admission` at head `5f2421b51c8220f2ba2035bb3bf7140b1e493b03`.'
+  created_at: 2026-11-25T22:56:45.565769958Z
+  modified_at: 2026-11-25T22:56:45.565769958Z
   session_id: 01a2147671bd
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
