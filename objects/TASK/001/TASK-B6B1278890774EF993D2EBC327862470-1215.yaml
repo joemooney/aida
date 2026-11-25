@@ -14,12 +14,12 @@ description: |
   - AC1: Guided and interactive implementer pickups keep the shared claim heartbeat bound to the live lease past TTL plus grace (finding 1), covered by a guided-pickup test.
   - AC2: Zero-grace admission on unreadable evidence logs one deduplicated reason (finding 5).
   - AC3: read_record charges actual bytes read against the aggregate budget before decoding (finding 6).
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:21:14.975468819Z
-modified_at: 2026-11-25T21:03:14.991468804Z
+modified_at: 2026-11-25T21:03:16.817655858Z
 req_type: Task
 tags:
 - mass-change
@@ -30,6 +30,14 @@ comments:
   content: FOLDED into a comment on BUG-2706 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
   created_at: 2026-11-25T21:03:14.991468804Z
   modified_at: 2026-11-25T21:03:14.991468804Z
+history:
+- id: 01a21485-1951-7020-8de5-46fa6b6a2e97
+  author: joe
+  timestamp: 2026-11-25T21:03:16.817653492Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
