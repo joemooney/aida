@@ -21,8 +21,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T07:43:57.487150298Z
+modified_at: 2026-11-25T07:44:00.166802137Z
 req_type: Story
+tags:
+- integration
 comments:
 - id: 01a2111c-fce8-75b3-b3f1-6b82c0da1ef7
   author: joe
@@ -41,6 +43,14 @@ comments:
     DROPPED: --file-bugs (conflicts with STORY-3118: findings are not requirements). A later slice may write findings records once STORY-3118 S1 lands.
   created_at: 2026-11-25T07:43:57.487150298Z
   modified_at: 2026-11-25T07:43:57.487150298Z
+history:
+- id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
+  author: joe
+  timestamp: 2026-11-25T07:44:00.166801683Z
+  changes:
+  - field_name: tags
+    old_value: ''
+    new_value: integration
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
