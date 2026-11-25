@@ -2859,7 +2859,10 @@ pub fn handle_remote_reconcile(
             }
             Err(e) => Err(rollback_to_preimage(&store_dir, &pre, e)),
         }
-    })?;
+    })
+    // Render the full chain for the CLI after refusal classification and recovery.
+    // trace:BUG-2759 | ai:codex
+    .map_err(|err| anyhow::anyhow!("{err:#}"))?;
     let Some((union, frontier, merge_notes)) = reconciled else {
         println!(
             "{} every hub already agrees on {STORE_BRANCH} — nothing to reconcile.",
@@ -4288,6 +4291,38 @@ host = \"should.not.count\"
             "{report:?}"
         );
         assert!(tip(&mirror, STORE_BRANCH).is_none());
+    }
+
+    // trace:BUG-2759 | ai:codex
+    #[test]
+    fn reconcile_refusal_displays_merge_validation_cause() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, _, _) = two_hub_fixture(tmp.path());
+        std::fs::write(project.join(".git/info/exclude"), ".aida-store/\n.aida/\n").unwrap();
+        git(
+            &project,
+            &["worktree", "add", "-q", ".aida-store", STORE_BRANCH],
+        );
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        let contact = "other@example.invalid";
+        commit_file(&store, "registry/contact.txt", contact, "contact");
+        declare_push_hubs(home.path(), &project, &["mirror"]);
+
+        let output = handle_remote_reconcile(&project, true, false, false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            output.contains("reconcile refused; nothing was pushed"),
+            "{output}"
+        );
+        assert!(
+            output.contains("reconcile would publish registry content"),
+            "{output}"
+        );
+        assert!(output.contains(contact), "{output}");
     }
 
     // reconcile on a clone whose push hubs are [mirror] reads origin but
