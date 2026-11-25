@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T02:32:54.999440813Z
+modified_at: 2026-11-25T02:36:18.777396443Z
 req_type: Bug
 tags:
 - codex
@@ -209,6 +209,17 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T02:32:54.839038095Z
   modified_at: 2026-11-25T02:32:54.839038095Z
+- id: 01a2108f-f5c1-7e31-9651-38f68b901119
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:36):
+    # BUG-2752 / PR #4529 r4 FINAL (advisor-122 ruling 2026-11-24 19:36 at c94fab4e; product-15). Lane: CODEX. MAIN, existing branch. <=40 lines.
+    Check the COMMITTED-UNPUBLISHED state (local main has codex="native", origin/main does not) BEFORE the working-copy cleanliness check, so local-committed + not-pushed prints the PUSH HINT even when the tree is otherwise dirty. Test it. (The p3 stays in TASK-3881; do NOT do it.)
+    One targeted cargo run, then make check-ci-fast, then push to #4529. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T02:36:18.777396443Z
+  modified_at: 2026-11-25T02:36:18.777396443Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
