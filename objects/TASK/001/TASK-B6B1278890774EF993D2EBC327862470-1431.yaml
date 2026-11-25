@@ -1,0 +1,31 @@
+id: 01a21224-4219-78d2-a67f-0b3252011f05
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1431
+title: 'Review follow-up: review_watch.rs:928 and :1690. The doctor finding reads a cached display string without ch'
+description: |-
+  From BUG-2763
+  Reviewed sha: 14a5d0f2168490d925f2cf18dc924ac3a987b637
+
+  review_watch.rs:928 and :1690. The doctor finding reads a cached display string without checking whether its hold survives. In particular, --release clears attempts and leaves skipped intact, so a released hold continues to emit a stalled-reviews finding and can fail the scheduled check until a later watcher pass. Tie the diagnostic to the current held receipt and its head, and cover clearing after release.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T09:58:15.833804161Z
+modified_at: 2026-11-25T09:58:15.833804161Z
+req_type: Task
+tags:
+- carried-from:BUG-2763
+- finding-hash:a2c2662a
+- from-review:BUG-2763
+relationships:
+- rel_type: References
+  target_id: 01a211d8-3bd8-79c1-9bbf-09bd1c29f5d9
+  created_at: 2026-11-25T09:58:30.549432795Z
+filed_at:
+  code_sha: 14a5d0f2168490d925f2cf18dc924ac3a987b637
+  branch: pr-4568
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a212209a8d

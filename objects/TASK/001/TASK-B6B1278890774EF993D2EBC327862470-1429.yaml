@@ -1,0 +1,31 @@
+id: 01a21223-cbe0-7043-b2b9-1ad3868f00d2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1429
+title: 'Review follow-up: review_watch.rs:1654 and :3628. A dispatcher that the watcher reaps before it claims its i'
+description: |-
+  From BUG-2763
+  Reviewed sha: 14a5d0f2168490d925f2cf18dc924ac3a987b637
+
+  review_watch.rs:1654 and :3628. A dispatcher that the watcher reaps before it claims its inherited setup retry is marked Failed with setup_retry and a diagnostic. The immediate reaping branch never saves its identity or PGID. moved_exit_hold reclassifies that proven pre-claim exit as ambiguous and strands the next head indefinitely. Differentiate confirmed pre-claim exits from failed setup receipts that may have launched work.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T09:57:45.568935329Z
+modified_at: 2026-11-25T09:57:45.568935329Z
+req_type: Task
+tags:
+- carried-from:BUG-2763
+- finding-hash:e0d5d642
+- from-review:BUG-2763
+relationships:
+- rel_type: References
+  target_id: 01a211d8-3bd8-79c1-9bbf-09bd1c29f5d9
+  created_at: 2026-11-25T09:58:00.236493555Z
+filed_at:
+  code_sha: 14a5d0f2168490d925f2cf18dc924ac3a987b637
+  branch: pr-4568
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a212209a8d
