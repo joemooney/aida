@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T18:58:02.932615037Z
+modified_at: 2026-11-25T19:14:26.762764149Z
 req_type: Story
 tags:
 - docs
@@ -134,6 +134,24 @@ comments:
   modified_at: 2026-11-25T18:58:02.932615037Z
   session_id: 01a214073970
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21421-b04d-78d1-8815-27724ea58b4c
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4588 @ e22768ff97 (STORY-2839 slice a: Markdown pipe-table renderer in docs/showcase/build.py; Refs-only; +99/-4).
+    Result: PASS. It's docs tooling plus tests, so it's within integration self-approve limits.
+    Verified locally on the PR tree: build.py --check exit 0 (no drift in generated pages; no existing source page has a pipe table yet), and python3 -m unittest tests.test_showcase_build: 20 tests OK.
+    Checks:
+    - Security lens from the grooming: every cell goes through inline(), which HTML-escapes. The test asserts that <b> and <script> come out as &lt;…&gt; in both th and td. Links in cells use the same inline() link handling as paragraphs, so this adds no new URL path.
+    - Parsing: a table needs a header row, then a separator with the same cell count matching :?-+:?. An escaped \| stays inside a cell. Lines with pipes but no separator stay as paragraphs (tested). Code fences and the end of input close the table.
+    - The search index drops separators and pipes, and keeps the cell text (tested).
+    Nits, not blocking:
+    (1) A row with MORE cells than the header is silently truncated. GFM does the same, so that's acceptable.
+    (2) The .table-wrap class has no CSS yet; slice b (styles.css/guide.css) should style it, and should mind horizontal overflow.
+    Merge-tree with integration: CLEAN.
+  created_at: 2026-11-25T19:14:26.762764149Z
+  modified_at: 2026-11-25T19:14:26.762764149Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
