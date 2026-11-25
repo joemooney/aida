@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: add `doctor check stalled-reviews --fail-on-findings` to the scheduled-command allowlist in maintenance_schedule.rs (same gated shape as the other doctor check jobs, hook_allowed false), so the job runs and routes only real findings.
   - AC2: a test that every `[[schedule.jobs]]` `command` in the repository's `.aida/config.toml` resolves to an allowlisted scheduled command, so a config job cannot ship without its allowlist entry.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:29:49.463570317Z
-modified_at: 2026-11-25T07:14:59.595440979Z
+modified_at: 2026-11-25T17:46:07.485403976Z
 req_type: Bug
 tags:
 - integration
@@ -118,6 +118,22 @@ history:
   timestamp: 2026-11-25T07:12:37.998741936Z
   session_id: 01a211569ece
   changes: []
+- id: 01a213d0-9898-7d70-93a4-e554b6b811e4
+  author: aida-auto-bump
+  timestamp: 2026-11-25T17:46:07.384792995Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a213d0-98fd-7c51-9574-8498ebd86427
+  timestamp: 2026-11-25T17:46:07.485399252Z
+  agent: aida
+  commit_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
+  summary: 'Promotion 38 reviewed as landed tree bc02abb (base main 664f260). Completing specs: TASK-3877 AC1 verified by test_apply_recorded_full_ci (review_watch.rs; driven from review_draft.rs:1601) states stale/moved (head re-read before and after the ci:full edit, no receipt on move) and queued/in_progress/newer/missing (settlement from the workflow run conclusion via tier_runs::outcome/bucket, not run_in_progress); TASK-3877 AC2 verified by the same test states foreign (other PR number), retargeted (other base) and the base=release rewrite (receipt keyed head+base re-requests). TASK-3880 AC1 verified by h2c_equal_stems_in_different_directories_stay_separate (directory-qualified canonical_module_stem, playbook packing splits on same stem/different dir); AC2 verified by h2c_rust_facets_follow_sample_paths (facets keyed on .rs extension, not playbook id prefix). BUG-2762 AC1 verified by maintenance_schedule.rs allowlist entry (--json --fail-on-findings, hook_allowed false) and bug_2762_stalled_reviews_is_a_scheduler_only_gate; AC2 verified by bug_2762_repository_job_commands_are_allowlisted (parses every [[schedule.jobs]] command in .aida/config.toml). Refs slices: TASK-3872 H2b (compiled globs with bounded brace expansion, KMP-linear anchoring, resolved_span preserving hints) covered by h2b_* tests; STORY-3120 S1 (SARIF export, runner JSON parse, severity threshold) is library-only, covered by s1_runner_findings_sarif_and_threshold. Deep pass: KMP span arithmetic, brace-expansion bounds (single non-recursive group, 256-alt cap, regex alternatives anchored), receipt legacy migration, fail-closed multi-owner CI runs all checked; no actionable defects. No protected/authority paths touched. CI pending at review time.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4
@@ -128,3 +144,7 @@ filed_at:
   vendor: claude
   session: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T17:46:07.384785077Z
+  completion_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
