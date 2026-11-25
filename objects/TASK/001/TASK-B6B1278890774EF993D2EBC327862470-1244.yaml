@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T09:42:10.147691442Z
-modified_at: 2026-11-23T09:42:10.147691442Z
+modified_at: 2026-11-25T07:18:48.539343161Z
 req_type: Task
 tags:
 - carried-from:TASK-3195
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1faf2-0249-74f3-8855-d051a75e6344
   created_at: 2026-11-23T09:42:23.193407501Z
+comments:
+- id: 01a21192-45db-7d22-b7b9-1917e84b17df
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: TASK-3195 / #4418. Evidence: PR-body ask; PR landed 79989f9. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:18:48.539343161Z
+  modified_at: 2026-11-25T07:18:48.539343161Z
 history:
 - id: 01a20810-4909-7392-8568-3ffea5e08617
   author: joe
