@@ -60,6 +60,19 @@
       "target": [
         "--lib"
       ],
+      "filter": "launch::review_runner::tests::",
+      "source": "aida-cli-lib/src/launch/review_runner.rs",
+      "tests": [
+        "s3a_runner_deadline_and_output_caps_fail_closed",
+        "s3a_runner_spawn_contract"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
       "filter": "story_1888_gate_paths",
       "source": "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
       "tests": [
