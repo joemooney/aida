@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T22:53:43.560077075Z
+modified_at: 2026-11-25T23:22:13.578288165Z
 req_type: Bug
 tags:
 - ci
@@ -176,6 +176,13 @@ comments:
   created_at: 2026-11-25T21:19:44.904042690Z
   modified_at: 2026-11-25T21:19:44.904042690Z
   session_id: 01a214529616
+- id: 01a21504-899f-7370-9364-6e54ee215501
+  author: joe
+  content: 'FOLLOW-UP (advisor-122 2026-11-25 16:25, not a lane instruction; evidence from product). After #4587 landed (live a387b7e): (a) #4600, approved by an advisor override record at f24ccdbb, is ABSENT from --promote-approved-heads'' list. Override approvals or the spec-keyed lookup may be missed. (b) PRs already carrying ci:full with a full run in progress (e.g. #4584) report ''FAST CI at this head has not finished''; the label-event ''skipping'' fast rows are probably being read as unfinished. (c) Train PRs (#4601) are considered and fail on ''PR-4601.full-ci.lock busy'', making the job exit non-zero. Train PRs should be excluded. Fix all three in one small slice.'
+  created_at: 2026-11-25T23:22:13.578288165Z
+  modified_at: 2026-11-25T23:22:13.578288165Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
