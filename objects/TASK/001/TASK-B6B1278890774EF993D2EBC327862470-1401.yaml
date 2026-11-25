@@ -26,12 +26,12 @@ description: |
   - knob on + dead lane + mandate → released, with an audit record.
 
   Tier: STRICT (authority/grants + repair journal). Size: ≤300 lines, one slice.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T15:17:53.097205863Z
+modified_at: 2026-11-25T15:17:54.817556828Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -154,6 +154,11 @@ comments:
   content: 'PARKED (advisor-122 2026-11-25 05:37): r2 punted on design: SessionLease has only the shared short-lived metadata writer lock, and session start hands an ID to an existing shell, so no repair lease currently qualifies for the required owner-lifetime lock (b). Needs a launch/adoption protocol covering surviving lane processes. FOLDED INTO BUG-2761''s sketch (the same reservation-lifecycle design).'
   created_at: 2026-11-25T15:17:53.097205863Z
   modified_at: 2026-11-25T15:17:53.097205863Z
+- id: 01a21348-e801-71e0-91e9-e2fe6264ae9b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: F6 audited success conflicts with the required F1–F3 owner-lifetime lock: SessionLease has only the shared short-lived metadata writer lock, and session start hands an ID to an existing shell. No supported repair lease currently qualifies. Current changes refuse all such releases. A launch/adoption protocol covering surviving lane processes is required before enabling success and testing stop/publication serialization.. No triage reason was given.'
+  created_at: 2026-11-25T15:17:54.817553587Z
+  modified_at: 2026-11-25T15:17:54.817553587Z
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
@@ -259,6 +264,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21348-e801-71e0-91e9-e2e6cdb2de48
+  author: joe
+  timestamp: 2026-11-25T15:17:54.817545934Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
@@ -269,8 +281,3 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'F6 audited success conflicts with the required F1–F3 owner-lifetime lock: SessionLease has only the shared short-lived metadata writer lock, and session start hands an ID to an existing shell. No supported repair lease currently qualifies. Current changes refuse all such releases. A launch/adoption protocol covering surviving lane processes is required before enabling success and testing stop/publication serialization.'
-  raised_by: implementer
-  raised_at: 2026-11-25T12:06:25.448452727Z
