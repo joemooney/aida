@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T23:28:15.005813754Z
-modified_at: 2026-11-25T23:29:14.843079219Z
+modified_at: 2026-11-25T23:29:21.612279869Z
 req_type: Bug
 tags:
 - ci
@@ -31,6 +31,11 @@ history:
   author: joe
   timestamp: 2026-11-25T23:29:17.258186824Z
   changes: []
+- id: 01a2150a-d7be-7673-aef2-e888b5a0e92a
+  author: joe
+  timestamp: 2026-11-25T23:29:21.854126368Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: a387b7e87b96e611ba9da42e196f44f36b538739
   branch: main
