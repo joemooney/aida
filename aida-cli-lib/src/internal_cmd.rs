@@ -179,7 +179,7 @@ fn git_rev_parse(root: &std::path::Path, rev: &str) -> Option<String> {
 // trace:TASK-917 | ai:claude
 /// The repo's common git dir (`git rev-parse --git-common-dir`, made absolute) —
 /// so the sentinel lives in the shared `.git` even from a worktree.
-fn git_common_dir(root: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn git_common_dir(root: &std::path::Path) -> Option<std::path::PathBuf> {
     let out = std::process::Command::new("git")
         .current_dir(root)
         .args(["rev-parse", "--git-common-dir"])
@@ -188,11 +188,12 @@ fn git_common_dir(root: &std::path::Path) -> Option<std::path::PathBuf> {
     if !out.status.success() {
         return None;
     }
-    let raw = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    use std::os::unix::ffi::OsStrExt;
+    let raw = out.stdout.strip_suffix(b"\n")?;
     if raw.is_empty() {
         return None;
     }
-    let p = std::path::PathBuf::from(&raw);
+    let p = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(raw));
     Some(if p.is_absolute() { p } else { root.join(p) })
 }
 
