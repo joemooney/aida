@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T02:57:34.569758961Z
+modified_at: 2026-11-25T02:57:28.629389422Z
 req_type: Task
 tags:
 - integration
@@ -119,20 +119,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 and tree fe7c3246bc28b56f7e1cbfd235e9defdc9916cd5. TASK-3874 is a completing spec (origin TASK-b6b1278890774ef993d2ebc327862470-1358).. No triage reason was given.'
   created_at: 2026-11-25T02:57:20.052324009Z
   modified_at: 2026-11-25T02:57:20.052324009Z
-- id: 01a210a3-1ac6-7830-9014-104f0f59e4ac
+- id: 01a210a3-3eaa-76f1-8ad5-958b78fd1f2a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3874):
-    Verdict: CHANGES REQUESTED
-    Reviewed commit: f3d120c1fd5d
-    Recorded: 2026-11-25T02:55:59.772504258+00:00
-    Findings:
-    1. aida-cli-lib/src/forge.rs:7160 — The supposed local check can contact a promisor remote in a partial clone. Resolving `<base>^{commit}` parses the object, and a missing object causes Git to launch an implicit fetch before `host_remote_git_command` can configure credential handling. A stored credential-bearing HTTPS URL can therefore reach a transport child's argv, bypassing BUG-2181 protection. Make the presence check strictly local on supported Git versions and route missing-object transport through the credential-aware fetch. Cover the partial-clone case. Git source: https://github.com/git/git/blob/v2.43.0/object-name.c#L1113-L1118 and https://github.com/git/git/blob/v2.43.0/promisor-remote.c#L15-L32
-    2. aida-cli-lib/src/tests/task_3874_review_risk.rs:52 — TASK-3874 AC1 is only tested at the object helper. The test calls `review_risk_base_object` directly, so removing its call at forge.rs:7147 would still pass the advanced-base regression and the stalled-resolver regression. Drive the production PR lookup with a fixture that reports the advanced base and matching head, then assert that the returned base resolves to the expected merge base.
-    3. aida-cli-lib/src/forge.rs:7168 — The explicit fetch can also download from the repository's configured `fetch.bundleURI` and update `refs/bundles/*` before looking up the requested OID. `--refmap=` and `--no-write-fetch-head` do not control this separate Git path. Prevent bundle retrieval for the advisory fetch so verdict collection only requests the pinned object from origin. Git source: https://github.com/git/git/blob/v2.43.0/builtin/fetch.c#L2185-L2189 and https://github.com/git/git/blob/v2.43.0/bundle-uri.c#L360-L381
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-25T02:57:34.406639499Z
-  modified_at: 2026-11-25T02:57:34.406639499Z
+  content: 'INTEGRATION SEAT CORRECTION (integration-30): my r2 pre-check PASS was too lenient. Per the advisor at 19:59, the independent review found (a) an implicit promisor/lazy fetch from the local cat-file probe before credential setup, (b) a fetch.bundleURI side path the credential wiring doesn''t cover, and (c) a refusal test that exercises only the helper, not the production caller. p38 #4556 was closed unmerged; it gets rebuilt after the r3 fix merges to integration.'
+  created_at: 2026-11-25T02:57:28.629389422Z
+  modified_at: 2026-11-25T02:57:28.629389422Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
