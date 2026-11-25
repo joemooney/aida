@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T04:56:29.345632133Z
+modified_at: 2026-11-25T05:08:56.399766216Z
 req_type: Task
 tags:
 - ci
@@ -108,6 +108,15 @@ comments:
   modified_at: 2026-11-25T04:41:23.837395766Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2111b-619f-7d32-a1ed-dfbd016fec02
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 722a9c1351fe404326609e84441c3fda55445e6e plus the native working diff. AC1: [evidence: behavioral-test] review_watch.rs:3669 selects owned ci.yml runs newest first, checks their conclusion, and reads jobs by run and attempt. The standalone parent-records-and-retries test passed (1 executed), including a queued successor without jobs and head movement. AC2: [evidence: behavioral-test] review_watch.rs:3741 and :3847 cover same-head retarget and same-base deduplication. Probed missing conclusion, zero markers, foreign ownership, and movement before edit. Ambiguous ownership refuses promotion. Legacy SHA-only receipts are re-evaluated. The inventory supplies both ownership and conclusion without a duplicate run-detail fetch. The existing receipt lock serializes writers. A run starting after observation is visible on a subsequent poll. Fast gate in progress.
+  created_at: 2026-11-25T05:08:56.399766216Z
+  modified_at: 2026-11-25T05:08:56.399766216Z
+  session_id: 01a2110fb451
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
