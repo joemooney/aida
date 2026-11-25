@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T20:06:17.908921326Z
+modified_at: 2026-11-25T20:23:14.289265721Z
 req_type: Story
 tags:
 - docs
@@ -194,6 +194,26 @@ comments:
   modified_at: 2026-11-25T20:06:17.908921326Z
   session_id: 01a214459c68
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21460-cdde-7ce0-b490-0d54e79e0dd6
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4591 @ 0aae887f (STORY-2839 slice b: topbar dropdowns plus a persisted Light/Dark toggle; Refs-only; +219/-33). About 175 lines are hand-written; the rest are 14 regenerated pages, each a 2-6 line header change.
+    Result: PASS. It's static docs, so it's within integration self-approve limits.
+    Verified locally on the PR tree: build.py --check exits 0 (the regenerated pages match the template), and python3 -m unittest tests.test_showcase_build passes (OK).
+    Lens items:
+    - 'aida-theme': the inline head script honours ONLY the exact value 'dark' (strict ===) and ignores anything else. app.js writes only 'light' or 'dark', from a two-way ternary. Both are wrapped in try/catch for when storage is disabled. Tested.
+    - No innerHTML anywhere in app.js (tested). Icon and label updates use textContent. Dropdowns toggle attributes only, and Escape returns focus to the trigger. aria-expanded and aria-pressed are kept in sync.
+    - .table-wrap gets overflow-x:auto (the slice-a nit is closed), plus dark-theme table, code and library styles.
+    - Nav labels go through html.escape (tested with 'Trust & evidence'). Extra hand-written pages are linked only when the file exists. There's no CSP meta on the site, so the inline preload script isn't blocked.
+    - Global-scope check: app.js is now loaded on every page alongside library.js. Their top-level const/function names don't collide (app: modes, tabs, chooseMode; library: cards, category, form, query, records, filterGuides). app.js's mode tabs are a no-op on pages without them.
+    Nits, not blocking:
+    (1) The hand-written pages (code-review, features, engineering-audit, executive-brief) aren't regenerated, so they keep the old header without the toggle or preload. A dark-theme reader sees those pages in light. Slice e, or a follow-up, can add the header.
+    (2) index.html hard-links executive-brief.html, which exists today.
+    Merge-tree with integration: CLEAN.
+  created_at: 2026-11-25T20:23:14.289265721Z
+  modified_at: 2026-11-25T20:23:14.289265721Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
