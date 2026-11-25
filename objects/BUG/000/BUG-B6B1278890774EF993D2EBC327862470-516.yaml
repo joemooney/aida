@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T07:55:19.675965656Z
+modified_at: 2026-11-25T08:25:49.794097316Z
 req_type: Bug
 tags:
 - leases
@@ -259,6 +259,13 @@ comments:
   content: 'REVIEW NOTE for #4541 r4 (advisor-122 2026-11-25 00:52, lesson from the parked STORY-3059): the attested MOVE must NOT repack and must NOT unlink objects/info/alternates. Move the clone AS-IS (alternates intact), so borrowed objects stay reachable through main exactly as before the move. Reviewer: verify there is no repack/alternates mutation in the move path, and require a test assertion that the alternates file is preserved after the move. (A repack + alternates removal was reproduced losing a borrowed commit reachable only via ORIG_HEAD.)'
   created_at: 2026-11-25T07:55:19.675965656Z
   modified_at: 2026-11-25T07:55:19.675965656Z
+- id: 01a211cf-a524-73c1-bdc1-7e6a9d6882a3
+  author: dirtlab
+  content: Round 4 validation complete. The candidate CLI terminal integration passed both cases. The final make check-ci-fast lane job j20261125T074945923-2-0 exited 0, including formatting, store-writer inventory, ownership-liveness ratchet and CLI manual verification. Final diff has 220 insertions and 150 deletions.
+  created_at: 2026-11-25T08:25:49.794097316Z
+  modified_at: 2026-11-25T08:25:49.794097316Z
+  session_id: 01a2119a3dad
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
