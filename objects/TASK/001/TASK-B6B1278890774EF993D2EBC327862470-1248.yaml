@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T11:12:33.531333510Z
-modified_at: 2026-11-23T11:12:33.531333510Z
+modified_at: 2026-11-25T07:18:52.704371262Z
 req_type: Task
 tags:
 - carried-from:BUG-2727
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20737-9b05-7ee3-a52c-b8319d3e0e34
   created_at: 2026-11-23T11:12:47.032560868Z
+comments:
+- id: 01a21192-5620-7782-9f7a-a6586af0b9bc
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: BUG-2727 / #4419. Evidence: #4419 closed; main keeps scoped stability rule (mandate_ship.rs:~700). Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:18:52.704371262Z
+  modified_at: 2026-11-25T07:18:52.704371262Z
 history:
 - id: 01a20838-a9ed-70f0-b144-881b72bb7183
   author: joe
