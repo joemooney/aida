@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T19:12:25.501455430Z
+modified_at: 2026-11-25T21:04:40.959029557Z
 req_type: Task
 tags:
 - integration
@@ -429,6 +429,15 @@ comments:
   modified_at: 2026-11-25T19:12:25.501455430Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21486-61ff-7c23-900b-fffa5f85f668
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3394: Review follow-up: The new inline list at session_end.rs:1635 makes a private clone with one untracked file n
+      From TASK-3882 Reviewed sha: 876ace623dbe8dc8b38dd09fe16c114d6cbc31fb The new inline list at session_end.rs:1635 makes a private clone with one untracked file named 'a; untracked: z' indistinguishable from a clone with two untracked files named 'a' and 'z'. Both summaries show 'untracked: a; untracked: z' because seat_clone.rs:2256 leaves the delimiter unescaped. The previous detailed session-end output used a separate line per entry. Use a representation that keeps entry boundaries intact and add a case with a delimiter in a filename.
+  created_at: 2026-11-25T21:04:40.959029557Z
+  modified_at: 2026-11-25T21:04:40.959029557Z
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
