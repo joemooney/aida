@@ -98,6 +98,12 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "MODEL")]
     pub model: Option<String>,
 
+    /// Reasoning effort level to pass to the review runner CLI (`low`, `medium`, `high`, or `xhigh`).
+    /// Overrides `.aida/review-rules.toml` (`default_effort`) and `[agents.<vendor>.seats.reviewer] effort`.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "LEVEL")]
+    pub effort: Option<String>,
+
     /// Run a two-pass Red-Team Finder -> Blue-Team Skeptical Challenger adversarial review.
     /// Pass 1 hunts for defects; Pass 2 attempts to disprove each candidate finding against
     /// surrounding code and type constraints, dropping false positives.
@@ -117,6 +123,13 @@ pub struct ReviewPrepareArgs {
     // trace:STORY-3120 | ai:antigravity
     #[clap(long, value_name = "MODEL")]
     pub challenger_model: Option<String>,
+
+    /// Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of
+    /// `--adversarial` (enables same-model asymmetric-effort adversarial review — e.g. Finder at
+    /// `medium`, Challenger at `high`).
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "LEVEL")]
+    pub challenger_effort: Option<String>,
 
     /// Fail with a non-zero exit code if any confirmed finding has severity at or above
     /// this threshold (`critical`, `high`, `medium`, or `low`). Also configurable via
@@ -308,12 +321,15 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         )?;
         let resolved_model =
             resolve_review_runner_model(&project_root, &resolved_agent, args, &rules_cfg);
+        let resolved_effort =
+            resolve_review_runner_effort(&project_root, &resolved_agent, args, &rules_cfg);
         let is_adversarial = args.adversarial || rules_cfg.adversarial.unwrap_or(false);
         let challenger_target = if is_adversarial {
-            Some(resolve_challenger_agent_and_model(
+            Some(resolve_challenger_target(
                 &project_root,
                 &resolved_agent,
                 resolved_model.as_deref(),
+                resolved_effort.as_deref(),
                 args,
                 &rules_cfg,
             )?)
@@ -324,6 +340,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             &project_root,
             &resolved_agent,
             resolved_model.as_deref(),
+            resolved_effort.as_deref(),
             challenger_target.as_ref(),
             &mode,
             merge_base.as_deref(),
@@ -1324,20 +1341,64 @@ fn resolve_review_runner_model(
     .model
 }
 
-/// Resolve `(challenger_agent, challenger_model)` for Pass 2 of `--adversarial`.
+/// Resolve the reasoning effort level (`low`, `medium`, `high`, `xhigh`) for the primary review runner.
+///
+/// Precedence (highest first):
+///   1. `--effort <LEVEL>` CLI flag
+///   2. `AIDA_REVIEW_EFFORT` environment variable
+///   3. `.aida/review-rules.toml` `default_effort`
+///   4. `[agents.<agent>.seats.reviewer] effort`
+// trace:STORY-3120 | ai:antigravity
+fn resolve_review_runner_effort(
+    project_root: &Path,
+    agent: &str,
+    args: &ReviewPrepareArgs,
+    rules_cfg: &ProjectReviewRulesConfig,
+) -> Option<String> {
+    if let Some(e) = &args.effort {
+        let trimmed = e.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    if let Ok(e) = std::env::var("AIDA_REVIEW_EFFORT") {
+        let trimmed = e.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    if let Some(e) = &rules_cfg.default_effort {
+        let trimmed = e.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    aida_core::agents_config::resolve_agent_tuning(
+        project_root,
+        agent,
+        aida_core::agents_config::AgentSeat::Reviewer,
+    )
+    .effort
+}
+
+/// Resolved `(agent, model, effort)` triple for Pass 2 of `--adversarial`.
+type ChallengerTarget = (String, Option<String>, Option<String>);
+
+/// Resolve `(challenger_agent, challenger_model, challenger_effort)` for Pass 2 of `--adversarial`.
 ///
 /// When `--challenger-agent` / `rules_cfg.challenger_agent` is omitted, automatically
 /// selects an opposing enabled vendor from `.aida/config.toml` if both `claude` and
 /// `codex` are enabled, or falls back to `finder_agent` (for single-vendor projects
 /// such as Codex-only environments).
 // trace:STORY-3120 | ai:antigravity
-fn resolve_challenger_agent_and_model(
+fn resolve_challenger_target(
     project_root: &Path,
     finder_agent: &str,
     finder_model: Option<&str>,
+    finder_effort: Option<&str>,
     args: &ReviewPrepareArgs,
     rules_cfg: &ProjectReviewRulesConfig,
-) -> Result<(String, Option<String>)> {
+) -> Result<ChallengerTarget> {
     let challenger_agent = if let Some(flag_ca) = &args.challenger_agent {
         normalize_review_agent(flag_ca)?
     } else if let Ok(env_ca) = std::env::var("AIDA_REVIEW_CHALLENGER_AGENT") {
@@ -1358,6 +1419,12 @@ fn resolve_challenger_agent_and_model(
         auto_opposing_agent(project_root, finder_agent)
     };
 
+    let challenger_tuning = aida_core::agents_config::resolve_agent_tuning(
+        project_root,
+        &challenger_agent,
+        aida_core::agents_config::AgentSeat::Reviewer,
+    );
+
     let challenger_model = if let Some(m) = &args.challenger_model {
         let trimmed = m.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_string())
@@ -1368,17 +1435,27 @@ fn resolve_challenger_agent_and_model(
         let trimmed = m.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_string())
     } else if challenger_agent != finder_agent {
-        aida_core::agents_config::resolve_agent_tuning(
-            project_root,
-            &challenger_agent,
-            aida_core::agents_config::AgentSeat::Reviewer,
-        )
-        .model
+        challenger_tuning.model
     } else {
         finder_model.map(str::to_string)
     };
 
-    Ok((challenger_agent, challenger_model))
+    let challenger_effort = if let Some(e) = &args.challenger_effort {
+        let trimmed = e.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    } else if let Ok(e) = std::env::var("AIDA_REVIEW_CHALLENGER_EFFORT") {
+        let trimmed = e.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    } else if let Some(e) = &rules_cfg.challenger_effort {
+        let trimmed = e.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    } else if challenger_agent != finder_agent {
+        challenger_tuning.effort
+    } else {
+        finder_effort.map(str::to_string)
+    };
+
+    Ok((challenger_agent, challenger_model, challenger_effort))
 }
 
 fn auto_opposing_agent(project_root: &Path, finder_agent: &str) -> String {
@@ -1402,7 +1479,8 @@ fn execute_automated_batch_reviews(
     project_root: &Path,
     agent: &str,
     model: Option<&str>,
-    challenger: Option<&(String, Option<String>)>,
+    effort: Option<&str>,
+    challenger: Option<&ChallengerTarget>,
     mode: &str,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
@@ -1434,11 +1512,11 @@ fn execute_automated_batch_reviews(
             linked_specs,
             content_cache,
         )?;
-        let raw_out = invoke_review_runner(project_root, agent, model, "finder", &prompt)?;
+        let raw_out = invoke_review_runner(project_root, agent, model, effort, "finder", &prompt)?;
         let (mut batch_findings, batch_ledger) = parse_runner_findings_json(&raw_out)
             .map_err(|e| anyhow::anyhow!("batch {} runner output error: {e}", batch.batch_index))?;
 
-        if let Some((challenger_agent, challenger_model)) = challenger {
+        if let Some((challenger_agent, challenger_model, challenger_effort)) = challenger {
             total_candidates += batch_findings.len();
             if !batch_findings.is_empty() {
                 let challenger_prompt = build_adversarial_challenger_prompt(
@@ -1451,6 +1529,7 @@ fn execute_automated_batch_reviews(
                     project_root,
                     challenger_agent,
                     challenger_model.as_deref(),
+                    challenger_effort.as_deref(),
                     "challenger",
                     &challenger_prompt,
                 )?;
@@ -1472,19 +1551,20 @@ fn execute_automated_batch_reviews(
         all_coverage.extend(batch_ledger.files);
     }
 
-    let adv_summary =
-        challenger.map(
-            |(challenger_agent, challenger_model)| AdversarialReviewSummary {
-                finder_agent: agent.to_string(),
-                finder_model: model.map(str::to_string),
-                challenger_agent: challenger_agent.clone(),
-                challenger_model: challenger_model.clone(),
-                candidate_findings: total_candidates,
-                confirmed_findings: all_findings.len(),
-                dismissed_findings: total_dismissed,
-                detected_author_agents: Vec::new(),
-            },
-        );
+    let adv_summary = challenger.map(|(challenger_agent, challenger_model, challenger_effort)| {
+        AdversarialReviewSummary {
+            finder_agent: agent.to_string(),
+            finder_model: model.map(str::to_string),
+            finder_effort: effort.map(str::to_string),
+            challenger_agent: challenger_agent.clone(),
+            challenger_model: challenger_model.clone(),
+            challenger_effort: challenger_effort.clone(),
+            candidate_findings: total_candidates,
+            confirmed_findings: all_findings.len(),
+            dismissed_findings: total_dismissed,
+            detected_author_agents: Vec::new(),
+        }
+    });
 
     Ok((
         all_findings,
@@ -1661,6 +1741,7 @@ fn invoke_review_runner(
     project_root: &Path,
     agent: &str,
     model_override: Option<&str>,
+    effort_override: Option<&str>,
     pass_role: &str,
     prompt: &str,
 ) -> Result<String> {
@@ -1676,6 +1757,9 @@ fn invoke_review_runner(
                 .env("AIDA_REVIEW_PASS", pass_role);
             if let Some(m) = model_override {
                 cmd.env("AIDA_REVIEW_RESOLVED_MODEL", m);
+            }
+            if let Some(e) = effort_override {
+                cmd.env("AIDA_REVIEW_RESOLVED_EFFORT", e);
             }
             let mut child = cmd
                 .stdin(Stdio::piped())
@@ -1702,6 +1786,7 @@ fn invoke_review_runner(
         aida_core::agents_config::AgentSeat::Reviewer,
     );
     let effective_model = model_override.map(str::to_string).or(tuning.model);
+    let effective_effort = effort_override.map(str::to_string).or(tuning.effort);
 
     let (program, mut argv) = match agent {
         "codex" => {
@@ -1715,7 +1800,7 @@ fn invoke_review_runner(
                 args.push("--model".to_string());
                 args.push(model);
             }
-            if let Some(effort) = tuning.effort {
+            if let Some(effort) = effective_effort {
                 args.push("-c".to_string());
                 args.push(format!("model_reasoning_effort={effort}"));
             }
@@ -1728,6 +1813,10 @@ fn invoke_review_runner(
             if let Some(model) = effective_model {
                 args.push("--model".to_string());
                 args.push(model);
+            }
+            if let Some(effort) = effective_effort {
+                args.push("--effort".to_string());
+                args.push(effort);
             }
             args.push("-p".to_string());
             args.push(prompt.to_string());
@@ -1748,6 +1837,10 @@ fn invoke_review_runner(
             if let Some(model) = effective_model {
                 args.push("--model".to_string());
                 args.push(model);
+            }
+            if let Some(effort) = effective_effort {
+                args.push("--effort".to_string());
+                args.push(effort);
             }
             args.push("-p".to_string());
             args.push(prompt.to_string());
@@ -2113,7 +2206,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             adversarial: true,
             file_bugs: true,
             model: Some("gpt-5.3-codex".into()),
+            effort: Some("medium".into()),
             challenger_model: Some("o3".into()),
+            challenger_effort: Some("high".into()),
             sarif: Some(PathBuf::from("review.sarif.json")),
             write: Some(PathBuf::from("bundle.json")),
             json: true,
@@ -2153,7 +2248,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert_eq!(adv.confirmed_findings, 1);
         assert_eq!(adv.dismissed_findings, 1);
         assert_eq!(adv.finder_model.as_deref(), Some("gpt-5.3-codex"));
+        assert_eq!(adv.finder_effort.as_deref(), Some("medium"));
         assert_eq!(adv.challenger_model.as_deref(), Some("o3"));
+        assert_eq!(adv.challenger_effort.as_deref(), Some("high"));
         let anchored = bundle.anchored_findings.as_ref().unwrap();
         assert_eq!(anchored.len(), 1);
         assert_eq!(anchored[0].start_line, Some(3));

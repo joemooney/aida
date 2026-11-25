@@ -847,8 +847,10 @@ aida review prepare --pr 42 \
 <pre><code># .aida/review-rules.toml
 default_agent = "codex"          # or auto-detected from `aida init`
 default_model = "gpt-5.3-codex"
+default_effort = "medium"        # low | medium | high | xhigh
 adversarial = true               # Red-Team Finder -> Blue-Team Challenger
 challenger_model = "o3"
+challenger_effort = "high"
 fail_on = "high"                 # Exit non-zero on high/critical findings
 
 exclude = [
@@ -1078,6 +1080,11 @@ aida list --type bug --status draft</code></pre>
                 <td>Model override passed to the review runner CLI (e.g. <code>gpt-5.3-codex</code>, <code>o3</code>, <code>claude-opus-4-6</code>).</td>
               </tr>
               <tr>
+                <td class="code-cell">--effort &lt;LEVEL&gt;</td>
+                <td>Execution</td>
+                <td>Reasoning effort level (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>) passed via <code>-c model_reasoning_effort=&lt;LEVEL&gt;</code> (Codex) or <code>--effort &lt;LEVEL&gt;</code> (Claude/Antigravity).</td>
+              </tr>
+              <tr>
                 <td class="code-cell">--adversarial</td>
                 <td>Adversarial</td>
                 <td>Enable two-pass Red-Team Finder → Blue-Team Skeptical Challenger verification to eliminate false positives.</td>
@@ -1091,6 +1098,11 @@ aida list --type bug --status draft</code></pre>
                 <td class="code-cell">--challenger-model &lt;MODEL&gt;</td>
                 <td>Adversarial</td>
                 <td>Model override for Pass 2 Challenger (enables same-vendor, cross-model adversarial review).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--challenger-effort &lt;LEVEL&gt;</td>
+                <td>Adversarial</td>
+                <td>Reasoning effort override for Pass 2 Challenger (enables same-model asymmetric-effort review — e.g. Finder at <code>medium</code>, Challenger at <code>high</code>).</td>
               </tr>
               <tr>
                 <td class="code-cell">--fail-on &lt;SEVERITY&gt;</td>

@@ -134,6 +134,11 @@ pub struct ProjectReviewRulesConfig {
     // trace:STORY-3120 | ai:antigravity
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Optional project-level default reasoning effort (`low`, `medium`, `high`, `xhigh`)
+    /// for `aida review prepare --run-review`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub default_effort: Option<String>,
     /// Optional project-level default enabling two-pass Red-Team Finder -> Blue-Team Challenger review.
     // trace:STORY-3120 | ai:antigravity
     #[serde(default)]
@@ -146,6 +151,11 @@ pub struct ProjectReviewRulesConfig {
     // trace:STORY-3120 | ai:antigravity
     #[serde(default)]
     pub challenger_model: Option<String>,
+    /// Optional project-level default challenger reasoning effort (`low`, `medium`, `high`, `xhigh`)
+    /// for Pass 2 of `--adversarial`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub challenger_effort: Option<String>,
     /// Optional project-level severity threshold (`critical`, `high`, `medium`, `low`)
     /// at or above which `aida review prepare` exits non-zero as a CI quality gate.
     // trace:STORY-3120 | ai:antigravity
@@ -1334,9 +1344,13 @@ pub struct AdversarialReviewSummary {
     pub finder_agent: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finder_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_effort: Option<String>,
     pub challenger_agent: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenger_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_effort: Option<String>,
     pub candidate_findings: usize,
     pub confirmed_findings: usize,
     pub dismissed_findings: usize,
@@ -2299,8 +2313,10 @@ fn beta() {
         let adv_summary = AdversarialReviewSummary {
             finder_agent: "codex".to_string(),
             finder_model: Some("gpt-5.3-codex".to_string()),
+            finder_effort: Some("medium".to_string()),
             challenger_agent: "codex".to_string(),
             challenger_model: Some("o3".to_string()),
+            challenger_effort: Some("high".to_string()),
             candidate_findings: 2,
             confirmed_findings: 1,
             dismissed_findings: 1,
