@@ -1,0 +1,31 @@
+id: 01a210a1-c557-7d41-9dcf-f47973cae953
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1395
+title: 'Review follow-up: aida-cli-lib/src/forge.rs:7168 — The explicit fetch can also download from the repository'''
+description: |-
+  From TASK-3874
+  Reviewed sha: f3d120c1fd5db11c0d63f4451b73dd68298b82c8
+
+  aida-cli-lib/src/forge.rs:7168 — The explicit fetch can also download from the repository's configured `fetch.bundleURI` and update `refs/bundles/*` before looking up the requested OID. `--refmap=` and `--no-write-fetch-head` do not control this separate Git path. Prevent bundle retrieval for the advisory fetch so verdict collection only requests the pinned object from origin. Git source: https://github.com/git/git/blob/v2.43.0/builtin/fetch.c#L2185-L2189 and https://github.com/git/git/blob/v2.43.0/bundle-uri.c#L360-L381
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T02:56:06.999451452Z
+modified_at: 2026-11-25T02:56:06.999451452Z
+req_type: Task
+tags:
+- carried-from:TASK-3874
+- finding-hash:a4b918de
+- from-review:TASK-3874
+relationships:
+- rel_type: References
+  target_id: 01a20e45-914e-7902-911a-f8554a9a6a04
+  created_at: 2026-11-25T02:56:21.946922918Z
+filed_at:
+  code_sha: f3d120c1fd5db11c0d63f4451b73dd68298b82c8
+  branch: pr-4556
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 260a82ae939
+  vendor: claude
+  session: 01a2109dcb34
