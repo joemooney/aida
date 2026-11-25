@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T11:02:25.676081753Z
-modified_at: 2026-11-20T11:02:25.676081753Z
+modified_at: 2026-11-25T21:03:01.063045963Z
 req_type: Task
 tags:
 - fast-gate
@@ -20,6 +20,12 @@ tags:
 - kind:followup-suggestion
 - lanes
 - severity:minor
+comments:
+- id: 01a21484-dbc7-7982-90ec-2c81c3653af4
+  author: joe
+  content: FOLDED into a comment on BUG-2705 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:03:01.063045963Z
+  modified_at: 2026-11-25T21:03:01.063045963Z
 history:
 - id: 01a1f8c4-79c7-76a2-9223-31800610efea
   author: joe
