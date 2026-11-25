@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When recording ci:full intent, RE-READ the PR head and skip if it moved since the snapshot (head-snapshot-then-verdict race). Use the workflow run's CONCLUSION, not the marker's run_in_progress flag, to decide settlement.
   - AC2: Key the FAST marker by PR number + base, not by SHA+name alone, so PRs sharing a head cannot match each other's marker. A test for each of the three cases.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T06:28:44.664415686Z
+modified_at: 2026-11-25T17:46:13.240595412Z
 req_type: Task
 tags:
 - ci
@@ -231,6 +231,25 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a213d0-af30-7182-b633-76b57e711c12
+  author: aida-auto-bump
+  timestamp: 2026-11-25T17:46:13.168340760Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a213d0-af78-7001-8f65-018c273462e1
+  timestamp: 2026-11-25T17:46:13.240591594Z
+  agent: aida
+  commit_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
+  summary: 'Promotion 38 reviewed as landed tree bc02abb (base main 664f260). Completing specs: TASK-3877 AC1 verified by test_apply_recorded_full_ci (review_watch.rs; driven from review_draft.rs:1601) states stale/moved (head re-read before and after the ci:full edit, no receipt on move) and queued/in_progress/newer/missing (settlement from the workflow run conclusion via tier_runs::outcome/bucket, not run_in_progress); TASK-3877 AC2 verified by the same test states foreign (other PR number), retargeted (other base) and the base=release rewrite (receipt keyed head+base re-requests). TASK-3880 AC1 verified by h2c_equal_stems_in_different_directories_stay_separate (directory-qualified canonical_module_stem, playbook packing splits on same stem/different dir); AC2 verified by h2c_rust_facets_follow_sample_paths (facets keyed on .rs extension, not playbook id prefix). BUG-2762 AC1 verified by maintenance_schedule.rs allowlist entry (--json --fail-on-findings, hook_allowed false) and bug_2762_stalled_reviews_is_a_scheduler_only_gate; AC2 verified by bug_2762_repository_job_commands_are_allowlisted (parses every [[schedule.jobs]] command in .aida/config.toml). Refs slices: TASK-3872 H2b (compiled globs with bounded brace expansion, KMP-linear anchoring, resolved_span preserving hints) covered by h2b_* tests; STORY-3120 S1 (SARIF export, runner JSON parse, severity threshold) is library-only, covered by s1_runner_findings_sarif_and_threshold. Deep pass: KMP span arithmetic, brace-expansion bounds (single non-recursive group, 256-alt cap, regex alternatives anchored), receipt legacy migration, fail-closed multi-owner CI runs all checked; no actionable defects. No protected/authority paths touched. CI pending at review time.'
+  punted:
+  - 'punted: Round 1 full sweep of PR #4558 at dfdc2a82a951731a9174a3f8020e7d7a3b721ad7. The generated worksheet identifies TASK-3877 as completing, with two acceptance criteria. TASK-b6b1278890774ef993d2ebc327862470-1361.AC1 — unverified. The stale and moved fixture cases cover both head reads. The queued, in_progress, missing-conclusion and completed cases distinguish workflow conclusion from the marker flag for one visible run. The current workflow can still be missing from the marker listing while an older run is concluded. TASK-b6b1278890774ef993d2ebc327862470-1361.AC2 — verified by source inspection of the singleton owner PR/base check and the foreign and retargeted cases, alongside a matching positive control, in cargo test -p aida-cli-lib standalone_review_verdict_parent_records_after_unbound_child_refusal_and_retries. The supplied untraced-criteria list names both ACs. The diff extends the existing behavioral fixture for all three requested cases. Same-head association and receipt follow-ups are listed separately. The implementer reported the focused regression passed. FAST CI and merge-hold-gate were green at this SHA (Actions run 45545237927 for FAST). Local tests were not run under reviewer policy. The actual base is integration at afbea08b75a, one commit ahead of the merge base. Its intervening review-engine change affects none of the findings.'
+  - 'punted: TASK-3877 review at bbd4a4f3a1a9cb04e3cc1aa1c28019e28af3fbbf against integration afbea08b75a58cf8d9618068cb5efd495790b244. AC1 PARTIAL. The live PR head and base are checked before consuming the verdict and around label edits. Settlement uses the workflow conclusion, and the fixture covers an already-queued successor. A successor or rerun that appears during selection can still trigger an early FULL request. AC2 PARTIAL. FAST ownership and the receipt are scoped to the PR and base, and ambiguous shared-head ownership remains fail-closed as accepted. An old-base FULL marker can still suppress the request after a same-SHA retarget because label planning uses a commit-scoped rollup. FAST gates, compile and the aggregate Build passed at the pinned head. The merge-hold status remains pending. Source review and existing CI evidence only.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
@@ -239,11 +258,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: TASK-3877 review at bbd4a4f3a1a9cb04e3cc1aa1c28019e28af3fbbf against integration afbea08b75a58cf8d9618068cb5efd495790b244. AC1 PARTIAL. The live PR head and base are checked before consuming the verdict and around label edits. Settlement uses the workflow conclusion, and the fixture covers an already-queued successor. A successor or rerun that appears during selection can still trigger an early FULL request. AC2 PARTIAL. FAST ownership and the receipt are scoped to the PR and base, and ambiguous shared-head ownership remains fail-closed as accepted. An old-base FULL marker can still suppress the request after a same-SHA retarget because label planning uses a commit-scoped rollup. FAST gates, compile and the aggregate Build passed at the pinned head. The merge-hold status remains pending. Source review and existing CI evidence only.
-  recovery_hint: address the review findings, move TASK-3877 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T06:27:25.343726141Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T17:46:13.168332962Z
+  completion_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
