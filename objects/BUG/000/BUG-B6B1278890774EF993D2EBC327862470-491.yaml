@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T15:19:44.417690410Z
+modified_at: 2026-11-25T15:22:37.351510918Z
 req_type: Bug
 tags:
 - doctor
@@ -298,6 +298,20 @@ comments:
   created_at: 2026-11-25T12:33:49.774500465Z
   modified_at: 2026-11-25T12:33:49.774500465Z
   session_id: 01a212ae2367
+- id: 01a2134d-7134-7f31-8e2e-44fc1d9679c9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:22):
+    # BUG-2730 / PR #4457 r4 FINAL (advisor-122 ruling 2026-11-25 05:10 at f613bc9c; +376, 3 majors; product-15). Lane: CODEX. MAIN, existing branch. <=60 lines, REMOVAL-FIRST. If still red, PARKED.
+    (F1) The throughput-guard pass does NOT route at all: it ONLY persists the snapshot. Routing moves to the existing per-seat job that reads the snapshot (or is dropped from this PR). NO synchronous git commit in the guard.
+    (F3) On deadline exhaustion, PERSIST what's covered so far with partial=true instead of `?`-propagating, so earlier GitLab pages aren't lost.
+    (F2) The test fixture's gh shim must ANSWER the new latest_runs call from main's BUG-2723 change (don't sleep on it).
+    DEFERRED (do NOT do): the 7 p2s.
+    One targeted cargo run, then make check-ci-fast, then push to #4457. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T15:22:37.351510918Z
+  modified_at: 2026-11-25T15:22:37.351510918Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
