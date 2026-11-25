@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T03:21:44.224691921Z
+modified_at: 2026-11-25T03:43:37.494140039Z
 req_type: Task
 tags:
 - launch
@@ -192,6 +192,17 @@ comments:
   modified_at: 2026-11-25T03:14:53.328289837Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210cd-48ce-7da3-9500-d6cff9baf5de
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 00d2462592083327fa15de94eaad31cff2f161cf plus the native worktree diff. No untracked additions.
+    AC1: [evidence: behavioral-test] The combined task_3884 and story_1888 run passed 55/55. seat_authority.rs:3415 preserves the accepted-receipt, service grant and live PID checks. The held-lock test at task_3820_grant_renewal_tests.rs:582 uses a minted grant and compares its bytes after timeout. session/inline_tests.rs:7 covers the lease closure. kernel_deps.rs:46 proves a lock acquired at expiry is released. test_env.rs:176 bounds the independent holder lifetime. Reviewed absent and present deadlines, repeated acquisition, contention and typed error propagation. Deadline applies to acquisition, not later filesystem operations.
+    AC2: Deferred by the pickup split to TASK-3893. Removed the incomplete recovery writer, its direct helper test and its FAST exclusion. FAST validation is running in job j20261125T033529664-2-0.
+  created_at: 2026-11-25T03:43:37.494140039Z
+  modified_at: 2026-11-25T03:43:37.494140039Z
+  session_id: 01a210b8f7d1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe

@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T03:06:37.999159053Z
+modified_at: 2026-11-25T03:44:36.131657001Z
 req_type: Story
 tags:
 - hygiene
@@ -223,6 +223,18 @@ comments:
   modified_at: 2026-11-25T03:06:37.999159053Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210ce-2c45-7e10-8bf7-a27e887b05aa
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 77e0344048d7cac6764e7df985fd0254c25daf6f plus native working-tree edits. Reviewed the merge-base diff and working diff across six files; no untracked additions.
+    AC1: [evidence: behavioral-test] Adopted the automatic whole-clone salvage policy. The closed-unmerged fixture exercises hygiene dry-run and actual reap. The lifecycle fixture verifies the recovered ORIG_HEAD, base pin, recorded path, and lease disposition, including refusal for a live holder, EXDEV and a failed comment. See aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs, task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal and bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates. Final targeted launcher job j20261125T032058333-2-0: five passed, zero failed.
+    AC2: [evidence: documentation-inspection] The interim parked state expired with the advisor decision. docs/cli/06-roles-sessions.md describes salvage for idle clean seat clones and the ordinary worktree merge predicate.
+    Deep-pass: compared scan and execution, examined ref snapshots with missing/stale origin evidence, validated scope as one filename, and traced mail retirement, holder checks, same-filesystem rename without replacement, comment rollback and lease release. Fixed a recovery dependency discovered in review: a main-checkout salvage ref preserves the alternate base after orphan seat-pin cleanup. A process crash between rename and comment can leave an intact clone in ~/salvage/reaped before the owning spec has its pointer. Purge is outside this slice. The writer inventory and formatting pass.
+  created_at: 2026-11-25T03:44:36.131657001Z
+  modified_at: 2026-11-25T03:44:36.131657001Z
+  session_id: 01a210af4c2a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
