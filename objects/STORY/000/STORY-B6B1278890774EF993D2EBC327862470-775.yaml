@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T03:59:44.396486907Z
-modified_at: 2026-11-20T16:05:00.527877549Z
+modified_at: 2026-11-25T16:20:10.237102940Z
 req_type: Story
 tags:
 - area:portability
@@ -40,6 +40,11 @@ comments:
   modified_at: 2026-11-20T16:05:00.527877549Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a21381-e77d-7521-93ce-7de70597c737
+  author: joe
+  content: 'REFERENCE IMPLEMENTATION (Joe 2026-11-25 09:19): commit b5826a0f949 on branch story-3120-ci-review (37 files, +4159): recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Light/Dark toggle (localStorage aida-theme), Markdown table renderer in docs/showcase/build.py, docs/getting-started.md, Multi-Seat Workflow + 8 SVGs (docs/product-workflow.md, docs/operator-setup.md); build.py --check and all 17 tests in tests/test_showcase_build.py pass. Port it in <=300-line slices (small-PR rule): (a) build.py table renderer + tests, (b) topbar dropdowns + theme toggle, (c) getting-started.md, (d) multi-seat workflow docs + SVGs (STORY-2852), (e) the terminology field guide (STORY-2839).'
+  created_at: 2026-11-25T16:20:10.237102940Z
+  modified_at: 2026-11-25T16:20:10.237102940Z
 history:
 - id: 01a1f9b7-480e-7ec1-8f31-2716b68362cf
   author: joe
