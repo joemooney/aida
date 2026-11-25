@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-25T22:36:44.500352357Z
+modified_at: 2026-11-25T22:40:14.179249364Z
 req_type: Story
 tags:
 - integration
@@ -485,6 +485,18 @@ comments:
   created_at: 2026-11-25T22:30:34.955773488Z
   modified_at: 2026-11-25T22:30:34.955773488Z
   session_id: 01a21468abcc
+- id: 01a214de-4463-7721-a7c4-804224b36070
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:40):
+    # STORY-3120 S3b: --effort / --model with allowlists (advisor-122 ruling 2026-11-25 09:33; Joe's 0d21f696ebf addendum; product-15). Lane: CLAUDE. STRICT. Base: INTEGRATION after S3a merged, NEW branch int40-story-3120-s3b (cut from the integration tip). Reuse S3a's spawn helper. Title "(Refs STORY-3120)". <=300 lines.
+    READ: `aida show STORY-3120 --comments`, comments 16, 18, 19 (item 6 onward) and 20. Reference: commit 0d21f696ebf on story-3120-ci-review.
+    Precedence: flag > AIDA_REVIEW_EFFORT > review-rules.toml default_effort > the [agents] seat effort. Validate EVERY source against a fixed allowlist (low|medium|high|xhigh, plus max only where that vendor supports it) BEFORE argv is built. codex gets -c model_reasoning_effort=<enum> from the fixed enum only; claude/agy get --effort <enum>. --model is allowlisted the same way. review-rules.toml is read from the TRUSTED BASE, and the run is refused if the PR modifies it. Uses S3a's spawn helper. TESTS: an injected value (e.g. 'high"\nfoo=1') is refused from each source; refusal when the PR edits review-rules.toml.
+    One targeted cargo run, make check-ci-fast, new PR to integration. COMMIT.
+  created_at: 2026-11-25T22:40:14.179249364Z
+  modified_at: 2026-11-25T22:40:14.179249364Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
@@ -567,13 +579,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
-- id: 01a214d8-b2fc-77d1-abb3-c9164393b61b
-  author: lane-recovery
-  timestamp: 2026-11-25T22:34:35.644544854Z
-  changes:
-  - field_name: status
-    old_value: InProgress
-    new_value: Approved
 - id: 01a214da-aa54-71f2-9eb8-f5782ce7c92c
   author: joe
   timestamp: 2026-11-25T22:36:44.500349515Z
