@@ -644,6 +644,13 @@ pub(crate) enum AttrSourceVerdict {
 // trace:BUG-2131 | ai:claude
 pub(crate) fn attr_source_verdict(store: &Path) -> AttrSourceVerdict {
     let output = host_git_version(store);
+    #[cfg(all(unix, feature = "native"))]
+    if crate::git_ops::CONFIG_READ_DEADLINE
+        .with(std::cell::Cell::get)
+        .is_some_and(|deadline| std::time::Instant::now() >= deadline)
+    {
+        return AttrSourceVerdict::Refuse("store git version probe deadline expired".into());
+    }
     if attr_source_supported_by(&output) {
         return AttrSourceVerdict::Supported;
     }

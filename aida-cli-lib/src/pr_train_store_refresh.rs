@@ -6,15 +6,29 @@ use std::time::{Duration, Instant};
 
 pub(super) fn pre_pass(root: &Path) {
     let deadline = Instant::now() + Duration::from_secs(5);
-    let result = aida_core::git_ops::with_config_read_deadline(Some(deadline), || {
-        aida_core::store_locate::detect_distributed_store_from(root)
-            .map_or(Ok(()), |store| refresh(&store, deadline))
+    let root = root.to_owned();
+    let result = before_deadline(deadline, move || {
+        aida_core::git_ops::with_config_read_deadline(Some(deadline), || {
+            aida_core::store_locate::detect_distributed_store_from(&root)
+                .map_or(Ok(()), |store| refresh(&store, deadline))
+        })
     });
     if Instant::now() >= deadline {
-        eprintln!("train: store refresh timed out; continuing with cached store");
+        eprintln!("train: store refresh skipped (deadline); continuing with cached store");
     } else if let Err(error) = result {
         eprintln!("train: {error}; continuing with cached store");
     }
+}
+
+fn before_deadline(
+    deadline: Instant,
+    work: impl FnOnce() -> anyhow::Result<()> + Send + 'static,
+) -> anyhow::Result<()> {
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::Builder::new().spawn(move || {
+        let _ = send.send(work());
+    })?;
+    receive.recv_timeout(deadline.saturating_duration_since(Instant::now()))?
 }
 
 fn refresh(store: &Path, deadline: Instant) -> anyhow::Result<()> {
@@ -66,12 +80,29 @@ mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
+    #[test]
+    fn bug2750_blocked_construction_releases_train() {
+        let (release, blocked) = std::sync::mpsc::channel::<()>();
+        let start = Instant::now();
+        let result = before_deadline(start + Duration::from_millis(100), move || {
+            blocked.recv_timeout(Duration::from_secs(5))?;
+            Ok(())
+        });
+        assert!(matches!(
+            result.unwrap_err().downcast_ref(),
+            Some(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        assert!(start.elapsed() < Duration::from_secs(2));
+        drop(release);
+    }
+
     // trace:BUG-2750.AC1 | trace:BUG-2750.AC2 | ai:codex
     #[test]
     fn bug2750_stalled_store_fetch_has_deadline_and_no_writer_lock() {
         if let Some(out) = crate::test_env::run_path_isolated_test_output() {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            let diagnostic = "train: store refresh timed out; continuing with cached store";
+            let diagnostic =
+                "train: store refresh skipped (deadline); continuing with cached store";
             assert_eq!(
                 stderr.lines().filter(|line| *line == diagnostic).count(),
                 2,
