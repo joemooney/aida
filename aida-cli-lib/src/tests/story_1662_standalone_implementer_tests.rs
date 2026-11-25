@@ -1223,9 +1223,6 @@ fn bug_2493_native_prompts_name_safe_body_file_surface() {
     assert!(NATIVE_STOP_CONTRACT
         .contains("Omit `--commit-body-file <file>` when no body trailers are needed."));
     assert!(NATIVE_STOP_CONTRACT.contains(
-        "aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" --commit-body-file <file>"
-    ));
-    assert!(NATIVE_STOP_CONTRACT.contains(
         "aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>"
     ));
     assert!(
@@ -1242,6 +1239,11 @@ fn bug_2493_native_prompts_name_safe_body_file_surface() {
         include_str!("../../../aida-core/templates/skills/aida-pickup.md"),
         include_str!("../../../aida-core/templates/commands/aida-pickup.md"),
     ] {
+        // trace:TASK-3876 | ai:codex
+        assert!(text.contains("exit summary claims every acceptance criterion"));
+        assert!(text.contains(
+            "Add `--partial-slice` only when the brief or exit summary declares a partial slice."
+        ));
         assert!(text.contains("--commit-body-file"));
         assert!(text.contains("/tmp"));
         assert!(text.contains("Help-Golden: unchanged"));
