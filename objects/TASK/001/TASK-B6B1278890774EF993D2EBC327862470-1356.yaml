@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:00:31.801480938Z
-modified_at: 2026-11-25T02:06:40.806236741Z
+modified_at: 2026-11-25T02:44:11.170289820Z
 req_type: Task
 tags:
 - review
@@ -188,6 +188,17 @@ comments:
   modified_at: 2026-11-25T02:03:37.102983246Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21096-db96-7ed0-b03a-ce369ad0694c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5bfd563d17524057405b4489f97fa8a0b647c94d plus the native working-tree merge of 1bb67f0b4dd8. Reviewed the merge-base diff, working-tree changes and untracked additions (none).
+    AC1: [evidence: behavioral-test] aida-core/src/review_engine.rs:1333,1357,1366,1380 exercise glob reuse and invalid exclusions, CRLF, hint preservation and a positive linear comparison bound. aida-cli-lib/src/review_prepare.rs:830 exercises a well-formed TOML rule over the expansion budget and checks its ID and pattern in the error. Path separator, case, multi-alternative, empty and repeated-line cases reviewed. Invalid config refuses before Git or coverage. Oversize inventory reporting retained; fixed H2a digest at aida-core/src/review_engine.rs:1415. Guide checked at docs/internal/presentation/aida-code-review-engine.md:112. Both ratchet name sets retained.
+    AC2: deferred by the Refs-only slice. Core tests 21/21, targeted CLI test 1/1, make check-ci-fast exit 0 including all seven review_prepare tests. Hosted FAST was green at the prior PR head; host publication and fresh CI are pending.
+  created_at: 2026-11-25T02:44:11.170289820Z
+  modified_at: 2026-11-25T02:44:11.170289820Z
+  session_id: 01a21073f413
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e13-15d8-7192-8c48-006617c031fe
   author: joe
