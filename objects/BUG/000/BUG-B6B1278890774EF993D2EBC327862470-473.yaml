@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-25T04:31:31.912001465Z
+modified_at: 2026-11-25T04:36:15.720921680Z
 req_type: Bug
 tags:
 - mass-change
@@ -250,6 +250,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: PR #4396 has a behavioral overlap in aida-cli-lib/src/gate/kernel_deps.rs. For a finding with class unmet-claimed-ac and no blocking_tier, BUG-2712 permits mass-change deferral while main returns Blocker::Unclassified before consulting the class. Choosing a result changes the submission/recorder contract. Both that file and aida-cli-lib/src/review_draft.rs remain unresolved in the existing merge. Please decide whether a class alone qualifies for deferral.. No triage reason was given.'
   created_at: 2026-11-25T04:31:31.911994193Z
   modified_at: 2026-11-25T04:31:31.911994193Z
+- id: 01a210fd-b2ef-74f1-9986-9238f3249fc5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:36):
+    # BUG-2712 / PR #4396 NON-MECHANICAL conflict round (product-15 2026-11-24 21:32). Lane: CODEX. MAIN, existing branch. <=200 lines.
+    Merge current origin/main FRESH. The previous attempt's host-staged merge (with its unresolved files) is saved on dell1 at ~/salvage/BUG-2712-conflict-20261124T2128 (staged.patch re-applies cleanly onto the PR head; unmerged-worktree/ holds the conflicted files). Use it as reference.
+    SEMANTICS RULING (advisor-122): (20:40) MAIN's fail-closed behaviour wins: a finding with NO blocking_tier → Blocker::Unclassified BEFORE the class is consulted; class alone NEVER qualifies for mass-change deferral; BUG-2712's deferral applies only with an explicit deferrable tier. Resolve review_draft.rs consistently (drafts carry the tier; never infer it from the class). Test: unmet-claimed-ac + no tier → Unclassified blocker even under mass-change.
+    Keep the PR's own content otherwise; resolve every conflict path. One targeted cargo run, then make check-ci-fast, then push to #4396. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T04:36:15.720921680Z
+  modified_at: 2026-11-25T04:36:15.720921680Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
