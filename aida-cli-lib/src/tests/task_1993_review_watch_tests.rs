@@ -5975,3 +5975,164 @@ fn bug2763_exited_hold_is_scoped_to_reviewed_head() {
     assert!(history.conclusive(&old.head));
     assert!(!history.conclusive(&new.head));
 }
+
+/// AC2: the forge scan is slow (a stub forge that sleeps per PR), and a ship
+/// and a manual train are each admitted while a PR's forge read is still in
+/// flight. Only the decision takes the claim: a ship holding exclusive
+/// admission at that moment defers the decision to the next pass.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan() {
+    use std::time::Duration;
+    let (temp, store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 5\n",
+    )
+    .unwrap();
+    let mut admission = None;
+    assert_eq!(hold_admission(&root, &mut admission, false).unwrap(), None);
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["legacy review-watch".to_string()]
+    );
+    let mut claim = PassClaim::new(&root, false, &mut admission);
+    claim.release("pass setup");
+    let mut pass = service::PassCounts::default();
+    let mut watched = Watched::default();
+    let mut held_ship = None;
+    let result = watch_pass(
+        &store,
+        &mut claim,
+        vec![
+            change(1, 1, false),
+            change(2, 2, false),
+            change(3, 3, false),
+        ],
+        &mut pass,
+        &mut watched,
+        |change, claim| {
+            // A waiter arrives as this PR's forge read starts.
+            let (tx, rx) = std::sync::mpsc::channel();
+            let waiter = root.clone();
+            let id = change.id;
+            std::thread::spawn(move || {
+                let got = if id == 2 {
+                    crate::admission_owner::manual_train_admission(&waiter, false)
+                } else {
+                    crate::admission_owner::ship_admission(&waiter)
+                };
+                let _ = tx.send(got.map(|c| c.expect("waiter holds its own claim")));
+            });
+            // The stub forge: one slow `gh pr view` per PR.
+            std::thread::sleep(Duration::from_millis(1500));
+            let got = rx
+                .try_recv()
+                .expect("admitted while the forge read was in flight")
+                .unwrap();
+            // PR-1's ship and PR-2's train finish; PR-3's ship still holds.
+            if id == 3 {
+                held_ship = Some(got);
+            } else {
+                drop(got);
+            }
+            match claim.decide(&change, || unreachable!("snapshot is fresh"))? {
+                Some(reason) => {
+                    assert!(reason.contains("admission yielded"), "{reason}");
+                    Ok(Admission::Skipped("deferred"))
+                }
+                None => {
+                    assert!(bug2703_loop_claims(&root).contains(&"legacy review-watch".into()));
+                    Ok(Admission::Settled)
+                }
+            }
+        },
+    );
+    result.unwrap();
+    assert!(watched.refused.is_empty(), "{:?}", watched.refused);
+    assert_eq!(pass.skipped["deferred"], vec!["PR-3".to_string()]);
+    // The other two were decided (settled) under the retaken claim.
+    assert_eq!(
+        pass.skipped["skipped"],
+        vec!["PR-1".to_string(), "PR-2".to_string()]
+    );
+    // The claim is given up after every decision.
+    assert!(claim.claim.is_none());
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["manual train/ship".to_string()]
+    );
+    drop(held_ship);
+}
+
+/// AC1: under the claim, a snapshot older than the bound is rechecked by a
+/// re-read made with the claim released; a moved change is not decided.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_stale_snapshot_is_reread_outside_the_claim() {
+    let (temp, _store) = fixture();
+    let root = temp.path().to_path_buf();
+    let stale = std::time::Instant::now() - SNAPSHOT_TTL - std::time::Duration::from_secs(1);
+    let c = change(7, 7, false);
+    let mut admission = None;
+    let mut claim = PassClaim::new(&root, false, &mut admission);
+    claim.observed = stale;
+    let current = claim
+        .decide(&c, || {
+            assert!(
+                bug2703_loop_claims(&root).is_empty(),
+                "re-read under the claim"
+            );
+            Ok(c.clone())
+        })
+        .unwrap();
+    assert_eq!(current, None);
+    assert!(
+        claim.claim.is_some(),
+        "an unchanged change is decided under the claim"
+    );
+    claim.release("test");
+    for (reread, want) in [
+        (
+            Ok(change(7, 8, false)),
+            "change moved during the forge scan",
+        ),
+        (
+            Err(anyhow::anyhow!("gh down")),
+            "forge re-read refused: gh down",
+        ),
+    ] {
+        let reason = claim.decide(&c, || reread).unwrap().unwrap();
+        assert!(reason.contains(want), "{reason}");
+        assert!(claim.claim.is_none(), "no decision on a moved change");
+    }
+}
+
+/// AC3: a hold longer than the bound is logged, naming its phase.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_long_admission_hold_warns_with_its_phase() {
+    let (temp, _store) = fixture();
+    let mut admission = None;
+    assert_eq!(
+        hold_admission(temp.path(), &mut admission, false).unwrap(),
+        None
+    );
+    let mut claim = PassClaim::new(temp.path(), false, &mut admission);
+    assert_eq!(claim.release("pass setup"), None, "a short hold is quiet");
+    assert_eq!(
+        claim
+            .decide(&change(1, 1, false), || unreachable!())
+            .unwrap(),
+        None
+    );
+    claim.since = Some(std::time::Instant::now() - HOLD_WARN - std::time::Duration::from_secs(5));
+    let warning = claim.release("dispatch decision for PR-1").unwrap();
+    assert!(
+        warning.contains("during dispatch decision for PR-1"),
+        "{warning}"
+    );
+    assert!(warning.contains("admission held 35s"), "{warning}");
+    assert_eq!(claim.release("again"), None, "nothing held, nothing logged");
+}
