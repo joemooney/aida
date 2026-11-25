@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T19:14:29.826665404Z
-modified_at: 2026-11-24T19:14:29.826665404Z
+modified_at: 2026-11-25T07:30:21.327989619Z
 req_type: Task
 tags:
 - carried-from:BUG-2752
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
   created_at: 2026-11-24T19:14:43.523849831Z
+comments:
+- id: 01a2119c-d810-7f63-8035-f4149bdbc24b
+  author: joe
+  content: 'Folded into TASK-3897 (review debt: containment/init) in the 2026-11-24 triage (Joe approved).'
+  created_at: 2026-11-25T07:30:21.327989619Z
+  modified_at: 2026-11-25T07:30:21.327989619Z
 history:
 - id: 01a20f0f-67a0-7d53-8b9d-88dd8c859133
   author: joe
