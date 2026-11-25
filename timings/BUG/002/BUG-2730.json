@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2730",
+  "publishes": [
+    {
+      "at": "2026-11-25T21:55:12.362407145Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T12:02:37.556484613Z",
+      "spec": "BUG-2730",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4457,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "f613bc9c207b12bb4de7a0db4356d3c738bf9d6a"
+      }
+    },
+    {
+      "ts": "2026-11-25T12:02:49.851859595Z",
+      "spec": "BUG-2730",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep of the eight-file landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 0c2d297e23b055b15ce4630176359421083d2757, attesting original head f613bc9c207b12bb4de7a0db4356d3c738bf9d6a. The worksheet and completion declaration cover both BUG-2730 criteria. The supplied untraced list was used. The diff adds a BUG-2730-traced regression, cargo test -p aida-cli-lib bug_2730_slow_approval_forge_reports_partial_before_ceiling. Its assertions cover ordinary row exhaustion, but the pinned-base Actions change prevents the fixture from testing the claimed approval path. The signer fixture avoids the admitted slow transaction. FAST gates, compile, and the required aggregate passed at the original head. FAST skipped runtime shards. No local tests were run.\nBUG-b6b1278890774ef993d2ebc327862470-491.AC1: unverified\nBUG-b6b1278890774ef993d2ebc327862470-491.AC2: unverified\nThe source establishes scoped row deadlines and timings on successful observation, but discovery can spend the deadline and return before either timing or coverage output. Scheduled routing can still prevent a normal return after a partial snapshot is persisted. The approval regression finding depends on the newer protected base. The remaining findings reproduce by source inspection on the reviewed change without that base change. The lane's explicit review claim attempt was refused.",
+        "recovery_hint": "address the review findings, move BUG-2730 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:27:24.478463451Z",
+      "spec": "BUG-2730",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4457,
+        "verdict": "APPROVED",
+        "reviewed_sha": "08ee6da5263965a55c163aef2b8cb0a425781f6f"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:29:44.444730874Z",
+      "spec": "BUG-2730",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4457,
+        "verdict": "APPROVED",
+        "reviewed_sha": "08ee6da5263965a55c163aef2b8cb0a425781f6f"
+      }
+    },
+    {
+      "ts": "2026-11-25T21:51:16.731407694Z",
+      "spec": "BUG-2730",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4457
+      }
+    },
+    {
+      "ts": "2026-11-25T21:55:12.140116834Z",
+      "spec": "BUG-2730",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f03f5255aae977b47ceb09666ba5e0dc2024de6d",
+        "pr": 4457,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
