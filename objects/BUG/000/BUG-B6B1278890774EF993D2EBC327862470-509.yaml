@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T01:43:24.833573554Z
+modified_at: 2026-11-25T01:45:04.792886670Z
 req_type: Bug
 tags:
 - launch
@@ -120,6 +120,11 @@ comments:
   created_at: 2026-11-24T22:47:07.540837034Z
   modified_at: 2026-11-24T22:47:07.540837034Z
   session_id: 01a20f4fc4d9
+- id: 01a21060-bc18-7720-8bfc-611e268c18a1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep. Reviewed all four files in the pinned landed-tree diff. PR head 12d08b65ca03deba668c2099d203c9d999d33a95 is seven commits behind protected main dc27cf1f4cb49a050002334062efb59fe7d2b914. The affected receipt, recovery and test files match the landed tree. No finding depends on code changed by those seven base commits.. No triage reason was given.'
+  created_at: 2026-11-25T01:45:04.792877068Z
+  modified_at: 2026-11-25T01:45:04.792877068Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
@@ -163,6 +168,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21060-bc18-7720-8bfc-610f934257a6
+  author: joe
+  timestamp: 2026-11-25T01:45:04.792868695Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -171,15 +183,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1 full sweep. Reviewed all four files in the pinned landed-tree diff. PR head 12d08b65ca03deba668c2099d203c9d999d33a95 is seven commits behind protected main dc27cf1f4cb49a050002334062efb59fe7d2b914. The affected receipt, recovery and test files match the landed tree. No finding depends on code changed by those seven base commits.
-    BUG-b6b1278890774ef993d2ebc327862470-509.AC1 — unverified. The diff adds evidence for missing worker, supervisor and worktree on a minimal malformed receipt, but the normal reader and recovery still accept a deserializable post-transfer receipt without its supervisor, and unknown retirement still accepts missing owner evidence.
-    BUG-b6b1278890774ef993d2ebc327862470-509.AC2 — verified by source inspection of the replacement grant-only `all` case in `cargo test -p aida-cli-lib story_2254_bg_corrupt_receipt_never_frees_scope`. It asserts Unknown, admission refusal, retirement refusal, the inspection hint and preserved bytes. The implementer reported a passing targeted run on its working diff.
-    Both criteria from the supplied untraced list were checked against the diff. Exact-head GitHub FAST checks passed and full test shards were skipped. No local tests were run.
-  recovery_hint: address the review findings, move BUG-2748 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T01:43:24.833573554Z
