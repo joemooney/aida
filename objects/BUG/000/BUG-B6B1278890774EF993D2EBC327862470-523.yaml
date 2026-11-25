@@ -13,8 +13,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T04:29:49.463570317Z
-modified_at: 2026-11-25T04:31:39.832003196Z
+modified_at: 2026-11-25T04:38:48.846554732Z
 req_type: Bug
+tags:
+- integration
 history:
 - id: 01a210f8-c819-7903-b35c-7e0d287801a9
   author: joe
@@ -27,6 +29,13 @@ history:
   author: joe
   timestamp: 2026-11-25T04:31:40.015120660Z
   changes: []
+- id: 01a210ff-cb0e-7100-b2ba-25b2c5d54808
+  author: joe
+  timestamp: 2026-11-25T04:38:48.846554064Z
+  changes:
+  - field_name: tags
+    old_value: ''
+    new_value: integration
 execution_mode: drain
 filed_at:
   code_sha: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4
