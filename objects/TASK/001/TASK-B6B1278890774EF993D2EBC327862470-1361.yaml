@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When recording ci:full intent, RE-READ the PR head and skip if it moved since the snapshot (head-snapshot-then-verdict race). Use the workflow run's CONCLUSION, not the marker's run_in_progress flag, to decide settlement.
   - AC2: Key the FAST marker by PR number + base, not by SHA+name alone, so PRs sharing a head cannot match each other's marker. A test for each of the three cases.
-status: Done
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T04:12:31.258751637Z
+modified_at: 2026-11-25T04:15:54.082307134Z
 req_type: Task
 tags:
 - ci
@@ -36,12 +36,19 @@ comments:
   modified_at: 2026-11-25T03:47:58.890271222Z
   session_id: 01a210ad058e
   harness_version: codex-cli 0.167.0
-- id: 01a210e7-b89a-7842-b9db-fe4f2f0119db
-  author: aida-publication-done
-  content: Implementer push dfdc2a82a951 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-25T04:12:31.258750641Z
-  modified_at: 2026-11-25T04:12:31.258750641Z
-  session_id: 01a210ad058e
+- id: 01a210eb-1274-72a3-adeb-9c2b186acee8
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4558 @ dfdc2a82a9 (integration-30): PASS. 1 file (review_watch.rs), +83/-16. merge-tree is clean vs integration afbea08b75a (the branch base is 48f3c087305; H2b's files don't overlap).
+    AC1: promote_approved_heads re-reads the PR (repo.change) before consuming an intent. It skips if the head or base moved since discovery, re-checks inside the edit closure, and writes the receipt only if the head and base are still current. Settlement now comes from the workflow run's status and conclusion (tier_runs::outcome/bucket), not the marker's run_in_progress.
+    AC2: each 'ci-tier: fast' run is fetched by id. Its identity (id, head_sha) must match, event must be pull_request, and pull_requests must be exactly [this PR targeting this base].
+    Tests: stale snapshot, absent, queued, in_progress, foreign owner, retargeted base, missing conclusion (error), moved head (error), done, again.
+    OBSERVATION (not blocking): GitHub lists every open PR with a matching head in a run's pull_requests. Two PRs sharing a head therefore never settle, and FULL is never requested for them. This fails closed, the same uniquely-associated rule #4408 uses in forge_tier_runs.rs:150, so it is consistent with train admission.
+    Cost: about 2-3 extra gh reads per pending intent per 2-minute tick, only while an intent is pending. No new git calls, and forge reads go through the existing pinned paths. READY after FAST.
+  created_at: 2026-11-25T04:15:54.082307134Z
+  modified_at: 2026-11-25T04:15:54.082307134Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
@@ -67,14 +74,6 @@ history:
   session_id: 01a210ad058e
   harness_version: codex-cli 0.167.0
   changes: []
-- id: 01a210e7-b89a-7842-b9db-fe30e817104a
-  author: aida-publication-done
-  timestamp: 2026-11-25T04:12:31.258746539Z
-  session_id: 01a210ad058e
-  changes:
-  - field_name: status
-    old_value: InProgress
-    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
