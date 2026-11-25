@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T19:39:12.124489393Z
+modified_at: 2026-11-25T20:35:00.227114111Z
 req_type: Bug
 tags:
 - lanes
@@ -480,6 +480,13 @@ comments:
   created_at: 2026-11-25T19:35:14.011256663Z
   modified_at: 2026-11-25T19:35:14.011256663Z
   session_id: 01a213fc67dc
+- id: 01a2146b-3603-7bc3-b718-d2ac097446f2
+  author: joe
+  content: |-
+    DEFERRED p3 (advisor-122 override-approval of #4583 S3 r1 @ 881f1adf, 2026-11-25 13:38): error-text inaccuracy:
+    - seat_clone.rs prepare_host_repair_routed (clean-merge bail after reserve): when an attempt slot is present the error says the reservation stays 'until this pickup's rollback removes the tree and retires it', but run_pickup_launch only retires it when the receipt owns the setup (fresh lease) and roll
+  created_at: 2026-11-25T20:35:00.227114111Z
+  modified_at: 2026-11-25T20:35:00.227114111Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
