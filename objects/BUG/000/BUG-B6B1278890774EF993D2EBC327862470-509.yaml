@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T10:04:48.454971785Z
+modified_at: 2026-11-25T21:04:04.961883884Z
 req_type: Bug
 tags:
 - launch
@@ -356,6 +356,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Round 5 parking rule for PR #4542: both receipt regressions passed, but the prescribed targeted lane job j20261125T091904403-2-0 exited 101 (34 passed, six supervisor tests failed). Three failures report procfs cwd permission denials and three retained RecoveryRequired. All four findings are accepted. Preserve the native working-tree edits for host inspection.. No triage reason was given.'
   created_at: 2026-11-25T10:04:48.454957156Z
   modified_at: 2026-11-25T10:04:48.454957156Z
+- id: 01a21485-d561-7d43-9b9b-97bfa9140d92
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 3 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3391: Review follow-up: aida-cli-lib/src/codex_bg_receipt.rs:615–632 reopens valid terminal reservations after upg
+      From BUG-2748 Reviewed sha: c5f7b33e0117f37812644ab1ba3722431ddc902b aida-cli-lib/src/codex_bg_receipt.rs:615–632 reopens valid terminal reservations after upgrade. The protected-base recovery writer could reconcile a Prepared attempt as Exited with Owner::Released and no supervisor or worker. The new reader classifies that persisted receipt as Unknown. The named scope blocks again, and pruning, ordinary recovery and unknown retirement all refuse it. The revised writer only fixes receipts created after the upgrade. Preserve a verified compatibility path for already reconciled Prepared receipts and exercise it with a receipt in the old writer's format.
+
+    - TASK-3395: Review follow-up: docs/cli/06-roles-sessions.md:477 still tells operators that a dead unknown attempt can be
+      From BUG-2748 Reviewed sha: c5f7b33e0117f37812644ab1ba3722431ddc902b docs/cli/06-roles-sessions.md:477 still tells operators that a dead unknown attempt can be recovered or retired once its processes have exited. With this PR a dead attempt with incomplete attribution stays reserved and both commands can refuse. Document the prerequisite for retirement and the inspection and evidence-restoration path.
+
+    - TASK-3408: Review follow-up: Deferred follow-up. The OccupancyProbe rustdoc at codex_bg_receipt.rs:108 links to scan_oc
+      From BUG-2748 Reviewed sha: 55db4c1eaffcfc47bde99ab35bc685a31aea2bba Deferred follow-up. The OccupancyProbe rustdoc at codex_bg_receipt.rs:108 links to scan_occupancy, which this change removes. Point the link to scan_occupancy_in.
+  created_at: 2026-11-25T21:04:04.961883884Z
+  modified_at: 2026-11-25T21:04:04.961883884Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
