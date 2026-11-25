@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T15:17:57.076423124Z
+modified_at: 2026-11-25T16:37:33.880424192Z
 req_type: Bug
 tags:
 - lanes
@@ -236,6 +236,137 @@ comments:
   content: 'SKETCH SCOPE ADDED (advisor-122 05:37): include TASK-3895''s need, an owner-lifetime lease lock / launch-adoption protocol covering surviving lane processes, so a mandate-attested release has real liveness evidence.'
   created_at: 2026-11-25T15:17:57.076423124Z
   modified_at: 2026-11-25T15:17:57.076423124Z
+- id: 01a21392-118a-75c3-9968-6a3dc61aa96f
+  author: joe
+  content: |-
+    Reviewer notes from integration-30 (please read first): the r4 findings are quoted from .aida/gate-ledger/PR-4564.jsonl #15, and the TASK-3895 findings from PR-4572 #2 (F1-F6) plus its r2 park comment. I spot-checked the code claims: RepairKey has no base field; SpawnOutcome::Started is written only in tests; lease_recorded_owner ignores hostname. The design rests on one unproven assumption: that lane processes inherit the owner-lock fd under bwrap and the codex sandbox. S1 must prove that first. S1 also changes the lease schema, which is an architecture change and needs signoff. This is a design only; none of it has been tested.
+
+    # SKETCH (integration-30): BUG-2761 + TASK-3895 reservation lifecycle
+
+    Code refs are to main @ 64e6946 unless marked r4 (= PR #4564 head 2d7195ae).
+
+    **Today.** A reservation's key is `(repository, pr, original_head)` (repair_journal.rs:15-19). Base is stored but is not part of the key. `reserve` refuses any non-`ProvenDead` entry with the same key (:374-376). Production code only ever writes `Unknown` (seat_clone.rs:3993-4007) and `ProvenDead`, via the terminal attest (repair_journal.rs:311-364). `Started` appears only in tests (:948, :968), and publication never retires an entry.
+
+    The only owner evidence is the pid/start-time check `lease_recorded_owner` (leases.rs:1492), which ignores `hostname` (leases.rs:82). The only lease lock is the short metadata writer lock (session/lease_lock.rs:29). There are four spawn paths, and they record lifecycle differently:
+    - contained (session/headless.rs:2780-2835) stamps only `active_pid`;
+    - plain headless (:2841-2935) stamps `holder_record` and the lane record;
+    - Codex resume (r4 headless.rs:3478-3482) stamps neither;
+    - interactive `exec` (session/interactive.rs:861, :1488) leaves no supervisor.
+
+    ## 1. Records and lifecycle
+    Records:
+    - **C**: seat clone.
+    - **L**: lease plus shared claim.
+    - **K**: a new per-lease owner lock (§2).
+    - **J**: journal entry. New fields:
+      - `reservation_id`, a UUID;
+      - `key = (repository, pr, original_head, base)`;
+      - `owner = {lease_id, owner_gen}`;
+      - `state`: Reserved, Active, Stale, Released, Published or RolledBack.
+      - "Parked" is not stored. It is derived: Active, K free, and the owner provably dead. This makes it crash-safe.
+    - **H**: the host-staged merge (MERGE_HEAD plus index in C).
+
+    | Phase | C | L | K | J | H | Actor / guard |
+    |---|---|---|---|---|---|---|
+    | Dispatch (conflict) | create | L1 minted with `owner_lock{gen g1}` | launcher acquires K(L1) **before** writing L1 | Reserved r1, after the supervised host-publish route is chosen | staged after J | `aida queue work` launcher. The route is checked **before** `reserve` (work.rs:6325 today prepares before the route at :6339). |
+    | Pre-spawn refusal | removed by rollback | removed | released | r1 → RolledBack, only if `reservation_id` and `owner_gen` are this attempt's | gone with C | `run_pickup_launch` (work.rs:7404) does a CAS under the journal lock. An adopted J instead gets its owner CAS'd back to (L_prev, g_prev). |
+    | Worker running | kept | kept | inherited by the worker tree | Active | worker edits it | One `LaneOwner` guard covers all four spawn paths. It writes the lane record and J→Active. |
+    | Punt / exit | kept | L1 kept (owner dead); claim released at worker exit (lane_liveness.rs:911) | free once **all** lane processes are gone | Active, read as Parked | intact | Nobody writes anything. A lingering child keeps K held, so nothing can adopt or release the seat. |
+    | Resume (same base) | reused | L2 minted; L1 removed (session_start.rs:3744) | try-lock K(L1), then hold K(L2) | owner CAS (L1,g1)→(L2,g2) under the journal lock | verify, then continue | Real launch modes only. Fetched base must equal `key.base`. |
+    | Fresh round (base moved) | C1 kept; C2 new | L1 demoted to `retained_evidence = r1`, so it no longer holds the scope or branch; L2 new | try-lock K(L1) | r1 → Stale; new r2 has key base = B2 | H1 byte-identical; H2 staged in C2 | Dispatcher. `--fresh` never selects adoption. |
+    | Release | kept | kept | try-lock K(L1), held through save | → Released, with an audit record | kept | Operator TTY attest (unchanged) or mandate attest (§2). Deletes nothing. |
+    | Publish | kept | ended | released | → Published | committed | Host publication (seat_clone.rs ~5600). The push is fast-forward from `original_head`, so the forge rejects a second round. |
+
+    Destroying C: only `seat_clone::destroy(KeepUnshipped)` may do it, and only when J is Published, Released or RolledBack. Force-claim reclaim (work.rs:4217-4255) must check this.
+
+    ## 2. Owner-lifetime lock K
+    **Location.** `<main>/.aida/sessions/<lease_id>.owner.lock`. Opened with `O_NOFOLLOW` and mode 0600.
+
+    **What the lease records** (`owner_lock`):
+    - `protocol = 1`
+    - `gen`
+    - lock-file inode
+    - the launcher's `HolderRecord`: `node_id` from machine-id, `boot_id`, pidns, pid and starttime (proc_identity.rs:402)
+
+    **Holder and lifetime:**
+    - Acquire: the `aida queue work` launcher (lane-run.sh is only `exec aida queue work`) takes `LOCK_EX` before it writes the lease file.
+    - Inherit: every spawn path clears `FD_CLOEXEC` on that one fd in `pre_exec`, or before `exec` on the interactive path. The worker and all its descendants then share the open file description.
+    - Release: implicit, when the last holder of that fd exits. The launcher never calls `LOCK_UN`, because unlocking would also release the lock for its children.
+    - Across a punt: the lock file and the record stay; the lock itself is free once the processes are gone.
+
+    **Ineligible leases.** A lease created by a shell handoff (`export AIDA_SESSION_ID`, session_start.rs:4110), a legacy lease, or one whose launch path cannot prove inheritance gets no `owner_lock`. Such leases are never auto-adopted or mandate-released, and stay operator-only.
+
+    **Mandate release** (`--attest-by-mandate`, TASK-3895). Lock order: authority lock, then journal lock, then K (try-lock only). Refuse on the first unknown:
+    1. The knob `[repair_journal] mandate_attested_release` is read from `origin/<default>` **only**. The new strict resolver drops the local fallback at trusted_config.rs:51-62. If the ref is absent, the knob is off.
+    2. Hold `relay_parent::authority_lock` (relay_parent.rs:152; mandate.rs:907/1096/1178). Then `recheck()` (mandate.rs:675) for a new explicit-only `Scope::RepairRelease`.
+    3. Take `RepairGuard::lock` and select J by exact `reservation_id`. Read the lease by exact `owner.lease_id` path. Require `owner_lock.protocol == 1` and that the lease's `owner_gen` equals J's.
+    4. `node_id` must equal the local machine-id, so it runs on the lane host.
+       - If `boot_id` differs, the owner is Dead(Reboot).
+       - Otherwise `observe(holder)` and the lane record's worker must both be `Dead(_)`.
+       - `Alive` or `ForeignUnknown` means refuse.
+    5. Open K and fstat it. The inode must equal the recorded inode. A non-blocking `LOCK_EX` must succeed.
+    6. Corroborating checks only. The lease heartbeat must be older than the grace period. No fresh lane-job runner heartbeat may exist for this lease (lane_job.rs:149/172).
+    7. Write state Released with the mandate id, grant and evidence, plus the `releases` audit record. Then drop the locks in reverse order.
+
+    Ownership is matched only on lease id, `owner_gen`, `reservation_id` and inode, never on scope, branch or path strings. That rules out the work.rs:6300 lookup "by scope… freshest" and the r4 `retained_for_lease` OR-on-`tree_path`.
+
+    **Residual risk.** A descendant that closes inherited fds (daemonizing, or `closefrom`) escapes K. The pid checks and the heartbeat narrow this but do not close it. The release deletes nothing.
+
+    ## 3. Fresh round vs a retained reservation
+    - **I1.** At most one entry in a **live** state (Reserved, or Active not provably Parked) per `(repository, pr)`.
+    - **I2.** At most one non-terminal entry per full key. A Parked entry on the same base must be resumed or released. `--fresh` refuses with "retained repair on this base: resume or release". It is never bypassed.
+    - **Base moved.** Base is in the key, so r2 does not collide with r1 (r4 failed exactly here). The dispatcher holds K(L1) with the owner dead, then writes r1→Stale and demotes L1, both under the journal lock.
+    - **Stale-adopt race.** Adoption and Stale both require a successful non-blocking K(L_prev) plus a CAS on `(lease_id, owner_gen)` under the journal lock. Of two concurrent dispatchers, the loser fails the try-lock or the CAS and refuses with nothing changed.
+    - **Double publication.** The fast-forward push from `original_head` serializes it. Once r2 publishes, r1 is Stale for good.
+
+    ## 4. Findings mapped
+    **BUG-2761, r4 verdict** (gate-ledger PR-4564 #15, also spec comment 22):
+    - **R4-1** "A retained repair can become unresumable again after a recorded-thread successor punts". Closed by the `LaneOwner` guard on the Codex resume path, which writes the lane record and releases the claim (§1, worker row), and by test T3.
+    - **R4-2** "the stated ordinary fresh round cannot start while the PR head stays the same … a new base does not change that key". Closed by base in the key, Stale plus lease demotion, and `--fresh` never adopting (§3), and by test T4.
+    - **R4-3 (p1)** "A first-time interactive conflict pickup can strand a new reservation before any worker starts". Closed by choosing the route before `reserve` and by an attempt-scoped RolledBack (§1), and by test T2.
+
+    **TASK-3895, r1 verdict** (PR-4572 #2), F1–F6:
+    - **F1** "requires cwd and environ for every numeric PID". There is no /proc scan; K replaces it.
+    - **F2** "A single /proc pass does not prove continuous lane quiescence". K is held through save. Admission needs K. The inode and gen CAS catch a replaced lease.
+    - **F3** "environ … does not reliably reflect an AIDA_SESSION_ID subsequently exported". Shell-handoff leases have no `owner_lock` and are refused.
+    - **F4** "display-only local resolver … fall back to an unreviewed local main". Strict resolver for `origin/<default>`.
+    - **F5** "without holding the mandate authority lock". The authority lock is held through the journal save.
+    - **F6** "injects a bool, a synthetic proc tree, and a fabricated grant ID". Covered by test T5 at the production entry.
+
+    **TASK-3895, r2 park:** "SessionLease has only the shared short-lived metadata writer lock, and session start hands an ID to an existing shell". K is the owner-lifetime lock, and shell-handoff leases are excluded.
+
+    ## 5. Tests and slices (each ≤300 lines)
+    Tests:
+    - **T1.** A real child inherits K. Try-lock fails while the child lives and succeeds after it exits. Repeat under PreparedLaunch (bwrap), not only a plain spawn.
+    - **T2.** An interactive conflict pickup refuses with the journal byte-identical. A headless retry then reserves.
+    - **T3.** Punt, recorded-thread resume, re-punt, then a second same-base dispatch completes in the same clone with both parents. Reuses r4's `tests/support/retained_repair.sh`.
+    - **T4.** The base moves and the new base **stays on origin**. r1 goes Stale with H1 SHA-identical, and r2 publishes. `--fresh` against a same-base Parked entry refuses.
+    - **T5.** Production `doctor heal` entry:
+      - knob on a local-only commit → off;
+      - no mandate or wrong scope → refuse;
+      - concurrent `mandate stop` → refuse;
+      - live child holding K → refuse;
+      - legacy lease or no `owner_lock` → "needs operator attest";
+      - dead owner, K free and a mandate → Released, audited, tree intact.
+    - **T6.** Journal unit tests: a second live reserve for the same PR is refused, and the loser of a two-adopter CAS race changes nothing.
+
+    Slices:
+    - **S1.** K primitive, `owner_lock` on the lease, CLOEXEC handling on the four spawn paths; T1. This is an architecture change (lease schema), so it needs signoff.
+    - **S2.** Journal schema (`reservation_id`, base in key, owner/gen, states, CAS transfer), with a one-time rewrite of existing entries; T6.
+    - **S3.** Route before reserve, plus attempt-scoped rollback; T2. Independent of the others, so it can land first.
+    - **S4.** K-gated adoption and the `LaneOwner` guard for the Codex resume path; T3. Close to 300 lines; land the fixture separately if needed.
+    - **S5.** Stale state, lease demotion, `--fresh`; T4.
+    - **S6.** TASK-3895 mandate release on top of S1 and S2; T5.
+
+    Order: S3 ∥ S1 → S2 → S4 → S5, and S6 after S2.
+
+    **Open risks to confirm in S1:**
+    - Does bwrap or the Codex native sandbox close inherited fds? If a path cannot inherit, it gets `protocol = none` and stays operator-only.
+    - `.aida/sessions` must be on a local filesystem that supports flock on the lane host.
+  created_at: 2026-11-25T16:37:33.880424192Z
+  modified_at: 2026-11-25T16:37:33.880424192Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
