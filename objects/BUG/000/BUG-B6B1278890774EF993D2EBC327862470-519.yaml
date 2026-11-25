@@ -8,17 +8,25 @@ description: |
   ## Acceptance
   - AC1: Advisor-loop / review-watch state READERS tolerate unknown fields (no deny_unknown_fields on persisted runtime state that crosses a binary rollover), so an older reader never hard-fails on a newer writer's field; add a test that state written with an extra unknown field loads.
   - AC2: Writers OMIT pickup_retries when zero (skip_serializing_if), so ordinary reservations stay readable by older binaries. Test.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T23:59:11.983027226Z
-modified_at: 2026-11-24T23:59:11.983027226Z
+modified_at: 2026-11-25T00:07:14.258991380Z
 req_type: Bug
 tags:
 - outage
 - review-watch
 - rollover
+history:
+- id: 01a21007-2852-7813-ac94-2a1454233837
+  author: aida-session-start
+  timestamp: 2026-11-25T00:07:14.258990129Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
   branch: main
