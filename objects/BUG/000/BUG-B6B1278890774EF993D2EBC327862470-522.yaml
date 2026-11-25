@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T10:52:55.413952574Z
+modified_at: 2026-11-25T11:06:59.190974558Z
 req_type: Bug
 tags:
 - lanes
@@ -211,6 +211,11 @@ comments:
   modified_at: 2026-11-25T10:52:55.413952574Z
   session_id: 01a2120e3646
   harness_version: codex-cli 0.167.0
+- id: 01a21263-2cf7-7622-8f36-019430ab2b69
+  author: joe
+  content: 'advisor-accepted 413 (test-driven), 2026-11-25 04:08: r4 removed the base-advance abort/restart path (base moved → merge untouched + needs a fresh repair round; only same-base resume). ~99 lines are the required e2e dispatch fixture. Pushed to #4564 for an independent STRICT review: minors-only CR → advisor override; any major on the same-base path → park (TASK-3895 fallback).'
+  created_at: 2026-11-25T11:06:59.190974558Z
+  modified_at: 2026-11-25T11:06:59.190974558Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
