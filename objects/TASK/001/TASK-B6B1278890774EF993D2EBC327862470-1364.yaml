@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T06:57:56.039310430Z
+modified_at: 2026-11-25T06:58:13.693774573Z
 req_type: Task
 tags:
 - integration
@@ -135,6 +135,13 @@ comments:
   modified_at: 2026-11-25T06:46:03.566072566Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2117f-a7c5-7992-bc6e-a1ce3a997fab
+  author: joe
+  content: 'DEFERRED (advisor 23:59, not a lane instruction): two minor findings from the H2c r2 review @ 47ed7651, plus the integration nit. Advisor merges H2c into integration anyway (pure review-engine logic). (1) The root test fallback treats a nested src/tests companion as evidence for a src/<stem> source, so tests/foo_test.rs + src/tests/foo_tests.rs alone batch into module:src/foo. (2) A broad merge_builtin=false rule (**/*) still publishes the enriched checklist under one playbook ID for all matched files. (3) Crate-level <crate>/tests/foo.rs doesn''t pair with <crate>/src/foo.rs. Fix all three in one later small slice if batching quality suffers.'
+  created_at: 2026-11-25T06:58:13.693774573Z
+  modified_at: 2026-11-25T06:58:13.693774573Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20e94-a407-75a0-baf4-38e2a3232a5d
   author: joe
