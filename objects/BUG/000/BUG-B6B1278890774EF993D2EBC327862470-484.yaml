@@ -10,12 +10,12 @@ description: |
   - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
   - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
   - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-24T19:50:15.390383878Z
+modified_at: 2026-11-25T00:16:19.199991715Z
 req_type: Bug
 tags:
 - ci
@@ -369,6 +369,11 @@ comments:
   created_at: 2026-11-24T19:50:15.390378459Z
   modified_at: 2026-11-24T19:50:15.390378459Z
   session_id: 01a20eca98fa
+- id: 01a2100f-78ff-70e0-bc6c-91bf3d760e3a
+  author: lane-recovery
+  content: Reference merge `52f38dc581ff9d426e78b26b457538c65bd97377` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-25T00:16:19.199983997Z
+  modified_at: 2026-11-25T00:16:19.199983997Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
@@ -490,6 +495,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2100f-78ff-70e0-bc6c-91cd7737cc9a
+  author: lane-recovery
+  timestamp: 2026-11-25T00:16:19.199991545Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
