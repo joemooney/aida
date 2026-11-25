@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T03:05:19.025915090Z
+modified_at: 2026-11-25T03:05:26.704201596Z
 req_type: Story
 tags:
 - hygiene
@@ -189,6 +189,22 @@ comments:
   content: 'advisor-122 20:14: REDESIGN BY REMOVAL. Reap never deletes: an atomic move to ~/salvage/reaped/<spec>-<lane>-<ts>/ + record path/refs/origin evidence + release the lease; deletion only via a later explicit aida salvage purge --older-than 14d (out of scope). r3 <=150 net, shrinking the PR.'
   created_at: 2026-11-25T03:05:19.025915090Z
   modified_at: 2026-11-25T03:05:19.025915090Z
+- id: 01a210aa-4f0b-7c82-8a05-a7025cc250ac
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3059):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1604a50aaf1e
+    Recorded: 2026-11-25T03:02:37.934957761+00:00
+    Findings:
+    1. aida-cli-lib/src/seat_clone.rs:6145–6159 (STORY-3059 F1): The quarantine verifier compares the ref/reflog inventory before the full probe, then accepts any Known probe with an empty dirty list. A short-lived Git process that reaches the renamed tree after the first holder scan can advance a ref after the inventory read and exit before the last holder scan. An empty commit keeps the tree clean, and even a changed current HEAD is ignored. Removal can delete that unpublished commit. Coordinate the final snapshot with writers, ensure removal is conditional on the same verified HEAD and complete inventory, and inject a ref/HEAD change between the inventory and dirty checks in the regression.
+    2. aida-cli-lib/src/seat_clone.rs:6060–6067, 6364–6395, 6442–6469 (STORY-3059 publication at reap time): The last origin observation precedes the checkpoint probe, the store write and quarantine verification. If another actor deletes or rewinds the only covering branch during those steps, all the subsequent checks can still pass and the clone is deleted with a recovery note pointing to a commit no longer reachable on origin. The existing stale-tracking test deletes the remote branch before entering reap, so it misses this window. Revalidate branch coverage at the final removal boundary or durably preserve a recovery copy before removing the seat, and cover a remote change after the initial proof.
+    3. aida-cli-lib/src/seat_clone.rs:6027–6058 (STORY-3059 every local commit): The inventory includes HEAD, refs under refs/, and reflog commits but omits Git recovery roots such as ORIG_HEAD. A hard reset from an unpublished commit back to the published tip leaves the old commit in ORIG_HEAD even when reflog recording was disabled or the reflog entries expired. Reap can delete the sole recoverable copy. Include commit-bearing recovery roots in the bounded inventory or preserve the commits before removal, and cover ORIG_HEAD-only work in the destructive fixture.
+    4. aida-cli-lib/src/seat_clone.rs:6097–6113 and aida-cli-lib/src/session_reap.rs:1422–1424 (STORY-3059 AC1): A closed-unmerged seat can remain unreapable when its published branch has since fast-forwarded from another checkout and the primary checkout has not fetched that new tip. The advertised SHA differs from the seat's SHA, and merge-base can only use objects already present in the primary checkout. The scan refuses the seat before apply can obtain any further evidence, even though the branch still contains every seat commit. Keep preview read-only and let apply obtain bounded ancestry evidence for the advertised tip, for example through a private proof fetch, without changing shared tracking refs. Exercise a fast-forwarded origin with the new tip absent locally.
+    5. aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:2854–2867 (STORY-3059 F5/F6): The dry-run regression calls scan_reapable directly and compares only show-ref output. It never runs session hygiene --dry-run, and an unintended fetch that writes objects or FETCH_HEAD without moving refs would still pass. Exercise the hygiene preview with the eligible clone and assert no fetch and no changes to clone, lease, owning spec, or primary Git evidence.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T03:05:26.539765236Z
+  modified_at: 2026-11-25T03:05:26.539765236Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
