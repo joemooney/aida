@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T06:56:57.732940884Z
+modified_at: 2026-11-25T06:57:05.251121107Z
 req_type: Bug
 tags:
 - lanes
@@ -62,6 +62,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes. BUG-2761 is a completing spec. Reviewed all six files in the landed diff against pinned main 2d346c274965961d1e187e5d48a6dbe611232393 and attested original PR head 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8.. No triage reason was given.'
   created_at: 2026-11-25T06:56:57.732928031Z
   modified_at: 2026-11-25T06:56:57.732928031Z
+- id: 01a2117e-6235-72d2-8b4a-86c060010b9f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2761):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2a9f9059b3d8
+    Recorded: 2026-11-25T06:56:01.683105558+00:00
+    Findings:
+    1. BUG-2761.AC1: The direct queue rework dispatch can adopt the repair but cannot finish it through the promised host route. queue_cmd/rework.rs:1140-1172 always passes no_human=false. queue_cmd/work.rs:856-905 admits the conflict using the vendor and containment alone and tells the lane to leave Git metadata read-only because the host will stage, commit and publish after exit. The interactive Codex branch instead execs the vendor at queue_cmd/work.rs:6854-6865 or 6893-6900, leaving no host exit handler. The recorded-thread interactive resume also drops the assembled conflict prompt. Route retained rework through a supervising host completion path and deliver the repair instructions on the recorded-thread path.
+    2. BUG-2761.AC1: An upstream base advance strands a valid retained merge even when its lease, PR, HEAD, MERGE_HEAD and conflict paths match the journal. After adopting it, prepare_host_repair_with fetches the latest remote base and rejects unless it equals MERGE_HEAD (seat_clone.rs:4018-4030). An unrelated commit on main between the punt and retry therefore prevents the next dispatch from continuing the staged repair and yields the generic different lane/PR/head/base error. Provide an in-place recovery for an intact journaled merge whose base is behind, while preserving the PR-head and publication freshness checks, and give a specific recovery message for actual divergence.
+    3. Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automatically selects retained repairs for --no-launch, --plan-only and --guided, and session_start.rs:3763-3784 transfers the journal and removes the predecessor. These modes skip host repair preparation and routing (queue_cmd/work.rs:6345); for --no-launch the command reports setup complete and prints a generic deferred launch with no repair instructions or host exit handler (6546-6596). A later real repair dispatch can then be blocked by the new live setup lease. Require a repair-capable launch before automatic transfer, or preserve the repair handoff through deferral with the same preparation and publication gates.
+    4. BUG-2761.AC2: The extended story_2710_actual_orphan_adoption_transfers_pending_repair fixture is component-level coverage. It constructs the orphan lease/journal directly, injects the PR into session_start_with_receipt, calls prepare_host_repair_with with resume=true and synthetic fetched refs, and completes the merge with direct Git (bug_2223_orphan_seat_reentry_tests.rs:411-539). It never puts a dispatched lane through a punt and then re-enters it via queue rework or lane-run, so regressions that disable the queue selection or lose the host completion path still pass. Add a criterion-traced dispatch regression that starts from the punted lease and verifies that the successor uses the same clone and completes the merge through the regular host-owned path. The reported focused run, cargo test -p aida-cli-lib story_2710_actual_orphan_adoption_transfers_pending_repair, covers the component behavior.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T06:57:05.077789984Z
+  modified_at: 2026-11-25T06:57:05.077789984Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
