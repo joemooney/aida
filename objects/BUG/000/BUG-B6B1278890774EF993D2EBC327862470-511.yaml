@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T11:30:25.796659771Z
+modified_at: 2026-11-25T11:55:44.783159077Z
 req_type: Bug
 tags:
 - store
@@ -342,6 +342,17 @@ comments:
   modified_at: 2026-11-25T11:27:30.335884031Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2128f-d2b6-7b52-8273-af0d47e1b20f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3c497182b289 plus the round-four native working tree. Reviewed the merge-base diff and both local edits. No untracked additions.
+    AC1: [evidence: behavioral-test] pr_train_store_refresh.rs:7 places discovery, command construction and fetch inside one deadline. store_hooks.rs:647 refuses an expired version probe before containment lookup. The old-Git containment refusal remains in force. A blocked system lookup may outlive the caller on the worker, but the remaining-time check prevents a subsequent fetch after expiry.
+    AC2: [evidence: behavioral-test] Both bug2750 tests passed, including injected blocking work and stalled fetch with the writer lock available. make check-ci-fast exited 0. The new test simulates blocking construction without requiring a real stalled NSS provider. Current round covers slice A.
+  created_at: 2026-11-25T11:55:44.783159077Z
+  modified_at: 2026-11-25T11:55:44.783159077Z
+  session_id: 01a212786cd9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
