@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-11T05:40:02.085047934Z
-modified_at: 2026-11-11T05:42:03.778418701Z
+modified_at: 2026-11-25T21:00:21.532745112Z
 req_type: Epic
 tags:
 - architecture
@@ -50,6 +50,12 @@ relationships:
 - rel_type: Parent
   target_id: 01a1ca8b-d64a-7bd2-bbb0-f40d4ae89db1
   created_at: 2026-11-11T12:19:03.656791975Z
+comments:
+- id: 01a21482-6c9d-7fc3-9f87-f35a35493836
+  author: joe
+  content: 'STALE CLAIM RELEASED (product-15, 2026-11-25 14:05, under Joe''s full authorization; advisor-122 pre-read 14:02): InProgress with an idle driver for 2 or more days, and no open PR or live lease on the imac or dell1, so reset to Approved so it no longer blocks dispatch or counts as in flight. Epics stay Approved; only their children run.'
+  created_at: 2026-11-25T21:00:21.532745112Z
+  modified_at: 2026-11-25T21:00:21.532745112Z
 history:
 - id: 01a1c920-3cf3-7ae0-a484-bce0db5d9cc4
   author: joe
