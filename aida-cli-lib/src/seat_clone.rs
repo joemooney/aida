@@ -4753,12 +4753,10 @@ mod rework_merge_tests {
         }
         // Marker-free bytes do not resolve unmerged index entries. trace:BUG-2756 | ai:codex
         std::fs::write(fx.main.join(path), "resolved bytes\n").unwrap();
-        assert!(
-            refuse_pending_conflict_markers(&execute, Some(&original_paths))
-                .unwrap_err()
-                .to_string()
-                .contains("unresolved index entries")
-        );
+        assert!(require_merged_index(&execute)
+            .unwrap_err()
+            .to_string()
+            .contains("unresolved index entries"));
         std::fs::write(fx.main.join(path), ">>>>>>> main\n").unwrap();
         // A failed prior host commit may have staged the resolution: scan it
         // on retry as well, rather than trusting absence of unmerged entries.
@@ -5634,6 +5632,10 @@ fn commit_pending_with(
         )
         .map_err(|failure| recovery("stage", failure))?;
         if let Some(base) = merge_base.as_deref() {
+            require_merged_index(&|program, args| {
+                run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+                    .map_err(|why| anyhow::anyhow!("could not inspect staged index: {why}"))
+            })?;
             let head = head_before.as_deref().context("missing repair head")?;
             let key = crate::repair_journal::RepairGuard::lock(main)?
                 .for_tree(clone, branch, head, base)?
@@ -5955,7 +5957,12 @@ fn refuse_pending_conflict_markers(
             .map(|p| format!("{:?}", String::from_utf8_lossy(p)))
             .collect::<Vec<_>>().join(", ")
     );
-    // git add -A would silently resolve outstanding index stages.
+    Ok(())
+}
+
+fn require_merged_index(
+    execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+) -> Result<()> {
     // trace:BUG-2756 | ai:codex
     anyhow::ensure!(
         execute("git", &["ls-files".as_ref(), "--unmerged".as_ref()])?.is_empty(),
