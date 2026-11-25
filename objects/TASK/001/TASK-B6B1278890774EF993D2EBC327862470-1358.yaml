@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F1, event.rs:283) When the target branch advanced after the review checkout was prepared, review_risk_pr_base must still resolve the merge base correctly: fetch the advanced base OID, or fall back to a bounded remote merge-base, instead of a local-only `git merge-base` that misses it. Test with a base that advanced after preparation.
   - AC2: (F2, forge.rs:6971) The 15-second risk-evidence timeout must cover resolve_gh_binary_for_probe (`gh --version`) too, so a stalled resolver cannot block appending the verdict; the advisory evidence degrades to STRICT on timeout. Test with a stalled resolver.
-status: Done
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T00:25:52.897355531Z
+modified_at: 2026-11-25T00:28:37.355836335Z
 req_type: Task
 tags:
 - integration
@@ -108,6 +108,13 @@ history:
   timestamp: 2026-11-25T00:20:45.307226715Z
   session_id: 01a20fa680dd
   changes: []
+- id: 01a2101a-bc6b-7243-bbf5-3eb6a449525e
+  author: joe
+  timestamp: 2026-11-25T00:28:37.355825182Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
@@ -116,3 +123,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 9cc76437f4f
   vendor: claude
+implementation_info:
+  implemented: false
+  reopened_at_sha: 52f38dc581ff9d426e78b26b457538c65bd97377
