@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T03:03:00.704105673Z
-modified_at: 2026-11-25T03:32:52.820333793Z
+modified_at: 2026-11-25T11:35:36.648503144Z
 req_type: Bug
 tags:
 - data-loss
@@ -34,6 +34,11 @@ comments:
     Sketch direction: ONE guarded-removal choke point + a ratchet that bans raw `worktree remove` / `worktree prune` elsewhere.
   created_at: 2026-11-25T03:32:52.820333793Z
   modified_at: 2026-11-25T03:32:52.820333793Z
+- id: 01a2127d-61c8-78b1-81e4-0e1c37e6032d
+  author: joe
+  content: 'NOTE (advisor-122 2026-11-25 04:43): BUG-2749''s new guard (landed 33a7b137a89) REFUSES `aida session end` when the checkout is already GONE, even with --force. The advisor had to restore the checkouts of 3 dead reviewer sessions (4560/4458/4457) just to end them normally. Add to this widening: a verifiably absent checkout (ENOENT, no mount, no staged index evidence) must end cleanly, or report the exact recovery, rather than refusing forever.'
+  created_at: 2026-11-25T11:35:36.648503144Z
+  modified_at: 2026-11-25T11:35:36.648503144Z
 history:
 - id: 01a210a8-d5f3-7f70-837f-115f437b6824
   author: joe
