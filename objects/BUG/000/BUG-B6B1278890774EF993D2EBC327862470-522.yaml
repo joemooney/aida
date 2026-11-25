@@ -492,6 +492,20 @@ comments:
   content: "FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 2 stand-alone finding-specs are recorded here and rejected:\n\n- TASK-3404: Review follow-up: Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automa\n  From BUG-2761 Reviewed sha: 2a9f9059b3d8170886b7b80ce59efcbe4dec99c8 Non-repair pickup modes can consume the retained lease. queue_cmd/work.rs:4954-4969 automatically selects retained repairs for --no-launch, --plan-only and --guided, and session_start.rs:3763-3784 transfers the journal and removes the predecessor. These modes skip host repair preparation and routing (queue_cmd/work.rs:6345); for --no-launch the command reports setup complete and prints a generic deferred launch with no repair instructions or host exit handler (6546-6596). A later real repair dispatch can then be blocked by the new live setup lease. Require a repair-capable launch before automatic transfer, or preserve the r\n\n- TASK-3411: Review follow-up: BUG-2761 r2 scope — the new commit adds 295 lines and removes 22 relative to 217841e559b. \n  From BUG-2761 Reviewed sha: c21f184762dd62cc8a97144e0fb97b4834ba1680 BUG-2761 r2 scope — the new commit adds 295 lines and removes 22 relative to 217841e559b. The new integration test alone adds 151 lines. This exceeds the authoritative brief's 150-line round limit. Reduce the revision using existing fixtures or record an accepted scope adjustment."
   created_at: 2026-11-25T21:05:39.892693707Z
   modified_at: 2026-11-25T21:05:39.892693707Z
+- id: 01a2148b-4ad9-7ab0-a454-0bb2e1034bc1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c5538b6d6e (S3, PR #4583 round 5).
+    Item 1: run_pickup_launch's attempt-scoped retirement (queue_cmd/work.rs:7466-7479) is covered by bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation (tests/task_2807_pickup_launch_rollback_tests.rs). It reserves inside the launch closure, stores the AttemptReservation in agent.repair, and covers four cases. (a) A failed spawn: the tree and the reservation are both gone. (b) A pre-existing reservation for another PR survives every rollback (new this round). (c) No spawn but the reserved tree is still live: the reservation is kept (new this round). (d) A spawned child keeps both the tree and the reservation. Deleting the block fails (a). Inverting the spawn-count filter also fails (a).
+    Item 2: the seat_clone.rs clean-merge bail was reworded in 881f1adfdc. It now says the entry stays recorded with an unknown spawn until this pickup's rollback removes the tree and retires it, or stays for recovery when no attempt holds it.
+    Evidence: lane job cargo test -p aida-cli-lib --lib bug_2761: 3 passed.
+    Residual: (d) exercises the spawn path through started(), not the inner spawn-count filter directly. The two are equivalent for the review_watch spawn counter.
+    Not done here: the S1 spike brief attached to this pickup. It is a separate no-PR measurement lane and was not run in this S3 round.
+  created_at: 2026-11-25T21:10:02.713658825Z
+  modified_at: 2026-11-25T21:10:02.713658825Z
+  session_id: 01a214701072
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
