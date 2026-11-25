@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T10:07:29.147861057Z
+modified_at: 2026-11-25T10:43:16.110584395Z
 req_type: Bug
 tags:
 - review-watch
@@ -93,6 +93,17 @@ comments:
   modified_at: 2026-11-25T10:02:33.964719779Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2124d-7962-7522-9cc5-9584620fb5bf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 14a5d0f21684 plus the round-two native working diff. Reviewed the merge-base diff, working tree and untracked inventory.
+    AC1: [evidence: behavioral-test] Under the revised pickup brief, an exited receipt holds its own head and an unresolved spawn on A permits dispatch of B. Active reservation and capacity gates remain in place. Release clears the skip in the receipt transaction.
+    AC2: [evidence: behavioral-test] bug2763_exited_hold_is_scoped_to_reviewed_head passed, including late approval for A after dispatch of B. The two backoff fixtures use reaped children. Reviewed identity absence, multiple heads, full SHA matching, release refusal ordering and retry budgets. The old doctor and liveness requirements were superseded by the pickup brief. make check-ci-fast and git diff --check passed. Only the BUG-2763 regression was selected for the targeted run.
+  created_at: 2026-11-25T10:43:16.110584395Z
+  modified_at: 2026-11-25T10:43:16.110584395Z
+  session_id: 01a2122c5790
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
