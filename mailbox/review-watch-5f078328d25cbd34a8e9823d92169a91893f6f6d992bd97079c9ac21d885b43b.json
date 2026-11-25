@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-5f078328d25cbd34a8e9823d92169a91893f6f6d992bd97079c9ac21d885b43b",
+  "thread_id": "review-watch-5f078328d25cbd34a8e9823d92169a91893f6f6d992bd97079c9ac21d885b43b",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795605996013,
+  "body": "PR-4541 reached the 4-round review cap: the reviews of `04abb2b5add64b26864bed9e344cf1012e3dab00`, `521e5f2095687a2815de128700c4c6745600769b`, `a80ae09d4a0842c44224d0792aa59325e99fe332`, `eb2e718dbedddf53460aab314d05c520db5e6c2c` each blocked done. Its head 696fd8422f05691585f0f2f06339b8f5a0aaa397 has no review, and the watcher will not start another. Manual review requested. Decide the next step: review the head by hand, or re-scope or close the change. Its findings are in `.aida/review-verdicts/PR-4541.json`.",
+  "subject": "PR-4541: 4-round review cap reached",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
