@@ -1,0 +1,31 @@
+id: 01a21203-efc7-7b61-8c1f-22afcd33260f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1427
+title: 'Review follow-up: aida-cli-lib/src/stalled_reviews.rs:60–67 and repair_journal.rs:228–245 hold an exclusive '
+description: |-
+  From TASK-3878
+  Reviewed sha: 2161550dbc3e121e18305b3811c7917e8e6bd93f
+
+  aida-cli-lib/src/stalled_reviews.rs:60–67 and repair_journal.rs:228–245 hold an exclusive repository-wide directory lock across queue children and advisor delivery, while existing journal readers and writers fail immediately on contention. An unrelated supported repair can lose its publication attempt when recording validation after compilation (seat_clone.rs:5639–5665). Limit exclusion to the repair admission boundary or make contention an explicit recoverable outcome for existing callers, and cover overlap between a sweep and in-flight publication.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T09:22:57.607380662Z
+modified_at: 2026-11-25T09:22:57.607380662Z
+req_type: Task
+tags:
+- carried-from:TASK-3878
+- finding-hash:85185efc
+- from-review:TASK-3878
+relationships:
+- rel_type: References
+  target_id: 01a20e71-b96a-79b3-8452-d24f9bbeca75
+  created_at: 2026-11-25T09:23:12.039021526Z
+filed_at:
+  code_sha: 2161550dbc3e121e18305b3811c7917e8e6bd93f
+  branch: pr-4566
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a211ff94be
