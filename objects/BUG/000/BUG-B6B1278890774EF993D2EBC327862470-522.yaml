@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T05:28:42.597984715Z
+modified_at: 2026-11-25T06:00:47.778487802Z
 req_type: Bug
 tags:
 - lanes
@@ -30,6 +30,13 @@ comments:
     Deep pass covered scope casing, exact Git and journal identifiers, NUL-delimited paths, resolved index stages, duplicate claims and concurrent journal changes. Fixed a selection-to-transfer race by pinning the predecessor and comparing the checked journal entry under the transfer lock. Existing dead-owner, containment and publication checks still apply. Fixed fixture Git auto-maintenance flags; all eight maintenance ratchet tests passed. The fast gate rerun is job j20261125T052825789-2-0. Hosted PR-head CI is unavailable before publication.
   created_at: 2026-11-25T05:28:42.597984715Z
   modified_at: 2026-11-25T05:28:42.597984715Z
+  session_id: 01a2111274b7
+  harness_version: codex-cli 0.167.0
+- id: 01a2114a-dc9f-7652-99aa-525f1b2ece82
+  author: dirtlab
+  content: 'Implementer self-review addendum for HEAD 45206d90a1df483c1caff91dee5abf345df4a8d2 plus the native worktree. Reviewed the final sixth file, scripts/store-writers.toml: three exact entries describe the journal read, index probe and session setup caller. Writer inventory reconciled 3882 sites. Final make check-ci-fast job j20261125T053609978-2-0 exited 0, including all 48 fast source gates and application checks. The runner reported overlay-stale at teardown. The targeted regression passed in job j20261125T052122915-2-0. git diff --check passed.'
+  created_at: 2026-11-25T06:00:47.778487802Z
+  modified_at: 2026-11-25T06:00:47.778487802Z
   session_id: 01a2111274b7
   harness_version: codex-cli 0.167.0
 history:
