@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-25T02:33:28.635237744Z
+modified_at: 2026-11-25T02:33:46.752936016Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1078,6 +1078,11 @@ comments:
   created_at: 2026-11-22T22:34:57.255926673Z
   modified_at: 2026-11-22T22:34:57.255926673Z
   session_id: 01a2053bf4f9
+- id: 01a2108d-5201-7e80-82b0-1cee39372a59
+  author: joe
+  content: '#4380 CLOSED as superseded/oversized (advisor-122 19:36; +5883/-335, stale since 11-22; branch kept: bug-2629-fresh 864db73fc0). Back to Approved: reproduce on current main first; fresh <=300-line slice only if it still reproduces.'
+  created_at: 2026-11-25T02:33:46.752936016Z
+  modified_at: 2026-11-25T02:33:46.752936016Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
