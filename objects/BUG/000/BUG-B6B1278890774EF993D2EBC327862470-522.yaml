@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T11:32:47.039347739Z
+modified_at: 2026-11-25T11:35:30.483369047Z
 req_type: Bug
 tags:
 - lanes
@@ -216,6 +216,16 @@ comments:
   content: 'advisor-accepted 413 (test-driven), 2026-11-25 04:08: r4 removed the base-advance abort/restart path (base moved → merge untouched + needs a fresh repair round; only same-base resume). ~99 lines are the required e2e dispatch fixture. Pushed to #4564 for an independent STRICT review: minors-only CR → advisor override; any major on the same-base path → park (TASK-3895 fallback).'
   created_at: 2026-11-25T11:06:59.190974558Z
   modified_at: 2026-11-25T11:06:59.190974558Z
+- id: 01a2127d-49b3-7f50-b61f-1689fec139b3
+  author: joe
+  content: |-
+    PARKED (advisor-122 2026-11-25 04:43, pre-committed at r4). #4564 closed; branch kept (bug-…-522, r4 at 2d7195ae). REMAINING DESIGN PROBLEMS from the independent review of r4:
+    1. p1 REGRESSION: a first-time interactive conflict pickup strands a NEW reservation before any worker starts.
+    2. A successor punt makes the seat unresumable again.
+    3. `--fresh` re-selects the retained repair, so the base-moved fallback can't start.
+    NEEDS A SKETCH FIRST: the reservation lifecycle across punt / resume / fresh, before any new implementation. TASK-3895 (mandate-attested release) is the operational answer meanwhile.
+  created_at: 2026-11-25T11:35:30.483369047Z
+  modified_at: 2026-11-25T11:35:30.483369047Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
