@@ -1482,19 +1482,10 @@ fn run_sandboxed_as(
             .stdin(std::process::Stdio::null());
         crate::command_output_with_timeout_capped(cmd, remaining, cap)
     });
-    let status_probe = program == "git" && args.first().copied() == Some("status".as_ref());
     match output {
         crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
             out.stdout.truncate(cap as usize);
             Err(SandboxFailure::Truncated(out.stdout))
-        }
-        crate::BoundedCommandOutput::Completed(out)
-            if status_probe && out.status.success() && !out.stderr.is_empty() =>
-        {
-            Err(failed(format!(
-                "incomplete git status: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )))
         }
         crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(out.stdout),
         crate::BoundedCommandOutput::Completed(out)

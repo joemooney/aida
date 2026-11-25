@@ -13456,7 +13456,8 @@ Options:
           Heal only this exact finding ID (as shown by doctor check)
 
       --attest <ATTEST>
-          Operator's reason for releasing one conflict repair reservation
+          Operator's reason for releasing a repair reservation or salvaging an unverified stale
+          clone
 
   -y, --yes
           Skip confirmation prompts
@@ -46637,7 +46638,7 @@ Working on aida itself
       {
         "name": "attest",
         "takes_value": true,
-        "help": "Operator's reason for releasing one conflict repair reservation"
+        "help": "Operator's reason for releasing a repair reservation or salvaging an unverified stale clone"
       },
       {
         "name": "canonical-ids",

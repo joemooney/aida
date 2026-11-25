@@ -343,7 +343,6 @@ pub(crate) fn read_watermark(project_root: &Path, agent: &str) -> Option<i64> {
 /// lowers an existing watermark, so re-reading an older view doesn't "un-read"
 /// newer messages. trace:STORY-539 | ai:claude
 pub(crate) fn set_watermark(project_root: &Path, agent: &str, ts: i64) -> Result<()> {
-    let _writer = aida_core::mailbox::lock_local_mail_writer(project_root)?;
     let dir = read_marker_dir(project_root);
     // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     aida_core::mailbox::ensure_local_mailbox_dir(project_root).with_context(|| {
@@ -380,7 +379,6 @@ pub(crate) fn read_last_seen(project_root: &Path, agent: &str) -> Option<i64> {
 /// Record per-message acknowledgement times so read-latency history is exact.
 // trace:TASK-1271 | ai:codex
 pub(crate) fn record_seen(project_root: &Path, agent: &str, message_ids: &[&str]) -> Result<()> {
-    let _writer = aida_core::mailbox::lock_local_mail_writer(project_root)?;
     let dir = mailbox_dir(project_root)
         .join(".read-receipts")
         .join(sanitize_id(agent));

@@ -352,33 +352,37 @@ pub(crate) fn handle_doctor_command(
             json: heal_json,
         } => {
             // trace:BUG-2722 | ai:codex
-            if normalize_doctor_category(category)? == "repair-reservations" {
+            let repair = normalize_doctor_category(category)? == "repair-reservations";
+            if repair || attest.is_some() {
                 let root = main_worktree_root_from(&find_project_root()?);
-                anyhow::ensure!(!yes && !sub_yes, "repair release refuses --yes");
-                anyhow::ensure!(!json && !heal_json, "repair release refuses --json");
-                let id = id.as_deref().context("repair release requires one --id")?;
+                anyhow::ensure!(!yes && !sub_yes, "attested release refuses --yes");
+                anyhow::ensure!(!json && !heal_json, "attested release refuses --json");
+                let id = id
+                    .as_deref()
+                    .context("attested release requires one --id")?;
                 let reason = attest
                     .as_deref()
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                    .context("repair release requires a nonempty --attest reason")?;
+                    .context("attested release requires a nonempty --attest reason")?;
                 crate::gate::seat_authority::require_direct_human()?;
                 anyhow::ensure!(
                     crate::gate::role_authority::has_integrity_floor_authority()
                         && !crate::pr_service::ship_caller_is_drive_seat()
                         && !doctor_running_autonomously(&root),
-                    "repair release requires a human operator"
+                    "attested release requires a human operator"
                 );
-                crate::repair_journal::RepairGuard::attest_reservation(
-                    &root,
-                    id,
-                    reason,
-                    std::io::stdin().lock(),
-                )?;
-                println!("Released {id}");
-                return Ok(());
+                if repair {
+                    crate::repair_journal::RepairGuard::attest_reservation(
+                        &root,
+                        id,
+                        reason,
+                        std::io::stdin().lock(),
+                    )?;
+                    println!("Released {id}");
+                    return Ok(());
+                }
             }
-            anyhow::ensure!(attest.is_none(), "--attest requires repair-reservations");
             let yes = sub_yes;
             let json = heal_json;
             if let Some(id) = id {
@@ -395,6 +399,14 @@ pub(crate) fn handle_doctor_command(
                     .iter()
                     .find(|f| &f.id == id)
                     .ok_or_else(|| anyhow::anyhow!("no eligible stale lease finding `{id}`"))?;
+                if attest.is_some() {
+                    let salvage = crate::home_dir()
+                        .context("home directory unavailable")?
+                        .join("salvage/reaped");
+                    attest_clone_lease(&root, id, &salvage, std::io::stdin().lock())?;
+                    println!("Released {id}");
+                    return Ok(());
+                }
                 if !yes && !confirm_doctor_category(&category, 1)? {
                     return Ok(());
                 }

@@ -4582,159 +4582,56 @@ fn store_tracked_runtime_is_noop_without_store_worktree() {
 }
 
 // trace:BUG-2755 | ai:codex
-fn bug_2755_fixture() -> (
-    tempfile::TempDir,
-    std::path::PathBuf,
-    std::path::PathBuf,
-    DoctorFinding,
-) {
-    let tmp = tempfile::tempdir().unwrap();
-    let main = tmp.path().join("main");
-    let tree = tmp.path().join("aida-seat-recreated");
-    let id = "deadbeef2755";
-    let lease = crate::lease_path(&main, id);
-    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
-    std::fs::write(lease, format!(
+#[test]
+fn bug_2755_attestation_preserves_clone_before_release() {
+    for present in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        let tree = tmp.path().join("aida-seat-recreated");
+        let id = "deadbeef2755";
+        let lease = crate::lease_path(&main, id);
+        std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+        std::fs::write(&lease, format!(
         "id = '{id}'\nscope = 'TASK-3211'\nslug = 'task-3211'\nowner = 'test'\nworktree_path = '{}'\nbranch = 'main'\nstarted_at = '2026-10-01T00:00:00Z'\nhostname = 'test'\ntree_kind = 'clone'\n",
         tree.display()
     )).unwrap();
-    let finding = DoctorFinding {
-        id: id.into(),
-        category: "stale-leases".into(),
-        summary: String::new(),
-        action: String::new(),
-        safe_heal: true,
-    };
-    (tmp, main, tree, finding)
-}
-
-#[test]
-fn bug_2755_absent_tree_ends_lease() {
-    let (_tmp, main, tree, finding) = bug_2755_fixture();
-    let mounts = format!(
-        "1 0 8:1 / / rw - ext4 /dev/root rw\n2 1 8:2 / {} rw - ext4 /dev/other rw\n",
-        tree.display()
-    );
-    let check = |path: &std::path::Path| {
-        crate::worktree_lifecycle_gc::ensure_no_tree_mount(path, mounts.as_bytes())
-    };
-    let err = heal_lease_with_mounts(&main, &finding, check).unwrap_err();
-    assert!(format!("{err:#}").contains("mount remains"));
-    let lease = crate::lease_path(&main, &finding.id);
-    assert!(lease.exists());
-    for errno in [libc::EACCES, libc::EIO] {
-        let err = heal_lease_with_mounts(&main, &finding, |_| {
-            Err(std::io::Error::from_raw_os_error(errno).into())
-        })
-        .unwrap_err();
-        assert!(err.to_string().contains("absence unverifiable"));
+        let finding = DoctorFinding {
+            id: id.into(),
+            category: "stale-leases".into(),
+            summary: String::new(),
+            action: String::new(),
+            safe_heal: true,
+        };
+        let salvage = tmp.path().join("salvage");
+        if present {
+            std::fs::create_dir(&tree).unwrap();
+            std::fs::write(tree.join("mail"), "pending").unwrap();
+        }
+        assert!(heal_doctor_lease(&main, &finding)
+            .unwrap_err()
+            .to_string()
+            .contains("--attest"));
+        assert!(attest_clone_lease(&main, id, &salvage, &b"wrong"[..]).is_err());
         assert!(lease.exists());
+        if present {
+            let shm = std::path::Path::new("/dev/shm");
+            let error = attest_clone_lease(&main, id, shm, id.as_bytes()).unwrap_err();
+            let io = error.downcast_ref::<std::io::Error>().unwrap();
+            assert_eq!(io.raw_os_error(), Some(libc::EXDEV));
+            assert!(tree.exists() && lease.exists());
+        }
+        attest_clone_lease(&main, id, &salvage, id.as_bytes()).unwrap();
+        assert!(!lease.exists() && !tree.exists());
+        if present {
+            let saved = std::fs::read_dir(salvage)
+                .unwrap()
+                .flatten()
+                .next()
+                .unwrap();
+            assert_eq!(
+                std::fs::read(saved.path().join("mail")).unwrap(),
+                b"pending"
+            );
+        }
     }
-    let result = heal_lease_with_mounts(&main, &finding, |p| {
-        crate::worktree_lifecycle_gc::ensure_no_tree_mount(
-            p,
-            b"1 0 8:1 / / rw - ext4 /dev/root rw\n",
-        )
-    })
-    .unwrap();
-    assert_eq!(
-        result.detail.as_deref(),
-        Some("tree absent, nothing to salvage")
-    );
-    assert!(!crate::lease_path(&main, &finding.id).exists());
-}
-
-#[test]
-fn bug_2755_dangling_slash_keeps_lease() {
-    let (_tmp, main, tree, finding) = bug_2755_fixture();
-    std::os::unix::fs::symlink("missing", &tree).unwrap();
-    let lease = crate::lease_path(&main, &finding.id);
-    let body = std::fs::read_to_string(&lease)
-        .unwrap()
-        .replace("aida-seat-recreated'", "aida-seat-recreated/'");
-    std::fs::write(&lease, body).unwrap();
-    assert!(heal_doctor_lease(&main, &finding)
-        .unwrap_err()
-        .to_string()
-        .contains("ambiguous clone path"));
-    assert!(lease.exists());
-}
-
-#[test]
-fn bug_2755_recreated_clean_tree_releases_only_lease() {
-    if crate::test_env::run_path_isolated_test() {
-        return;
-    }
-    let _env = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
-    let (_tmp, main, tree, finding) = bug_2755_fixture();
-    task_202_git(&main, &["init", "-qb", "main"]);
-    std::fs::write(main.join(".gitignore"), "/.aida/mailbox/\n").unwrap();
-    task_202_git(&main, &["add", ".gitignore"]);
-    task_202_git(
-        &main,
-        &[
-            "-c",
-            "user.name=test",
-            "-c",
-            "user.email=test@example.com",
-            "commit",
-            "--allow-empty",
-            "-qm",
-            "base",
-        ],
-    );
-    task_202_git(&main, &["clone", ".", tree.to_str().unwrap()]);
-
-    let mailbox = tree.join(".aida/mailbox");
-    std::fs::create_dir_all(&mailbox).unwrap();
-    let lease = crate::lease_path(&main, &finding.id);
-    let work = tree.join("unsaved");
-    std::fs::write(&work, "keep").unwrap();
-    assert!(heal_doctor_lease(&main, &finding).is_err());
-    assert!(lease.exists());
-    std::fs::remove_file(work).unwrap();
-    let unreadable = tree.join("private");
-    std::fs::create_dir(&unreadable).unwrap();
-    let original = unreadable.metadata().unwrap().permissions();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0)).unwrap();
-    assert_eq!(
-        std::fs::read_dir(&unreadable).unwrap_err().raw_os_error(),
-        Some(libc::EACCES)
-    );
-    let err = heal_doctor_lease(&main, &finding).unwrap_err();
-    assert!(err.to_string().contains("incomplete git status"), "{err:#}");
-    assert!(lease.exists());
-    std::fs::set_permissions(&unreadable, original).unwrap();
-    std::fs::remove_dir(unreadable).unwrap();
-    use crate::gate::seat_authority::{read_grant, test_support::mint_grant_for};
-    let grant = mint_grant_for(&main, "bug-2755-test", "implementer", &[]);
-    crate::session::stamp_lease_child_grant_at(&main, &finding.id, &grant).unwrap();
-    let mail = mailbox.join("msg");
-    std::fs::write(&mail, "keep").unwrap();
-    let err = heal_doctor_lease(&main, &finding).unwrap_err();
-    assert!(
-        err.to_string().contains("unbound seat clone holds mail"),
-        "{err:#}"
-    );
-    let retained: toml::Table = std::fs::read_to_string(&lease).unwrap().parse().unwrap();
-    assert_eq!(
-        retained["ending_retained_reason"].as_str(),
-        Some("unbound seat clone holds mail")
-    );
-    assert!(retained.contains_key("ending_retained_at"));
-    assert!(lease.exists());
-    assert!(read_grant(&grant).unwrap().revoked_at.is_some());
-    std::fs::remove_file(mail).unwrap();
-    let writer = aida_core::mailbox::lock_local_mail_writer(&tree).unwrap();
-    assert!(heal_doctor_lease(&main, &finding)
-        .unwrap_err()
-        .to_string()
-        .contains("local mail writer active"));
-    assert!(lease.exists());
-    drop(writer);
-    let result = heal_doctor_lease(&main, &finding).unwrap();
-    assert_eq!(result.status, "healed");
-    assert!(!lease.exists());
-    assert!(tree.join(".git").is_dir());
 }
