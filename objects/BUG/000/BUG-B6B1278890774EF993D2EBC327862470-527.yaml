@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T23:28:15.005813754Z
-modified_at: 2026-11-25T23:29:21.612279869Z
+modified_at: 2026-11-25T23:31:27.688095648Z
 req_type: Bug
 tags:
 - ci
@@ -26,6 +26,21 @@ relationships:
   target_id: 01a213e3-ba21-73e1-b295-65d98d31ac5f
   created_at: 2026-11-25T23:29:14.843013069Z
   created_by: joe
+comments:
+- id: 01a2150d-0126-78d2-82a0-f7030581b24f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:31):
+    # BUG-2766 (BUG-2764 follow-up) (advisor-122 2026-11-25 16:27; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2764-followup (from current main, which already contains #4587). Title with the completing (BUG-2766) trailer. <=150 lines. HIGH.
+    READ: `aida show BUG-2766` and `aida show BUG-2764 --comments` (the latest comment lists the three oddities). Live evidence from `aida review --promote-approved-heads` at 16:20:
+     (a) OVERRIDE approvals are MISSING from the list: #4600 was approved @ f24ccdbb by an advisor override record and does not appear at all. The approved-head selection must include override/advisor approval records at the current head.
+     (b) Label-event check rows (`label event (fast compile not rerun)`, status 'skipping', created when the ci:full label is added) are read as "FAST CI at this head has not finished". Ignore label-event rows; judge FAST from the real fast checks at the head (and if ci:full is already present with a full run in progress or done, say so).
+     (c) TRAIN PRs (head branch train/*, title "[train] ...") are considered and fail with "review-watch lock busy: PR-N.full-ci.lock", which makes the whole job exit non-zero. Skip train PRs entirely, and treat a busy per-PR lock as "skipped (busy)", not a failure.
+    TESTS for (a), (b) and (c). One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T23:31:27.688095648Z
+  modified_at: 2026-11-25T23:31:27.688095648Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2150a-c5ca-7f63-8878-e8a8add13a31
   author: joe
