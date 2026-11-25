@@ -12,12 +12,12 @@ description: |
   - AC1: an approval recorded at a head whose FAST run is complete adds ci:full (or re-triggers the full run), and a full run appears. An approval recorded while FAST is still running is promoted by approved-head-full-ci as soon as FAST completes, within one tick.
   - AC2: a test covering both orders (approval after FAST completes; approval before FAST completes, then the job tick).
   - AC3: `review --promote-approved-heads` prints one line per approved PR it considered (promoted / skipped + reason), and a non-zero exit always carries a stderr reason, so schedule.log is diagnosable.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T19:06:51.672763084Z
+modified_at: 2026-11-25T19:07:40.106704901Z
 req_type: Bug
 tags:
 - ci
@@ -84,6 +84,13 @@ comments:
   modified_at: 2026-11-25T19:06:51.672763084Z
   session_id: 01a213ea88d0
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2141b-40ca-7751-8968-e24051d54272
+  author: aida-publication-done
+  content: Implementer push 6719a94592e6 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T19:07:40.106704407Z
+  modified_at: 2026-11-25T19:07:40.106704407Z
+  session_id: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
@@ -100,6 +107,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2141b-40ca-7751-8968-e23454e5b4ed
+  author: aida-publication-done
+  timestamp: 2026-11-25T19:07:40.106702395Z
+  session_id: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
