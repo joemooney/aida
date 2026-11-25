@@ -21,7 +21,6 @@ const HOLDER_PURPOSE: &str = if TRAIN {
 const MAX_RETIRED_GRANTS: usize = 4;
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Binding {
     grant: String,
     subject: String,
@@ -76,7 +75,6 @@ impl Binding {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Service {
     version: u32,
     deputy: String,
@@ -1365,7 +1363,6 @@ fn rebind_after_launch_with(
 // restarts. Success starts a new episode; backoff ticks never clear failures.
 // trace:STORY-2691 | ai:codex
 #[derive(Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Failures {
     #[serde(default)]
     dispatch_pending: bool,

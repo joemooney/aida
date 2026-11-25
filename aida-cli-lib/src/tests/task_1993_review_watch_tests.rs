@@ -5878,3 +5878,38 @@ fn bug2746_unrecorded_takeover_and_failed_record() {
         .unwrap();
     unknown();
 }
+
+// trace:BUG-2758 | ai:codex
+#[test]
+fn bug2758_rollover_loads_additive_fields_and_omits_zero_retries() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    dispatch(select(&store, &c, None, 1).unwrap());
+    let bytes = store.dir.read(STATE).unwrap().unwrap();
+    let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    json["future_state"] = true.into();
+    let entry = &mut json["entries"][c.key()];
+    entry["future_entry"] = 1.into();
+    let attempt = &mut entry["attempts"][0];
+    assert!(attempt.get("pickup_retries").is_none());
+    attempt["future_attempt"] = serde_json::json!({"extra": ["value"]});
+    store
+        .dir
+        .write(STATE, &serde_json::to_vec(&json).unwrap())
+        .unwrap();
+    assert_eq!(
+        store.load().unwrap().entries[&c.key()].attempts[0].pickup_retries,
+        0
+    );
+
+    store
+        .transaction(&c.key(), |state| {
+            state.entries.get_mut(&c.key()).unwrap().attempts[0].pickup_retries = 2;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        store.load().unwrap().entries[&c.key()].attempts[0].pickup_retries,
+        2
+    );
+}

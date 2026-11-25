@@ -97,7 +97,11 @@ fn store_compact(squash: bool, yes: bool) -> Result<()> {
 
 // Path-explicit entry keeps the maintenance boundary testable without cwd changes.
 // trace:TASK-1981 | ai:codex
-fn store_compact_at(store_path: &std::path::Path, squash: bool, yes: bool) -> Result<()> {
+pub(crate) fn store_compact_at(
+    store_path: &std::path::Path,
+    squash: bool,
+    yes: bool,
+) -> Result<()> {
     if squash {
         return store_compact_squash(store_path, yes);
     }
