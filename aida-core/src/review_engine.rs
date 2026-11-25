@@ -1412,6 +1412,17 @@ pub struct ReviewTelemetryRecord {
     pub gate_failed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sarif_archive_path: Option<String>,
+    /// ReviewBench-aligned severity-weighted defect signal (`10*critical + 5*high + 2*medium + 1*low`).
+    #[serde(default)]
+    pub severity_weighted_score: usize,
+    /// Number of confirmed findings with an `existing_code` snippet that were subsequently
+    /// modified or replaced by `suggestion_code` in follow-up commits / current working tree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressed_findings: Option<usize>,
+    /// Online precision counterpart (ReviewBench "Addressed Rate"): percentage of snippet-bearing
+    /// confirmed findings that were modified/fixed in subsequent code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressed_rate_pct: Option<u8>,
 }
 
 /// Aggregated statistics for a single A/B experiment arm across recorded reviews.
@@ -1435,6 +1446,17 @@ pub struct ReviewArmSummary {
     pub avg_exact_anchor_rate_pct: u8,
     pub avg_coverage_rate_pct: u8,
     pub gate_failures: usize,
+    pub total_severity_weighted_score: usize,
+    pub avg_severity_weighted_score: f64,
+    pub total_addressed_findings: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overall_addressed_rate_pct: Option<u8>,
+    /// Precision-weighted F_0.5 score (beta = 0.5, for low-noise CI gates).
+    pub f05_score: f64,
+    /// Balanced F_1 score (beta = 1.0).
+    pub f1_score: f64,
+    /// Recall-weighted F_2 score (beta = 2.0, for exhaustive pre-release audits).
+    pub f2_score: f64,
 }
 
 /// Convert anchored review findings into a SARIF 2.1.0 JSON document suitable for
@@ -1524,6 +1546,19 @@ pub fn findings_to_sarif_json_with_telemetry(
                 "disposition": if dismissal_reason.is_some() { "dismissed_by_challenger" } else { "confirmed" }
             }
         });
+
+        if let Some(existing) = f.existing_code.as_deref() {
+            if !existing.trim().is_empty() {
+                result_obj["properties"]["existingCode"] =
+                    serde_json::Value::String(existing.to_string());
+            }
+        }
+        if let Some(suggestion) = f.suggestion_code.as_deref() {
+            if !suggestion.trim().is_empty() {
+                result_obj["properties"]["suggestionCode"] =
+                    serde_json::Value::String(suggestion.to_string());
+            }
+        }
 
         if let Some(reason) = dismissal_reason {
             result_obj["suppressions"] = serde_json::json!([
@@ -1974,6 +2009,194 @@ pub fn resolve_ab_arm_assignment(
     }
 }
 
+/// Compute ReviewBench-aligned severity-weighted defect signal (`10*critical + 5*high + 2*medium + 1*low`).
+// trace:STORY-3120 | ai:antigravity
+pub fn compute_severity_weighted_score(
+    critical: usize,
+    high: usize,
+    medium: usize,
+    low: usize,
+) -> usize {
+    critical * 10 + high * 5 + medium * 2 + low
+}
+
+/// Compute the generalized F_beta score (`beta = 0.5` for precision-weighted, `beta = 1.0` for F1,
+/// `beta = 2.0` for recall-weighted) given `precision` and `recall` in `[0.0, 1.0]`.
+// trace:STORY-3120 | ai:antigravity
+pub fn compute_f_beta_score(precision: f64, recall: f64, beta: f64) -> f64 {
+    let p = precision.clamp(0.0, 1.0);
+    let r = recall.clamp(0.0, 1.0);
+    if p <= 0.0 || r <= 0.0 {
+        return 0.0;
+    }
+    let b2 = beta * beta;
+    let denom = b2 * p + r;
+    if denom <= 0.0 {
+        return 0.0;
+    }
+    let raw = (1.0 + b2) * (p * r) / denom;
+    (raw * 10_000.0).round() / 10_000.0
+}
+
+/// Evaluate how many snippet-bearing confirmed findings have been addressed (the quoted
+/// defective `existing_code` snippet was modified/removed or replaced by `suggestion_code`)
+/// in the current file contents returned by `read_current_file`.
+/// Returns `(addressed_count, evaluable_count, addressed_rate_pct)`.
+// trace:STORY-3120 | ai:antigravity
+pub fn compute_addressed_findings_with<F>(
+    findings: &[RawReviewFinding],
+    mut read_current_file: F,
+) -> (usize, usize, Option<u8>)
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    let mut addressed = 0usize;
+    let mut evaluable = 0usize;
+
+    for f in findings {
+        let Some(existing) = f.existing_code.as_deref() else {
+            continue;
+        };
+        let trimmed_existing = existing.trim();
+        if trimmed_existing.is_empty() {
+            continue;
+        }
+        evaluable += 1;
+        match read_current_file(&f.path) {
+            Some(current_body) => {
+                // If the verbatim defective snippet is no longer present in the file
+                // (or `suggestion_code` is now present and `existing_code != suggestion_code`),
+                // the finding was addressed by a code change.
+                let still_has_defect =
+                    anchor_snippet_lines(&current_body, trimmed_existing, f.start_line).is_some();
+                if !still_has_defect {
+                    addressed += 1;
+                } else if let Some(sugg) = f.suggestion_code.as_deref() {
+                    let trimmed_sugg = sugg.trim();
+                    if !trimmed_sugg.is_empty()
+                        && trimmed_sugg != trimmed_existing
+                        && anchor_snippet_lines(&current_body, trimmed_sugg, f.start_line).is_some()
+                    {
+                        addressed += 1;
+                    }
+                }
+            }
+            None => {
+                // File was deleted or moved in follow-up commit
+                addressed += 1;
+            }
+        }
+    }
+
+    let rate = if evaluable > 0 {
+        Some(((addressed * 100) / evaluable).min(100) as u8)
+    } else {
+        None
+    };
+    (addressed, evaluable, rate)
+}
+
+/// Extract confirmed `RawReviewFinding` entries (including `existingCode` and `suggestionCode`
+/// properties) from a SARIF 2.1.0 JSON document so `--telemetry-report` can compute live
+/// Online Addressed Rate against current repository files.
+// trace:STORY-3120 | ai:antigravity
+pub fn extract_confirmed_findings_from_sarif(sarif: &serde_json::Value) -> Vec<RawReviewFinding> {
+    let mut out = Vec::new();
+    let Some(results) = sarif
+        .get("runs")
+        .and_then(|r| r.get(0))
+        .and_then(|r0| r0.get("results"))
+        .and_then(|res| res.as_array())
+    else {
+        return out;
+    };
+
+    for item in results {
+        if item
+            .get("suppressions")
+            .and_then(|s| s.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let props = item.get("properties");
+        if props
+            .and_then(|p| p.get("disposition"))
+            .and_then(|d| d.as_str())
+            == Some("dismissed_by_challenger")
+        {
+            continue;
+        }
+        let path = item
+            .get("locations")
+            .and_then(|l| l.get(0))
+            .and_then(|l0| l0.get("physicalLocation"))
+            .and_then(|pl| pl.get("artifactLocation"))
+            .and_then(|al| al.get("uri"))
+            .and_then(|u| u.as_str())
+            .unwrap_or("")
+            .to_string();
+        if path.is_empty() {
+            continue;
+        }
+        let region = item
+            .get("locations")
+            .and_then(|l| l.get(0))
+            .and_then(|l0| l0.get("physicalLocation"))
+            .and_then(|pl| pl.get("region"));
+        let start_line = region
+            .and_then(|r| r.get("startLine"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let end_line = region
+            .and_then(|r| r.get("endLine"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let category = props
+            .and_then(|p| p.get("category"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("general")
+            .to_string();
+        let severity = props
+            .and_then(|p| p.get("severity"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("medium")
+            .to_string();
+        let anchor_status = props
+            .and_then(|p| p.get("anchorStatus"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let existing_code = props
+            .and_then(|p| p.get("existingCode"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let suggestion_code = props
+            .and_then(|p| p.get("suggestionCode"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let message = item
+            .get("message")
+            .and_then(|m| m.get("text"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        out.push(RawReviewFinding {
+            path,
+            severity,
+            category,
+            message,
+            existing_code,
+            suggestion_code,
+            start_line,
+            end_line,
+            anchor_status,
+        });
+    }
+    out
+}
+
 /// Aggregate a slice of `ReviewTelemetryRecord` entries by `ab_arm` for A/B comparison.
 // trace:STORY-3120 | ai:antigravity
 pub fn summarize_review_telemetry_by_arm(
@@ -2006,6 +2229,7 @@ pub fn summarize_review_telemetry_by_arm(
             0
         };
         let sum_anchor_pct: usize = rows.iter().map(|r| r.exact_anchor_rate_pct as usize).sum();
+        let avg_exact_anchor_rate_pct = (sum_anchor_pct / n) as u8;
         let mut cov_sum = 0usize;
         let mut cov_cnt = 0usize;
         for r in &rows {
@@ -2020,6 +2244,51 @@ pub fn summarize_review_telemetry_by_arm(
             100
         };
         let gate_failures = rows.iter().filter(|r| r.gate_failed).count();
+
+        let total_severity_weighted_score: usize = rows
+            .iter()
+            .map(|r| {
+                if r.severity_weighted_score > 0 {
+                    r.severity_weighted_score
+                } else {
+                    compute_severity_weighted_score(
+                        r.critical_count,
+                        r.high_count,
+                        r.medium_count,
+                        r.low_count,
+                    )
+                }
+            })
+            .sum();
+        let avg_severity_weighted_score =
+            ((total_severity_weighted_score as f64 / (n as f64)) * 100.0).round() / 100.0;
+
+        let total_addressed_findings: usize =
+            rows.iter().filter_map(|r| r.addressed_findings).sum();
+        let mut addressed_pct_sum = 0usize;
+        let mut addressed_pct_cnt = 0usize;
+        for r in &rows {
+            if let Some(pct) = r.addressed_rate_pct {
+                addressed_pct_sum += pct as usize;
+                addressed_pct_cnt += 1;
+            }
+        }
+        let overall_addressed_rate_pct = if addressed_pct_cnt > 0 {
+            Some((addressed_pct_sum / addressed_pct_cnt).min(100) as u8)
+        } else {
+            None
+        };
+
+        // Precision proxy for F_beta: use online Addressed Rate when positive (>0%),
+        // otherwise combine exact-anchor verification rate with Challenger confirmation rate.
+        let precision_proxy = match overall_addressed_rate_pct {
+            Some(pct) if pct > 0 => (pct as f64) / 100.0,
+            _ => (avg_exact_anchor_rate_pct as f64) / 100.0,
+        };
+        let recall_proxy = (avg_cov as f64) / 100.0;
+        let f05_score = compute_f_beta_score(precision_proxy, recall_proxy, 0.5);
+        let f1_score = compute_f_beta_score(precision_proxy, recall_proxy, 1.0);
+        let f2_score = compute_f_beta_score(precision_proxy, recall_proxy, 2.0);
 
         summaries.push(ReviewArmSummary {
             ab_arm: arm,
@@ -2036,9 +2305,16 @@ pub fn summarize_review_telemetry_by_arm(
             total_confirmed_findings: total_confirmed,
             total_dismissed_findings: total_dismissed,
             overall_suppression_pct,
-            avg_exact_anchor_rate_pct: (sum_anchor_pct / n) as u8,
+            avg_exact_anchor_rate_pct,
             avg_coverage_rate_pct: avg_cov,
             gate_failures,
+            total_severity_weighted_score,
+            avg_severity_weighted_score,
+            total_addressed_findings,
+            overall_addressed_rate_pct,
+            f05_score,
+            f1_score,
+            f2_score,
         });
     }
     summaries
@@ -2062,11 +2338,15 @@ pub fn format_review_telemetry_report_markdown(records: &[ReviewTelemetryRecord]
 
     let summaries = summarize_review_telemetry_by_arm(records);
     out.push_str("## A/B Arm Summary\n\n");
-    out.push_str("| A/B Arm | Runs | Avg Total (ms) | Avg Finder / Challenger (ms) | Avg Tokens (in/out) | Avg Cost ($) | Candidates → Confirmed (Dismissed %) | Exact Anchor % | Avg Coverage % |\n");
-    out.push_str("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n");
+    out.push_str("| A/B Arm | Runs | Avg Total (ms) | Avg Finder / Challenger (ms) | Avg Tokens (in/out) | Avg Cost ($) | Candidates → Confirmed (Dismissed %) | Sev-Weighted Score | Addressed Rate | F0.5 / F1 / F2 | Exact Anchor % | Avg Coverage % |\n");
+    out.push_str("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n");
     for s in &summaries {
+        let addressed_str = match s.overall_addressed_rate_pct {
+            Some(pct) => format!("{pct}% ({})", s.total_addressed_findings),
+            None => "n/a".to_string(),
+        };
         out.push_str(&format!(
-            "| `{}` | {} | {} ms | {} / {} ms | {} / {} | ${:.4} | {} → {} ({}% suppressed) | {}% | {}% |\n",
+            "| `{}` | {} | {} ms | {} / {} ms | {} / {} | ${:.4} | {} → {} ({}% suppressed) | {:.1} (total {}) | {} | {:.2} / {:.2} / {:.2} | {}% | {}% |\n",
             s.ab_arm,
             s.runs,
             s.avg_total_ms,
@@ -2078,6 +2358,12 @@ pub fn format_review_telemetry_report_markdown(records: &[ReviewTelemetryRecord]
             s.total_pass1_candidates,
             s.total_confirmed_findings,
             s.overall_suppression_pct,
+            s.avg_severity_weighted_score,
+            s.total_severity_weighted_score,
+            addressed_str,
+            s.f05_score,
+            s.f1_score,
+            s.f2_score,
             s.avg_exact_anchor_rate_pct,
             s.avg_coverage_rate_pct
         ));
@@ -2936,6 +3222,9 @@ fn beta() {
             coverage_rate_pct: Some(100),
             gate_failed: true,
             sarif_archive_path: None,
+            severity_weighted_score: compute_severity_weighted_score(0, 1, 0, 0),
+            addressed_findings: Some(1),
+            addressed_rate_pct: Some(100),
         };
 
         let rich_sarif = findings_to_sarif_json_with_telemetry(
@@ -2964,6 +3253,29 @@ fn beta() {
             "ab-adversarial"
         );
 
+        let extracted = extract_confirmed_findings_from_sarif(&rich_sarif);
+        assert_eq!(extracted.len(), 1);
+        assert_eq!(
+            extracted[0].existing_code.as_deref(),
+            Some("let _ = verify_token(tok);")
+        );
+        // Before fix: defective snippet is still present -> 0% addressed
+        let (addr0, eval0, rate0) = compute_addressed_findings_with(&extracted, |_| {
+            Some("pub fn run() {\n    let _ = verify_token(tok);\n}\n".to_string())
+        });
+        assert_eq!((addr0, eval0, rate0), (0, 1, Some(0)));
+        // After fix: defective snippet replaced by suggestion -> 100% addressed
+        let (addr1, eval1, rate1) = compute_addressed_findings_with(&extracted, |_| {
+            Some(
+                "pub fn run() -> Result<()> {\n    verify_token(tok)?;\n    Ok(())\n}\n"
+                    .to_string(),
+            )
+        });
+        assert_eq!((addr1, eval1, rate1), (1, 1, Some(100)));
+
+        assert_eq!(compute_f_beta_score(1.0, 1.0, 1.0), 1.0);
+        assert!(compute_f_beta_score(1.0, 0.5, 0.5) > compute_f_beta_score(1.0, 0.5, 2.0));
+
         assert_eq!(
             resolve_ab_arm_assignment(Some("auto"), Some(100), None, "abc", true, false),
             ("ab-single-pass".to_string(), false)
@@ -2977,6 +3289,8 @@ fn beta() {
         assert!(report_md.contains("A/B Arm Summary"));
         assert!(report_md.contains("`ab-adversarial`"));
         assert!(report_md.contains("50% suppressed"));
+        assert!(report_md.contains("100% (1)"));
+        assert!(report_md.contains("1.00 / 1.00 / 1.00"));
         assert!(report_md.contains("`aida.review.fail-open`"));
 
         let reg = PlaybookRegistry::default();

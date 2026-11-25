@@ -7,7 +7,8 @@
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
     anchor_findings_with, apply_adversarial_challenger_with_dismissed, bundle_review_batches,
-    classify_diff_inventory, detect_ai_authors, estimate_review_cost_usd,
+    classify_diff_inventory, compute_addressed_findings_with, compute_severity_weighted_score,
+    detect_ai_authors, estimate_review_cost_usd, extract_confirmed_findings_from_sarif,
     findings_exceeding_threshold, findings_to_sarif_json_with_telemetry,
     format_forge_review_markdown_with_adversarial, format_review_telemetry_report_markdown,
     parse_runner_findings_json, resolve_ab_arm_assignment, summarize_review_telemetry_by_arm,
@@ -1412,6 +1413,14 @@ fn build_review_telemetry_record(
         coverage_rate_pct: coverage.map(|c| c.coverage_rate_pct.min(100) as u8),
         gate_failed,
         sarif_archive_path: None,
+        severity_weighted_score: compute_severity_weighted_score(
+            critical_count,
+            high_count,
+            medium_count,
+            low_count,
+        ),
+        addressed_findings: None,
+        addressed_rate_pct: None,
     }
 }
 
@@ -1487,13 +1496,34 @@ fn handle_telemetry_report(project_root: &Path, args: &ReviewPrepareArgs) -> Res
             if trimmed.is_empty() {
                 continue;
             }
-            let rec: ReviewTelemetryRecord = serde_json::from_str(trimmed).with_context(|| {
-                format!(
-                    "parse telemetry JSONL row {} in {}",
-                    line_no + 1,
-                    jsonl_path.display()
-                )
-            })?;
+            let mut rec: ReviewTelemetryRecord =
+                serde_json::from_str(trimmed).with_context(|| {
+                    format!(
+                        "parse telemetry JSONL row {} in {}",
+                        line_no + 1,
+                        jsonl_path.display()
+                    )
+                })?;
+            // Live Online Addressed-Rate evaluation (ReviewBench counterpart to online precision):
+            // When the SARIF 2.1.0 archive exists on disk, inspect its confirmed findings against
+            // the current workspace files to check how many quoted defective snippets were modified
+            // or replaced by `suggestion_code` in subsequent edits/commits.
+            if let Some(sarif_rel) = rec.sarif_archive_path.as_deref() {
+                let sarif_full = project_root.join(sarif_rel);
+                if let Ok(sarif_raw) = std::fs::read_to_string(&sarif_full) {
+                    if let Ok(sarif_val) = serde_json::from_str::<serde_json::Value>(&sarif_raw) {
+                        let confirmed = extract_confirmed_findings_from_sarif(&sarif_val);
+                        let (addressed, evaluable, rate) =
+                            compute_addressed_findings_with(&confirmed, |rel_path| {
+                                std::fs::read_to_string(project_root.join(rel_path)).ok()
+                            });
+                        if evaluable > 0 {
+                            rec.addressed_findings = Some(addressed);
+                            rec.addressed_rate_pct = rate;
+                        }
+                    }
+                }
+            }
             records.push(rec);
         }
     }
@@ -2045,8 +2075,12 @@ fn build_adversarial_challenger_prompt(
         "You are an AIDA Blue-Team Skeptical Challenger in a two-pass adversarial code review.\n",
     );
     prompt.push_str("Your job is to challenge every candidate finding from Pass 1 (Red-Team Finder) against the actual file contents, type guarantees, and surrounding control flow.\n");
-    prompt.push_str("- Mark a finding `\"dismissed\"` if it is a false positive, already prevented by surrounding validation/types/compiler checks, or speculative noise.\n");
-    prompt.push_str("- Mark a finding `\"confirmed\"` only if the defect is genuinely reachable and violates the contract, safety rules, or linked acceptance criteria.\n\n");
+    prompt.push_str("Apply the three-condition validity rubric (True + Relevant + Non-Trivial):\n");
+    prompt.push_str("1. **Factually True**: The defect is genuinely reachable in the code and not already prevented by surrounding validation, caller invariants, or compiler/type/borrow checks.\n");
+    prompt.push_str("2. **Change-Relevant**: The issue is directly introduced, exposed, or impacted by the reviewed code or violates a linked AIDA `## Acceptance` criterion.\n");
+    prompt.push_str("3. **Actionable & Non-Trivial**: The finding surfaces a substantive correctness, security, concurrency, error-handling, contract, or test defect — not stylistic bikeshedding or linter noise.\n");
+    prompt.push_str("- Mark a finding `\"dismissed\"` if it fails ANY of the three conditions above, and state which condition failed in `reason`.\n");
+    prompt.push_str("- Mark a finding `\"confirmed\"` only if it satisfies ALL THREE conditions (`True + Relevant + Non-Trivial`).\n\n");
     prompt.push_str("Return ONLY a valid JSON object matching this exact schema:\n");
     prompt.push_str("{\n  \"verdicts\": [\n    {\n      \"index\": 0,\n      \"verdict\": \"confirmed|dismissed\",\n      \"reason\": \"Concise evidence from the code explaining why the finding holds or fails\",\n      \"refined_message\": \"Optional sharpened message when confirmed\"\n    }\n  ]\n}\n\n");
 
@@ -2696,7 +2730,8 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(root.join(sarif_archive_rel).is_file());
         assert!(root.join(".aida/review-telemetry/reviews.jsonl").is_file());
 
-        // Verify `--telemetry-report` aggregates `.aida/review-telemetry/reviews.jsonl`:
+        // Verify `--telemetry-report` aggregates `.aida/review-telemetry/reviews.jsonl`
+        // and dynamically evaluates live Online Addressed Rate against current files:
         let report_args = ReviewPrepareArgs {
             telemetry_report: true,
             write: Some(PathBuf::from("telemetry-report.md")),
@@ -2707,7 +2742,24 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(report_md.contains("A/B Arm Summary"));
         assert!(report_md.contains("`ab-adversarial`"));
         assert!(report_md.contains("50% suppressed"));
+        assert!(report_md.contains("0% (0)"), "{report_md}");
         assert!(report_md.contains("`aida.review.fail-open`"));
+
+        // Simulate developer addressing the finding in `lib.rs` (replacing `.unwrap()` with `?`):
+        let orig_lib = std::fs::read_to_string(root.join("lib.rs")).unwrap();
+        std::fs::write(
+            root.join("lib.rs"),
+            "// trace:STORY-3120 | ai:antigravity\npub fn compute() -> Option<i32> {\n    let danger = Some(1)?;\n    Some(danger)\n}\n",
+        )
+        .unwrap();
+        handle_review_prepare(&report_args, &store).unwrap();
+        let report_after_fix = std::fs::read_to_string(root.join("telemetry-report.md")).unwrap();
+        assert!(report_after_fix.contains("100% (1)"), "{report_after_fix}");
+        assert!(
+            report_after_fix.contains("1.00 / 1.00 / 1.00"),
+            "{report_after_fix}"
+        );
+        std::fs::write(root.join("lib.rs"), orig_lib).unwrap();
 
         let loaded_store = store.load().unwrap();
         assert_eq!(loaded_store.requirements.len(), 1);
