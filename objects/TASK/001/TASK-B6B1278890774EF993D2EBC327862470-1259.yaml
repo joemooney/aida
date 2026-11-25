@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397
 
   The strict_terms check at lines 282–284 and 375–412 treats common words as strict metadata without regard to what they modify. An Approved small change titled 'Fix Shift key handling' in ordinary UI code is held solely because 'shift' was intended to catch night-shift guards. Use explicit tier metadata and scoped path classification, and test an ordinary title containing a colliding word.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T17:58:39.971726305Z
-modified_at: 2026-11-25T21:03:32.942650751Z
+modified_at: 2026-11-25T21:03:34.575956919Z
 req_type: Task
 tags:
 - carried-from:STORY-3038
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21485-5eaf-7042-82a7-fd98d997967d
+  author: joe
+  timestamp: 2026-11-25T21:03:34.575952487Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397
   branch: pr-4448
