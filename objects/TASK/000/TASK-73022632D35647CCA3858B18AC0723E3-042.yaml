@@ -14,12 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T21:46:44.802418707Z
-modified_at: 2026-11-20T21:46:44.802418707Z
+modified_at: 2026-11-25T21:03:09.428656830Z
 req_type: Task
 tags:
 - from-implementer:BUG-2706
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a21484-fc74-7dc0-8dff-cb8047fd364b
+  author: joe
+  content: FOLDED into a comment on BUG-2706 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:03:09.428656830Z
+  modified_at: 2026-11-25T21:03:09.428656830Z
 history:
 - id: 01a1fb44-b6dc-7640-988c-604e1de1ea2d
   author: joe
