@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T22:08:17.795104503Z
+modified_at: 2026-11-25T22:16:13.230001529Z
 req_type: Story
 tags:
 - landing
@@ -1483,6 +1483,14 @@ comments:
   created_at: 2026-11-25T22:08:17.795099369Z
   modified_at: 2026-11-25T22:08:17.795099369Z
   session_id: 01a2146b4fa4
+- id: 01a214c7-e0ae-7f82-a13f-0bfd32c9a35e
+  author: joe
+  content: |-
+    DEFERRED minors (advisor-122 override-approval of #4569 FINAL @ a6f5aba4, 2026-11-25 15:22): a p3 case compare and a p2 stale-episode guard.
+    - validate_waiting_needs (review_commands.rs, the `specific` check) compares need details against ci_gated_checks, CI_AGGREGATOR_CHECK and the `ci-tier:` prefix case-sensitively, but compares `ci` case-insensitively. So `check:build (Ubuntu-latest)` or `test:CI-Tier:full` count as a specific dependenc
+    - main_watch::open_episode (main_watch.rs open_episode_at) returns any episode still open in the state file. It does not check how old the state is, or whether the episode's red_sha is an ancestor of the PR's base. If the red-main watch stops running after main has recovered, a leftover open episode k
+  created_at: 2026-11-25T22:16:13.230001529Z
+  modified_at: 2026-11-25T22:16:13.230001529Z
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
