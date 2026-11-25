@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The ancestry exemption applies only to the recovery-invocation argv itself; a descendant carrying the EXACT attempt token, or matching the recorded group/session, still counts as an occupant and blocks release.
   - AC2: Tests: an ancestor with independent holder evidence blocks release; a plain recovery invocation does not.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-25T02:07:29.802535306Z
+modified_at: 2026-11-25T04:01:55.371499951Z
 req_type: Bug
 tags:
 - launch
@@ -195,6 +195,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a210de-04ab-7db0-8c50-958962026139
+  author: aida-session-start
+  timestamp: 2026-11-25T04:01:55.371498294Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
