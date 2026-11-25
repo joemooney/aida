@@ -13,12 +13,25 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T04:02:46.723004459Z
+modified_at: 2026-11-25T04:11:29.684004129Z
 req_type: Task
 tags:
 - integration
 - review
 - small
+comments:
+- id: 01a210e6-ca15-7a10-bb6b-815461ef9c37
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: afbea08b75a58cf8d9618068cb5efd495790b244 plus native working tree. Inspected origin/main...HEAD and git diff HEAD. No untracked additions.
+    AC1: [evidence: behavioral-test] aida-core/src/review_engine.rs:1770 checks three normalized stems across different directories and case-distinct packages with spare batch capacity. Same-directory companions and budget limits retain coverage.
+    AC2: [evidence: behavioral-test] aida-core/src/review_engine.rs:1755 checks a mixed-language custom playbook, mixed-case Rust extension and a Rust-prefixed playbook with only Python input. review_prepare.rs:197 retains the path of each sample.
+    Probe findings and fixes: protected fallback packing from cross-directory collisions, matched extension case handling and registered both regressions in scripts/ratchet-set.json. No authority paths changed. All 23 review-engine tests and seven inventory checks passed. Full fast gate rerun in progress. Forge CI awaits host publication.
+  created_at: 2026-11-25T04:11:29.684004129Z
+  modified_at: 2026-11-25T04:11:29.684004129Z
+  session_id: 01a210ddafaf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e94-a407-75a0-baf4-38e2a3232a5d
   author: joe
