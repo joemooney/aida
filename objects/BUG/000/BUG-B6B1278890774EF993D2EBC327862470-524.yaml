@@ -5,15 +5,17 @@ title: 'review-watch holds PRs forever on exited attempts: new pushed heads are 
 description: |
   Seen 2026-11-25 (filed by product-15 per advisor-122 01:42). review-watch's last pass skipped 9 open PRs under "held by exited attempts" (PR-4560, 4538, 4533, 4482, 4475, 4464, 4458, 4457, 4397): a prior review attempt exited without clearing, so each PR's NEWER pushed rework head was never reviewed. Most of the night's reworks stalled silently this way. Recovery today needs an operator `aida review watch --release PR-N` per PR (reviewer authority).
 
+  AMENDED 2026-11-25 04:50 (advisor-122): redesign by removal. No liveness proof is needed (the r1 review showed it can't be made reliable). The doctor finding is out of scope.
+
   ## Acceptance
-  - AC1: When EVERY recorded attempt process for a change is verified DEAD and the PR head has MOVED past the attempt's head, review-watch auto-releases the hold and dispatches the new head. If liveness is UNKNOWN, it keeps holding and surfaces a doctor finding (stalled-reviews / review-watch).
-  - AC2: Tests: dead + moved → released and dispatched; alive → held; unknown liveness → held + doctor finding.
+  - AC1: An exited-attempt hold is keyed by (PR, head SHA). When the PR head differs from the held attempt's head, review-watch dispatches the new head with no liveness probe. This includes the hub/claim path: an old head's claim, Running or not, never blocks a different head. Verdicts stay head-pinned, so a late verdict from the old attempt never counts for the new head. A same-head hold stays held until an operator runs `--release`. `--release` also clears the saved skip entry.
+  - AC2: Tests: a hold on head A plus a new head B → B is dispatched with no probe; the same head A → still held; a late verdict from the A attempt does not count for B; a hub-enabled case where A's claim is left Running → B is still dispatched.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T11:42:53.344277611Z
+modified_at: 2026-11-25T11:43:22.598034809Z
 req_type: Bug
 tags:
 - review-watch
@@ -185,6 +187,25 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21284-7de6-77e1-87b5-414a552b0d3b
+  author: joe
+  timestamp: 2026-11-25T11:43:22.598031977Z
+  changes:
+  - field_name: description
+    old_value: |
+      Seen 2026-11-25 (filed by product-15 per advisor-122 01:42). review-watch's last pass skipped 9 open PRs under "held by exited attempts" (PR-4560, 4538, 4533, 4482, 4475, 4464, 4458, 4457, 4397): a prior review attempt exited without clearing, so each PR's NEWER pushed rework head was never reviewed. Most of the night's reworks stalled silently this way. Recovery today needs an operator `aida review watch --release PR-N` per PR (reviewer authority).
+
+      ## Acceptance
+      - AC1: When EVERY recorded attempt process for a change is verified DEAD and the PR head has MOVED past the attempt's head, review-watch auto-releases the hold and dispatches the new head. If liveness is UNKNOWN, it keeps holding and surfaces a doctor finding (stalled-reviews / review-watch).
+      - AC2: Tests: dead + moved → released and dispatched; alive → held; unknown liveness → held + doctor finding.
+    new_value: |
+      Seen 2026-11-25 (filed by product-15 per advisor-122 01:42). review-watch's last pass skipped 9 open PRs under "held by exited attempts" (PR-4560, 4538, 4533, 4482, 4475, 4464, 4458, 4457, 4397): a prior review attempt exited without clearing, so each PR's NEWER pushed rework head was never reviewed. Most of the night's reworks stalled silently this way. Recovery today needs an operator `aida review watch --release PR-N` per PR (reviewer authority).
+
+      AMENDED 2026-11-25 04:50 (advisor-122): redesign by removal. No liveness proof is needed (the r1 review showed it can't be made reliable). The doctor finding is out of scope.
+
+      ## Acceptance
+      - AC1: An exited-attempt hold is keyed by (PR, head SHA). When the PR head differs from the held attempt's head, review-watch dispatches the new head with no liveness probe. This includes the hub/claim path: an old head's claim, Running or not, never blocks a different head. Verdicts stay head-pinned, so a late verdict from the old attempt never counts for the new head. A same-head hold stays held until an operator runs `--release`. `--release` also clears the saved skip entry.
+      - AC2: Tests: a hold on head A plus a new head B → B is dispatched with no probe; the same head A → still held; a late verdict from the A attempt does not count for B; a hub-enabled case where A's claim is left Running → B is still dispatched.
 execution_mode: drive
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
