@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T21:23:46.693184820Z
+modified_at: 2026-11-25T22:05:41.380647970Z
 req_type: Bug
 tags:
 - lanes
@@ -511,6 +511,12 @@ comments:
   content: PR-4583 at c5538b6d6e694a79e4f195a4f755fb5c10ca22ff conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-25T21:23:46.540620587Z
   modified_at: 2026-11-25T21:23:46.540620587Z
+- id: 01a214be-3c84-7ad0-b8da-b6c95dc50cea
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2761-s3-route-before-reserve` at head `c5538b6d6e694a79e4f195a4f755fb5c10ca22ff`.'
+  created_at: 2026-11-25T22:05:41.380644182Z
+  modified_at: 2026-11-25T22:05:41.380644182Z
+  session_id: 01a214701072
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
