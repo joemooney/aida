@@ -1312,8 +1312,12 @@ impl TickExec {
 }
 
 impl ShiftExec for TickExec {
-    fn reap(&mut self) -> usize {
-        0
+    fn reap(
+        &mut self,
+        _: Option<&str>,
+        _: Option<std::time::Instant>,
+    ) -> crate::session_reap::ReapProgress {
+        Default::default()
     }
     fn tag_batch(&mut self, _: &str, _: &[String]) -> Result<()> {
         Ok(())

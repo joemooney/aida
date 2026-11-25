@@ -1382,3 +1382,64 @@ fn bug_2511_occupancy_unreadable_foreign_cwd() {
         matches!(scan(&probe, false), receipt::Occupancy::Occupied(why) if why.contains("running in"))
     );
 }
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-508.AC1 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn bug_2747_recovery_ancestry_only_exempts_argv() {
+    let tmp = tempfile::tempdir().unwrap();
+    let process = tmp.path().join("4242");
+    std::fs::create_dir(&process).unwrap();
+    std::fs::write(process.join("stat"), "4242 (recover) S 1 42 43").unwrap();
+    std::fs::write(
+        process.join("cmdline"),
+        b"aida\0agent\0recover-launch\0attempt-1\0",
+    )
+    .unwrap();
+    let own = [4242].into();
+    let mut probe = receipt::OccupancyProbe {
+        attempt: Some("attempt-1"),
+        recovery: true,
+        ..Default::default()
+    };
+    let scan = |probe: &_| receipt::scan_occupancy_in(tmp.path(), probe, &own);
+    std::fs::write(process.join("environ"), b"TOKEN=attempt-10\0").unwrap();
+    std::os::unix::fs::symlink("/bin/sh", process.join("exe")).unwrap();
+    assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    std::fs::remove_file(process.join("exe")).unwrap();
+    std::os::unix::fs::symlink("/proc/self/exe", process.join("exe")).unwrap();
+    assert_eq!(scan(&probe), receipt::Occupancy::Clear);
+    for tail in ["attempt-10", "another-attempt\0--config\0attempt-1"] {
+        std::fs::write(
+            process.join("cmdline"),
+            format!("aida\0agent\0recover-launch\0{tail}\0"),
+        )
+        .unwrap();
+        assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    }
+    std::fs::write(
+        process.join("cmdline"),
+        b"aida\0agent\0recover-launch\0attempt-1\0",
+    )
+    .unwrap();
+    std::fs::write(process.join("environ"), b"OTHER=x\0TOKEN=attempt-1\0").unwrap();
+    assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    std::fs::write(process.join("environ"), []).unwrap();
+    std::fs::write(process.join("cmdline"), b"worker\0attempt-1\0").unwrap();
+    assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    std::fs::write(process.join("cmdline"), b"worker\0").unwrap();
+    probe.group = Some(42);
+    assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    probe.group = None;
+    probe.session = Some(43);
+    assert!(matches!(scan(&probe), receipt::Occupancy::Occupied(_)));
+    probe.session = None;
+    std::fs::remove_file(process.join("environ")).unwrap();
+    std::fs::create_dir(process.join("environ")).unwrap();
+    assert!(matches!(scan(&probe), receipt::Occupancy::Unknown(_)));
+    // The same PID is unrelated with no birth bound and no ancestry evidence.
+    assert_eq!(
+        receipt::scan_occupancy_in(tmp.path(), &probe, &Default::default()),
+        receipt::Occupancy::Clear
+    );
+}

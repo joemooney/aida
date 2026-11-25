@@ -436,9 +436,22 @@ pub(crate) fn review_pickup_cmd(
 // trace:BUG-2513 | ai:codex
 pub(crate) mod native_setup {
     pub const KEY: &str = "codex";
-    pub const PROMPT: &str = "  Opt Codex into its native sandbox? This is weaker than AIDA containment (native sandbox, not AIDA-contained). Write [contained.vendors] codex = \"native\"? [y/N]: ";
-    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Commit .aida/config.toml to the trusted default branch before launching; native sandbox, not AIDA-contained.";
-    pub const FIX: &str = "aida init --agent codex (interactive opt-in for missing policy), or edit .aida/config.toml to set and commit [contained.vendors] codex = \"native\" to the trusted default branch";
+    pub const PROMPT: &str = "  Opt Codex into its native sandbox? This is weaker than AIDA containment (native sandbox, not AIDA-contained). Write and commit [contained.vendors] codex = \"native\"? [y/N]: ";
+    pub const WRITTEN: &str = "Codex native sandbox opt-in written. Codex uses its native sandbox, not AIDA containment, once .aida/config.toml is committed on the trusted default branch.";
+    pub const FIX: &str = "aida init --agent codex (interactive opt-in for missing policy), or edit .aida/config.toml to set and commit [contained.vendors] codex = \"native\" on the trusted default branch and publish it if the project has a remote";
+    // Diagnostic only. The caller has already observed a missing trusted policy.
+    pub fn unpublished_hint(root: &std::path::Path, branch: &str) -> Option<String> {
+        use crate::trusted_config::{read_config_at_sha, rev_parse_commit};
+        rev_parse_commit(root, &format!("refs/remotes/origin/{branch}"))?;
+        let local = rev_parse_commit(root, &format!("refs/heads/{branch}"))?;
+        let body = read_config_at_sha(root, &local)?;
+        let policy =
+            crate::agent_config::contained_vendor_in_trusted_body(Some(&body), KEY).ok()?;
+        let branch = crate::cast_recording::shell_quote(branch);
+        (policy.as_deref() == Some("native")).then(|| format!(
+            "policy committed locally but not pushed: run `git push origin {branch}` (or your remote), or land the commit through your protected-branch workflow"
+        ))
+    }
     pub const OTHER_FIX: &str = "use a supported vendor: aida agent new claude";
 }
 
