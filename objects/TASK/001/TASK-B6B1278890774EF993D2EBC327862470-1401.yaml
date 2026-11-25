@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T05:49:28.228826143Z
+modified_at: 2026-11-25T06:39:47.937500292Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -72,6 +72,15 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Final validation needs a clean launcher target. FAST job j20261125T050848928-2-0 stopped on compiler signal 9. Focused rerun j20261125T052623673-2-0 failed linking undefined hidden LLVM symbols before executing tests. Initial focused run passed one test. Preserve the uncommitted implementation for host validation.. No triage reason was given.'
   created_at: 2026-11-25T05:50:12.312680033Z
   modified_at: 2026-11-25T05:50:12.312680033Z
+- id: 01a2116e-90cd-7dd2-864f-b7cabe3b4d8d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3ff1519f69421a5f9cc2b054a7edb77acfd15fd8. Reviewed origin/main...HEAD, git diff HEAD, and untracked files. Clean worktree. AC1: [evidence: behavioral-test] repair_journal.rs:458 checks trusted opt-in, current advisor grant, explicit mandate scope, owner and process evidence before journal release. gate/mandate.rs:407 enforces principal and scope. AC2: [evidence: behavioral-test] repair_journal.rs:933 task_3895_mandate_release executed, 1 passed. Covers disabled, missing lease, live cwd and session marker, unreadable environment, absent mandate and successful persisted release with tree retained. Probe review checked flag and scope spelling, strict TOML boolean, full PID iteration, exact marker and component matching, and propagation of incomplete observations. Process fixtures are synthetic. Host proc visibility remains an operational prerequisite. No source fixes. make check-ci-fast exited 0, job j20261125T061221209-2-0. Prior validation punt remains advisor-owned.
+  created_at: 2026-11-25T06:39:47.937500292Z
+  modified_at: 2026-11-25T06:39:47.937500292Z
+  session_id: 01a2114c9fa0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
