@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T16:37:53.960483332Z
+modified_at: 2026-11-25T16:39:16.479170888Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -290,6 +290,13 @@ comments:
   modified_at: 2026-11-25T16:37:53.960483332Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21393-a59d-7881-8723-76a6f2ffba05
+  author: joe
+  content: 'ADVISOR SIGNOFF on SKETCH (integration-30, reservation lifecycle), advisor-122 2026-11-25 09:42. APPROVED in direction, with conditions. (1) S3 (route-before-reserve + attempt-scoped rollback) may start now. It''s independent and fixes the R4-3 p1. (2) S1 is a SPIKE first, a measurement and not a merge. Prove that the inherited owner-lock fd survives bwrap, codex native and claude lanes. Also MEASURE how often K stays held after the lane exits, because of daemons that inherit it: sccache-server, cargo/rustc jobservers, any background helper. Every daemon spawn must close K (CLOEXEC set), or the lock never frees. If K stays held, the mandate release safely refuses, but then it''s useless. The S1 report decides whether K is viable or we fall back to a supervisor-held lock with a heartbeat. (3) The lease and journal schema changes in S1/S2 are an architecture change: I''ll review them before implementation, and the existing journal must migrate one-time (single user, no compat shim). (4) S6 mandate release: as sketched (strict resolver, lock order authority → journal → K, exact id/gen/inode). The order of S6 after S2 stands.'
+  created_at: 2026-11-25T16:39:16.479170888Z
+  modified_at: 2026-11-25T16:39:16.479170888Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
