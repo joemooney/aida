@@ -2077,7 +2077,7 @@ fn build_adversarial_challenger_prompt(
     prompt.push_str("Your job is to challenge every candidate finding from Pass 1 (Red-Team Finder) against the actual file contents, type guarantees, and surrounding control flow.\n");
     prompt.push_str("Apply the three-condition validity rubric (True + Relevant + Non-Trivial):\n");
     prompt.push_str("1. **Factually True**: The defect is genuinely reachable in the code and not already prevented by surrounding validation, caller invariants, or compiler/type/borrow checks.\n");
-    prompt.push_str("2. **Change-Relevant**: The issue is directly introduced, exposed, or impacted by the reviewed code or violates a linked AIDA `## Acceptance` criterion.\n");
+    prompt.push_str("2. **Change-Relevant**: The issue is directly introduced, exposed, or exacerbated by the reviewed code (including adding new filesystem/network/exec calls on an unvalidated parameter in a touched function, ordering hazards with sibling calls in the same function, or violating project security/architecture rules in `AGENTS.md`/`CLAUDE.md` or a linked AIDA `## Acceptance` criterion).\n");
     prompt.push_str("3. **Actionable & Non-Trivial**: The finding surfaces a substantive correctness, security, concurrency, error-handling, contract, or test defect — not stylistic bikeshedding or linter noise.\n");
     prompt.push_str("- Mark a finding `\"dismissed\"` if it fails ANY of the three conditions above, and state which condition failed in `reason`.\n");
     prompt.push_str("- Mark a finding `\"confirmed\"` only if it satisfies ALL THREE conditions (`True + Relevant + Non-Trivial`).\n\n");
@@ -2216,6 +2216,18 @@ fn build_batch_review_prompt(
                     prompt.push('\n');
                 }
                 prompt.push_str("```\n\n");
+                if let Some(body) = content_cache.get(path) {
+                    if body.len() <= 32_768 {
+                        prompt.push_str(&format!(
+                            "#### Full Target File Context (`{path}` at target revision)\n```text\n"
+                        ));
+                        prompt.push_str(body);
+                        if !body.ends_with('\n') {
+                            prompt.push('\n');
+                        }
+                        prompt.push_str("```\n\n");
+                    }
+                }
             } else if let Some(body) = content_cache.get(path) {
                 prompt.push_str("```text\n");
                 prompt.push_str(body);
