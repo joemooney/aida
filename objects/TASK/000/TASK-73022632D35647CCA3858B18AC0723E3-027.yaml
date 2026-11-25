@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-25T08:31:36.038446769Z
+modified_at: 2026-11-25T21:08:33.949427568Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -755,6 +755,15 @@ comments:
   content: 'PARKED #4387 (advisor-122 01:20, at the round cap; branch kept: task-73022632d35647cca3858b18ac0723e3-027). 3 blocking fixture issues to fix in ONE <=150 test slice later: (1) a /var/tmp live fixture; (2) a /tmp libtest exe; (3) the preflight excluding temp grants.'
   created_at: 2026-11-25T08:31:36.038446769Z
   modified_at: 2026-11-25T08:31:36.038446769Z
+- id: 01a21489-f01d-7000-af2a-428bb6e8f0e7
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3832: Mass-change deferred findings from PR #4387 (TASK-3133) final round
+      Deferred under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST) from the PR #4387 (TASK-3133) Changes Requested verdict at aa380d29b2. These findings were blocking (unmet claimed AC / below-tier) and now defer; #4387 fixes only p1, data loss and security findings in its final round. ## Findings to address 1. [major/mutation-kill] aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs The new regression at line 517 can pass if the previous fixture_tempdir is restored. In a normal build outside /tmp or a named seat, the old helper chooses the target relative to the compile-time CARGO_MANIFEST_DIR. Relocating the executable, cwd and TMPDIR leaves that path unchanged. Assert th
+  created_at: 2026-11-25T21:08:33.949427568Z
+  modified_at: 2026-11-25T21:08:33.949427568Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
