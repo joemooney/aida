@@ -1,0 +1,32 @@
+id: 01a2119a-9bf2-7f00-8317-f65eca0c0bc8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1411
+agreed_id: TASK-3896
+title: 'Review debt: ci-runner (5 deferred findings)'
+description: |
+  Review debt for area 'ci-runner' (folded from 5 reviewer 'Review follow-up:' drafts in the 2026-11-24 triage; Joe approved 2026-11-25 00:16; product-15). Each item below is a deferred review finding; the full text and file:line are on the original spec.
+
+  ## Items
+  - TASK-3206 (parent STORY-2695): deepen=1 fetch still (ci.yml:567); dell1 tree lacks origin
+  - TASK-3212 (parent STORY-2695): no test asserts 'Unsupported runner variables'
+  - TASK-3217 (parent STORY-2695): wording still in tests/test_self_hosted_runner.py:422, dell1-runner.md:158
+  - TASK-3251 (parent STORY-2695): select-job.py:25 still only checks train/ prefix
+  - TASK-3306 (parent BUG-2734 / #4479): no exemption cases in tests/test_python_discovery.py
+
+  ## Acceptance
+  - AC1: each listed finding is fixed with a test, or explicitly closed with evidence that it no longer applies.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T07:27:54.866346829Z
+modified_at: 2026-11-25T07:27:54.866346829Z
+req_type: Task
+tags:
+- review-debt
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d346c27496
+  vendor: claude
