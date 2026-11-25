@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:54:53.934825801Z
-modified_at: 2026-11-25T22:53:36.232680232Z
+modified_at: 2026-11-25T23:08:24.724635474Z
 req_type: Story
 tags:
 - completion
@@ -70,6 +70,11 @@ comments:
   modified_at: 2026-11-25T22:53:04.473742650Z
   session_id: 01a2149cfd85
   harness_version: 2.1.319 (Claude Code)
+- id: 01a214f7-a914-79a0-a5c1-461e3ac3b6b7
+  author: joe
+  content: 'DEFERRED p3 (advisor-122 override-approval of #4600 @ f24ccdbb, 2026-11-25 16:10): warn when the landed-spec scan is incomplete (e.g. history truncated or a commit unreadable), instead of completing silently.'
+  created_at: 2026-11-25T23:08:24.724635474Z
+  modified_at: 2026-11-25T23:08:24.724635474Z
 history:
 - id: 01a21493-8b06-77e3-b30f-6f6bcc0f2195
   author: joe
