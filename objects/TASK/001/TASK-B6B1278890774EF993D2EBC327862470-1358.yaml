@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F1, event.rs:283) When the target branch advanced after the review checkout was prepared, review_risk_pr_base must still resolve the merge base correctly: fetch the advanced base OID, or fall back to a bounded remote merge-base, instead of a local-only `git merge-base` that misses it. Test with a base that advanced after preparation.
   - AC2: (F2, forge.rs:6971) The 15-second risk-evidence timeout must cover resolve_gh_binary_for_probe (`gh --version`) too, so a stalled resolver cannot block appending the verdict; the advisory evidence degrades to STRICT on timeout. Test with a stalled resolver.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T01:02:14.564309139Z
+modified_at: 2026-11-25T01:18:42.497214599Z
 req_type: Task
 tags:
 - integration
@@ -95,6 +95,12 @@ comments:
   modified_at: 2026-11-25T01:02:14.564309139Z
   session_id: 01a2101f9226
   harness_version: codex-cli 0.167.0
+- id: 01a21048-9741-7712-afe4-97e0ba66e6d8
+  author: aida-publication-done
+  content: Implementer push e43764edceaf declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T01:18:42.497214132Z
+  modified_at: 2026-11-25T01:18:42.497214132Z
+  session_id: 01a2101f9226
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
@@ -153,6 +159,14 @@ history:
   session_id: 01a2101f9226
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a21048-9741-7712-afe4-97df05bd8726
+  author: aida-publication-done
+  timestamp: 2026-11-25T01:18:42.497212398Z
+  session_id: 01a2101f9226
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: ea4cace77f021f44f0adedbbaf9a5c46803f00c7
