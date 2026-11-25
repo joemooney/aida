@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T11:42:45.033727915Z
+modified_at: 2026-11-25T11:43:02.115206796Z
 req_type: Task
 tags:
 - integration
@@ -248,6 +248,20 @@ comments:
   modified_at: 2026-11-25T11:40:36.979147131Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21284-1a21-7b32-9227-289d764f1800
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4559):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: be1d46a9b0ce
+    Recorded: 2026-11-25T11:39:56.721951628+00:00
+    Findings:
+    1. Expanding untracked files in the shared safety readers at aida-core/src/git_ops.rs:4837 and :5068 reintroduces the teardown regression already identified on BUG-2713. The existing regression at aida-cli-lib/src/tests/bug_1986_teardown_recheck_tests.rs:179 expects worktree_dirty_entries to return `?? .aida/` for an unignored directory of runtime links. Git now returns each symlink separately, so the fixture fails before exercising either runtime-link safety assertion. Scope full untracked enumeration to refusal evidence and preserve the shared reader's collapsed output, or update the fixture if the shared contract is intentionally changing while retaining coverage for both the collapsed fallback and expanded runtime-link filtering. Keep the check that real work under .aida remains dirty.
+    2. TASK-b6b1278890774ef993d2ebc327862470-1369.AC1: The clone refusal formatter at aida-cli-lib/src/seat_clone.rs:2256 applies porcelain_quote to an already C-quoted Git porcelain-v2 field. A filename consisting of 'a', a tab, and a trailing space reaches it as "a\t " and is shown as "\"a\\t \"". Reading the displayed path as one C-quoted filename yields literal quotes and a backslash instead of the original filename. The same issue affects either rename endpoint. Preserve Git's existing lexical quoting or decode the field losslessly before quoting once, and add a test using Git-produced status for a filename with a tab and a trailing space. Evidence: https://github.com/git/git/blob/v2.43.0/wt-status.c#L2316-L2333
+    3. TASK-b6b1278890774ef993d2ebc327862470-1369.AC1: The ordinary worktree status path at aida-core/src/git_ops.rs:5063-5079 and the clone probe at aida-cli-lib/src/seat_clone.rs:2061-2064 and :2092-2100 can both inherit core.quotePath=false and then decode stdout with from_utf8_lossy. Filenames with bytes 0xff and 0xfe respectively followed by a trailing space collapse to the same displayed filename. Force byte-safe Git quoting before text conversion or format pathname bytes losslessly, as the contained worktree's pinned quotePath setting already does for ordinary Git status entries. Exercise distinct non-UTF-8 names with trailing spaces under core.quotePath=false. Evidence: https://github.com/git/git/blob/v2.43.0/Documentation/config/core.txt#L141-L154
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T11:42:57.057173995Z
+  modified_at: 2026-11-25T11:42:57.057173995Z
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
