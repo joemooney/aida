@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-25T11:43:11.106836658Z
+modified_at: 2026-11-25T11:48:12.446432211Z
 req_type: Bug
 tags:
 - authority
@@ -239,6 +239,17 @@ comments:
   created_at: 2026-11-23T03:12:06.947296983Z
   modified_at: 2026-11-23T03:12:06.947296983Z
   session_id: 01a206420bef
+- id: 01a21288-ea1e-7891-b0df-92bf6c25103b
+  author: joe
+  content: |-
+    PARKED (advisor-122 2026-11-25 04:55): #4397 r4 FINAL still red with 4 p1s. Closed, branch kept. Remaining design problems:
+    1. A renamed lease file / id mismatch.
+    2. A FIFO-blocking list_leases on the --force-claim path.
+    3. A symlink_metadata EACCES silently dropping clones.
+    4. A successor acquiring the same session id during destroy.
+    NEEDS A SKETCH: lease identity = (id, generation, path) fenced end-to-end, before any new implementation.
+  created_at: 2026-11-25T11:48:12.446432211Z
+  modified_at: 2026-11-25T11:48:12.446432211Z
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
