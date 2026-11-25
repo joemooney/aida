@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-24T23:59:04.781823093Z
+modified_at: 2026-11-25T00:30:32.435715210Z
 req_type: Bug
 tags:
 - hygiene
@@ -218,6 +218,20 @@ comments:
   modified_at: 2026-11-24T23:33:24.664400542Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2101c-80f2-7300-ae4e-e2ade195baa3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3798bff21b83deb02981955a47caafb55c1ee685 plus the resolved native working tree. Refs-only merge repair. Compared all three Git index stages byte for byte. The resolved lifecycle test file is exactly the PR version plus both main-side test functions. No untracked additions or conflict markers. git diff --check HEAD passed.
+    AC1: [evidence: behavioral-test] Nested-file and multiline refusal regressions at task_2053_seat_clone_lifecycle_tests.rs:3204 and :3241 passed. Shared status still collapses runtime-link directories. The unchanged bare-directory regression passed, including retention of real notes. A final ASCII space can still be trimmed, deferred under the r4 merge-only brief.
+    AC2: [evidence: behavioral-test] All 64 seat_clone::lifecycle_tests passed including the merged ignored-state and tracked-edit tests. Bwrap fixtures have environment availability guards.
+    AC3: [evidence: behavioral-test] Multiline agent refusal preserved in the targeted session-end test. No hygiene changes in this repair.
+    AC4: [evidence: manual-inspection] Historical seat outside this merge repair. No live teardown attempted.
+    Reviewed status encoding, directory expansion, multiple entries and failed probes against downstream rendering. The resolution changes no production or authority path. Fast gate j20261125T000946664-2-0 passed.
+  created_at: 2026-11-25T00:30:32.435715210Z
+  modified_at: 2026-11-25T00:30:32.435715210Z
+  session_id: 01a20fff56e1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
