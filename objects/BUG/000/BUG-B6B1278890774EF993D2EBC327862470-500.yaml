@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-24T21:49:52.434079470Z
+modified_at: 2026-11-25T22:41:51.142520718Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -187,6 +187,15 @@ comments:
   created_at: 2026-11-24T21:49:52.434074194Z
   modified_at: 2026-11-24T21:49:52.434074194Z
   session_id: 01a20f20de79
+- id: 01a214df-5826-7640-b59e-12aa25efb006
+  author: joe
+  content: |-
+    DEFERRED follow-ups (advisor-122 override-approval of #4482 r2 @ 04aa3b22, 2026-11-25 15:46; test-gap/cosmetic/p3):
+    - Test gap: the local-lease race refusal in apply_doctor_lease (aida-cli-lib/src/doctor/worktrees.rs, `selected lease changed or is no longer eligible` and `selected lease identity mismatch`) and the shared `selected shared store changed` branch have no test; only happy-path, lock-timeout and ambiguity paths are exercised. Add a test that mutates the lease (e.g. heartbeat) between selection and heal
+    - heal_exited_claim (aida-cli-lib/src/coordination.rs) detects the bounded-lock timeout by matching the error string `Busy` emitted by aida_core store_lock::acquire_until; a typed error (or a dedicated bounded-lock error type) would avoid silent breakage if that sentinel text changes or if the closure itself returns an error reading `Busy`.
+    - Targeted local heal runs local_stale_finding twice (once in doctor_cmd selection, again in apply_doctor_lease revalidation), so detect_merged_pr_for_branch_via_forge does two forge round-trips per --id heal; consider revalidating without the forge call or caching the lookup, since this bug was about slow/silent heals.
+  created_at: 2026-11-25T22:41:51.142520718Z
+  modified_at: 2026-11-25T22:41:51.142520718Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
