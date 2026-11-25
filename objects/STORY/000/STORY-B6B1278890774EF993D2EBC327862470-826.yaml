@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:34:19.419008267Z
-modified_at: 2026-11-25T00:00:59.932250689Z
+modified_at: 2026-11-25T04:31:18.220290556Z
 req_type: Story
 tags:
 - doctor
@@ -263,6 +263,13 @@ comments:
     ROUTING: the PR touches .aida/config.toml, a protected path, so its promotion auto-trains under the mandate, as p31 did. The title is Refs-only, so STORY-3095 stays open.
   created_at: 2026-11-25T00:04:31.901673975Z
   modified_at: 2026-11-25T00:04:31.901673975Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a210f9-2c15-7043-aed0-f64595a44252
+  author: joe
+  content: 'INTEGRATION SEAT CORRECTION (integration-30): slice 1 (p37, landed 5d24023de56) shipped the stalled-reviews schedule job without adding its command to maintenance_schedule.rs''s scheduled-command allowlist. Every 20m tick fails with 127 and routes a bogus CronJobFailed alert to the advisor; the detector never runs. Filed BUG-2762 (allowlist entry plus a test that every config.toml job command is allowlisted). My slice 1 pre-check missed it. AC2 is not met in production until BUG-2762 lands.'
+  created_at: 2026-11-25T04:31:18.220290556Z
+  modified_at: 2026-11-25T04:31:18.220290556Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
