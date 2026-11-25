@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 71b61e09385fc46ea829ff72ae8e2191d7a7e635
 
   aida-cli-lib/src/worktree_gc.rs:246-248,300-303. Session GC dry-run skips missing-registration inspection, so it can report an agent-managed checkout as preserved even though applied GC would immediately clear its clean registration. Use the read-only inspection to report the proposed registration cleanup and leave the repository unchanged.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T03:28:41.186100041Z
-modified_at: 2026-11-25T21:05:15.078796896Z
+modified_at: 2026-11-25T21:05:17.136084469Z
 req_type: Task
 tags:
 - carried-from:BUG-2749
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T05:37:23.819463347Z
   changes: []
+- id: 01a21486-ef50-7f73-97cd-20bbcc27473e
+  author: joe
+  timestamp: 2026-11-25T21:05:17.136080112Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 71b61e09385fc46ea829ff72ae8e2191d7a7e635
   branch: pr-4537
