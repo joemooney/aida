@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:26:36.718610073Z
-modified_at: 2026-11-25T23:03:07.015276362Z
+modified_at: 2026-11-25T23:03:20.750578911Z
 req_type: Spike
 tags:
 - leases
@@ -42,6 +42,12 @@ comments:
   content: 'Lane exit evidence: retained branch `spike-b6b1278890774ef993d2ebc327862470-012` at head `a387b7e87b96e611ba9da42e196f44f36b538739`.'
   created_at: 2026-11-25T23:03:07.015273385Z
   modified_at: 2026-11-25T23:03:07.015273385Z
+  session_id: 01a214e72770
+- id: 01a214f3-05ae-7553-aceb-a6a13fd46a3f
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `spike-b6b1278890774ef993d2ebc327862470-012` at head `a387b7e87b96e611ba9da42e196f44f36b538739`.'
+  created_at: 2026-11-25T23:03:20.750574968Z
+  modified_at: 2026-11-25T23:03:20.750574968Z
   session_id: 01a214e72770
 history:
 - id: 01a2149a-f0e1-75e3-8505-a3c7cf379451
