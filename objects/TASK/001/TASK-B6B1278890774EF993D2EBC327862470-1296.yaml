@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T04:55:16.590710616Z
-modified_at: 2026-11-24T04:55:16.590710616Z
+modified_at: 2026-11-25T07:19:12.329833013Z
 req_type: Task
 tags:
 - carried-from:BUG-2742
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20b98-35f8-7b01-9f98-bc1e520d84bb
   created_at: 2026-11-24T04:55:29.210833174Z
+comments:
+- id: 01a21192-a2c9-75e2-be8a-92ff8b81866c
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: BUG-2742 / #4487. Evidence: landed 71bb63b differs; placeholder still recognised (seat_clone.rs:2117). Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:19:12.329833013Z
+  modified_at: 2026-11-25T07:19:12.329833013Z
 history:
 - id: 01a20be9-ef48-77a2-9b9f-ace4d36ee387
   author: joe
