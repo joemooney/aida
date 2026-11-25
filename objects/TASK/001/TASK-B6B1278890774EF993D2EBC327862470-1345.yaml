@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
 
   Deferred per the TASK-3862 brief. aida-cli-lib/src/review_prepare.rs:147–148,511–523,531–552: scan passes scopes to Git as pathspecs and diff uses a normalized path prefix comparison. The same --path can select different files across modes, including paths containing literal metacharacters.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T11:55:34.560425689Z
-modified_at: 2026-11-25T07:26:32.723236248Z
+modified_at: 2026-11-25T07:26:34.536499762Z
 req_type: Task
 tags:
 - carried-from:TASK-3862
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21199-6228-7b53-a7b7-3ccb381ccb07
+  author: joe
+  timestamp: 2026-11-25T07:26:34.536495043Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: b554c5545a0c16c5582a3beab3cfcdc8f765028e
   branch: pr-4511
