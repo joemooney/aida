@@ -1,0 +1,33 @@
+id: 01a213f5-abb6-7643-a80e-b103379d17be
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-316
+title: 'Review PR-4583: [AI:claude] fix(repair): route before reserve and retire only the attempt''s own reservation (Refs BUG-2761)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a213a0`) for branch `bug-2761-s3-route-before-reserve`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4583>
+  - Branch: `bug-2761-s3-route-before-reserve` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2761
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4583` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T18:26:37.110482366Z
+modified_at: 2026-11-25T18:26:37.110482366Z
+req_type: Story
+filed_at:
+  code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d738e6c6f1
