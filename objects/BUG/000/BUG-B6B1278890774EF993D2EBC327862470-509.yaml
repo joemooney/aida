@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T01:45:04.792886670Z
+modified_at: 2026-11-25T01:45:28.617885632Z
 req_type: Bug
 tags:
 - launch
@@ -125,6 +125,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep. Reviewed all four files in the pinned landed-tree diff. PR head 12d08b65ca03deba668c2099d203c9d999d33a95 is seven commits behind protected main dc27cf1f4cb49a050002334062efb59fe7d2b914. The affected receipt, recovery and test files match the landed tree. No finding depends on code changed by those seven base commits.. No triage reason was given.'
   created_at: 2026-11-25T01:45:04.792877068Z
   modified_at: 2026-11-25T01:45:04.792877068Z
+- id: 01a21061-1874-7c81-a1bb-fca91b8cc0d5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2748):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 12d08b65ca03
+    Recorded: 2026-11-25T01:42:39.703816775+00:00
+    Findings:
+    1. BUG-2748 AC1: The new attribution check runs only after a ReceiptRead::Unknown result. At aida-cli-lib/src/codex_bg_receipt.rs:594–615, an otherwise valid post-transfer receipt with a deleted supervisor field still deserializes as Known because LaunchReceipt.supervisor is optional. At aida-cli-lib/src/agent_codex_background.rs:2205–2229, ordinary recovery skips the absent supervisor liveness and session checks and can mark the attempt Exited, releasing admission without complete evidence. Validate attribution against the phase before treating a receipt as Known or releasing its scope, preserving legitimate pre-transfer and pre-execution receipt shapes. Add a regression using an otherwise valid persisted post-transfer receipt with its supervisor removed, exercising status, both recovery routes and admission.
+    2. BUG-2748 AC1: aida-cli-lib/src/codex_bg_receipt.rs:741–773 accepts an absent or null owner, or an owner with an unusable start tick, then supplies the later worker/supervisor tick as the earliest start bound. That bound permits the scan to discard unreadable details for earlier same-user processes without evidence ruling out an earlier dispatcher. The new positive fixture demonstrates that a receipt missing the owner can be retired. Fail closed on incomplete owner attribution, handle an explicitly Released owner deliberately, and cover the missing-owner case in the admission and retirement regressions.
+    3. aida-cli-lib/src/codex_bg_receipt.rs:708 and aida-cli-lib/src/agent_codex_background.rs:2068 and 2190 still tell operators to retire an incomplete receipt once its processes are gone. The new retirement check refuses even after all processes exit. Update the guidance for incomplete evidence, retain the attempt-specific launch-status command in the refusals, and describe retirement as conditional on sufficient attribution as well as a clear scan.
+    4. aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:142–186 no longer independently tests the new admission branch's scanner decision. The live-process case uses malformed JSON and now refuses before scanning, while the synthetic Clear control only calls retirement, so rejecting every unscoped unknown receipt at admission would pass this test. Use a deterministic process table and fully attributed unknown receipt to assert admission blocks on Occupied or Unknown and permits entry on Clear before retirement. This also makes the live-child setup unnecessary for the malformed receipt check.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T01:45:28.436514156Z
+  modified_at: 2026-11-25T01:45:28.436514156Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
