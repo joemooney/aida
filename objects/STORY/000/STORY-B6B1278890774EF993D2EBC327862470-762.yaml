@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T19:54:08.731900877Z
+modified_at: 2026-11-25T20:06:17.908921326Z
 req_type: Story
 tags:
 - docs
@@ -182,6 +182,18 @@ comments:
   modified_at: 2026-11-25T19:50:12.209394922Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21450-ee34-7ef0-beb9-fcf3ed47ac26
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0aae887f62 (slice b: topbar dropdowns + Light/Dark toggle, Refs-only).
+    Acceptance evidence: [behavioral-test] tests/test_showcase_build.py::test_header_groups_pages_into_dropdowns_and_marks_the_current_one (grouping, aria-current, nav-group-active, empty groups omitted, extra pages only when on disk, label escaping); [configuration-validation] test_theme_preference_only_honours_the_dark_value + python3 docs/showcase/build.py --check clean; unittest run 22 OK (2 skipped: node absent; pytest not installed here, ran via python3 -m unittest).
+    Probes: storage whitelist—head script honours only 'dark' (anything else → default light), toggle writes only 'light'/'dark'; no innerHTML added (textContent only); glossary-tooltip code from the reference commit deliberately NOT ported (out of slice scope, used innerHTML). app.js logic wrapped in a block so it shares no globals with library.js now that app.js loads on every guide page. Escape closes menus and returns focus to the trigger; outside click closes.
+    Residual risks: hand-written pages (code-review, engineering-audit, features, executive-brief) keep their own headers and do not read the persisted preference; landing nav drops the #factory/#capabilities in-page anchors per the reference design.
+  created_at: 2026-11-25T20:06:17.908921326Z
+  modified_at: 2026-11-25T20:06:17.908921326Z
+  session_id: 01a214459c68
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
