@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-524",
+  "publishes": [
+    {
+      "at": "2026-11-25T21:22:21.929027627Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T08:35:49.747507745Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-11-25T10:00:01.444634243Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-25T10:00:01.488619033Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-25T11:48:20.507746153Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-25T11:48:20.539639776Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-25T15:19:09.571023276Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-25T16:22:25.737156372Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-25T21:22:21.717282093Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-524",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "34c86b75a25da79cf648a68dfdd1d593949567b4",
+        "pr": 4568,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
