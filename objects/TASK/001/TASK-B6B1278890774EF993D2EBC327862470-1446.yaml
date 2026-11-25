@@ -1,0 +1,31 @@
+id: 01a213f6-481e-7fd1-b8e7-c91cbf4e8eb0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1446
+title: 'Review follow-up: Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_d'
+description: |-
+  From BUG-2730
+  Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
+
+  Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_deadline_keeps_listed_pages calls Repository::discover_with directly. No test drives a cut discovery through scan_with_budgets/observe, so nothing checks the 'changes past the discovery deadline unknown' partial line (land_stalls.rs observe), the metrics::record skip in land.rs live_pass_with (rows.len()==changes.len() && !discovery_cut), or that routing is deferred on a cut. The prior review asked for a regression through the guard. Add a GitLab guard fixture whose page 2 hangs.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T18:27:17.150856879Z
+modified_at: 2026-11-25T18:27:17.150856879Z
+req_type: Task
+tags:
+- carried-from:BUG-2730
+- finding-hash:de936971
+- from-review:BUG-2730
+relationships:
+- rel_type: References
+  target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
+  created_at: 2026-11-25T18:27:17.150902554Z
+filed_at:
+  code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
+  branch: pr-4457
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d738e6c6f16
+  vendor: claude
+  session: 01a213f3b386
