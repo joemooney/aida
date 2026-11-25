@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T23:27:04.527642481Z
-modified_at: 2026-11-23T23:27:04.527642481Z
+modified_at: 2026-11-25T07:25:43.835531653Z
 req_type: Task
 tags:
 - carried-from:BUG-2735
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
   created_at: 2026-11-23T23:27:18.073073671Z
+comments:
+- id: 01a21198-9c1b-79e3-864e-47f4e43a2932
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): duplicate. Parent: BUG-2735 / #4464. Evidence: = TASK-3888 AC1 F4; keep TASK-3888. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:25:43.835531653Z
+  modified_at: 2026-11-25T07:25:43.835531653Z
 history:
 - id: 01a20aca-3b7b-7e63-9ea7-abe734d3c431
   author: joe
