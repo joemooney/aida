@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-25T02:05:11.893395060Z
+modified_at: 2026-11-25T02:07:29.802535306Z
 req_type: Bug
 tags:
 - launch
@@ -131,6 +131,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T02:05:11.734895473Z
   modified_at: 2026-11-25T02:05:11.734895473Z
+- id: 01a21075-7f11-7231-b576-e6efd4b3874c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:07):
+    # BUG-2747 / PR #4540 r2 (advisor-122 ruling 2026-11-24 19:05 at 490b4f03; STRICT; product-15). Lane: CODEX. MAIN, existing branch. <=80 lines. ONE round.
+    MUST (F1, p1): the ancestry exemption may ONLY arm for an ancestor whose /proc/<pid>/exe is the AIDA binary (live or the current build) AND whose argv is exactly `<aida> agent recover-launch … --attempt <token>` in subcommand position, with the token matching THIS attempt exactly. Arbitrary words anywhere in any ancestor's argv must NOT arm it. Tests: a spoofed argv in a non-AIDA ancestor → NO exemption; a real recover-launch with the matching attempt → exemption.
+    (F2) Add criterion-level trace markers to the tests.
+    DEFERRED (do NOT do): F3 (env-readability over-refusal; fails closed), a LOW follow-up.
+    One targeted cargo run, then make check-ci-fast, then push to #4540. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T02:07:29.802535306Z
+  modified_at: 2026-11-25T02:07:29.802535306Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20df3-134f-7401-800a-606c9060db24
   author: joe
