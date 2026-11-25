@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: eb2e718dbedddf53460aab314d05c520db5e6c2c
 
   aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4617 — The EXDEV regression assumes the default temporary directory and /dev/shm are on different filesystems and that /dev/shm is writable. A supported Linux run with TMPDIR=/dev/shm can instead successfully move the fixture and release its lease, then panic at unwrap_err and leave a fixture under /dev/shm. Use managed fixture directories proven to be on different mounts or inject EXDEV at the rename boundary.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T06:08:36.775916260Z
-modified_at: 2026-11-25T21:05:26.847839717Z
+modified_at: 2026-11-25T21:05:28.806563807Z
 req_type: Task
 tags:
 - carried-from:BUG-2755
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21487-1ce6-7f43-9845-835faae41d38
+  author: joe
+  timestamp: 2026-11-25T21:05:28.806561559Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: eb2e718dbedddf53460aab314d05c520db5e6c2c
   branch: pr-4541
