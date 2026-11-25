@@ -4897,6 +4897,54 @@ mod bug2564_own_handoff_tests {
         assert!(!own.recorded(&no_grant));
     }
 
+    /// A record whose needs differ from the draft's is not this draft's
+    /// replay, and a legacy record with no `needs` key matches only a draft
+    /// with no needs. trace:STORY-2897 | ai:claude
+    #[test]
+    fn story_2897_draft_matches_record_compares_needs() {
+        const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
+        fn draft(needs: &[ReviewNeed]) -> DraftFacts<'_> {
+            DraftFacts {
+                pr: 59,
+                verdict: "waiting",
+                reviewed_sha: HEAD,
+                findings: &[],
+                needs,
+            }
+        }
+        let head = HEAD;
+        let needs: &[ReviewNeed] = &["test:foo::bar".parse().unwrap()];
+        let other: &[ReviewNeed] = &["artifact:dist/aida".parse().unwrap()];
+        let record = |needs: Option<serde_json::Value>| {
+            let mut value =
+                serde_json::json!({"verdict":"waiting","reviewed_sha":head,"findings":[]});
+            if let Some(needs) = needs {
+                value["needs"] = needs;
+            }
+            value.as_object().unwrap().clone()
+        };
+        let recorded = record(Some(serde_json::json!(needs)));
+        assert!(draft_matches_record(&draft(needs), &recorded));
+        assert!(
+            !draft_matches_record(&draft(other), &recorded),
+            "different needs"
+        );
+        assert!(
+            !draft_matches_record(&draft(&[]), &recorded),
+            "draft without needs"
+        );
+        let legacy = record(None);
+        assert!(draft_matches_record(&draft(&[]), &legacy));
+        assert!(
+            !draft_matches_record(&draft(needs), &legacy),
+            "legacy has no needs"
+        );
+        assert!(draft_matches_record(
+            &draft(&[]),
+            &record(Some(serde_json::json!([])))
+        ));
+    }
+
     #[test]
     fn restore_refuses_a_barrier_that_does_not_match_the_draft() {
         let head = "0123456789abcdef0123456789abcdef01234567";

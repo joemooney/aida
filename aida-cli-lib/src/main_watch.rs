@@ -486,7 +486,12 @@ fn read_state(land: &Path) -> Result<State> {
 
 // trace:STORY-2897 | ai:codex
 pub(crate) fn open_episode(root: &Path) -> Option<(String, Vec<String>)> {
-    let dir = watch_directory(&watch_root(root).ok()?, false).ok()?;
+    open_episode_at(&watch_root(root).ok()?)
+}
+
+/// [`open_episode`] at a resolved watch root. trace:STORY-2897 | ai:claude
+fn open_episode_at(watch_root: &Path) -> Option<(String, Vec<String>)> {
+    let dir = watch_directory(watch_root, false).ok()?;
     let episode = read_state(&dir).ok()?.episode?;
     if episode.failed.is_empty()
         || episode.red_sha.len() != 40

@@ -2928,28 +2928,47 @@ fn handle_review_record_context_at(
 }
 
 // trace:STORY-2897 | ai:codex
-fn validate_waiting_needs(
+pub(crate) fn validate_waiting_needs(
     policy: &crate::landing_policy::LandingPolicy,
     needs: &[crate::gate::review_verdict::ReviewNeed],
 ) -> Result<()> {
-    use crate::gate::review_verdict::NeedKind;
     anyhow::ensure!(
         needs
             .iter()
             .all(|n| !n.detail.trim().is_empty() && n.detail == n.detail.trim()),
         "invalid dependency detail"
     );
+    // An aggregate check, a CI tier marker or CI itself names no specific
+    // dependency, whatever the kind. trace:STORY-2897 | ai:claude
     let specific = needs.iter().any(|need| {
-        let aggregate = policy.ci_gated_checks.contains(&need.detail)
+        !(policy.ci_gated_checks.contains(&need.detail)
             || need.detail.starts_with("ci-tier:")
-            || need.detail == crate::forge::CI_AGGREGATOR_CHECK;
-        need.kind != NeedKind::Check || !aggregate
+            || need.detail == crate::forge::CI_AGGREGATOR_CHECK
+            || need.detail.eq_ignore_ascii_case("ci"))
     });
     anyhow::ensure!(
         policy.mode != crate::landing_policy::LandingMode::ReviewGated || specific,
         "review-gated WAITING requires a specific --needs KIND:DETAIL; record APPROVED or CHANGES REQUESTED on the code, with CI as info"
     );
     Ok(())
+}
+
+/// Dependencies belong to a WAITING verdict only; any other verdict refuses
+/// them rather than persisting stray needs. trace:STORY-2897 | ai:claude
+pub(crate) fn validate_verdict_needs(
+    policy: &crate::landing_policy::LandingPolicy,
+    kind: crate::gate::review_verdict::VerdictKind,
+    needs: &[crate::gate::review_verdict::ReviewNeed],
+) -> Result<()> {
+    if kind == crate::gate::review_verdict::VerdictKind::Waiting {
+        validate_waiting_needs(policy, needs)
+    } else {
+        anyhow::ensure!(
+            needs.is_empty(),
+            "--needs applies only to a waiting verdict"
+        );
+        Ok(())
+    }
 }
 
 /// [`handle_review_record_context_at`] under a caller-held policy snapshot
@@ -3058,9 +3077,9 @@ fn handle_review_record_context_with_policy_at(
             "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected, waiting"
         );
     }
+    validate_verdict_needs(&crate::landing_policy::load(&project_root), kind, needs)?;
     // trace:BUG-2500 | ai:codex
     if kind == crate::gate::review_verdict::VerdictKind::Waiting {
-        validate_waiting_needs(&crate::landing_policy::load(&project_root), needs)?;
         anyhow::ensure!(summary.is_some_and(|s| !s.trim().is_empty()), "waiting requires a summary naming the dependency, responsible actor and resume condition");
         anyhow::ensure!(
             findings.is_empty(),
@@ -4754,4 +4773,32 @@ fn story_2897_s1b_waiting_dependencies() {
     assert!(validate_waiting_needs(&policy, &[]).is_err());
     assert!(validate_waiting_needs(&policy, &["check:Build".parse().unwrap()]).is_err());
     assert!(validate_waiting_needs(&policy, &["test:foo::bar".parse().unwrap()]).is_ok());
+    // The aggregate rule applies to every kind, not only check:.
+    for raw in ["test:ci-tier:full", "artifact:Build", "actor:CI", "test:Build (ubuntu-latest)"] {
+        assert!(
+            validate_waiting_needs(&policy, &[raw.parse().unwrap()]).is_err(),
+            "{raw} must be refused as aggregate"
+        );
+    }
+    // A specific dependency alongside an aggregate one still passes.
+    assert!(validate_waiting_needs(
+        &policy,
+        &["check:Build".parse().unwrap(), "artifact:dist/aida.tar".parse().unwrap()]
+    )
+    .is_ok());
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+#[test]
+fn story_2897_needs_only_on_waiting_verdicts() {
+    use crate::gate::review_verdict::VerdictKind;
+    let policy = crate::landing_policy::LandingPolicy::default();
+    let need = ["test:foo::bar".parse().unwrap()];
+    for kind in [VerdictKind::Approved, VerdictKind::RequestChanges, VerdictKind::Rejected] {
+        let err = validate_verdict_needs(&policy, kind, &need).unwrap_err();
+        assert!(err.to_string().contains("only to a waiting verdict"), "{err}");
+        assert!(validate_verdict_needs(&policy, kind, &[]).is_ok());
+    }
+    assert!(validate_verdict_needs(&policy, VerdictKind::Waiting, &need).is_ok());
 }
