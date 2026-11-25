@@ -8,12 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T20:52:29.096873677Z
-modified_at: 2026-11-15T20:52:29.096873677Z
+modified_at: 2026-11-25T21:19:30.686662200Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1b862-584a-7491-b07f-b81dcf3bf545
   created_at: 2026-11-15T20:52:47.057647055Z
+comments:
+- id: 01a21493-f57e-7382-a0db-656556d20e14
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): REJECTED: dell1 timing AC5 is obsolete after the NVMe install (2026-11-25).'
+  created_at: 2026-11-25T21:19:30.686662200Z
+  modified_at: 2026-11-25T21:19:30.686662200Z
 history:
 - id: 01a1e0fb-ec1e-7b20-b539-0e5167bc623e
   author: joe
