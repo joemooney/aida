@@ -470,6 +470,28 @@ impl RepairGuard {
         entry.original_conflict_paths = paths.to_vec();
         self.save()
     }
+    // trace:BUG-2761 | ai:codex
+    pub(crate) fn retained_for_lease(
+        &self,
+        lease: &crate::SessionLease,
+    ) -> Result<Option<&RepairEntry>> {
+        let mut matching = self.journal.entries.iter().filter(|entry| {
+            entry.spawn != SpawnOutcome::ProvenDead
+                && (entry.lane_id == lease.id || entry.tree_path == lease.worktree_path)
+        });
+        let entry = matching.next();
+        if let Some(entry) = entry {
+            anyhow::ensure!(
+                matching.next().is_none()
+                    && entry.lane_id == lease.id
+                    && entry.tree_path == lease.worktree_path
+                    && entry.branch == lease.branch,
+                "retained repair ownership is ambiguous or changed; inspect the repair journal and session leases"
+            );
+        }
+        Ok(entry)
+    }
+
     /// Called only after session_start has verified orphan adoption. Repeating
     /// the transfer is harmless; a different lane never acquires the entry.
     pub fn transfer_adopted_lane(

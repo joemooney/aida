@@ -3901,6 +3901,101 @@ fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -
             .is_some_and(|paths| !paths.is_empty())
 }
 
+// trace:BUG-2761 | ai:codex
+pub(crate) fn retained_repair_for_pickup(
+    main: &Path,
+    scope: &str,
+    pr: Option<u64>,
+) -> Result<Option<crate::SessionLease>> {
+    let Some(lease) = crate::leases::adoptable_orphan_lease(main, scope) else {
+        return Ok(None);
+    };
+    if lease.tree_kind != TreeKind::Clone || verified_retained_repair(main, &lease, pr)?.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(lease))
+}
+
+// trace:BUG-2761 | ai:codex
+pub(crate) fn verified_retained_repair(
+    main: &Path,
+    lease: &crate::SessionLease,
+    pr: Option<u64>,
+) -> Result<Option<crate::repair_journal::RepairEntry>> {
+    let entry = crate::repair_journal::RepairGuard::lock(main)?
+        .retained_for_lease(lease)?
+        .cloned();
+    let Some(entry) = entry else {
+        // An orphan with an unfinished merge cannot fall back to ordinary
+        // adoption merely because the reservation was removed or moved.
+        return match lease.worktree_path.join(".git/MERGE_HEAD").symlink_metadata() {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).context("cannot inspect retained merge; inspect session leases"),
+            Ok(_) => anyhow::bail!("retained merge has no matching repair reservation; preserve the seat and inspect the repair journal"),
+        };
+    };
+    anyhow::ensure!(
+        pr == Some(entry.key.pr) && host_recorded_clone(main, &lease.worktree_path).is_some(),
+        "retained repair PR or private clone differs; inspect the repair journal and session leases"
+    );
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        leases
+            .iter()
+            .filter(|other| other.id == lease.id
+                || other.scope.eq_ignore_ascii_case(&lease.scope)
+                || other.branch == lease.branch
+                || other.worktree_path == lease.worktree_path)
+            .count()
+            == 1
+            && leases.iter().any(|other| other.id == lease.id
+                && other.worktree_path == lease.worktree_path
+                && other.branch == lease.branch
+                && other.scope == lease.scope),
+        "retained repair lease ownership changed or is ambiguous; inspect session leases"
+    );
+    verify_retained_index(&entry, |args| {
+        let args: Vec<_> = args.iter().map(std::ffi::OsStr::new).collect();
+        let bytes = run_sandboxed(&lease.worktree_path, main, "git", &args, PROBE_OUTPUT_CAP)
+            .map_err(|why| anyhow::anyhow!("{why}"))?;
+        Ok(String::from_utf8(bytes)?)
+    })
+    .context("retained repair differs from journal; preserve the seat and inspect its merge and conflict paths")?;
+    Ok(Some(entry))
+}
+
+// Resolved paths leave the unmerged stages but remain in Git's resolve-undo
+// extension. Compare their union so partially staged repairs keep their work.
+// trace:BUG-2761 | ai:codex
+fn verify_retained_index(
+    entry: &crate::repair_journal::RepairEntry,
+    execute: impl Fn(&[&str]) -> Result<String>,
+) -> Result<()> {
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])?.trim_end_matches('\n') == entry.branch
+            && execute(&["rev-parse", "--verify", "HEAD"])?.trim_end_matches('\n')
+                == entry.key.original_head
+            && execute(&["rev-parse", "--verify", "MERGE_HEAD"])?.trim_end_matches('\n')
+                == entry.base,
+        "repair branch, original head or merge base changed"
+    );
+    let mut paths = std::collections::BTreeSet::new();
+    for mode in ["--unmerged", "--resolve-undo"] {
+        let rows = execute(&["ls-files", mode, "-z"])?;
+        for row in rows.split_terminator('\0') {
+            let (_, path) = row.split_once('\t').context("invalid index stage record")?;
+            paths.insert(path.to_owned());
+        }
+    }
+    anyhow::ensure!(
+        !paths.is_empty()
+            && paths.len() == entry.original_conflict_paths.len()
+            && paths == entry.original_conflict_paths.iter().cloned().collect(),
+        "repair conflict paths changed"
+    );
+    Ok(())
+}
+
 // Host-staged conflict preparation. The shared reservation precedes the merge;
 // any ambiguous failure keeps it. Only proof of lane death may release it.
 // trace:STORY-2710 | ai:codex

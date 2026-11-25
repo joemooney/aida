@@ -4947,6 +4947,26 @@ pub(crate) fn handle_queue_work(
         }
         let resolved_pickup_pr =
             (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
+        // A cold dispatch can resume a host-staged repair even when the vendor
+        // has no conversation to resume. Keep ordinary orphan pickup explicit.
+        // trace:BUG-2761 | ai:codex
+        let retained = if !list_sessions
+            && role == "implementer"
+            && plan.entries.len() == 1
+            && (plan.scope.eq_ignore_ascii_case(&plan.entries[0].spec_id)
+                || plan.scope.eq_ignore_ascii_case(&plan.anchor_display))
+            && (adopt_orphan.is_some() || rework_pr.is_some())
+        {
+            crate::seat_clone::retained_repair_for_pickup(
+                &project_root,
+                &plan.scope,
+                rework_pr.as_ref().map(|(pr, _)| *pr),
+            )?
+        } else {
+            None
+        };
+        let retained_id = retained.as_ref().map(|lease| lease.id.clone());
+        let adopt_orphan = retained.or(adopt_orphan);
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
         // trace:BUG-2549 | ai:codex
         let canonical_resume = canonical_resume_branch(
@@ -6274,7 +6294,9 @@ pub(crate) fn handle_queue_work(
                 // BUG-2223: re-enter the orphan's tree in place. Session start
                 // re-checks it and bypasses nothing else: a live claim on the
                 // scope still refuses. trace:BUG-2223 | ai:claude
-                if adopt_orphan.is_some() {
+                if let Some(previous) = &retained_id {
+                    crate::session_start::PathReentry::RetainedRepair(previous)
+                } else if adopt_orphan.is_some() {
                     crate::session_start::PathReentry::AdoptOrphan
                 } else {
                     crate::session_start::PathReentry::None
@@ -6326,7 +6348,7 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &lease.worktree_path,
                         branch,
-                        matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        retained_id.is_some() || matches!(launch, Some(QueueWorkLaunch::Resume(_))),
                         *pr,
                         &lease.id,
                     );

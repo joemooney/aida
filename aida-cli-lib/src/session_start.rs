@@ -995,13 +995,15 @@ pub(crate) fn creator_shell_pid() -> Option<u32> {
 /// (with `--force-claim`, any registered worktree on the branch may be).
 // trace:BUG-2223 TASK-2823 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PathReentry {
+pub(crate) enum PathReentry<'a> {
     /// An existing path is refused.
     None,
     /// BUG-2223: re-enter the orphaned lease the path records
     /// (`aida queue work --resume`). Unlike `force_claim` it bypasses no live
     /// claim, and refuses when the path is not an adoptable orphan's.
     AdoptOrphan,
+    // trace:BUG-2761 | ai:codex
+    RetainedRepair(&'a str),
     /// TASK-2823: a lane launch naming `--branch` re-enters a linked worktree
     /// that already has that branch checked out (git refuses a second
     /// checkout of it) when no session's lease records that tree.
@@ -2177,7 +2179,7 @@ pub(crate) fn session_start_with_receipt(
     rollback_failed_setup: bool,
     // BUG-2223 / TASK-2823: whether an existing `explicit_path` may be
     // re-entered in place, and on what terms (see [`PathReentry`]).
-    path_reentry: PathReentry,
+    path_reentry: PathReentry<'_>,
     // Some(None) is a confirmed negative from a single-spec queue pickup.
     resolved_pr: Option<Option<(u64, String)>>,
     // Queue work proved this Done spec's open origin change and its rework
@@ -2202,7 +2204,10 @@ pub(crate) fn session_start_with_receipt(
         Some(SessionBase::QueueBranch(branch)) => Some(branch),
         _ => None,
     };
-    let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
+    let adopt_orphan = matches!(
+        path_reentry,
+        PathReentry::AdoptOrphan | PathReentry::RetainedRepair(_)
+    );
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
     // inside a linked worktree, find_project_root() returns the linked
@@ -2371,6 +2376,27 @@ pub(crate) fn session_start_with_receipt(
             &branch_name,
             clone_reentry,
         )?
+    } else {
+        None
+    };
+    // Recheck queue-selected repair evidence at setup, before replacing its lease.
+    // trace:BUG-2761 | ai:codex
+    let retained_entry = if let PathReentry::RetainedRepair(previous) = path_reentry {
+        let orphan = adopted_orphan
+            .as_ref()
+            .context("retained repair lease disappeared; inspect session leases")?;
+        anyhow::ensure!(
+            clone_reentry && orphan.id == previous,
+            "retained repair ownership changed before pickup; inspect session leases"
+        );
+        Some(
+            crate::seat_clone::verified_retained_repair(
+                &project_root,
+                orphan,
+                verified_pickup_pr.as_ref().map(|(pr, _)| *pr),
+            )?
+            .context("retained repair reservation disappeared; inspect the repair journal")?,
+        )
     } else {
         None
     };
@@ -3741,12 +3767,20 @@ pub(crate) fn session_start_with_receipt(
         // Transfer only at the verified adoption boundary, before removing the
         // original lease. The shared journal remains independent of watcher state.
         // trace:STORY-2710 | ai:codex
-        crate::repair_journal::RepairGuard::lock(&project_root)?.transfer_adopted_lane(
+        let mut journal = crate::repair_journal::RepairGuard::lock(&project_root)?;
+        if let Some(expected) = &retained_entry {
+            anyhow::ensure!(
+                journal.retained_for_lease(orphan)? == Some(expected),
+                "retained repair reservation changed during pickup; inspect the repair journal"
+            );
+        }
+        journal.transfer_adopted_lane(
             &lease.worktree_path,
             &lease.branch,
             &orphan.id,
             &lease.id,
         )?;
+        drop(journal);
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.
