@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T16:29:12.042566113Z
+modified_at: 2026-11-25T17:00:43.818148149Z
 req_type: Bug
 tags:
 - review-watch
@@ -205,6 +205,20 @@ comments:
   modified_at: 2026-11-25T16:24:53.521466525Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213a7-09aa-7502-afbf-8152ac945723
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: abbcff0abc (PR #4568 r3)
+    - F2 (hub path): admission claims are keyed by head. chain() keeps one global predecessor order per change but scopes prior/ownership/replacement to the transition's head; update_with_observer uses the same-head prior; retry_allowed peels Retry/Cancelled pairs within the head's history; require_released refuses while ANY head's latest transition is active. Test admission::tests::bug2763_running_hub_claim_allows_dispatch_only_for_a_different_head: A's claim is asserted Running after an ambiguous exit, B is reserved and dispatched (marker spawned), and a second node is refused for both A and B. story2492 race test now asserts same-head fencing (a different head is intentionally no longer fenced).
+    - F1: test traces now use BUG-2763.AC1/AC2 per the amended ACs (no liveness proof, no doctor finding).
+    - F3 (release vs record_skip race): DEFERRED per advisor-122 ruling.
+    - Evidence: targeted cargo run (admission, bug2763, release_retries) 115 passed; make check-ci-fast exit 0.
+    - Residual risk: older binaries still verify chains with the global-prior rule and will reject a change whose chain has B reserved while A is active, so mixed-version hub fleets fail closed for that PR until upgraded.
+  created_at: 2026-11-25T17:00:43.818148149Z
+  modified_at: 2026-11-25T17:00:43.818148149Z
+  session_id: 01a21389cc20
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
