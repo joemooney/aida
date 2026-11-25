@@ -632,13 +632,54 @@ fn approved_small_approval_and_show_label_use_unique_work_branch() {
     req.spec_id = Some("STORY-42".into());
     req.status = aida_core::RequirementStatus::Approved;
     let label = || show_label(root, &req, || None).unwrap();
-    assert!(label().contains("supervised"));
+    assert!(label().starts_with("unset (supervised"));
+    let module = repo_on("main", "");
+    git_in(
+        root,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            module.path().to_str().unwrap(),
+            "docs/cli/vendor.md",
+        ],
+    );
+    std::fs::write(root.join("excluded.txt"), "unchanged").unwrap();
+    git_in(root, &["add", "."]);
+    git_in(root, &["commit", "-qm", "baseline"]);
     git_in(root, &["checkout", "-qb", "story-42-work"]);
-    std::fs::create_dir_all(root.join("docs/cli")).unwrap();
     std::fs::write(root.join("docs/cli/test.md"), "docs").unwrap();
     git_in(root, &["add", "."]);
     git_in(root, &["commit", "-qm", "docs"]);
-    assert!(label().starts_with("drain"));
+    assert_eq!(label(), APPROVED_SMALL_PREVIEW);
+    git_in(root, &["config", "diff.renames", "true"]);
+    git_in(root, &["mv", "excluded.txt", "docs/cli/moved.md"]);
+    git_in(root, &["commit", "-qm", "move unchanged file"]);
+    assert!(label().starts_with("unset (supervised"));
+    git_in(root, &["reset", "--hard", "HEAD^"]);
+
+    use std::os::unix::ffi::OsStrExt;
+    std::fs::write(
+        root.join(std::ffi::OsStr::from_bytes(b"docs/cli/\xff.md")),
+        "docs",
+    )
+    .unwrap();
+    git_in(root, &["add", "docs/cli"]);
+    git_in(root, &["commit", "-qm", "non UTF-8 path"]);
+    assert!(label().starts_with("unset (supervised"));
+    git_in(root, &["reset", "--hard", "HEAD^"]);
+    git_in(
+        &root.join("docs/cli/vendor.md"),
+        &["commit", "--allow-empty", "-qm", "advance"],
+    );
+    git_in(root, &["add", "--force", "docs/cli/vendor.md"]);
+    git_in(root, &["commit", "-qm", "advance gitlink"]);
+    git_in(root, &["config", "diff.ignoreSubmodules", "all"]);
+    assert!(label().starts_with("unset (supervised"));
+    git_in(root, &["reset", "--hard", "HEAD^"]);
+
+    assert_eq!(label(), APPROVED_SMALL_PREVIEW);
     git_in(root, &["branch", "story-42-alternate"]);
-    assert!(label().contains("supervised"));
+    assert!(label().starts_with("unset (supervised"));
 }

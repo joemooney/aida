@@ -7108,7 +7108,8 @@ fn run_show(
                                 }) {
                                     // STORY-2884: the project default an unset
                                     // mode takes. trace:STORY-2884 | ai:claude
-                                    lines.push(crate::toon::scalar("effective_mode", &label));
+                                    let (key, _) = crate::gate::unset_mode::label_fields(&label);
+                                    lines.push(crate::toon::scalar(key, &label));
                                 }
                                 // STORY-634: the multi-repo origin dimension, emitted
                                 // only when set. trace:STORY-634 | ai:claude
@@ -7782,7 +7783,8 @@ fn run_show(
                             }) {
                                 // STORY-2884: the project default an unset mode
                                 // takes at merge. trace:STORY-2884 | ai:claude
-                                println!("\n{} {}", "Effective mode:".bold(), label.cyan());
+                                let (_, heading) = crate::gate::unset_mode::label_fields(&label);
+                                println!("\n{} {}", heading.bold(), label.cyan());
                             }
                             // Human output at an interactive terminal renders the
                             // markdown in the description (the knowledge body for
@@ -9348,7 +9350,9 @@ fn run_edit(
                                         backend.load().ok().map(|s| s.requirements)
                                     })
                                 {
-                                    eprintln!("  Effective mode: {label}");
+                                    let (_, heading) =
+                                        crate::gate::unset_mode::label_fields(&label);
+                                    eprintln!("  {heading} {label}");
                                 }
                             }
                         }

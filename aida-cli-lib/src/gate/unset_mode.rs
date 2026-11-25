@@ -421,9 +421,12 @@ pub(crate) fn show_label(
                     }
                 }
                 let (_, head) = candidate?;
-                changed_paths(root, &base, head)
+                preview_paths(root, &base, head)
             });
             mode.withdraw_for_change(paths.as_deref());
+            if mode.is_project_default() {
+                return APPROVED_SMALL_PREVIEW.to_owned();
+            }
         }
         mode.label()
     };
@@ -671,6 +674,50 @@ impl CheckedHeads {
 
 fn short_sha(sha: &str) -> &str {
     sha.get(..12).unwrap_or(sha)
+}
+
+const APPROVED_SMALL_PREVIEW: &str =
+    "drain-eligible (preview; landing stays supervised until TASK-3890)";
+
+pub(crate) fn label_fields(label: &str) -> (&'static str, &'static str) {
+    if label == APPROVED_SMALL_PREVIEW {
+        ("mode_preview", "Mode preview:")
+    } else {
+        ("effective_mode", "Effective mode:")
+    }
+}
+
+/// Raw tree modes expose gitlinks even when their names match the docs allow-list.
+// trace:STORY-3038.AC1 | ai:codex
+fn preview_paths(root: &Path, base: &str, head: &str) -> Option<Vec<String>> {
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    cmd.args([
+        "diff",
+        "--raw",
+        "-z",
+        "--no-renames",
+        "--ignore-submodules=none",
+        "--no-ext-diff",
+    ])
+    .arg(format!("{base}...{head}"))
+    .arg("--");
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output).ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let mut records = std::str::from_utf8(&out.stdout)
+        .ok()?
+        .split_terminator('\0');
+    let mut paths = Vec::new();
+    while let Some(header) = records.next() {
+        let mut modes = header.strip_prefix(':')?.split(' ');
+        if [modes.next()?, modes.next()?].contains(&"160000") {
+            return None;
+        }
+        let path = records.next()?;
+        paths.push((!path.is_empty()).then(|| path.to_owned())?);
+    }
+    (out.stdout.is_empty() || out.stdout.ends_with(&[0])).then_some(paths)
 }
 
 /// Files `head` changes against its merge base with `base` (a ref such as
