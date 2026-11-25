@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: An exited-attempt hold is keyed by (PR, head SHA). When the PR head differs from the held attempt's head, review-watch dispatches the new head with no liveness probe. This includes the hub/claim path: an old head's claim, Running or not, never blocks a different head. Verdicts stay head-pinned, so a late verdict from the old attempt never counts for the new head. A same-head hold stays held until an operator runs `--release`. `--release` also clears the saved skip entry.
   - AC2: Tests: a hold on head A plus a new head B → B is dispatched with no probe; the same head A → still held; a late verdict from the A attempt does not count for B; a hub-enabled case where A's claim is left Running → B is still dispatched.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T12:09:44.208986850Z
+modified_at: 2026-11-25T15:19:06.261069059Z
 req_type: Bug
 tags:
 - review-watch
@@ -270,6 +270,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21349-ff15-7dc2-a108-5d903a274d20
+  author: joe
+  timestamp: 2026-11-25T15:19:06.261066919Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
