@@ -10,12 +10,12 @@ description: |
   - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
   - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
   - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-25T21:19:14.999335916Z
+modified_at: 2026-11-25T21:19:17.626045112Z
 req_type: Story
 tags:
 - planning
@@ -27,6 +27,14 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:19:14.999335916Z
   modified_at: 2026-11-25T21:19:14.999335916Z
+history:
+- id: 01a21493-c27a-7021-a48c-0648fcec1383
+  author: joe
+  timestamp: 2026-11-25T21:19:17.626042122Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
   branch: main
