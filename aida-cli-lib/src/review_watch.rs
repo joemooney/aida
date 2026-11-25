@@ -928,6 +928,7 @@ impl Store {
             );
             let released = entry.attempts.len();
             entry.attempts.clear();
+            entry.skipped = None;
             Ok(released)
         })
     }
@@ -2036,6 +2037,9 @@ fn select_with_probes(
         let mut no_verdict_attempts = 0;
         let mut no_verdict_ready = false;
         let mut pickup_retries = 0;
+        // An exited attempt holds only its own head. Even a surviving reviewer can
+        // record only its old head, and the verdict gate checks the reviewed SHA.
+        // trace:BUG-2763 | ai:codex
         if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
             if history.conclusive(&change.head) {
                 attempt.no_verdict_retry_at = None;
