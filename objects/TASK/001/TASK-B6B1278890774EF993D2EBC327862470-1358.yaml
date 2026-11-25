@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T00:21:47.745095661Z
+modified_at: 2026-11-25T00:25:52.897355531Z
 req_type: Task
 tags:
 - integration
@@ -59,6 +59,17 @@ comments:
   created_at: 2026-11-25T00:21:47.745092028Z
   modified_at: 2026-11-25T00:21:47.745092028Z
   session_id: 01a20fa680dd
+- id: 01a21018-7012-72b0-ad25-8c533425bf96
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4548 @ f81cee0cb8 (integration-30): ONE REQUIRED FIX (security), otherwise PASS.
+    AC1: review_risk_base_object fetches the forge-observed base OID when it is missing locally (validates 40/64 hex, --no-write-fetch-head, --refmap=, --no-tags). The test advances the target after checkout. Good. AC2: the whole lookup, including resolve_gh_binary_for_probe, runs inside with_forge_lookup_deadline(15s). The stalled gh --version test proves the result is None, so the tier is Strict. Good. merge-tree vs integration a3397751429: clean.
+    REQUIRED (F1, forge.rs review_risk_base_object): the new network fetch and its cat-file probe are built with raw Command::new("git") in root, plus .remote_credentials(). Remote-contacting host git must start from aida_core::git_ops::host_remote_git_command(root, "origin") (cat-file: host_git_command(root)). That builder refuses to run in a contained seat clone (BUG-2169), where seat-written config such as core.sshCommand, remote.origin.uploadpack, url.*.insteadOf or protocol.ext.allow would otherwise execute on the host during the fetch. It also applies host_git_hardening (fsmonitor off, hooks pinned). Raw git here makes a verdict append in a seat-controlled checkout a host command-execution path. The fix is about 4 lines; keep the current flags. Add a test that the fetch is refused in a seat clone root, or assert via the existing bug_1929 guard pattern.
+    Route: a micro-round on the same branch; READY follows after FAST on the fixed head.
+  created_at: 2026-11-25T00:25:52.897355531Z
+  modified_at: 2026-11-25T00:25:52.897355531Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
