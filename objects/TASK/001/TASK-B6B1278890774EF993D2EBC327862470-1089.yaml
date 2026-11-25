@@ -8,8 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:30:12.175379505Z
-modified_at: 2026-11-16T01:31:33.147731813Z
+modified_at: 2026-11-25T21:19:34.724027769Z
 req_type: Task
+comments:
+- id: 01a21494-0544-7143-8d1b-4c533adc32df
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): REJECTED: superseded by aida mandate renew (TASK-3820).'
+  created_at: 2026-11-25T21:19:34.724027769Z
+  modified_at: 2026-11-25T21:19:34.724027769Z
 history:
 - id: 01a1e1fa-7379-7672-a25f-9096f460ebb1
   author: joe
