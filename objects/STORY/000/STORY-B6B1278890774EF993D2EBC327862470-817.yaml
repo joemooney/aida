@@ -9,12 +9,12 @@ description: |
   - AC1: When land/train merges a change, the specs in the landed commit's trailing parens (skipping a final `(#N)` group, and never Refs-only ones) are completed at merge time by the landing actor, without waiting for a pull.
   - AC2: A later `aida pull` is idempotent for specs already completed this way.
   - AC3: A test covers a train landing whose squash subject ends in `(SPEC-ID) (#N)`.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:54:53.934825801Z
-modified_at: 2026-11-25T21:19:00.923331494Z
+modified_at: 2026-11-25T21:19:03.430045544Z
 req_type: Story
 tags:
 - completion
@@ -25,6 +25,14 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:19:00.923331494Z
   modified_at: 2026-11-25T21:19:00.923331494Z
+history:
+- id: 01a21493-8b06-77e3-b30f-6f6bcc0f2195
+  author: joe
+  timestamp: 2026-11-25T21:19:03.430039223Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
