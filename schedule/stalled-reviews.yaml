@@ -1,5 +1,5 @@
 job: stalled-reviews
-last_run: 2026-11-25T09:58:35.926593263Z
+last_run: 2026-11-25T11:58:34.676589463Z
 last_by:
   seat: substrate
   vendor: tick
@@ -52,4 +52,7 @@ failure_trips:
   status: 127
 - trip_id: stalled-reviews@2026-11-25T09:58:35.926593263Z
   at: 2026-11-25T09:58:35.926593263Z
+  status: 127
+- trip_id: stalled-reviews@2026-11-25T11:58:34.676589463Z
+  at: 2026-11-25T11:58:34.676589463Z
   status: 127
