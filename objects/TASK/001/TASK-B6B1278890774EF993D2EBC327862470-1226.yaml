@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9c8f6309535ec40c19802d775203a3396f578960
 
   release_evidence calls read_exact_lease, which reads the entire TOML into a String while holding the shared repair lock. This also runs in unfiltered doctor. A large malformed lease can exhaust memory or stall other repair operations even though any existing file disqualifies the reservation. Check presence fail-closed without consuming the file, or bound any diagnostic read.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T03:32:52.010174214Z
-modified_at: 2026-11-25T07:18:09.232960070Z
+modified_at: 2026-11-25T07:18:13.872813274Z
 req_type: Task
 tags:
 - carried-from:BUG-2722
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-23T03:52:31.633715817Z
   changes: []
+- id: 01a21191-be70-70a2-8205-3cb51ecb2121
+  author: joe
+  timestamp: 2026-11-25T07:18:13.872805618Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9c8f6309535ec40c19802d775203a3396f578960
   branch: pr-4403
