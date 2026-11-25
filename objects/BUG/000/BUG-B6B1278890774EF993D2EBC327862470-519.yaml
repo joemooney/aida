@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Advisor-loop / review-watch state READERS tolerate unknown fields (no deny_unknown_fields on persisted runtime state that crosses a binary rollover), so an older reader never hard-fails on a newer writer's field; add a test that state written with an extra unknown field loads.
   - AC2: Writers OMIT pickup_retries when zero (skip_serializing_if), so ordinary reservations stay readable by older binaries. Test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T23:59:11.983027226Z
-modified_at: 2026-11-25T00:22:19.866555166Z
+modified_at: 2026-11-25T00:58:43.209512926Z
 req_type: Bug
 tags:
 - outage
@@ -32,6 +32,12 @@ comments:
   modified_at: 2026-11-25T00:22:19.866555166Z
   session_id: 01a21006d380
   harness_version: codex-cli 0.167.0
+- id: 01a21036-4a89-7060-abf8-a3dc7d260a65
+  author: aida-publication-done
+  content: Implementer push 0ec9c312e7c1 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T00:58:43.209512428Z
+  modified_at: 2026-11-25T00:58:43.209512428Z
+  session_id: 01a21006d380
 history:
 - id: 01a21000-f703-7691-a95e-5c3599133388
   author: joe
@@ -50,6 +56,14 @@ history:
   session_id: 01a21006d380
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a21036-4a89-7060-abf8-a3ca0a855694
+  author: aida-publication-done
+  timestamp: 2026-11-25T00:58:43.209510990Z
+  session_id: 01a21006d380
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
