@@ -9,16 +9,22 @@ description: |
   - AC1: When land/train merges a change, the specs in the landed commit's trailing parens (skipping a final `(#N)` group, and never Refs-only ones) are completed at merge time by the landing actor, without waiting for a pull.
   - AC2: A later `aida pull` is idempotent for specs already completed this way.
   - AC3: A test covers a train landing whose squash subject ends in `(SPEC-ID) (#N)`.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:54:53.934825801Z
-modified_at: 2026-11-25T22:27:52.054920064Z
+modified_at: 2026-11-25T22:53:36.232680232Z
 req_type: Story
 tags:
 - completion
 - landing
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a214ea-0050-7592-bb02-14303f16cf1c
+  created_at: 2026-11-25T22:53:36.232647361Z
+  created_by: dirtlab
 comments:
 - id: 01a21493-813b-7e23-9e14-81c17ae2c2b6
   author: joe
@@ -57,6 +63,13 @@ comments:
   modified_at: 2026-11-25T22:27:52.054920064Z
   session_id: 01a2149cfd85
   harness_version: 2.1.319 (Claude Code)
+- id: 01a214e9-9e59-7c81-948b-051ffca7a969
+  author: aida-publication-done
+  content: Implementer push f24ccdbb0c97 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T22:53:04.473742650Z
+  modified_at: 2026-11-25T22:53:04.473742650Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-8b06-77e3-b30f-6f6bcc0f2195
   author: joe
@@ -72,6 +85,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a214e9-9e59-7c81-948b-050bd21d3525
+  author: aida-publication-done
+  timestamp: 2026-11-25T22:53:04.473740939Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a214ea-2297-79f0-839d-fd97ae9219e7
+  author: dirtlab
+  timestamp: 2026-11-25T22:53:38.327834741Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main

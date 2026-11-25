@@ -1,0 +1,77 @@
+id: 01a214ea-0050-7592-bb02-14303f16cf1c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-322
+title: 'Review PR-4600: [AI:claude] feat(train): complete landed trailer specs at merge (STORY-3006)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2149c`) for branch `story-3006-complete-at-merge`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4600>
+  - Branch: `story-3006-complete-at-merge` → `main`
+
+  ## Covers
+
+  - STORY-3006
+  - BUG-2764
+  - BUG-2730
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2839
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4600` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T22:53:29.552740998Z
+modified_at: 2026-11-25T22:53:47.197104205Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a2050a-58ee-7470-a810-e7b93d9a7867
+  created_at: 2026-11-25T22:53:32.968816010Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a213e3-ba21-73e1-b295-65d98d31ac5f
+  created_at: 2026-11-25T22:53:39.891787842Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
+  created_at: 2026-11-25T22:53:47.197041080Z
+  created_by: dirtlab
+history:
+- id: 01a214ea-15ea-7892-95e8-ea4779fd7367
+  author: dirtlab
+  timestamp: 2026-11-25T22:53:35.082283230Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a214ea-30e8-77c0-9dff-89a51b51753c
+  author: dirtlab
+  timestamp: 2026-11-25T22:53:41.992456052Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a214ea-4d68-7a40-a684-e4c7eac9b01d
+  author: dirtlab
+  timestamp: 2026-11-25T22:53:49.288183035Z
+  session_id: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: f24ccdbb0c97dd1418c92a4fc6f034d228770ccb
+  branch: story-3006-complete-at-merge
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f03f5255aa
+  vendor: claude
+  session: 01a2149cfd85
+  harness_version: 2.1.319 (Claude Code)
