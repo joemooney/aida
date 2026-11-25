@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T01:29:16.453059652Z
+modified_at: 2026-11-25T01:30:26.519654751Z
 req_type: Story
 tags:
 - hygiene
@@ -137,6 +137,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T01:29:16.298275080Z
   modified_at: 2026-11-25T01:29:16.298275080Z
+- id: 01a21053-9759-7a40-9e07-3a083bbd72f9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:30):
+    # STORY-3059 / PR #4552 r2 (advisor-122 ruling 2026-11-24 18:31 at 1deb5e4d; STRICT, destructive reap; product-15). Lane: CODEX. MAIN, existing branch. <=200 lines. ONE round.
+    MUST:
+    (F1) No TOCTOU: re-verify the clean tree, no holders and the ref/reflog inventory AT THE MOMENT OF DELETION. RENAME the tree to a quarantine path first, re-check, then delete; any change means restore and RETAIN.
+    (F2) Include the HEAD and branch REFLOGS in the inventory: any commit reachable only from a reflog and not from a freshly fetched origin ref means RETAIN.
+    (F4) NO fetch into the shared refs/remotes/origin namespace from hygiene, and NEVER any fetch or mutation in --dry-run. Fetch into a PRIVATE per-run ref namespace, or use `git ls-remote` plus a reachability check.
+    (F5, F6) Tests through the REAL clone path: the forge shim is actually exercised; origin branch deleted or rewound after the push while the old tip exists locally → RETAIN; a reflog-only commit → RETAIN; dry-run changes nothing.
+    (F7) Update the summary/guide wording to the new policy.
+    REJECTED (do NOT do): F3. A tag-only preserved commit is RETAINED (branch-only coverage fails closed). NOTE that in the guide.
+    One targeted cargo run, then make check-ci-fast, then push to #4552. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T01:30:26.519654751Z
+  modified_at: 2026-11-25T01:30:26.519654751Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
