@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:27:32.690201732Z
-modified_at: 2026-11-23T03:30:32.201316875Z
+modified_at: 2026-11-25T21:19:39.275733228Z
 req_type: Story
 tags:
 - lanes
@@ -46,6 +46,11 @@ comments:
   content: 'Related: BUG-2724 (auto-salvage a DEAD predecessor seat at admission; reference script .aida/tmp/ref/salvage-seat.sh). STORY-2904 keeps the resume-in-clone verb.'
   created_at: 2026-11-23T03:30:32.201316875Z
   modified_at: 2026-11-23T03:30:32.201316875Z
+- id: 01a21494-170b-78c3-b1bf-794528dc4cc0
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): REJECTED: folded into BUG-2761''s reservation-lifecycle sketch (integration-30, signed 09:42).'
+  created_at: 2026-11-25T21:19:39.275733228Z
+  modified_at: 2026-11-25T21:19:39.275733228Z
 history:
 - id: 01a1fd6f-edc5-7cf2-b558-787f1c14cd00
   author: joe
