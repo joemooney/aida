@@ -1,5 +1,6 @@
 id: 01a2110a-e051-7e03-bc91-ae4a57d54b94
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1406
+agreed_id: TASK-3397
 title: 'Review follow-up: aida-cli-lib/src/session_reap.rs:1498–1505 and aida-cli-lib/src/session_hygiene.rs:139–153'
 description: |-
   From STORY-3059
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20bea-575b-7210-9136-af2771724df6
   created_at: 2026-11-25T04:51:16.403365524Z
+history:
+- id: 01a21135-6d2a-75a2-8af2-1ded444f0d27
+  author: joe
+  timestamp: 2026-11-25T05:37:23.754062558Z
+  changes: []
 filed_at:
   code_sha: 8e61bbfdfcb8e4ca9d3bd7307b609e3b99bef088
   branch: pr-4552

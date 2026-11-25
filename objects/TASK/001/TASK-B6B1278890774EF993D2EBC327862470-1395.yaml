@@ -1,5 +1,6 @@
 id: 01a210a1-c557-7d41-9dcf-f47973cae953
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1395
+agreed_id: TASK-3392
 title: 'Review follow-up: aida-cli-lib/src/forge.rs:7168 — The explicit fetch can also download from the repository'''
 description: |-
   From TASK-3874
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20e45-914e-7902-911a-f8554a9a6a04
   created_at: 2026-11-25T02:56:21.946922918Z
+history:
+- id: 01a21135-6cb7-7493-b5dd-000812d9bf08
+  author: joe
+  timestamp: 2026-11-25T05:37:23.639748900Z
+  changes: []
 filed_at:
   code_sha: f3d120c1fd5db11c0d63f4451b73dd68298b82c8
   branch: pr-4556

@@ -1,5 +1,6 @@
 id: 01a210f2-ee00-7793-84d4-da18fe3aa991
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-303
+agreed_id: STORY-3122
 title: 'Review PR-4559: [AI:codex] fix(session): quote trailing-space filenames in refusal summaries (TASK-3882)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a210af`) for branch `int38-task-3882`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T04:25:41.855801704Z
   session_id: 01a210af7534
+  changes: []
+- id: 01a21135-6fa2-7da0-b871-cb79ef04e1fc
+  author: joe
+  timestamp: 2026-11-25T05:37:24.386040270Z
   changes: []
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2

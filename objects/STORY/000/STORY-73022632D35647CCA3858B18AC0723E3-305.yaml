@@ -1,5 +1,6 @@
 id: 01a21115-3626-7d82-a2fb-9b88e8cdf188
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-305
+agreed_id: STORY-3124
 title: 'Review PR-4561: [AI:codex] fix(review): scope companion batches by directory and Rust facets by language (TASK-3880)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a210dd`) for branch `int38-task-3880`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T05:02:44.996980840Z
   session_id: 01a210ddafaf
+  changes: []
+- id: 01a21135-7043-72c0-8125-d22086ff9649
+  author: joe
+  timestamp: 2026-11-25T05:37:24.547734658Z
   changes: []
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2

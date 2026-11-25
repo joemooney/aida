@@ -1,5 +1,6 @@
 id: 01a2110c-e7f7-7110-a6f4-fc17721c6fe8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-304
+agreed_id: STORY-3121
 title: 'Review PR-4560: [AI:codex] fix(review): prevent implicit fetches during risk base resolution (Refs TASK-3874)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a210c5`) for branch `int38-task-3874-r3`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21111-0013-7022-b9f4-185cdc0e4e4d
   author: dirtlab
   timestamp: 2026-11-25T04:57:36.531991903Z
+  changes: []
+- id: 01a21135-6f53-7e63-be09-82b026e079bf
+  author: joe
+  timestamp: 2026-11-25T05:37:24.307227379Z
   changes: []
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2

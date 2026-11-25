@@ -1,5 +1,6 @@
 id: 01a21100-db04-75c0-8f63-fd09499af67d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1405
+agreed_id: TASK-3394
 title: 'Review follow-up: The new inline list at session_end.rs:1635 makes a private clone with one untracked file n'
 description: |-
   From TASK-3882
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20f19-b0f7-7b60-8ff2-b117b95009d5
   created_at: 2026-11-25T04:40:15.298003617Z
+history:
+- id: 01a21135-6cc4-79b3-9f20-be0d1e752e46
+  author: joe
+  timestamp: 2026-11-25T05:37:23.652568312Z
+  changes: []
 filed_at:
   code_sha: 876ace623dbe8dc8b38dd09fe16c114d6cbc31fb
   branch: pr-4559

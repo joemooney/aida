@@ -1,5 +1,6 @@
 id: 01a210e8-47ae-71e3-a7e8-19458ed78a15
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-302
+agreed_id: STORY-3123
 title: 'Review PR-4558: [AI:codex] fix(review-watch): bind FULL requests to settled FAST runs for the reviewed PR (TASK-3877)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a210ad`) for branch `int38-task-3877`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T04:13:45.958203075Z
   session_id: 01a210ad058e
+  changes: []
+- id: 01a21135-6fca-7062-8ecf-8670bce15230
+  author: joe
+  timestamp: 2026-11-25T05:37:24.426225473Z
   changes: []
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
