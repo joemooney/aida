@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T07:55:24.831493306Z
+modified_at: 2026-11-25T07:59:35.247834907Z
 req_type: Story
 tags:
 - hygiene
@@ -297,6 +297,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Round 4: dispute the F3 ruling that the holder race is moot when combined with F1 dissociation. A resumed writer can add a ref to a borrowed side commit after repack selects its objects and before alternates removal. Rename preserves open inodes but does not preserve the borrowed object. Independently reproduced F1 recovery loss with a borrowed commit reachable only via ORIG_HEAD: repack -a -d, unlink alternates, rev-parse succeeds, cat-file -t fails (128). The prescribed sequence therefore cannot establish whole-clone recovery.. No triage reason was given.'
   created_at: 2026-11-25T07:55:24.831487506Z
   modified_at: 2026-11-25T07:55:24.831487506Z
+- id: 01a211b7-d42c-7d12-89aa-e49ead2db214
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:59):
+    # STORY-3059: REPORT-ONLY slice (advisor-122 ruling 2026-11-25 00:52; auto-reap PARKED; product-15). Lane: CODEX. MAIN, NEW branch from origin/main. <=100 lines.
+    Read `aida show STORY-3059 --comments`. The old #4552 (auto-reap by moving clones) is CLOSED: a repack + alternates removal was reproduced losing a borrowed commit.
+    NEW SCOPE: session hygiene REPORTS closed-unmerged / published seats as "recoverable; run `aida doctor heal … --attest`" and NEVER moves, repacks, deletes or otherwise mutates them. The manual move is BUG-2755's attested path (#4541).
+    Tests: a closed-unmerged published seat → reported as recoverable with the attest hint; the seat's tree, refs and alternates are byte-for-byte unchanged afterwards; dry-run and real run are identical (report only).
+    One targeted cargo run, then make check-ci-fast. Open a NEW PR to main with the completing (STORY-3059) trailer. COMMIT your work.
+  created_at: 2026-11-25T07:59:35.247834907Z
+  modified_at: 2026-11-25T07:59:35.247834907Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
