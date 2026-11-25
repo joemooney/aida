@@ -1,0 +1,33 @@
+id: 01a213fb-16ee-7370-b1a6-dc3a6d9c5c44
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-317
+title: 'Review PR-4582: [AI:claude] feat(review): hardened review-runner spawn helper (Refs STORY-3120)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21396`) for branch `int40-story-3120-s3a`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4582>
+  - Branch: `int40-story-3120-s3a` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4582` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T18:32:32.238445310Z
+modified_at: 2026-11-25T18:32:32.238445310Z
+req_type: Story
+filed_at:
+  code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d738e6c6f1
