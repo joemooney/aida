@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
 
   Deferred follow-up from prior review: aida-cli-lib/src/land_stalls.rs:1289–1291 and :1590–1615 prune red-detail memory using only covered red heads. Skipping a still-open red PR evicts its cached test names and observation timestamp. Use confirmed inventory and covered facts for eviction, and verify cache retention across a partial tick.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T12:02:31.260636164Z
-modified_at: 2026-11-25T21:06:59.758435348Z
+modified_at: 2026-11-25T21:07:01.780086051Z
 req_type: Task
 tags:
 - carried-from:BUG-2730
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T12:08:20.836548016Z
   changes: []
+- id: 01a21488-8814-7b62-9867-bfd503ee8119
+  author: joe
+  timestamp: 2026-11-25T21:07:01.780081654Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: f613bc9c207b12bb4de7a0db4356d3c738bf9d6a
   branch: pr-4457
