@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T19:52:05.720908050Z
-modified_at: 2026-11-21T09:23:32.424105220Z
+modified_at: 2026-11-25T07:35:30.512631668Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -29,6 +29,11 @@ comments:
     Advisor carryover for the separate STORY-2897 S3b sketch. S3a #4389 intentionally removes the attention-item completion path. When S3b restores completion, thread the authoritative project root into the common completion seam and operate on the exact watch-created item UUID from the episode binding. Prove against the real store and timeline that a successful resolution emits one SpecCompleted event, a repeated resolution does not emit another, and a refused completion emits none. This remains open for the S3b sketch and independent signoff.
   created_at: 2026-11-21T09:23:32.424105220Z
   modified_at: 2026-11-21T09:23:32.424105220Z
+- id: 01a211a1-8fd0-75e3-8446-9f8b00d66a64
+  author: joe
+  content: 'Folded into TASK-3903 (review debt: main-watch) in the 2026-11-24 triage (Joe approved).'
+  created_at: 2026-11-25T07:35:30.512631668Z
+  modified_at: 2026-11-25T07:35:30.512631668Z
 history:
 - id: 01a1fa87-958f-7d53-b873-49363c57182b
   author: joe
