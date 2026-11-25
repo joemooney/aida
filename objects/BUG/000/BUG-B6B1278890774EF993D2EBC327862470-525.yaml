@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T20:03:36.598359461Z
+modified_at: 2026-11-25T20:03:49.651166258Z
 req_type: Bug
 tags:
 - ci
@@ -107,6 +107,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2764 at 6719a945 (2 commits behind main; no finding depends on base changes). AC1: verified by spec_approvals_by_head plus the head-exact fallback in promote_approved_heads; the scheduled job (maintenance_schedule.rs:3482, every 2m) promotes within one tick once FAST settles. AC2: verified by bug2764_spec_keyed_approval_promotes_in_both_orders (both orders, plus receipt dedupe). AC3: partially met. Per-PR stdout lines and per-PR stderr failures were added, but pass-level failures (load/discover) still exit non-zero with the error only on stdout in agent mode, and per-PR lines are dropped whenever any PR fails. Precedence (a PR''s own verdict at its head wins, including request-changes) and SHA-exact matching look correct. Fast CI green at the head. Request changes for the AC3 gaps.. No triage reason was given.'
   created_at: 2026-11-25T20:03:36.598351853Z
   modified_at: 2026-11-25T20:03:36.598351853Z
+- id: 01a2144e-aa47-7fa1-b99d-4c72a67d140d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2764):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6719a94592e6
+    Recorded: 2026-11-25T20:01:13.743892074+00:00
+    Findings:
+    1. AC3 unmet (non-zero exit always carries a stderr reason): only per-PR failures inside the loop are eprintln'd in promote_approved_heads (aida-cli-lib/src/review_watch.rs ~L3975-3982). Pass-level failures still propagate via `?` with nothing on stderr: forge::Repository::load, Directory::shared/open of .aida/full-ci-requests, and above all repo.discover(root) (review_watch_forge.rs:277, which fails on any gh error, e.g. rate limit, network, or the page-limit ensure). Under a scheduled non-TTY child, cli_entry.rs:226-233 agent-output mode prints that final error block on STDOUT, so schedule.log again records status=1 with empty stderr. That is the exact BUG-2764 symptom, and the implementer's own root-cause note names this channel. Fix: write every error from the promotion pass to stderr before returning (e.g. in review_cmd.rs around the promote_approved_heads call, or wrap the whole body), and add a test that makes discovery fail (the gh stub exits 1 on `pr list`) and asserts a stderr reason.
+    2. AC3 unmet (one line per approved PR it considered): when any PR fails, `anyhow::ensure!(failures.is_empty(), ...)` returns Err and the collected `lines` (promoted/skipped outcomes for every other PR in the same pass) are dropped, because review_cmd.rs prints only the Ok(Vec). A tick with one failing PR therefore hides what happened to every other approved PR. Fix: print (or return) the per-PR lines before failing, e.g. emit them inside promote_approved_heads, or return them alongside the failure list.
+    3. Test gap: bug2764_spec_keyed_approval_promotes_in_both_orders covers only promoted/skipped lines. No test covers the failure reporting path (`PR-N: failed: <err>` on stderr plus the non-zero exit), which is the AC3 half that motivated the bug. Add a case where the per-PR promotion errors (e.g. the stub fails `pr edit` or `pr view`).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T20:03:49.447919359Z
+  modified_at: 2026-11-25T20:03:49.447919359Z
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
