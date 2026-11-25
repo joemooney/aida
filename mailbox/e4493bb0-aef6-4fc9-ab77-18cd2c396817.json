@@ -1,0 +1,18 @@
+{
+  "id": "e4493bb0-aef6-4fc9-ab77-18cd2c396817",
+  "thread_id": "e4493bb0-aef6-4fc9-ab77-18cd2c396817",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795628862343,
+  "body": "- [STUCK-REVIEW] #4457 at 08ee6da5 has had no verdict and no reviewer for 52 min\n  -> launch a reviewer for #4457 at 08ee6da5\n- [STUCK-REVIEW] #4570 at a9b2089a has had no verdict and no reviewer for 38 min\n  -> launch a reviewer for #4570 at a9b2089a\n\n15 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 2 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
