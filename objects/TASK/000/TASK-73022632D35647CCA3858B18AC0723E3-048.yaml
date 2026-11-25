@@ -1,0 +1,21 @@
+id: 01a21132-758a-7c60-8833-cd3b3fe4ff0b
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-048
+title: Lane test link fails after compiler receives SIGKILL
+description: Seeded lane 01a2110564b6 passed one focused test initially. FAST job j20261125T050848928-2-0 passed source checks but sccache reported the aida-cli-lib test compiler terminated by signal 9. The next targeted job j20261125T052623673-2-0 failed linking with undefined hidden LLVM symbols across unrelated modules. A clean host-managed target is needed to verify the final patch.
+status: Draft
+priority: Medium
+owner: dirtlab
+feature: Uncategorized
+created_at: 2026-11-25T05:34:09.290123636Z
+modified_at: 2026-11-25T05:34:09.290123636Z
+req_type: Task
+tags:
+- from-advisor:TASK-3895
+- kind:observation
+- linked:TASK-3895
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 45206d90a1
+  vendor: codex
+  session: 01a2110564b6
+  harness_version: codex-cli 0.167.0
