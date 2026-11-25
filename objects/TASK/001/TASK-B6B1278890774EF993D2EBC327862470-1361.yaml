@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T04:38:45.325711267Z
+modified_at: 2026-11-25T04:41:23.837395766Z
 req_type: Task
 tags:
 - ci
@@ -94,6 +94,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T04:38:45.168495291Z
   modified_at: 2026-11-25T04:38:45.168495291Z
+- id: 01a21102-64e7-7692-961f-e8a7bd76de92
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:41):
+    # TASK-3877 / PR #4558 r2 (advisor-122 ruling 2026-11-24 21:26 at dfdc2a82, via integration-30; STRICT; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int38-task-3877. <=60 lines. ONE round.
+    - F1 MUST: "FAST settled" uses the LATEST FAST run for (PR, base, SHA); any NEWER queued or in-progress FAST run (e.g. after a close/reopen) means NOT settled. Test: old completed marker + newer queued run → not settled.
+    - F2: the FULL-request receipt key includes the BASE (head+base), so a same-SHA retarget is not suppressed. Test.
+    - F3: multi-PR same head stays fail-closed (accepted; no change).
+    - F4: reuse the commit-check reader's run metadata instead of a duplicate actions/runs fetch IF TRIVIAL (rate budget). Otherwise skip it and say so in the PR body.
+    make check-ci-fast, then push to #4558. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T04:41:23.837395766Z
+  modified_at: 2026-11-25T04:41:23.837395766Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
