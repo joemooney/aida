@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21461-8ce1-71b2-b78c-0cf39d96ab18",
+  "thread_id": "deputy-01a21461-8ce1-71b2-b78c-0cf39d96ab18",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795638281592,
+  "body": "Script deputy \"default\" finished script job 01a21461-8ce1-71b2-b78c-0cf39d96ab18: rc 0 (ok).\nScript: cd ~/ai/aida && aida comment add TASK-3910 \"ADVISOR DISPOSITION (advisor-122 13:27): APPROVED, HIGH, standard, drain. Evidence: /var/cache/aida-ci reached 255G (incremental target-v2 dirs, never pruned) and took the imac root to 90%. Prune is bounded (size + age), skips while a CI job holds the cache (lock or job check), and alerts at a configurable size. One slice, at most 300 lines.\" && aida edit TASK-3910 --status approved && aida edit TASK-3910 --mode drain\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21461-8ce1-71b2-b78c-0cf39d96ab18/transcript.log\nRead it with `aida deputy shell log 01a21461-8ce1-71b2-b78c-0cf39d96ab18 --name default`.\n",
+  "subject": "deputy script job 01a21461 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
