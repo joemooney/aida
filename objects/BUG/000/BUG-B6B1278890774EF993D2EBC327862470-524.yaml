@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When EVERY recorded attempt process for a change is verified DEAD and the PR head has MOVED past the attempt's head, review-watch auto-releases the hold and dispatches the new head. If liveness is UNKNOWN, it keeps holding and surfaces a doctor finding (stalled-reviews / review-watch).
   - AC2: Tests: dead + moved → released and dispatched; alive → held; unknown liveness → held + doctor finding.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T08:35:48.574482263Z
+modified_at: 2026-11-25T08:42:19.221032515Z
 req_type: Bug
 tags:
 - review-watch
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-25T08:35:48.670310568Z
   changes: []
+- id: 01a211de-bad5-7122-8c92-a46861f5483b
+  author: aida-session-start
+  timestamp: 2026-11-25T08:42:19.221029082Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
