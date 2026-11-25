@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T01:54:19.850157917Z
+modified_at: 2026-11-25T02:29:03.078229647Z
 req_type: Bug
 tags:
 - leases
@@ -123,6 +123,13 @@ comments:
     Targeted lane job j20261125T014604139-2-0 executed three passing tests. Some final edits occurred during that build. The fast gate is running. Residual limits include conservative refusals when any process inventory is inaccessible and advisory locking among participating mailbox writers. No live lease was exercised.
   created_at: 2026-11-25T01:54:19.850157917Z
   modified_at: 2026-11-25T01:54:19.850157917Z
+  session_id: 01a2105e6a47
+  harness_version: codex-cli 0.167.0
+- id: 01a21088-ffaf-7c20-b12e-73354508be89
+  author: dirtlab
+  content: 'Final self-review validation at HEAD 4d98f0674998 plus native changes: all three BUG-2755 tests executed and passed in j20261125T015617768-2-0, including grant revocation. Restored original fixture permissions, regenerated and reviewed scripts/store-writers.toml, and passed make check-ci-fast in j20261125T020632690-2-0 (exit 0; runner reported overlay-stale at teardown). git diff --check passed. Host commit and publication pending.'
+  created_at: 2026-11-25T02:29:03.078229647Z
+  modified_at: 2026-11-25T02:29:03.078229647Z
   session_id: 01a2105e6a47
   harness_version: codex-cli 0.167.0
 history:
