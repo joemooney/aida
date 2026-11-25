@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
 
   Deferred follow-up (BUG-2730, test-gap): in bug_2730_slow_approval_forge_reports_partial_before_ceiling, the assertion `git branch --list aida-store` runs against the fixture's root repo, but the aida-store branch only exists in the nested .aida-store repo, so the assertion is always empty and cannot detect a store commit. The memory.routed.is_empty() and elapsed<10s assertions do carry the no-route guarantee. Fix: assert on `git -C .aida-store rev-list --count aida-store` (unchanged), or drop the line.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T18:27:17.554003934Z
-modified_at: 2026-11-25T21:07:12.189620211Z
+modified_at: 2026-11-25T21:07:16.556444391Z
 req_type: Task
 tags:
 - carried-from:BUG-2730
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T18:30:12.039362989Z
   changes: []
+- id: 01a21488-c1cc-78f2-be1b-8fbcb39198d8
+  author: joe
+  timestamp: 2026-11-25T21:07:16.556442067Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
   branch: pr-4457
