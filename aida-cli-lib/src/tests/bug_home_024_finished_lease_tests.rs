@@ -500,3 +500,125 @@ fn missing_session_id_is_reported_as_an_id_not_a_branch() {
         .to_string();
     assert!(err.contains("No lease found for branch"), "{err}");
 }
+
+// trace:BUG-2710 | ai:codex
+#[test]
+fn bug_2710_deadline_finishes_one_session_before_yield_and_resume() {
+    let repo = committed_repo();
+    let holder = tempfile::tempdir().unwrap();
+    let mut ids = Vec::new();
+    for n in 1..=2 {
+        let branch = format!("deadline-{n}");
+        let tree = deleted_worktree(repo.path(), holder.path(), &branch);
+        let lease = lease_at(
+            &format!("dead{n}"),
+            "PR-6",
+            &tree,
+            &branch,
+            Some(reaped_pid()),
+        );
+        write_lease(repo.path(), &lease);
+        ids.push(lease.id);
+    }
+    // Model a first session consuming the entire allowance. Advance the
+    // clock only once its lease file has actually been released.
+    let first = super::reap_quiet(repo.path(), None, || {
+        !lease_path(repo.path(), &ids[0]).exists()
+    });
+    assert_eq!((first.visited, first.reaped), (1, 1));
+    assert_eq!(first.next_session.as_ref(), Some(&ids[1]));
+    assert!(lease_path(repo.path(), &ids[1]).exists());
+    let listing = git(repo.path(), &["worktree", "list", "--porcelain"]);
+    let listing = String::from_utf8(listing.stdout).unwrap();
+    assert!(!listing.contains("refs/heads/deadline-1"));
+    assert!(listing.contains("refs/heads/deadline-2"));
+    let rest = super::reap_quiet(repo.path(), first.next_session.as_deref(), || false);
+    assert_eq!((rest.visited, rest.reaped, rest.next_session), (1, 1, None));
+}
+
+// trace:BUG-2710 | ai:codex
+#[test]
+fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
+    for budgeted in [false, true] {
+        let repo = committed_repo();
+        let holder = tempfile::tempdir().unwrap();
+        crate::test_env::write_project_config_fixture(
+            repo.path(),
+            "store_path = \".aida-store\"\n",
+        );
+        let mut req = aida_core::Requirement::new("finished".into(), String::new());
+        req.spec_id = Some("BUG-2710".into());
+        req.status = aida_core::RequirementStatus::Completed;
+        let mut store = aida_core::RequirementsStore::default();
+        store.requirements.push(req);
+        let mut unfinished = aida_core::Requirement::new("unfinished".into(), String::new());
+        unfinished.spec_id = Some("BUG-2711".into());
+        store.requirements.push(unfinished);
+        crate::test_env::home_fixture_storage(repo.path().join(".aida-store"))
+            .save(&store)
+            .unwrap();
+        assert!(git(
+            repo.path(),
+            &["update-ref", "refs/remotes/origin/main", "HEAD"]
+        )
+        .status
+        .success());
+        for id in ["dead1", "dirty2"] {
+            let tree = holder.path().join(id);
+            let added = git(
+                repo.path(),
+                &["worktree", "add", "-qb", id, tree.to_str().unwrap()],
+            );
+            assert!(added.status.success(), "{added:?}");
+            let mut lease = lease_at(id, "BUG-2710", &tree, id, Some(reaped_pid()));
+            lease.hostname = crate::coordination::hostname();
+            write_lease(repo.path(), &lease);
+        }
+        let mut claim = lease_at(
+            "later3",
+            "BUG-2711",
+            &holder.path().join("dead1"),
+            "dead1",
+            Some(reaped_pid()),
+        );
+        claim.claim_verb = true;
+        claim.hostname = crate::coordination::hostname();
+        write_lease(repo.path(), &claim);
+        // A finished claim recorded while the same tree was on another
+        // already-merged branch: off-branch at the start of the pass, so it
+        // stays put even after dead1's reap removes the checkout.
+        assert!(git(repo.path(), &["branch", "other4"]).status.success());
+        let mut off = lease_at(
+            "other4",
+            "BUG-2710",
+            &holder.path().join("dead1"),
+            "other4",
+            Some(reaped_pid()),
+        );
+        off.claim_verb = true;
+        off.hostname = crate::coordination::hostname();
+        write_lease(repo.path(), &off);
+        let notes = holder.path().join("dirty2/notes");
+        std::fs::write(&notes, "unsaved").unwrap();
+        if budgeted {
+            let progress = super::reap_quiet(repo.path(), None, || false);
+            assert_eq!(
+                (progress.visited, progress.reaped, progress.next_session),
+                (4, 1, None)
+            );
+        } else {
+            let outcomes = super::reap_quiet_outcomes(repo.path());
+            assert_eq!(outcomes.leases.len(), 1);
+            assert_eq!(outcomes.leases[0].0, "dead1");
+        }
+        assert!(lease_path(repo.path(), "later3").exists());
+        assert!(lease_path(repo.path(), "other4").exists());
+        assert!(local_branch_exists(repo.path(), "other4"));
+        assert!(!lease_path(repo.path(), "dead1").exists());
+        assert!(!holder.path().join("dead1").exists());
+        assert!(!local_branch_exists(repo.path(), "dead1"));
+        assert!(lease_path(repo.path(), "dirty2").exists());
+        assert!(local_branch_exists(repo.path(), "dirty2"));
+        assert_eq!(std::fs::read_to_string(notes).unwrap(), "unsaved");
+    }
+}
