@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: When `aida init` is run with codex as the only selected vendor, it writes `[contained.vendors] codex = "native"` into the committed default-branch config (the trusted location the check requires) and tells the user in one line what that means (codex's native sandbox, not AIDA containment). A test: init with codex-only → `aida agent new codex --role advisor` passes the containment check.
   - AC2: When a codex launch is refused for missing containment config in a project with NO claude vendor configured, the error names the exact one-line fix (`[contained.vendors] codex = "native"` in .aida/config.toml on the default branch) instead of suggesting claude. Test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T06:55:04.319683964Z
+modified_at: 2026-11-25T07:44:10.221804910Z
 req_type: Bug
 tags:
 - codex
@@ -232,6 +232,12 @@ comments:
   modified_at: 2026-11-25T06:55:04.319683964Z
   session_id: 01a21173cb1a
   harness_version: codex-cli 0.167.0
+- id: 01a211a9-7ded-72c3-bb7c-f20fe74081ca
+  author: aida-publication-done
+  content: Implementer push 0b6c3b11e21c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T07:44:10.221804291Z
+  modified_at: 2026-11-25T07:44:10.221804291Z
+  session_id: 01a21173cb1a
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
@@ -352,6 +358,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a211a9-7ded-72c3-bb7c-f1f499ffadc9
+  author: aida-publication-done
+  timestamp: 2026-11-25T07:44:10.221802164Z
+  session_id: 01a21173cb1a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
