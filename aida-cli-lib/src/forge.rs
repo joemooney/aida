@@ -7123,6 +7123,27 @@ fn review_risk_pr_base_with_budget(
     budget: std::time::Duration,
 ) -> Option<String> {
     crate::forge_lookup::with_forge_lookup_deadline(budget, || {
+        // Partial clones can fetch implicitly during any later object walk.
+        let mut config = aida_core::git_ops::host_git_command(root);
+        config.args([
+            "config",
+            "--type=bool",
+            "--get-regexp",
+            "^(extensions\\.partialclone|remote\\..*\\.promisor)$",
+        ]);
+        let out = crate::forge_lookup::forge_lookup_output(config).ok()??;
+        let ordinary = match out.status.code() {
+            Some(1) => out.stdout.is_empty() && out.stderr.is_empty(), // No matching keys.
+            Some(0) => out
+                .stdout
+                .strip_suffix(b"\n")?
+                .split(|b| *b == b'\n')
+                .all(|line| line.starts_with(b"remote.") && line.ends_with(b".promisor false")),
+            _ => false,
+        };
+        if !ordinary {
+            return None;
+        }
         let (host, project) = pr_state_repository(root).ok()?;
         let mut cmd = forge_read_command(&crate::resolve_gh_binary_for_probe()?);
         pr_state_pin(&mut cmd, root, &host);
@@ -7157,9 +7178,7 @@ fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
         return None;
     }
     let mut check = host_git_command(root);
-    check
-        .env("GIT_NO_LAZY_FETCH", "1")
-        .args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
+    check.args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
     if crate::forge_lookup::forge_lookup_output(check)
         .ok()??
         .status

@@ -34,7 +34,11 @@ fn fetches_target_advanced_after_checkout() {
     let common = git(remote, &["rev-parse", "HEAD"]);
     git(remote, &["clone", "--quiet", ".", "review"]);
     let review = remote.join("review");
-    git(&review, &["commit", "--allow-empty", "-qm", "topic"]);
+    std::fs::write(review.join("topic"), "topic").unwrap();
+    git(&review, &["add", "topic"]);
+    git(&review, &["commit", "-qm", "topic"]);
+    let blob = git(&review, &["rev-parse", "HEAD:topic"]);
+    let object = review.join(format!(".git/objects/{}/{}", &blob[..2], &blob[2..]));
     git(remote, &["commit", "--allow-empty", "-qm", "advanced"]);
     let base = git(remote, &["rev-parse", "HEAD"]);
     assert!(!crate::test_git::git_command()
@@ -46,12 +50,6 @@ fn fetches_target_advanced_after_checkout() {
     // The same origin and object IDs are usable outside the seat clone.
     // trace:TASK-3874 | ai:codex
     let seat = remote.join("aida-seat-review");
-    std::fs::rename(&review, &seat).unwrap();
-    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
-        assert!(review_risk_base_object(&seat, &common).is_none());
-        assert!(review_risk_base_object(&seat, &base).is_none());
-    });
-    std::fs::rename(&seat, &review).unwrap();
     let head = git(&review, &["rev-parse", "HEAD"]);
     git(
         &review,
@@ -62,14 +60,24 @@ fn fetches_target_advanced_after_checkout() {
             "git@github.com:test/project.git",
         ],
     );
-    git(&review, &["config", "remote.origin.promisor", "true"]);
+    let bundle = remote.join("fixture.bundle");
+    let uri = bundle.to_str().unwrap();
+    git(remote, &["bundle", "create", uri, "HEAD"]);
+    git(&review, &["config", "fetch.bundleURI", uri]);
+    let epoch = std::time::SystemTime::UNIX_EPOCH;
+    std::fs::File::open(&bundle)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_accessed(epoch))
+        .unwrap();
+    let observed = remote.join("observed");
+    std::fs::write(&observed, &common).unwrap();
     let gh = remote.join("gh");
     crate::test_exec::write_executable(
         &gh,
         format!(
             r#"#!/bin/sh
 [ "$*" = "pr view 1 --repo github.com/test/project --json headRefOid,baseRefOid" ] || exit 1
-echo '{{"headRefOid":"{head}","baseRefOid":"{base}"}}'
+printf '{{"headRefOid":"{head}","baseRefOid":"%s"}}\n' "$(cat "$(dirname "$0")/observed")"
 "#
         ),
     );
@@ -92,10 +100,39 @@ exec git-upload-pack .
         ("GIT_SSH_VARIANT", Some("ssh")),
         ("GIT_TRACE2_EVENT", Some(trace.to_str().unwrap())),
     ]);
+    std::fs::rename(&review, &seat).unwrap();
+    assert!(review_risk_pr_base(&seat, 1, &head).is_none());
+    std::fs::write(&observed, &base).unwrap();
+    assert!(review_risk_pr_base(&seat, 1, &head).is_none());
+    std::fs::rename(&seat, &review).unwrap();
+    std::fs::write(&observed, &common).unwrap();
+    std::fs::rename(&object, remote.join("missing-blob")).unwrap();
+    for (key, value) in [
+        ("remote.other.promisor", "yes"),
+        ("extensions.partialClone", "origin"),
+    ] {
+        git(&review, &["config", key, value]);
+        let result = review_risk_pr_base(&review, 1, &head);
+        assert!(result.is_none());
+        let risk = crate::review_risk::assess(&review, result.as_deref(), Some(&head));
+        assert_eq!(risk.tier, crate::review_risk::Tier::Strict);
+        git(&review, &["config", "--unset", key]);
+    }
+    assert!(!log.exists());
+    let refused = std::fs::read_to_string(&trace).unwrap();
+    for command in ["cat-file", "merge-base", "diff", "fetch", "remote-https"] {
+        assert!(!refused.contains(&format!(r#""{command}""#)));
+    }
+    std::fs::rename(remote.join("missing-blob"), &object).unwrap();
+    std::fs::write(&observed, &base).unwrap();
     assert_eq!(review_risk_pr_base(&review, 1, &head), Some(base.clone()));
     assert_eq!(std::fs::read_to_string(log).unwrap(), "fetch\n");
     let events = std::fs::read_to_string(trace).unwrap();
     assert!(events.contains(r#""-c","fetch.bundleURI=","-c","transfer.bundleURI=false","fetch""#));
+    assert_eq!(bundle.metadata().unwrap().accessed().unwrap(), epoch);
+    assert!(!events.contains("git-remote-https"));
+    git(&review, &["fetch", "--no-tags", "origin", &base]);
+    assert!(bundle.metadata().unwrap().accessed().unwrap() > epoch);
     assert_eq!(git(&review, &["merge-base", &base, "HEAD"]), common);
 }
 
