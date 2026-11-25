@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T01:50:43.666711086Z
+modified_at: 2026-11-25T02:13:13.691841876Z
 req_type: Bug
 tags:
 - hubs
@@ -44,6 +44,12 @@ comments:
   modified_at: 2026-11-25T01:50:43.666711086Z
   session_id: 01a21049e21b
   harness_version: codex-cli 0.167.0
+- id: 01a2107a-815b-7ae3-a058-0607cb15bad0
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-520` at head `fdf7d380d986caa57fef981f5f6d117396f3b779`.'
+  created_at: 2026-11-25T02:13:13.691838694Z
+  modified_at: 2026-11-25T02:13:13.691838694Z
+  session_id: 01a21049e21b
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
