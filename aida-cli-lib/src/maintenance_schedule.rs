@@ -3768,22 +3768,6 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
-        // The configured job was "unsupported" without this row, so it never
-        // ran. trace:STORY-3131 trace:STORY-3095 | ai:claude
-        (
-            &["doctor check stalled-reviews --fail-on-findings"],
-            ScheduledCommand {
-                display: "doctor check stalled-reviews --fail-on-findings",
-                args: &[
-                    "doctor",
-                    "check",
-                    "stalled-reviews",
-                    "--json",
-                    "--fail-on-findings",
-                ],
-                hook_allowed: false,
-            },
-        ),
         // STORY-1699: relay stall guard — store-free, silent unless a relay
         // run is blocked/exited without a `.done` acknowledgement.
         // trace:STORY-1699 | ai:claude

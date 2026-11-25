@@ -87,10 +87,17 @@ fn cause(ready: &Ready) -> Option<(String, String)> {
             format!("red required check ({failed})"),
             format!("inspect `gh pr checks {n}`; rerun a flake or route rework"),
         ),
-        _ if ready.full_tier_gap.is_some() => (
-            format!("full CI tier {} at the approved head", ready.full_tier_gap?),
-            format!("add the `ci:full` label to PR {n} to run full-tier CI at its head"),
-        ),
+        // A cancelled full tier holds CI pending, but nothing is running;
+        // a missing one only matters once the fast tier is green.
+        Ci::Green | Ci::Pending
+            if ready.full_tier_gap == Some("cancelled")
+                || (ready.ci == Ci::Green && ready.full_tier_gap.is_some()) =>
+        {
+            (
+                format!("full CI tier {} at the approved head", ready.full_tier_gap?),
+                format!("add the `ci:full` label to PR {n} to run full-tier CI at its head"),
+            )
+        }
         Ci::Green if ready.supervised => (
             "supervised, not drain-eligible".into(),
             format!("needs operator train: `aida pr train {n}`"),
@@ -134,17 +141,20 @@ pub(crate) fn evaluate(
         .collect();
     let drought = TimeDelta::minutes(policy.drought_minutes);
     let dry = last_landing.is_none_or(|at| now.signed_duration_since(at) > drought);
-    if dry && !findings.is_empty() {
+    // Only landable PRs (green, no full-tier gap) make main's idleness a drought.
+    let landable = prs
+        .iter()
+        .filter(|r| !r.on_train && now.signed_duration_since(r.since) > dwell)
+        .filter(|r| r.ci == Ci::Green && r.full_tier_gap.is_none())
+        .count();
+    if dry && landable > 0 {
         let since = last_landing.map_or("ever".into(), |at| {
             format!("{}m", now.signed_duration_since(at).num_minutes())
         });
         findings.push(DoctorFinding {
             category: CATEGORY.into(),
             id: "main".into(),
-            summary: format!(
-                "no landing on main for {since} while {} ready PRs wait",
-                findings.len()
-            ),
+            summary: format!("no landing on main for {since} while {landable} landable PRs wait"),
             action: "investigate the stuck PRs above, or page the operator".into(),
             safe_heal: false,
         });
@@ -188,6 +198,48 @@ fn last_landing(root: &Path) -> Result<Option<DateTime<Utc>>> {
     bail!("cannot read the last landing on main")
 }
 
+/// The time of the latest ledger record when it is an open approval at
+/// `head`; `None` when the latest record is anything else.
+fn approved_at_head(
+    records: Vec<(String, crate::gate::review_verdict::JsonObj)>,
+    head: &str,
+) -> Result<Option<DateTime<Utc>>> {
+    let mut latest = None;
+    for (at, record) in records {
+        let at = DateTime::parse_from_rfc3339(&at)?.with_timezone(&Utc);
+        if latest.as_ref().is_none_or(|(t, _)| at > *t) {
+            latest = Some((at, record));
+        }
+    }
+    let Some((at, record)) = latest else {
+        return Ok(None);
+    };
+    let verdict = parse_ledger_record(&record).context("invalid ledger verdict")?;
+    let at_head = verdict
+        .reviewed_sha
+        .as_deref()
+        .is_some_and(|s| s.eq_ignore_ascii_case(head));
+    let open = !verdict.is_closed() && verdict.kind == VerdictKind::Approved;
+    Ok((open && at_head).then_some(at))
+}
+
+/// Fail closed like the ship gate: a PR needs supervision unless every spec
+/// it names resolves and is drain mode. No spec ID, or an unresolved one
+/// (`None`), counts as supervised.
+fn needs_supervision(
+    modes: impl Iterator<Item = Option<Option<aida_core::ExecutionMode>>>,
+) -> bool {
+    let mut any = false;
+    for mode in modes {
+        any = true;
+        match mode {
+            Some(m) if !crate::gate::ship::merge_requires_supervision(m) => {}
+            _ => return true,
+        }
+    }
+    !any
+}
+
 pub(crate) fn scan(
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<(Policy, Vec<DoctorFinding>)> {
@@ -206,33 +258,19 @@ pub(crate) fn scan(
         let head = pr["headRefOid"].as_str().context("invalid PR head")?;
         let records = project::change_verdicts_checked(root, ChangeKey::pr(number))
             .map_err(anyhow::Error::msg)?;
-        let mut latest = None;
-        for (at, record) in records {
-            let at = DateTime::parse_from_rfc3339(&at)?.with_timezone(&Utc);
-            if latest.as_ref().is_none_or(|(t, _)| at > *t) {
-                latest = Some((at, record));
-            }
-        }
-        let Some((at, record)) = latest else { continue };
-        let verdict = parse_ledger_record(&record).context("invalid ledger verdict")?;
-        let at_head = verdict
-            .reviewed_sha
-            .as_deref()
-            .is_some_and(|s| s.eq_ignore_ascii_case(head));
-        if verdict.is_closed() || verdict.kind != VerdictKind::Approved || !at_head {
+        let Some(at) = approved_at_head(records, head)? else {
             continue;
-        }
+        };
         let rollup = &pr["statusCheckRollup"];
         let green_at = crate::land::green_rollup_at(rollup).map(|t| t.with_timezone(&Utc));
         let branch = pr["headRefName"].as_str().unwrap_or_default();
         let title = pr["title"].as_str().unwrap_or_default();
-        let supervised = crate::pr_ship::extract_pr_spec_ids(branch, title)
-            .iter()
-            .filter_map(|s| store.get_requirement_by_spec_id(s))
-            .any(|r| {
-                r.execution_mode
-                    .is_some_and(|m| m != aida_core::ExecutionMode::Drain)
-            });
+        let spec_ids = crate::pr_ship::extract_pr_spec_ids(branch, title);
+        let supervised = needs_supervision(spec_ids.iter().map(|s| {
+            store
+                .get_requirement_by_spec_id(s)
+                .map(|r| r.execution_mode)
+        }));
         ready.push(Ready {
             number,
             since: green_at.map_or(at, |ci| at.max(ci)),

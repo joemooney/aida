@@ -47,6 +47,10 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
     trained.on_train = true;
     let mut running = ready(11, 45, now);
     running.ci = Ci::Pending;
+    // Fast CI still running with no full tier yet: not ready, not "missing".
+    let mut running_no_full = ready(14, 45, now);
+    running_no_full.ci = Ci::Pending;
+    running_no_full.full_tier_gap = Some("missing");
     let prs = [
         supervised,
         red,
@@ -55,6 +59,7 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
         ready(13, 5, now),
         trained,
         running,
+        running_no_full,
     ];
     let recent_landing = Some(now - TimeDelta::minutes(10));
     let findings = evaluate(&prs, &policy, now, recent_landing);
@@ -77,7 +82,13 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
     assert_eq!(dry.len(), 5);
     assert!(dry[4]
         .summary
-        .contains("no landing on main for 90m while 4 ready PRs"));
+        .contains("no landing on main for 90m while 2 landable PRs"));
+    // Only unlandable (red) PRs stuck: no drought finding.
+    let mut only_red = ready(8, 45, now);
+    only_red.ci = Ci::Red("build".into());
+    let red_only = evaluate(&[only_red], &policy, now, None);
+    assert_eq!(red_only.len(), 1);
+    assert_eq!(red_only[0].id, "PR-8");
     // No drought finding without a ready PR.
     let fresh = [ready(13, 5, now)];
     assert!(evaluate(&fresh, &policy, now, None).is_empty());
@@ -115,4 +126,60 @@ fn story_3131_full_tier_gap_from_rollup() {
         None
     );
     assert_eq!(full_tier_gap(&serde_json::json!([row("")])), None);
+}
+
+#[test]
+fn story_3131_unset_or_unresolved_spec_is_supervised() {
+    use aida_core::ExecutionMode;
+    let drain = Some(Some(ExecutionMode::Drain));
+    assert!(!needs_supervision([drain].into_iter()));
+    // Unset mode is supervised, as the ship gate treats it.
+    assert!(needs_supervision([Some(None)].into_iter()));
+    assert!(needs_supervision([drain, Some(None)].into_iter()));
+    // An unresolved spec ID, or no spec ID at all, fails closed.
+    assert!(needs_supervision([drain, None].into_iter()));
+    assert!(needs_supervision(std::iter::empty()));
+}
+
+#[test]
+fn story_3131_latest_ledger_record_wins_and_must_approve_head() {
+    use crate::gate::review_verdict::JsonObj;
+    const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let rec = |word: &str, sha: &str, at: &str| {
+        let mut r = JsonObj::new();
+        r.insert("verdict".into(), word.into());
+        r.insert("reviewed_sha".into(), sha.into());
+        r.insert("recorded_at".into(), at.into());
+        r.insert("recorded_by".into(), "reviewer seat".into());
+        (at.to_string(), r)
+    };
+    let t1 = "2026-11-02T10:00:00+00:00";
+    let t2 = "2026-11-02T11:00:00+00:00";
+    // Latest approval at head wins over an older refusal, in any order.
+    let got = approved_at_head(
+        vec![
+            rec("approved", HEAD, t2),
+            rec("changes_requested", HEAD, t1),
+        ],
+        HEAD,
+    )
+    .unwrap();
+    assert_eq!(got, Some(DateTime::parse_from_rfc3339(t2).unwrap().into()));
+    // A later refusal supersedes an earlier approval.
+    let refused = vec![
+        rec("approved", HEAD, t1),
+        rec("changes_requested", HEAD, t2),
+    ];
+    assert_eq!(approved_at_head(refused, HEAD).unwrap(), None);
+    // An approval of an older head does not count.
+    assert_eq!(
+        approved_at_head(vec![rec("approved", OLD, t1)], HEAD).unwrap(),
+        None
+    );
+    // A closed (merged) verdict is skipped.
+    let (at, mut closed) = rec("approved", HEAD, t1);
+    closed.insert("closed_by_merge".into(), "abc123".into());
+    assert_eq!(approved_at_head(vec![(at, closed)], HEAD).unwrap(), None);
+    assert_eq!(approved_at_head(Vec::new(), HEAD).unwrap(), None);
 }
