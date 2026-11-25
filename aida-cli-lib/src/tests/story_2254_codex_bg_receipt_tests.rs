@@ -114,6 +114,28 @@ fn story_2254_bg_two_same_scope_one_admitted_and_terminal_frees() {
     admit(&dir, &receipt_for(&f, "implementer", "TASK-1"), || Ok(())).unwrap();
 }
 
+// trace:BUG-2748 | ai:codex
+#[test]
+fn story_2254_bg_legacy_prepared_recovery_stays_released() {
+    let f = fixture();
+    let dir = runtime_dir(f.project.path()).unwrap();
+    let mut r = receipt_for(&f, "implementer", "TASK-1");
+    r.phase = Phase::Exited;
+    r.owner = Owner::Released;
+    r.generation = 1;
+    r.reason =
+        Some("reconciled by `aida agent recover-launch`; worktree, branch and lease kept".into());
+    r.terminal = Some(TerminalRecord {
+        unknown: Some("recovered after its processes were gone".into()),
+        ..Default::default()
+    });
+    write_receipt(&dir, &r).unwrap();
+    assert!(scope_blocker(&dir, f.project.path(), &r.scope).is_none());
+    r.reason = None;
+    write_receipt(&dir, &r).unwrap();
+    assert!(scope_blocker(&dir, f.project.path(), &r.scope).is_some());
+}
+
 /// A corrupt receipt never frees the scope it names, and one whose scope
 /// cannot be read blocks every scope only while something may still run for
 /// its attempt; a provably dead one is retired explicitly, kept as evidence.
@@ -190,6 +212,24 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     assert!(blocker().is_some());
     std::fs::remove_dir_all(process).unwrap();
     assert!(blocker().is_none());
+    let mut transferred = complete.clone();
+    transferred["owner"] = transferred["supervisor"].clone();
+    transferred["owner"]["kind"] = "supervisor".into();
+    std::fs::write(&path, transferred.to_string()).unwrap();
+    let earlier = proc_root.join("123456");
+    std::fs::create_dir(&earlier).unwrap();
+    std::fs::write(
+        earlier.join("stat"),
+        format!("123456 (helper) S 1 1 1 {} 0", "0 ".repeat(15)),
+    )
+    .unwrap();
+    std::fs::create_dir(earlier.join("cmdline")).unwrap(); // EISDIR, even as root
+    assert!(
+        matches!(attempt_occupancy(&dir, &attempt, proc_root), Occupancy::Unknown(why) if why.contains("command line"))
+    );
+    assert!(blocker().is_some());
+    assert!(retire_unknown(&dir, proc_root, &attempt, proc_root).is_err());
+    std::fs::remove_dir_all(earlier).unwrap();
     let kept = retire_unknown(&dir, f.project.path(), &attempt, proc_root).unwrap();
     assert!(kept.starts_with(dir.join("retired")) && kept.exists());
     assert!(!path.exists());

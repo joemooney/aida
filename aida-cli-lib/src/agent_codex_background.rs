@@ -2264,13 +2264,11 @@ pub(crate) fn recover_launch_at(
             now.owner = Owner::Released;
             if now.terminal.is_none() {
                 now.terminal = Some(TerminalRecord {
-                    unknown: Some("recovered after its processes were gone".into()),
+                    unknown: Some(receipt::RECOVERY_OUTCOME.into()),
                     ..TerminalRecord::default()
                 });
             }
-            now.reason = Some(
-                "reconciled by `aida agent recover-launch`; worktree, branch and lease kept".into(),
-            );
+            now.reason = Some(receipt::RECOVERY_REASON.into());
         },
     )?;
     Ok(format!("recovered attempt {attempt}: its scope reservation is released; worktree, branch and lease are kept"))

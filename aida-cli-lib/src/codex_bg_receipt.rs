@@ -568,6 +568,10 @@ fn open_private(path: &Path, truncate: bool) -> Result<std::fs::File> {
         .with_context(|| format!("opening {}", path.display()))
 }
 
+pub(crate) const RECOVERY_REASON: &str =
+    "reconciled by `aida agent recover-launch`; worktree, branch and lease kept";
+pub(crate) const RECOVERY_OUTCOME: &str = "recovered after its processes were gone";
+
 /// Checked read: regular file, bounded size, our version, our project.
 pub(crate) fn read_receipt(dir: &Path, project_root: &Path, attempt: &str) -> ReceiptRead {
     let path = match receipt_path(dir, attempt) {
@@ -612,14 +616,27 @@ fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
     if receipt.attempt != stem {
         return ReceiptRead::Unknown("receipt attempt id does not match its file".into());
     }
+    // The previous recovery writer marked reconciled Prepared attempts Exited.
+    let legacy_recovery = receipt.phase == Phase::Exited
+        && receipt.owner == Owner::Released
+        && receipt.generation > 0
+        && receipt.reason.as_deref() == Some(RECOVERY_REASON)
+        && matches!(&receipt.terminal, Some(TerminalRecord { code: None, signal: None, unknown: Some(why) }) if why == RECOVERY_OUTCOME)
+        && receipt.worker.is_none()
+        && receipt.supervisor.is_none()
+        && serde_json::from_slice::<serde_json::Value>(&body).is_ok_and(|raw| {
+            ["worker", "supervisor"]
+                .iter()
+                .all(|key| raw.get(*key).is_some_and(|v| v.is_null()))
+        });
     let transferred = matches!(
         receipt.phase,
         Phase::SupervisorOwned
             | Phase::Registered
             | Phase::AcceptedRunning
             | Phase::RecoveryRequired
-            | Phase::Exited
-    ) || receipt.worker.is_some()
+    ) || (receipt.phase == Phase::Exited && !legacy_recovery)
+        || receipt.worker.is_some()
         || receipt.supervisor.is_some()
         || matches!(receipt.owner, Owner::Supervisor(_));
     let valid = |p: &ProcId| p.pid != 0 && p.start_tick().is_some();
@@ -780,11 +797,15 @@ fn attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
     }
     let first_process_tick = worker_tick.min(supervisor_tick);
     let owner_tick = match fields.owner {
-        Owner::Dispatcher(p) | Owner::Supervisor(p) => match p.start_tick() {
+        Owner::Dispatcher(p) => match p.start_tick() {
             Some(t) if p.pid != 0 => Some(t.min(first_process_tick)),
             _ => return Occupancy::Unknown("incomplete receipt attribution".into()),
         },
-        Owner::Released => None,
+        Owner::Supervisor(p) if p.pid == 0 || p.start_tick().is_none() => {
+            return Occupancy::Unknown("incomplete receipt attribution".into());
+        }
+        // Transfer overwrites the dispatcher identity, losing the setup interval.
+        Owner::Supervisor(_) | Owner::Released => None,
     };
     let probe = OccupancyProbe {
         worktree: Some(&fields.worktree),
