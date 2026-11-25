@@ -15,12 +15,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:52:55.894945012Z
-modified_at: 2026-11-22T20:52:55.894945012Z
+modified_at: 2026-11-25T21:08:49.301425335Z
 req_type: Task
 tags:
 - mass-change
 - review-follow-up
 - seat-clone
+comments:
+- id: 01a2148a-2c15-7f52-860a-5559afc76781
+  author: joe
+  content: FOLDED into a comment on TASK-3901 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:08:49.301425335Z
+  modified_at: 2026-11-25T21:08:49.301425335Z
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
