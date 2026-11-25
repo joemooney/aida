@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T17:34:05.396780156Z
+modified_at: 2026-11-25T18:27:25.010128140Z
 req_type: Task
 tags:
 - integration
@@ -329,6 +329,20 @@ comments:
   modified_at: 2026-11-25T17:30:47.885742867Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a213f6-66d2-7262-a48e-a8fdcc6e6458
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c43ef85ff9 (PR #4585 -> integration; supersedes #4559, and #4416 per ruling)
+    AC1 [evidence: behavioral-test]: refusal paths are quoted once from raw porcelain v2 -z bytes. Tests: aida-core task_3882_refusal_lines_quote_each_raw_path_once (a<TAB><space>, \xfe/\xff + trailing space, rename endpoints, quotePath=false, agreement with git v1); aida-cli-lib task_3882_bwrap_clone_refusal_quotes_each_path_once (live probe); task_3882_worktree_refusal_quotes_each_path_once (session end, end to end).
+    Ruling (1): contained_safety_scan / worktree_status_porcelain_lines keep their collapsed untracked mode; bug_1986 passes unchanged. The ordinary reader now pins core.quotePath=true (CR finding 3).
+    Ruling (2): describe_status_entry no longer re-escapes (CR finding 2); --untracked-files=all is used only in refusal_status_lines and in the clone probe.
+    Probes: the refusal evidence is display-only and runs after the gate has refused; a failed scan falls back to the gate's entries; it is never run in seat clones; --ignore-submodules=all, so it never enters a submodule. make check-ci-fast passed.
+    Residual: the clone noise filters now match raw paths, so a non-ASCII UTF-8 path under a noise prefix counts as noise; non-UTF-8 paths still count as work. In a wider local filter run, 40 tests in unrelated modules failed on sandbox-environment errors (getcwd etc.); CI is authoritative.
+  created_at: 2026-11-25T18:27:25.010128140Z
+  modified_at: 2026-11-25T18:27:25.010128140Z
+  session_id: 01a213c53f76
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
