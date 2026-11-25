@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T03:05:26.704201596Z
+modified_at: 2026-11-25T03:06:37.999159053Z
 req_type: Story
 tags:
 - hygiene
@@ -205,6 +205,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T03:05:26.539765236Z
   modified_at: 2026-11-25T03:05:26.539765236Z
+- id: 01a210ab-a021-7ed1-8e9c-0a6056401077
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:06):
+    # STORY-3059 / PR #4552 r3: REDESIGN BY REMOVAL (advisor-122 ruling 2026-11-24 20:14 at 1604a50a; STRICT data loss; product-15). Lane: CODEX. MAIN, existing branch. <=150 NET lines: this round should SHRINK the PR.
+    r2 drew 5 new data-loss majors (TOCTOU after quarantine, origin rewound mid-reap, ORIG_HEAD/recovery roots, a stale primary fetch, dry-run test fidelity). Instead of patching: for a closed-unmerged-but-published clone, "reap" must NOT DELETE anything. It:
+     (1) MOVES the whole clone to ~/salvage/reaped/<spec>-<lane>-<ts>/ via an ATOMIC RENAME on the same filesystem (else REFUSE);
+     (2) RECORDS the path + refs + origin evidence on the spec (comment);
+     (3) RELEASES the lease.
+    Deletion happens ONLY via a separate explicit `aida salvage purge --older-than 14d` (OUT OF SCOPE here; do NOT implement).
+    REMOVE the complex reachability/quarantine-verify code (every race finding becomes moot because nothing is destroyed). KEEP only: clean tree + no live holder → move.
+    TESTS: a reap moves the clone and the lease is released; a live holder → refuse; dry-run moves nothing; a cross-filesystem target → refuse.
+    One targeted cargo run, then make check-ci-fast, then push to #4552. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T03:06:37.999159053Z
+  modified_at: 2026-11-25T03:06:37.999159053Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
