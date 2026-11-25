@@ -2089,12 +2089,14 @@ pub(crate) fn probe_until(
     // `--ignore-submodules=none`: a seat's `.gitmodules` `ignore = dirty`
     // must not hide anything, should a submodule appear after the check.
     // trace:TASK-2053 | ai:claude
-    let status = match probe_run(
+    let status = match run_sandboxed_until(
         clone,
         main,
+        "git",
         &[
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
+            "-z".as_ref(),
             "--branch".as_ref(),
             "--ignored=no".as_ref(), // trace:BUG-2742 | ai:codex
             "--untracked-files=all".as_ref(),
@@ -2105,23 +2107,16 @@ pub(crate) fn probe_until(
             ".".as_ref(),
             format!(":(exclude){MARKER_RELATIVE}").as_ref(),
         ],
-        "git",
+        PROBE_OUTPUT_CAP,
+        deadline,
     ) {
         Ok(out) => out,
         Err(why) => return Probe::Unknown(format!("working tree status: {why}")),
     };
-    let mut facts = parse_status_v2(&status);
-    // The sandbox's empty `.gitmodules` placeholder holds no work, so it
-    // does not make a clean clone read as dirty.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
-    if is_empty_gitmodules_placeholder(clone) {
-        facts.dirty.retain(|line| line != "? .gitmodules");
-    }
-    // The session's runtime links and build/cache output are not work.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-    facts.dirty.retain(|line| {
-        !is_runtime_noise_entry(clone, line) && !is_mirrored_handshake_entry(main, clone, line)
+    let lines = status_v2_lines(&status, false, |entry| {
+        is_runtime_noise_entry(clone, entry) || is_mirrored_handshake_entry(main, clone, entry)
     });
+    let mut facts = parse_status_v2(&lines.join("\n"));
     let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -2242,29 +2237,64 @@ pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
     items
 }
 
+/// Convert Git's raw NUL records into single-line evidence, quoting each endpoint once.
+// trace:TASK-3882 | ai:codex
+pub(crate) fn status_v2_lines(
+    raw: &[u8],
+    worktree_short: bool,
+    skip: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    use aida_core::git_ops::porcelain_quote;
+    let mut records = raw.split(|b| *b == 0).filter(|r| !r.is_empty());
+    let mut lines = Vec::new();
+    while let Some(record) = records.next() {
+        if record.starts_with(b"? ") && std::str::from_utf8(record).is_ok_and(&skip) {
+            continue;
+        }
+        let fields = match record.first() {
+            Some(b'?' | b'!') => 1,
+            Some(b'1') => 8,
+            Some(b'2') => 9,
+            Some(b'u') => 10,
+            _ => {
+                lines.push(String::from_utf8_lossy(record).into_owned());
+                continue;
+            }
+        };
+        let path = record.splitn(fields + 1, |b| *b == b' ').last().unwrap();
+        let prefix = String::from_utf8_lossy(&record[..record.len() - path.len()]);
+        let path = porcelain_quote(path);
+        let source =
+            (record[0] == b'2').then(|| porcelain_quote(records.next().unwrap_or_default()));
+        let xy = prefix.split_whitespace().nth(1).unwrap_or("??");
+        let line = match (worktree_short, source) {
+            (true, Some(from)) => format!("{} {from} -> {path}", xy.replace('.', " ")),
+            (true, None) => format!("{} {path}", xy.replace('.', " ")),
+            (false, Some(from)) => format!("{prefix}{path}\t{from}"),
+            (false, None) => format!("{prefix}{path}"),
+        };
+        lines.push(line);
+    }
+    lines
+}
+
 /// A `git status --porcelain=v2` entry as `<kind>: <path>`, so a refusal
 /// names the file rather than printing modes and object ids. A line that does
 /// not parse is shown as it is. The path is seat-written, so it is escaped.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 // trace:TASK-3882 | ai:codex
 pub(crate) fn describe_status_entry(line: &str) -> String {
-    use aida_core::git_ops::porcelain_quote;
-
     let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
     let xy = line.split(' ').nth(1).unwrap_or("");
     let described = match line.as_bytes().first() {
-        Some(b'?') => field(1).map(|p| format!("untracked: {}", porcelain_quote(p))),
-        Some(b'!') => field(1).map(|p| format!("ignored: {}", porcelain_quote(p))),
-        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", porcelain_quote(p))),
+        Some(b'?') => field(1).map(|p| format!("untracked: {p}")),
+        Some(b'!') => field(1).map(|p| format!("ignored: {p}")),
+        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {p}")),
         Some(b'2') => field(9).map(|p| match p.split_once('\t') {
-            Some((to, from)) => format!(
-                "renamed ({xy}): {} -> {}",
-                porcelain_quote(from),
-                porcelain_quote(to)
-            ),
-            None => format!("renamed ({xy}): {}", porcelain_quote(p)),
+            Some((to, from)) => format!("renamed ({xy}): {from} -> {to}"),
+            None => format!("renamed ({xy}): {p}"),
         }),
-        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", porcelain_quote(p))),
+        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {p}")),
         _ => None,
     };
     described.unwrap_or_else(|| line.escape_debug().to_string())

@@ -1624,15 +1624,33 @@ pub(crate) fn session_end_with_discard_unpushed(
             DirtyGateOutcome::Proceed => false,
             DirtyGateOutcome::Salvage => true,
             DirtyGateOutcome::Refuse => {
-                // Agent summaries retain the first line. Git porcelain v1 already
-                // quotes spaced paths, and clone entries are formatted by unshipped_items.
+                // Keep the original refusal evidence if the display-only scan fails.
                 // trace:TASK-3882 | ai:codex
                 let location = target
                     .worktree_path
                     .to_string_lossy()
                     .escape_debug()
                     .to_string();
-                let evidence = dirty_entries.join("\n");
+                let mut entries = dirty_entries;
+                if !is_clone {
+                    let output = aida_core::git_ops::host_git_command(&target.worktree_path)
+                        .args(["--no-optional-locks", "status", "--porcelain=v2", "-z"])
+                        .args(["--untracked-files=all", "--ignore-submodules=dirty"])
+                        .output();
+                    if let Some(output) = output.ok().filter(|o| o.status.success()) {
+                        let paths =
+                            crate::seat_clone::status_v2_lines(&output.stdout, true, |_| false);
+                        let paths =
+                            dirty_entries_ignoring_runtime_links(&target.worktree_path, paths);
+                        if !paths.is_empty() {
+                            // Preserve the safety scan's submodule and failure evidence.
+                            let reported: std::collections::HashSet<_> = paths.iter().collect();
+                            entries.retain(|s| !s.starts_with("?? ") && !reported.contains(s));
+                            entries.extend(paths);
+                        }
+                    }
+                }
+                let evidence = entries.join("\n");
                 let mut msg = if is_clone {
                     format!("seat clone {location} holds work origin does not have: {evidence}\n")
                 } else {

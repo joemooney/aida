@@ -4832,12 +4832,7 @@ fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
     let out = host_git_command(&top)
         .args(["-c", "core.quotePath=true"])
         .arg("--no-optional-locks")
-        .args([
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--ignore-submodules=dirty",
-        ])
+        .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status")?;
     anyhow::ensure!(
@@ -4930,13 +4925,14 @@ fn porcelain_unquote(field: &str) -> String {
 /// `core.quotePath=true`: bare unless it holds a space, control byte, `"`, `\\` or
 /// a non-ASCII byte.
 // trace:TASK-1952 | trace:TASK-1943 | ai:claude
-pub fn porcelain_quote(path: &str) -> String {
+pub fn porcelain_quote(path: impl AsRef<[u8]>) -> String {
+    let path = path.as_ref();
     let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
-    if !path.contains(' ') && !path.bytes().any(needs) {
-        return path.to_string();
+    if !path.contains(&b' ') && !path.iter().copied().any(needs) {
+        return String::from_utf8(path.to_vec()).expect("bare path is ASCII");
     }
     let mut out = String::from("\"");
-    for b in path.bytes() {
+    for &b in path {
         match b {
             7 => out.push_str("\\a"),
             8 => out.push_str("\\b"),
@@ -5061,13 +5057,8 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
         contained_safety_scan(worktree_path)?.0
     } else {
         let out = host_git_command(worktree_path)
-            .arg("--no-optional-locks")
-            .args([
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignore-submodules=none",
-            ])
+            .args(["-c", "core.quotePath=true", "--no-optional-locks"])
+            .args(["status", "--porcelain", "--ignore-submodules=none"])
             .output()
             .context("run git status")?;
         anyhow::ensure!(

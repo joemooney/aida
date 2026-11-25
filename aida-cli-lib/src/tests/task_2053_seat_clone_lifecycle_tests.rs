@@ -1912,9 +1912,8 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
 // trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:codex
 #[test]
 fn task_3882_refusal_quotes_trailing_spaces_on_each_rename_path() {
-    let facts = parse_status_v2(
-        "? notes\n?  notes\n? notes  \n2 R. N... 100644 100644 100644 aaa aaa R100 new \told  \n",
-    );
+    let records = b"? notes\0?  notes\0? notes  \x002 R. N... 100644 100644 100644 aaa aaa R100 new \0old  \0";
+    let facts = parse_status_v2(&status_v2_lines(records, false, |_| false).join("\n"));
     assert_eq!(
         unshipped_items(&facts),
         [
@@ -1954,6 +1953,25 @@ fn task_3882_agent_refusal_keeps_quoted_worktree_filename() {
         msg.contains("?? \"a; untracked: z\"\n?? \"notes/todo \""),
         "{msg}"
     );
+    use std::os::unix::ffi::OsStrExt;
+    git_ok(&tree, &["config", "core.quotePath", "false"]);
+    for name in [b"a\t ".as_slice(), b"\xff ", b"\xfe "] {
+        std::fs::write(tree.join(std::ffi::OsStr::from_bytes(name)), "pending").unwrap();
+    }
+    let msg = format!("{:#}", end_session(id, false).unwrap_err());
+    let status = crate::test_git::git_command()
+        .current_dir(&tree)
+        .args(["status", "--porcelain=v2", "-z"])
+        .output()
+        .unwrap();
+    assert!(status.status.success());
+    let clone_items = unshipped_items(&parse_status_v2(
+        &status_v2_lines(&status.stdout, false, |_| false).join("\n"),
+    ));
+    for expected in [r#"?? "a\t ""#, r#"?? "\377 ""#, r#"?? "\376 ""#] {
+        assert!(msg.contains(expected), "{msg}");
+        assert!(clone_items.contains(&expected.replacen("??", "untracked:", 1)));
+    }
     assert!(tree.exists() && lease.exists());
 }
 
@@ -1965,7 +1983,7 @@ fn task_3882_agent_refusal_keeps_quoted_worktree_filename() {
 fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
     assert_eq!(describe_status_entry("? notes.txt"), "untracked: notes.txt");
     assert_eq!(
-        describe_status_entry("1 .M N... 100644 100644 100644 0123abc 0123abc src/a b.rs"),
+        describe_status_entry("1 .M N... 100644 100644 100644 0123abc 0123abc \"src/a b.rs\""),
         r#"changed (.M): "src/a b.rs""#
     );
     assert_eq!(
