@@ -35,8 +35,7 @@ fn story_3095_read_only_scan() {
     crate::gate::ledger::bindings::bootstrap(root).unwrap();
     let state_entries = std::fs::read_dir(&state).unwrap().count();
     let ledger_entries = std::fs::read_dir(ledger_dir(root)).unwrap().count();
-    let scan_pr =
-        |pr| scan_rows(root, Utc::now(), TimeDelta::minutes(60), vec![pr], false).unwrap();
+    let scan_pr = |pr| scan_rows(root, Utc::now(), TimeDelta::minutes(60), vec![pr], "").unwrap();
     let scan = || {
         scan_pr(serde_json::json!({
             "number":1, "headRefOid":head, "headRefName":"fix", "title":"Fix review"
@@ -62,14 +61,48 @@ fn story_3095_read_only_scan() {
         std::fs::read_dir(ledger_dir(root)).unwrap().count(),
         ledger_entries + 1
     );
-    assert_eq!(std::fs::read_dir(store).unwrap().count(), 2);
-    let conflicting = || {
-        scan_pr(serde_json::json!({
-            "number":7, "headRefOid":head, "baseRefOid":"b".repeat(40), "mergeable":"CONFLICTING",
-            "headRefName":"fix", "title":"Fix"
-        }))
-    };
-    assert!(conflicting()[0].summary.contains("conflicting"));
+    assert_eq!(std::fs::read_dir(&store).unwrap().count(), 2);
+    // trace:TASK-3878 | ai:codex
+    let contents = std::fs::read(&ledger).unwrap();
+    let mut spec = aida_core::Requirement::new("Fix".into(), String::new());
+    spec.spec_id = Some("TASK-7".into());
+    let live = "b".repeat(40);
+    let now = Utc::now();
+    let mut observation = aida_core::Comment::new("implementer".into(), format!("conflict-repair-7-{head}-{live}: merge the base into PR-7, resolve conflicts, no scope change"));
+    observation.created_at = now - TimeDelta::minutes(14);
+    spec.add_comment(observation);
+    let object = store.join("objects/TASK/000");
+    std::fs::create_dir_all(&object).unwrap();
+    std::fs::write(
+        object.join("TASK-7.yaml"),
+        serde_yaml::to_string(&spec).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(&ledger, "corrupt").unwrap();
+    let conflict = serde_json::json!({"number":1,"headRefOid":head,"baseRefName":"main","baseRefOid":"stale","mergeable":"CONFLICTING","headRefName":"fix","title":"Fix (Refs TASK-7)"});
+    let mut approved = conflict.clone();
+    approved["number"] = 7.into();
+    approved["reviewDecision"] = "APPROVED".into();
+    let mut ordinary = conflict.clone();
+    ordinary["mergeable"] = "MERGEABLE".into();
+    let rows = scan_rows(
+        root,
+        now,
+        TimeDelta::minutes(60),
+        vec![ordinary, serde_json::Value::Null, conflict, approved],
+        &format!("{live}\trefs/heads/main\n"),
+    )
+    .unwrap();
+    assert_eq!(rows.len(), 4);
+    assert!(rows[0].summary.contains("conflict age at least 14m"));
+    assert!(rows[0].id.starts_with("PR-7/"));
+    assert!(rows[1].summary.contains(&format!(
+        "conflicting with main {live}, conflict age unknown, owner unknown"
+    )));
+    assert_eq!(rows[1].action, "aida queue rework TASK-7 --for implementer --reason 'Merge the base into PR-1, resolve conflicts, no scope change'");
+    assert!(rows[2].summary.contains("unavailable"));
+    assert_eq!(std::fs::read_dir(&state).unwrap().count(), state_entries);
+    std::fs::write(&ledger, contents).unwrap();
     let sessions = crate::leases_dir(root);
     std::fs::create_dir(&sessions).unwrap();
     let lease = format!(
@@ -89,19 +122,6 @@ active_pid = {}
     );
     std::fs::write(sessions.join("running.toml"), &lease).unwrap();
     assert!(scan().is_empty());
-    let blocked = "blocked: reservation repair needed";
-    let active = format!("active_pid = {}", std::process::id());
-    let dead = lease.replace(&active, "active_pid = 2147483647");
-    std::fs::write(sessions.join("running.toml"), dead).unwrap();
-    assert!(conflicting()[0].summary.contains(blocked));
-    std::fs::remove_file(sessions.join("running.toml")).unwrap();
-    let reservation = serde_json::json!({"version":1,"entries":[{
-        "key":{"repository":root,"pr":7,"original_head":head}, "dispatched_by":"host",
-        "reserved_at":"now","lane_id":"retained","tree_path":root,"branch":"fix",
-        "base":"b".repeat(40),"spawn":"unknown","original_conflict_paths":[]
-    }]});
-    std::fs::write(state.join("repair-journal.json"), reservation.to_string()).unwrap();
-    assert!(conflicting()[0].summary.contains(blocked));
 }
 
 #[test]
@@ -118,13 +138,4 @@ fn story_3095_green_since_last_completion() {
     );
     rows[1]["completedAt"] = serde_json::Value::Null;
     assert!(crate::land::green_rollup_at(&rows).is_none());
-}
-
-// trace:TASK-3878 | ai:codex
-#[test]
-fn conflict_repair_queue_and_delivery_receipts_deduplicate() {
-    assert!(should_queue(false, false, false).unwrap());
-    assert!(!should_queue(true, false, true).unwrap());
-    assert!(!should_queue(false, true, true).unwrap());
-    assert!(should_queue(false, false, true).is_err());
 }

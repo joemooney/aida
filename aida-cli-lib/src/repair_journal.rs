@@ -2,7 +2,6 @@
 //! Permanent sidecar lock -> bounded read -> atomic replacement; no lock across
 //! child execution or mail delivery. Unknown spawn outcomes reserve the head.
 //! trace:STORY-2710 | ai:codex
-use crate::gate::review_verdict::open_verdict_entry;
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
@@ -129,7 +128,6 @@ impl From<&RepairEntry> for ReleasedMerge {
 }
 pub(crate) struct RepairGuard {
     _lock: File,
-    _directory: File,
     path: PathBuf,
     journal: Journal,
 }
@@ -232,37 +230,26 @@ impl RepairGuard {
             !std::fs::symlink_metadata(&dir)?.file_type().is_symlink(),
             "repair journal directory is a symlink"
         );
-        let directory = Self::directory(main)?;
-        fs2::FileExt::try_lock_shared(&directory).context("conflict repair sweep active")?;
         let path = dir.join("repair-journal.json");
         let lock = lock_file(&dir.join("repair-journal.lock"))?;
-        let journal = Self::read(main)?;
+        let journal = Self::read(main, &path)?;
         Ok(Self {
             _lock: lock,
-            _directory: directory,
             path,
             journal,
         })
     }
-    // trace:TASK-3878 | ai:codex
-    pub(crate) fn retained_prs(main: &Path) -> Result<Vec<(u64, String)>> {
-        Ok(Self::read(main)?
-            .entries
-            .into_iter()
-            .filter(|e| e.spawn != SpawnOutcome::ProvenDead)
-            .map(|e| (e.key.pr, e.branch))
-            .collect())
-    }
-
-    pub(crate) fn directory(main: &Path) -> std::io::Result<File> {
-        let root = File::open(main)?;
-        open_verdict_entry(&root, ".aida".as_ref(), libc::O_DIRECTORY)
-    }
-
-    fn read(main: &Path) -> Result<Journal> {
-        let directory = Self::directory(main)?;
-        let name = "repair-journal.json".as_ref();
-        let journal = match open_verdict_entry(&directory, name, 0) {
+    fn read(main: &Path, path: &Path) -> Result<Journal> {
+        use std::os::unix::fs::OpenOptionsExt;
+        anyhow::ensure!(
+            std::fs::symlink_metadata(main.join(".aida"))?.is_dir(),
+            "invalid repair journal directory"
+        );
+        let journal = match std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)
+        {
             Ok(mut f) => {
                 use std::io::Read;
                 anyhow::ensure!(
@@ -331,7 +318,7 @@ impl RepairGuard {
             input.is_terminal() && !reason.trim().is_empty(),
             "release requires a terminal and attestation"
         );
-        let snapshot = Self::read(main)?;
+        let snapshot = Self::read(main, &main.join(".aida/repair-journal.json"))?;
         let entry = snapshot.reservation(id)?;
         anyhow::ensure!(
             entry.spawn != SpawnOutcome::ProvenDead,
@@ -665,7 +652,7 @@ pub(crate) fn refusal_delivery_id(key: &RepairKey) -> String {
 // the strict reader refuses an unreadable or malformed message file instead
 // of skipping it, since a skipped copy of the accepted notice reads as absent.
 // trace:TASK-3804 | ai:claude
-pub(crate) fn mailbox_has_delivery(main: &Path, delivery: &str) -> Result<bool> {
+fn mailbox_has_delivery(main: &Path, delivery: &str) -> Result<bool> {
     let messages = crate::mailbox_store::read_all_messages_strict(main)
         .context("could not read the mailbox to deduplicate the repair refusal")?;
     Ok(messages.iter().any(|message| message.thread_id == delivery))
