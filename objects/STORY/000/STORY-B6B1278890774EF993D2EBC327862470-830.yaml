@@ -10,12 +10,12 @@ description: |
   - AC1: A built-in, configurable LANDING-DROUGHT check: `[landing.drought] max_minutes` (default 60) + `action = "report" | "investigate"` (default "investigate"). When main has had no landing for max_minutes AND at least one PR is landable (approved at head + required CI green + holds cleared), it fires once per drought episode. Runs from the existing scheduler.
   - AC2: action="investigate" produces a DIAGNOSIS without operator prompting: per ready PR, the `aida pr train --dry-run` refusal reason; the auto-train controller's last exit + its error; the mandate coverage; the guard's own health. It routes the diagnosis to the advisor (mail + CronJobFailed-style route) and records it as a doctor finding.
   - AC3: The guard is itself bounded and watched: the drought check has a hard deadline; a timeout or error is ITSELF a finding/alert ("landing guard unhealthy"), never silent. Tests: drought + ready PR → fires once with the diagnosis; no ready PR → silent; the check times out → a "guard unhealthy" alert.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T11:30:00.523920544Z
+modified_at: 2026-11-25T11:30:05.259307568Z
 req_type: Story
 tags:
 - landing
@@ -27,6 +27,14 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 04:32): APPROVED HIGH, standard, drain. Joe asked for this directly. Additions: AC2''s investigate diagnosis also lists ADMISSION HOLDERS (pid, role, held-for) and any manual train waiting on admission. AC3: the guard runs under its own hard timeout (default 60s). A timeout or error emits a ''landing guard unhealthy'' alert to the advisor, and is never silent. Ship as ≤300-line slices.'
   created_at: 2026-11-25T11:30:00.523920544Z
   modified_at: 2026-11-25T11:30:00.523920544Z
+history:
+- id: 01a21278-534b-78c3-9acc-06e202dacf55
+  author: joe
+  timestamp: 2026-11-25T11:30:05.259301238Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
   branch: main
