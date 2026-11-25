@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T20:30:55.194487601Z
+modified_at: 2026-11-25T20:33:08.392010023Z
 req_type: Story
 tags:
 - landing
@@ -1437,6 +1437,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T20:30:54.954533050Z
   modified_at: 2026-11-25T20:30:54.954533050Z
+- id: 01a21469-db6a-7aa1-bf5a-9aec0d20e683
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:33):
+    # STORY-2897 fresh slice r1 (advisor-122 ruling 2026-11-25 13:30 on #4569 @ ee393994; product-15). Lane: CLAUDE. MAIN, existing branch / PR #4569. <=80 lines. Keep it within the slice; do NOT expand. Keep the PR title.
+    (F1, untested path) A TEST that draft_matches_record now compares `needs` (a mismatch → no match).
+    (F2, p2) `review submit-draft` runs validate_waiting_needs under the review-gated policy, the same as the direct path. TEST: a waiting draft with no needs / an aggregate check:Build / whitespace → refused.
+    (F3) REJECT --needs on non-WAITING verdicts instead of persisting it.
+    (F4) The specificity check applies to EVERY kind (test:/artifact:/actor: aggregates refused, as documented).
+    (F5) TESTS for main_watch::open_episode's guards (40-hex red_sha, empty failed list, blank name).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4569. COMMIT your work.
+  created_at: 2026-11-25T20:33:08.392010023Z
+  modified_at: 2026-11-25T20:33:08.392010023Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
