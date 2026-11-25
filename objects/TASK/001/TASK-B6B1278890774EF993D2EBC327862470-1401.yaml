@@ -26,12 +26,12 @@ description: |
   - knob on + dead lane + mandate → released, with an audit record.
 
   Tier: STRICT (authority/grants + repair journal). Size: ≤300 lines, one slice.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T11:53:13.898809274Z
+modified_at: 2026-11-25T11:54:06.356201885Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -93,6 +93,11 @@ comments:
   created_at: 2026-11-25T06:57:47.034549588Z
   modified_at: 2026-11-25T06:57:47.034549588Z
   session_id: 01a2114c9fa0
+- id: 01a2128e-5094-7ba3-b956-928af2e0ffab
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full-sweep review of the TASK-3895 Refs slice. The generated worksheet lists AC1 and AC2 in full with no pre-marked deferrals. The PR body claims both the opt-in flow and its refusal conditions. I compared the complete 532-line review evidence with the pinned Git diff from protected base 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to landed tree cf3301866fe5fa415202e1858534d94210bdebf2 and attest the original PR head. The two base commits also touched the CLI help snapshot and store-writer inventory. The landed diff retained the flag in both help representations and the new writer entries. None of the findings depends on base changes.. It was punted on: blocked-dependency: Final validation needs a clean launcher target. FAST job j20261125T050848928-2-0 stopped on compiler signal 9. Focused rerun j20261125T052623673-2-0 failed linking undefined hidden LLVM symbols before executing tests. Initial focused run passed one test. Preserve the uncommitted implementation for host validation.. No triage reason was given.'
+  created_at: 2026-11-25T11:54:06.356193156Z
+  modified_at: 2026-11-25T11:54:06.356193156Z
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
@@ -175,6 +180,13 @@ history:
   timestamp: 2026-11-25T11:53:14.064096788Z
   session_id: 01a21289add5
   changes: []
+- id: 01a2128e-5094-7ba3-b956-92715dd6f495
+  author: joe
+  timestamp: 2026-11-25T11:54:06.356178558Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
@@ -185,36 +197,3 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: Final validation needs a clean launcher target. FAST job j20261125T050848928-2-0 stopped on compiler signal 9. Focused rerun j20261125T052623673-2-0 failed linking undefined hidden LLVM symbols before executing tests. Initial focused run passed one test. Preserve the uncommitted implementation for host validation.
-  raised_by: implementer
-  raised_at: 2026-11-25T05:34:20.426477760Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full-sweep review of the TASK-3895 Refs slice. The generated worksheet lists AC1 and AC2 in full with no pre-marked deferrals. The PR body claims both the opt-in flow and its refusal conditions. I compared the complete 532-line review evidence with the pinned Git diff from protected base 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to landed tree cf3301866fe5fa415202e1858534d94210bdebf2 and attest the original PR head. The two base commits also touched the CLI help snapshot and store-writer inventory. The landed diff retained the flag in both help representations and the new writer entries. None of the findings depends on base changes.
-
-    AC1 — unverified
-    - Default-off knob and unchanged terminal route — verified by the strict boolean check in release_by_mandate, the original direct-human and terminal gates, and source inspection of the existing BUG-2722 PTY regression. The protected-source opt-in is defective as detailed in the findings.
-    - Noninteractive release with opt-in and scoped live mandate — unverified
-    - Journal audit records mandate ID, grant ID and liveness evidence — verified by the persisted MandateRelease fields and the fixture's reopened journal assertions for both IDs and process count.
-    - Keep the tree in place and delete nothing on release — verified by the journal-only write path and the retained-directory assertion in the focused fixture.
-    - Refuse a live process matching lease ID or tree path — unverified
-    - Refuse on probe error or incomplete evidence — unverified
-    - Refuse a live or unverified lease owner — verified by reservation_lease requiring the exact lane/tree/branch, local host and RecordedLeaseOwner::Dead, and release_with refusing a missing lease.
-    - Refuse an absent or unscoped mandate — verified by current_state and the explicit scope and principal checks, plus both synthetic refusals. Concurrent mandate stop remains defective as detailed in the findings.
-
-    AC2 — unverified
-    - Knob off requires terminal — unverified
-    - Knob on and live lane refuses — verified by the focused fixture's exact lease marker and matching cwd refusals. Production completeness remains unverified under AC1.
-    - Knob on and probe error refuses — verified by the focused fixture's missing environ error.
-    - Knob on and no mandate refuses — verified by the focused fixture's MandateState::None case and empty audit assertion.
-    - Knob on and dead lane with mandate releases with audit — verified by the synthetic fixture's persisted ProvenDead verdict and reopened audit. Production success remains unverified under AC1.
-
-    The implementer reports one focused test pass at this head (cargo test -p aida-cli-lib task_3895_mandate_release). No local build or test was run during review. GitHub fast gates and merge-hold gate passed, and fast compile was pending at the last check.
-  recovery_hint: address the review findings, move TASK-3895 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T11:53:13.898809274Z
