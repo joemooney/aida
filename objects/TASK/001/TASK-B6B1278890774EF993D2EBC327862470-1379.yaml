@@ -8,17 +8,27 @@ description: |
   ## Acceptance
   - AC1: (F4) the snapshot-regeneration fallback warning records the actual compiler/Cargo diagnostic (captured stderr tail), not only argv + exit status. Test.
   - AC2: (F7) the Rust seat-publish fixture drives a real failing regeneration command instead of a fabricated warning. Test.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:53:36.980920917Z
-modified_at: 2026-11-25T03:21:12.959707487Z
+modified_at: 2026-11-25T03:22:00.770416292Z
 req_type: Task
 tags:
 - conflict-repair
 - integration
 - lanes
+comments:
+- id: 01a210b9-7070-7631-9a93-7df34b161479
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4. AC1: [evidence: behavioral-test] blocked; scripts/repair-generated.py raises after rollback and the base has no BUG-2756 snapshot fallback warning. AC2: [evidence: behavioral-test] blocked; the target warning fixture is absent from this integration tip. No edits, tests or CI evidence for this task. The prerequisite changes publication and journal behavior beyond this follow-up.
+  created_at: 2026-11-25T03:21:57.690088661Z
+  modified_at: 2026-11-25T03:21:57.690088661Z
+  session_id: 01a210b53cd1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f56-6c1a-7c13-8bdd-1a29b59f834a
   author: joe
@@ -44,6 +54,15 @@ history:
   session_id: 01a210b53cd1
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a210b9-7c8d-77f2-8735-758bd64cd017
+  author: dirtlab
+  timestamp: 2026-11-25T03:22:01.229222285Z
+  session_id: 01a210b53cd1
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
@@ -52,3 +71,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8a4c9ba4ba5
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: Assigned origin/integration and seat HEAD both resolve to 48f3c08730, which lacks the BUG-2756 snapshot fallback and warning fixture. BUG-2756 commit 6d12ee315a is on a separate branch. Please integrate the approved prerequisite or route this follow-up onto its intended successor before retrying.
+  raised_by: implementer
+  raised_at: 2026-11-25T03:22:00.770416292Z
