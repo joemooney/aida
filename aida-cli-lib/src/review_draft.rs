@@ -25,6 +25,8 @@ pub(crate) struct ReviewerDraft {
     pub(crate) reviewed_sha: String,
     pub(crate) verdict: String,
     pub(crate) summary: String,
+    #[serde(default)]
+    pub(crate) needs: Vec<rv::ReviewNeed>,
     pub(crate) findings: Vec<String>,
 }
 
@@ -37,6 +39,7 @@ impl ReviewerDraft {
             verdict: &self.verdict,
             reviewed_sha: &self.reviewed_sha,
             findings: &self.findings,
+            needs: &self.needs,
         }
     }
 
@@ -131,7 +134,7 @@ impl LaunchDraft {
     // trace:BUG-2707 | ai:claude
     pub(crate) fn prompt(&self, prompt: &str) -> String {
         format!(
-            "{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording), on fresh and resumed reviews alike: write your verdict as UTF-8 JSON data to the absolute path `{path}`, then validate it by running this command exactly as written: {command}\nIf validation refuses, correct the draft and run the command again. Do not run `aida review record`. If a legacy record attempt was refused, still submit this draft for validation. After you exit, the parent validates the current draft and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{pr},\"reviewed_sha\":\"{head}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the submission refuses any other approved draft. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Exit only after the submission command has accepted the draft; then give a brief final response. Never claim the parent has recorded it.",
+            "{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording), on fresh and resumed reviews alike: write your verdict as UTF-8 JSON data to the absolute path `{path}`, then validate it by running this command exactly as written: {command}\nIf validation refuses, correct the draft and run the command again. Do not run `aida review record`. If a legacy record attempt was refused, still submit this draft for validation. After you exit, the parent validates the current draft and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{pr},\"reviewed_sha\":\"{head}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. For review-gated WAITING include needs, an array of objects with kind (test, artifact, check or actor) and detail. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the submission refuses any other approved draft. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Exit only after the submission command has accepted the draft; then give a brief final response. Never claim the parent has recorded it.",
             path = self.path().display(),
             command = self.submit_command(),
             pr = self.pr,
@@ -2051,6 +2054,7 @@ mod standalone_review_verdict_parent_tests {
         let path = dir.join("STORY-77.json");
         let draft = ReviewerDraft {
             version: 1,
+            needs: Vec::new(),
             pr: 59,
             reviewed_sha: f.head.clone(),
             verdict: "approved".into(),
@@ -2135,6 +2139,7 @@ mod standalone_review_verdict_parent_tests {
             .unwrap();
         let draft = ReviewerDraft {
             version: 1,
+            needs: Vec::new(),
             pr: 59,
             reviewed_sha: f.head.clone(),
             verdict: "waiting".into(),

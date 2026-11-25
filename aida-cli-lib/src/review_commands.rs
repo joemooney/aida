@@ -2542,9 +2542,10 @@ pub(crate) fn handle_review_record(
     finding_classes: &[String],
     pr: Option<u64>,
     no_carry: bool,
+    needs: &[crate::gate::review_verdict::ReviewNeed],
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
-    handle_review_record_context_at(
+    handle_review_record_context_with_policy_at(
         project_root,
         spec,
         verdict,
@@ -2557,6 +2558,8 @@ pub(crate) fn handle_review_record(
         no_carry,
         fetch_review_record_head,
         None,
+        None,
+        needs,
     )
 }
 
@@ -2766,7 +2769,7 @@ pub(crate) fn record_reviewer_draft(
     reviewer.revalidate(&root)?;
     // Draft findings are complete, unlike the interactive omitted-findings API.
     let findings = draft.record_findings();
-    handle_review_record_context_at(
+    handle_review_record_context_with_policy_at(
         root,
         spec,
         &draft.verdict,
@@ -2779,6 +2782,8 @@ pub(crate) fn record_reviewer_draft(
         false,
         fetch_review_record_head,
         Some(reviewer),
+        None,
+        &draft.needs,
     )
 }
 
@@ -2918,7 +2923,33 @@ fn handle_review_record_context_at(
         current_head,
         launch_context,
         None,
+        &[],
     )
+}
+
+// trace:STORY-2897 | ai:codex
+fn validate_waiting_needs(
+    policy: &crate::landing_policy::LandingPolicy,
+    needs: &[crate::gate::review_verdict::ReviewNeed],
+) -> Result<()> {
+    use crate::gate::review_verdict::NeedKind;
+    anyhow::ensure!(
+        needs
+            .iter()
+            .all(|n| !n.detail.trim().is_empty() && n.detail == n.detail.trim()),
+        "invalid dependency detail"
+    );
+    let specific = needs.iter().any(|need| {
+        let aggregate = policy.ci_gated_checks.contains(&need.detail)
+            || need.detail.starts_with("ci-tier:")
+            || need.detail == crate::forge::CI_AGGREGATOR_CHECK;
+        need.kind != NeedKind::Check || !aggregate
+    });
+    anyhow::ensure!(
+        policy.mode != crate::landing_policy::LandingMode::ReviewGated || specific,
+        "review-gated WAITING requires a specific --needs KIND:DETAIL; record APPROVED or CHANGES REQUESTED on the code, with CI as info"
+    );
+    Ok(())
 }
 
 /// [`handle_review_record_context_at`] under a caller-held policy snapshot
@@ -2940,6 +2971,7 @@ fn handle_review_record_context_with_policy_at(
     current_head: impl Fn(&std::path::Path, crate::gate::ledger::ChangeKey) -> Result<String>,
     launch_context: Option<&crate::review_draft::VerifiedReviewer>,
     policy: Option<&crate::gate::kernel_deps::review_blocking::Effective>,
+    needs: &[crate::gate::review_verdict::ReviewNeed],
 ) -> Result<()> {
     // The launcher's explicit verdict anchor routes collection independently
     // of containment posture. This input grants no review authority.
@@ -3028,6 +3060,7 @@ fn handle_review_record_context_with_policy_at(
     }
     // trace:BUG-2500 | ai:codex
     if kind == crate::gate::review_verdict::VerdictKind::Waiting {
+        validate_waiting_needs(&crate::landing_policy::load(&project_root), needs)?;
         anyhow::ensure!(summary.is_some_and(|s| !s.trim().is_empty()), "waiting requires a summary naming the dependency, responsible actor and resume condition");
         anyhow::ensure!(
             findings.is_empty(),
@@ -3276,6 +3309,7 @@ fn handle_review_record_context_with_policy_at(
                 verdict,
                 reviewed_sha: resolved_sha.as_deref().unwrap_or_default(),
                 findings,
+                needs,
             },
         )
         .map_err(anyhow::Error::msg)?;
@@ -3300,6 +3334,9 @@ fn handle_review_record_context_with_policy_at(
         .with_context(|| "could not write the review verdict")?
     };
     // trace:BUG-2517 | ai:codex
+    if replay_record.is_none() {
+        verdict_obj.insert("needs".into(), serde_json::json!(needs));
+    }
     // A local spec-only review has no change binding. Never route it via the
     // spec's most recently indexed PR, which may be unrelated to this review.
     if change.is_none() {
@@ -3458,6 +3495,9 @@ fn handle_review_record_context_with_policy_at(
             .with_context(|| format!("could not prepare {}", handshake.display()))?
         };
         // trace:STORY-1417 | ai:claude
+        if let Some(dependencies) = verdict_obj.get("needs") {
+            handshake_obj.insert("needs".into(), dependencies.clone());
+        }
         review_classes::apply_finding_classes(&mut handshake_obj, findings, &classes);
         // The two artifacts describe the same act of review, so retain the
         // spec record's timestamp byte-for-byte while preserving any displaced
@@ -4234,6 +4274,13 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
                     crate::review_verdict_display::verdict_notice_line(&v)
                 );
                 println!("  {} {}", "actionability:".dimmed(), actionability);
+                for need in value["needs"].as_array().into_iter().flatten() {
+                    if let (Some(kind), Some(detail)) =
+                        (need["kind"].as_str(), need["detail"].as_str())
+                    {
+                        println!("  needs: {kind}:{detail}");
+                    }
+                }
                 if let Some(line) = value["strict_pre_merge_review_pending"].as_str() {
                     println!("  STRICT pre-merge review pending: {line}");
                 }
@@ -4535,6 +4582,7 @@ pub(crate) fn review_verdict_show_body_with_coverage(
     let mut value: serde_json::Value =
         serde_json::from_str(current.body.trim()).unwrap_or(serde_json::Value::Null);
     if let Some(obj) = value.as_object_mut() {
+        obj.entry("needs").or_insert_with(|| serde_json::json!([]));
         obj.insert(
             "actionability".to_string(),
             serde_json::Value::String(actionability.as_str().to_string()),
@@ -4693,3 +4741,17 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/story_2893_verdict_next_actor_tests.rs"]
 mod story_2893_verdict_next_actor_tests;
+
+// trace:STORY-2897 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2897_s1b_waiting_dependencies() {
+    use crate::landing_policy::{LandingMode, LandingPolicy};
+    let mut policy = LandingPolicy::default();
+    assert!(validate_waiting_needs(&policy, &[]).is_ok());
+    policy.mode = LandingMode::ReviewGated;
+    policy.ci_gated_checks = vec!["Build".into()];
+    assert!(validate_waiting_needs(&policy, &[]).is_err());
+    assert!(validate_waiting_needs(&policy, &["check:Build".parse().unwrap()]).is_err());
+    assert!(validate_waiting_needs(&policy, &["test:foo::bar".parse().unwrap()]).is_ok());
+}
