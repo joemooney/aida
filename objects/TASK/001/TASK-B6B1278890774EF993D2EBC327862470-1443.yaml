@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: `.aida/config.toml` sets `[agents] vendor = "claude"` with the comment "TEMPORARY: codex usage limit until 2026-11-29 10:41; revert to codex then". One small PR to main, <=10 lines.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T15:28:30.252627712Z
-modified_at: 2026-11-25T16:59:49.724258506Z
+modified_at: 2026-11-25T19:57:18.573772531Z
 req_type: Task
 tags:
 - codex-limit
@@ -94,6 +94,20 @@ history:
   session_id: 01a213800b55
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21448-b323-7202-873d-96e6a50602e5
+  author: aida-auto-bump
+  timestamp: 2026-11-25T19:57:18.499267438Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21448-b36d-72d0-ac7d-03902d2743d5
+  timestamp: 2026-11-25T19:57:18.573768484Z
+  agent: aida
+  commit_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
+  summary: 'TASK-3908 AC1 verified by configuration inspection: .aida/config.toml [agents] now sets vendor = "claude" preceded by the exact comment "# TEMPORARY: codex usage limit until 2026-11-29 10:41; revert to codex then"; single commit, one file, 2 insertions/1 deletion (<=10 lines), targeting main. Landed tree 4521869 carries the same block; the 2 base commits the head is behind do not touch .aida/config.toml, so no finding depends on base drift. ''claude'' is the default/accepted vendor value. Valid TOML (comment on its own line). No defects found; CI pending at review time.'
+  review_verdict: approved
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
   branch: main
@@ -101,3 +115,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 664f2602224
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T19:57:18.499258967Z
+  completion_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
