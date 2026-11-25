@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T11:48:56.407954532Z
+modified_at: 2026-11-25T11:52:38.957280334Z
 req_type: Story
 tags:
 - hygiene
@@ -383,6 +383,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T11:48:56.243552577Z
   modified_at: 2026-11-25T11:48:56.243552577Z
+- id: 01a2128d-35cd-7622-b6d7-c56fe6cacb79
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:52):
+    # STORY-3059 report-only / PR #4570 r2 (advisor-122 ruling 2026-11-25 04:58 at 9959be29; product-15). Lane: CODEX. MAIN, existing branch. <=60 lines.
+    (F3, p1 data-loss) Any seat this pass classifies as RECOVERABLE is EXCLUDED from EVERY destructive hygiene step for the rest of the pass. Re-check the closed-unmerged / exact-tip veto AT THE POINT of any destructive action, not only at scan time; on doubt, PRESERVE. Test: an older merged PR + the exact-tip PR closing mid-pass → the seat is preserved.
+    (F2) Don't claim "published" unless a LIVE origin check (ls-remote, via the host git helper) confirms the tip; otherwise print "publication unverified".
+    (F1) Until BUG-2755 lands, the hint points to the REAL path ("recoverable; manual recovery: see BUG-2755 / aida session show <id>"), not a command that refuses today.
+    (F4) The test supplies an exact-tip closed PR AND a historical-merge row in the SAME scan.
+    One targeted cargo run, then make check-ci-fast, then push to #4570. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T11:52:38.957280334Z
+  modified_at: 2026-11-25T11:52:38.957280334Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
