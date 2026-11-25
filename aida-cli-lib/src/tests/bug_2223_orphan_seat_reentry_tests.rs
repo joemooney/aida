@@ -565,6 +565,9 @@ fn bare_resume_without_a_recorded_session_cold_starts_in_the_orphan_tree() {
 #[test]
 fn the_containment_refusal_names_the_vendor_fix_in_its_first_line() {
     use crate::session::HeadlessVendor;
+    // trace:BUG-2752 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    let _cwd = crate::session::contained_cwd_seam::pin(root.path());
     let errors = [
         crate::session::require_vendor_containment(HeadlessVendor::Codex, true, "x").unwrap_err(),
         crate::session::child_containment_preflight(HeadlessVendor::Codex, true, true, "x")
@@ -573,8 +576,8 @@ fn the_containment_refusal_names_the_vendor_fix_in_its_first_line() {
     for err in errors {
         let msg = format!("{err:#}");
         let first = msg.lines().next().unwrap();
-        assert!(first.contains("AIDA_HEADLESS_VENDOR=claude"), "{first}");
-        assert!(first.contains("--vendor claude"), "{first}");
+        assert!(first.contains(crate::vendors::native_setup::FIX), "{first}");
+        assert!(!first.contains("--vendor claude"), "{first}");
         assert!(first.contains("`codex`"), "{first}");
     }
 }
