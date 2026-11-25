@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-25T21:18:54.112674181Z
+modified_at: 2026-11-25T21:23:24.686145292Z
 req_type: Bug
 tags:
 - landing
@@ -53,6 +53,18 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:18:26.165492760Z
   modified_at: 2026-11-25T21:18:26.165492760Z
+- id: 01a21497-c203-78c3-b8f3-a569254286a6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:23):
+    # BUG-2733 (advisor-122 approved 2026-11-25 14:30, launch priority; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2733-linear-promotion-specs. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2733) and say what remains. Otherwise use the completing (BUG-2733) trailer.
+    READ FIRST: `aida show BUG-2733 --comments` (evidence, ACs, rulings).
+    TODAY'S EVIDENCE (2026-11-25): promotion 38 (#4574, branch promote/integration-38, built LINEAR on main by cherry-picking the integration squashes) made `aida pr auto-queue-review --branch promote/integration-38` refuse with 'promotion boundary could not be established within 500 commits', so the review story had to be filed by hand (STORY-3133). p39 #4580 needed the same workaround. Fix BOTH the train's spec resolution (only commits not already on main by patch-id) AND auto-queue-review's promotion boundary for linear promotions (e.g. use patch-ids / the PR body's squash table, or merge-base with main), with a test for a linear promotion branch.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T21:23:24.686145292Z
+  modified_at: 2026-11-25T21:23:24.686145292Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
