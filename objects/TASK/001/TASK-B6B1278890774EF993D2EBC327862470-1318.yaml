@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:23:08.021931769Z
-modified_at: 2026-11-24T08:23:08.021931769Z
+modified_at: 2026-11-25T07:22:27.960352448Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20c6f-7d40-73c3-acac-3692587839bc
   created_at: 2026-11-24T08:23:20.817639306Z
+comments:
+- id: 01a21195-9ef8-77c0-88c7-2c53b7537f2f
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): likely already fixed. Parent: TASK-3864 / #4504. Evidence: now ''whole-file substring'' facets 8dfad22. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:22:27.960352448Z
+  modified_at: 2026-11-25T07:22:27.960352448Z
 history:
 - id: 01a20cec-14da-74c2-9a3c-bac91aa1ccd8
   author: joe
