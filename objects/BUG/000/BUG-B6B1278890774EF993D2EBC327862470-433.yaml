@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-25T01:56:31.478509972Z
+modified_at: 2026-11-25T02:01:25.112615588Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -467,6 +467,17 @@ comments:
     cargo fmt; one targeted cargo run of the touched tests; `make check-ci-fast`; push. COMMIT your work.
   created_at: 2026-11-22T23:52:45.610342785Z
   modified_at: 2026-11-22T23:52:45.610342785Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a2106f-ea84-7c62-aa03-3993d3da9eff
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:01):
+    # BUG-2669 / PR #4376 CONFLICT REPAIR (product-15 2026-11-24 18:57; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4376 now CONFLICTS with main (found by the product conflict check; its dead-lane reservation was released by Joe's attestation 2026-11-24 18:50). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4376. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T02:01:25.112615588Z
+  modified_at: 2026-11-25T02:01:25.112615588Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
