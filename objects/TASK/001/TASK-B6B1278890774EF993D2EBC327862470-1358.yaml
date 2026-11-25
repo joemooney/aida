@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T12:08:55.011099136Z
+modified_at: 2026-11-25T16:42:55.697112433Z
 req_type: Task
 tags:
 - integration
@@ -251,6 +251,117 @@ comments:
     NEEDS A SKETCH: guard with a sanitized env (no GIT_CONFIG*), no object access before the decision, a minimal raw command builder. Not relaunched tonight.
   created_at: 2026-11-25T12:07:43.345255753Z
   modified_at: 2026-11-25T12:07:43.345255753Z
+- id: 01a21396-fc82-7403-8a7c-320fa2bd1b53
+  author: joe
+  content: |-
+    Reviewer notes from integration-30 (read first):
+    (1) DECISION NEEDED: patch_identity (event.rs:275) runs BEFORE the risk path. It can lazy-fetch and does a raw ls-remote. I recommend skipping it when the probe returns Unknown (~6 lines).
+    (2) Three claims are code-read, not proven: an empty GIT_ALLOW_PROTOCOL refuses before git-remote-<scheme> spawns (test 6 proves it); gh with --repo spawns no git; the compare payload needs a size cap. Also, GIT_ATTR_SOURCE needs git >= 2.40, so the builder should check the git version or fall back to core.attributesFile=/dev/null only.
+    (3) The forge-supplied merge base is untrusted input. It's safe only because R5 checks that it is a local ancestor of head before any diff. Keep that check mandatory.
+    (4) Size: ~120 production + 150 test lines, so split S1/S2 as proposed.
+
+    SKETCH (integration-30): TASK-3874 partial-clone-safe risk-base check
+
+    Baseline is origin/main = origin/integration after revert #4573. Line numbers are on main.
+
+    **Core move: no network git at all.** AC1 permits "a bounded remote merge-base", so take that route. The merge base of the advanced base and `head` comes from the forge with one pinned `gh api repos/H/P/compare/<baseOid>...<head>?per_page=1 --jq .merge_base_commit.sha`. That merge base is an ancestor of `head`, so it is already local whenever `head` is. Removing the fetch also removes, by construction, the credential rewrite, the `configured_remote_urls` child, the bundle-URI path, SSH and the uploadpack/insteadOf surface (r2-a, r2-c, r3-F1, r3-F4, r4-F2 second half). Every git process left in the risk path is local and runs after the promisor decision.
+
+    **1. Environment: allowlist, not denylist.** Call `env_clear()`, then set exactly:
+    - `PATH`
+    - `LC_ALL=C`
+    - `GIT_CONFIG_NOSYSTEM=1`
+    - `GIT_CONFIG_GLOBAL=/dev/null`
+    - `GIT_CEILING_DIRECTORIES=<parent of root>`
+    - `GIT_NO_LAZY_FETCH=1`
+    - `GIT_NO_REPLACE_OBJECTS=1`
+    - `GIT_ALLOW_PROTOCOL=` (empty)
+    - `GIT_TERMINAL_PROMPT=0`
+    - `GIT_OPTIONAL_LOCKS=0`
+    - `GIT_ATTR_SOURCE=4b825dc6…` (the empty tree)
+
+    HOME is not passed. Why an allowlist:
+    - Git reads more than 40 GIT_* variables, and new git releases add more. Examples: `GIT_CONFIG{,_COUNT,_KEY_n,_PARAMETERS,_GLOBAL,_SYSTEM}`, `GIT_DIR/COMMON_DIR/WORK_TREE/INDEX_FILE/OBJECT_DIRECTORY/ALTERNATE_OBJECT_DIRECTORIES/NAMESPACE/REPLACE_REF_BASE/GRAFT_FILE/SHALLOW_FILE/QUARANTINE_PATH`, `GIT_SSH*`, `GIT_ASKPASS`, `GIT_EXEC_PATH`, `GIT_TRACE*`. It also reads non-GIT variables: `XDG_CONFIG_HOME`, `HOME`, `PAGER`.
+    - Both existing denylists have already drifted. `clear_routing` (review_watch_forge.rs:43) and `pr_state_pin` (forge.rs) both miss `GIT_CONFIG`, `GIT_CONFIG_GLOBAL/SYSTEM`, `GIT_SSH_COMMAND` and `XDG_CONFIG_HOME`.
+    - Dropping system and global config makes the probe and every object command read the same config: the repository config plus `config.worktree`, plus our `-c` flags. That closes r4-F2: a probe can no longer be blinded relative to its successors, because they share one config source by construction.
+    - Cost: a repository not owned by the user hits "dubious ownership" (`safe.directory` is read only from protected config). It fails, and the result is STRICT. That is acceptable.
+
+    **2. Builder: a new one; the existing builders cannot be reused.**
+    - `host_git_command` spawns children while it is being built: `gitmodules_submodule_names` runs `git config --blob :.gitmodules` / `HEAD:.gitmodules` (git_ops.rs:228–361) for linked worktrees. Those are object reads, they can lazy-fetch, they run outside any deadline and they inherit the env (r4-F1). In a store tree it also resolves hooks. It always inherits the env.
+    - `contained_seat_git_command` spawns `git config --global` twice.
+    - `host_remote_git_command` → `configure_remote_credentials` → `configured_remote_urls` spawns a `host_git_command` config read. That read is bounded only by `CONFIG_READ_DEADLINE`; the gitmodules children it spawns are not bounded.
+
+    New `aida_core::git_ops::RiskGit` (~45 lines, the only raw `Command::new("git")`, tagged `raw-git-ok(TASK-3874)` plus an ExecContext allowance; it removes the raw site at review_risk.rs:57). The construction path spawns nothing:
+    - Refuse with None if `refused_seat_clone(root)` (filesystem only, verified: seat_clone_detect.rs has 0 `Command::new`) or `is_store_tree(root)` (filesystem).
+    - Fixed argv prefix: `--no-pager --no-replace-objects --literal-pathspecs -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.useReplaceRefs=false -c core.attributesFile=/dev/null -c protocol.allow=never -c submodule.recurse=false -c diff.external= -c maintenance.auto=false -c gc.auto=0`.
+    - `stdin(null)`.
+    - Each spawn goes through `output_before(deadline)`, which kills the process group.
+
+    Typestate: `RiskGit::probe()` returns `Result<LocalRepo, Unknown>`. Only `LocalRepo` has the object methods (`is_ancestor`, `merge_base_all`, `diff`), so the compiler refuses any object access before the decision.
+
+    **3. Promisor decision first (in `verdict_event`, before `patch_identity`).**
+    - (a) Filesystem only. Resolve the common dir from `root/.git`: a directory, or a `gitdir:` file followed by `commondir`. Return Unknown if any of these exist: `objects/pack/*.promisor`, `objects/info/alternates` (a foreign, possibly seat-writable object store), or `.git` is unparsable.
+    - (b) One process: `git config -z --get-regexp '^(extensions\.partialclone|remote\..*\.(promisor|partialclonefilter)|remote\.origin\.url)$'`. Exit 1 with empty output means clean. Return Unknown on any of: `extensions.partialclone` present; `partialclonefilter` present; a promisor value other than `false|no|off|0` (parsed in Rust, no `--type=bool`); any other exit; a timeout. The same output supplies `remote.origin.url` for host/project, which replaces `pr_state_repository`'s separate raw `remote get-url` with its fresh 500 ms (r4-F3).
+    - Unknown means `risk = STRICT` ("partial clone or unverifiable object store").
+    - **Advisor decision needed.** Should Unknown also skip `patch_identity`? I recommend yes (about 6 lines; carry-over then fails closed). Otherwise the production verdict path still lazy-fetches before the guard; see P2–P4. The `patch_identity` builder hardening for full clones (P1) stays as the follow-up the advisor listed at 00:10.
+
+    `GIT_NO_LAZY_FETCH=1` and `GIT_ALLOW_PROTOCOL=` are defence in depth only. On git builds that ignore the former (upstream 2.40–2.44 .0), the empty protocol allowlist still makes git refuse before spawning `git-remote-<scheme>` (`transport-helper.c` `get_helper` → `transport_check_allowed`), so no argv carries a credential.
+
+    **4. Every git/gh invocation on the verdict path.** Today's state, then the design.
+
+    | # | site | argv | net? | today | design |
+    |---|---|---|---|---|---|
+    | P1 | review_carryover.rs:324 (`patch_identity`, event.rs:275) | `ls-remote --symref origin HEAD` | NET | raw `Command` (:931) + `configure_remote_credentials` (spawns host-builder gitmodules children and a config read). Inherits env, no seat refusal. Bounded only inside a train. | Skipped on Unknown. Builder fix in the follow-up slice. |
+    | P2 | :908 | `rev-parse --verify refs/remotes/origin/<b>^{commit}` | local obj | raw, `local_output` (Duration::MAX) | skipped on Unknown |
+    | P3 | :820 | `merge-base --all` | local obj | raw, unbounded | skipped on Unknown |
+    | P4 | :833 | `diff --binary --full-index …` | local blobs | raw, unbounded, lazy-capable | skipped on Unknown |
+    | P5 | :861 | `patch-id --verbatim` | stdin only | raw | unchanged |
+    | R1 | forge.rs `pr_state_repository` | `remote get-url origin` | config | raw, inherits `GIT_CONFIG*`/`GIT_DIR`, fixed 500 ms (r4-F3) | removed; folded into probe (b) |
+    | R2 | kernel.rs:500 → :345 | `<gh candidate> --version` per PATH entry | none | not under the 15 s budget on main (AC2) | inside `with_forge_lookup_deadline(15s)` and `resolve_forge_binary_before` |
+    | R3 | forge.rs:7114 | `gh pr view N --repo H/P --json headRefOid,baseRefOid` | NET | own 15 s; `pr_state_pin`: `GH_HOST` pinned, `GH_REPO` and 7 GIT_* removed | shared deadline; env: remove every `GIT_*` by prefix plus `GH_REPO`, pin `GH_HOST`, `GH_PROMPT_DISABLED=1`, `GH_NO_UPDATE_NOTIFIER=1`, `GH_PAGER=cat`. gh keeps its own auth env (denylist justified: `GH_TOKEN`/`GH_CONFIG_DIR` live there). With `--repo` set, gh resolves no local repo, so it spawns no git. |
+    | R4 | new | `gh api -X GET repos/H/P/compare/<base>...<head>?per_page=1 --jq .merge_base_commit.sha` | NET | — | same env and deadline. Hex 40/64 validated. Response capped (8 MiB, as `pr_state_batch`). |
+    | R5 | review_risk.rs:55 | `merge-base --all` (non-PR branch) / `merge-base --is-ancestor <mb> <head>` (PR) | local obj | raw via `rc::git`, unbounded | `LocalRepo`, deadline |
+    | R6 | review_risk.rs:57–75 | `diff --raw/--numstat/--patch` ×3 | local blobs | raw `Command::new`, inherits env, no deadline (r3-F2) | `LocalRepo` with `--no-ext-diff --no-textconv --submodule=short --no-renames --no-color` plus the builder prefix; deadline |
+    | x | r2 (reverted) | `cat-file -e`; `fetch origin <oid>` | — | — | removed |
+
+    **Children of each design-side process:**
+    - The probe and the diffs spawn none. There is no pager, no hooks and no fsmonitor. Ext-diff and textconv are off. Attributes come from the empty tree. A `.gitmodules` blob read cannot lazy-fetch once the clone has been proven non-partial.
+    - The gh calls do HTTPS in-process.
+    - Every process runs in its own process group and is killed at the single 15 s deadline that covers R2–R6 (AC2). Not reviewed: review_git_evidence.rs, because it has no verdict_event caller.
+
+    **5. Tests.** Every test enters through `ledger::event::verdict_event(root, ChangeKey::pr(N), record, None)`, never through helpers (r2-b, r3-F3).
+
+    Oracles:
+    - A cfg(test) spawn recorder inside `RiskGit`. Every risk-path git child goes through it.
+    - `core.sshCommand` set in the repository config to a logging shim, plus an `https://` origin. The shim catches transports that git starts internally.
+    - A gh stub via `AIDA_TEST_GH_BINARY`. It logs its argv.
+
+    Cases:
+    1. **Partial-clone matrix.** Fixtures: `extensions.partialClone=origin`; `remote.other.promisor=yes`; `partialclonefilter` only; a `.promisor` pack with clean config; `alternates`. Each uses a real `--filter=blob:none` clone with a missing topic blob. Expect STRICT, the recorder shows only the probe, zero gh calls, and an empty shim log.
+    2. **Linked-worktree `.gitmodules` fallback (r4-F1).** A worktree of a blobless clone, `.gitmodules` only in HEAD, blob missing. Expect zero transports. Mutation: swapping in `host_git_command` makes the shim fire.
+    3. **Hostile ambient env (r4-F2).** Re-exec the test binary as a child (the inner test is `#[ignore]`) with `GIT_CONFIG_PARAMETERS="'remote.origin.promisor'='false'"`, `GIT_CONFIG_COUNT/KEY/VALUE`, `GIT_CONFIG_GLOBAL=<file>`, `GIT_DIR`, `GIT_OBJECT_DIRECTORY` and `XDG_CONFIG_HOME` set. Expect partial still detected and STRICT. Mutation: removing `env_clear` makes the test fail.
+    4. **Seat refusal through the entry (r3-F3).** Checkout under `aida-seat-*` with every fixture in place. Expect zero recorder entries and zero gh calls.
+    5. **Positive control (AC1).** Full clone; target advanced on the forge after checkout; the gh stub returns the true merge base. Expect a non-STRICT tier from the local diff and zero transports.
+    6. **Defence layer (r3-F1).** Use a cfg(test) seam to bypass the probe and drop `GIT_NO_LAZY_FETCH` in a partial clone. Expect zero helper starts, from `GIT_ALLOW_PROTOCOL=` alone.
+    7. **AC2.** A stalled `gh --version`. Expect STRICT within 15 s plus margin.
+    8. **Deadline (r4-F3).** Budget about 0. Expect no git spawned.
+
+    The bundle oracle tests (r3-F4, r4-F4 atime) are deleted: there is no fetch left to test.
+
+    **Finding → closure:**
+    - pre-check F1 → `RiskGit` seat refusal (filesystem).
+    - r2-a / r3-F1 → probe first, plus the protocol allowlist.
+    - r2-b / r3-F3 → tests 4 and 5.
+    - r2-c / r3-F4 / r4-F4 → fetch removed.
+    - r3-F2 → `LocalRepo` diffs after the probe; P2–P4 gated (pending the advisor decision).
+    - r4-F1 → no `host_git_command` before the decision; test 2.
+    - r4-F2 → allowlist env shared by all children; test 3.
+    - r4-F3 → R1 folded into the probe, one deadline.
+
+    Size: about 120 production lines plus 150 test lines, which is over the old 80-line cap. A split would be S1 (`RiskGit` + probe + `LocalRepo` assess + AC2) and S2 (forge merge base, AC1).
+  created_at: 2026-11-25T16:42:55.697112433Z
+  modified_at: 2026-11-25T16:42:55.697112433Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
