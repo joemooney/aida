@@ -71,17 +71,6 @@ fn adopt_receipt(
     contained: bool,
     rollback: bool,
 ) -> anyhow::Result<crate::session_start::SessionStartReceipt> {
-    adopt_receipt_for_repair(owns, branch, path, contained, rollback, None)
-}
-
-fn adopt_receipt_for_repair(
-    owns: &str,
-    branch: &str,
-    path: &Path,
-    contained: bool,
-    rollback: bool,
-    repair: Option<(&str, u64)>,
-) -> anyhow::Result<crate::session_start::SessionStartReceipt> {
     crate::session_start::session_start_with_receipt(
         owns,
         Some(branch),
@@ -103,11 +92,8 @@ fn adopt_receipt_for_repair(
         /* review_coexistence */ None,
         /* contained_seat */ contained,
         /* rollback_failed_setup */ rollback,
-        repair.map_or(
-            crate::session_start::PathReentry::AdoptOrphan,
-            |(previous, _)| crate::session_start::PathReentry::RetainedRepair(previous),
-        ),
-        repair.map(|(_, pr)| Some((pr, branch.to_owned()))),
+        crate::session_start::PathReentry::AdoptOrphan,
+        None,
         /* done_rework_admitted */ false,
     )
 }
@@ -408,53 +394,7 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             "unrelated-successor"
         )
         .is_err());
-    // trace:BUG-2761 | ai:codex
-    let selected = crate::leases::adoptable_orphan_lease(&fx.main, "TASK-2223").unwrap();
-    let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
-    let repair = guard.retained_for_lease(&selected).unwrap().unwrap();
-    assert_eq!(repair.key.pr, 3813);
-    verify_retained_index(repair, &execute).unwrap();
-    let mut mismatch = repair.clone();
-    mismatch.original_conflict_paths = vec!["elsewhere".into()];
-    assert!(verify_retained_index(&mismatch, &execute).is_err());
-    let mut mismatch = repair.clone();
-    mismatch.key.original_head = base.clone();
-    assert!(verify_retained_index(&mismatch, &execute).is_err());
-    drop(guard);
-    if bwrap_live {
-        assert_eq!(
-            retained_repair_for_pickup(&fx.main, "TASK-2223", Some(3813))
-                .unwrap()
-                .unwrap()
-                .id,
-            orphan.id
-        );
-    }
-    assert!(verified_retained_repair(&fx.main, &selected, Some(3814)).is_err());
-    // Make the PR branch visible to the fixture host's open-change preflight.
-    if bwrap_live {
-        execute(&[
-            "-c",
-            "maintenance.auto=false",
-            "-c",
-            "gc.auto=0",
-            "push",
-            "origin",
-            &orphan.branch,
-        ])
-        .unwrap();
-    }
-    let adopt_repair = |rollback| {
-        adopt_receipt_for_repair(
-            "TASK-2223",
-            &orphan.branch,
-            tree,
-            true,
-            rollback,
-            bwrap_live.then_some((orphan.id.as_str(), 3813)),
-        )
-    };
-    let receipt = adopt_repair(true).unwrap();
+    let receipt = adopt_receipt("TASK-2223", &orphan.branch, tree, true, true).unwrap();
     let failed_successor = lease_for(&fx.main, "TASK-2223");
     assert_ne!(failed_successor.id, orphan.id);
     let failure = prepare_host_repair_with(
@@ -485,7 +425,7 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
     assert_eq!(entry.original_conflict_paths, ["README.md"]);
     drop(journal);
     assert!(!crate::lease_path(&fx.main, &failed_successor.id).exists());
-    adopt_repair(false).unwrap().disarm();
+    adopt("TASK-2223", &orphan.branch, tree).unwrap();
     let successor = lease_for(&fx.main, "TASK-2223");
     assert_ne!(successor.id, orphan.id);
     let resume = |lane: &str| {
@@ -519,26 +459,6 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
     // Resume admission is not exact-tree publication evidence. Publication
     // must regenerate and record its own staged tree even after this recovery.
     assert!(entry.require_regenerated_tree(&"c".repeat(40)).is_err());
-    // The successor finishes the same two-parent merge, including when every
-    // conflict path has moved from the unmerged index to resolve-undo.
-    std::fs::write(tree.join("README.md"), "resolved\n").unwrap();
-    execute(&["add", "README.md"]).unwrap();
-    verify_retained_index(entry, &execute).unwrap();
-    drop(journal);
-    execute(&[
-        "-c",
-        "maintenance.auto=false",
-        "-c",
-        "gc.auto=0",
-        "commit",
-        "-qm",
-        "finish repair",
-    ])
-    .unwrap();
-    assert_eq!(
-        execute(&["show", "-s", "--format=%P"]).unwrap(),
-        format!("{head} {base}")
-    );
 }
 
 /// Binding 5b: a lease whose owner is alive is never adopted.

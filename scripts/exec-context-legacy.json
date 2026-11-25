@@ -1,5 +1,5 @@
 {
-  "ceiling": 1197,
+  "ceiling": 1196,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -829,7 +829,6 @@
     "aida-cli/tests/story_1662_bg_lane_identity.rs:aida:var_os:dd727c4b59933866a12a": 1,
     "aida-cli/tests/story_1662_bg_lane_identity.rs:run_guard:var_os:dd727c4b59933866a12a": 1,
     "aida-cli/tests/story_1662_bg_lane_identity.rs:run_hook_as:var_os:dd727c4b59933866a12a": 1,
-    "aida-cli/tests/story_1662_queue_work_wiring.rs:aida:var_os:dd727c4b59933866a12a": 1,
     "aida-cli/tests/story_1742_transport_profile.rs:command:vars_os:75150cae389e9785b8ff": 1,
     "aida-cli/tests/story_1742_transport_profile.rs:credentialed_pinned_push_authenticates_without_exposing_or_redirecting_the_endpoint:var:c2c7e032717fc5d2fa3f": 1,
     "aida-cli/tests/story_1843_relay_mail.rs:env:vars:f70dd45d927f4e763f69": 1,

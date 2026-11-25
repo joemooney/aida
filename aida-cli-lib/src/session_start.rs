@@ -1003,7 +1003,7 @@ pub(crate) enum PathReentry<'a> {
     /// claim, and refuses when the path is not an adoptable orphan's.
     AdoptOrphan,
     // trace:BUG-2761 | ai:codex
-    RetainedRepair(&'a str),
+    RetainedRepair(&'a crate::repair_journal::RepairEntry),
     /// TASK-2823: a lane launch naming `--branch` re-enters a linked worktree
     /// that already has that branch checked out (git refuses a second
     /// checkout of it) when no session's lease records that tree.
@@ -2386,22 +2386,20 @@ pub(crate) fn session_start_with_receipt(
     };
     // Recheck queue-selected repair evidence at setup, before replacing its lease.
     // trace:BUG-2761 | ai:codex
-    let retained_entry = if let PathReentry::RetainedRepair(previous) = path_reentry {
+    let retained_entry = if let PathReentry::RetainedRepair(entry) = path_reentry {
         let orphan = adopted_orphan
             .as_ref()
-            .context("retained repair lease disappeared; inspect session leases")?;
+            .context("retained repair lease disappeared")?;
         anyhow::ensure!(
-            clone_reentry && orphan.id == previous,
-            "retained repair ownership changed before pickup; inspect session leases"
+            clone_reentry
+                && orphan.id == entry.lane_id
+                && orphan.worktree_path == entry.tree_path
+                && orphan.branch == entry.branch
+                && verified_pickup_pr.as_ref().map(|(pr, _)| *pr) == Some(entry.key.pr),
+            "retained repair lease or PR changed; inspect the journal"
         );
-        Some(
-            crate::seat_clone::verified_retained_repair(
-                &project_root,
-                orphan,
-                verified_pickup_pr.as_ref().map(|(pr, _)| *pr),
-            )?
-            .context("retained repair reservation disappeared; inspect the repair journal")?,
-        )
+        crate::seat_clone::verify_retained_repair(&project_root, orphan, entry)?;
+        Some(entry)
     } else {
         None
     };
@@ -2682,7 +2680,7 @@ pub(crate) fn session_start_with_receipt(
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
-        let repair = retained_entry.as_ref().map(|entry| {
+        let repair = retained_entry.map(|entry| {
             let previous = rollback
                 .as_mut()
                 .map(|cleanup| &mut cleanup.previous_claim)
@@ -3781,7 +3779,7 @@ pub(crate) fn session_start_with_receipt(
         // original lease. The shared journal remains independent of watcher state.
         // trace:STORY-2710 | ai:codex
         let mut journal = crate::repair_journal::RepairGuard::lock(&project_root)?;
-        if let Some(expected) = &retained_entry {
+        if let Some(expected) = retained_entry {
             anyhow::ensure!(
                 journal.retained_for_lease(orphan)? == Some(expected),
                 "retained repair reservation changed during pickup; inspect the repair journal"

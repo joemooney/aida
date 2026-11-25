@@ -17,16 +17,21 @@ use std::process::Command;
 mod support;
 
 fn aida(repo: &Path, home: &Path, bin_dir: &Path) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+    fixture_command(env!("CARGO_BIN_EXE_aida"), repo, home, bin_dir)
+}
+
+fn fixture_command(program: &str, repo: &Path, home: &Path, bin_dir: &Path) -> Command {
+    let mut cmd = Command::new(program);
     cmd.current_dir(repo);
     cmd.env("HOME", home);
     cmd.env("AIDA_HOME", home);
     cmd.env("AIDA_TELEMETRY", "0");
     cmd.env_remove("AIDA_OS_WRAP");
     cmd.env_remove("AIDA_CONTAINED");
+    let environment = aida_core::exec_context::Environment::capture();
     let path = std::env::join_paths(
         std::iter::once(bin_dir.to_path_buf())
-            .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+            .chain(std::env::split_paths(environment.get("PATH").unwrap())),
     )
     .unwrap();
     cmd.env("PATH", path);
@@ -405,236 +410,18 @@ fn live_legacy_slot_refuses_before_setup() {
 
 // trace:BUG-2761.AC1 BUG-2761.AC2 | ai:codex
 #[test]
-fn bug_2761_queue_rework_finishes_punted_merge_on_advanced_base() {
-    dispatch_retained_merge(false);
-}
-
-#[test]
-fn bug_2761_queue_rework_retains_merge_when_abort_refuses() {
-    dispatch_retained_merge(true);
-}
-
-// trace:BUG-2761.AC1 BUG-2761.AC2 | ai:codex
-fn dispatch_retained_merge(obstruct_abort: bool) {
-    use std::fs::{read, read_to_string, write};
-    use std::os::unix::fs::PermissionsExt;
+fn bug_2761_dispatch_retained_repair() {
     let fx = fixture("exit 99", "");
-    std::fs::remove_file(fx.bin.join("bwrap")).unwrap(); // real host repair sandbox
-    let codex_home = fx.home.join(".codex");
-    std::fs::create_dir_all(&codex_home).unwrap();
-    std::fs::write(codex_home.join("config.toml"), "sandbox_mode='workspace-write'\napproval_policy='never'\n[sandbox_workspace_write]\nnetwork_access=true\nwritable_roots=[]\n").unwrap();
-    let policy = "store_path='.aida-store'\n[agents]\nvendor='codex'\nenabled=['codex']\n[contained]\nenable=true\nseat_tree='clone'\n[contained.vendors]\ncodex='native'\n[doctor.disk_headroom]\nmin_free_gib=1\n[forge]\nprovider=\"github\"\n[validation]\nfast_check='true'\nrepair_check='true'\n";
-    std::fs::write(fx.repo.join(".aida/config.toml"), policy).unwrap();
-    std::fs::write(fx.repo.join("conflict"), "seed\n").unwrap();
-    git(&fx.repo, &["add", "-f", ".aida/config.toml", "conflict"]);
-    git(&fx.repo, &["commit", "-qm", "policy"]);
-    let origin = fx.base.join("origin.git");
-    git(
-        &fx.repo,
-        &["clone", "--bare", ".", origin.to_str().unwrap()],
-    );
-    git(
-        &fx.repo,
-        &["remote", "add", "origin", origin.to_str().unwrap()],
-    );
-    let branch = fx.spec.to_lowercase();
-    git(&fx.repo, &["checkout", "-qb", &branch]);
-    std::fs::write(fx.repo.join("conflict"), "feature\n").unwrap();
-    let feature = format!("feature (Refs {})", fx.spec);
-    git(&fx.repo, &["commit", "-qam", &feature]);
-    git(&fx.repo, &["push", "origin", &branch]);
-    let head = git(&fx.repo, &["rev-parse", "HEAD"]);
-    git(&fx.repo, &["checkout", "-q", "main"]);
-    std::fs::write(fx.repo.join("conflict"), "main\n").unwrap();
-    std::fs::write(fx.repo.join("base-only"), "from main\n").unwrap();
-    git(&fx.repo, &["add", "base-only"]);
-    git(&fx.repo, &["commit", "-qam", "conflict"]);
-    git(&fx.repo, &["push", "origin", "main"]);
-    git(&fx.repo, &["remote", "set-head", "origin", "main"]);
-    let pr = serde_json::json!({"number":7,"state":"OPEN","isCrossRepository":false,"body":"","headRefOid":"REMOTE_HEAD","baseRefName":"main","headRefName":branch,
-        "title":format!("repair ({})", fx.spec),"url":"https://github.com/example/test/pull/7"});
-    std::fs::write(
-        fx.bin.join("gh"),
-        format!(
-            r#"#!/bin/sh
-set -eu
-case "$*" in
-    *'--state merged'*) data='[]' ;;
-    *'pr list'*) data='[{pr}]' ;;
-    *'pr view'*) data='{pr}' ;;
-    *'pr edit'*) exit 0 ;;
-    *) exit 1 ;;
-esac
-tip=$(git --git-dir='{origin}' rev-parse 'refs/heads/{branch}')
-data=$(echo "$data" | sed "s/REMOTE_HEAD/$tip/g")
-while [ "$#" -gt 1 ]; do
-    case "$1" in -q|--jq) echo "$data" | jq -r "$2"; exit ;; esac
-    shift
-done
-echo "$data"
-"#,
-            origin = origin.display()
-        ),
-    )
-    .unwrap();
-    let cli = env!("CARGO_BIN_EXE_aida");
-    let vendor = fx.bin.join("codex");
-    let marker = fx.base.join("first-seat");
-    std::fs::write(
-        &vendor,
-        format!(
-            r#"#!/bin/sh
-set -eu
-case " $* " in
-*" sandbox "*) while [ "$1" != -- ]; do shift; done; shift; exec "$@" ;;
-*" --version "*) echo 'codex fixture'; exit ;;
-*"FIRST TASK"*) ;;
-*) exit 81 ;;
-esac
-if [ ! -f '{marker}' ]; then
-    pwd -P > '{marker}'
-    echo 'old resolution' > conflict
-    exec '{cli}' punt '{spec}' --category design-fork --reason 'review resolution'
-fi
-test "$(pwd -P)" = "$(cat '{marker}')" || exit 82
-echo resolved > conflict
-exec '{cli}' ship -m '[AI:codex] fix: repair (Refs {spec})'
-"#,
-            marker = marker.display(),
-            spec = fx.spec
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&vendor, std::fs::Permissions::from_mode(0o755)).unwrap();
     let grant = support::grant_seat(&fx.home, &fx.repo, "advisor", &["implementer"]);
-    let dispatch = |args: &[&str]| {
-        aida(&fx.repo, &fx.home, &fx.bin)
-            .env("AIDA_SESSION_ROLE", "advisor")
-            .env("AIDA_SESSION_GRANT", &grant)
-            .env("AIDA_AGENT_CMD", &vendor)
-            .env("CODEX_HOME", &codex_home)
-            .env("AIDA_TEST_GH_BINARY", fx.bin.join("gh"))
-            .args(args)
-            .output()
-            .unwrap()
-    };
-    let start = dispatch(&["queue", "add", &fx.spec, "--for", "implementer"]);
-    assert!(start.status.success(), "{start:?}");
-    let first = dispatch(&[
-        "queue",
-        "work",
-        &fx.spec,
-        "--role",
-        "implementer",
-        "--no-human",
-        "--no-pull",
-    ]);
-    assert_eq!(first.status.code(), Some(32), "{first:?}");
-    let triaged = dispatch(&[
-        "queue",
-        "rework",
-        &fx.spec,
-        "--reason",
-        "reviewed resolution",
-    ]);
-    assert!(triaged.status.success(), "{triaged:?}");
-    let journal_path = fx.repo.join(".aida/repair-journal.json");
-    let journal = read(&journal_path).unwrap();
-    let entry: serde_json::Value = serde_json::from_slice(&journal).unwrap();
-    let predecessor = entry["entries"][0]["lane_id"].as_str().unwrap();
-    let lease = fx.repo.join(format!(".aida/sessions/{predecessor}.toml"));
-    let store = fx.repo.join(".aida-store");
-    let shared = store.join(git(&store, &["ls-files", "coordination/leases/*.toml"]).trim());
-    let prior_claim = read(&shared).unwrap();
-    let pickup = |mode| dispatch(&["queue", "work", &fx.spec, "--role=implementer", mode]);
-    for mode in ["--no-launch", "--plan-only", "--guided"] {
-        let preview = pickup(mode);
-        assert!(preview.status.success() && lease.is_file(), "{preview:?}");
-        assert_eq!(read(&journal_path).unwrap(), journal);
-        assert!(
-            String::from_utf8_lossy(&preview.stdout).contains("retained repair available"),
-            "{preview:?}"
-        );
-    }
-    git(
-        &fx.repo,
-        &["commit", "--allow-empty", "-qm", "unrelated advance"],
-    );
-    git(&fx.repo, &["push", "origin", "main"]);
-    let base = git(&fx.repo, &["rev-parse", "HEAD"]);
-    let seat = PathBuf::from(read_to_string(&marker).unwrap().trim_end());
-    let retained_base = git(&seat, &["rev-parse", "MERGE_HEAD"]);
-    let staged = git(&seat, &["ls-files", "--stage"]);
-    if obstruct_abort {
-        write(seat.join("base-only"), "operator edit\n").unwrap();
-        let record = fx
-            .repo
-            .join(format!(".aida/lanes/headless-{predecessor}.json"));
-        let bytes = read(&record).unwrap();
-        let mut evidence: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        evidence["claim"]["claim_id"] = "unrelated".into();
-        write(&record, evidence.to_string()).unwrap();
-        let refusal = pickup("--no-pull");
-        assert!(
-            !refusal.status.success() && format!("{refusal:?}").contains("exit evidence"),
-            "{refusal:?}"
-        );
-        assert_eq!(read(&shared).unwrap(), prior_claim);
-        write(record, bytes).unwrap();
-    }
-    let retry = dispatch(&[
-        "queue",
-        "rework",
-        &fx.spec,
-        "--work",
-        "--no-pull",
-        "--reason",
-        "resume repair",
-    ]);
-    if obstruct_abort {
-        assert!(!retry.status.success(), "{retry:?}");
-        assert!(lease.is_file());
-        assert_eq!(read(&shared).unwrap(), prior_claim);
-        assert_eq!(read(&journal_path).unwrap(), journal);
-        assert!(
-            format!("{retry:?}").contains("resume needs operator"),
-            "{retry:?}"
-        );
-        assert_eq!(git(&seat, &["rev-parse", "MERGE_HEAD"]), retained_base);
-        assert_eq!(git(&seat, &["ls-files", "--stage"]), staged);
-        assert_eq!(git(&origin, &["rev-parse", &branch]), head);
-        for (path, expected) in [
-            ("base-only", "operator edit\n"),
-            ("conflict", "old resolution\n"),
-        ] {
-            assert_eq!(read_to_string(seat.join(path)).unwrap(), expected);
-        }
-        let salvage = fx
-            .repo
-            .join(".aida/salvage")
-            .join(seat.file_name().unwrap());
-        let staged_patch = std::fs::read_dir(salvage)
-            .unwrap()
-            .flatten()
-            .map(|entry| entry.path())
-            .find(|path| path.to_string_lossy().ends_with(".index.patch"))
-            .unwrap();
-        let working_patch = staged_patch.with_extension("").with_extension("patch");
-        for (patch, edit) in [
-            (working_patch, "+operator edit"),
-            (staged_patch, "+from main"),
-        ] {
-            assert!(read_to_string(patch).unwrap().contains(edit));
-        }
-        return;
-    }
-    assert!(retry.status.success(), "{retry:?}");
-    assert_eq!(
-        git(&origin, &["show", "-s", "--format=%P", &branch]).trim(),
-        format!("{} {}", head.trim(), base.trim())
-    );
-    assert_eq!(
-        git(&origin, &["show", &format!("{branch}:conflict")]),
-        "resolved\n"
-    );
+    let result = fixture_command("bash", &fx.repo, &fx.home, &fx.bin)
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/support/retained_repair.sh"
+        ))
+        .args([env!("CARGO_BIN_EXE_aida"), &fx.spec])
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", grant)
+        .status()
+        .unwrap();
+    assert!(result.success(), "repair dispatch fixture exited {result}");
 }

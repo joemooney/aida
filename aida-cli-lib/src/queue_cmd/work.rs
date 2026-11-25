@@ -4678,12 +4678,17 @@ pub(crate) fn handle_queue_work(
         // requested an interactive session. Select it before unattended admission.
         // trace:BUG-2761 | ai:codex
         let mut repair_dispatch = None;
-        if !list_sessions && plan.review_target.is_none() && plan.entries.len() == 1 {
+        if !list_sessions
+            && plan.review_target.is_none()
+            && plan.entries.len() == 1
+            && (plan.scope.eq_ignore_ascii_case(&plan.entries[0].spec_id)
+                || plan.scope.eq_ignore_ascii_case(&plan.anchor_display))
+        {
             let root = find_main_worktree_root()?;
             if let Some(lease) = crate::leases::adoptable_orphan_lease(&root, &plan.scope) {
-                if crate::repair_journal::RepairGuard::lock(&root)?
+                if let Some(entry) = crate::repair_journal::RepairGuard::lock(&root)?
                     .retained_for_lease(&lease)?
-                    .is_some()
+                    .cloned()
                 {
                     if no_launch || plan_only || guided || role != "implementer" {
                         println!(
@@ -4692,7 +4697,7 @@ pub(crate) fn handle_queue_work(
                         );
                         return Ok(());
                     }
-                    repair_dispatch = Some(lease.id);
+                    repair_dispatch = Some((lease, entry));
                 }
             }
         }
@@ -4977,33 +4982,14 @@ pub(crate) fn handle_queue_work(
         // A cold dispatch can resume a host-staged repair even when the vendor
         // has no conversation to resume. Keep ordinary orphan pickup explicit.
         // trace:BUG-2761 | ai:codex
-        let retained = if !list_sessions
-            && role == "implementer"
-            && plan.entries.len() == 1
-            && (plan.scope.eq_ignore_ascii_case(&plan.entries[0].spec_id)
-                || plan.scope.eq_ignore_ascii_case(&plan.anchor_display))
-            && (adopt_orphan.is_some() || rework_pr.is_some())
-        {
-            crate::seat_clone::retained_repair_for_pickup(
-                &project_root,
-                &plan.scope,
-                rework_pr.as_ref().map(|(pr, _)| *pr),
-            )?
-        } else {
-            None
-        };
-        anyhow::ensure!(
-            repair_dispatch.as_ref() == retained.as_ref().map(|lease| &lease.id),
-            "retained repair changed during dispatch or has no matching open PR; retry pickup"
-        );
         if repair_dispatch.is_some() {
             anyhow::ensure!(
                 crate::vendors::headless::host_publishes_implementer(launch_vendor, contained),
                 "retained repair requires a supervised host-published implementer launch"
             );
         }
-        let retained_id = retained.as_ref().map(|lease| lease.id.clone());
-        let adopt_orphan = retained.or(adopt_orphan);
+        let (retained_lease, retained_entry) = repair_dispatch.unzip();
+        let adopt_orphan = retained_lease.or(adopt_orphan);
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
         // trace:BUG-2549 | ai:codex
         let canonical_resume = canonical_resume_branch(
@@ -6331,7 +6317,7 @@ pub(crate) fn handle_queue_work(
                 // BUG-2223: re-enter the orphan's tree in place. Session start
                 // re-checks it and bypasses nothing else: a live claim on the
                 // scope still refuses. trace:BUG-2223 | ai:claude
-                if let Some(previous) = &retained_id {
+                if let Some(previous) = &retained_entry {
                     crate::session_start::PathReentry::RetainedRepair(previous)
                 } else if adopt_orphan.is_some() {
                     crate::session_start::PathReentry::AdoptOrphan
@@ -6385,21 +6371,11 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &lease.worktree_path,
                         branch,
-                        retained_id.is_some() || matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        retained_entry.is_some()
+                            || matches!(launch, Some(QueueWorkLaunch::Resume(_))),
                         *pr,
                         &lease.id,
                     );
-                    if let Some(name) = lease
-                        .worktree_path
-                        .file_name()
-                        .filter(|_| retained_id.is_some())
-                    {
-                        let salvage = project_root.join(".aida/salvage").join(name);
-                        prompt.push_str(&format!(
-                            "\nIf the base advanced, consult the previous resolution patch in {}.",
-                            salvage.display()
-                        ));
-                    }
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
                         files,

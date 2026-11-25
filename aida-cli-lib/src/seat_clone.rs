@@ -3907,41 +3907,14 @@ fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -
 }
 
 // trace:BUG-2761 | ai:codex
-pub(crate) fn retained_repair_for_pickup(
-    main: &Path,
-    scope: &str,
-    pr: Option<u64>,
-) -> Result<Option<crate::SessionLease>> {
-    let Some(lease) = crate::leases::adoptable_orphan_lease(main, scope) else {
-        return Ok(None);
-    };
-    if lease.tree_kind != TreeKind::Clone || verified_retained_repair(main, &lease, pr)?.is_none() {
-        return Ok(None);
-    }
-    Ok(Some(lease))
-}
-
-// trace:BUG-2761 | ai:codex
-pub(crate) fn verified_retained_repair(
+pub(crate) fn verify_retained_repair(
     main: &Path,
     lease: &crate::SessionLease,
-    pr: Option<u64>,
-) -> Result<Option<crate::repair_journal::RepairEntry>> {
-    let entry = crate::repair_journal::RepairGuard::lock(main)?
-        .retained_for_lease(lease)?
-        .cloned();
-    let Some(entry) = entry else {
-        // An orphan with an unfinished merge cannot fall back to ordinary
-        // adoption merely because the reservation was removed or moved.
-        return match lease.worktree_path.join(".git/MERGE_HEAD").symlink_metadata() {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e).context("cannot inspect retained merge; inspect session leases"),
-            Ok(_) => anyhow::bail!("retained merge has no matching repair reservation; preserve the seat and inspect the repair journal"),
-        };
-    };
+    entry: &crate::repair_journal::RepairEntry,
+) -> Result<()> {
     anyhow::ensure!(
-        pr == Some(entry.key.pr) && host_recorded_clone(main, &lease.worktree_path).is_some(),
-        "retained repair PR or private clone differs; inspect the repair journal and session leases"
+        host_recorded_clone(main, &lease.worktree_path).is_some(),
+        "unrecognized repair clone"
     );
     let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
     anyhow::ensure!(
@@ -3959,44 +3932,44 @@ pub(crate) fn verified_retained_repair(
                 && other.scope == lease.scope),
         "retained repair lease ownership changed or is ambiguous; inspect session leases"
     );
-    verify_retained_index(&entry, |args| {
-        let args: Vec<_> = args.iter().map(std::ffi::OsStr::new).collect();
-        let bytes = run_sandboxed(&lease.worktree_path, main, "git", &args, PROBE_OUTPUT_CAP)
-            .map_err(|why| anyhow::anyhow!("{why}"))?;
-        Ok(String::from_utf8(bytes)?)
-    })
-    .context("retained repair differs from journal; preserve the seat and inspect its merge and conflict paths")?;
-    Ok(Some(entry))
-}
-
-// Resolved paths leave the unmerged stages but remain in Git's resolve-undo
-// extension. Compare their union so partially staged repairs keep their work.
-// trace:BUG-2761 | ai:codex
-fn verify_retained_index(
-    entry: &crate::repair_journal::RepairEntry,
-    execute: impl Fn(&[&str]) -> Result<String>,
-) -> Result<()> {
+    let branch = rework_base_branch(main, entry.key.pr, &entry.branch)?;
+    let (base, head) = fetch_rework_heads(main, &branch, &entry.branch)?;
+    anyhow::ensure!(base == entry.base, "base moved: needs a fresh repair round");
     anyhow::ensure!(
-        execute(&["symbolic-ref", "--short", "HEAD"])?.trim_end_matches('\n') == entry.branch
-            && execute(&["rev-parse", "--verify", "HEAD"])?.trim_end_matches('\n')
-                == entry.key.original_head
-            && execute(&["rev-parse", "--verify", "MERGE_HEAD"])?.trim_end_matches('\n')
-                == entry.base,
-        "repair branch, original head or merge base changed"
+        head == entry.key.original_head,
+        "retained repair PR head changed"
     );
+    // After git add the conflict moves from unmerged stages to resolve-undo.
+    // Keep the two NUL-delimited listings in one read-only sandbox.
+    let script = r#"set -eu
+test "$(git symbolic-ref HEAD)" = "refs/heads/$1"
+test "$(git rev-parse --verify HEAD)" = "$2"
+test "$(git rev-parse --verify MERGE_HEAD)" = "$3"
+git ls-files --unmerged -z
+git ls-files --resolve-undo -z"#;
+    let args = ["-c", script, "verify-repair", &entry.branch, &head, &base];
+    let rows = run_sandboxed(
+        &lease.worktree_path,
+        main,
+        "sh",
+        &args.map(std::ffi::OsStr::new),
+        PROBE_OUTPUT_CAP,
+    )
+    .map_err(|why| {
+        anyhow::anyhow!(
+            "cannot verify retained repair; inspect its branch and merge parents: {why}"
+        )
+    })?;
     let mut paths = std::collections::BTreeSet::new();
-    for mode in ["--unmerged", "--resolve-undo"] {
-        let rows = execute(&["ls-files", mode, "-z"])?;
-        for row in rows.split_terminator('\0') {
-            let (_, path) = row.split_once('\t').context("invalid index stage record")?;
-            paths.insert(path.to_owned());
-        }
+    for row in std::str::from_utf8(&rows)?.split_terminator('\0') {
+        let (_, path) = row.split_once('\t').context("invalid index stage record")?;
+        paths.insert(path.to_owned());
     }
     anyhow::ensure!(
         !paths.is_empty()
             && paths.len() == entry.original_conflict_paths.len()
             && paths == entry.original_conflict_paths.iter().cloned().collect(),
-        "repair conflict paths changed"
+        "repair conflict paths changed; preserve the seat and inspect its journal"
     );
     Ok(())
 }
@@ -4021,80 +3994,33 @@ fn prepare_host_repair_with(
         "rework branch changed"
     );
     let (base, pr_head) = fetch_heads()?;
-    let mut superseded = None;
     if execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
         let head = execute(&["rev-parse", "HEAD"])?;
         let merge = execute(&["rev-parse", "MERGE_HEAD"])?;
         let guard = RepairGuard::lock(main)?;
         let entry = guard.for_tree(tree, branch, &head, &merge)?;
         anyhow::ensure!(
-            resume
-                && entry.lane_id == lane_id
-                && entry.key.pr == pr
-                && pr_head == head,
-            "pending repair lane, PR or PR head changed; preserve the clone and inspect the current PR head before retrying"
+            resume && entry.lane_id == lane_id && entry.key.pr == pr && pr_head == head,
+            "pending repair belongs to a different lane, PR or head"
         );
-        if merge != base {
-            let previous = entry.clone();
-            drop(guard);
-            verify_retained_index(&previous, execute)
-                .context("retained repair index changed; preserve the clone before retrying")?;
-            execute(&["merge-base", "--is-ancestor", &merge, &base]).with_context(|| format!(
-                "cannot prove fetched base {base} descends from retained base {merge}; preserve the merge and inspect the PR base history before retrying"
-            ))?;
-            let patch = salvage(main, tree)
-                .context("cannot preserve the old resolution; merge retained")?;
-            // A partly staged resolution can differ from both HEAD and the
-            // working tree. Preserve its stage-zero version independently.
-            let args = [
-                "diff",
-                "--cached",
-                "--binary",
-                "--no-ext-diff",
-                "--no-textconv",
-                "HEAD",
-            ];
-            let args: Vec<_> = args.iter().map(std::ffi::OsStr::new).collect();
-            let index = run_sandboxed(tree, main, "git", &args, SALVAGE_OUTPUT_CAP)
-                .map_err(|why| anyhow::anyhow!("cannot preserve staged resolution: {why}"))?;
-            std::fs::write(patch.with_extension("index.patch"), index)
-                .context("cannot save staged resolution; merge retained")?;
-            eprintln!(
-                "Previous resolution saved for reference at {}",
-                patch.display()
-            );
-            // Salvage can take time. Revalidate ownership under the journal
-            // lock before changing the index or MERGE_HEAD.
-            let guard = RepairGuard::lock(main)?;
-            anyhow::ensure!(
-                guard.for_tree(tree, branch, &head, &merge)? == &previous,
-                "resume needs operator: repair ownership changed during salvage; merge retained"
-            );
-            verify_retained_index(&previous, execute)?;
-            execute(&["merge", "--abort"]).with_context(|| format!(
-                "resume needs operator: could not abort the retained merge in {}; inspect the working-tree patch {} and staged patch {} before retrying",
-                tree.display(), patch.display(), patch.with_extension("index.patch").display()
-            ))?;
-            superseded = Some((previous, patch));
-        } else {
-            let paths = entry.original_conflict_paths.clone();
-            let key = entry.key.clone();
-            let prepared = entry.preparation_success == Some(true);
-            let failed_generation = entry.regeneration_success == Some(false);
-            drop(guard);
-            if !prepared || failed_generation {
-                RepairGuard::lock(main)?.record_preparation(&key, false)?;
-                regenerate(&merge, !failed_generation)?;
-                RepairGuard::lock(main)?.record_preparation(&key, true)?;
-                if failed_generation {
-                    RepairGuard::lock(main)?.record_regeneration(&key, true)?;
-                }
+        anyhow::ensure!(merge == base, "base moved: needs a fresh repair round");
+        let paths = entry.original_conflict_paths.clone();
+        let key = entry.key.clone();
+        let prepared = entry.preparation_success == Some(true);
+        let failed_generation = entry.regeneration_success == Some(false);
+        drop(guard);
+        if !prepared || failed_generation {
+            RepairGuard::lock(main)?.record_preparation(&key, false)?;
+            regenerate(&merge, !failed_generation)?;
+            RepairGuard::lock(main)?.record_preparation(&key, true)?;
+            if failed_generation {
+                RepairGuard::lock(main)?.record_regeneration(&key, true)?;
             }
-            RepairGuard::lock(main)?
-                .for_tree(tree, branch, &head, &merge)?
-                .require_prepared()?;
-            return Ok(paths);
         }
+        RepairGuard::lock(main)?
+            .for_tree(tree, branch, &head, &merge)?
+            .require_prepared()?;
+        return Ok(paths);
     }
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
     anyhow::ensure!(
@@ -4106,7 +4032,7 @@ fn prepare_host_repair_with(
     } else {
         "seated rework branch is behind the PR head; retry pickup with its current head"
     })?;
-    if dirty && superseded.is_none() {
+    if dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base])
             .context("could not prove clean merge for dirty resume; edits preserved")?;
         return Ok(vec![]);
@@ -4134,7 +4060,8 @@ fn prepare_host_repair_with(
             before == pr_head,
             "repair requires the exact original PR head; local commits preserved"
         );
-        let next = RepairEntry {
+        let mut journal = RepairGuard::lock(main)?;
+        journal.reserve(RepairEntry {
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: chrono::Utc::now().to_rfc3339(),
@@ -4149,13 +4076,7 @@ fn prepare_host_repair_with(
             preparation_success: None,
             validation: None,
             refusal_notice: None,
-        };
-        let mut journal = RepairGuard::lock(main)?;
-        if let Some((entry, patch)) = superseded {
-            journal.supersede_base(&entry, &patch, Some(next))?;
-        } else {
-            journal.reserve(next)?;
-        }
+        })?;
         drop(journal);
         match execute(&["merge", "--no-edit", "--no-verify", &base]) {
             Ok(_) => {
@@ -4184,9 +4105,6 @@ fn prepare_host_repair_with(
             }
         }
     } else {
-        if let Some((entry, patch)) = superseded {
-            RepairGuard::lock(main)?.supersede_base(&entry, &patch, None)?;
-        }
         // Keep the prepared merge local until ship publishes the fix.
         // trace:BUG-2726 | ai:codex
         execute(&["merge", "--no-edit", "--no-verify", &base])?;
