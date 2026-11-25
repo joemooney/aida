@@ -54,6 +54,17 @@ class ContainedHostShutdownTests(unittest.TestCase):
                 self.assertIn('notification-shutdown-ok', result.stdout)
 
 
+class ContainedHostPreflightTests(unittest.TestCase):
+    # trace:BUG-2717 | ai:codex
+    def test_notification_listener_before_exec(self):
+        for mode in ('open', 'hangup', 'exit-hangup', 'withdrawn'):
+            with self.subTest(mode=mode):
+                result = subprocess.run(
+                    [sys.executable, '-m', 'tests.test_store_mutation', '--preflight-helper', mode],
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class StoreMutationTests(unittest.TestCase):
     def setUp(self):
         self.identity = Identity()
@@ -750,6 +761,96 @@ while True:
             self.assertEqual(len(self.service.accepted), 1)
 
 
+def preflight_helper(mode):
+    """Exercise the production preflight through its exec release, after privileged setup."""
+    import contextlib
+    import ctypes as C
+    import errno
+
+    tree = ast.parse((SOURCE / 'containment/contained_host.py').read_text())
+    host = next(node for node in tree.body if getattr(node, 'name', '') == 'host_contained')
+    body = next(node.body for node in host.body if isinstance(node, ast.Try))
+    start = next(i for i, node in enumerate(body) if isinstance(node, ast.While)
+                 and 'preflight did not complete' in ast.unparse(node))
+    end = next(i for i, node in enumerate(body) if ast.unparse(node) == "broker.send(b'exec-v1')")
+    code = compile(ast.Module(body=body[start:end + 1], type_ignores=[]), 'host-preflight', 'exec')
+    with contextlib.ExitStack() as stack:
+        def pair():
+            return tuple(stack.enter_context(s) for s in socket.socketpair(
+                socket.AF_UNIX, socket.SOCK_SEQPACKET))
+
+        notification, sender = pair()
+        broker, shim = pair()
+        proxy, _ = pair()
+        broker.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        shim.send(b'preflight-v1')
+        if mode in ('hangup', 'exit-hangup'):
+            sender.close()
+        else:
+            sender.send(b'N')
+
+        entered = threading.Event()
+
+        request = ns['Notification']()
+        request.id = 41
+        request.data.arch = 0xc000003e
+        request.data.nr = 42
+        # A zero-length sockaddr gets a denial without accessing tracee memory.
+        def listener_ioctl(fd, operation, pointer):
+            if operation.value == ns['RECV']:
+                assert not entered.is_set(), 'broker attempted a second notification receive'
+                entered.set()
+                assert os.read(fd, 1) == b'N'
+                if mode == 'withdrawn':
+                    # Last task exits after readiness and before RECV dequeues.
+                    sender.close()
+                    threading.Event().wait()
+                C.memmove(pointer, C.byref(request), C.sizeof(request))
+            else:
+                assert operation.value == ns['SEND']
+                assert fd == notification.fileno()
+                response = C.cast(pointer, C.POINTER(ns['Response'])).contents
+                assert (response.id, response.error, response.flags) == (request.id, -errno.EACCES, 0)
+                os.write(fd, b'R')
+            return 0
+
+        stack.enter_context(patch.object(ns['LIBC'], 'ioctl', listener_ioctl))
+
+        receipt_r, receipt_w = os.pipe()
+        acceptance, writer = os.pipe()
+        os.write(writer, b'R')
+        os.close(writer)
+        process = Mock(pid=1)
+        process.poll.return_value = 0 if mode == 'exit-hangup' else None
+        context = dict(ns, notification=notification.fileno(), broker=broker, proxy=proxy,
+                       end=time.monotonic() + 65, process=process,
+                       mutation=None, state_fd=-1, state_prefix=b'', connector=None, port=0,
+                       lane_net=None, lane_user=None,
+                       identity=[line.split() for line in Path('/proc/self/uid_map').read_text().splitlines()],
+                       namespaces={'net': os.readlink('/proc/self/ns/net')}, cfg={'policy_sha': 'fixture'},
+                       receipt_fd=receipt_w, acceptance_fd=acceptance, credential_deadline=lambda: None)
+        if mode == 'open':
+            exec(code, context)
+            assert sender.recv(1) == b'R'
+            assert shim.recv(32) == b'exec-v1'
+        else:
+            try:
+                exec(code, context)
+            except RuntimeError as error:
+                assert 'hung up' in str(error), error
+            else:
+                raise AssertionError('hung-up listener passed preflight')
+            assert mode != 'withdrawn' or entered.is_set()
+            shim.setblocking(False)
+            try:
+                released = shim.recv(32)
+            except BlockingIOError:
+                pass
+            else:
+                raise AssertionError(f'unexpected exec release: {released!r}')
+        os.close(receipt_r)
+
+
 def shutdown_helper(mode):
     """Run the production supervision loop with real readiness/HUP and a lane
     process, without requiring keyrings, namespaces or a vendor. Extract only
@@ -935,6 +1036,9 @@ print('live-store-channel-ok',flush=True)
 
 
 if __name__ == '__main__':
+    if len(sys.argv) == 3 and sys.argv[1] == '--preflight-helper':
+        preflight_helper(sys.argv[2])
+        sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == '--shutdown-helper':
         assert sys.argv[2] in ('hangup', 'notification', 'cancelled')
         shutdown_helper(sys.argv[2])
