@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T11:06:59.190974558Z
+modified_at: 2026-11-25T11:32:47.039347739Z
 req_type: Bug
 tags:
 - lanes
@@ -340,6 +340,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a2127b-1c5e-7983-a453-627459665fe0
+  author: joe
+  timestamp: 2026-11-25T11:33:07.806867043Z
+  session_id: 01a212759929
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
@@ -353,3 +358,11 @@ attention_reason:
   detail: R3 finding 1 asked for a durable refresh before abort. I dispute retaining that refresh under the final R4 ruling and removed the abort and restart. The same-base publication and moved-base preservation regression passed. The draft still adds 413 lines against the 300-line PR limit, including 99 lines of dispatch fixture. Parking for the specified TASK-3895 fallback.
   raised_by: implementer
   raised_at: 2026-11-25T10:50:41.917489611Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Reviewed the full landed diff against pinned main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2761.AC1 FAIL: the recorded-thread retry can strand the successor shared claim, and the R4 base-moved refusal leaves the stated fresh-round fallback unavailable. The new interactive refusal can also strand a fresh repair reservation. BUG-2761.AC2 PASS for the staged-punt cold-dispatch scenario: the fixture asserts the same clone, staged resolution and both published merge parents, with a reported focused pass. It also checks preservation when the base has already moved and report-only behavior in non-launch modes. Exact-head fast gates, fast compile and aggregate build passed. Merge-hold status was pending. No local tests or builds were run per reviewer policy.'
+  recovery_hint: address the review findings, move BUG-2761 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T11:32:47.039347739Z
