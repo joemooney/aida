@@ -78,9 +78,19 @@ def exercise(root, aida):
 
     git("update-ref", "refs/remotes/origin/main", unpublished_base)
     git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
-    result = terminal(*init)
-    assert "policy committed locally but not pushed: run `git push origin main`" in result, result
-    assert "Opt Codex into" not in result, result
+    committed = git("rev-parse", "HEAD")
+    for state in ("clean", "unstaged", "staged"):
+        if state == "unstaged":
+            with config.open("a") as stream:
+                stream.write("\n# unrelated operator edit\n")
+        elif state == "staged":
+            git("add", "--", path)
+        worktree, index = config.read_bytes(), git("show", f":{path}")
+        result = terminal(*init)
+        assert "policy committed locally but not pushed: run `git push origin main`" in result, result
+        assert "Opt Codex into" not in result and "review and commit .aida/config.toml" not in result, result
+        assert config.read_bytes() == worktree and git("show", f":{path}") == index, state
+        assert git("rev-parse", "HEAD") == committed, state
 
     # A valid inline table that the editor declines must not abort role setup.
     config.write_text("contained = {}\n" + re.sub(r"(?ms)^\[contained(?:\.vendors)?\].*?(?=^\[|\Z)", "", config.read_text()))
