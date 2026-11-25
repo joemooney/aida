@@ -14,12 +14,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T02:27:22.798059974Z
+modified_at: 2026-11-25T02:27:25.709200616Z
 req_type: Story
 tags:
 - backlog
 - findings
 - review
+comments:
+- id: 01a21087-818d-7d31-8e29-86b8cb3919c8
+  author: joe
+  content: 'advisor-122 APPROVED HIGH (2026-11-24 19:30). Architecture change: SKETCH FIRST (where findings live, the reviewer/deferral write path, the aida findings read surface, promotion, the migration of the 127 drafts via dry-run -> Joe sign-off -> apply). Slices: S1 record + write path; S2 aida findings + promote; S3 migration; each <=300. Interim: advisor follow-ups are filed as COMMENTS on the parent spec unless it says file a task.'
+  created_at: 2026-11-25T02:27:25.709200616Z
+  modified_at: 2026-11-25T02:27:25.709200616Z
 history:
 - id: 01a21087-762e-7253-a4ae-33628f3dae2c
   author: joe
