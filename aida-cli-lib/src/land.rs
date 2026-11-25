@@ -1708,6 +1708,9 @@ pub(crate) struct Pass {
     pub notes: Vec<String>,
     /// What the pass could not read and so does not show.
     pub warnings: Vec<String>,
+    /// Discovery stopped at the read deadline: changes past it are unknown.
+    /// trace:BUG-2730 | ai:claude
+    pub discovery_cut: bool,
 }
 
 /// The warning for a lease store that could not be read.
@@ -1750,16 +1753,16 @@ pub(crate) fn live_pass_with<T>(
     let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
-    let (changes, github_checks) = match discover_rich(&root, &repo)? {
-        Some(discovered) => discovered,
+    let (changes, github_checks, discovery_cut) = match discover_rich(&root, &repo)? {
+        Some((changes, checks)) => (changes, checks, false),
         None => {
-            let changes = repo.discover_with(&root, |change, row| {
+            let (changes, cut) = repo.discover_with(&root, |change, row| {
                 let title = row["title"]
                     .as_str()
                     .context("forge listing row has no title")?;
                 Ok(plain_change(change, title.to_owned()))
             })?;
-            (changes, BTreeMap::new())
+            (changes, BTreeMap::new(), cut)
         }
     };
     let gitlab = repo.github_slug().is_none();
@@ -1796,7 +1799,7 @@ pub(crate) fn live_pass_with<T>(
     // trace:TASK-3813 | ai:codex
     // A partial guard pass cannot establish that an omitted change closed.
     // trace:BUG-2730 | ai:codex
-    if rows.len() == changes.len() {
+    if rows.len() == changes.len() && !discovery_cut {
         metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
     }
     // Lanes that could not be read are said to be missing, never shown as
@@ -1817,6 +1820,7 @@ pub(crate) fn live_pass_with<T>(
             book: live.book,
             notes,
             warnings,
+            discovery_cut,
         },
         extra,
     ))

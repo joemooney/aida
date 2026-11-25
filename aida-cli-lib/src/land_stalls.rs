@@ -1564,6 +1564,18 @@ fn observe(
             })
         },
     )?;
+    // Discovery cut by the deadline keeps the pages read; the rest is unknown.
+    // trace:BUG-2730 | ai:claude
+    let partial = match (partial, pass.discovery_cut) {
+        (partial, false) => partial,
+        (partial, true) => Some(format!(
+            "{}; changes past the discovery deadline unknown",
+            partial.unwrap_or_else(|| format!(
+                "PARTIAL: covered PRs {:?}",
+                prs.iter().map(|fact| fact.number).collect::<Vec<_>>()
+            ))
+        )),
+    };
     let observed = Instant::now();
     let elapsed = || observed.elapsed();
     let budget = Budget {
@@ -1888,19 +1900,15 @@ pub(crate) fn route_with(
         crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
     // A stall that is gone is forgotten, so its return routes again.
     let current = |key: &String| report.stuck.iter().any(|item| &item.key == key);
-    if report.partial.is_none() {
-        memory.routed.retain(|key, _| current(key));
-        memory.mail_pending.retain(current);
-    }
+    memory.routed.retain(|key, _| current(key));
+    memory.mail_pending.retain(current);
     let plan = plan_routes(report, memory, policy, now);
     let open: BTreeSet<String> = report
         .changes
         .iter()
         .map(|line| format!("PR-{}@{}", line.pr, line.head))
         .collect();
-    if report.partial.is_none() {
-        memory.reruns.retain(|key, _| open.contains(key));
-    }
+    memory.reruns.retain(|key, _| open.contains(key));
     for (seat, plan) in &plan.seats {
         // The due job is raised for a new stall only; a failed mail alone
         // never raises it a second time.
@@ -2014,9 +2022,13 @@ fn scan_with_budgets(
         if let Some(run) = memory.runs.last() {
             eprintln!("throughput-guard: {}", snapshot_line(run));
         }
-        // Store commits can invoke an unbounded signer even with a free lock.
-        // Leave new stalls eligible for the next tick when time is short.
-        if run_budget.saturating_sub(started.elapsed()) <= std::time::Duration::from_secs(5) {
+        // A partial pass only persists its snapshot: routing commits to the
+        // store (an unbounded signer) and needs the whole inventory, so new
+        // stalls stay eligible for the next complete tick.
+        // trace:BUG-2730 | ai:claude
+        if report.partial.is_some()
+            || run_budget.saturating_sub(started.elapsed()) <= std::time::Duration::from_secs(5)
+        {
             eprintln!("throughput-guard: routing deferred (deadline)");
         } else {
             for (key, checks) in proposed {

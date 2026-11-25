@@ -1618,6 +1618,8 @@ fn bug_2730_slow_approval_forge_reports_partial_before_ceiling() {
         assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1], skipped PRs [2, 3]"));
         assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1, 3], skipped PRs [2]"));
         assert!(stderr.contains("throughput-guard: routing deferred (deadline)"));
+        assert!(stderr.contains("throughput-guard timings: setup="));
+        assert!(stderr.contains(" observations="));
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
@@ -1666,11 +1668,16 @@ fn bug_2730_slow_approval_forge_reports_partial_before_ceiling() {
     .unwrap();
     crate::test_exec::write_executable(
         &root.join("gh"),
+        // Capability and Actions reads answer at once; only PR 2's approval
+        // metadata (`pr view 2`) is slow. trace:BUG-2730 | ai:claude
         r#"#!/bin/sh
 case "$1 $2" in
   "pr list") cat rows ;;
   "--version " ) echo 'gh version 2' ;;
-  *) touch reading; exec sleep 20 ;;
+  "api --help") echo 'Usage: gh api <endpoint> [flags]' ;;
+  "pr view") [ "$3" = 2 ] || exit 1; touch reading; exec sleep 20 ;;
+  api\ *actions/runs*) echo '{"total_count":0,"workflow_runs":[]}' ;;
+  *) exit 1 ;;
 esac
 "#,
     );
@@ -1716,11 +1723,68 @@ exec /usr/bin/git "$@"
         assert_eq!(findings.len(), 1);
         if run == 3 {
             assert!(start.elapsed() < StdDuration::from_secs(5));
-            assert!(memory.routed.is_empty());
-            git(&["-C", ".aida-store", "config", "commit.gpgSign", "false"]);
-        } else {
-            assert_eq!(memory.routed.len(), 1);
         }
+        // The partial pass routes nothing, so the slow signer is never invoked.
+        assert!(memory.routed.is_empty());
         assert!(git(&["branch", "--list", "aida-store"]).is_empty());
     }
+}
+
+// A GitLab listing whose second page outlives the deadline keeps page one.
+// trace:BUG-2730 | ai:claude
+#[test]
+fn bug_2730_discovery_deadline_keeps_listed_pages() {
+    use std::time::Duration as StdDuration;
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = crate::test_git::git_command()
+        .current_dir(root)
+        .args(["init", "-q", "-b", "main"])
+        .status()
+        .unwrap();
+    assert!(git.success());
+    let origin = [
+        "remote",
+        "add",
+        "origin",
+        "https://gitlab.example.test/g/repo.git",
+    ];
+    assert!(crate::test_git::git_command()
+        .current_dir(root)
+        .args(origin)
+        .status()
+        .unwrap()
+        .success());
+    let rows: Vec<_> = (1..=100)
+        .map(|iid| {
+            serde_json::json!({"iid":iid,"state":"opened","draft":false,"sha":"a".repeat(40),
+            "source_branch":"topic","target_branch":"main","author":{"username":"w"}})
+        })
+        .collect();
+    std::fs::write(root.join("page1"), serde_json::to_vec(&rows).unwrap()).unwrap();
+    crate::test_exec::write_executable(
+        &root.join("glab"),
+        "#!/bin/sh\ncase \"$*\" in *page=1) cat page1 ;; *) exec sleep 20 ;; esac\n",
+    );
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    let repo = crate::review_watch::forge::Repository::load(root).unwrap();
+    let started = std::time::Instant::now();
+    let (changes, cut) =
+        crate::forge_lookup::with_forge_lookup_deadline(StdDuration::from_secs(3), || {
+            repo.discover_with(root, |change, _| Ok(change.id))
+        })
+        .unwrap();
+    assert!(cut, "the deadline cut must be reported");
+    assert_eq!(changes, (1..=100).collect::<Vec<u64>>());
+    assert!(started.elapsed() < StdDuration::from_secs(10));
+    // The unscoped reader still refuses an incomplete inventory.
+    let refused =
+        crate::forge_lookup::with_forge_lookup_deadline(StdDuration::from_secs(3), || {
+            repo.discover(root)
+        });
+    assert!(refused.is_err());
 }
