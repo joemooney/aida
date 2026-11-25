@@ -3411,7 +3411,8 @@ pub(crate) fn bind_contained_launch_worker(
     bind_contained_launch_worker_until(grant_id, receipt, None)
 }
 
-pub(crate) fn bind_contained_launch_worker_until(
+/// Apply the caller's absolute lock deadline on every grant update attempt.
+pub fn bind_contained_launch_worker_until(
     grant_id: &str,
     receipt: &crate::gate::kernel_deps::ContainmentReceipt,
     deadline: Option<std::time::Instant>,

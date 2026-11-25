@@ -2311,41 +2311,8 @@ impl ContainedChild {
 impl Drop for ContainedChild {
     fn drop(&mut self) {
         let _ = self.child.kill();
-        let end = Instant::now() + Duration::from_millis(200);
-        if let Err(error) = reap_or_record(&mut self.child, end, &std::env::temp_dir()) {
-            eprintln!(
-                "contained recovery required for pid {}: {error:#}",
-                self.child.id()
-            );
-        }
+        let _ = self.child.wait();
     }
-}
-
-// trace:TASK-3884 | ai:codex
-fn reap_or_record(child: &mut Child, end: Instant, directory: &Path) -> Result<()> {
-    let reason = loop {
-        match child.try_wait() {
-            Ok(Some(_)) => return Ok(()),
-            Ok(None) if Instant::now() < end => std::thread::sleep(
-                end.saturating_duration_since(Instant::now())
-                    .min(Duration::from_millis(2)),
-            ),
-            Ok(None) => break "wait deadline elapsed".to_string(),
-            Err(error) => break error.to_string(),
-        }
-    };
-    let mut record = tempfile::Builder::new()
-        .prefix("aida-contained-recovery-")
-        .tempfile_in(directory)?;
-    writeln!(
-        record,
-        "unconfirmed contained helper exit: parent={} pid={} reason={reason}",
-        std::process::id(),
-        child.id()
-    )?;
-    let (_, path) = record.keep()?;
-    eprintln!("contained recovery work recorded at {}", path.display());
-    Ok(())
 }
 
 // trace:TASK-2708 | ai:claude — under tests/, which the TASK-1752 grant-env
