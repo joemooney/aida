@@ -8,11 +8,17 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-21T01:12:31.383990019Z
-modified_at: 2026-11-21T01:12:31.383990019Z
+modified_at: 2026-11-25T21:03:25.806826249Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a21485-3c6e-7b43-a31e-a3909149dd19
+  author: joe
+  content: FOLDED into a comment on BUG-2688 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:03:25.806826249Z
+  modified_at: 2026-11-25T21:03:25.806826249Z
 history:
 - id: 01a204f5-fb9c-7102-8b0e-7abf2cd95713
   author: joe
