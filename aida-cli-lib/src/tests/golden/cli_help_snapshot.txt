@@ -22840,6 +22840,81 @@ Options:
           Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact
           1-based `(start_line, end_line)` spans on the target revision
 
+      --run-review
+          Execute automated batch code review across the prepared batches using the resolved project
+          agent (`claude`, `codex`, `antigravity`/`agy`, or `gemini`) or `AIDA_REVIEW_RUNNER_CMD`,
+          automatically anchoring reported `existing_code` snippets to exact 1-based line numbers
+          and verifying 100% file coverage
+
+      --agent <AGENT>
+          Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
+          When omitted, resolves from `.aida/review-rules.toml` (`default_agent`), `[agents] vendor`
+          (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`), or the project's
+          `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo)
+
+      --model <MODEL>
+          Model to pass to the review runner CLI (e.g. `o3`, `gpt-5.3-codex`, `claude-opus-4-6`).
+          Overrides `.aida/review-rules.toml` (`default_model`) and
+          `[agents.<vendor>.seats.reviewer] model`
+
+      --effort <LEVEL>
+          Reasoning effort level to pass to the review runner CLI (`low`, `medium`, `high`, or
+          `xhigh`). Overrides `.aida/review-rules.toml` (`default_effort`) and
+          `[agents.<vendor>.seats.reviewer] effort`
+
+      --adversarial
+          Run a two-pass Red-Team Finder -> Blue-Team Skeptical Challenger adversarial review. Pass
+          1 hunts for defects; Pass 2 attempts to disprove each candidate finding against
+          surrounding code and type constraints, dropping false positives
+
+      --challenger-agent <AGENT>
+          Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`,
+          or `gemini`). When omitted in `--adversarial` mode, automatically selects an opposing
+          enabled vendor from `.aida/config.toml` if multiple agents are enabled, or falls back to
+          the Finder agent
+
+      --challenger-model <MODEL>
+          Optional model override for Pass 2 of `--adversarial` (enables same-vendor, cross-model
+          adversarial verification — e.g. Finder on default model, Challenger on `o3`)
+
+      --challenger-effort <LEVEL>
+          Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of
+          `--adversarial` (enables same-model asymmetric-effort adversarial review — e.g. Finder at
+          `medium`, Challenger at `high`)
+
+      --fail-on <SEVERITY>
+          Fail with a non-zero exit code if any confirmed finding has severity at or above this
+          threshold (`critical`, `high`, `medium`, or `low`). Also configurable via `fail_on` in
+          `.aida/review-rules.toml`
+
+      --file-bugs
+          Automatically file confirmed findings (at or above `--fail-on` severity, or `high` by
+          default) as draft `BUG` requirements in the AIDA store, pre-populated with the anchored
+          `file:line` location, quoted snippet, suggested fix, and linked spec tags
+
+      --sarif <SARIF_PATH>
+          Export anchored findings as a SARIF 2.1.0 JSON file inside the repository (for GitHub Code
+          Scanning / GitLab SAST)
+
+      --record-telemetry
+          Persist review telemetry (duration breakdown, token/cost estimates, A/B arm,
+          false-positive suppression rate, anchor precision) to
+          `.aida/review-telemetry/reviews.jsonl` and archive the full SARIF 2.1.0 findings report
+          (including Pass-2 suppressed candidates) under `.aida/review-telemetry/sarif/`
+
+      --ab-arm <ARM>
+          Tag this review execution with an A/B experiment arm label (`single-pass`, `adversarial`,
+          or `auto` to deterministically randomize 50/50 by PR number or commit SHA)
+
+      --telemetry-report
+          Aggregate `.aida/review-telemetry/reviews.jsonl` and print an A/B telemetry comparison
+          report (duration, token/cost burn, Pass-1 vs. Pass-2 false-positive suppression rate,
+          exact line-anchor precision %, and SARIF finding categories)
+
+      --post-comment
+          Post a consolidated Markdown review report as a comment on `--pr <N>` (supports GitHub `gh
+          pr comment` and GitLab `glab mr note`)
+
       --json
           Emit machine-readable JSON output
 
@@ -56227,6 +56302,21 @@ Working on aida itself
     "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
     "flags": [
       {
+        "name": "ab-arm",
+        "takes_value": true,
+        "help": "Tag this review execution with an A/B experiment arm label (`single-pass`, `adversarial`, or `auto` to deterministically randomize 50/50 by PR number or commit SHA)"
+      },
+      {
+        "name": "adversarial",
+        "takes_value": false,
+        "help": "Run a two-pass Red-Team Finder -> Blue-Team Skeptical Challenger adversarial review. Pass 1 hunts for defects; Pass 2 attempts to disprove each candidate finding against surrounding code and type constraints, dropping false positives"
+      },
+      {
+        "name": "agent",
+        "takes_value": true,
+        "help": "Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`). When omitted, resolves from `.aida/review-rules.toml` (`default_agent`), `[agents] vendor` (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`), or the project's `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo)"
+      },
+      {
         "name": "anchor-findings",
         "takes_value": true,
         "help": "Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact 1-based `(start_line, end_line)` spans on the target revision"
@@ -56237,14 +56327,44 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "challenger-agent",
+        "takes_value": true,
+        "help": "Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`). When omitted in `--adversarial` mode, automatically selects an opposing enabled vendor from `.aida/config.toml` if multiple agents are enabled, or falls back to the Finder agent"
+      },
+      {
+        "name": "challenger-effort",
+        "takes_value": true,
+        "help": "Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of `--adversarial` (enables same-model asymmetric-effort adversarial review — e.g. Finder at `medium`, Challenger at `high`)"
+      },
+      {
+        "name": "challenger-model",
+        "takes_value": true,
+        "help": "Optional model override for Pass 2 of `--adversarial` (enables same-vendor, cross-model adversarial verification — e.g. Finder on default model, Challenger on `o3`)"
+      },
+      {
         "name": "commit",
         "takes_value": true,
         "help": "Single commit SHA to inspect against its parent"
       },
       {
+        "name": "effort",
+        "takes_value": true,
+        "help": "Reasoning effort level to pass to the review runner CLI (`low`, `medium`, `high`, or `xhigh`). Overrides `.aida/review-rules.toml` (`default_effort`) and `[agents.<vendor>.seats.reviewer] effort`"
+      },
+      {
         "name": "exclude",
         "takes_value": true,
         "help": "Additional comma-separated glob patterns to exclude from review"
+      },
+      {
+        "name": "fail-on",
+        "takes_value": true,
+        "help": "Fail with a non-zero exit code if any confirmed finding has severity at or above this threshold (`critical`, `high`, `medium`, or `low`). Also configurable via `fail_on` in `.aida/review-rules.toml`"
+      },
+      {
+        "name": "file-bugs",
+        "takes_value": false,
+        "help": "Automatically file confirmed findings (at or above `--fail-on` severity, or `high` by default) as draft `BUG` requirements in the AIDA store, pre-populated with the anchored `file:line` location, quoted snippet, suggested fix, and linked spec tags"
       },
       {
         "name": "format",
@@ -56267,14 +56387,39 @@ Working on aida itself
         "help": "Emit machine-readable JSON output"
       },
       {
+        "name": "model",
+        "takes_value": true,
+        "help": "Model to pass to the review runner CLI (e.g. `o3`, `gpt-5.3-codex`, `claude-opus-4-6`). Overrides `.aida/review-rules.toml` (`default_model`) and `[agents.<vendor>.seats.reviewer] model`"
+      },
+      {
         "name": "path",
         "takes_value": true,
         "help": "Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable (`--path aida-core/src --path aida-cli-lib/src`)"
       },
       {
+        "name": "post-comment",
+        "takes_value": false,
+        "help": "Post a consolidated Markdown review report as a comment on `--pr <N>` (supports GitHub `gh pr comment` and GitLab `glab mr note`)"
+      },
+      {
         "name": "pr",
         "takes_value": true,
         "help": "Pull spec IDs and base/head refs from PR/MR number N"
+      },
+      {
+        "name": "record-telemetry",
+        "takes_value": false,
+        "help": "Persist review telemetry (duration breakdown, token/cost estimates, A/B arm, false-positive suppression rate, anchor precision) to `.aida/review-telemetry/reviews.jsonl` and archive the full SARIF 2.1.0 findings report (including Pass-2 suppressed candidates) under `.aida/review-telemetry/sarif/`"
+      },
+      {
+        "name": "run-review",
+        "takes_value": false,
+        "help": "Execute automated batch code review across the prepared batches using the resolved project agent (`claude`, `codex`, `antigravity`/`agy`, or `gemini`) or `AIDA_REVIEW_RUNNER_CMD`, automatically anchoring reported `existing_code` snippets to exact 1-based line numbers and verifying 100% file coverage"
+      },
+      {
+        "name": "sarif",
+        "takes_value": true,
+        "help": "Export anchored findings as a SARIF 2.1.0 JSON file inside the repository (for GitHub Code Scanning / GitLab SAST)"
       },
       {
         "name": "scan",
@@ -56285,6 +56430,11 @@ Working on aida itself
         "name": "specs",
         "takes_value": true,
         "help": "Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria should be injected into the review preparation bundle"
+      },
+      {
+        "name": "telemetry-report",
+        "takes_value": false,
+        "help": "Aggregate `.aida/review-telemetry/reviews.jsonl` and print an A/B telemetry comparison report (duration, token/cost burn, Pass-1 vs. Pass-2 false-positive suppression rate, exact line-anchor precision %, and SARIF finding categories)"
       },
       {
         "name": "to",

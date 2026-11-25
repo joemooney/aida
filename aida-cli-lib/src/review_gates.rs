@@ -1507,8 +1507,8 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     }
     desc.push_str("## Acceptance\n\n");
     desc.push_str(&format!(
-        "- Generate a structured review prompt with `aida review prompt --pr {}` and verify each spec's acceptance criteria.\n",
-        pr.number
+        "- Generate a structured review prompt with `aida review prompt --pr {}` and deterministic review preparation bundle with `aida review prepare --pr {} --record-telemetry --write .aida/review-prepare-pr-{}.md`, then verify each spec's acceptance criteria.\n",
+        pr.number, pr.number, pr.number
     ));
     desc.push_str("- Approve and merge, or request changes by spec id.\n");
     desc.push_str("- Mark this story `completed` once the PR is merged.\n");

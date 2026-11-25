@@ -1013,7 +1013,12 @@ aida review prepare --pr 42 \
   --post-comment
 
 # 2. Inspect or drain the newly filed BUG requirements in AIDA:
-aida list --type bug --status draft</code></pre>
+aida list --type bug --status draft
+
+# 3. Record SARIF 2.1.0 archive (including Pass-2 suppressed false positives) + telemetry
+#    with deterministic 50/50 A/B assignment (`--ab-arm auto`) and view the A/B report:
+aida review prepare --pr 42 --run-review --ab-arm auto --record-telemetry
+aida review prepare --telemetry-report</code></pre>
         </div>
       </div>
 
@@ -1118,7 +1123,22 @@ aida list --type bug --status draft</code></pre>
               <tr>
                 <td class="code-cell">--sarif &lt;SARIF_PATH&gt;</td>
                 <td>CI Export</td>
-                <td>Write anchored findings as a SARIF 2.1.0 JSON report for GitHub Code Scanning / GitLab SAST.</td>
+                <td>Write all anchored findings (behavioral, spec-acceptance, concurrency, security, and language/hardware playbooks) plus Pass-2 suppressed candidates (<code>suppressions</code>) and telemetry as a SARIF 2.1.0 JSON report.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--record-telemetry</td>
+                <td>Telemetry &amp; A/B</td>
+                <td>Persist review duration breakdown, token/cost estimates, A/B arm, and anchor precision to <code>.aida/review-telemetry/reviews.jsonl</code> and archive the full SARIF 2.1.0 report under <code>.aida/review-telemetry/sarif/</code>.</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--ab-arm &lt;ARM&gt;</td>
+                <td>Telemetry &amp; A/B</td>
+                <td>Tag the run with an A/B experiment arm (<code>single-pass</code>, <code>adversarial</code>, or <code>auto</code> for deterministic 50/50 assignment by PR number / commit SHA).</td>
+              </tr>
+              <tr>
+                <td class="code-cell">--telemetry-report</td>
+                <td>Telemetry &amp; A/B</td>
+                <td>Aggregate <code>.aida/review-telemetry/reviews.jsonl</code> and render an A/B comparison table (latency, tokens/cost USD, Pass-1 vs. Pass-2 false-positive suppression %, exact anchor rate %, and SARIF category totals).</td>
               </tr>
               <tr>
                 <td class="code-cell">--post-comment</td>

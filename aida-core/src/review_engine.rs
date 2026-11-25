@@ -161,6 +161,16 @@ pub struct ProjectReviewRulesConfig {
     // trace:STORY-3120 | ai:antigravity
     #[serde(default)]
     pub fail_on: Option<String>,
+    /// Optional project-level toggle to persist each review's SARIF 2.1.0 archive and
+    /// telemetry row under `.aida/review-telemetry/`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub record_telemetry: Option<bool>,
+    /// Optional project-level A/B experiment arm label (`single-pass`, `adversarial`,
+    /// or `auto` for deterministic 50/50 randomization by PR number / commit SHA).
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub ab_arm: Option<String>,
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
 }
@@ -1315,14 +1325,144 @@ where
     out
 }
 
+/// A Pass-1 candidate finding that was dismissed as a false positive by the Pass-2 Blue-Team Challenger.
+/// Retained in `AdversarialReviewSummary` and exported into SARIF 2.1.0 `results` with a standard
+/// SARIF §3.35 `suppressions` entry (`kind: "external"`, `status: "accepted"`, `justification`).
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DismissedReviewFinding {
+    pub finding: RawReviewFinding,
+    pub dismissal_reason: String,
+}
+
+/// Comprehensive telemetry record for a single `aida review prepare` execution.
+/// Stored in `.aida/review-telemetry/reviews.jsonl` (and embedded in SARIF 2.1.0
+/// `runs[0].properties.aidaTelemetry`) for A/B testing, latency/cost analysis,
+/// and false-positive tracking.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewTelemetryRecord {
+    pub review_id: String,
+    pub timestamp: String,
+    /// A/B experiment arm (`"prepare-only"`, `"single-pass"`, `"adversarial"`, `"ab-single-pass"`, `"ab-adversarial"`, or custom `--ab-arm`).
+    pub ab_arm: String,
+    pub mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr_number: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head_ref: Option<String>,
+    pub inventory_sha256: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked_specs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detected_author_agents: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_effort: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_effort: Option<String>,
+    /// Diff scope metrics
+    pub reviewable_files: usize,
+    pub excluded_files: usize,
+    pub batch_count: usize,
+    pub total_added_lines: usize,
+    pub total_removed_lines: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_playbooks: Vec<String>,
+    /// Wall-clock duration breakdown in milliseconds
+    pub prepare_elapsed_ms: u64,
+    pub finder_elapsed_ms: u64,
+    pub challenger_elapsed_ms: u64,
+    pub verify_elapsed_ms: u64,
+    pub total_elapsed_ms: u64,
+    /// Prompt/response size, token estimates, and estimated cost in USD
+    pub finder_prompt_bytes: usize,
+    pub finder_response_bytes: usize,
+    pub challenger_prompt_bytes: usize,
+    pub challenger_response_bytes: usize,
+    pub estimated_input_tokens: usize,
+    pub estimated_output_tokens: usize,
+    pub estimated_cost_usd: f64,
+    /// Finding quality, signal-to-noise, and anchor precision metrics
+    pub pass1_candidate_findings: usize,
+    pub confirmed_findings: usize,
+    pub dismissed_findings: usize,
+    pub false_positive_suppression_pct: u8,
+    pub critical_count: usize,
+    pub high_count: usize,
+    pub medium_count: usize,
+    pub low_count: usize,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counts_by_category: BTreeMap<String, usize>,
+    pub exact_anchor_count: usize,
+    pub shifted_anchor_count: usize,
+    pub unanchored_count: usize,
+    pub exact_anchor_rate_pct: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage_rate_pct: Option<u8>,
+    pub gate_failed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sarif_archive_path: Option<String>,
+}
+
+/// Aggregated statistics for a single A/B experiment arm across recorded reviews.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewArmSummary {
+    pub ab_arm: String,
+    pub runs: usize,
+    pub avg_total_ms: u64,
+    pub avg_prepare_ms: u64,
+    pub avg_finder_ms: u64,
+    pub avg_challenger_ms: u64,
+    pub avg_input_tokens: usize,
+    pub avg_output_tokens: usize,
+    pub total_cost_usd: f64,
+    pub avg_cost_usd: f64,
+    pub total_pass1_candidates: usize,
+    pub total_confirmed_findings: usize,
+    pub total_dismissed_findings: usize,
+    pub overall_suppression_pct: u8,
+    pub avg_exact_anchor_rate_pct: u8,
+    pub avg_coverage_rate_pct: u8,
+    pub gate_failures: usize,
+}
+
 /// Convert anchored review findings into a SARIF 2.1.0 JSON document suitable for
 /// GitHub Code Scanning (`github/codeql-action/upload-sarif`) and GitLab SAST.
 // trace:STORY-3120 | ai:antigravity
 pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Value {
-    let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
-    let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len());
+    findings_to_sarif_json_with_telemetry(findings, &[], None)
+}
 
-    for f in findings {
+/// Convert confirmed and Pass-2 dismissed review findings (across all categories:
+/// behavioral/spec-acceptance, logic, concurrency, security, error-handling, and
+/// language/hardware playbooks) plus optional review telemetry into a self-contained
+/// SARIF 2.1.0 JSON document.
+///
+/// Dismissed Pass-1 candidates are recorded with standard SARIF 2.1.0 §3.35
+/// `suppressions` (`kind: "external"`, `status: "accepted"`, `justification`) so
+/// Code Scanning gates ignore them while the SARIF database retains full false-positive
+/// provenance.
+// trace:STORY-3120 | ai:antigravity
+pub fn findings_to_sarif_json_with_telemetry(
+    findings: &[RawReviewFinding],
+    dismissed: &[DismissedReviewFinding],
+    telemetry: Option<&ReviewTelemetryRecord>,
+) -> serde_json::Value {
+    let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+    let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len() + dismissed.len());
+
+    let mut append_finding = |f: &RawReviewFinding, dismissal_reason: Option<&str>| {
         let cat_clean = if f.category.trim().is_empty() {
             "general"
         } else {
@@ -1356,7 +1496,8 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
             }
         }
 
-        results.push(serde_json::json!({
+        let anchor_status = f.anchor_status.as_deref().unwrap_or("unanchored");
+        let mut result_obj = serde_json::json!({
             "ruleId": rule_id,
             "level": level,
             "message": {
@@ -1375,26 +1516,76 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
                         }
                     }
                 }
-            ]
-        }));
+            ],
+            "properties": {
+                "category": cat_clean,
+                "severity": f.severity.trim().to_ascii_lowercase(),
+                "anchorStatus": anchor_status,
+                "disposition": if dismissal_reason.is_some() { "dismissed_by_challenger" } else { "confirmed" }
+            }
+        });
+
+        if let Some(reason) = dismissal_reason {
+            result_obj["suppressions"] = serde_json::json!([
+                {
+                    "kind": "external",
+                    "status": "accepted",
+                    "justification": reason
+                }
+            ]);
+            result_obj["properties"]["challengerReason"] =
+                serde_json::Value::String(reason.to_string());
+        }
+
+        results.push(result_obj);
+    };
+
+    for f in findings {
+        append_finding(f, None);
+    }
+    for d in dismissed {
+        append_finding(&d.finding, Some(&d.dismissal_reason));
     }
 
     let rules: Vec<serde_json::Value> = rules_map.into_values().collect();
+    let mut run_obj = serde_json::json!({
+        "tool": {
+            "driver": {
+                "name": "aida-review-engine",
+                "informationUri": "https://github.com/joemooney/aida",
+                "rules": rules
+            }
+        },
+        "results": results
+    });
+
+    if let Some(t) = telemetry {
+        run_obj["invocations"] = serde_json::json!([
+            {
+                "executionSuccessful": !t.gate_failed,
+                "properties": {
+                    "reviewId": t.review_id,
+                    "abArm": t.ab_arm,
+                    "prepareElapsedMs": t.prepare_elapsed_ms,
+                    "finderElapsedMs": t.finder_elapsed_ms,
+                    "challengerElapsedMs": t.challenger_elapsed_ms,
+                    "verifyElapsedMs": t.verify_elapsed_ms,
+                    "totalElapsedMs": t.total_elapsed_ms,
+                    "estimatedInputTokens": t.estimated_input_tokens,
+                    "estimatedOutputTokens": t.estimated_output_tokens,
+                    "estimatedCostUsd": t.estimated_cost_usd
+                }
+            }
+        ]);
+        run_obj["properties"] = serde_json::json!({
+            "aidaTelemetry": t
+        });
+    }
+
     serde_json::json!({
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
-        "runs": [
-            {
-                "tool": {
-                    "driver": {
-                        "name": "aida-review-engine",
-                        "informationUri": "https://github.com/joemooney/aida",
-                        "rules": rules
-                    }
-                },
-                "results": results
-            }
-        ]
+        "runs": [run_obj]
     })
 }
 
@@ -1417,6 +1608,8 @@ pub struct AdversarialReviewSummary {
     pub dismissed_findings: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub detected_author_agents: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dismissed_details: Vec<DismissedReviewFinding>,
 }
 
 /// Format a consolidated GitHub PR / GitLab MR Markdown review comment from the
@@ -1630,8 +1823,22 @@ pub fn apply_adversarial_challenger_json(
     candidates: Vec<RawReviewFinding>,
     raw_challenger_output: &str,
 ) -> Result<(Vec<RawReviewFinding>, usize), String> {
+    let (confirmed, dismissed) =
+        apply_adversarial_challenger_with_dismissed(candidates, raw_challenger_output)?;
+    Ok((confirmed, dismissed.len()))
+}
+
+/// Apply Pass 2 Blue-Team Challenger verdicts to Pass 1 candidate findings,
+/// returning `(confirmed_findings, dismissed_findings_with_reasons)` so the SARIF 2.1.0
+/// archive and telemetry database can record both confirmed findings and Pass-2
+/// suppressed false positives.
+// trace:STORY-3120 | ai:antigravity
+pub fn apply_adversarial_challenger_with_dismissed(
+    candidates: Vec<RawReviewFinding>,
+    raw_challenger_output: &str,
+) -> Result<(Vec<RawReviewFinding>, Vec<DismissedReviewFinding>), String> {
     if candidates.is_empty() {
-        return Ok((Vec::new(), 0));
+        return Ok((Vec::new(), Vec::new()));
     }
     let trimmed = extract_json_payload(raw_challenger_output);
     let parsed: ChallengerOutput = serde_json::from_str(trimmed)
@@ -1643,7 +1850,7 @@ pub fn apply_adversarial_challenger_json(
     }
 
     let mut confirmed = Vec::with_capacity(candidates.len());
-    let mut dismissed_count = 0usize;
+    let mut dismissed = Vec::new();
 
     for (idx, mut finding) in candidates.into_iter().enumerate() {
         if let Some(v) = verdict_by_idx.get(&idx) {
@@ -1657,7 +1864,17 @@ pub fn apply_adversarial_challenger_json(
                     | "false_positive"
                     | "false-positive"
             ) {
-                dismissed_count += 1;
+                let reason = v
+                    .reason
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("Dismissed as false positive by Pass-2 Blue-Team Challenger")
+                    .to_string();
+                dismissed.push(DismissedReviewFinding {
+                    finding,
+                    dismissal_reason: reason,
+                });
                 continue;
             }
             if let Some(refined) = v.refined_message.as_deref() {
@@ -1669,7 +1886,221 @@ pub fn apply_adversarial_challenger_json(
         confirmed.push(finding);
     }
 
-    Ok((confirmed, dismissed_count))
+    Ok((confirmed, dismissed))
+}
+
+/// Estimate USD cost for a review invocation based on agent, model family,
+/// and input/output token counts.
+// trace:STORY-3120 | ai:antigravity
+pub fn estimate_review_cost_usd(
+    agent: Option<&str>,
+    model: Option<&str>,
+    input_tokens: usize,
+    output_tokens: usize,
+) -> f64 {
+    let model_lower = model.unwrap_or("").to_ascii_lowercase();
+    let agent_lower = agent.unwrap_or("").to_ascii_lowercase();
+    // Standard approximate per-1M-token rates (input_per_1m, output_per_1m) in USD
+    let (in_rate, out_rate) = if model_lower.contains("opus") {
+        (15.0, 75.0)
+    } else if model_lower.contains("haiku")
+        || model_lower.contains("mini")
+        || model_lower.contains("flash")
+    {
+        (0.80, 4.0)
+    } else if model_lower.contains("o3") {
+        (10.0, 40.0)
+    } else if model_lower.contains("codex") || agent_lower == "codex" {
+        (2.50, 10.0)
+    } else if agent_lower == "gemini" || agent_lower == "agy" {
+        (1.25, 5.0)
+    } else {
+        // Default Claude Sonnet / frontier baseline
+        (3.0, 15.0)
+    };
+    let raw = (input_tokens as f64 / 1_000_000.0) * in_rate
+        + (output_tokens as f64 / 1_000_000.0) * out_rate;
+    (raw * 100_000.0).round() / 100_000.0
+}
+
+/// Resolve the A/B experiment arm label and whether `--adversarial` Pass 2 should run.
+///
+/// When `requested_arm` is `Some("auto")` and `run_review` is `true` (without an explicit
+/// `--adversarial` flag), deterministically assigns 50/50 between `("ab-single-pass", false)`
+/// and `("ab-adversarial", true)` using `pr_number` parity or the first hex byte of
+/// `head_ref` / `inventory_sha256`.
+// trace:STORY-3120 | ai:antigravity
+pub fn resolve_ab_arm_assignment(
+    requested_arm: Option<&str>,
+    pr_number: Option<u64>,
+    head_ref: Option<&str>,
+    inventory_sha256: &str,
+    run_review: bool,
+    explicit_adversarial: bool,
+) -> (String, bool) {
+    let cleaned = requested_arm.map(str::trim).filter(|s| !s.is_empty());
+    if !run_review {
+        return (
+            cleaned.unwrap_or("prepare-only").to_string(),
+            explicit_adversarial,
+        );
+    }
+    if let Some(arm) = cleaned {
+        if arm.eq_ignore_ascii_case("auto") {
+            if explicit_adversarial {
+                return ("ab-adversarial".to_string(), true);
+            }
+            let bucket_is_odd = if let Some(pr) = pr_number {
+                pr % 2 == 1
+            } else {
+                let seed = head_ref
+                    .filter(|h| !h.is_empty())
+                    .unwrap_or(inventory_sha256);
+                seed.bytes().next().unwrap_or(0) % 2 == 1
+            };
+            return if bucket_is_odd {
+                ("ab-adversarial".to_string(), true)
+            } else {
+                ("ab-single-pass".to_string(), false)
+            };
+        }
+        let adv = explicit_adversarial || arm.to_ascii_lowercase().contains("adversarial");
+        return (arm.to_string(), adv);
+    }
+    if explicit_adversarial {
+        ("adversarial".to_string(), true)
+    } else {
+        ("single-pass".to_string(), false)
+    }
+}
+
+/// Aggregate a slice of `ReviewTelemetryRecord` entries by `ab_arm` for A/B comparison.
+// trace:STORY-3120 | ai:antigravity
+pub fn summarize_review_telemetry_by_arm(
+    records: &[ReviewTelemetryRecord],
+) -> Vec<ReviewArmSummary> {
+    let mut grouped: BTreeMap<String, Vec<&ReviewTelemetryRecord>> = BTreeMap::new();
+    for r in records {
+        grouped.entry(r.ab_arm.clone()).or_default().push(r);
+    }
+
+    let mut summaries = Vec::with_capacity(grouped.len());
+    for (arm, rows) in grouped {
+        let n = rows.len();
+        if n == 0 {
+            continue;
+        }
+        let sum_total_ms: u64 = rows.iter().map(|r| r.total_elapsed_ms).sum();
+        let sum_prepare_ms: u64 = rows.iter().map(|r| r.prepare_elapsed_ms).sum();
+        let sum_finder_ms: u64 = rows.iter().map(|r| r.finder_elapsed_ms).sum();
+        let sum_challenger_ms: u64 = rows.iter().map(|r| r.challenger_elapsed_ms).sum();
+        let sum_in_tok: usize = rows.iter().map(|r| r.estimated_input_tokens).sum();
+        let sum_out_tok: usize = rows.iter().map(|r| r.estimated_output_tokens).sum();
+        let total_cost: f64 = rows.iter().map(|r| r.estimated_cost_usd).sum();
+        let total_candidates: usize = rows.iter().map(|r| r.pass1_candidate_findings).sum();
+        let total_confirmed: usize = rows.iter().map(|r| r.confirmed_findings).sum();
+        let total_dismissed: usize = rows.iter().map(|r| r.dismissed_findings).sum();
+        let overall_suppression_pct = if total_candidates > 0 {
+            ((total_dismissed * 100) / total_candidates).min(100) as u8
+        } else {
+            0
+        };
+        let sum_anchor_pct: usize = rows.iter().map(|r| r.exact_anchor_rate_pct as usize).sum();
+        let mut cov_sum = 0usize;
+        let mut cov_cnt = 0usize;
+        for r in &rows {
+            if let Some(c) = r.coverage_rate_pct {
+                cov_sum += c as usize;
+                cov_cnt += 1;
+            }
+        }
+        let avg_cov = if cov_cnt > 0 {
+            (cov_sum / cov_cnt) as u8
+        } else {
+            100
+        };
+        let gate_failures = rows.iter().filter(|r| r.gate_failed).count();
+
+        summaries.push(ReviewArmSummary {
+            ab_arm: arm,
+            runs: n,
+            avg_total_ms: sum_total_ms / (n as u64),
+            avg_prepare_ms: sum_prepare_ms / (n as u64),
+            avg_finder_ms: sum_finder_ms / (n as u64),
+            avg_challenger_ms: sum_challenger_ms / (n as u64),
+            avg_input_tokens: sum_in_tok / n,
+            avg_output_tokens: sum_out_tok / n,
+            total_cost_usd: (total_cost * 100_000.0).round() / 100_000.0,
+            avg_cost_usd: ((total_cost / (n as f64)) * 100_000.0).round() / 100_000.0,
+            total_pass1_candidates: total_candidates,
+            total_confirmed_findings: total_confirmed,
+            total_dismissed_findings: total_dismissed,
+            overall_suppression_pct,
+            avg_exact_anchor_rate_pct: (sum_anchor_pct / n) as u8,
+            avg_coverage_rate_pct: avg_cov,
+            gate_failures,
+        });
+    }
+    summaries
+}
+
+/// Format an A/B telemetry comparison report in Markdown from recorded review telemetry rows.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_review_telemetry_report_markdown(records: &[ReviewTelemetryRecord]) -> String {
+    let mut out = String::new();
+    out.push_str("# AIDA Code Review Telemetry & A/B Comparison Report\n\n");
+    out.push_str(&format!(
+        "- **Total recorded review runs**: {}\n\n",
+        records.len()
+    ));
+    if records.is_empty() {
+        out.push_str(
+            "No review telemetry records found in `.aida/review-telemetry/reviews.jsonl`.\n",
+        );
+        return out;
+    }
+
+    let summaries = summarize_review_telemetry_by_arm(records);
+    out.push_str("## A/B Arm Summary\n\n");
+    out.push_str("| A/B Arm | Runs | Avg Total (ms) | Avg Finder / Challenger (ms) | Avg Tokens (in/out) | Avg Cost ($) | Candidates → Confirmed (Dismissed %) | Exact Anchor % | Avg Coverage % |\n");
+    out.push_str("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n");
+    for s in &summaries {
+        out.push_str(&format!(
+            "| `{}` | {} | {} ms | {} / {} ms | {} / {} | ${:.4} | {} → {} ({}% suppressed) | {}% | {}% |\n",
+            s.ab_arm,
+            s.runs,
+            s.avg_total_ms,
+            s.avg_finder_ms,
+            s.avg_challenger_ms,
+            s.avg_input_tokens,
+            s.avg_output_tokens,
+            s.avg_cost_usd,
+            s.total_pass1_candidates,
+            s.total_confirmed_findings,
+            s.overall_suppression_pct,
+            s.avg_exact_anchor_rate_pct,
+            s.avg_coverage_rate_pct
+        ));
+    }
+    out.push('\n');
+
+    let mut cat_totals: BTreeMap<String, usize> = BTreeMap::new();
+    for r in records {
+        for (cat, cnt) in &r.counts_by_category {
+            *cat_totals.entry(cat.clone()).or_insert(0) += cnt;
+        }
+    }
+    if !cat_totals.is_empty() {
+        out.push_str("## Confirmed Findings by Category (All Stored in SARIF 2.1.0)\n\n");
+        out.push_str("| Category (`aida.review.<category>`) | Confirmed Findings |\n");
+        out.push_str("| :--- | :---: |\n");
+        for (cat, cnt) in cat_totals {
+            out.push_str(&format!("| `aida.review.{cat}` | {cnt} |\n"));
+        }
+        out.push('\n');
+    }
+
+    out
 }
 
 /// Numeric rank for a review finding severity (`critical`=4, `high`=3, `medium`=2, `low`=1).
@@ -2382,6 +2813,7 @@ fn beta() {
             confirmed_findings: 1,
             dismissed_findings: 1,
             detected_author_agents: vec!["claude".to_string()],
+            dismissed_details: Vec::new(),
         };
         let md = format_forge_review_markdown_with_adversarial(
             "range",
@@ -2437,10 +2869,115 @@ fn beta() {
   ]
 }
 ```"#;
-        let (confirmed, dismissed) =
-            apply_adversarial_challenger_json(candidates, challenger_json).unwrap();
+        let (confirmed, dismissed_details) =
+            apply_adversarial_challenger_with_dismissed(candidates, challenger_json).unwrap();
         assert_eq!(confirmed.len(), 1);
-        assert_eq!(dismissed, 1);
+        assert_eq!(dismissed_details.len(), 1);
+        assert_eq!(
+            dismissed_details[0].dismissal_reason,
+            "Caller already validates."
+        );
+
+        let mut cat_map = BTreeMap::new();
+        cat_map.insert("fail-open".to_string(), 1);
+        let sample_telemetry = ReviewTelemetryRecord {
+            review_id: "rev-001".to_string(),
+            timestamp: "2026-11-25T17:30:00Z".to_string(),
+            ab_arm: "ab-adversarial".to_string(),
+            mode: "range".to_string(),
+            pr_number: Some(4575),
+            base_ref: Some("main".to_string()),
+            head_ref: Some("deadbeef".to_string()),
+            inventory_sha256: "inv123".to_string(),
+            linked_specs: vec!["STORY-3120".to_string()],
+            detected_author_agents: vec!["claude".to_string()],
+            finder_agent: Some("codex".to_string()),
+            finder_model: Some("gpt-5.3-codex".to_string()),
+            finder_effort: Some("medium".to_string()),
+            challenger_agent: Some("codex".to_string()),
+            challenger_model: Some("o3".to_string()),
+            challenger_effort: Some("high".to_string()),
+            reviewable_files: 1,
+            excluded_files: 0,
+            batch_count: 1,
+            total_added_lines: 25,
+            total_removed_lines: 4,
+            active_playbooks: vec!["rust".to_string()],
+            prepare_elapsed_ms: 15,
+            finder_elapsed_ms: 1200,
+            challenger_elapsed_ms: 950,
+            verify_elapsed_ms: 3,
+            total_elapsed_ms: 2168,
+            finder_prompt_bytes: 4000,
+            finder_response_bytes: 600,
+            challenger_prompt_bytes: 3200,
+            challenger_response_bytes: 400,
+            estimated_input_tokens: 1800,
+            estimated_output_tokens: 250,
+            estimated_cost_usd: estimate_review_cost_usd(
+                Some("codex"),
+                Some("gpt-5.3-codex"),
+                1800,
+                250,
+            ),
+            pass1_candidate_findings: 2,
+            confirmed_findings: 1,
+            dismissed_findings: 1,
+            false_positive_suppression_pct: 50,
+            critical_count: 0,
+            high_count: 1,
+            medium_count: 0,
+            low_count: 0,
+            counts_by_category: cat_map,
+            exact_anchor_count: 1,
+            shifted_anchor_count: 0,
+            unanchored_count: 0,
+            exact_anchor_rate_pct: 100,
+            coverage_rate_pct: Some(100),
+            gate_failed: true,
+            sarif_archive_path: None,
+        };
+
+        let rich_sarif = findings_to_sarif_json_with_telemetry(
+            &confirmed,
+            &dismissed_details,
+            Some(&sample_telemetry),
+        );
+        assert_eq!(
+            rich_sarif["runs"][0]["results"].as_array().unwrap().len(),
+            2
+        );
+        assert_eq!(
+            rich_sarif["runs"][0]["results"][0]["properties"]["disposition"],
+            "confirmed"
+        );
+        assert_eq!(
+            rich_sarif["runs"][0]["results"][1]["properties"]["disposition"],
+            "dismissed_by_challenger"
+        );
+        assert_eq!(
+            rich_sarif["runs"][0]["results"][1]["suppressions"][0]["justification"],
+            "Caller already validates."
+        );
+        assert_eq!(
+            rich_sarif["runs"][0]["properties"]["aidaTelemetry"]["ab_arm"],
+            "ab-adversarial"
+        );
+
+        assert_eq!(
+            resolve_ab_arm_assignment(Some("auto"), Some(100), None, "abc", true, false),
+            ("ab-single-pass".to_string(), false)
+        );
+        assert_eq!(
+            resolve_ab_arm_assignment(Some("auto"), Some(101), None, "abc", true, false),
+            ("ab-adversarial".to_string(), true)
+        );
+
+        let report_md = format_review_telemetry_report_markdown(&[sample_telemetry]);
+        assert!(report_md.contains("A/B Arm Summary"));
+        assert!(report_md.contains("`ab-adversarial`"));
+        assert!(report_md.contains("50% suppressed"));
+        assert!(report_md.contains("`aida.review.fail-open`"));
 
         let reg = PlaybookRegistry::default();
         assert_eq!(reg.resolve("src/engine.cpp").id, "c_cpp");

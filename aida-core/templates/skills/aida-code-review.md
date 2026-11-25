@@ -45,11 +45,11 @@ cargo machete 2>&1 || echo "install: cargo install cargo-machete"
 # Lines of code per file (complexity indicator)
 tokei --sort code 2>&1 | head -20 || find . -name "*.rs" -exec wc -l {} \; | sort -rn | head -20
 
-# Deterministic full-file inventory, token-budgeted batches, and language/security playbooks (STORY-3076)
-aida review prepare --scan --write .aida/code-review-prepare.md
+# Deterministic full-file inventory, token-budgeted batches, language/security playbooks, and SARIF + telemetry recording (STORY-3076 / STORY-3120)
+aida review prepare --scan --record-telemetry --write .aida/code-review-prepare.md
 ```
 
-Use the generated batches and playbooks to guide the manual review. Add `--path <directory>` to scope the inventory for a narrower audit. Running `aida review prepare` requires an AIDA CLI that includes the command; if it is unavailable (for example, “unexpected argument”), continue with the manual audit.
+Use the generated batches and playbooks to guide the manual review. Add `--path <directory>` to scope the inventory for a narrower audit, `--run-review [--adversarial] [--ab-arm auto]` for automated multi-agent batch review, or `--telemetry-report` to inspect aggregated duration, token/cost, and false-positive suppression telemetry across recorded reviews. Running `aida review prepare` requires an AIDA CLI that includes the command; if it is unavailable (for example, “unexpected argument”), continue with the manual audit.
 
 <!-- trace:TASK-3863 | ai:codex -->
 
