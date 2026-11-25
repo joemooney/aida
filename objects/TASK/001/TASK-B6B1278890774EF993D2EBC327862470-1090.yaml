@@ -20,12 +20,12 @@ description: |
   - The standing order is in the template master and the mirrors are synced.
   - The integration seat's handoff (`aida session handoff --seat integration --show`) prints the active depth.
   - Vendor-neutral: a Codex integration seat reads the same rule from the standing orders.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T03:56:09.604532673Z
-modified_at: 2026-11-25T21:19:05.359882326Z
+modified_at: 2026-11-25T21:19:07.296966372Z
 req_type: Task
 tags:
 - area:integration
@@ -43,6 +43,14 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:19:05.359882326Z
   modified_at: 2026-11-25T21:19:05.359882326Z
+history:
+- id: 01a21493-9a20-7790-9d2f-a33b10b25619
+  author: joe
+  timestamp: 2026-11-25T21:19:07.296962563Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
