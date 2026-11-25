@@ -61,7 +61,7 @@ fn task3809_runtime_lock_is_close_on_exec() {
 
 // trace:BUG-2746 | ai:codex
 #[test]
-fn bug2746_train_admission_during_reviewer_launch() {
+fn bug2757_bug2746_train_admission_during_reviewer_launch() {
     let (temp, store) = fixture();
     let attempt = dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
     execute_reservation(
@@ -70,12 +70,16 @@ fn bug2746_train_admission_during_reviewer_launch() {
         &attempt.token,
         |_| Ok(()),
         |_| {
-            // Admission runs before the synchronous launch callback can return.
+            let mut reviewer = Command::new("sleep").arg("30").spawn()?;
+            // The unrelated train reserves while the review child is still running.
             let train_dir = Directory::open(&temp.path().join(".aida/auto-train"))?;
             let _tick = train_dir.admission_lock("auto-train supervising worker")?;
             let _train = crate::admission_owner::cooperative_train(temp.path(), false)?;
             let _members = train_members(temp.path(), &[1])?;
             assert!(train_members(temp.path(), &[2]).is_err());
+            assert!(reviewer.try_wait()?.is_none());
+            reviewer.kill()?;
+            reviewer.wait()?;
             Ok(())
         },
     )
@@ -5708,7 +5712,7 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
 
 // trace:BUG-2720 | ai:codex
 #[test]
-fn bug2720_exited_pickup_retries_after_worktree_release() {
+fn bug2757_bug2720_exited_pickup_retries_after_worktree_release() {
     let (temp, store) = fixture();
     let git = |args: &[&str]| {
         let out = crate::test_git::git_command()
@@ -5778,6 +5782,24 @@ fn bug2720_exited_pickup_retries_after_worktree_release() {
     git(&["worktree", "remove", "held"]);
     receipt(&dead, true, 3);
     skip("retry cap");
+    receipt(&dead, true, 0);
+    // The probe observes a free branch. A train can reserve even this member
+    // while the probe is in flight, and a new checkout invalidates its result.
+    let occupy = |branch: &str| {
+        crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some(branch))?;
+        let _train = train_members(temp.path(), &[1])?;
+        git(&["worktree", "add", "-q", "raced", branch]);
+        Ok(())
+    };
+    let (action, _) = select_with_probes(&store, &c, None, 1, || None, occupy).unwrap();
+    assert!(
+        matches!(action, Action::Skip(reason) if reason.contains("worktree ownership changed"))
+    );
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Exited
+    );
+    git(&["worktree", "remove", "raced"]);
     receipt(&dead, true, 0);
     let retry = dispatch(select(&store, &c, None, 1).unwrap());
     assert_eq!(retry.pickup_retries, 1);
