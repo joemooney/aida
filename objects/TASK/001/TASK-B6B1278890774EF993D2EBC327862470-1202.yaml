@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-22T04:57:14.326061663Z
-modified_at: 2026-11-22T04:57:14.326061663Z
+modified_at: 2026-11-25T07:17:34.163987356Z
 req_type: Task
 tags:
 - carried-from:BUG-2688
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-22T04:57:14.326101880Z
+comments:
+- id: 01a21191-2354-7c53-96eb-68044def0c66
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: BUG-2688 / #4388. Evidence: #4388 closed; prepare_host_repair_admitted/PinnedRework absent on main. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:17:34.163987356Z
+  modified_at: 2026-11-25T07:17:34.163987356Z
 history:
 - id: 01a204f5-fca2-7b43-a699-22fc20d7d8e4
   author: joe
