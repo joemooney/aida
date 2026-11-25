@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: b3fe0fe9f31fb80280a9599406e9b479a5dd1826
 
   Deferred timeout follow-up: a plain mandate check can hang on an irregular history-index path. aida-cli-lib/src/mandate_history_index.rs:195–199 reads the optional disk index with blocking fs::read regardless of publish_index. A FIFO at that path, including a symlink to one, can hold the check past --timeout before check_all can report not-checked. Open and validate a regular file without a blocking open and treat unreadable cache data as a rebuild under the existing scoped deadline.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T14:31:57.340773633Z
-modified_at: 2026-11-25T07:27:38.878962409Z
+modified_at: 2026-11-25T07:27:40.900320434Z
 req_type: Task
 tags:
 - carried-from:TASK-3115
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-24T14:50:07.157902083Z
   changes: []
+- id: 01a2119a-6564-7c22-bf59-9c7cffdc384d
+  author: joe
+  timestamp: 2026-11-25T07:27:40.900316192Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: b3fe0fe9f31fb80280a9599406e9b479a5dd1826
   branch: pr-4432
