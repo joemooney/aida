@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:22:42.880980Z
-modified_at: 2026-11-24T12:26:43.622908039Z
+modified_at: 2026-11-25T21:03:57.512952978Z
 req_type: Task
 tags:
 - review
@@ -157,6 +157,15 @@ comments:
   modified_at: 2026-11-24T09:21:50.064647786Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21485-b848-7933-bc10-a1ea4e5e2185
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3343: Review follow-up: The supplied untraced list identifies TASK-b6b1278890774ef993d2ebc327862470-1309.AC1 and T
+      From TASK-3864 Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c The supplied untraced list identifies TASK-b6b1278890774ef993d2ebc327862470-1309.AC1 and TASK-b6b1278890774ef993d2ebc327862470-1309.AC2. The diff has no criterion-traced check for source/author provenance or the PowerPoint exclusions and retained presentation assets. Capture the Git/forge comparison and docs-scope check as explicit criterion evidence, and add or link a focused check for the exclusions and retained assets if the project requires an automated trace.
+  created_at: 2026-11-25T21:03:57.512952978Z
+  modified_at: 2026-11-25T21:03:57.512952978Z
 history:
 - id: 01a20c6f-c9b6-7683-b9af-733d032dee88
   author: joe
