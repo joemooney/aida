@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor check stalled-reviews` also reports every open PR whose GitHub mergeable state is CONFLICTING (with the base) and has no active implementer lane or queued rework, showing PR, spec and head, and how long it has conflicted where known. Approved PRs that conflict are flagged first (they block landing).
   - AC2: For a conflicting PR with no lane, the detector queues ONE conflict-repair rework for the implementer (merge the base, resolve, no scope change) and notifies the advisor, deduplicated per (PR, head, base tip). Tests for detection and dedup.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:23.786790901Z
-modified_at: 2026-11-25T01:16:06.967982800Z
+modified_at: 2026-11-25T03:33:12.582536930Z
 req_type: Task
 tags:
 - review
@@ -82,6 +82,11 @@ comments:
   created_at: 2026-11-25T01:16:06.967979341Z
   modified_at: 2026-11-25T01:16:06.967979341Z
   session_id: 01a2102ebb28
+- id: 01a210c3-bb06-7561-9ef3-d0ad4db8c75e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Native lane HEAD 52f38dc581ff equals origin/main and lacks the slice-1 detector. Slice 1 is present in origin/integration at a33977514299. Relaunch this worktree based on integration for validation and publication against the requested base.. No triage reason was given.'
+  created_at: 2026-11-25T03:33:12.582527762Z
+  modified_at: 2026-11-25T03:33:12.582527762Z
 history:
 - id: 01a20e73-975e-78c0-a723-be2674242d46
   author: joe
@@ -143,6 +148,13 @@ history:
   author: joe
   timestamp: 2026-11-25T00:37:47.798687867Z
   changes: []
+- id: 01a210c3-bb06-7561-9ef3-d093844eae09
+  author: joe
+  timestamp: 2026-11-25T03:33:12.582519193Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
@@ -151,8 +163,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f2a1ab1e1ee
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: Native lane HEAD 52f38dc581ff equals origin/main and lacks the slice-1 detector. Slice 1 is present in origin/integration at a33977514299. Relaunch this worktree based on integration for validation and publication against the requested base.
-  raised_by: implementer
-  raised_at: 2026-11-25T00:31:51.683502616Z
