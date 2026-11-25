@@ -136,6 +136,30 @@ comments:
   created_at: 2026-11-25T11:20:50.050706909Z
   modified_at: 2026-11-25T11:20:50.050706909Z
   session_id: 01a21242dde8
+- id: 01a21270-4097-7570-b89d-529cbc9f8898
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration pre-check for PR #4567 micro-round @ 57910a34aa (STORY-3120 S1)
+
+    Result: PASS.
+
+    The required fix:
+    - findings_exceeding_threshold now ranks an unknown or unparseable severity as critical (unwrap_or(4)), so the gate fails closed.
+    - The test confirms that 'blocker' and '' are both caught by --fail-on critical.
+
+    Beyond the 15-line micro-round scope (about 30 lines; all pure, all correct, so accepted):
+    (a) SARIF message text doubles literal braces (SARIF 2.1 §3.11.5).
+    (b) The run declares originalUriBaseIds for %SRCROOT%.
+    (c) Backslashes in a path are now percent-encoded (%5C) instead of being rewritten to '/'. The literal filename is kept, which is safer.
+    Each change has assertions in the test.
+
+    Remaining nit, for S2: the SARIF level for an unknown severity is still 'note'. 'error' would be consistent with the fail-closed rule.
+
+    FAST is pending. This is pure engine logic, so the advisor may self-merge it.
+  created_at: 2026-11-25T11:20:58.558444375Z
+  modified_at: 2026-11-25T11:20:58.558444375Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
