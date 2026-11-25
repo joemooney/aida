@@ -1,0 +1,29 @@
+id: 01a2104e-54cf-7e91-872e-e5e9838f396a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1385
+agreed_id: TASK-3891
+title: Release repair reservations whose PR is CLOSED or MERGED and whose lane is dead, without a per-ID attestation (salvage first, audit line, open PRs still attested)
+description: |
+  Filed by product-15 per advisor-122 ruling 2026-11-24 18:25. MEDIUM, STRICT, drive. dell1 holds 62 retained repair-journal reservations across 46 PRs (back to PR-3950, 2026-11-15). By forge state: 18 MERGED, 20 CLOSED, 8 OPEN (4376, 4396, 4401, 4525 = being attested now; 4416, 4464, 4482, 4533 = current lanes). Making the operator type ~58 per-ID attestations for dead lanes on CLOSED/MERGED PRs is pointless toil.
+
+  ## Acceptance
+  - AC1: `aida doctor heal repair-reservations` can release, WITHOUT a per-ID attestation, a reservation whose PR the forge reports CLOSED or MERGED, whose lane has no live process, and whose tree has first been salvaged to ~/salvage when it holds uncommitted or unique commits. Tests.
+  - AC2: an audit line per release (id, PR state, salvage path or "nothing to salvage"). Test.
+  - AC3: anything else (OPEN PR, unknown or unreachable forge state, live lane) still requires the attested path. Test.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T01:24:58.703993536Z
+modified_at: 2026-11-25T01:24:58.703993536Z
+req_type: Task
+tags:
+- leases
+- repair
+- strict
+filed_at:
+  code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b3
+  vendor: claude
