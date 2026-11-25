@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T19:08:14.361658078Z
+modified_at: 2026-11-25T19:08:45.047961375Z
 req_type: Bug
 tags:
 - ci
@@ -127,6 +127,12 @@ history:
   session_id: 01a213ea88d0
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2141c-624b-7d51-b8c6-706709ec3042
+  author: dirtlab
+  timestamp: 2026-11-25T19:08:54.219363109Z
+  session_id: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: d738e6c6f16627da24f96a1aa62b4c6518f658a8
@@ -135,3 +141,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: d738e6c6f16
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-25T19:08:45.047961375Z
+  implemented_by: dirtlab
