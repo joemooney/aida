@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-21T06:31:04.443564500Z
+modified_at: 2026-11-25T21:01:00.067566721Z
 req_type: Bug
 tags:
 - landing
@@ -107,6 +107,11 @@ comments:
   content: 'Product live observation on Nov 20 at 23:29 MST: review-watch and live binaries both aa567732958. Advisor loops status reports 40 consecutive review-watch failures, last alert naming admission.lock contention, and review-watch admission held by controller 3281211 for 225m. Auto-train is waiting for supervisor, with no controller and two consecutive failures, and the advisor mailbox has repeated auto-train failure alerts. Land stalls sees 12 open changes, four stuck, and no landing for about 302m. This is live post-#4212 evidence of a stalled landing service. It does not establish that any specific PR was train-eligible. The sandbox cannot inspect the controller process or descendants on the host.'
   created_at: 2026-11-21T06:31:04.443564500Z
   modified_at: 2026-11-21T06:31:04.443564500Z
+- id: 01a21483-0323-72d1-af68-5d382f65430d
+  author: joe
+  content: 'STALE CLAIM RELEASED (product-15, 2026-11-25 14:05, under Joe''s full authorization; advisor-122 pre-read 14:02): InProgress with an idle driver for 2 or more days, and no open PR or live lease on the imac or dell1, so reset to Approved so it no longer blocks dispatch or counts as in flight. Epics stay Approved; only their children run.'
+  created_at: 2026-11-25T21:01:00.067566721Z
+  modified_at: 2026-11-25T21:01:00.067566721Z
 history:
 - id: 01a1eb74-944e-7701-a8b0-4ace42203bde
   author: joe
