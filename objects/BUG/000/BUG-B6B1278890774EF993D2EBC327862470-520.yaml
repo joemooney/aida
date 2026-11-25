@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Every reconcile refusal NAMES its cause (which check refused, which hub/ref, and the underlying git/merge error). A test asserts the reason text for at least the push-race and merge-refusal paths.
   - AC2: A BOUNDED retry (e.g. up to 2 attempts with re-fetch + re-union) when a push rejection is a fast-forward race from a concurrent writer. Test with a simulated race.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-25T02:26:44.983710448Z
+modified_at: 2026-11-25T03:56:09.414578885Z
 req_type: Bug
 tags:
 - hubs
@@ -55,6 +55,11 @@ comments:
   content: 'advisor-122 19:28: #4555 slice 1 OVERRIDE->APPROVE (full cause chain on an interactive TTY). SLICE 2 must ALSO cover (new AC): in agent-output mode (redirected stdout, e.g. cron) the multiline cause chain is not truncated: join causes with " | " or emit all lines; test with redirected output.'
   created_at: 2026-11-25T02:26:44.983710448Z
   modified_at: 2026-11-25T02:26:44.983710448Z
+- id: 01a210d8-bd46-7e02-a2e6-a758dde2cf29
+  author: lane-recovery
+  content: Reference merge `45206d90a1df483c1caff91dee5abf345df4a8d2` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-25T03:56:09.414565697Z
+  modified_at: 2026-11-25T03:56:09.414565697Z
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
@@ -76,6 +81,13 @@ history:
   session_id: 01a21049e21b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a210d8-bd46-7e02-a2e6-a763f8395497
+  author: lane-recovery
+  timestamp: 2026-11-25T03:56:09.414578810Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
   branch: main
