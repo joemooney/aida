@@ -4,8 +4,20 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-pub(super) fn refresh(store: &Path, budget: Duration) -> anyhow::Result<()> {
-    let deadline = Instant::now() + budget;
+pub(super) fn pre_pass(root: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let result = aida_core::git_ops::with_config_read_deadline(Some(deadline), || {
+        aida_core::store_locate::detect_distributed_store_from(root)
+            .map_or(Ok(()), |store| refresh(&store, deadline))
+    });
+    if Instant::now() >= deadline {
+        eprintln!("train: store refresh timed out; continuing with cached store");
+    } else if let Err(error) = result {
+        eprintln!("train: {error}; continuing with cached store");
+    }
+}
+
+fn refresh(store: &Path, deadline: Instant) -> anyhow::Result<()> {
     anyhow::ensure!(store.join(".git").exists(), "missing store checkout");
     let mut branch = aida_core::git_ops::host_git_command(store);
     branch.args(["symbolic-ref", "--quiet", "HEAD"]);
@@ -16,9 +28,7 @@ pub(super) fn refresh(store: &Path, budget: Duration) -> anyhow::Result<()> {
     let branch = source
         .strip_prefix("refs/heads/")
         .ok_or_else(|| anyhow::anyhow!("unexpected store HEAD"))?;
-    let mut cmd = aida_core::git_ops::with_config_read_deadline(Some(deadline), || {
-        aida_core::git_ops::host_remote_git_command(store, "origin")
-    });
+    let mut cmd = aida_core::git_ops::host_remote_git_command(store, "origin");
     let destination = format!("refs/remotes/origin/{branch}");
     cmd.args([
         "fetch",
@@ -55,10 +65,31 @@ mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
+    // trace:BUG-2750.AC1 | trace:BUG-2750.AC2 | ai:codex
     #[test]
     fn bug2750_stalled_store_fetch_has_deadline_and_no_writer_lock() {
+        if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let diagnostic = "train: store refresh timed out; continuing with cached store";
+            assert_eq!(
+                stderr.lines().filter(|line| *line == diagnostic).count(),
+                2,
+                "{stderr}"
+            );
+            return;
+        }
         let temp = tempfile::tempdir().unwrap();
-        let store = temp.path();
+        let root = temp.path();
+        crate::test_git::commit_fixture(root);
+        let store = &root.join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join("metadata.yaml"), "{}").unwrap();
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "store_path = '.aida-store'\n[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
         let git = |args: &[&str]| {
             assert!(crate::test_git::git_command()
                 .current_dir(store)
@@ -67,27 +98,46 @@ mod tests {
                 .unwrap()
                 .success());
         };
-        git(&["init", "-q", "-b", "aida-store"]);
+        crate::test_git::commit_fixture(store);
         git(&["remote", "add", "origin", "."]);
-        git(&[
-            "-c",
-            "user.name=test",
-            "-c",
-            "user.email=test@example.org",
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "fixture",
-        ]);
-        refresh(store, Duration::from_secs(5)).unwrap();
+        let stalled = || {
+            let start = Instant::now();
+            let error = crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                prs: &[1],
+                all_ready: false,
+                dry_run: false,
+                local_ci: None,
+                max: 1,
+                no_pull: true,
+            })
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("could not read origin's default branch"),
+                "{error:#}"
+            );
+            assert!(start.elapsed() < Duration::from_millis(5750));
+        };
+        std::fs::create_dir(store.join(".aida")).unwrap();
+        let shim = root.join("git");
+        std::fs::write(&shim, "#!/bin/sh\ncase \" $* \" in *' rev-parse '*) if test -f metadata.yaml; then flock -n .aida/store-write.lock touch prep-stalled || exit 1; exec sleep 20; fi;; esac\nexec /usr/bin/git \"$@\"\n").unwrap();
+        std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o700)).unwrap();
+        {
+            let path = format!("{}:/usr/bin:/bin", root.display());
+            let _env =
+                crate::test_env::AmbientGuard::hermetic_and(root, None, &[("PATH", Some(&path))]);
+            stalled();
+            assert!(store.join("prep-stalled").exists());
+        }
+        pre_pass(root);
         let head = crate::test_git::git_command()
             .current_dir(store)
             .args([
                 "rev-list",
                 "--left-right",
                 "--count",
-                "HEAD...refs/remotes/origin/aida-store",
+                "HEAD...refs/remotes/origin/main",
             ])
             .output()
             .unwrap();
@@ -97,16 +147,13 @@ mod tests {
         let upload = store.join("upload");
         std::fs::write(&upload, "#!/bin/sh\nflock -n .aida/store-write.lock touch observed-unlocked || exit 1\nexec sleep 20\n").unwrap();
         std::fs::set_permissions(&upload, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::create_dir(store.join(".aida")).unwrap();
         git(&[
             "config",
             "remote.origin.uploadpack",
             upload.to_str().unwrap(),
         ]);
-        let start = Instant::now();
-        let error = refresh(store, Duration::from_secs(2)).unwrap_err();
-        assert!(start.elapsed() < Duration::from_secs(5));
+        let _env = crate::test_env::AmbientGuard::hermetic(root, None);
+        stalled();
         assert!(store.join("observed-unlocked").exists());
-        assert!(error.to_string().contains("store refresh timed out"));
     }
 }

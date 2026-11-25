@@ -5133,12 +5133,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     }
     // trace:BUG-2750 | ai:codex
     if !opts.dry_run {
-        if let Some(store) = aida_core::store_locate::detect_distributed_store_from(&main_worktree)
-        {
-            if let Err(error) = store_refresh::refresh(&store, std::time::Duration::from_secs(5)) {
-                eprintln!("train: {error}; continuing with cached store");
-            }
-        }
+        store_refresh::pre_pass(&main_worktree);
     }
     let forge = crate::forge::forge_for(&project_root);
     let base = crate::gate::review_carryover::protected_base(&main_worktree)

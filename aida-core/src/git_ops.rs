@@ -288,10 +288,11 @@ fn contained_seat_git_command(cwd: &Path) -> Command {
         }
         // `--global` reads only the user's own file; `/` is no repository.
         // raw-git-ok(TASK-2053): runs in `/`, never in a clone.
-        let value = Command::new("git")
+        let mut probe = Command::new("git");
+        probe
             .current_dir("/")
-            .args(["config", "--global", "--get", key])
-            .output()
+            .args(["config", "--global", "--get", key]);
+        let value = crate::store_hooks::probe_output(probe)
             .ok()
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -352,13 +353,13 @@ fn gitmodules_names_from(top: &Path, sources: Vec<Vec<String>>) -> Result<Vec<St
         crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1985): `git config` reads one file or blob and never
         // walks the tree; host_git_command itself calls this.
-        let out = Command::new("git")
-            .current_dir(top)
+        let mut cmd = Command::new("git");
+        cmd.current_dir(top)
             .args(["-c", "core.fsmonitor=false", "config"])
             .args(&source)
-            .args(["-z", "--get-regexp", r"^submodule\."])
-            .output()
-            .context("run git config over .gitmodules")?;
+            .args(["-z", "--get-regexp", r"^submodule\."]);
+        let out =
+            crate::store_hooks::probe_output(cmd).context("run git config over .gitmodules")?;
         match out.status.code() {
             Some(0) => {}
             // No submodule key at all.
@@ -579,15 +580,15 @@ pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
     let read = |args: &[&str]| -> Result<Option<String>> {
         crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1929): read-only lookup used to build the hardening.
-        let out = Command::new("git")
-            .env(
-                "PATH",
-                crate::store_hooks::safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
-            )
-            .current_dir(store)
-            .args(["-c", "core.fsmonitor=false"])
-            .args(args)
-            .output()
+        let mut cmd = Command::new("git");
+        cmd.env(
+            "PATH",
+            crate::store_hooks::safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+        )
+        .current_dir(store)
+        .args(["-c", "core.fsmonitor=false"])
+        .args(args);
+        let out = crate::store_hooks::probe_output(cmd)
             .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
         Ok(out.status.success().then(|| {
             String::from_utf8_lossy(&out.stdout)
@@ -2121,6 +2122,7 @@ pub use config_lock::{
     clear_sandbox_config_lock, config_lock_path, is_sandbox_placeholder,
     output_healing_config_lock, repair_push_upstream, sandbox_config_lock,
 };
+pub(crate) use remote_credentials::CONFIG_READ_DEADLINE;
 pub use remote_credentials::{
     configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
     operator_credential_helper_configured, percent_decode, split_http_url_userinfo,

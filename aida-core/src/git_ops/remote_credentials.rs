@@ -324,7 +324,7 @@ fn append_git_config_env(cmd: &mut Command, key: &str, value: &str) {
 }
 
 thread_local! {
-    static CONFIG_READ_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
+    pub(crate) static CONFIG_READ_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
         const { std::cell::Cell::new(None) };
 }
 
