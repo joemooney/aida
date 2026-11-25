@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T04:42:38.885090708Z
+modified_at: 2026-11-25T04:43:18.457980784Z
 req_type: Story
 tags:
 - backlog
@@ -80,6 +80,15 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Signed S1 requires each row embedded on a canonical parent requirement with its UUID. The collected PR-only path supports zero credited specs (story_2698_collected_approval_delivers_and_retries passes PR-7 and an empty spec slice). There is no parent UUID for this input. Refusing would turn a deliverable approved PR into a pending gate, and selecting an unrelated spec would misattribute debt. Decide the durable location and identity for change-only findings, or explicitly authorize refusal until a parent is bound.. No triage reason was given.'
   created_at: 2026-11-25T03:39:35.608968524Z
   modified_at: 2026-11-25T03:39:35.608968524Z
+- id: 01a21103-ebc1-7a31-8f6f-9ed1d65dacf1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 45206d90a1df483c1caff91dee5abf345df4a8d2 and its working tree. The origin/main merge-base diff was empty and there were no untracked additions. Zero-credit amendment: [evidence: behavioral-test] story_2698_collected_approval_delivers_and_retries checks the delivered PR-7 approval, retained finding text, retry, and single original requirement. Test job j20261125T044106369-2-0 and fast gate j20261125T044149682-2-0 submitted. At gate/ledger/mod.rs:468 the empty credited-spec slice skips parent delivery after verdict normalization. One or multiple credited specs still take the existing path. Ledger append, change identity and contained-caller checks are shared with the prior implementation. Rustfmt issue fixed. S1 parent records, advisor authorization and negative tests remain outstanding. Punt records the signed change-budget constraint.
+  created_at: 2026-11-25T04:43:18.457980784Z
+  modified_at: 2026-11-25T04:43:18.457980784Z
+  session_id: 01a210fda3e9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a21087-762e-7253-a4ae-33628f3dae2c
   author: joe
