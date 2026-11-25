@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T09:10:00.213520598Z
+modified_at: 2026-11-25T09:10:32.131443479Z
 req_type: Bug
 tags:
 - launch
@@ -297,6 +297,11 @@ comments:
   created_at: 2026-11-25T08:55:34.953255261Z
   modified_at: 2026-11-25T08:55:34.953255261Z
   session_id: 01a211a7ecbc
+- id: 01a211f8-8fc3-7e23-aa73-ac2647c0b3f8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2748 AC1 fails source review. Ordinary recovery can release a Prepared receipt with absent attribution keys, the inspection surface reports a normal phase for a held transfer without dispatcher attribution, and the legacy terminal exception cannot distinguish a partially corrupted post-transfer recovery from a Prepared recovery. AC2 passes source review. The grant-only success case now tests refusal and evidence preservation, and complete attribution has occupied, unreadable and clear scanner controls. Reviewed the full landed diff for acfa405338a5c0594f539768d81d12aa1b80b537 against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. The two trees at the landed result and original PR head have identical content. FAST source gates passed and compilation was pending when checked. No local tests were run.. No triage reason was given.'
+  created_at: 2026-11-25T09:10:32.131434872Z
+  modified_at: 2026-11-25T09:10:32.131434872Z
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe
@@ -430,6 +435,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a211f8-8fc3-7e23-aa73-ac1c2ec06788
+  author: joe
+  timestamp: 2026-11-25T09:10:32.131425299Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -438,11 +450,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2748 AC1 fails source review. Ordinary recovery can release a Prepared receipt with absent attribution keys, the inspection surface reports a normal phase for a held transfer without dispatcher attribution, and the legacy terminal exception cannot distinguish a partially corrupted post-transfer recovery from a Prepared recovery. AC2 passes source review. The grant-only success case now tests refusal and evidence preservation, and complete attribution has occupied, unreadable and clear scanner controls. Reviewed the full landed diff for acfa405338a5c0594f539768d81d12aa1b80b537 against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. The two trees at the landed result and original PR head have identical content. FAST source gates passed and compilation was pending when checked. No local tests were run.
-  recovery_hint: address the review findings, move BUG-2748 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T09:10:00.213520598Z
