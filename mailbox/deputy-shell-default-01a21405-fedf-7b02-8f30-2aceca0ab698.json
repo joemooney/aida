@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21405-fedf-7b02-8f30-2aceca0ab698",
+  "thread_id": "deputy-01a21405-fedf-7b02-8f30-2aceca0ab698",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795632275546,
+  "body": "Script deputy \"default\" finished script job 01a21405-fedf-7b02-8f30-2aceca0ab698: rc 0 (ok).\nScript: cd ~/ai/aida && aida comment add BUG-2710 \"ADVISOR (11:47): DONE via #4458 (b56d4289944, landed with a Refs-only title, so it is completed by hand). The reap phase yields at the tick deadline with its own sub-budget, reports the item it was on, and eligibility is decided once per worktree. The remaining p2 follow-ups stay as recorded comments (not open ACs).\" && aida edit BUG-2710 --status done\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21405-fedf-7b02-8f30-2aceca0ab698/transcript.log\nRead it with `aida deputy shell log 01a21405-fedf-7b02-8f30-2aceca0ab698 --name default`.\n",
+  "subject": "deputy script job 01a21405 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
