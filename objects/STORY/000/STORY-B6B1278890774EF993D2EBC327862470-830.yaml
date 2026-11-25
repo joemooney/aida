@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T20:06:47.789007684Z
+modified_at: 2026-11-25T22:41:46.678863618Z
 req_type: Story
 tags:
 - landing
@@ -154,6 +154,14 @@ comments:
   created_at: 2026-11-25T20:06:47.789004319Z
   modified_at: 2026-11-25T20:06:47.789004319Z
   session_id: 01a2141c118c
+- id: 01a214df-46b7-76d2-841f-5f60416e70ff
+  author: joe
+  content: |-
+    DEFERRED to S2 (advisor-122 override-approval of #4584 S1 r2 @ 0459cd01, 2026-11-25 15:46; 2 p3 minors):
+    - landing_drought.rs cause(): approved PRs whose land::Ci is StaleBase, WaitingForRun or None fall into the `_ => return None` arm and are never reported, although a stale-base or a never-started run is a plausible way for an approved PR to sit stuck. Consider a dedicated cause (update the branch / re-trigger CI), or at least 'unknown', for these states in S2.
+    - landing_drought.rs scan(): open PRs are not filtered by baseRefName or isDraft, so an approved PR targeting a non-main base (for example an integration-track branch) or an approved draft can be reported as stuck and counted toward the main-branch drought, which can produce false advisor routes. Filter to PRs that target main and are not drafts, or name these as their own cause in S2.
+  created_at: 2026-11-25T22:41:46.678863618Z
+  modified_at: 2026-11-25T22:41:46.678863618Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
