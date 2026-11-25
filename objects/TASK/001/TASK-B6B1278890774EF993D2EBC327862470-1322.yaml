@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   docs/showcase/code-review.html:598–608 and the Marp deck at line 155 present the six-defect comparison and 100% anchoring as measured results without a pinned input, ledger, anchored output, or comparison methodology. The exact command shown only prepares the bundle and does not produce findings or verify coverage. Credit the reviewer for the findings, cite retained case-study evidence for the reported outcomes and line spans, or qualify the claims to match the evidence.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:23:59.904437839Z
-modified_at: 2026-11-25T07:24:58.249591398Z
+modified_at: 2026-11-25T07:25:00.922114133Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21197-f47a-7bb1-9e45-cbbd7d7d2a07
+  author: joe
+  timestamp: 2026-11-25T07:25:00.922109278Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
