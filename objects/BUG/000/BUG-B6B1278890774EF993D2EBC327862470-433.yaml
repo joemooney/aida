@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-25T04:30:32.292229472Z
+modified_at: 2026-11-25T04:35:34.985996689Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -485,6 +485,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: PR #4376 merge overlaps draft consumption behavior. Main''s LaunchDraft::collect marks consumption internally and returns the collected verdict even if marker persistence fails. BUG-2669 closes a receipt only after confirmed marker persistence, and distinguishes draft recording from fallback collection. Integrating those outcomes crosses the requested mechanical repair boundary. Unresolved: aida-cli-lib/src/queue_cmd/work.rs, aida-cli-lib/src/review_draft.rs, aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs.. No triage reason was given.'
   created_at: 2026-11-25T04:30:32.292219479Z
   modified_at: 2026-11-25T04:30:32.292219479Z
+- id: 01a210fd-173b-7d20-8961-5b46b2b980a6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:35):
+    # BUG-2669 / PR #4376 NON-MECHANICAL conflict round (product-15 2026-11-24 21:32). Lane: CODEX. MAIN, existing branch. <=200 lines.
+    Merge current origin/main FRESH. The previous attempt's host-staged merge (with its unresolved files) is saved on dell1 at ~/salvage/BUG-2669-conflict-20261124T2122 (staged.patch re-applies cleanly onto the PR head; unmerged-worktree/ holds the conflicted files). Use it as reference.
+    SEMANTICS RULING (advisor-122): (20:18) BUG-2669's STRICTER semantics WIN: a receipt closes ONLY after CONFIRMED marker persistence, and draft recording stays DISTINCT from fallback collection. Main's LaunchDraft::collect call site must adopt it: if persistence fails, return an ERROR, not a collected verdict. Test: persistence fails → no close + error surfaced.
+    Keep the PR's own content otherwise; resolve every conflict path. One targeted cargo run, then make check-ci-fast, then push to #4376. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T04:35:34.985996689Z
+  modified_at: 2026-11-25T04:35:34.985996689Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
