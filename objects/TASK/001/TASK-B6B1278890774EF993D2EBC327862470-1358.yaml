@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T05:10:31.116851290Z
+modified_at: 2026-11-25T05:13:01.790827648Z
 req_type: Task
 tags:
 - integration
@@ -177,6 +177,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T05:10:30.957699242Z
   modified_at: 2026-11-25T05:10:30.957699242Z
+- id: 01a2111f-6284-7d40-8c9f-ac41d03cab9f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:13):
+    # TASK-3874 / PR #4560 r4 FINAL (advisor-122 ruling 2026-11-24 21:58 via integration-30; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int38-task-3874-r3. <=80 lines. REMOVE RATHER THAN PATCH.
+    - At the risk-path entry (review_risk_pr_base), detect a PARTIAL CLONE (extensions.partialClone set, or any remote.*.promisor=true). If found, do NOT touch git objects at all and return none (risk unknown → STRICT tier, fail closed).
+    - F3: the seat-refusal assertions go through the PRODUCTION entry with the fixtures in place.
+    - F4: a nonempty fetch.bundleURI fixture proving no bundle is read while the pinned fetch succeeds.
+    make check-ci-fast, then push to #4560. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T05:13:01.790827648Z
+  modified_at: 2026-11-25T05:13:01.790827648Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
