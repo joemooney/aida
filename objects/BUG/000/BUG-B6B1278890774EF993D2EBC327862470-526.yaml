@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T20:47:39.052559555Z
+modified_at: 2026-11-25T20:53:01.618709110Z
 req_type: Bug
 tags:
 - admission
@@ -38,6 +38,26 @@ comments:
   modified_at: 2026-11-25T20:44:20.740100623Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2147b-b632-7ed0-80a8-b7406c193dcd
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + code path):** `run_with_program` releases the shared review-watch claim after pass setup (probe-ref sweep), so hub sync, `gh pr list` discovery and every per-PR forge read in `admit_change` (supersede head re-read, base probe, readiness report) run unclaimed. A new `PassClaim` retakes it only right before `select_with_coverage` + reservation/spawn, rechecks under the claim that the forge snapshot is younger than a bound, and if stale releases, re-reads the change outside the claim and retries (head/base moved -> skip, retry next pass). The claim is released after each decision. Test: `bug2765_stale_snapshot_is_reread_outside_the_claim` (unit).
+    - **AC2 (unit, real admission_owner):** `bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan` drives the production `watch_pass` with a stub forge that sleeps per PR; a ship (exclusive) and a manual train are admitted while the scan is in flight.
+    - **AC3 (unit):** `PassClaim::release` logs `review-watch: admission held Ns during <phase>` when a hold exceeds the bound; test asserts the warning names the phase.
+
+    ### Expected files
+    - `aida-cli-lib/src/review_watch.rs`
+    - `aida-cli-lib/src/tests/task_1993_review_watch_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - A cooperative manual train already shares the mode with the watcher; the starved party during a long scan is an exclusive ship/land (and the train via intents). AC2 asserts both a ship and a manual train get in mid-scan. Idle between passes still holds the claim (it yields within 1s to any intent, as before).
+  created_at: 2026-11-25T20:53:01.618709110Z
+  modified_at: 2026-11-25T20:53:01.618709110Z
+  session_id: 01a2147671bd
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
