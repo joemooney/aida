@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-25T11:58:37.471712024Z
+modified_at: 2026-11-25T12:00:26.109752941Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -240,6 +240,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T11:58:28.835039613Z
   modified_at: 2026-11-25T11:58:28.835039613Z
+- id: 01a21294-5532-7df0-b393-caa00689c8d0
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:00):
+    # BUG-2710 / PR #4458 r4 FINAL (advisor-122 ruling 2026-11-25 05:06 at 05eddc17; STRICT data-loss; product-15). Lane: CODEX. MAIN, existing branch. <=40 lines. If still red, PARKED.
+    One major: reaping one lease can make a SECOND, previously ineligible lease on the same worktree reapable, and delete its branch.
+    FIX: decide eligibility ONCE per worktree from the INITIAL snapshot. A worktree's branch/tree is removed ONLY if EVERY lease on it was eligible in that snapshot; anything that becomes eligible only after an in-pass reap waits for the NEXT pass.
+    Test: two leases on one worktree, only one eligible at start → after the pass the branch and tree REMAIN and the second lease is UNTOUCHED.
+    One targeted cargo run, then make check-ci-fast, then push to #4458. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T12:00:26.109752941Z
+  modified_at: 2026-11-25T12:00:26.109752941Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
