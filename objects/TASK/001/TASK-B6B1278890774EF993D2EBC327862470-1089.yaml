@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1089
 agreed_id: TASK-3806
 title: 'aida-relay: relay.sh renews an expired parent grant via aida role renew-parent (TASK-3119 step 2b)'
 description: 'Per advisor ruling 2026-11-15 18:32 on TASK-3119. In ~/ai/aida-relay bin/relay.sh (AIDA_SESSION_GRANT passed to children at relay.sh:3095-3100): when a child exits on an expired parent grant, run ''aida role renew-parent --run-dir "$RUN_DIR"''; on rc 0 re-read <run dir>/relay.grant (version=1, grant, expires_at, mandate, supersedes; 0600, fail closed), replace AIDA_SESSION_GRANT in SESSION_ENV and relaunch; on rc 3 keep today''s hold-and-wait. Starts only after TASK-3119 step 2a is on main. Separate repo: local lane, not dell1.'
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T01:30:12.175379505Z
-modified_at: 2026-11-25T21:19:34.724027769Z
+modified_at: 2026-11-25T21:19:36.643548197Z
 req_type: Task
 comments:
 - id: 01a21494-0544-7143-8d1b-4c533adc32df
@@ -29,6 +29,13 @@ history:
   session_id: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
   changes: []
+- id: 01a21494-0cc3-7633-b817-e9311f56f6b3
+  author: joe
+  timestamp: 2026-11-25T21:19:36.643546164Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
   branch: main
