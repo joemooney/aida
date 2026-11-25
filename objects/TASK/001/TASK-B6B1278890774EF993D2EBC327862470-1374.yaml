@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T01:57:43.101524890Z
+modified_at: 2026-11-25T01:57:51.241003973Z
 req_type: Task
 tags:
 - launch
@@ -101,6 +101,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for completing TASK-3884 (TASK-b6b1278890774ef993d2ebc327862470-1374). Reviewed the entire pinned landed diff from main 260a82ae939faf34a8e6505a6f765f2151655610 to tree 0b6d6698157b5f6e4b4300202ad6a420f1916ad5 and attested original head e71d9c6e1974bffe31b2776fa2ba72c71b933185. The branch is six commits behind. I checked the upstream edits to scripts/store-writers.toml against the landed inventory. No finding depends on stale base code.. No triage reason was given.'
   created_at: 2026-11-25T01:57:43.101518480Z
   modified_at: 2026-11-25T01:57:43.101518480Z
+- id: 01a2106c-6d5b-7f02-adf8-5dd88586cf90
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3884):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e71d9c6e1974
+    Recorded: 2026-11-25T01:49:04.808487206+00:00
+    Findings:
+    1. AC1 | aida-cli-lib/src/gate/seat_authority.rs:178 and :3386–3436. The only Some(deadline) caller of update_grant_until is the unit test. The function is private and launch callers can reach grant binding only through entry points that eventually pass None. Expose a deadline-aware entry point for the existing grant binding operation, preserving its receipt, PID and grant checks and the blocking wrappers, so the launch critical section can actually opt in. Exercise that entry point against a held grant lock.
+    2. AC1 | aida-cli-lib/src/gate/kernel_deps.rs:19–27. The deadline is sampled before try_lock_exclusive and an Ok is returned without another check. If the thread is descheduled after that sample and the holder releases after expiry, a resumed attempt can acquire and run the lease closure or grant mutation after the caller's absolute deadline. On successful acquisition recheck the deadline and release the lock before returning TimedOut if it has expired. Add coverage for a lock acquisition that completes past expiry.
+    3. AC2 | aida-cli-lib/src/launch/contained.rs:2307–2339. The timeout branch synchronously creates, writes and persists a file in std::env::temp_dir() after the polling deadline. On Linux that can be an environment-selected filesystem, such as a stalled mount. Any of those operations, or the synchronous stderr write, can hold the caller indefinitely. Put recovery publication behind a handoff that lets the destructor return within its deadline, with I/O owned outside the unwind path.
+    4. AC2 | aida-cli-lib/src/launch/contained.rs:2307–2311 and :2329–2338. A missing, read-only or full temporary directory causes recovery creation/write/keep to fail. Drop then only prints a diagnostic, with no recovery item retained, even when stderr is discarded. Arrange for a recovery owner and record before starting the risky unwind, or provide a reliable fallback handoff, and cover recovery-storage failure.
+    5. AC2 | aida-cli-lib/src/containment/tests/launch_tests.rs:4710–4721. The test invokes reap_or_record directly with a writable temp directory, then manually kills and waits for the child. It would continue to pass if ContainedChild::drop switched back to a blocking wait or stopped handing off recovery. Exercise the actual unwind/Drop path with a controllable child or wait seam and a watchdog, and assert recovery exists and the caller returns.
+    6. aida-cli-lib/src/test_env.rs:166–181. Both contention fixtures hold a flock and attempt the production call on the same thread, keeping the lock held until the call returns. A regression to blocking lock_exclusive deadlocks the test before its elapsed-time assertion. Use an independently controlled lock holder with bounded release or a watchdog child so that the blocking mutation produces a bounded test failure.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T01:57:51.067213188Z
+  modified_at: 2026-11-25T01:57:51.067213188Z
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe
