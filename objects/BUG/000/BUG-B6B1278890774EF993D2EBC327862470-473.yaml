@@ -12,12 +12,12 @@ description: |
   - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
   - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
   - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-25T02:20:04.034575106Z
+modified_at: 2026-11-25T02:21:04.418877321Z
 req_type: Bug
 tags:
 - mass-change
@@ -377,6 +377,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21081-b3af-7703-a108-756bf75a83c6
+  author: dirtlab
+  timestamp: 2026-11-25T02:21:05.327685053Z
+  session_id: 01a2108066a1
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -387,3 +396,8 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
+attention_reason:
+  category: design-fork
+  detail: 'PR #4396 has a behavioral overlap in aida-cli-lib/src/gate/kernel_deps.rs. For a finding with class unmet-claimed-ac and no blocking_tier, BUG-2712 permits mass-change deferral while main returns Blocker::Unclassified before consulting the class. Choosing a result changes the submission/recorder contract. Both that file and aida-cli-lib/src/review_draft.rs remain unresolved in the existing merge. Please decide whether a class alone qualifies for deferral.'
+  raised_by: implementer
+  raised_at: 2026-11-25T02:21:04.418877321Z
