@@ -4923,7 +4923,7 @@ fn porcelain_unquote(field: &str) -> String {
 /// `core.quotePath=true`: bare unless it holds a space, control byte, `"`, `\\` or
 /// a non-ASCII byte.
 // trace:TASK-1952 | trace:TASK-1943 | ai:claude
-fn porcelain_quote(path: &str) -> String {
+pub fn porcelain_quote(path: &str) -> String {
     let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
     if !path.contains(' ') && !path.bytes().any(needs) {
         return path.to_string();

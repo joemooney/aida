@@ -1913,12 +1913,13 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
 #[test]
 fn task_3882_refusal_quotes_trailing_spaces_on_each_rename_path() {
     let facts = parse_status_v2(
-        "? notes\n? notes  \n2 R. N... 100644 100644 100644 aaa aaa R100 new \told  \n",
+        "? notes\n?  notes\n? notes  \n2 R. N... 100644 100644 100644 aaa aaa R100 new \told  \n",
     );
     assert_eq!(
         unshipped_items(&facts),
         [
             "untracked: notes",
+            r#"untracked: " notes""#,
             r#"untracked: "notes  ""#,
             r#"renamed (R.): "old  " -> "new ""#
         ]
@@ -1965,7 +1966,7 @@ fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
     assert_eq!(describe_status_entry("? notes.txt"), "untracked: notes.txt");
     assert_eq!(
         describe_status_entry("1 .M N... 100644 100644 100644 0123abc 0123abc src/a b.rs"),
-        "changed (.M): src/a b.rs"
+        r#"changed (.M): "src/a b.rs""#
     );
     assert_eq!(
         describe_status_entry("2 R. N... 100644 100644 100644 aaa aaa R100 new.rs\told.rs"),

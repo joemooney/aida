@@ -2246,27 +2246,25 @@ pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
 /// names the file rather than printing modes and object ids. A line that does
 /// not parse is shown as it is. The path is seat-written, so it is escaped.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// trace:TASK-3882 | ai:codex
 pub(crate) fn describe_status_entry(line: &str) -> String {
+    use aida_core::git_ops::porcelain_quote;
+
     let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
     let xy = line.split(' ').nth(1).unwrap_or("");
-    // Porcelain v2 leaves ordinary spaces literal, including at the path boundary.
-    // trace:TASK-3882 | ai:codex
-    let path = |p: &str| {
-        if p.ends_with(' ') {
-            format!("{p:?}")
-        } else {
-            p.escape_debug().to_string()
-        }
-    };
     let described = match line.as_bytes().first() {
-        Some(b'?') => field(1).map(|p| format!("untracked: {}", path(p))),
-        Some(b'!') => field(1).map(|p| format!("ignored: {}", path(p))),
-        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", path(p))),
+        Some(b'?') => field(1).map(|p| format!("untracked: {}", porcelain_quote(p))),
+        Some(b'!') => field(1).map(|p| format!("ignored: {}", porcelain_quote(p))),
+        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", porcelain_quote(p))),
         Some(b'2') => field(9).map(|p| match p.split_once('\t') {
-            Some((to, from)) => format!("renamed ({xy}): {} -> {}", path(from), path(to)),
-            None => format!("renamed ({xy}): {}", path(p)),
+            Some((to, from)) => format!(
+                "renamed ({xy}): {} -> {}",
+                porcelain_quote(from),
+                porcelain_quote(to)
+            ),
+            None => format!("renamed ({xy}): {}", porcelain_quote(p)),
         }),
-        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", path(p))),
+        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", porcelain_quote(p))),
         _ => None,
     };
     described.unwrap_or_else(|| line.escape_debug().to_string())
