@@ -1401,3 +1401,52 @@ fn bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs() {
             .approved_at_head
     );
 }
+
+// trace:BUG-2718 | ai:codex
+#[test]
+fn bug_2718_signed_projection_matches_only_its_local_approval() {
+    let f = Fixture::new();
+    let _env = env(&f.temp.path().join("home-b"));
+    write(&f.b, ".aida/review-authorship.jsonl", "");
+    let change = ChangeKey::pr(7);
+    let mut record = f.record("approved", "reviewer-session");
+    record.insert(
+        "release_grant".into(),
+        serde_json::json!({"id":"local-only"}),
+    );
+    let append = |record| {
+        let mut event = ledger::GateEvent::new(change, ledger::EventBody::Verdict { record });
+        event.head = Some(f.sha.clone());
+        ledger::store::append(&ledger::store_root(&f.b).unwrap(), change, vec![event]).unwrap();
+    };
+    append(record.clone());
+    publish(&f.b, change, &record, &[]).unwrap();
+    let select = || crate::gate::rework_hold_release::change_approval(&f.b, change, &f.sha, &[]);
+    let (local, selected) = select().unwrap().unwrap();
+    assert_eq!(local["release_grant"]["id"], "local-only");
+    verified_identity(&f.b, &selected).unwrap();
+    let spec_view =
+        crate::gate::rework_hold_release::read_arming_body(&f.b, &f.b, "STORY-1").unwrap();
+    assert_eq!(
+        rv::parse_recorded_verdict(&spec_view.to_string()).unwrap(),
+        selected
+    );
+    record.insert("summary".into(), "unpublished edit".into());
+    append(record);
+    assert!(select().is_err());
+
+    let refusal = f.record("request-changes", "reviewer-session");
+    publish(&f.b, change, &refusal, &[]).unwrap();
+    assert!(
+        select().is_err(),
+        "a signed refusal blocks the local approval"
+    );
+    let mr = ChangeKey::parse("MR-7").unwrap();
+    let approval = f.record("approved", "reviewer-session");
+    let mut event = ledger::GateEvent::new(mr, ledger::EventBody::Verdict { record: approval });
+    event.head = Some(f.sha.clone());
+    ledger::store::append(&ledger::store_root(&f.b).unwrap(), mr, vec![event]).unwrap();
+    let candidates = ship::merge_gate_verdict_candidates(&[&f.b], mr, &[], Some(&f.sha));
+    let policy = approval::ship_approval_policy(&f.b, &[], Some("main"), &candidates);
+    approval::drain_merge_approval_gate(&candidates, &policy, Some(&f.sha), 7).unwrap();
+}
