@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2756",
+  "publishes": [
+    {
+      "at": "2026-11-25T21:16:07.873402168Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T19:45:08.436316439Z",
+      "spec": "BUG-2756",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "24 changes are open and the limit is 10; BUG-2756 is started anyway (--over-wip)",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-25T21:16:07.730318086Z",
+      "spec": "BUG-2756",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8177ad276f68cdeff7f68ff8ff931a6db4eb1559",
+        "pr": 4533,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
