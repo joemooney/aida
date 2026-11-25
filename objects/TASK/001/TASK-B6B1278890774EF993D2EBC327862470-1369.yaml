@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T06:11:17.083972209Z
+modified_at: 2026-11-25T06:14:58.132884317Z
 req_type: Task
 tags:
 - integration
@@ -121,6 +121,18 @@ comments:
   created_at: 2026-11-25T06:11:17.083966079Z
   modified_at: 2026-11-25T06:11:17.083966079Z
   session_id: 01a211137e61
+- id: 01a21158-1595-73f1-9b23-7bc3e810b444
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4559 r2 @ a80ec1e9e9 (integration-30): F1, F3 and F4 pass; F2 is PARTIAL (one small fix needed). vs integration afbea08b75a: 4 files, +111/-26. merge-tree is clean.
+    F1: both status calls (contained_safety_scan, worktree_status_porcelain_lines) add --untracked-files=all. The e2e test shows a sole notes/todo listed in full as ?? "notes/todo ".
+    F3: criterion traces added to the two new tests, plus the new git_ops submodule test.
+    F4: entries are joined with newlines. The first line still names the first entry, so the agent summary keeps evidence. The e2e test proves 'a; untracked: z' no longer reads as two entries.
+    F2 PARTIAL: git_ops::porcelain_quote now quotes any space, matching git porcelain v1, which C-quotes whitespace. But seat_clone.rs describe_status_entry still uses its own closure that quotes only a TRAILING space. A seat-clone entry ' notes' (leading space) renders as 'untracked:  notes', ambiguous, and a mid-path space is treated differently from the worktree path. The ruling asked for ONE helper with git's predicate, leading/trailing included. Fix (about 5 lines): expose git_ops::porcelain_quote, or a pub(crate) wrapper, and use it in describe_status_entry for every path. Add a leading-space case to task_3882_refusal_quotes_trailing_spaces_on_each_rename_path.
+  created_at: 2026-11-25T06:14:58.132884317Z
+  modified_at: 2026-11-25T06:14:58.132884317Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
