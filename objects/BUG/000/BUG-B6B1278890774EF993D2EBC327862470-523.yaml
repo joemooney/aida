@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: add `doctor check stalled-reviews --fail-on-findings` to the scheduled-command allowlist in maintenance_schedule.rs (same gated shape as the other doctor check jobs, hook_allowed false), so the job runs and routes only real findings.
   - AC2: a test that every `[[schedule.jobs]]` `command` in the repository's `.aida/config.toml` resolves to an allowlisted scheduled command, so a config job cannot ship without its allowlist entry.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:29:49.463570317Z
-modified_at: 2026-11-25T06:48:14.702027054Z
+modified_at: 2026-11-25T07:11:46.874082904Z
 req_type: Bug
 tags:
 - integration
@@ -29,6 +29,12 @@ comments:
   modified_at: 2026-11-25T06:48:14.702027054Z
   session_id: 01a211569ece
   harness_version: codex-cli 0.167.0
+- id: 01a2118b-d6ba-77c3-b6f9-2f2a532df011
+  author: aida-publication-done
+  content: Implementer push 3601e4ffcb1d declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T07:11:46.874081865Z
+  modified_at: 2026-11-25T07:11:46.874081865Z
+  session_id: 01a211569ece
 history:
 - id: 01a210f8-c819-7903-b35c-7e0d287801a9
   author: joe
@@ -76,6 +82,14 @@ history:
   session_id: 01a211569ece
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a2118b-d6ba-77c3-b6f9-2f10d42ec541
+  author: aida-publication-done
+  timestamp: 2026-11-25T07:11:46.874079390Z
+  session_id: 01a211569ece
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4
