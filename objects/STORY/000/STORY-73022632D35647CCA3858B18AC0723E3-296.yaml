@@ -1,5 +1,6 @@
 id: 01a20ff5-2252-7b62-a4dc-ebd3343eab32
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-296
+agreed_id: STORY-3114
 title: 'Review PR-4545: [AI:codex] fix(docs): clarify approved-head FULL CI scheduling (TASK-3282)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20fc2`) for branch `int35-task-3282`.
@@ -48,6 +49,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a2100c-5fda-7c23-8f83-f9792f16c932
+  author: joe
+  timestamp: 2026-11-25T00:12:56.154512455Z
+  changes: []
 filed_at:
   code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
   branch: main

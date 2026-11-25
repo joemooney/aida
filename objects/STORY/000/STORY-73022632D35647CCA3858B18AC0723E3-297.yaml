@@ -1,5 +1,6 @@
 id: 01a21000-3aa5-7a11-ae0a-7c7081aa6635
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-297
+agreed_id: STORY-3113
 title: 'Review PR-4547: [AI:codex] fix(doctor): report stalled reviews from existing evidence (Refs STORY-3095)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20fb6`) for branch `int35-story-3095`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-24T23:59:55.838907803Z
   session_id: 01a20fb6f4b3
+  changes: []
+- id: 01a2100c-5f13-7d53-8dc9-715f87317750
+  author: joe
+  timestamp: 2026-11-25T00:12:55.955337664Z
   changes: []
 filed_at:
   code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
