@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-25T04:30:58.327564653Z
+modified_at: 2026-11-25T04:35:55.680455354Z
 req_type: Story
 tags:
 - landing
@@ -1340,6 +1340,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: PR #4401 staged parents 0612b2c022 and 5d24023de5 overlap in the same readiness decision in review_watch_ready.rs: S1b permits covered red checks in review-gated mode, while incoming clean_policy requires successful exact-head latest FULL evidence for a stale base. Their intersection needs an explicit precedence decision. main_watch.rs also overlaps pass-deadline and verdict-error behavior. All ten host-recorded conflict paths remain unresolved: .aida/config.toml and aida-cli-lib/src/{forge.rs,land_metrics.rs,main_watch.rs,maintenance_schedule.rs,review_commands.rs,review_draft.rs,review_watch_ready.rs,tests/story_2897_main_watch_tests.rs,tests/task_1945_review_watch_ready_tests.rs}. No edits or publication declaration.. No triage reason was given.'
   created_at: 2026-11-25T04:30:58.327554425Z
   modified_at: 2026-11-25T04:30:58.327554425Z
+- id: 01a210fd-67a1-7762-87dd-02725b7fad1f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:35):
+    # STORY-2897 / PR #4401 NON-MECHANICAL conflict round (product-15 2026-11-24 21:32). Lane: CODEX. MAIN, existing branch. <=200 lines.
+    Merge current origin/main FRESH. The previous attempt's host-staged merge (with its unresolved files) is saved on dell1 at ~/salvage/STORY-2897-conflict-20261124T2123 (staged.patch re-applies cleanly onto the PR head; unmerged-worktree/ holds the conflicted files). Use it as reference.
+    SEMANTICS RULING (advisor-122): (20:30) the STRICTER rule wins: a STALE base requires exact-head latest FULL success even in review-gated mode; S1b's covered-red allowance applies ONLY to a fresh base. main_watch.rs pass-deadline/verdict-error overlap: whichever path WITHHOLDS readiness wins. Test at the intersection: review-gated + stale base + covered red → NOT ready.
+    Keep the PR's own content otherwise; resolve every conflict path. One targeted cargo run, then make check-ci-fast, then push to #4401. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T04:35:55.680455354Z
+  modified_at: 2026-11-25T04:35:55.680455354Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
