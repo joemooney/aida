@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:54:53.934825801Z
-modified_at: 2026-11-25T21:19:03.430045544Z
+modified_at: 2026-11-25T21:23:51.571894709Z
 req_type: Story
 tags:
 - completion
@@ -25,6 +25,18 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:19:00.923331494Z
   modified_at: 2026-11-25T21:19:00.923331494Z
+- id: 01a21498-2b0c-7472-ab28-95232ad3cf39
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:23):
+    # STORY-3006 (advisor-122 approved 2026-11-25 14:30, launch priority; product-15). Lane: CLAUDE. MAIN, NEW branch story-3006-complete-at-merge. <=300 changed lines; if larger, ship a first slice with (Refs STORY-3006) and say what remains. Otherwise use the completing (STORY-3006) trailer.
+    READ FIRST: `aida show STORY-3006 --comments` (evidence, ACs, rulings).
+    Today's motivation: the advisor had to complete BUG-2710 and others by hand after landing, and Refs-vs-completing titles caused confusion. The land/train path must complete the trailer specs AT MERGE (the same scanner as the pull side, run by the train once the merge lands), idempotently, so the next pull is a no-op.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-25T21:23:51.571894709Z
+  modified_at: 2026-11-25T21:23:51.571894709Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-8b06-77e3-b30f-6f6bcc0f2195
   author: joe
