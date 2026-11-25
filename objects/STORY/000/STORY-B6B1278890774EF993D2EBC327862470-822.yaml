@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T10:01:17.296020417Z
+modified_at: 2026-11-25T10:21:00.301970589Z
 req_type: Story
 tags:
 - hygiene
@@ -333,6 +333,19 @@ comments:
   modified_at: 2026-11-25T08:29:36.506042582Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21239-18b1-7c81-a192-3f53d13fe6d7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 33a7b137a89cf1fb813b2e7313cfe1de28da7594 plus native working-tree diff. Merge-base diff and untracked list empty.
+    AC1: [evidence: behavioral-test] session_reap.rs:1445 and task_2053_seat_clone_lifecycle_tests.rs:2791 exercise a published, closed GitHub PR at the checked-out tip and a lease-specific attestation hint.
+    AC2: [evidence: behavioral-test] The lifecycle fixture compares whole-clone archives including refs, index, tree and alternates after each path and checks the lease persists.
+    AC3: [evidence: behavioral-test] The dry scan and real quiet reap render the same recovery line. Final targeted lane job j20261125T100740665-2-0 passed one test.
+    Deep-pass: checked exact branch, SHA, repository and forge-specific terminal states across empty, multiple and malformed rows. A historical merge must not override unreadable history; added and exercised the refusal. The report grants no move or release authority. Automatic salvage and its four review findings belong to closed PR 4552. Manual execution of the suggested command depends on BUG-2755, absent from this base. No published-head CI available before host commit.
+  created_at: 2026-11-25T10:21:00.301970589Z
+  modified_at: 2026-11-25T10:21:00.301970589Z
+  session_id: 01a21226b039
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
