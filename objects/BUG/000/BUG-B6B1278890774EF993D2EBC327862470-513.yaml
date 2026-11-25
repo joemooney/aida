@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T06:45:46.879964358Z
+modified_at: 2026-11-25T06:55:04.319683964Z
 req_type: Bug
 tags:
 - codex
@@ -220,6 +220,18 @@ comments:
   modified_at: 2026-11-25T02:36:18.777396443Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2117c-8d04-7613-829f-94569f8540f2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fdef9b53fb34cab30c1b3090374e79044dcd2d82 plus the two native-lane edits. Reviewed the merge-base diff, working diff and untracked inventory (empty).
+    AC1: [evidence: behavioral-test] bug_2752_codex_init_and_advisor_launch passed, 1 executed. aida-cli/tests/support/codex_init.py:82 covers clean, unstaged and staged unpublished policy, exact push guidance, index/worktree preservation and stable HEAD. config_cmd.rs:1744 now checks committed refs first and still requires a clean config before editing.
+    AC2: [evidence: behavioral-test] task_2631_containment_tests.rs:513 covers missing-policy recovery, unpublished refusal and admission after publication. Reviewed this existing test and the child refusal assertions. AC2 tests were not rerun this round.
+    Deep pass checked the shared hint, TOML parsing, checkout/ref combinations, prompt gating and trusted launch policy. The early return only prints guidance. TASK-3881 retains the concurrent path-commit race per the pickup brief.
+  created_at: 2026-11-25T06:55:04.319683964Z
+  modified_at: 2026-11-25T06:55:04.319683964Z
+  session_id: 01a21173cb1a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
