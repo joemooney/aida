@@ -9,12 +9,12 @@ description: |
   - AC1: Deferred review findings are recorded as FINDINGS attached to their spec/PR (the findings ledger), NOT as new requirement specs. Reviewers and deferral rulings stop creating "Review follow-up:" drafts; `aida list` (default) shows no findings.
   - AC2: `aida findings` (or `aida findings list --area <path|tag>`) shows open review debt grouped by area/spec; a finding is PROMOTED to a requirement only by an explicit command that groups related findings into one spec with acceptance criteria.
   - AC3: A one-time migration converts existing open "Review follow-up:" drafts into findings on their parent spec (dry-run + operator sign-off), preserving their text and provenance.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T03:22:36.724193901Z
+modified_at: 2026-11-25T03:30:24.481802259Z
 req_type: Story
 tags:
 - backlog
@@ -114,6 +114,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a210c1-2dce-7d33-b0c0-d5ee93005e60
+  author: dirtlab
+  timestamp: 2026-11-25T03:30:25.358307104Z
+  session_id: 01a210b9ba99
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 260a82ae939faf34a8e6505a6f765f2151655610
   branch: main
@@ -121,3 +130,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: dc27cf1f4cb
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: Signed S1 requires each row embedded on a canonical parent requirement with its UUID. The collected PR-only path supports zero credited specs (story_2698_collected_approval_delivers_and_retries passes PR-7 and an empty spec slice). There is no parent UUID for this input. Refusing would turn a deliverable approved PR into a pending gate, and selecting an unrelated spec would misattribute debt. Decide the durable location and identity for change-only findings, or explicitly authorize refusal until a parent is bound.
+  lean: Keep PR-only findings with the durable change ledger, keyed by change and source receipt, with no synthetic requirement. This needs a signed exception to the parent UUID rule.
+  raised_by: implementer
+  raised_at: 2026-11-25T03:30:24.481802259Z
