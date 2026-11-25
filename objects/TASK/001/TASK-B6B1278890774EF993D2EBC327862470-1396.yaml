@@ -1,0 +1,28 @@
+id: 01a210af-6089-77b3-8476-d216d1b2e2d7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1396
+agreed_id: TASK-3893
+title: 'Bounded ContainedChild teardown via explicit close(): deadline over TempDir + mutation Session cleanup, recovery record under the state dir, typed error (TASK-3884 split)'
+description: |
+  Split from #4538 TASK-3884 r2 (advisor-122 ruling 2026-11-24 20:18; filed by product-15). STRICT, drive. Prereq hardening for STORY-3080.
+
+  ## Acceptance
+  - AC1: ContainedChild teardown is BOUNDED through an explicit close() (not Drop): the TempDir recursive cleanup and the optional mutation Session teardown run under one deadline; past it, a RECOVERY RECORD is written under the AIDA state dir (not env temp_dir) with a bounded write.
+  - AC2: close() returns a TYPED ERROR when the recovery record cannot be written (and logs it); Drop only falls back to best-effort and never silently loses the recovery item. Test: a stuck child, the caller returns within the deadline and the recovery is recorded; an unwritable state dir gives the typed error.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T03:10:58.697650410Z
+modified_at: 2026-11-25T03:10:58.697650410Z
+req_type: Task
+tags:
+- containment
+- launch
+- strict
+filed_at:
+  code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5d24023de56
+  vendor: claude
