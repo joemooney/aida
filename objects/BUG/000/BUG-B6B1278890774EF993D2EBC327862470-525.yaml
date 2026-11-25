@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T21:08:59.985076340Z
+modified_at: 2026-11-25T21:10:50.257466476Z
 req_type: Bug
 tags:
 - ci
@@ -154,6 +154,11 @@ comments:
   content: "FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:\n\n- TASK-b6b1278890774ef993d2ebc327862470-1450: Review follow-up: Test gap: bug2764_spec_keyed_approval_promotes_in_both_orders covers only promoted/skipped\n  "
   created_at: 2026-11-25T21:08:59.985076340Z
   modified_at: 2026-11-25T21:08:59.985076340Z
+- id: 01a2148c-0491-7643-b87d-001c9cbc52e9
+  author: joe
+  content: 'FOLDED REVIEW FINDING (backlog cleanup 2026-11-25 14:20, product-15): TASK-b6b1278890774ef993d2ebc327862470-1452: description: "From BUG-2764\nReviewed sha: 69cf3759d3c019700c639070d6e553dfe1941588\n\nStore-writer inventory coverage loss: after splitting promote_approved_heads into a private promotion_pass, the regenerated scripts/store-writers.toml drops the run_review -> promote_approved_heads wrapper row, ... (truncated; --full for the rest)" filed_at: 69cf375 (pr-4587) · aida 0.16.0 (ea1b3c3) · claude session 01a2147c relationships[1]{rel,id,title}:   references,BUG-2764,"Approved PRs do not get ci:full: review record --verdict approved and approved-head-full-ci leave approved heads on the fast tier (~1h landing delay per PR)" next[2]{cmd,to}:   aida edit TASK-b6b1278890774ef993d2ebc327862470-1452'
+  created_at: 2026-11-25T21:10:50.257466476Z
+  modified_at: 2026-11-25T21:10:50.257466476Z
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
