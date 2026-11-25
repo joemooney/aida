@@ -1,0 +1,31 @@
+id: 01a214dd-48b0-76d1-b02f-ea7e745f6e96
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1464
+title: 'Review follow-up: Deferred (round-1 F3, carried): review_commands.rs passes no PR or head association to lea'
+description: |-
+  From BUG-2736
+  Reviewed sha: dfa658dd96d93a1a377ec8aa8d895e2e3da5de7a
+
+  Deferred (round-1 F3, carried): review_commands.rs passes no PR or head association to leases::shelve_spec_on_failure, so a still-current refusal for an older PR can shelve a Done spec whose Done status came from a different change. The fix is to bind shelving to the change that earned Done. This is outside the advisor's 'do not change WHEN shelving happens' scope.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T22:39:36.112835347Z
+modified_at: 2026-11-25T22:39:36.112835347Z
+req_type: Task
+tags:
+- carried-from:BUG-2736
+- finding-hash:ef8bba1e
+- from-review:BUG-2736
+relationships:
+- rel_type: References
+  target_id: 01a20aa8-25c9-7dc3-992b-e72c6c60ba35
+  created_at: 2026-11-25T22:39:36.112882736Z
+filed_at:
+  code_sha: dfa658dd96d93a1a377ec8aa8d895e2e3da5de7a
+  branch: pr-4475
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 34c86b75a25
+  vendor: claude
+  session: 01a214daa6e5

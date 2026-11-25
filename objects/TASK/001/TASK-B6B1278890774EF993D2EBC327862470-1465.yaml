@@ -1,0 +1,31 @@
+id: 01a214dd-49fe-7182-b0b3-96adc7aecf24
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1465
+title: 'Review follow-up: Spec hygiene: BUG-2736''s recorded AC1/AC2 still describe the original lane-recovery scope.'
+description: |-
+  From BUG-2736
+  Reviewed sha: dfa658dd96d93a1a377ec8aa8d895e2e3da5de7a
+
+  Spec hygiene: BUG-2736's recorded AC1/AC2 still describe the original lane-recovery scope. AC1 is satisfied on main by bug_2451_pickup_entry_tests.rs:2186 (PR #4468, Refs), and AC2 was dropped by the advisor-122 ruling. The re-scoped criterion ('every automated status regression leaves a spec comment naming its writer') appears only in comments. Update the spec's acceptance criteria to match the re-scope so `aida criteria` stops reporting them as untraced.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T22:39:36.446182133Z
+modified_at: 2026-11-25T22:39:36.446182133Z
+req_type: Task
+tags:
+- carried-from:BUG-2736
+- finding-hash:9fcd9479
+- from-review:BUG-2736
+relationships:
+- rel_type: References
+  target_id: 01a20aa8-25c9-7dc3-992b-e72c6c60ba35
+  created_at: 2026-11-25T22:39:36.446224314Z
+filed_at:
+  code_sha: dfa658dd96d93a1a377ec8aa8d895e2e3da5de7a
+  branch: pr-4475
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 34c86b75a25
+  vendor: claude
+  session: 01a214daa6e5
