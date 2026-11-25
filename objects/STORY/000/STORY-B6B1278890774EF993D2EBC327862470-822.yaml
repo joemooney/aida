@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T18:34:08.606229382Z
+modified_at: 2026-11-25T18:34:22.041998660Z
 req_type: Story
 tags:
 - hygiene
@@ -467,6 +467,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: CHANGES REQUESTED for STORY-3059 (round 2 of report-only slice). I reviewed the whole five-file landing diff of original head a9b2089aaaa9 against pinned main d738e6c6 (landed tree 84827a5e). The head is 2 commits behind main, and neither finding depends on the intervening base commits. AC1 [documentation-inspection]: verified. The policy is recorded on the spec in comments 0, 15, 25 and 27 and the r2 brief: auto-reap is parked, hygiene reports only, and manual recovery goes through BUG-2755. AC2 [behavioral-test]: verified by bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates, which checks the hint text ''(published)'', the BUG-2755 / `aida session show <id>` pointer, and ''publication unverified'' when the origin branch is rewound or deleted while a stale origin/feat exists. Skipped rows render as report lines, and keep_items does not count them as failures. All four prior findings are addressed. F1: the hint now points at the real path. F2: a live, bounded ls-remote through origin_branch_at decides ''published''. F3: reap_one_clone re-runs the veto before mail retirement and teardown, and is tested with an OPEN-to-CLOSED change at the same SHA. Hygiene''s cache reclaim now spares the caches of clone-leased seats. F4: the scan and the real reap see a historical merged row and an exact-tip closed row together, and the negative cases (HEAD^, fork, merged-only, empty sha, invalid JSON) are covered. CI: fast gates, fast compile and Build pass at the head, and merge-hold-gate is pending clearance. One blocking ADR-76 finding remains: the GitLab arm of the new unmerged-only veto in the seat-destruction path has no test. One p3 follow-up: the hint omits the PR number.. No triage reason was given.'
   created_at: 2026-11-25T18:34:08.606219973Z
   modified_at: 2026-11-25T18:34:08.606219973Z
+- id: 01a213fc-c35a-77a1-be0a-3b16b679e4ce
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3059):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a9b2089aaaa9
+    Recorded: 2026-11-25T18:30:33.638595656+00:00
+    Findings:
+    1. aida-cli-lib/src/forge.rs:7035-7084 (observe_terminal_branch / parse_terminal_branch with unmerged_only=true) — the new closed-unmerged exact-tip veto is the only thing standing between a closed-MR seat clone and clone destruction in reap_one_clone, but its GitLab branch is untested. Every behavioral case in task_2053_seat_clone_lifecycle_tests.rs uses a GitHub shim, and forge_task_1222_gc_forge_tests_inline_tests.rs exercises only the unmerged_only=false GC parser. Mutating the GitLab arm (dropping "closed" from the `matches!(state, "CLOSED" | "closed")` check, or the full-SHA/same-project guards in unmerged mode) survives, and then a GitLab project (the work clone is GitLab-hosted) silently loses the veto and reaps a seat whose exact tip has a closed-unmerged MR. Add unit tests on parse_terminal_branch(..., ForgeKind::GitLab, ..., true): closed same-project MR at the tip → Some(true); merged-only at the tip, closed at a different sha, and closed cross-project → Some(false); a short/empty sha → None.
+    2. aida-cli-lib/src/session_reap.rs:1494 — the recoverable hint names the branch and publication state but not the closed PR/MR number that AC2's wording ("PR #N closed unmerged") and the salvage-pointer intent of AC1 call for. The advisor's r2 brief fixed the hint wording, so this is not an unmet AC, but an operator still has to look the PR up by hand. Follow-up: carry the matched closed PR number out of parse_terminal_branch and include it in the hint.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T18:34:21.914226202Z
+  modified_at: 2026-11-25T18:34:21.914226202Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
