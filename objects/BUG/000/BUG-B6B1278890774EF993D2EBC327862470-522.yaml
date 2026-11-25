@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T09:27:44.601114094Z
+modified_at: 2026-11-25T09:30:31.481703630Z
 req_type: Bug
 tags:
 - lanes
@@ -180,6 +180,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T09:27:44.445422031Z
   modified_at: 2026-11-25T09:27:44.445422031Z
+- id: 01a2120b-1485-71a1-b84b-aa2c496ffca3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:30):
+    # BUG-2761 / PR #4564 r4 FINAL (advisor-122 ruling 2026-11-25 02:30 at a0ecc2ae; STRICT; product-15). Lane: CODEX. MAIN, existing branch. REMOVE RATHER THAN PATCH. Target <=300 lines TOTAL for the PR (currently +754): this round must REMOVE well over 400 lines. If still red, the PR is parked (TASK-3895 is the fallback).
+    DELETE the base-advance refresh path ENTIRELY (no merge --abort, no restart on a new base). If the base advanced since the punt, the resume does NOT adopt: leave the retained merge UNTOUCHED and report "base moved: needs a fresh repair round" (the dispatcher then runs an ordinary fresh round). Resume ONLY the SAME-base case (the common one). This deletes the p1 path (refresh intent not persisted before abort).
+    TESTS: fix the e2e test so the FIRST lane STAGES a resolution, then the resume COMPLETES it on the same base; plus a base-moved case → NOT adopted, merge byte-for-byte untouched. Keep the F1 routing (same host-repair completion) and F3 (non-launch modes only report).
+    One targeted cargo run, then make check-ci-fast, then push to #4564. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T09:30:31.481703630Z
+  modified_at: 2026-11-25T09:30:31.481703630Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
