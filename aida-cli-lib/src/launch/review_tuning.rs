@@ -232,47 +232,45 @@ mod tests {
     fn s3b_review_rules_come_from_the_trusted_base() {
         let repo = tempfile::tempdir().unwrap();
         let root = repo.path();
-        let sh = |cmd: &str| {
-            let ok = std::process::Command::new("sh")
-                .args(["-ec", cmd])
+        let git = |args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
                 .current_dir(root)
                 .env("GIT_CONFIG_GLOBAL", "/dev/null")
                 .status();
-            assert!(ok.unwrap().success(), "{cmd}");
+            assert!(ok.unwrap().success(), "{args:?}");
         };
-        let commit = "git -c user.name=t -c user.email=t@t commit -qm c";
-        sh("git init -q . && mkdir .aida && echo 'x' > a.txt && git add a.txt");
-        sh(&format!("{commit} && git tag empty"));
-        assert!(trusted_review_rules(root, "empty", Some("HEAD"))
-            .unwrap()
-            .default_effort
-            .is_none());
-        let rules = format!("echo 'default_effort = \"medium\"' > {RULES_PATH}");
-        sh(&format!(
-            "{rules} && git add -A && {commit} && git tag base"
-        ));
+        let commit = |tag: &str| {
+            git(&["add", "-A"]);
+            git(&["commit", "-qm", tag]);
+            git(&["tag", tag]);
+        };
+        let write = |path: &str, body: &str| std::fs::write(root.join(path), body).unwrap();
+        git(&["init", "-q", "."]);
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        write("a.txt", "x");
+        commit("empty");
+        let empty = trusted_review_rules(root, "empty", Some("HEAD")).unwrap();
+        assert!(empty.default_effort.is_none());
+        write(RULES_PATH, "default_effort = \"medium\"\n");
+        commit("base");
         let head = |rev: &str| trusted_review_rules(root, "base", Some(rev));
-        sh(&format!("echo y > a.txt && {commit} -a && git tag ok"));
-        assert_eq!(
-            head("ok").unwrap().default_effort.as_deref(),
-            Some("medium")
-        );
+        write("a.txt", "y");
+        commit("ok");
+        let ok = head("ok").unwrap();
+        assert_eq!(ok.default_effort.as_deref(), Some("medium"));
         // The PR's own copy is never read: an edit refuses, committed or not.
-        sh(&format!("echo 'default_effort = \"low\"' > {RULES_PATH}"));
-        let err = trusted_review_rules(root, "base", None)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("modifies .aida/review-rules.toml"), "{err}");
-        sh(&format!("{commit} -a && git tag edited"));
+        write(RULES_PATH, "default_effort = \"low\"\n");
+        let err = trusted_review_rules(root, "base", None).unwrap_err();
+        assert!(err.to_string().contains("modifies .aida/review-rules.toml"));
+        commit("edited");
         assert!(head("edited").unwrap_err().to_string().contains("modifies"));
         assert!(trusted_review_rules(root, "--output=x", None).is_err());
-        sh(&format!(
-            "git rm -q {RULES_PATH} && {commit} && git tag deleted"
-        ));
-        assert!(head("deleted")
-            .unwrap_err()
-            .to_string()
-            .contains("modifies"));
+        std::fs::remove_file(root.join(RULES_PATH)).unwrap();
+        commit("deleted");
+        let err = head("deleted").unwrap_err();
+        assert!(err.to_string().contains("modifies"));
         // An injected default in the trusted file still fails validation.
         let bad = ProjectReviewRulesConfig {
             default_effort: Some(INJECTED.into()),
