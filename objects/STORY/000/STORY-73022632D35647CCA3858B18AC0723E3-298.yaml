@@ -1,0 +1,32 @@
+id: 01a21013-3a78-7a93-acc0-6c0250b467c7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-298
+title: 'Review PR-4548: [AI:codex] fix(review): fetch advanced risk bases within the evidence deadline (TASK-3874)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20fa6`) for branch `task-b6b1278890774ef993d2ebc327862470-1358`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4548>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1358` → `integration`
+
+  ## Covers
+
+  - TASK-3874
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4548` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T00:20:25.336927904Z
+modified_at: 2026-11-25T00:20:25.336927904Z
+req_type: Story
+filed_at:
+  code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b
+  session: 01a20fa680dd
