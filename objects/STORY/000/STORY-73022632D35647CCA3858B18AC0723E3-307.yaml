@@ -1,5 +1,6 @@
 id: 01a2118c-4fbf-70b3-9d99-950395204fea
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-307
+agreed_id: STORY-3126
 title: 'Review PR-4565: [AI:codex] fix(schedule): allow the stalled-reviews doctor gate (BUG-2762)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21156`) for branch `int38-bug-2762`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a2125e-5434-7f50-bd25-cd2dbb157506
+  author: joe
+  timestamp: 2026-11-25T11:01:41.556890788Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2d346c274965961d1e187e5d48a6dbe611232393
   branch: main

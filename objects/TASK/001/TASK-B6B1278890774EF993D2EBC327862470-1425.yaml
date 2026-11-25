@@ -1,5 +1,6 @@
 id: 01a211d7-6055-7a02-986e-fb693fb3446b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1425
+agreed_id: TASK-3410
 title: 'Review follow-up: aida-cli-lib/src/codex_bg_receipt.rs:334–344: The recovery operand matcher rejects support'
 description: |-
   From BUG-2747
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20df2-a0a7-7a40-a0c1-ad86be768bb8
   created_at: 2026-11-25T08:34:32.034756753Z
+history:
+- id: 01a2125d-1e5e-7ce1-b8e4-f4bd5cd2ef43
+  author: joe
+  timestamp: 2026-11-25T11:00:22.238278279Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ed120e3245ca0e75fe8b4bc97d863e8d734432d3
   branch: pr-4540

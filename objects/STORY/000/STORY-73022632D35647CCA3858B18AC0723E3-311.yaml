@@ -1,5 +1,6 @@
 id: 01a2123d-4f9d-7621-bc11-1d3b59b31cfb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-311
+agreed_id: STORY-3129
 title: 'Review PR-4569: [AI:codex] feat(land): enforce landing-mode readiness and WAITING dependencies (Refs STORY-2897)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a211fe`) for branch `story-2897-fresh`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T10:25:50.619030549Z
   session_id: 01a211fe6afe
+  changes: []
+- id: 01a2125f-10ba-7323-b365-41be184af0e8
+  author: joe
+  timestamp: 2026-11-25T11:02:29.818744318Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594

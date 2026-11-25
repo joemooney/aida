@@ -1,5 +1,6 @@
 id: 01a21203-efc7-7b61-8c1f-22afcd33260f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1427
+agreed_id: TASK-3406
 title: 'Review follow-up: aida-cli-lib/src/stalled_reviews.rs:60–67 and repair_journal.rs:228–245 hold an exclusive '
 description: |-
   From TASK-3878
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20e71-b96a-79b3-8452-d24f9bbeca75
   created_at: 2026-11-25T09:23:12.039021526Z
+history:
+- id: 01a2125c-25fc-7162-bc28-50c85f5fd6a4
+  author: joe
+  timestamp: 2026-11-25T10:59:18.652984196Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2161550dbc3e121e18305b3811c7917e8e6bd93f
   branch: pr-4566

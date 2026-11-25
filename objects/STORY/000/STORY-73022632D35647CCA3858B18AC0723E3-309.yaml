@@ -1,5 +1,6 @@
 id: 01a2120f-964d-7eb2-b451-37e699fed71e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-309
+agreed_id: STORY-3127
 title: 'Review PR-4567: [AI:codex] feat(review): export and filter runner findings (Refs STORY-3120)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a211d6`) for branch `int39-story-3120-s1`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T09:35:50.582151462Z
   session_id: 01a211d677cd
+  changes: []
+- id: 01a2125e-9006-7902-9f2f-93abb9e43987
+  author: joe
+  timestamp: 2026-11-25T11:01:56.870397822Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594

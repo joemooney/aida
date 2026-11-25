@@ -1,5 +1,6 @@
 id: 01a21218-1244-70b1-9895-7070ec6d046c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-310
+agreed_id: STORY-3130
 title: 'Review PR-4568: [AI:codex] fix(review-watch): verify exited attempts before dispatching moved heads (BUG-2763)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a211de`) for branch `bug-b6b1278890774ef993d2ebc327862470-524`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T09:45:40.288662753Z
   session_id: 01a211de6003
+  changes: []
+- id: 01a2125f-4fc4-73d0-b8d5-748d59880707
+  author: joe
+  timestamp: 2026-11-25T11:02:45.956036629Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594

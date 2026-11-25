@@ -1,5 +1,6 @@
 id: 01a211b6-e7a6-7283-adfa-24cafbe89205
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1424
+agreed_id: TASK-3411
 title: 'Review follow-up: BUG-2761 r2 scope — the new commit adds 295 lines and removes 22 relative to 217841e559b. '
 description: |-
   From BUG-2761
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a210b8-0b89-7b72-a5d9-49f67101d886
   created_at: 2026-11-25T07:59:04.526444398Z
+history:
+- id: 01a2125d-5897-7250-96c6-eb4c9e700d4b
+  author: joe
+  timestamp: 2026-11-25T11:00:37.143376835Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c21f184762dd62cc8a97144e0fb97b4834ba1680
   branch: pr-4564
