@@ -31,8 +31,20 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T04:53:06.181680804Z
+modified_at: 2026-11-25T05:22:22.123787836Z
 req_type: Task
+comments:
+- id: 01a21127-ae95-7061-89f0-777f9c145c79
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 45206d90a1df483c1caff91dee5abf345df4a8d2 and native working diff. Merge-base diff empty, no untracked additions.
+    AC1: [evidence: behavioral-test] repair_journal.rs:234 and :479; gate/mandate.rs:406. Trusted opt-in, explicit scope, validated matching advisor grant, verified local dead owner, complete host scan. Locked journal release records both IDs and process evidence and retains the tree.
+    AC2: [evidence: behavioral-test] repair_journal::tests::task_3895_mandate_release, focused job j20261125T045554394-2-0 executed one test successfully. Reviewed empty, duplicate and unrelated IDs, exact NUL-delimited marker matching, cwd components, unreadable observations, symlink and namespace refusals, legacy audit decoding, and unchanged terminal checks. Found and added the headless lane marker and both help snapshot representations. Fixed Linux fixture portability and reconciled writer inventory. Tests use synthetic proc evidence. Restricted hosts with unreadable process environments require terminal attestation. FAST retry j20261125T050848928-2-0 is running.
+  created_at: 2026-11-25T05:22:22.123787836Z
+  modified_at: 2026-11-25T05:22:22.123787836Z
+  session_id: 01a2110564b6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
