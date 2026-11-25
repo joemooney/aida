@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T09:36:52.305510122Z
+modified_at: 2026-11-25T09:40:35.195468546Z
 req_type: Story
 tags:
 - integration
@@ -99,6 +99,17 @@ comments:
   created_at: 2026-11-25T09:37:33.579099466Z
   modified_at: 2026-11-25T09:37:33.579099466Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21214-4b94-71b1-936f-7b33bb4e6cef
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:40):
+    # STORY-3120 S1 / PR #4567 MICRO-ROUND (advisor-122 2026-11-25 02:40; details from integration-30 on the spec; product-15). Lane: CODEX. Base: INTEGRATION, existing branch int39-story-3120-s1. <=15 lines.
+    In findings_exceeding_threshold (review_engine.rs), an UNKNOWN or UNPARSEABLE severity ranks as CRITICAL, so the CI gate FAILS CLOSED. Add a test: a finding with severity "bogus" exceeds any --fail-on threshold.
+    make check-ci-fast, then push to #4567. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T09:40:35.195468546Z
+  modified_at: 2026-11-25T09:40:35.195468546Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
