@@ -7157,7 +7157,9 @@ fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
         return None;
     }
     let mut check = host_git_command(root);
-    check.args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
+    check
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
     if crate::forge_lookup::forge_lookup_output(check)
         .ok()??
         .status
@@ -7168,6 +7170,10 @@ fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
     let mut fetch = host_remote_git_command(root, "origin");
     fetch
         .args([
+            "-c",
+            "fetch.bundleURI=",
+            "-c",
+            "transfer.bundleURI=false",
             "fetch",
             "--no-tags",
             "--no-write-fetch-head",
