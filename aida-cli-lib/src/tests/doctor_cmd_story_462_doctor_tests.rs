@@ -1814,6 +1814,7 @@ fn doctor_check_and_heal_subcommands_parse() {
     let crate::doctor_cmd::DoctorArgs {
         cmd:
             Some(cli::DoctorCommand::Heal {
+                attest: None,
                 id: None,
                 category,
                 yes,
