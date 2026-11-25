@@ -1909,6 +1909,83 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
     );
 }
 
+/// TASK-3882: the clone probe reads raw `-z` status, so a refusal quotes each
+/// path once whatever the seat's `core.quotePath`: a tab and trailing space,
+/// distinct non-UTF-8 names, and both endpoints of a rename.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3882_bwrap_clone_refusal_quotes_each_path_once() {
+    use std::os::unix::ffi::OsStrExt;
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "quote", "c0ffee003882");
+    seat_commit(&clone, "old  ");
+    git_ok(&clone, &["mv", "--", "old  ", "new "]);
+    git_ok(&clone, &["config", "core.quotePath", "false"]);
+    for name in [b"a\t ".as_slice(), b"\xfe ", b"\xff "] {
+        std::fs::write(clone.join(std::ffi::OsStr::from_bytes(name)), "x").unwrap();
+    }
+    let items = unshipped_items(&known(probe(&fx.main, &clone)));
+    for expected in [
+        r#"renamed (R.): "old  " -> "new ""#,
+        r#"untracked: "a\t ""#,
+        r#"untracked: "\376 ""#,
+        r#"untracked: "\377 ""#,
+    ] {
+        assert!(items.iter().any(|i| i == expected), "{expected}: {items:?}");
+    }
+}
+
+/// TASK-3882: a worktree refusal lists each file of an untracked directory,
+/// quoted once (trailing space, tab, distinct non-UTF-8 names) under
+/// `core.quotePath=false`, and keeps the tree and lease.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_3882_worktree_refusal_quotes_each_path_once() {
+    use std::os::unix::ffi::OsStrExt;
+    let fx = fixture();
+    let tree = fx.root.join("worktree-3882");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-b", "feat", tree.to_str().unwrap()],
+    );
+    let id = "c0ffee013882";
+    let lease = crate::lease_path(&fx.main, id);
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(
+        &lease,
+        format!(
+            "id = \"{id}\"\nscope = \"TASK-3882\"\nslug = \"task-3882\"\nowner = \"test\"\n\
+             worktree_path = {}\nbranch = \"feat\"\nstarted_at = \"2026-11-25T00:00:00Z\"\n\
+             hostname = \"h\"\n",
+            aida_core::toml_quote::toml_string(&tree.display().to_string())
+        ),
+    )
+    .unwrap();
+    git_ok(&tree, &["config", "core.quotePath", "false"]);
+    std::fs::create_dir(tree.join("notes")).unwrap();
+    std::fs::write(tree.join("notes/todo "), "pending").unwrap();
+    for name in [b"a\t ".as_slice(), b"\xfe ", b"\xff "] {
+        std::fs::write(tree.join(std::ffi::OsStr::from_bytes(name)), "x").unwrap();
+    }
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let msg = format!("{:#}", end_session(id, false).unwrap_err());
+    for expected in [
+        r#"  ?? "notes/todo ""#,
+        r#"  ?? "a\t ""#,
+        r#"  ?? "\376 ""#,
+        r#"  ?? "\377 ""#,
+    ] {
+        assert!(msg.lines().any(|l| l == expected), "{expected}: {msg}");
+    }
+    assert!(!msg.contains("?? notes/"), "{msg}");
+    assert!(tree.exists() && lease.exists());
+}
+
 /// BUG-051: every probe `git status` entry is named by its path, and a set
 /// of findings is never rendered as an empty list.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
