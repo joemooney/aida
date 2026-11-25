@@ -3402,11 +3402,12 @@ fn prepare_rework_merge_with_base(
         "rework seat {} is not on the PR head branch {branch}; inspect `aida session leases --all` and restore the recorded branch through the appropriate seat recovery path before retrying",
         tree.display()
     );
-    if let Ok(base) = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]) {
+    let retained_merge = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).ok();
+    if let Some(base) = &retained_merge {
         let head = execute(&["rev-parse", "HEAD"])?;
         let journal = crate::repair_journal::RepairGuard::lock(main)?;
         journal
-            .for_tree(tree, branch, &head, &base)
+            .for_tree(tree, branch, &head, base)
             .context("unfinished merge lacks host repair evidence; preserve it for recovery")?;
     }
     // Recovery depends on the host's recorded tree kind, never seat configuration.
@@ -3438,6 +3439,10 @@ fn prepare_rework_merge_with_base(
     .map_err(|error| {
         if let Some(key) = repair_key.into_inner() {
             report_repair_refusal(main, &key, &error);
+        }
+        if retained_merge.is_some() {
+            // Keep the actual refusal visible in the CLI's single-line error.
+            return error;
         }
         let recovery = if pending_resume {
             if clone.is_some() {
@@ -4058,8 +4063,18 @@ fn prepare_host_repair_with(
                 "Previous resolution saved for reference at {}",
                 patch.display()
             );
-            execute(&["merge", "--abort"])
-                .context("cannot abort the retained merge; inspect the saved resolution")?;
+            // Salvage can take time. Revalidate ownership under the journal
+            // lock before changing the index or MERGE_HEAD.
+            let guard = RepairGuard::lock(main)?;
+            anyhow::ensure!(
+                guard.for_tree(tree, branch, &head, &merge)? == &previous,
+                "resume needs operator: repair ownership changed during salvage; merge retained"
+            );
+            verify_retained_index(&previous, execute)?;
+            execute(&["merge", "--abort"]).with_context(|| format!(
+                "resume needs operator: could not abort the retained merge in {}; inspect the working-tree patch {} and staged patch {} before retrying",
+                tree.display(), patch.display(), patch.with_extension("index.patch").display()
+            ))?;
             superseded = Some((previous, patch));
         } else {
             let paths = entry.original_conflict_paths.clone();

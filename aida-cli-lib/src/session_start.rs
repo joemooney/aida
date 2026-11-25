@@ -1581,6 +1581,7 @@ pub(crate) struct UnleasedClaimRelease {
     store: std::path::PathBuf,
     scope: String,
     pub(crate) claim: Option<coordination::Claim>,
+    previous_claim: Option<coordination::Claim>,
 }
 impl UnleasedClaimRelease {
     pub(crate) fn new(root: &std::path::Path, scope: &str) -> Self {
@@ -1588,6 +1589,7 @@ impl UnleasedClaimRelease {
             store: root.join(".aida-store"),
             scope: scope.into(),
             claim: None,
+            previous_claim: None,
         }
     }
 }
@@ -1596,7 +1598,8 @@ impl Drop for UnleasedClaimRelease {
         let Some(claim) = self.claim.take() else {
             return;
         };
-        match coordination::release_claim_receipt(&self.store, &claim) {
+        match coordination::release_claim_receipt(&self.store, &claim, self.previous_claim.as_ref())
+        {
             Ok(_) => {}
             Err(error) => eprintln!(
                 "session start failed and could not release its shared claim for {}: {error:#}; \
@@ -1612,6 +1615,7 @@ pub(crate) struct SessionStartCleanup {
     root: std::path::PathBuf,
     scope: String,
     claim: Option<coordination::Claim>,
+    previous_claim: Option<coordination::Claim>,
     tree: Option<std::path::PathBuf>,
     branch: Option<String>,
     branch_sha: Option<String>,
@@ -1636,6 +1640,7 @@ impl SessionStartCleanup {
             root: root.into(),
             scope: scope.into(),
             claim: None,
+            previous_claim: None,
             tree: None,
             branch: None,
             branch_sha: None,
@@ -1851,7 +1856,7 @@ impl Drop for SessionStartCleanup {
         self.revert_claim_write();
         let _ = self.release_branch();
         if let Some(claim) = &self.claim {
-            match coordination::release_claim_receipt(&self.root.join(".aida-store"), claim) {
+            match coordination::release_claim_receipt(&self.root.join(".aida-store"), claim, self.previous_claim.as_ref()) {
                 Ok(true) => {},
                 Ok(false) => eprintln!("launch cleanup kept changed shared claim for {}; inspect `aida session leases --all`", self.scope),
                 Err(error) => eprintln!("launch cleanup could not release shared claim for {}: {error:#}; inspect `aida session leases --all`", self.scope),
@@ -2677,6 +2682,13 @@ pub(crate) fn session_start_with_receipt(
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
+        let repair = retained_entry.as_ref().map(|entry| {
+            let previous = rollback
+                .as_mut()
+                .map(|cleanup| &mut cleanup.previous_claim)
+                .unwrap_or(&mut unleased_claim.previous_claim);
+            (entry, previous)
+        });
         match coordination::acquire_claim_bound(
             &store_root,
             owns,
@@ -2685,6 +2697,7 @@ pub(crate) fn session_start_with_receipt(
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
             Some(&bound_lease_id),
+            repair,
         ) {
             Ok((coordination::AcquireOutcome::Acquired, claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {

@@ -1707,6 +1707,7 @@ fn bug2655_failed_and_punted_lanes_release_exact_claim_and_allow_same_branch_rel
             false,
             false,
             Some(&l.id),
+            None,
         )
         .unwrap();
         if punt {
@@ -1742,6 +1743,7 @@ fn bug2655_failed_and_punted_lanes_release_exact_claim_and_allow_same_branch_rel
             false,
             true,
             Some("new-lane"),
+            None,
         )
         .unwrap();
         assert_eq!(

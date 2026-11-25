@@ -788,7 +788,7 @@ pub(crate) fn heal_exited_claim(store_root: &Path, expected: &Claim) -> Result<b
         if !exited_holder_is_dead(expected, Utc::now()) {
             return Ok(None);
         }
-        if delete_claim_receipt_locked(store_root, expected)? {
+        if delete_claim_receipt_locked(store_root, expected, None)? {
             Ok(Some(aida_core::git_ops::head_sha(store_root)?))
         } else {
             Ok(None)
@@ -1029,6 +1029,7 @@ pub(crate) fn acquire_claim_receipted(
         review_verb,
         force,
         None,
+        None,
     )
 }
 
@@ -1043,6 +1044,7 @@ pub(crate) fn acquire_claim_bound(
     review_verb: bool,
     force: bool,
     lease_id: Option<&str>,
+    mut repair: Option<(&crate::repair_journal::RepairEntry, &mut Option<Claim>)>,
 ) -> Result<(AcquireOutcome, Option<Claim>)> {
     if !store_root.exists() {
         return Ok((
@@ -1092,6 +1094,7 @@ pub(crate) fn acquire_claim_bound(
                 // trace:BUG-2658 | ai:codex
                 commit_pending_admission_writes(store_root)?;
                 if let Err(e) = refresh_store(store_root, &branch)? {
+                    anyhow::ensure!(repair.is_none(), "cannot refresh shared repair claim: {e}");
                     return Ok((
                         AcquireOutcome::Unavailable(format!("store unreachable ({e})")),
                         false,
@@ -1108,7 +1111,26 @@ pub(crate) fn acquire_claim_bound(
                 // trace:BUG-2586 | ai:codex ai:claude
                 let mut replaced: Vec<(PathBuf, Claim)> = Vec::new();
                 if !review_verb {
-                    for (held_path, holder) in implementer_claims(store_root, scope)? {
+                    let holders = implementer_claims(store_root, scope)?;
+                    if let Some((_, prior)) = repair.as_mut() {
+                        **prior = None;
+                        anyhow::ensure!(holders.len() <= 1, "ambiguous shared repair claims");
+                    }
+                    for (held_path, holder) in holders {
+                        // trace:BUG-2761 | ai:codex
+                        if let Some((entry, prior)) = repair.as_mut() {
+                            anyhow::ensure!(
+                                held_path == path && holder.claim_id.is_some() && !holder.review_verb && !holder.process_backed
+                                    && holder.host == ours.host && holder.clone_path == ours.clone_path
+                                    && holder.lease_id.as_deref() == Some(entry.lane_id.as_str())
+                                    && crate::lane_liveness::exited_claim_seat(&holder).as_ref() == Some(&entry.tree_path)
+                                    && crate::lane_liveness::claim_worker_has_exited(&holder, Utc::now()),
+                                "shared repair claim lacks exact predecessor exit evidence; resume needs operator"
+                            );
+                            **prior = Some(holder.clone());
+                            replaced.push((held_path, holder));
+                            continue;
+                        }
                         if !bound_holder_is_dead(&holder, clone_path)
                             && !(force && exited_holder_is_dead(&holder, Utc::now()))
                         {
@@ -1271,6 +1293,10 @@ pub(crate) fn acquire_claim_bound(
                 {
                     eprintln!("warning: the unpushed lease claim commit was kept: {rollback:#}");
                 }
+                anyhow::ensure!(
+                    repair.is_none(),
+                    "shared repair claim push unconfirmed: {e}; resume needs operator"
+                );
                 return Ok((
                     AcquireOutcome::Unavailable(format!("could not push lease claim ({e})")),
                     // The remote may have accepted before the connection failed.
@@ -1348,13 +1374,20 @@ fn rollback_claim_commit(store_root: &Path, expected_head: &str, expected: &Clai
 /// Compare-and-delete only this invocation's persisted identity. Legacy and
 /// adopted claims never produce a rollback receipt.
 // trace:BUG-2188 | ai:codex
-pub(crate) fn release_claim_receipt(store_root: &Path, expected: &Claim) -> Result<bool> {
+pub(crate) fn release_claim_receipt(
+    store_root: &Path,
+    expected: &Claim,
+    restore: Option<&Claim>,
+) -> Result<bool> {
     let branch = aida_core::git_ops::current_branch(store_root)?;
     let committed_sha = aida_core::db::with_store_write_lock(store_root, || {
+        if restore.is_some() {
+            commit_pending_admission_writes(store_root)?;
+        }
         if let Err(error) = refresh_store(store_root, &branch)? {
             anyhow::bail!("cannot refresh claim before rollback: {error}");
         }
-        if delete_claim_receipt_locked(store_root, expected)? {
+        if delete_claim_receipt_locked(store_root, expected, restore)? {
             Ok(Some(aida_core::git_ops::head_sha(store_root)?))
         } else {
             Ok(None)
@@ -1371,7 +1404,11 @@ pub(crate) fn release_claim_receipt(store_root: &Path, expected: &Claim) -> Resu
 }
 
 // trace:BUG-2188 | ai:codex
-fn delete_claim_receipt_locked(store_root: &Path, expected: &Claim) -> Result<bool> {
+fn delete_claim_receipt_locked(
+    store_root: &Path,
+    expected: &Claim,
+    restore: Option<&Claim>,
+) -> Result<bool> {
     let path = claim_path(store_root, &expected.scope);
     let Some(current) = read_claim(&path) else {
         return Ok(false);
@@ -1380,7 +1417,15 @@ fn delete_claim_receipt_locked(store_root: &Path, expected: &Claim) -> Result<bo
     {
         return Ok(false);
     }
-    std::fs::remove_file(&path)?;
+    if let Some(prior) = restore {
+        anyhow::ensure!(
+            claim_path(store_root, &prior.scope) == path,
+            "repair claim path changed"
+        );
+        aida_core::write_atomic(&path, toml::to_string_pretty(prior)?.as_bytes())?;
+    } else {
+        std::fs::remove_file(&path)?;
+    }
     let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(&expected.scope));
     aida_core::git_ops::add(store_root, &[&rel])?;
     aida_core::git_ops::commit(
@@ -2151,7 +2196,8 @@ mod tests {
             "codex",
             false,
             false,
-            Some("new-lease")
+            Some("new-lease"),
+            None,
         )
         .is_err());
         let (_, receipt) = acquire_claim_bound(
@@ -2162,6 +2208,7 @@ mod tests {
             false,
             true,
             Some("new-lease"),
+            None,
         )
         .unwrap();
         let successor = receipt.unwrap();
@@ -2199,6 +2246,7 @@ mod tests {
                 false,
                 true,
                 Some("new-lease"),
+                None,
             )
             .unwrap_err()
             .to_string();
@@ -2283,6 +2331,7 @@ mod tests {
             false,
             true,
             Some("new-lease"),
+            None,
         )
         .unwrap();
         assert_ne!(
@@ -2338,7 +2387,8 @@ mod tests {
                 "codex",
                 false,
                 true,
-                Some("new-lease")
+                Some("new-lease"),
+                None,
             )
             .is_err());
             assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
@@ -2363,7 +2413,8 @@ mod tests {
             "codex",
             false,
             true,
-            Some("new-lease")
+            Some("new-lease"),
+            None,
         )
         .is_err());
         assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
@@ -2506,6 +2557,7 @@ mod tests {
             false,
             false,
             Some("new-lease"),
+            None,
         )
         .unwrap_err()
         .to_string();
@@ -2518,6 +2570,7 @@ mod tests {
             false,
             true,
             Some("new-lease"),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -2539,6 +2592,7 @@ mod tests {
             false,
             false,
             Some("unleased"),
+            None,
         )
         .unwrap();
         let claim = receipt.expect("a fresh claim has a receipt");
@@ -2798,7 +2852,7 @@ mod tests {
         );
         let mut loser = winner.clone();
         loser.claim_id = Some(uuid::Uuid::new_v4().to_string());
-        assert!(!release_claim_receipt(&store, &loser).unwrap());
+        assert!(!release_claim_receipt(&store, &loser, None).unwrap());
         assert_eq!(read_claim(&claim_path(&store, "BUG-2586")), Some(winner));
     }
 
@@ -2887,6 +2941,7 @@ mod tests {
             false,
             false,
             Some("0123456789ab"),
+            None,
         )
         .unwrap();
         let winner = receipt.unwrap();
@@ -2900,6 +2955,7 @@ mod tests {
                 false,
                 force,
                 Some("ba9876543210"),
+                None,
             )
             .unwrap_err()
             .to_string();
@@ -2915,6 +2971,7 @@ mod tests {
             true,
             false,
             Some("0123456789ab"),
+            None,
         )
         .unwrap();
         assert_eq!(review.and_then(|c| c.lease_id), None);
@@ -4362,14 +4419,14 @@ mod bug2188_claim_rollback_tests {
         })
         .unwrap();
         assert!(aida_core::git_ops::push(&store, "origin", "aida-store").unwrap());
-        assert!(!release_claim_receipt(&store, &expected).unwrap());
+        assert!(!release_claim_receipt(&store, &expected, None).unwrap());
         assert_eq!(
             read_claim(&claim_path(&store, "TASK-1")).unwrap(),
             successor
         );
         let (_, receipt) =
             acquire_claim_receipted(&store, "TASK-2", &root, "implementer", false, false).unwrap();
-        assert!(release_claim_receipt(&store, &receipt.unwrap()).unwrap());
+        assert!(release_claim_receipt(&store, &receipt.unwrap(), None).unwrap());
         assert!(!claim_path(&store, "TASK-2").exists());
     }
 
@@ -4450,7 +4507,7 @@ mod bug2188_claim_rollback_tests {
         assert_eq!(lines.next(), lines.next());
         // The refreshed claim now belongs to the re-claiming session: the
         // first invocation's receipt no longer authorizes deleting it.
-        assert!(!release_claim_receipt(&store, &first).unwrap());
+        assert!(!release_claim_receipt(&store, &first, None).unwrap());
         assert!(claim_path(&store, "TASK-1").exists());
     }
 
@@ -4562,12 +4619,12 @@ mod bug2188_claim_rollback_tests {
         let path = claim_path(dir.path(), "TASK-1");
         let body = toml::to_string(&successor).unwrap();
         std::fs::write(&path, &body).unwrap();
-        assert!(!delete_claim_receipt_locked(dir.path(), &expected).unwrap());
+        assert!(!delete_claim_receipt_locked(dir.path(), &expected, None).unwrap());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
         let mut legacy = expected;
         legacy.claim_id = None;
         std::fs::write(&path, toml::to_string(&legacy).unwrap()).unwrap();
-        assert!(!delete_claim_receipt_locked(dir.path(), &legacy).unwrap());
+        assert!(!delete_claim_receipt_locked(dir.path(), &legacy, None).unwrap());
     }
 }
 

@@ -974,7 +974,7 @@ pub(crate) fn finish_headless_lane_for_child(
                     None,
                     &lease.worktree_path,
                 )
-                .and_then(|_| crate::coordination::release_claim_receipt(&store, claim));
+                .and_then(|_| crate::coordination::release_claim_receipt(&store, claim, None));
                 if let Err(error) = result {
                     eprintln!("warning: exited lane shared claim retained: {error:#}");
                 }
