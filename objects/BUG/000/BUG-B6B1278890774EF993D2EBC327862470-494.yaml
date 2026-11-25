@@ -10,12 +10,12 @@ description: |
   ## Acceptance
   - AC1: The train (and `aida pr ship`) resolve a PR's specs from its title/squash trailer, or from base..head commits whose patch-id is not already on the base, never from history whose change is already on main. Test: a promotion-shaped branch (main merged into a branch carrying old squashed-history commits plus one new commit) resolves only the new commit's spec.
   - AC2: The refusal text lists only the specs that drove it (unchanged wording otherwise).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-25T22:35:02.179705166Z
+modified_at: 2026-11-25T23:00:41.881165332Z
 req_type: Bug
 tags:
 - landing
@@ -88,6 +88,12 @@ comments:
   modified_at: 2026-11-25T22:35:02.179705166Z
   session_id: 01a2149c38e5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a214f0-9919-72a1-bc9b-12c3450969ea
+  author: aida-publication-done
+  content: Implementer push 9e55228e4279 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T23:00:41.881164846Z
+  modified_at: 2026-11-25T23:00:41.881164846Z
+  session_id: 01a2149c38e5
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
@@ -109,6 +115,14 @@ history:
   session_id: 01a2149c38e5
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a214f0-9919-72a1-bc9b-12b4498605db
+  author: aida-publication-done
+  timestamp: 2026-11-25T23:00:41.881163050Z
+  session_id: 01a2149c38e5
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: ef906ec7464cf1b3100c4383085280c203722941
   branch: main
