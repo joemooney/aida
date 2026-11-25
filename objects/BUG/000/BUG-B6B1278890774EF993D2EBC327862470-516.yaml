@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T01:36:46.966646025Z
+modified_at: 2026-11-25T01:36:56.979873604Z
 req_type: Bug
 tags:
 - leases
@@ -74,6 +74,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Request changes for BUG-2755. Reviewed the entire pinned landed diff on main dc27cf1f4cb49a050002334062efb59fe7d2b914 and attest head 521e5f2095687a2815de128700c4c6745600769b. The head is seven commits behind. The overlapping base edit adds an unrelated Doctor Heal parser field and none of the findings depends on that edit.. No triage reason was given.'
   created_at: 2026-11-25T01:36:46.966632303Z
   modified_at: 2026-11-25T01:36:46.966632303Z
+- id: 01a21059-48f6-7553-9e5c-a1f9fe845398
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2755):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 521e5f209568
+    Recorded: 2026-11-25T01:35:55.753770853+00:00
+    Findings:
+    1. aida-cli-lib/src/doctor/worktrees.rs:1462 — AC1 can report absence while the recorded tree still has a mount in another namespace. The new check reads only the healer's mountinfo, and the preceding holder scan returns empty when the path cannot be canonicalized. A private namespace can retain a mount at that path after it disappears from the healer's view. Establish mount absence from the relevant host/seat namespaces and keep the lease when the evidence is unavailable.
+    2. aida-cli-lib/src/doctor/worktrees.rs:1447 — AC1 can treat a dangling final symlink as an absent directory if the recorded path ends in a slash. The kernel follows the final link for that spelling and returns ENOENT. Path::ancestors().skip(1) then moves to its parent and misses the link itself, and the final check repeats the same lookup. Reject ambiguous spellings or inspect the normalized final component without following it before deciding absence.
+    3. aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4612 — The AC1 mount assertion calls the helper with synthetic mountinfo, while the heal reads the process's own mountinfo. The test would still pass if the heal stopped consulting the guard. Inject the mount evidence at the heal boundary and assert that a recorded mount keeps the lease, alongside the existing absent/no-mount success and diagnostic assertions.
+    4. aida-cli-lib/src/doctor/worktrees.rs:1482 — AC2 can release a present clone with unreadable contents. Git's untracked traversal can emit an opendir warning and continue with exit zero and no entries for that directory. The shared sandbox runner discards stderr on success (aida-cli-lib/src/seat_clone.rs:1486), so Probe::Known can look clean despite incomplete evidence. Make this release path refuse incomplete status scans and cover a valid clone containing an unreadable directory. Git source: https://github.com/git/git/blob/master/dir.c#L2438-L2460
+    5. aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4628 — The AC2 fixture creates a plain directory with no .git. The clone probe refuses that fixture even with ordinary permissions, and the assertion also accepts any skipped result from the holder scan. The test proves neither EACCES nor EIO handling. Use an otherwise eligible clone with a clean control or inject those errors at the relevant filesystem boundary, assert the specific refusal, and verify the lease survives.
+    6. aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:4670 — The AC3 mail fixture uses an empty Git repository with no ignore rule for .aida/mailbox. Creating msg makes the checkout dirty, so the generic is_err assertion passes before the mailbox guard runs and survives deletion of that guard. Ignore the mailbox in the fixture and assert the mail-specific refusal and retained lease.
+    7. aida-cli-lib/src/doctor/worktrees.rs:1543 — The new early release skips force_cleanup_lease's second holder check after the potentially long clone probe. A process can enter the clone during the probe and still have its lease, grant and ownership released at line 1558. The empty-mail check is also an unfenced snapshot, so a local writer can add mail before release. Revalidate holders and clone identity at release and coordinate the empty-mail check with writers through the release decision.
+    8. aida-cli-lib/src/doctor/worktrees.rs:1491 — A Git-clean unbound clone with an ignored, nonempty local mailbox now errors before the established retention-refusal path. Previously, salvage returned clean and force_cleanup_lease called keep_ending_retained, revoking the lease's child grant and stamping the reason while preserving the lease and mail (aida-cli-lib/src/leases.rs:3459). Preserve that refusal transition when the new mailbox check fails and assert it in the fixture.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T01:36:56.566540851Z
+  modified_at: 2026-11-25T01:36:56.566540851Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
