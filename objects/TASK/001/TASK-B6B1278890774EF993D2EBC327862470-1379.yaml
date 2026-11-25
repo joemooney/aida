@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:53:36.980920917Z
-modified_at: 2026-11-25T03:22:33.014270899Z
+modified_at: 2026-11-25T03:32:54.491337340Z
 req_type: Task
 tags:
 - conflict-repair
@@ -41,6 +41,11 @@ comments:
   created_at: 2026-11-25T03:22:33.014266966Z
   modified_at: 2026-11-25T03:22:33.014266966Z
   session_id: 01a210b53cd1
+- id: 01a210c3-745b-7bd2-894c-02b0ffd31145
+  author: joe
+  content: 'PARKED (product-15 20:42): needs BUG-2756 (#4533, snapshot fallback + warning fixture) on integration first; relaunch after #4533 lands and integration re-syncs.'
+  created_at: 2026-11-25T03:32:54.491337340Z
+  modified_at: 2026-11-25T03:32:54.491337340Z
 history:
 - id: 01a20f56-6c1a-7c13-8bdd-1a29b59f834a
   author: joe
