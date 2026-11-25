@@ -233,6 +233,7 @@
       <a href="#severity">02. Severity &amp; Fβ</a>
       <a href="#pr-deep-dive">03. Per-PR Golden Matches</a>
       <a href="#telemetry">04. Telemetry &amp; Cost</a>
+      <a href="#leaderboard">05. Leaderboard vs. Industry</a>
     </nav>
     <div class="top-actions">
       <button class="btn-ghost" id="theme-toggle" type="button">
@@ -915,6 +916,514 @@
     </div>
   </section>
 
+  <!-- SECTION 05: LIVE REVIEWBENCH LEADERBOARD COMPARISON -->
+  <section class="report-section" id="leaderboard">
+    <div class="section-head">
+      <div>
+        <div class="section-num">05 / LIVE REVIEW-BENCH.AI LEADERBOARD COMPARISON</div>
+        <h2>How AIDA Stacks Up Against Published Leaderboard Agents</h2>
+      </div>
+      <div class="pr-tabs" role="tablist">
+        <button class="btn-ghost active" type="button" data-lb="high">High-Severity (Default Leaderboard View)</button>
+        <button class="btn-ghost" type="button" data-lb="hm">High + Medium Severity</button>
+        <button class="btn-ghost" type="button" data-lb="all">All Severities (Unfiltered)</button>
+      </div>
+    </div>
+
+    <!-- LB VIEW 1: HIGH SEVERITY (DEFAULT) -->
+    <div class="pr-panel active" id="lb-panel-high">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Default ReviewBench Leaderboard View (<code>severities=High</code> · Ranked by Grounded F1)</h3>
+            <p class="card-subtitle">DATA SOURCE: <code>https://review-bench.ai/leaderboard.md</code> &amp; <code>/api/leaderboard/metrics?severities=High&amp;preference=balanced</code></p>
+          </div>
+          <span class="badge badge-elite">AIDA 4-PR Test Slice: 87.3% High-Severity Grounded F1 (129.4 s avg)</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Agent / Configuration</th>
+                <th>Grounded F1 %</th>
+                <th>Grounded Precision %</th>
+                <th>High-Severity Recall %</th>
+                <th>Augmented Precision %</th>
+                <th>Avg Duration / PR</th>
+                <th>Evaluation Scope</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:var(--emerald-soft);font-weight:600;">
+                <td><strong>★</strong></td>
+                <td><strong>AIDA v2 · Adversarial (Finder → Challenger)</strong></td>
+                <td><strong>87.3%</strong></td>
+                <td><strong>91.7%</strong></td>
+                <td><strong>83.3%</strong> (5/6)</td>
+                <td><strong>94.4%</strong></td>
+                <td><strong>129.4 s</strong> (2.2 min)</td>
+                <td>4-PR Multi-Language Test Slice</td>
+              </tr>
+              <tr>
+                <td>1</td>
+                <td>OhMyBug</td>
+                <td>83.0%</td>
+                <td>92.0%</td>
+                <td>75.6%</td>
+                <td>94.3%</td>
+                <td>322.2 s (5.4 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>intent-review-agent</td>
+                <td>82.2%</td>
+                <td>92.0%</td>
+                <td>74.4%</td>
+                <td>96.1%</td>
+                <td>212.6 s (3.5 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>intent-review-agent · v1</td>
+                <td>78.7%</td>
+                <td>90.1%</td>
+                <td>69.8%</td>
+                <td>96.7%</td>
+                <td>337.1 s (5.6 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>Copilot code review · Max</td>
+                <td>75.7%</td>
+                <td>96.8%</td>
+                <td>62.2%</td>
+                <td>97.9%</td>
+                <td>973.5 s (16.2 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>Laude RevEngine · anthropic/claude-opus-5.5</td>
+                <td>73.3%</td>
+                <td>92.8%</td>
+                <td>60.6%</td>
+                <td>95.3%</td>
+                <td>181.6 s (3.0 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td>Copilot code review · Balanced</td>
+                <td>72.7%</td>
+                <td>96.9%</td>
+                <td>58.2%</td>
+                <td>97.6%</td>
+                <td>371.2 s (6.2 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>7</td>
+                <td>Codex · GPT-5.6 Sol · Max</td>
+                <td>70.2%</td>
+                <td>96.3%</td>
+                <td>55.3%</td>
+                <td>95.5%</td>
+                <td>567.7 s (9.5 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>9</td>
+                <td>Klaussy · claude-opus-5-5 · 1</td>
+                <td>69.3%</td>
+                <td>93.3%</td>
+                <td>55.2%</td>
+                <td>96.2%</td>
+                <td>55.1 s (0.9 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>10</td>
+                <td>Qodo</td>
+                <td>68.3%</td>
+                <td>95.3%</td>
+                <td>53.3%</td>
+                <td>96.4%</td>
+                <td>274.0 s (4.6 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>14</td>
+                <td>Copilot code review · Lite</td>
+                <td>66.2%</td>
+                <td>94.5%</td>
+                <td>50.9%</td>
+                <td>95.5%</td>
+                <td>275.4 s (4.6 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>15</td>
+                <td>Devin AI</td>
+                <td>66.1%</td>
+                <td>93.1%</td>
+                <td>51.2%</td>
+                <td>94.7%</td>
+                <td>192.9 s (3.2 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>20</td>
+                <td>Cursor</td>
+                <td>60.9%</td>
+                <td>96.0%</td>
+                <td>44.5%</td>
+                <td>98.0%</td>
+                <td>256.5 s (4.3 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>23</td>
+                <td>Cubic</td>
+                <td>35.8%</td>
+                <td>93.5%</td>
+                <td>22.1%</td>
+                <td>86.3%</td>
+                <td>701.7 s (11.7 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+              <tr>
+                <td>24</td>
+                <td>Greptile</td>
+                <td>33.4%</td>
+                <td>95.2%</td>
+                <td>20.2%</td>
+                <td>97.9%</td>
+                <td>289.2 s (4.8 min)</td>
+                <td>219 PRs (3 rounds)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- LB VIEW 2: HIGH + MEDIUM SEVERITY -->
+    <div class="pr-panel" id="lb-panel-hm">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Substantive Defects Leaderboard View (<code>severities=High,Medium</code> · Ranked by Grounded F1)</h3>
+            <p class="card-subtitle">DATA SOURCE: <code>https://review-bench.ai/api/leaderboard/metrics?severities=High,Medium&amp;preference=balanced</code></p>
+          </div>
+          <span class="badge badge-elite">AIDA 4-PR Test Slice: 78.4% H+M Grounded F1 (Top-4 Tier)</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Agent / Configuration</th>
+                <th>H+M Grounded F1 %</th>
+                <th>Grounded Precision %</th>
+                <th>H+M Grounded Recall %</th>
+                <th>Augmented Precision %</th>
+                <th>Avg Duration / PR</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>OhMyBug</td>
+                <td>81.7%</td>
+                <td>93.5%</td>
+                <td>72.6%</td>
+                <td>97.0%</td>
+                <td>322.2 s</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>intent-review-agent · v1</td>
+                <td>79.5%</td>
+                <td>93.0%</td>
+                <td>69.4%</td>
+                <td>97.7%</td>
+                <td>337.1 s</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>intent-review-agent</td>
+                <td>79.0%</td>
+                <td>93.7%</td>
+                <td>68.3%</td>
+                <td>96.8%</td>
+                <td>212.6 s</td>
+              </tr>
+              <tr style="background:var(--emerald-soft);font-weight:600;">
+                <td><strong>★</strong></td>
+                <td><strong>AIDA v2 · Adversarial (4-PR Test Slice)</strong></td>
+                <td><strong>78.4%</strong></td>
+                <td><strong>91.7%</strong></td>
+                <td><strong>68.4%</strong> (13/19)</td>
+                <td><strong>94.4%</strong></td>
+                <td><strong>129.4 s</strong></td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>Klaussy · claude-opus-5-5 · 1</td>
+                <td>75.0%</td>
+                <td>92.8%</td>
+                <td>63.0%</td>
+                <td>96.2%</td>
+                <td>55.1 s</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>diffox ultra</td>
+                <td>73.4%</td>
+                <td>92.4%</td>
+                <td>60.9%</td>
+                <td>95.8%</td>
+                <td>86.8 s</td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td>Laude RevEngine · anthropic/claude-opus-5.5</td>
+                <td>71.8%</td>
+                <td>92.6%</td>
+                <td>58.6%</td>
+                <td>95.6%</td>
+                <td>181.6 s</td>
+              </tr>
+              <tr>
+                <td>8</td>
+                <td>block/review · sol-opus · off</td>
+                <td>62.8%</td>
+                <td>93.8%</td>
+                <td>47.2%</td>
+                <td>95.1%</td>
+                <td>196.8 s</td>
+              </tr>
+              <tr>
+                <td>9</td>
+                <td>Copilot code review · Max</td>
+                <td>61.4%</td>
+                <td>92.5%</td>
+                <td>46.0%</td>
+                <td>94.3%</td>
+                <td>973.5 s</td>
+              </tr>
+              <tr>
+                <td>11</td>
+                <td>Qodo</td>
+                <td>54.5%</td>
+                <td>94.0%</td>
+                <td>38.4%</td>
+                <td>95.9%</td>
+                <td>274.0 s</td>
+              </tr>
+              <tr>
+                <td>12</td>
+                <td>Copilot code review · Balanced</td>
+                <td>54.4%</td>
+                <td>93.3%</td>
+                <td>38.4%</td>
+                <td>94.3%</td>
+                <td>371.2 s</td>
+              </tr>
+              <tr>
+                <td>13</td>
+                <td>Devin AI</td>
+                <td>54.4%</td>
+                <td>93.9%</td>
+                <td>38.3%</td>
+                <td>95.9%</td>
+                <td>192.9 s</td>
+              </tr>
+              <tr>
+                <td>18</td>
+                <td>Codex · GPT-5.6 Sol · Max</td>
+                <td>48.9%</td>
+                <td>92.9%</td>
+                <td>33.2%</td>
+                <td>93.5%</td>
+                <td>567.7 s</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- LB VIEW 3: ALL SEVERITIES -->
+    <div class="pr-panel" id="lb-panel-all">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Unfiltered All-Severities Leaderboard View (<code>/api/leaderboard</code> · High + Medium + Low)</h3>
+            <p class="card-subtitle">SHOWS WHY NOISE-SUPPRESSING AGENTS DROP IN ALL-SEVERITY RECALL (52.3% OF CORPUS IS LOW-SEVERITY NITS)</p>
+          </div>
+          <span class="badge badge-elite">AIDA Grounded Precision: 91.7% (Highest in All-Severity Top 25)</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Agent / Configuration</th>
+                <th>All-Sev Grounded F1 %</th>
+                <th>Grounded Precision %</th>
+                <th>All-Sev Grounded Recall %</th>
+                <th>Augmented Precision %</th>
+                <th>Avg Duration / PR</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>OhMyBug</td>
+                <td>69.3%</td>
+                <td>81.7%</td>
+                <td>60.2%</td>
+                <td>92.4%</td>
+                <td>322.2 s</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>intent-review-agent · v1</td>
+                <td>68.8%</td>
+                <td>80.7%</td>
+                <td>60.0%</td>
+                <td>91.0%</td>
+                <td>337.1 s</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>Klaussy · claude-opus-5-5 · 1</td>
+                <td>67.4%</td>
+                <td>80.2%</td>
+                <td>58.1%</td>
+                <td>87.3%</td>
+                <td>55.1 s</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>diffox ultra</td>
+                <td>63.6%</td>
+                <td>78.3%</td>
+                <td>53.5%</td>
+                <td>81.6%</td>
+                <td>86.8 s</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>intent-review-agent</td>
+                <td>62.6%</td>
+                <td>81.8%</td>
+                <td>50.7%</td>
+                <td>87.7%</td>
+                <td>212.6 s</td>
+              </tr>
+              <tr style="background:var(--emerald-soft);font-weight:600;">
+                <td><strong>★</strong></td>
+                <td><strong>AIDA v2 · Adversarial (4-PR Test Slice)</strong></td>
+                <td><strong>59.8%</strong></td>
+                <td><strong>91.7%</strong></td>
+                <td><strong>44.4%</strong> (16/36)</td>
+                <td><strong>94.4%</strong></td>
+                <td><strong>129.4 s</strong></td>
+              </tr>
+              <tr>
+                <td>7</td>
+                <td>Laude RevEngine · anthropic/claude-opus-5.5</td>
+                <td>59.6%</td>
+                <td>83.6%</td>
+                <td>46.3%</td>
+                <td>90.8%</td>
+                <td>181.6 s</td>
+              </tr>
+              <tr>
+                <td>8</td>
+                <td>block/review · sol-opus · off</td>
+                <td>47.7%</td>
+                <td>88.7%</td>
+                <td>32.6%</td>
+                <td>91.1%</td>
+                <td>196.8 s</td>
+              </tr>
+              <tr>
+                <td>10</td>
+                <td>Copilot code review · Max</td>
+                <td>42.4%</td>
+                <td>87.8%</td>
+                <td>28.0%</td>
+                <td>88.3%</td>
+                <td>973.5 s</td>
+              </tr>
+              <tr>
+                <td>12</td>
+                <td>Devin AI</td>
+                <td>37.0%</td>
+                <td>84.0%</td>
+                <td>23.8%</td>
+                <td>80.4%</td>
+                <td>192.9 s</td>
+              </tr>
+              <tr>
+                <td>16</td>
+                <td>Qodo</td>
+                <td>35.1%</td>
+                <td>85.3%</td>
+                <td>22.1%</td>
+                <td>86.8%</td>
+                <td>274.0 s</td>
+              </tr>
+              <tr>
+                <td>17</td>
+                <td>Copilot code review · Balanced</td>
+                <td>34.9%</td>
+                <td>88.2%</td>
+                <td>21.8%</td>
+                <td>88.9%</td>
+                <td>371.2 s</td>
+              </tr>
+              <tr>
+                <td>18</td>
+                <td>Codex · GPT-5.6 Sol · Max</td>
+                <td>30.4%</td>
+                <td>86.0%</td>
+                <td>18.5%</td>
+                <td>85.8%</td>
+                <td>567.7 s</td>
+              </tr>
+              <tr>
+                <td>22</td>
+                <td>Cubic</td>
+                <td>27.3%</td>
+                <td>85.5%</td>
+                <td>16.3%</td>
+                <td>85.1%</td>
+                <td>701.7 s</td>
+              </tr>
+              <tr>
+                <td>23</td>
+                <td>Greptile</td>
+                <td>27.2%</td>
+                <td>86.1%</td>
+                <td>16.2%</td>
+                <td>85.6%</td>
+                <td>289.2 s</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <footer>
     <div>AIDA · The Governed Software Factory · ReviewBench Evaluation Report (<code>STORY-3120</code>)</div>
     <div>
@@ -989,8 +1498,21 @@
       prBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const target = btn.getAttribute('data-pr');
-      document.querySelectorAll('.pr-panel').forEach(p => {
+      document.querySelectorAll('#pr-deep-dive .pr-panel').forEach(p => {
         p.classList.toggle('active', p.id === `panel-${target}`);
+      });
+    });
+  });
+
+  // Leaderboard view tabs
+  const lbBtns = Array.from(document.querySelectorAll('[data-lb]'));
+  lbBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      lbBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.getAttribute('data-lb');
+      document.querySelectorAll('#leaderboard .pr-panel').forEach(p => {
+        p.classList.toggle('active', p.id === `lb-panel-${target}`);
       });
     });
   });
