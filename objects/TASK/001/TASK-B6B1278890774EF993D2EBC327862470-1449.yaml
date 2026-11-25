@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: a9b2089aaaa9386cc3a859b5277bff50b5058548
 
   aida-cli-lib/src/session_reap.rs:1494 — the recoverable hint names the branch and publication state but not the closed PR/MR number that AC2's wording ("PR #N closed unmerged") and the salvage-pointer intent of AC1 call for. The advisor's r2 brief fixed the hint wording, so this is not an unmet AC, but an operator still has to look the PR up by hand. Follow-up: carry the matched closed PR number out of parse_terminal_branch and include it in the hint.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T18:30:53.562368635Z
-modified_at: 2026-11-25T21:05:07.088529756Z
+modified_at: 2026-11-25T21:05:08.963839081Z
 req_type: Task
 tags:
 - carried-from:STORY-3059
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T19:12:45.775234258Z
   changes: []
+- id: 01a21486-cf63-7950-bc75-0dcbde994166
+  author: joe
+  timestamp: 2026-11-25T21:05:08.963834638Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: a9b2089aaaa9386cc3a859b5277bff50b5058548
   branch: pr-4570
