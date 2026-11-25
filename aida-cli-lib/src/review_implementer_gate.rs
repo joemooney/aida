@@ -5,9 +5,9 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 #[derive(Debug)]
-struct Holder {
-    scope: String,
-    branch: Option<String>,
+pub(crate) struct Holder {
+    pub(crate) scope: String,
+    pub(crate) branch: Option<String>,
     host: String,
     lease: String,
 }
@@ -64,6 +64,25 @@ pub(crate) fn deferred_with_metadata(
     root: &Path,
     metadata: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Option<String>> {
+    let holders = live_holders(root)?;
+    if holders.is_empty() {
+        return Ok(None);
+    }
+    let (title, branch) = metadata()?;
+    let mut specs = crate::pr_ship::extract_authorship_spec_ids_from_subject(&title);
+    specs.extend(crate::pr_ship::extract_spec_ids_from_text(&branch));
+    // Friendly and origin IDs remain interchangeable after store remapping.
+    if let Some(store) = crate::load_store_for_lookup(root) {
+        for id in specs.clone() {
+            if let Some(req) = store.get_requirement_by_spec_id(&id) {
+                specs.extend(req.spec_id.iter().chain(req.agreed_id.iter()).cloned());
+            }
+        }
+    }
+    Ok(reason(&holders, &branch, &specs))
+}
+
+pub(crate) fn live_holders(root: &Path) -> Result<Vec<Holder>> {
     let mut holders = local_holders(root)?;
     let host = crate::coordination::hostname();
     let now = chrono::Utc::now();
@@ -94,21 +113,7 @@ pub(crate) fn deferred_with_metadata(
             });
         }
     }
-    if holders.is_empty() {
-        return Ok(None);
-    }
-    let (title, branch) = metadata()?;
-    let mut specs = crate::pr_ship::extract_authorship_spec_ids_from_subject(&title);
-    specs.extend(crate::pr_ship::extract_spec_ids_from_text(&branch));
-    // Friendly and origin IDs remain interchangeable after store remapping.
-    if let Some(store) = crate::load_store_for_lookup(root) {
-        for id in specs.clone() {
-            if let Some(req) = store.get_requirement_by_spec_id(&id) {
-                specs.extend(req.spec_id.iter().chain(req.agreed_id.iter()).cloned());
-            }
-        }
-    }
-    Ok(reason(&holders, &branch, &specs))
+    Ok(holders)
 }
 
 fn remote_live(

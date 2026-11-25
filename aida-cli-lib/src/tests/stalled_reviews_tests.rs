@@ -41,8 +41,8 @@ fn story_3095_read_only_scan() {
             "number":1, "headRefOid":head, "headRefName":"fix", "title":"Fix review"
         }))
     };
-    for (age, expected) in [(59, 0), (61, 1)] {
-        let record = serde_json::json!({"verdict":"request-changes", "reviewed_sha":head});
+    let write_verdict = |change, verdict: &str, age| {
+        let record = serde_json::json!({"verdict":verdict, "reviewed_sha":head});
         let mut event = GateEvent::new(
             change,
             EventBody::Verdict {
@@ -52,7 +52,11 @@ fn story_3095_read_only_scan() {
         event.at = (Utc::now() - TimeDelta::minutes(age)).to_rfc3339();
         event.seq = 1;
         let contents = format!("{}\n", serde_json::to_string(&event).unwrap());
-        std::fs::write(&ledger, &contents).unwrap();
+        std::fs::write(ledger_file(root, change), &contents).unwrap();
+        contents
+    };
+    for (age, expected) in [(59, 0), (61, 1)] {
+        let contents = write_verdict(change, "request-changes", age);
         assert_eq!(scan().len(), expected);
         assert_eq!(std::fs::read_to_string(&ledger).unwrap(), contents);
     }
@@ -62,9 +66,10 @@ fn story_3095_read_only_scan() {
         ledger_entries + 1
     );
     assert_eq!(std::fs::read_dir(&store).unwrap().count(), 2);
-    // trace:TASK-3878 | ai:codex
+    // trace:TASK-3878.AC1 | ai:codex
     let contents = std::fs::read(&ledger).unwrap();
     let mut spec = aida_core::Requirement::new("Fix".into(), String::new());
+    spec.owner = "tester".into();
     spec.spec_id = Some("TASK-7".into());
     let live = "b".repeat(40);
     let now = Utc::now();
@@ -78,50 +83,67 @@ fn story_3095_read_only_scan() {
         serde_yaml::to_string(&spec).unwrap(),
     )
     .unwrap();
-    std::fs::write(&ledger, "corrupt").unwrap();
     let conflict = serde_json::json!({"number":1,"headRefOid":head,"baseRefName":"main","baseRefOid":"stale","mergeable":"CONFLICTING","headRefName":"fix","title":"Fix (Refs TASK-7)"});
     let mut approved = conflict.clone();
     approved["number"] = 7.into();
-    approved["reviewDecision"] = "APPROVED".into();
+    write_verdict(ChangeKey::pr(7), "approved", 2);
     let mut ordinary = conflict.clone();
     ordinary["mergeable"] = "MERGEABLE".into();
+    std::fs::write(&ledger, "corrupt").unwrap();
+    let refused = scan_pr(conflict.clone());
+    assert!(refused[0].summary.contains("conflicting with"));
+    assert!(refused[1].summary.contains("unavailable"));
+    std::fs::write(&ledger, contents).unwrap();
+    let mut github = conflict.clone();
+    github["number"] = 8.into();
+    github["reviewDecision"] = "APPROVED".into();
     let rows = scan_rows(
         root,
         now,
         TimeDelta::minutes(60),
-        vec![ordinary, serde_json::Value::Null, conflict, approved],
+        vec![ordinary, conflict.clone(), approved, github],
         &format!("{live}\trefs/heads/main\n"),
     )
     .unwrap();
     assert_eq!(rows.len(), 4);
     assert!(rows[0].summary.contains("conflict age at least 14m"));
     assert!(rows[0].id.starts_with("PR-7/"));
-    assert!(rows[1].summary.contains(&format!(
-        "conflicting with main {live}, conflict age unknown, owner unknown"
+    assert_eq!(rows[1].id, "PR-8/TASK-7");
+    assert!(rows[2].summary.contains(&format!(
+        "conflicting with main {live}, conflict age unknown, owner tester"
     )));
-    assert_eq!(rows[1].action, "aida queue rework TASK-7 --for implementer --reason 'Merge the base into PR-1, resolve conflicts, no scope change'");
-    assert!(rows[2].summary.contains("unavailable"));
+    assert_eq!(rows[2].action, "aida queue rework TASK-7 --for implementer --reason 'Merge the base into PR-1, resolve conflicts, no scope change'");
+    assert!(scan_pr(serde_json::Value::Null)[0]
+        .summary
+        .contains("unavailable"));
     assert_eq!(std::fs::read_dir(&state).unwrap().count(), state_entries);
-    std::fs::write(&ledger, contents).unwrap();
+    let queue = store.join("registry/queues");
+    std::fs::create_dir_all(&queue).unwrap();
+    let queue_path = queue.join("tester.yaml");
+    let mut entry = serde_json::json!([{"user_id":"tester","requirement_id":spec.id,"position":1,"added_by":"tester","added_at":now,"for_role":"implementer","note":"ordinary work"}]);
+    std::fs::write(&queue_path, entry.to_string()).unwrap();
+    assert_eq!(scan_pr(conflict.clone()).len(), 1);
+    entry[0]["note"] = "Merge the base into PR-1, resolve conflicts, no scope change".into();
+    std::fs::write(&queue_path, entry.to_string()).unwrap();
+    assert!(scan_pr(conflict.clone()).is_empty());
+    std::fs::remove_file(queue_path).unwrap();
     let sessions = crate::leases_dir(root);
     std::fs::create_dir(&sessions).unwrap();
-    let lease = format!(
-        r#"id = "running"
-scope = "STORY-1"
-slug = "fix"
-owner = "tester"
-branch = "fix"
-worktree_path = "."
-started_at = "{}"
-hostname = "localhost"
-role = "implementer"
-active_pid = {}
-"#,
-        Utc::now().to_rfc3339(),
-        std::process::id()
-    );
-    std::fs::write(sessions.join("running.toml"), &lease).unwrap();
+    let pid = std::process::id();
+    let lease: crate::SessionLease = serde_json::from_value(serde_json::json!({
+        "id":"running", "scope":"STORY-1", "slug":"fix", "owner":"tester", "branch":"fix",
+        "worktree_path":root, "started_at":now, "hostname":crate::coordination::hostname(),
+        "role":"implementer", "active_pid":pid, "active_pid_start_time":crate::process_probe::process_start_identity(pid),
+        "pid_namespace":crate::agent_registry::current_pid_namespace(),
+        "holder_record":serde_json::to_string(&aida_core::proc_identity::HolderRecord::capture(pid)).unwrap()
+    })).unwrap();
+    std::fs::write(
+        sessions.join("running.toml"),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
     assert!(scan().is_empty());
+    assert!(scan_pr(conflict).is_empty());
 }
 
 #[test]
@@ -138,4 +160,15 @@ fn story_3095_green_since_last_completion() {
     );
     rows[1]["completedAt"] = serde_json::Value::Null;
     assert!(crate::land::green_rollup_at(&rows).is_none());
+}
+
+#[test]
+fn base_tip_probe_refuses_seat_clone() {
+    let tmp = tempfile::Builder::new()
+        .prefix("aida-seat-")
+        .tempdir()
+        .unwrap();
+    let out = base_tip_command(tmp.path()).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("contained seat's private clone"));
 }

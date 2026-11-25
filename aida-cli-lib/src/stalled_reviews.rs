@@ -42,14 +42,7 @@ pub(crate) fn scan(exec: &aida_core::exec_context::ExecContext) -> Result<Vec<Do
     let root = exec.project_root();
     let prs = open_prs(root)?;
     let tips = if prs.iter().any(|pr| pr["mergeable"] == "CONFLICTING") {
-        use aida_core::git_ops::RemoteCredentialsExt as _;
-        let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(root)
-            .args(["ls-remote", "--heads", "origin"])
-            .env("GIT_TERMINAL_PROMPT", "0");
-        crate::review_watch::forge::clear_routing(&mut cmd);
-        cmd.remote_credentials(root, "origin")
-            .stdin(std::process::Stdio::null());
+        let cmd = base_tip_command(root);
         crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(30))
             .filter(|out| out.status.success())
             .and_then(|out| String::from_utf8(out.stdout).ok())
@@ -58,6 +51,17 @@ pub(crate) fn scan(exec: &aida_core::exec_context::ExecContext) -> Result<Vec<Do
         String::new()
     };
     scan_rows(root, now, threshold, prs, &tips)
+}
+
+fn base_tip_command(root: &Path) -> std::process::Command {
+    let mut cmd = aida_core::git_ops::host_remote_git_command(root, "origin");
+    crate::review_watch::forge::clear_routing(&mut cmd);
+    // clear_routing removes the credential builder's Git config count too.
+    aida_core::git_ops::configure_remote_credentials(&mut cmd, root, "origin");
+    cmd.args(["ls-remote", "--heads", "origin"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    cmd
 }
 
 fn open_prs(root: &Path) -> Result<Vec<serde_json::Value>> {
@@ -88,18 +92,9 @@ fn scan_rows(
     let store = storage.load_for_read()?;
     let ownership = crate::ownership::reader::LeaseReader::with_store(root, &store);
     let ordinary = std::cell::LazyCell::new(|| -> Result<_> {
-        let mut queued = HashSet::new();
-
+        let mut queued = Vec::new();
         for user in storage.queue_users()? {
-            for entry in storage.queue_list(&user, false)? {
-                if entry
-                    .for_role
-                    .as_deref()
-                    .is_none_or(|r| !r.eq_ignore_ascii_case("reviewer"))
-                {
-                    queued.insert(entry.requirement_id);
-                }
-            }
+            queued.extend(storage.queue_list(&user, false)?);
         }
         let active: Vec<_> = crate::list_leases(root)
             .into_iter()
@@ -114,6 +109,7 @@ fn scan_rows(
     });
     let mut findings = Vec::new();
     let mut conflicts = Vec::new();
+    let holders = std::cell::LazyCell::new(|| crate::review_implementer_gate::live_holders(root));
     for pr in prs {
         let mut row = || -> Result<()> {
             let number = pr["number"].as_u64().context("PR number missing")?;
@@ -140,6 +136,24 @@ fn scan_rows(
             if specs.is_empty() {
                 specs.push("unknown spec".into());
             }
+            let latest = || -> Result<_> {
+                let records = project::change_verdicts_checked(root, ChangeKey::pr(number))
+                    .map_err(anyhow::Error::msg)?;
+                let mut newest = None;
+                for (at, record) in records {
+                    let at = DateTime::parse_from_rfc3339(&at)?;
+                    if newest.as_ref().is_none_or(|(prev, _)| at >= *prev) {
+                        newest = Some((at, record));
+                    }
+                }
+                newest
+                    .map(|(at, r)| {
+                        parse_ledger_record(&r)
+                            .map(|v| (at, v))
+                            .context("invalid ledger verdict")
+                    })
+                    .transpose()
+            };
             // Conflict evidence is independent of review age and verdict availability.
             // trace:TASK-3878 | ai:codex
             if conflicting {
@@ -153,9 +167,40 @@ fn scan_rows(
                     format!("Merge the base into PR-{number}, resolve conflicts, no scope change");
                 // Earlier repairs recorded this exact (PR, head, base) observation.
                 let observation = format!("conflict-repair-{number}-{head}-{base}: merge the base into PR-{number}, resolve conflicts, no scope change");
-                let age = specs
-                    .iter()
-                    .filter_map(|s| store.get_requirement_by_spec_id(s))
+                let (entries, _) = ordinary.as_ref().map_err(|e| anyhow::anyhow!("{e}"))?;
+                let queued = entries.iter().any(|entry| {
+                    let note = entry.note.as_deref().unwrap_or_default();
+                    entry.for_role.as_deref() == Some("implementer")
+                        && seen.contains(&entry.requirement_id)
+                        && (note == reason
+                            || note
+                                .strip_prefix(&format!("conflict-repair-{number}-"))
+                                .and_then(|s| s.split_once(": "))
+                                .is_some_and(|(_, r)| r.eq_ignore_ascii_case(&reason)))
+                });
+                let live = holders.as_ref().map_err(|e| anyhow::anyhow!("{e}"))?;
+                if queued
+                    || live.iter().any(|h| {
+                        h.branch.as_deref() == Some(branch)
+                            || store
+                                .get_requirement_by_spec_id(&h.scope)
+                                .is_some_and(|r| seen.contains(&r.id))
+                    })
+                {
+                    return Ok(());
+                }
+                let backing = || {
+                    specs
+                        .iter()
+                        .filter_map(|id| store.get_requirement_by_spec_id(id))
+                };
+                let owners: std::collections::BTreeSet<_> = backing()
+                    .map(|r| r.owner.trim())
+                    .filter(|owner| !owner.is_empty())
+                    .collect();
+                let owner = owners.into_iter().collect::<Vec<_>>().join(", ");
+                let owner = if owner.is_empty() { "unknown" } else { &owner };
+                let age = backing()
                     .flat_map(|r| &r.comments)
                     .filter(|c| c.content == observation && c.created_at <= now)
                     .map(|c| c.created_at)
@@ -164,39 +209,30 @@ fn scan_rows(
                         || "unknown".into(),
                         |at| format!("at least {}m", (now - at).num_minutes()),
                     );
-                let action = if seen.is_empty() {
-                    "Identify the backing spec before queuing rework".into()
+                let action = if seen.len() == 1 {
+                    format!("aida queue rework {spec} --for implementer --reason '{reason}'")
                 } else {
-                    specs
-                        .iter()
-                        .map(|s| {
-                            format!("aida queue rework {s} --for implementer --reason '{reason}'")
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
+                    "Identify the backing spec before queuing rework".into()
                 };
                 let finding = DoctorFinding {
                     category: "stalled-reviews".into(),
                     id: format!("PR-{number}/{spec}"),
-                    summary: format!("PR-{number} {spec} {head}: conflicting with {name} {base}, conflict age {age}, owner unknown"),
+                    summary: format!("PR-{number} {spec} {head}: conflicting with {name} {base}, conflict age {age}, owner {owner}"),
                     action,
                     safe_heal: false,
                 };
-                conflicts.push((pr["reviewDecision"] != "APPROVED", finding));
+                let ledger = latest();
+                let approved = matches!(&ledger, Ok(Some((_, v))) if !v.is_closed()
+                    && v.kind == VerdictKind::Approved
+                    && v.reviewed_sha.as_deref().is_some_and(|sha| sha.eq_ignore_ascii_case(head)));
+                conflicts.push((!approved && pr["reviewDecision"] != "APPROVED", finding));
+                ledger?;
                 return Ok(());
             }
-            let records = project::change_verdicts_checked(root, ChangeKey::pr(number))
-                .map_err(anyhow::Error::msg)?;
-            let latest = records
-                .into_iter()
-                .map(|(at, record)| Ok((DateTime::parse_from_rfc3339(&at)?, record)))
-                .collect::<Result<Vec<_>>>()?
-                .into_iter()
-                .max_by_key(|(at, _)| *at);
-            let Some((at, record)) = latest else {
+            let latest = latest()?;
+            let Some((at, verdict)) = latest else {
                 return Ok(());
             };
-            let verdict = parse_ledger_record(&record).context("invalid ledger verdict")?;
             if verdict.is_closed() {
                 return Ok(());
             }
@@ -210,12 +246,16 @@ fn scan_rows(
             let on_train = green && !crate::pr_train::pr_head_pins(root, number)?.is_empty();
             let (queued, active) = ordinary.as_ref().map_err(|e| anyhow::anyhow!("{e}"))?;
             for spec in specs {
-                let reworking = store
-                    .get_requirement_by_spec_id(&spec)
-                    .is_some_and(|r| queued.contains(&r.id))
-                    || active.iter().any(|l| {
-                        aida_core::id_identity::same_id(&l.scope, &spec) || l.branch == branch
-                    });
+                let reworking = store.get_requirement_by_spec_id(&spec).is_some_and(|r| {
+                    queued.iter().any(|e| {
+                        e.requirement_id == r.id
+                            && e.for_role
+                                .as_deref()
+                                .is_none_or(|role| !role.eq_ignore_ascii_case("reviewer"))
+                    })
+                }) || active.iter().any(|l| {
+                    aida_core::id_identity::same_id(&l.scope, &spec) || l.branch == branch
+                });
                 let Some(reason) = stall(
                     verdict.kind,
                     verdict.reviewed_sha.as_deref(),
