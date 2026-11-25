@@ -1,0 +1,34 @@
+id: 01a2123d-4f9d-7621-bc11-1d3b59b31cfb
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-311
+title: 'Review PR-4569: [AI:codex] feat(land): enforce landing-mode readiness and WAITING dependencies (Refs STORY-2897)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a211fe`) for branch `story-2897-fresh`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4569>
+  - Branch: `story-2897-fresh` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2897
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4569` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T10:25:37.693460513Z
+modified_at: 2026-11-25T10:25:37.693460513Z
+req_type: Story
+filed_at:
+  code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a8
+  session: 01a211fe6afe
