@@ -1,5 +1,6 @@
 id: 01a2144c-6d97-7703-822f-7a74e0d78858
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1450
+agreed_id: TASK-3438
 title: 'Review follow-up: Test gap: bug2764_spec_keyed_approval_promotes_in_both_orders covers only promoted/skipped'
 description: |-
   From BUG-2764
@@ -35,6 +36,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a21493-3465-7aa3-82ac-1ac1b24629f8
+  author: joe
+  timestamp: 2026-11-25T21:18:41.253474089Z
+  changes: []
 filed_at:
   code_sha: 6719a94592e6bf03948325240c4a38f8e310f068
   branch: pr-4587
