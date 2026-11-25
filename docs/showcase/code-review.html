@@ -768,6 +768,18 @@
                 <td>Separate commands (<code>ocr review</code> vs <code>ocr scan</code>)</td>
                 <td><span class="badge badge-elite">Unified Command</span> (<code>--pr</code>, <code>--from</code>, <code>--commit</code>, or <code>--scan --path &lt;dir&gt;</code>)</td>
               </tr>
+              <tr>
+                <td><strong>Two-Pass Adversarial Verification</strong></td>
+                <td>Single-pass prompt (rubber-stamps own blind spots)</td>
+                <td>Single-vendor LLM post-filter</td>
+                <td><span class="badge badge-elite">Red-Team Finder → Blue-Team Challenger</span> (<code>--adversarial</code>) with auto cross-vendor or cross-model opposition (<code>--model</code> / <code>--challenger-model</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>Turnkey CI, SARIF 2.1.0 &amp; PR/MR Comments</strong></td>
+                <td>Manual copy-paste</td>
+                <td>Requires separate LLM provider credentials</td>
+                <td><span class="badge badge-elite">Native CI Runner</span> (<code>--run-review --sarif &lt;path&gt; --post-comment</code>) using project's <code>aida init</code> default agent (<code>codex</code>, <code>claude</code>, <code>agy</code>, <code>gemini</code>)</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -807,7 +819,14 @@ aida review prepare --commit HEAD --specs STORY-3076
 # 3. Full-file scan mode for /aida-code-review audits (no diff needed)
 aida review prepare --scan --path aida-core/src --write .aida/scan.md
 
-# 4. Verify 100% file coverage &amp; anchor quoted code snippets to exact lines
+# 4. Turnkey CI / PR Adversarial Review (Red-Team Finder -> Blue-Team Challenger)
+#    Automatically uses the project's `aida init` default agent (e.g. codex or claude)
+aida review prepare --pr 42 \
+  --run-review --adversarial \
+  --model gpt-5.3-codex --challenger-model o3 \
+  --sarif aida-review.sarif.json --post-comment
+
+# 5. Verify 100% file coverage &amp; anchor quoted code snippets to exact lines
 aida review prepare --pr 42 \
   --verify-coverage .aida/review-coverage.json \
   --anchor-findings .aida/review-findings.json \
@@ -818,11 +837,16 @@ aida review prepare --pr 42 \
           <div class="card-header">
             <div>
               <h3 class="card-title">Project Customization (<code>.aida/review-rules.toml</code>)</h3>
-              <p class="card-subtitle">PATH EXCLUSIONS, BATCH BUDGETS &amp; CUSTOM PATH PLAYBOOKS</p>
+              <p class="card-subtitle">DEFAULT AGENT/MODEL, ADVERSARIAL MODE &amp; PATH PLAYBOOKS</p>
             </div>
             <span class="badge badge-elite">Optional Config</span>
           </div>
 <pre><code># .aida/review-rules.toml
+default_agent = "codex"          # or auto-detected from `aida init`
+default_model = "gpt-5.3-codex"
+adversarial = true               # Red-Team Finder -> Blue-Team Challenger
+challenger_model = "o3"
+
 exclude = [
   "docs/archive/**",
   "**/testdata/**"

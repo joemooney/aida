@@ -6,8 +6,9 @@
 
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
-    anchor_findings_with, bundle_review_batches, classify_diff_inventory, findings_to_sarif_json,
-    format_forge_review_markdown, parse_runner_findings_json, verify_coverage_ledger,
+    anchor_findings_with, apply_adversarial_challenger_json, bundle_review_batches,
+    classify_diff_inventory, findings_to_sarif_json, format_forge_review_markdown_with_adversarial,
+    parse_runner_findings_json, verify_coverage_ledger, AdversarialReviewSummary,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
     PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
     ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
@@ -90,6 +91,32 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "AGENT")]
     pub agent: Option<String>,
 
+    /// Model to pass to the review runner CLI (e.g. `o3`, `gpt-5.3-codex`, `claude-opus-4-6`).
+    /// Overrides `.aida/review-rules.toml` (`default_model`) and `[agents.<vendor>.seats.reviewer] model`.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "MODEL")]
+    pub model: Option<String>,
+
+    /// Run a two-pass Red-Team Finder -> Blue-Team Skeptical Challenger adversarial review.
+    /// Pass 1 hunts for defects; Pass 2 attempts to disprove each candidate finding against
+    /// surrounding code and type constraints, dropping false positives.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long)]
+    pub adversarial: bool,
+
+    /// Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
+    /// When omitted in `--adversarial` mode, automatically selects an opposing enabled vendor from
+    /// `.aida/config.toml` if multiple agents are enabled, or falls back to the Finder agent.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "AGENT")]
+    pub challenger_agent: Option<String>,
+
+    /// Optional model override for Pass 2 of `--adversarial` (enables same-vendor, cross-model
+    /// adversarial verification — e.g. Finder on default model, Challenger on `o3`).
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "MODEL")]
+    pub challenger_model: Option<String>,
+
     /// Export anchored findings as a SARIF 2.1.0 JSON file inside the repository
     /// (for GitHub Code Scanning / GitLab SAST).
     // trace:STORY-3120 | ai:antigravity
@@ -138,6 +165,8 @@ pub struct ReviewPreparationBundle {
     pub coverage_verification: Option<CoverageVerificationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anchored_findings: Option<Vec<RawReviewFinding>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adversarial_summary: Option<AdversarialReviewSummary>,
 }
 
 // trace:TASK-3862 | ai:codex
@@ -240,11 +269,28 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     //    coverage ledger (`--verify-coverage`) and findings (`--anchor-findings`).
     let mut runner_findings: Option<Vec<RawReviewFinding>> = None;
     let mut runner_ledger: Option<CoverageLedger> = None;
+    let mut adversarial_summary: Option<AdversarialReviewSummary> = None;
     if args.run_review {
         let resolved_agent = resolve_review_runner_agent(&project_root, args, &rules_cfg)?;
-        let (f, l) = execute_automated_batch_reviews(
+        let resolved_model =
+            resolve_review_runner_model(&project_root, &resolved_agent, args, &rules_cfg);
+        let is_adversarial = args.adversarial || rules_cfg.adversarial.unwrap_or(false);
+        let challenger_target = if is_adversarial {
+            Some(resolve_challenger_agent_and_model(
+                &project_root,
+                &resolved_agent,
+                resolved_model.as_deref(),
+                args,
+                &rules_cfg,
+            )?)
+        } else {
+            None
+        };
+        let (f, l, adv) = execute_automated_batch_reviews(
             &project_root,
             &resolved_agent,
+            resolved_model.as_deref(),
+            challenger_target.as_ref(),
             &mode,
             merge_base.as_deref(),
             head_ref.as_deref(),
@@ -255,6 +301,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         )?;
         runner_findings = Some(f);
         runner_ledger = Some(l);
+        adversarial_summary = adv;
     }
 
     let coverage_verification = if let Some(ledger_path) = &args.verify_coverage {
@@ -306,13 +353,14 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
                 )
             })
             .collect();
-        let comment_md = format_forge_review_markdown(
+        let comment_md = format_forge_review_markdown_with_adversarial(
             &mode,
             head_ref.as_deref(),
             &inventory,
             coverage_verification.as_ref(),
             &spec_pairs,
             anchored_findings.as_deref().unwrap_or(&[]),
+            adversarial_summary.as_ref(),
         );
         post_forge_review_comment(&project_root, pr_n, &comment_md)?;
     }
@@ -328,6 +376,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         linked_specs,
         coverage_verification,
         anchored_findings,
+        adversarial_summary,
     };
 
     let rendered = if args.json {
@@ -901,6 +950,22 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         out.push('\n');
     }
 
+    if let Some(adv) = &bundle.adversarial_summary {
+        out.push_str("## Adversarial Verification (Red-Team Finder → Blue-Team Challenger)\n\n");
+        let finder_label = match &adv.finder_model {
+            Some(m) => format!("`{}` (`{m}`)", adv.finder_agent),
+            None => format!("`{}`", adv.finder_agent),
+        };
+        let challenger_label = match &adv.challenger_model {
+            Some(m) => format!("`{}` (`{m}`)", adv.challenger_agent),
+            None => format!("`{}`", adv.challenger_agent),
+        };
+        out.push_str(&format!(
+            "- **Finder**: {finder_label} → **Challenger**: {challenger_label}\n- **Candidates challenged**: `{}` → **Confirmed**: `{}` | **Dismissed (false positives)**: `{}`\n\n",
+            adv.candidate_findings, adv.confirmed_findings, adv.dismissed_findings
+        ));
+    }
+
     out
 }
 
@@ -983,12 +1048,125 @@ fn normalize_review_agent(raw: &str) -> Result<String> {
     }
 }
 
+/// Resolve the model to pass to the primary review runner.
+///
+/// Precedence (highest first):
+///   1. `--model <MODEL>` CLI flag
+///   2. `AIDA_REVIEW_MODEL` environment variable
+///   3. `.aida/review-rules.toml` `default_model`
+///   4. `[agents.<agent>.seats.reviewer] model` > `[agents.<agent>] model`
+// trace:STORY-3120 | ai:antigravity
+fn resolve_review_runner_model(
+    project_root: &Path,
+    agent: &str,
+    args: &ReviewPrepareArgs,
+    rules_cfg: &ProjectReviewRulesConfig,
+) -> Option<String> {
+    if let Some(m) = &args.model {
+        let trimmed = m.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    if let Ok(m) = std::env::var("AIDA_REVIEW_MODEL") {
+        let trimmed = m.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    if let Some(m) = &rules_cfg.default_model {
+        let trimmed = m.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    aida_core::agents_config::resolve_agent_tuning(
+        project_root,
+        agent,
+        aida_core::agents_config::AgentSeat::Reviewer,
+    )
+    .model
+}
+
+/// Resolve `(challenger_agent, challenger_model)` for Pass 2 of `--adversarial`.
+///
+/// When `--challenger-agent` / `rules_cfg.challenger_agent` is omitted, automatically
+/// selects an opposing enabled vendor from `.aida/config.toml` if both `claude` and
+/// `codex` are enabled, or falls back to `finder_agent` (for single-vendor projects
+/// such as Codex-only environments).
+// trace:STORY-3120 | ai:antigravity
+fn resolve_challenger_agent_and_model(
+    project_root: &Path,
+    finder_agent: &str,
+    finder_model: Option<&str>,
+    args: &ReviewPrepareArgs,
+    rules_cfg: &ProjectReviewRulesConfig,
+) -> Result<(String, Option<String>)> {
+    let challenger_agent = if let Some(flag_ca) = &args.challenger_agent {
+        normalize_review_agent(flag_ca)?
+    } else if let Ok(env_ca) = std::env::var("AIDA_REVIEW_CHALLENGER_AGENT") {
+        let trimmed = env_ca.trim();
+        if !trimmed.is_empty() {
+            normalize_review_agent(trimmed)?
+        } else {
+            auto_opposing_agent(project_root, finder_agent)
+        }
+    } else if let Some(cfg_ca) = &rules_cfg.challenger_agent {
+        let trimmed = cfg_ca.trim();
+        if !trimmed.is_empty() {
+            normalize_review_agent(trimmed)?
+        } else {
+            auto_opposing_agent(project_root, finder_agent)
+        }
+    } else {
+        auto_opposing_agent(project_root, finder_agent)
+    };
+
+    let challenger_model = if let Some(m) = &args.challenger_model {
+        let trimmed = m.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    } else if let Ok(m) = std::env::var("AIDA_REVIEW_CHALLENGER_MODEL") {
+        let trimmed = m.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    } else if let Some(m) = &rules_cfg.challenger_model {
+        let trimmed = m.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    } else if challenger_agent != finder_agent {
+        aida_core::agents_config::resolve_agent_tuning(
+            project_root,
+            &challenger_agent,
+            aida_core::agents_config::AgentSeat::Reviewer,
+        )
+        .model
+    } else {
+        finder_model.map(str::to_string)
+    };
+
+    Ok((challenger_agent, challenger_model))
+}
+
+fn auto_opposing_agent(project_root: &Path, finder_agent: &str) -> String {
+    if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(project_root) {
+        if finder_agent == "claude" && selection.codex {
+            return "codex".to_string();
+        }
+        if finder_agent == "codex" && selection.claude {
+            return "claude".to_string();
+        }
+    }
+    finder_agent.to_string()
+}
+
 /// Execute automated batch code reviews over each prepared batch using either
 /// `AIDA_REVIEW_RUNNER_CMD` (invoked with prompt on stdin) or the resolved agent CLI.
+/// When `challenger` is `Some((challenger_agent, challenger_model))`, runs a second
+/// Blue-Team Skeptical Challenger pass to disprove false-positive candidate findings.
 // trace:STORY-3120 | ai:antigravity
 fn execute_automated_batch_reviews(
     project_root: &Path,
     agent: &str,
+    model: Option<&str>,
+    challenger: Option<&(String, Option<String>)>,
     mode: &str,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
@@ -996,12 +1174,18 @@ fn execute_automated_batch_reviews(
     playbooks: &[ResolvedPlaybook],
     linked_specs: &[LinkedSpecAcceptance],
     content_cache: &BTreeMap<String, String>,
-) -> Result<(Vec<RawReviewFinding>, CoverageLedger)> {
+) -> Result<(
+    Vec<RawReviewFinding>,
+    CoverageLedger,
+    Option<AdversarialReviewSummary>,
+)> {
     let playbooks_map: BTreeMap<&str, &ResolvedPlaybook> =
         playbooks.iter().map(|p| (p.id.as_str(), p)).collect();
 
     let mut all_findings = Vec::new();
     let mut all_coverage = Vec::new();
+    let mut total_candidates = 0usize;
+    let mut total_dismissed = 0usize;
 
     for batch in batches {
         let prompt = build_batch_review_prompt(
@@ -1014,19 +1198,123 @@ fn execute_automated_batch_reviews(
             linked_specs,
             content_cache,
         )?;
-        let raw_out = invoke_review_runner(project_root, agent, &prompt)?;
-        let (batch_findings, batch_ledger) = parse_runner_findings_json(&raw_out)
+        let raw_out = invoke_review_runner(project_root, agent, model, "finder", &prompt)?;
+        let (mut batch_findings, batch_ledger) = parse_runner_findings_json(&raw_out)
             .map_err(|e| anyhow::anyhow!("batch {} runner output error: {e}", batch.batch_index))?;
+
+        if let Some((challenger_agent, challenger_model)) = challenger {
+            total_candidates += batch_findings.len();
+            if !batch_findings.is_empty() {
+                let challenger_prompt = build_adversarial_challenger_prompt(
+                    batch,
+                    &batch_findings,
+                    linked_specs,
+                    content_cache,
+                );
+                let raw_challenger = invoke_review_runner(
+                    project_root,
+                    challenger_agent,
+                    challenger_model.as_deref(),
+                    "challenger",
+                    &challenger_prompt,
+                )?;
+                let (confirmed, dismissed) =
+                    apply_adversarial_challenger_json(batch_findings, &raw_challenger).map_err(
+                        |e| {
+                            anyhow::anyhow!(
+                                "batch {} adversarial challenger error: {e}",
+                                batch.batch_index
+                            )
+                        },
+                    )?;
+                batch_findings = confirmed;
+                total_dismissed += dismissed;
+            }
+        }
+
         all_findings.extend(batch_findings);
         all_coverage.extend(batch_ledger.files);
     }
+
+    let adv_summary =
+        challenger.map(
+            |(challenger_agent, challenger_model)| AdversarialReviewSummary {
+                finder_agent: agent.to_string(),
+                finder_model: model.map(str::to_string),
+                challenger_agent: challenger_agent.clone(),
+                challenger_model: challenger_model.clone(),
+                candidate_findings: total_candidates,
+                confirmed_findings: all_findings.len(),
+                dismissed_findings: total_dismissed,
+            },
+        );
 
     Ok((
         all_findings,
         CoverageLedger {
             files: all_coverage,
         },
+        adv_summary,
     ))
+}
+
+fn build_adversarial_challenger_prompt(
+    batch: &ReviewBatch,
+    candidates: &[RawReviewFinding],
+    linked_specs: &[LinkedSpecAcceptance],
+    content_cache: &BTreeMap<String, String>,
+) -> String {
+    let mut prompt = String::new();
+    prompt.push_str(
+        "You are an AIDA Blue-Team Skeptical Challenger in a two-pass adversarial code review.\n",
+    );
+    prompt.push_str("Your job is to challenge every candidate finding from Pass 1 (Red-Team Finder) against the actual file contents, type guarantees, and surrounding control flow.\n");
+    prompt.push_str("- Mark a finding `\"dismissed\"` if it is a false positive, already prevented by surrounding validation/types/compiler checks, or speculative noise.\n");
+    prompt.push_str("- Mark a finding `\"confirmed\"` only if the defect is genuinely reachable and violates the contract, safety rules, or linked acceptance criteria.\n\n");
+    prompt.push_str("Return ONLY a valid JSON object matching this exact schema:\n");
+    prompt.push_str("{\n  \"verdicts\": [\n    {\n      \"index\": 0,\n      \"verdict\": \"confirmed|dismissed\",\n      \"reason\": \"Concise evidence from the code explaining why the finding holds or fails\",\n      \"refined_message\": \"Optional sharpened message when confirmed\"\n    }\n  ]\n}\n\n");
+
+    if !linked_specs.is_empty() {
+        prompt.push_str("## Linked AIDA Requirement Acceptance Criteria\n\n");
+        for spec in linked_specs {
+            prompt.push_str(&format!(
+                "### {} — {}\n{}\n\n",
+                aida_core::node_alias::display_spec_id(&spec.spec_id),
+                spec.title,
+                spec.acceptance_markdown
+            ));
+        }
+    }
+
+    prompt.push_str("## Candidate Findings to Challenge\n\n");
+    for (idx, f) in candidates.iter().enumerate() {
+        prompt.push_str(&format!(
+            "- **Index `{idx}`**: `[{}]` `{}` (`{}`) — {}\n",
+            f.severity, f.path, f.category, f.message
+        ));
+        if let Some(snippet) = &f.existing_code {
+            prompt.push_str(&format!(
+                "  Quoted snippet:\n  ```text\n  {snippet}\n  ```\n"
+            ));
+        }
+    }
+    prompt.push('\n');
+
+    prompt.push_str(&format!(
+        "## Batch {} (`{}`) — Full File Context\n\n",
+        batch.batch_index, batch.label
+    ));
+    for path in &batch.files {
+        if let Some(body) = content_cache.get(path) {
+            prompt.push_str(&format!("### File: `{path}`\n```text\n{body}"));
+            if !body.ends_with('\n') {
+                prompt.push('\n');
+            }
+            prompt.push_str("```\n\n");
+        }
+    }
+
+    prompt
 }
 
 fn build_batch_review_prompt(
@@ -1132,16 +1420,27 @@ fn build_batch_review_prompt(
     Ok(prompt)
 }
 
-fn invoke_review_runner(project_root: &Path, agent: &str, prompt: &str) -> Result<String> {
+fn invoke_review_runner(
+    project_root: &Path,
+    agent: &str,
+    model_override: Option<&str>,
+    pass_role: &str,
+    prompt: &str,
+) -> Result<String> {
     use std::io::Write;
     use std::process::Stdio;
 
     if let Ok(custom_cmd) = std::env::var("AIDA_REVIEW_RUNNER_CMD") {
         let trimmed = custom_cmd.trim();
         if !trimmed.is_empty() {
-            let mut child = Command::new(trimmed)
-                .current_dir(project_root)
+            let mut cmd = Command::new(trimmed);
+            cmd.current_dir(project_root)
                 .env("AIDA_REVIEW_RESOLVED_AGENT", agent)
+                .env("AIDA_REVIEW_PASS", pass_role);
+            if let Some(m) = model_override {
+                cmd.env("AIDA_REVIEW_RESOLVED_MODEL", m);
+            }
+            let mut child = cmd
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -1165,6 +1464,7 @@ fn invoke_review_runner(project_root: &Path, agent: &str, prompt: &str) -> Resul
         agent,
         aida_core::agents_config::AgentSeat::Reviewer,
     );
+    let effective_model = model_override.map(str::to_string).or(tuning.model);
 
     let (program, mut argv) = match agent {
         "codex" => {
@@ -1174,7 +1474,7 @@ fn invoke_review_runner(project_root: &Path, agent: &str, prompt: &str) -> Resul
                 "read-only".to_string(),
                 "--skip-git-repo-check".to_string(),
             ];
-            if let Some(model) = tuning.model {
+            if let Some(model) = effective_model {
                 args.push("--model".to_string());
                 args.push(model);
             }
@@ -1186,11 +1486,29 @@ fn invoke_review_runner(project_root: &Path, agent: &str, prompt: &str) -> Resul
             args.push(prompt.to_string());
             ("codex", args)
         }
-        "agy" => ("agy", vec!["-p".to_string(), prompt.to_string()]),
-        "gemini" => ("gemini", vec!["-p".to_string(), prompt.to_string()]),
+        "agy" => {
+            let mut args = Vec::new();
+            if let Some(model) = effective_model {
+                args.push("--model".to_string());
+                args.push(model);
+            }
+            args.push("-p".to_string());
+            args.push(prompt.to_string());
+            ("agy", args)
+        }
+        "gemini" => {
+            let mut args = Vec::new();
+            if let Some(model) = effective_model {
+                args.push("--model".to_string());
+                args.push(model);
+            }
+            args.push("-p".to_string());
+            args.push(prompt.to_string());
+            ("gemini", args)
+        }
         _ => {
             let mut args = vec!["--print".to_string()];
-            if let Some(model) = tuning.model {
+            if let Some(model) = effective_model {
                 args.push("--model".to_string());
                 args.push(model);
             }
@@ -1485,9 +1803,11 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
 
-        // Mock runner script that returns a finding with `existing_code` and a 100% file coverage row
+        // Mock runner script:
+        // - In Pass 1 (`AIDA_REVIEW_PASS=finder`), returns 2 candidate findings (1 real `.unwrap()`, 1 false positive) + 100% file coverage.
+        // - In Pass 2 (`AIDA_REVIEW_PASS=challenger`), confirms index 0 and dismisses index 1.
         let runner = root.join("mock-runner.sh");
-        let runner_json = serde_json::json!({
+        let finder_json = serde_json::json!({
             "findings": [
                 {
                     "path": "lib.rs",
@@ -1496,15 +1816,30 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                     "message": "Avoid .unwrap() in production path.",
                     "existing_code": "    let danger = Some(1).unwrap();",
                     "suggestion_code": "    let danger = Some(1)?;"
+                },
+                {
+                    "path": "lib.rs",
+                    "severity": "low",
+                    "category": "bug",
+                    "message": "False positive nitpick.",
+                    "existing_code": "    let _ = danger;"
                 }
             ],
             "files": [
                 { "path": "lib.rs", "status": "reviewed" }
             ]
         });
+        let challenger_json = serde_json::json!({
+            "verdicts": [
+                { "index": 0, "verdict": "confirmed", "reason": "Unchecked unwrap in production." },
+                { "index": 1, "verdict": "dismissed", "reason": "Harmless binding." }
+            ]
+        });
         crate::test_exec::write_executable(
             &runner,
-            &format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{runner_json}'\n"),
+            &format!(
+                "#!/bin/sh\ncat >/dev/null\nif [ \"$AIDA_REVIEW_PASS\" = \"challenger\" ]; then\n  printf '%s\\n' '{challenger_json}'\nelse\n  printf '%s\\n' '{finder_json}'\nfi\n"
+            ),
         );
 
         let _guard = crate::test_env::AmbientGuard::hermetic_and(
@@ -1538,6 +1873,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             scan: true,
             path: vec!["lib.rs".into()],
             run_review: true,
+            adversarial: true,
+            model: Some("gpt-5.3-codex".into()),
+            challenger_model: Some("o3".into()),
             sarif: Some(PathBuf::from("review.sarif.json")),
             write: Some(PathBuf::from("bundle.json")),
             json: true,
@@ -1548,6 +1886,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let bundle: ReviewPreparationBundle =
             serde_json::from_slice(&std::fs::read(root.join("bundle.json")).unwrap()).unwrap();
         assert!(bundle.coverage_verification.as_ref().unwrap().passed);
+        let adv = bundle.adversarial_summary.as_ref().unwrap();
+        assert_eq!(adv.candidate_findings, 2);
+        assert_eq!(adv.confirmed_findings, 1);
+        assert_eq!(adv.dismissed_findings, 1);
+        assert_eq!(adv.finder_model.as_deref(), Some("gpt-5.3-codex"));
+        assert_eq!(adv.challenger_model.as_deref(), Some("o3"));
         let anchored = bundle.anchored_findings.as_ref().unwrap();
         assert_eq!(anchored.len(), 1);
         assert_eq!(anchored[0].start_line, Some(3));

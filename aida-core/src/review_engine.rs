@@ -130,6 +130,22 @@ pub struct ProjectReviewRulesConfig {
     // trace:STORY-3120 | ai:antigravity
     #[serde(default)]
     pub default_agent: Option<String>,
+    /// Optional project-level default model for `aida review prepare --run-review`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub default_model: Option<String>,
+    /// Optional project-level default enabling two-pass Red-Team Finder -> Blue-Team Challenger review.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub adversarial: Option<bool>,
+    /// Optional project-level default challenger agent for Pass 2 of `--adversarial`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub challenger_agent: Option<String>,
+    /// Optional project-level default challenger model for Pass 2 of `--adversarial`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub challenger_model: Option<String>,
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
 }
@@ -1306,6 +1322,21 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
     })
 }
 
+/// Summary of the two-pass Red-Team Finder -> Blue-Team Skeptical Challenger pipeline.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdversarialReviewSummary {
+    pub finder_agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finder_model: Option<String>,
+    pub challenger_agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub challenger_model: Option<String>,
+    pub candidate_findings: usize,
+    pub confirmed_findings: usize,
+    pub dismissed_findings: usize,
+}
+
 /// Format a consolidated GitHub PR / GitLab MR Markdown review comment from the
 /// classified inventory, optional coverage report, linked spec `(spec_id, title)` list,
 /// and anchored findings.
@@ -1317,6 +1348,29 @@ pub fn format_forge_review_markdown(
     coverage: Option<&CoverageVerificationReport>,
     linked_specs: &[(String, String)],
     findings: &[RawReviewFinding],
+) -> String {
+    format_forge_review_markdown_with_adversarial(
+        mode,
+        head_ref,
+        inventory,
+        coverage,
+        linked_specs,
+        findings,
+        None,
+    )
+}
+
+/// Format a GitHub PR / GitLab MR Markdown review comment with optional adversarial
+/// Finder -> Challenger verification summary.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_forge_review_markdown_with_adversarial(
+    mode: &str,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+    coverage: Option<&CoverageVerificationReport>,
+    linked_specs: &[(String, String)],
+    findings: &[RawReviewFinding],
+    adversarial: Option<&AdversarialReviewSummary>,
 ) -> String {
     let mut out = String::new();
     out.push_str("## AIDA Deterministic Code Review\n\n");
@@ -1344,6 +1398,21 @@ pub fn format_forge_review_markdown(
         out.push_str(&format!(
             "- **File coverage**: **{status_label}** ({}% — {} reviewed, {} skipped of {})\n",
             cov.coverage_rate_pct, cov.reviewed_count, cov.skipped_count, cov.total_reviewable
+        ));
+    }
+
+    if let Some(adv) = adversarial {
+        let finder_label = match &adv.finder_model {
+            Some(m) => format!("`{}` (`{m}`)", adv.finder_agent),
+            None => format!("`{}`", adv.finder_agent),
+        };
+        let challenger_label = match &adv.challenger_model {
+            Some(m) => format!("`{}` (`{m}`)", adv.challenger_agent),
+            None => format!("`{}`", adv.challenger_agent),
+        };
+        out.push_str(&format!(
+            "- **Adversarial verification**: Finder {finder_label} → Challenger {challenger_label} — **{}** candidate(s) challenged → **{}** confirmed, **{}** dismissed as false positive(s)\n",
+            adv.candidate_findings, adv.confirmed_findings, adv.dismissed_findings
         ));
     }
 
@@ -1437,6 +1506,76 @@ pub fn parse_runner_findings_json(
     let env: BatchRunnerOutput = serde_json::from_str(trimmed)
         .map_err(|e| format!("failed to parse runner output object: {e}"))?;
     Ok((env.findings, CoverageLedger { files: env.files }))
+}
+
+/// Single verdict emitted by the Pass 2 Blue-Team Skeptical Challenger.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChallengerVerdictRow {
+    pub index: usize,
+    /// `"confirmed"` or `"dismissed"` (also accepts `"rejected"` / `"false_positive"`).
+    pub verdict: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub refined_message: Option<String>,
+}
+
+/// JSON envelope returned by the Pass 2 Blue-Team Skeptical Challenger.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ChallengerOutput {
+    #[serde(default)]
+    pub verdicts: Vec<ChallengerVerdictRow>,
+}
+
+/// Apply Pass 2 Blue-Team Challenger verdicts to Pass 1 candidate findings.
+/// Returns `(confirmed_findings, dismissed_count)`.
+// trace:STORY-3120 | ai:antigravity
+pub fn apply_adversarial_challenger_json(
+    candidates: Vec<RawReviewFinding>,
+    raw_challenger_output: &str,
+) -> Result<(Vec<RawReviewFinding>, usize), String> {
+    if candidates.is_empty() {
+        return Ok((Vec::new(), 0));
+    }
+    let trimmed = extract_json_payload(raw_challenger_output);
+    let parsed: ChallengerOutput = serde_json::from_str(trimmed)
+        .map_err(|e| format!("failed to parse challenger verdicts JSON: {e}"))?;
+
+    let mut verdict_by_idx: BTreeMap<usize, &ChallengerVerdictRow> = BTreeMap::new();
+    for v in &parsed.verdicts {
+        verdict_by_idx.insert(v.index, v);
+    }
+
+    let mut confirmed = Vec::with_capacity(candidates.len());
+    let mut dismissed_count = 0usize;
+
+    for (idx, mut finding) in candidates.into_iter().enumerate() {
+        if let Some(v) = verdict_by_idx.get(&idx) {
+            let norm = v.verdict.trim().to_ascii_lowercase();
+            if matches!(
+                norm.as_str(),
+                "dismissed"
+                    | "dismiss"
+                    | "rejected"
+                    | "reject"
+                    | "false_positive"
+                    | "false-positive"
+            ) {
+                dismissed_count += 1;
+                continue;
+            }
+            if let Some(refined) = v.refined_message.as_deref() {
+                if !refined.trim().is_empty() {
+                    finding.message = refined.trim().to_string();
+                }
+            }
+        }
+        confirmed.push(finding);
+    }
+
+    Ok((confirmed, dismissed_count))
 }
 
 fn extract_json_payload(raw: &str) -> &str {
@@ -2057,17 +2196,56 @@ fn beta() {
 
         let inv = inventory(&["src/auth.rs"], false);
         let cov = verify_coverage_ledger(&inv, &ledger);
-        let md = format_forge_review_markdown(
+        let adv_summary = AdversarialReviewSummary {
+            finder_agent: "codex".to_string(),
+            finder_model: Some("gpt-5.3-codex".to_string()),
+            challenger_agent: "codex".to_string(),
+            challenger_model: Some("o3".to_string()),
+            candidate_findings: 2,
+            confirmed_findings: 1,
+            dismissed_findings: 1,
+        };
+        let md = format_forge_review_markdown_with_adversarial(
             "range",
             Some("deadbeef12345678"),
             &inv,
             Some(&cov),
             &[("STORY-3120".to_string(), "Turnkey CI review".to_string())],
             &findings,
+            Some(&adv_summary),
         );
         assert!(md.contains("## AIDA Deterministic Code Review"));
         assert!(md.contains("**PASSED** (100%"));
+        assert!(md.contains("Adversarial verification"));
+        assert!(md.contains("`codex` (`o3`)"));
         assert!(md.contains("`src/auth.rs:42`"));
         assert!(md.contains("verify_token(tok)?;"));
+
+        let candidates = vec![
+            findings[0].clone(),
+            RawReviewFinding {
+                path: "src/auth.rs".to_string(),
+                severity: "low".to_string(),
+                category: "bug".to_string(),
+                message: "Hypothetical nitpick already handled by caller.".to_string(),
+                existing_code: None,
+                suggestion_code: None,
+                start_line: None,
+                end_line: None,
+                anchor_status: None,
+            },
+        ];
+        let challenger_json = r#"```json
+{
+  "verdicts": [
+    { "index": 0, "verdict": "confirmed", "reason": "Real fail-open defect." },
+    { "index": 1, "verdict": "dismissed", "reason": "Caller already validates." }
+  ]
+}
+```"#;
+        let (confirmed, dismissed) =
+            apply_adversarial_challenger_json(candidates, challenger_json).unwrap();
+        assert_eq!(confirmed.len(), 1);
+        assert_eq!(dismissed, 1);
     }
 }
