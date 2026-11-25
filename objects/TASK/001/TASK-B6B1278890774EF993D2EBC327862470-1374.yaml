@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:12:46.582006412Z
-modified_at: 2026-11-25T05:11:55.310612424Z
+modified_at: 2026-11-25T05:38:47.755656817Z
 req_type: Task
 tags:
 - launch
@@ -238,6 +238,18 @@ comments:
   modified_at: 2026-11-25T04:49:34.589492200Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21136-ba95-7c51-ba2f-489d326ef5aa
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9f0faef5348252d5a095c1ed050ca7eafb203917 plus the native working diff. Reviewed origin/main...HEAD and git diff HEAD. No untracked additions.
+    AC1: [evidence: behavioral-test] gate/seat_authority.rs:207 rechecks the same absolute deadline immediately after the locked grant decode on every attempt. Returning typed TimedOut drops the lock before any callback or write. The slow-read hook in gate/tests/task_3820_grant_renewal_tests.rs:598 advances a simulated clock to expiry while holding the lock. The callback panics if invoked and the persisted bytes must match. Lane job j20261125T051714753-2-0 executed and passed all three TASK-3884 tests, including lease contention and late flock acquisition.
+    AC2: N/A for this Refs slice. Bounded contained unwind is assigned to TASK-3893.
+    Probes covered absent and present deadlines, equality at expiry, repeated attempts, rejected receipts, parse failures, blocking callers and writer inventory. Accepted receipt and live PID checks precede binding. Decode errors propagate. No new serialization and no tests weakened. The deadline check governs callback entry. A synchronous read can still delay the return. PR FAST passed at 8cf6db3a9956 and the merge hold was pending. Local fast gate job j20261125T052927069-2-0 is in progress.
+  created_at: 2026-11-25T05:38:47.755656817Z
+  modified_at: 2026-11-25T05:38:47.755656817Z
+  session_id: 01a2111ddfa5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20f30-f39c-7c50-a947-1c8e1e94fca2
   author: joe

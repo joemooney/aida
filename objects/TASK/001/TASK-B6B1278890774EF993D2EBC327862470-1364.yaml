@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T05:33:18.373143326Z
+modified_at: 2026-11-25T05:38:35.577189045Z
 req_type: Task
 tags:
 - integration
@@ -98,6 +98,18 @@ comments:
   modified_at: 2026-11-25T05:22:16.482413186Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21136-89a0-7a03-87ee-2f613030fa73
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1cd44c480f3f25ab579bb8494a4154b560f89a5f plus the uncommitted r2 diff. Checked origin/main...HEAD, the integration parent, git diff HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] aida-core/src/review_engine.rs:1786 covers nested companions and three distinct directories. At :1802 the restored tests/parser_test.rs fixture verifies the source/test batch and its token budget.
+    AC2: [evidence: behavioral-test] aida-core/src/review_engine.rs:1770 covers mixed-language samples. At :1719 a replacement named rust collides with the built-in name but has a distinct checklist group, and unrelated Rust receives no facet. Both criterion traces resolve in aida criteria. Targeted review-engine run passed 23 tests.
+    Probes covered case-sensitive directories, singular/plural test directories, shared versus scoped IDs and multiple files. The repository-level test fallback checks for a matching src stem. The guide at lines 79–80 documents this exception. No authority changes. Fast gate running, independent review pending.
+  created_at: 2026-11-25T05:38:35.577189045Z
+  modified_at: 2026-11-25T05:38:35.577189045Z
+  session_id: 01a211314e8d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e94-a407-75a0-baf4-38e2a3232a5d
   author: joe
