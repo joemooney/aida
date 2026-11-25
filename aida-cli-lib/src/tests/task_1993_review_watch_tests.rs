@@ -2551,7 +2551,10 @@ fn release_retries_an_exited_head_and_refuses_a_live_one() {
             Ok(())
         })
         .unwrap();
+    record_skip(&store, &c, Some(&reason)).unwrap();
+    assert_eq!(skipped_changes(&store.root).len(), 1);
     assert_eq!(store.release("PR-1").unwrap(), 1);
+    assert!(skipped_changes(&store.root).is_empty());
     let again = dispatch(select(&store, &c, None, 2).unwrap());
     assert_ne!(again.token, attempt.token);
 }
@@ -3280,14 +3283,15 @@ fn bug2518_no_verdict_backoff_cap_and_new_head() {
         let (_temp, store) = fixture();
         let c = change(1, 1, false);
         let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let (dead, input, exited) = bug2703_review_process();
+        drop(input);
+        assert!(exited.join().unwrap().success());
         for count in 1..=3 {
             store
                 .transaction("PR-1", |state| {
                     let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
                     a.phase = phase.clone();
-                    let mut dead = Identity::current()?;
-                    dead.boot = "previous-boot".into();
-                    a.identity = Some(dead);
+                    a.identity = Some(dead.clone());
                     a.diagnostic = Some("reviewer ended without recording".into());
                     Ok(())
                 })
@@ -3596,14 +3600,15 @@ fn bug2521_waiting_backoff_cap_and_new_head() {
             &verdicts.path().join("PR-1.json"),
             &verdict_json(&c.head, "WAITING"),
         );
+        let (dead, input, exited) = bug2703_review_process();
+        drop(input);
+        assert!(exited.join().unwrap().success());
         for count in 1..=3 {
             store
                 .transaction("PR-1", |state| {
                     let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
                     a.phase = phase.clone();
-                    let mut dead = Identity::current()?;
-                    dead.boot = "previous-boot".into();
-                    a.identity = Some(dead);
+                    a.identity = Some(dead.clone());
                     a.diagnostic = Some("reviewer ended without recording".into());
                     Ok(())
                 })
@@ -5914,55 +5919,35 @@ fn bug2758_rollover_loads_additive_fields_and_omits_zero_retries() {
     );
 }
 
-// trace:BUG-2763 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-524.AC1 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-524.AC2 | ai:codex
 #[test]
-fn bug2763_moved_exit_requires_verified_death() {
-    let (temp, store) = fixture();
+fn bug2763_exited_hold_is_scoped_to_reviewed_head() {
+    let (_temp, store) = fixture();
     let old = change(1, 1, false);
     let new = change(1, 2, false);
     let first = dispatch(select(&store, &old, None, 1).unwrap());
-    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
-    let dead = Identity::child(&child).unwrap();
-    child.kill().unwrap();
-    child.wait().unwrap();
-
-    let mut unknown = dead.clone();
-    unknown.pid_namespace = None;
-    for (worker, reason) in [
-        (Identity::current().unwrap(), EXIT_ALIVE),
-        (unknown, EXIT_UNKNOWN),
-    ] {
-        store
-            .transaction("PR-1", |state| {
-                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
-                assert_eq!(attempt.token, first.token);
-                attempt.phase = Phase::Exited;
-                attempt.identity = Some(dead.clone());
-                attempt.worker = Some(worker);
-                attempt.spawning = true;
-                Ok(())
-            })
-            .unwrap();
-        let Action::Skip(message) = select(&store, &new, None, 1).unwrap() else {
-            panic!("unverified attempt released");
-        };
-        assert_eq!(message, reason);
-        record_skip(&store, &new, Some(&message)).unwrap();
-        let findings = unknown_exit_findings(temp.path());
-        if reason == EXIT_UNKNOWN {
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].id, "PR-1/review-watch");
-        } else {
-            assert!(findings.is_empty());
-        }
-    }
     store
         .transaction("PR-1", |state| {
-            state.entries.get_mut("PR-1").unwrap().attempts[0].worker = Some(dead);
+            let attempt = attempt_mut(state, "PR-1", &first.token).unwrap();
+            attempt.phase = Phase::Exited;
+            attempt.setup_retry = true;
+            attempt.spawning = true;
             Ok(())
         })
         .unwrap();
+    let Action::Skip(reason) = select(&store, &old, None, 1).unwrap() else {
+        panic!("expected same-head hold");
+    };
+    assert!(reason.contains("aida review watch --release PR-1"));
     let next = dispatch(select(&store, &new, None, 1).unwrap());
     assert_eq!(next.head, new.head);
-    assert_ne!(next.token, first.token);
+    let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+    write_verdict(
+        &verdicts.path().join("PR-1.json"),
+        &verdict_json(&old.head, "approved"),
+    );
+    let history = store.history_for_head("PR-1", &new.head).unwrap();
+    assert!(history.conclusive(&old.head));
+    assert!(!history.conclusive(&new.head));
 }

@@ -88,8 +88,7 @@ fn scan_open(
         })
         .filter(|lease| ownership.retained(lease))
         .collect();
-    // trace:BUG-2763 | ai:codex
-    let mut findings = crate::review_watch::unknown_exit_findings(root);
+    let mut findings = Vec::new();
     for pr in prs {
         let number = pr["number"].as_u64().context("PR number missing")?;
         let head = pr["headRefOid"]
