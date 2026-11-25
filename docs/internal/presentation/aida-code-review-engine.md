@@ -47,7 +47,7 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 | **Batching** | Groups likely companions by stem, targeting 12k estimated tokens | Reviews each module + its tests in focused context |
 | **Rules & Playbooks** | Selects playbooks by path and Rust facets by substring matches across each file | Evaluates concrete failure patterns against reachable call sites |
 | **Intent & Acceptance** | Lifts linked spec `## Acceptance` criteria + flags the literal `trace:` marker | Judges whether every acceptance criterion has falsifiable evidence |
-| **Positioning & Coverage** | Anchors quoted `existing_code` to exact `start_line..end_line` and optionally checks a file ledger | Quotes defective snippets and records defect class + verdict |
+| **Positioning & Coverage** | Anchors quoted `existing_code` to `resolved_span.start_line` and `resolved_span.end_line` and optionally checks a file ledger | Quotes defective snippets and records defect class + verdict |
 
 <!-- Separate mechanical checks from the reviewer’s judgment about intent and defects. -->
 
@@ -109,7 +109,8 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 - **Two-Pass Deterministic Line Anchoring (`--anchor-findings <findings.json>`)**:
   - Reviewers quote the exact defective lines in `existing_code` instead of guessing line numbers.
-  - `anchor_snippet_lines` runs a sliding-window search over the revision-pinned file (`git show <sha>:<path>`):
+  - `anchor_snippet_lines` builds a prefix table for the snippet and uses it to resume after mismatches in a linear scan of the revision-pinned file (`git show <sha>:<path>`):
+    - Top-level `start_line` and `end_line` preserve the submitted hints. Successful matches write the inclusive coordinates to `resolved_span`.
     - **Pass 1**: Exact line-by-line match (disambiguated by minimum distance to optional `start_line` hint).
     - **Pass 2**: Trimmed-whitespace fallback that tolerates LLM indentation drift while recording `anchor_status: "trimmed_whitespace"`.
 - **Library-only Observation Evidence Citations (`verify_observation_citations`)**:
