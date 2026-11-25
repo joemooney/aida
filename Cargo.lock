@@ -135,6 +135,7 @@ dependencies = [
  "r2d2_postgres",
  "regex",
  "reqwest",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",

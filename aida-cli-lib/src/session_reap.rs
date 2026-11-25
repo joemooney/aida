@@ -1286,12 +1286,13 @@ fn reap_one_with_clear_hooks(
         if clear_missing_worktree_registration(
             project_root,
             &lease.worktree_path,
+            checked_tip,
             before_missing_worktree_clear,
             after_final_registration_check,
         ) == RegistrationClearOutcome::Declined
         {
-            return "reaped — lease released (worktree path reappeared or could not be \
-                    confirmed unoccupied; registration kept)"
+            return "reaped — lease released (worktree path reappeared or safe removal of its \
+                    registered index could not be confirmed; registration kept)"
                 .to_string();
         }
     }
@@ -1677,7 +1678,7 @@ pub(crate) fn release_gone_worktree_lease(
     if !gone_worktree_lease_releasable(lease, recovery) {
         return false;
     }
-    if clear_missing_worktree_registration(project_root, &lease.worktree_path, || {}, || {})
+    if clear_missing_worktree_registration(project_root, &lease.worktree_path, None, || {}, || {})
         == RegistrationClearOutcome::Declined
     {
         return false;
@@ -1809,20 +1810,9 @@ pub(crate) fn reap_finished_review(
     }
 }
 
-// How a registration-clear attempt for an absent lease path ended.
-// trace:BUG-1694 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RegistrationClearOutcome {
-    /// The stale admin registration was removed.
-    Cleared,
-    /// The path could not be confirmed unoccupied (or the removal itself
-    /// failed), so the registration was kept. Fail closed: a stale
-    /// registration is strictly better than orphaning a live worktree.
-    Declined,
-    /// No admin registration names this path (or the repository state was
-    /// unreadable); there was nothing to clear.
-    NoRegistration,
-}
+pub(crate) use aida_core::worktree_registration::{
+    inspect_missing_registration, RegistrationClearOutcome,
+};
 
 // Clear only the administrative registration for an absent lease path. Never
 // ask Git to remove a worktree here: the path can reappear after the early scan.
@@ -1839,102 +1829,19 @@ pub(crate) enum RegistrationClearOutcome {
 pub(crate) fn clear_missing_worktree_registration(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
+    pinned_tip: Option<&str>,
     before_clear: impl FnOnce(),
     after_final_check: impl FnOnce(),
 ) -> RegistrationClearOutcome {
-    if !worktree_path.is_absolute() {
-        return RegistrationClearOutcome::Declined;
-    }
-    if worktree_path.exists() {
-        return RegistrationClearOutcome::Declined;
-    }
-    before_clear();
-    if worktree_path.exists() {
-        return RegistrationClearOutcome::Declined;
-    }
-
-    // Unreadable repository state cannot establish that no registration names
-    // this path — decline loudly rather than fall through to branch deletion.
-    // trace:BUG-1694 | ai:claude
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["rev-parse", "--git-common-dir"])
-        .output();
-    let Ok(output) = output else {
-        return RegistrationClearOutcome::Declined;
-    };
-    if !output.status.success() {
-        return RegistrationClearOutcome::Declined;
-    }
-    let common_dir = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-    let common_dir = if common_dir.is_absolute() {
-        common_dir
-    } else {
-        project_root.join(common_dir)
-    };
-    let worktrees_dir = common_dir.join("worktrees");
-    let expected_gitdir = worktree_path.join(".git");
-    // A missing worktrees dir means no registrations exist at all (the common
-    // already-pruned case); any OTHER read failure is unreadable state and
-    // declines like the above. trace:BUG-1694 | ai:claude
-    let entries = match std::fs::read_dir(worktrees_dir) {
-        Ok(entries) => entries,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return RegistrationClearOutcome::NoRegistration;
-        }
-        Err(_) => return RegistrationClearOutcome::Declined,
-    };
-    for entry in entries.flatten() {
-        let admin_dir = entry.path();
-        let Ok(gitdir) = std::fs::read_to_string(admin_dir.join("gitdir")) else {
-            continue;
-        };
-        if worktree_gitdir_matches(gitdir.trim(), &expected_gitdir) {
-            if worktree_path.exists() {
-                return RegistrationClearOutcome::Declined;
-            }
-            after_final_check();
-            if std::fs::create_dir(worktree_path).is_err() {
-                return RegistrationClearOutcome::Declined;
-            }
-            let removed = std::fs::remove_dir_all(admin_dir);
-            // Release the claim on both outcomes; non-recursive, so a creator
-            // that already populated the empty directory keeps it (ENOTEMPTY).
-            let _ = std::fs::remove_dir(worktree_path);
-            return if removed.is_ok() {
-                RegistrationClearOutcome::Cleared
-            } else {
-                RegistrationClearOutcome::Declined
-            };
-        }
-    }
-    RegistrationClearOutcome::NoRegistration
-}
-
-// Windows' Git for Windows and `std::fs::canonicalize` can spell the same
-// worktree with different separator, case, or `\\?\` prefix forms. The path
-// is already constrained to an absolute path from this lease; normalize those
-// Windows spelling differences before matching the stale administrative link.
-// trace:BUG-1777 | ai:codex
-fn worktree_gitdir_matches(recorded: &str, expected: &std::path::Path) -> bool {
-    #[cfg(windows)]
-    {
-        let key = |path: &str| {
-            let path = path.replace('\\', "/");
-            let path = path
-                .strip_prefix("//?/UNC/")
-                .map(|unc| format!("//{unc}"))
-                .or_else(|| path.strip_prefix("//?/").map(str::to_string))
-                .unwrap_or(path);
-            path.trim_end_matches('/').to_ascii_lowercase()
-        };
-        return key(recorded) == key(&expected.to_string_lossy());
-    }
-    #[cfg(not(windows))]
-    {
-        std::path::Path::new(recorded) == expected
-    }
+    inspect_missing_registration(
+        project_root,
+        worktree_path,
+        pinned_tip,
+        false,
+        false,
+        before_clear,
+        after_final_check,
+    )
 }
 
 /// Does local branch `branch` still point at `tip`? `None` (never pinned) or
