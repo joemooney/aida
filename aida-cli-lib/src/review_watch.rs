@@ -139,7 +139,6 @@ fn bounded_diagnostic(text: &str) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Identity {
     // Absent fields are omitted only so a legacy record round-trips
     // unchanged. New captures always stamp both, so state this binary writes
@@ -314,7 +313,6 @@ enum Phase {
 /// watchers never signal twice.
 // trace:TASK-1945 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 struct Supersede {
     by: String,
     requested_at: chrono::DateTime<chrono::Utc>,
@@ -326,8 +324,12 @@ struct Supersede {
     diagnostic: Option<String>,
 }
 
+// trace:BUG-2758 | ai:codex
+fn is_zero_retries(count: &u8) -> bool {
+    *count == 0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Attempt {
     // Pin distributed mode through child launch, even if configuration vanishes.
     // trace:STORY-2492 | ai:codex
@@ -365,6 +367,11 @@ struct Attempt {
     // trace:BUG-2450 | ai:codex
     #[serde(default)]
     setup_retry: bool,
+    // trace:BUG-2720 | ai:codex
+    #[serde(default, skip_serializing_if = "is_zero_retries")]
+    pickup_retries: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pickup_retry_at: Option<chrono::DateTime<chrono::Utc>>,
     // trace:STORY-2401 | ai:codex
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     retryable_fetch: bool,
@@ -446,13 +453,11 @@ impl Attempt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Notice {
     message: aida_core::mailbox::Message,
     sent: bool,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Entry {
     attempts: Vec<Attempt>,
     // Never written: retained rounds live in history/<key>.json. Still read
@@ -503,14 +508,12 @@ impl Entry {
 /// One readiness report: the head it judged, the verdict line, and when.
 // trace:TASK-1945 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 struct Reported {
     head: String,
     line: String,
     checked_at: chrono::DateTime<chrono::Utc>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct State {
     version: u8,
     repository: String,
@@ -1642,6 +1645,82 @@ enum Action {
     Skip(String),
 }
 
+/// Recheck a transient terminal refusal before spending another pickup attempt.
+/// None leaves ordinary review, fetch and setup outcomes to their existing policies.
+// trace:BUG-2720 | ai:codex
+fn pickup_retry(
+    store: &Store,
+    key: &str,
+    attempt: &mut Attempt,
+    conclusive: bool,
+) -> Option<std::result::Result<(), String>> {
+    if attempt.phase != Phase::Exited
+        || attempt.reviewer_spawning
+        || attempt.identity.is_none()
+        || attempt.retryable_fetch
+        || conclusive
+    {
+        return None;
+    }
+    let diagnostic = attempt.diagnostic.as_deref()?;
+    let branch = key.to_ascii_lowercase();
+    let held_tree = diagnostic.contains(&format!("branch `{branch}` is held by worktree "))
+        || diagnostic.contains(&format!(
+            "branch `{branch}` is held by a contained seat's private clone "
+        ));
+    if !held_tree && !diagnostic.contains("lock busy") {
+        return None;
+    }
+    if attempt.unrecorded_descendant()
+        || attempt.reviewer.is_some()
+        || attempt
+            .recorded()
+            .iter()
+            .any(|p| !matches!(p.verdict(), aida_core::proc_identity::Verdict::Dead(_)))
+        || confirm(attempt).is_err()
+    {
+        return Some(Err(format!("process exit unconfirmed ({diagnostic}); inspect before `aida review watch --release {key}`")));
+    }
+    if attempt.pickup_retries >= 3 {
+        return Some(Err(format!(
+            "pickup retry cap reached; inspect before `aida review watch --release {key}`"
+        )));
+    }
+    let now = chrono::Utc::now();
+    let delay = chrono::Duration::seconds(60 << attempt.pickup_retries);
+    let deadline = *attempt.pickup_retry_at.get_or_insert(now + delay);
+    if now < deadline {
+        return Some(Err(format!("pickup backoff until {deadline}")));
+    }
+    // The receipt retains the producer's lock name. Only probe known locks
+    // relative to this project, never a path supplied by diagnostic text.
+    let available = if held_tree {
+        crate::queue_cmd::preflight_queue_work_branch(&store.root, Some(&branch))
+    } else if diagnostic.contains("handle allocation lock busy; retry after agent gc") {
+        crate::agent_handle::lock_namespace_within(&store.root, std::time::Duration::ZERO).map(drop)
+    } else {
+        // Selection already owns these three locks for this change.
+        let name = diagnostic
+            .split_once("review-watch lock busy: ")
+            .map(|(_, tail)| tail.split([';', ':', '\n']).next().unwrap_or("").trim());
+        if name == Some("admission.lock")
+            || name == Some(format!("{key}.lock").as_str())
+            || name == Some(format!("train-member-{key}.lock").as_str())
+        {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "pickup lock availability unknown ({diagnostic})"
+            ))
+        }
+    };
+    if let Err(error) = available {
+        attempt.pickup_retry_at = Some(now + delay);
+        return Some(Err(error.to_string()));
+    }
+    Some(Ok(()))
+}
+
 // trace:BUG-2518 | ai:codex
 fn no_verdict_blocker(attempt: &Attempt) -> Option<String> {
     (attempt.no_verdict_attempts >= 3
@@ -1719,6 +1798,7 @@ fn stale_follow_up(
     update::follow_up(root, store, change, live, updater)
 }
 
+#[cfg(test)]
 fn select(
     store: &Store,
     change: &forge::Change,
@@ -1728,6 +1808,7 @@ fn select(
     select_with_coverage(store, change, vendor, max, || {
         dispatch_carried_approval(store, change)
     })
+    .map(|(action, _)| action)
 }
 
 // trace:STORY-2694 | ai:codex
@@ -1737,7 +1818,7 @@ fn select_with_coverage(
     vendor: Option<String>,
     max: u8,
     coverage: impl FnOnce() -> Option<String>,
-) -> Result<Action> {
+) -> Result<(Action, Admission)> {
     let key = change.key();
     // Resolve remote proof evidence before taking the shared runtime lock.
     // Suppression is review coverage only: readiness still checks CI at H2.
@@ -1749,7 +1830,8 @@ fn select_with_coverage(
     // admission transaction: it cannot block train reservations.
     // trace:BUG-2650 | ai:claude
     let paused = pause::current(store, chrono::Utc::now()).context(GlobalState)?;
-    store.transaction(&key, |state| {
+    let mut outcome = Admission::Settled;
+    let action = store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
         // The train takes these locks under this same admission lock.
@@ -1823,6 +1905,7 @@ fn select_with_coverage(
             .map(|a| a.fetch_failures.saturating_add(u8::from(a.retryable_fetch)))
             .max().unwrap_or(0);
         if fetch_failures >= 3 {
+            outcome = Admission::Skipped("capped");
             return Ok(Action::Skip(format!("fetch unavailable on three dispatches for this head; repair credentials/remote and retry with `aida review watch --release {key}`, or route to the advisor")));
         }
         // A terminal receipt proves process completion, not verdict publication.
@@ -1830,18 +1913,28 @@ fn select_with_coverage(
         // trace:BUG-2518 | ai:codex
         let mut no_verdict_attempts = 0;
         let mut no_verdict_ready = false;
+        let mut pickup_retries = 0;
         if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
             if history.conclusive(&change.head) {
                 attempt.no_verdict_retry_at = None;
             }
             no_verdict_attempts = attempt.no_verdict_attempts;
-            if matches!(attempt.phase, Phase::Completed | Phase::Exited)
+            pickup_retries = attempt.pickup_retries;
+            if let Some(result) = pickup_retry(store, &key, attempt, history.conclusive(&change.head)) {
+                if let Err(reason) = result {
+                    outcome = Admission::Skipped("held by exited attempts");
+                    return Ok(Action::Skip(format!("held by exited attempt: {reason}")));
+                }
+                pickup_retries += 1;
+                no_verdict_ready = true;
+            } else if matches!(attempt.phase, Phase::Completed | Phase::Exited)
                 && !attempt.retryable_fetch && !history.conclusive(&change.head)
                 && !(attempt.setup_retry && !attempt.reviewer_spawning)
             {
                 no_verdict_attempts = no_verdict_attempts.max(1);
                 attempt.no_verdict_attempts = no_verdict_attempts;
                 if !attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()) {
+                    outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(format!("unfinished review processes still hold this head; inspect before `aida review watch --release {key}`")));
                 }
                 // WAITING may depend on evidence other than CI; use a bounded backoff.
@@ -1851,14 +1944,17 @@ fn select_with_coverage(
                         if history.contains(&change.head) { review_publication::WAITING_RETRY_SECS }
                         else { 60 * i64::from(no_verdict_attempts) }));
                 if let Some(reason) = no_verdict_blocker(attempt) {
+                    outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(reason));
                 }
                 if chrono::Utc::now() < retry_at {
+                    outcome = Admission::Skipped("held by exited attempts");
                     return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
                 }
                 no_verdict_attempts += 1;
                 no_verdict_ready = true;
             } else if !attempt.retryable_fetch && (attempt.phase == Phase::Exited || (attempt.phase == Phase::Failed && attempt.setup_retry && attempt.diagnostic.is_some())) {
+                outcome = Admission::Skipped("held by exited attempts");
                 return Ok(Action::Skip(format!("review setup exited without completing ({}); retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
             }
         }
@@ -1882,7 +1978,10 @@ fn select_with_coverage(
                 }
             }
         }
-        if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
+        if history.blocking() >= store.max_rounds {
+            outcome = Admission::Skipped("capped");
+            return Ok(Action::Skip(store.round_cap_reason()));
+        }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
         // Launch point: a pause skips only the new reservation; running
         // reviews, notices and reconciliation above are unaffected.
@@ -1893,14 +1992,15 @@ fn select_with_coverage(
         // Preflight and spawn failures preserve the inherited review budget.
         // trace:BUG-2518 | ai:codex
         // trace:TASK-3112 | ai:codex
-        let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.identity.is_some() && a.diagnostic.is_some())));
-        let attempt = Attempt { no_verdict_attempts, no_verdict_retry_at: None, review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let setup_retry = pickup_retries > 0 || entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.identity.is_some() && a.diagnostic.is_some())));
+        let attempt = Attempt { pickup_retries, pickup_retry_at: None, no_verdict_attempts, no_verdict_retry_at: None, review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
         entry.attempts.push(attempt.clone());
         Ok(Action::Dispatch(attempt))
-    })
+    })?;
+    Ok((action, outcome))
 }
 
 /// The cheap, lock-held admission pre-check run before the forge probe (two
@@ -3063,7 +3163,17 @@ pub(crate) fn run_with_program(
                     });
                     Ok(())
                 }
-                Ok(Admission::Settled) => Ok(()),
+                Ok(outcome) => {
+                    let category = match outcome {
+                        Admission::Skipped(category) => category,
+                        _ => "skipped",
+                    };
+                    pass.skipped
+                        .entry(category.to_string())
+                        .or_default()
+                        .push(change.key());
+                    Ok(())
+                }
                 Err(error) => Err(error),
             };
             observe_dispatch_result(&root, result)
@@ -3513,6 +3623,7 @@ pub(crate) enum Admission {
     Settled,
     Admitted,
     Unadmitted(String),
+    Skipped(&'static str),
 }
 
 /// The skip reason `probe_unneeded` gives a head the admission hub refused
@@ -3525,9 +3636,11 @@ const HUB_HELD_CAUSE: &str =
 /// The admission outcome of a `probe_unneeded` skip: an unresolved remote
 /// hold is unadmitted work, not a settled head.
 // trace:BUG-2674 | ai:claude
-fn skipped_admission(reason: &str) -> Admission {
+fn skipped_admission(store: &Store, reason: &str) -> Admission {
     if reason == REMOTE_HELD_UNRESOLVED {
         Admission::Unadmitted(HUB_HELD_CAUSE.into())
+    } else if reason == store.round_cap_reason() {
+        Admission::Skipped("capped")
     } else {
         Admission::Settled
     }
@@ -3548,6 +3661,108 @@ fn watch_change(
     program: Option<&Path>,
 ) -> Result<()> {
     admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
+}
+
+// Both recorders persist the PR and attested SHA in the verdict. Remember
+// a consumed intent while GitHub registers the FULL run.
+// trace:BUG-2729 | ai:codex
+pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
+    use crate::full_tier::{bounded, request_full_ci_with};
+    use crate::gate::review_verdict::read_recorded_verdict;
+    let repo = forge::Repository::load(root)?;
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))?;
+    let promote = |change: forge::Change| -> Result<()> {
+        let pr = change.id;
+        let key = change.key();
+        let receipt = format!("{key}.full-ci");
+        let _lock = receipts.lock(&format!("{receipt}.lock"))?;
+        let Some(v) = read_recorded_verdict(root, &key) else {
+            return Ok(());
+        };
+        let Some(head) = v.reviewed_sha.as_deref() else {
+            return Ok(());
+        };
+        if !v.kind.approves()
+            || v.is_closed()
+            || v.attestation.as_ref().is_none_or(|a| a.sha != head)
+            || receipts.read(&receipt)?.as_deref() == Some(head.as_bytes())
+        {
+            return Ok(());
+        }
+        if head != change.head {
+            eprintln!("{key}: discarding FULL request for superseded head {head}");
+            return receipts.write(&receipt, head.as_bytes());
+        }
+        let rows = repo.commit_checks(root, head)?.checks;
+        let mut fast = rows.iter().filter(|c| c.name == "ci-tier: fast");
+        let incomplete =
+            |c: &crate::forge::CommitCheck| c.workflow_id.is_none() || c.run_in_progress;
+        if fast.clone().next().is_none() || fast.any(incomplete) {
+            return Ok(());
+        }
+        let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
+            if repo.change(root, pr).map_err(|e| e.to_string())?.head != head {
+                return Err(format!("{key} moved from reviewed head {head}"));
+            }
+            bounded(root, cli, args)
+        })
+        .map_err(anyhow::Error::msg)?;
+        if edited {
+            receipts.write(&receipt, head.as_bytes())?;
+        }
+        Ok(())
+    };
+    let mut failures = Vec::new();
+    for change in repo.discover(root)?.into_iter().filter(|c| !c.gitlab) {
+        if let Err(error) = promote(change) {
+            failures.push(error.to_string());
+        }
+    }
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, record: impl FnOnce()) {
+    use serde_json::json;
+    let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
+    let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
+    let script = format!(
+        r#"#!/bin/sh
+state=$(cat state)
+case "$*" in
+  *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
+  *"pr list"*) echo '[{change}]';;
+  *statusCheckRollup*) case "$state" in completed) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/";;
+  *check-runs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"check_runs":[]}}'; else echo '{{"total_count":1,"check_runs":[{marker}]}}'; fi;;
+  *actions/runs*) printf '{{"id":1,"workflow_id":2,"head_sha":"{head}","status":"%s"}}' "$state";;
+  *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
+  *"pr edit"*) echo "$*" >> edits;;
+  *) exit 1;;
+esac"#
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    forge::git(root, &["remote", "add", "origin", "git@github.com:o/r.git"]).unwrap();
+    let write = |name, value: &str| std::fs::write(root.join(name), value).unwrap();
+    write("state", "absent");
+    record();
+    assert!(!root.join("edits").exists());
+    let replacement = "a".repeat(40);
+    for state in ["absent", "queued", "in_progress", "moved", "done", "again"] {
+        let moved = state == "moved";
+        let completed = matches!(state, "done" | "again");
+        let settled = completed || moved;
+        write("state", if settled { "completed" } else { state });
+        write("current", if moved { &replacement } else { head });
+        let result = promote_approved_heads(root);
+        assert_eq!(result.is_err(), moved, "{result:?}");
+        assert_eq!(root.join("edits").exists(), completed);
+    }
+    let edits = std::fs::read_to_string(root.join("edits")).unwrap();
+    let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
+    assert_eq!(edits.trim(), expected);
 }
 
 // trace:TASK-1993 | ai:claude
@@ -3601,7 +3816,7 @@ fn admit_change(
             eprintln!("{key}: {reason}");
             record_skip(store, &change, Some(&reason))?;
             return report(root, store, &change, &ready::Live { root, repo })
-                .map(|_| skipped_admission(&reason));
+                .map(|_| skipped_admission(store, &reason));
         }
         if crate::gate::review_freshness::decision_exists(
             root,
@@ -3648,7 +3863,7 @@ fn admit_change(
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| skipped_admission(&reason));
+        return report(root, store, &change, &live).map(|_| skipped_admission(store, &reason));
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
@@ -3670,12 +3885,13 @@ fn admit_change(
         return report(root, store, &change, &live).map(|_| Admission::Settled);
     }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
-    let action = select(
+    let (action, outcome) = select_with_coverage(
         store,
         &change,
         args.vendor.clone(),
         args.max_concurrent
             .context("unresolved review concurrency")?,
+        || dispatch_carried_approval(store, &change),
     )?;
     record_skip(
         store,
@@ -3689,6 +3905,7 @@ fn admit_change(
         Action::Skip(reason) => {
             eprintln!("{key}: {reason}");
             report(root, store, &change, &live)?;
+            return Ok(outcome);
         }
         Action::Notify(notice) => {
             deliver(root, &notice)?;

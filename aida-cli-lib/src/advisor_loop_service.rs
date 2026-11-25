@@ -21,7 +21,6 @@ const HOLDER_PURPOSE: &str = if TRAIN {
 const MAX_RETIRED_GRANTS: usize = 4;
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Binding {
     grant: String,
     subject: String,
@@ -76,7 +75,6 @@ impl Binding {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Service {
     version: u32,
     deputy: String,
@@ -545,13 +543,14 @@ fn status_lines(
     // trace:BUG-2674 | ai:claude
     if let Some(pass) = pass {
         lines.push(format!(
-            "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
+            "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused{}",
             pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
             pass.changes,
             pass.dispatched,
             pass.unadmitted,
             pass.busy,
-            pass.refused
+            pass.refused,
+            skipped_summary(pass)
         ));
     }
     for reason in degraded {
@@ -1364,7 +1363,6 @@ fn rebind_after_launch_with(
 // restarts. Success starts a new episode; backoff ticks never clear failures.
 // trace:STORY-2691 | ai:codex
 #[derive(Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Failures {
     #[serde(default)]
     dispatch_pending: bool,
@@ -1516,6 +1514,18 @@ fn failure_escalation_threshold(root: &Path) -> Result<u32> {
 mod loop_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+
+    // trace:BUG-2720 | ai:codex
+    #[test]
+    fn bug2720_pass_summary_names_skipped_heads() {
+        let mut counts = PassCounts::default();
+        counts.skipped.insert("held by exited attempts".into(), vec!["PR-7".into(), "MR-9".into()]);
+        counts.skipped.insert("capped".into(), vec!["PR-10".into()]);
+        let report = next_pass_report(None, &counts, &[], Utc::now());
+        let line = pass_log_line(&report);
+        assert!(line.contains("2 held by exited attempts (PR-7, MR-9)"));
+        assert!(line.contains("1 capped (PR-10)"));
+    }
 
     // trace:BUG-2621 | ai:claude
     fn bug2621_sleeper() -> std::process::Child {
@@ -2457,7 +2467,7 @@ mod loop_tests {
             dispatched: 1,
             unadmitted: Vec::new(),
             busy: watched.busy,
-            stopped: None,
+            ..Default::default()
         };
 
         // Without a controller (a manual watcher) nothing is recorded.
@@ -2693,7 +2703,7 @@ mod loop_tests {
         while at < Utc::now() {
             // The production selection each pass runs for this head.
             let reason = probe_unneeded(&store, &change).unwrap().unwrap();
-            let super::super::Admission::Unadmitted(cause) = skipped_admission(&reason) else {
+            let super::super::Admission::Unadmitted(cause) = skipped_admission(&store, &reason) else {
                 panic!("an unresolved remote hold is not settled: {reason}");
             };
             let counts = PassCounts {
@@ -2763,7 +2773,7 @@ mod loop_tests {
         .unwrap()
         .unwrap();
         assert_eq!(
-            skipped_admission(&covered),
+            skipped_admission(&store, &covered),
             super::super::Admission::Settled
         );
         let settled = next_pass_report(Some(&report), &PassCounts::default(), &[], now);
@@ -3437,6 +3447,7 @@ mod loop_tests {
 // trace:BUG-2674 | ai:claude
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct PassCounts {
+    pub(super) skipped: std::collections::BTreeMap<String, Vec<String>>,
     pub(super) changes: usize,
     pub(super) dispatched: usize,
     /// Heads local state found eligible that the admission hub holds for
@@ -3473,6 +3484,8 @@ struct Held {
 // trace:BUG-2674 | ai:claude
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct PassReport {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    skipped: std::collections::BTreeMap<String, Vec<String>>,
     at: DateTime<Utc>,
     changes: usize,
     dispatched: usize,
@@ -3538,6 +3551,7 @@ fn next_pass_report(
         .collect();
     PassReport {
         at: now,
+        skipped: counts.skipped.clone(),
         changes: counts.changes,
         dispatched: counts.dispatched,
         unadmitted: counts.unadmitted.len(),
@@ -3554,17 +3568,27 @@ fn next_pass_report(
     }
 }
 
+// trace:BUG-2720 | ai:codex
+fn skipped_summary(report: &PassReport) -> String {
+    report
+        .skipped
+        .iter()
+        .map(|(category, keys)| format!("; {} {category} ({})", keys.len(), keys.join(", ")))
+        .collect()
+}
+
 /// The one bounded `service.log` line every pass writes.
 // trace:BUG-2674 | ai:claude
 fn pass_log_line(report: &PassReport) -> String {
     format!(
-        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused",
+        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused{}",
         report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         report.changes,
         report.dispatched,
         report.unadmitted,
         report.busy,
-        report.refused
+        report.refused,
+        skipped_summary(report)
     )
 }
 

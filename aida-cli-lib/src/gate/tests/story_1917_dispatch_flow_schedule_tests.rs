@@ -1944,6 +1944,7 @@ const TRAIN_FAKE_GH: &str = r#"#!/bin/sh
 case "$*" in
   'pr view '*' --json headRefOid,baseRefName,state')
     echo '{"headRefOid":"7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","baseRefName":"main","state":"OPEN"}' ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) echo '{"total_count":0,"workflow_runs":[]}' ;;
   'api repos/{owner}/{repo}/branches/main/protection')
     echo '{"required_status_checks":{"contexts":["Build"]}}' ;;
   'api repos/{owner}/{repo}/rules/branches/main?'*) echo '[]' ;;
