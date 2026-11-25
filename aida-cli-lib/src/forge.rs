@@ -7072,13 +7072,13 @@ fn parse_terminal_branch(
             ),
             ForgeKind::None => return None,
         };
-        if name != branch || (!closed && !is_open) {
+        if name != branch || (!closed && !is_open) || (unmerged_only && !is_full_commit_sha(sha)) {
             return None;
         }
         open |= is_open && same_repo;
         found |= closed
             && same_repo
-            && sha == head
+            && sha.eq_ignore_ascii_case(head)
             && (!unmerged_only || matches!(state, "CLOSED" | "closed"));
     }
     Some(found && (unmerged_only || !open))
