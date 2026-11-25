@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   docs/review-process.md:288 and docs/showcase/code-review.html:414 and 479 claim inline spec trace verification. The reference CLI only checks content.contains("trace:") at review_prepare.rs:147–150, so a string literal or an invalid ID earns the same flag. Describe the flag as a marker check and reserve verification language for evidence that validates a parsed spec ID.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:23:20.953544826Z
-modified_at: 2026-11-25T07:24:03.078894480Z
+modified_at: 2026-11-25T07:24:06.068783095Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21197-1e34-7663-b6ba-d2422923dff2
+  author: joe
+  timestamp: 2026-11-25T07:24:06.068768902Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
