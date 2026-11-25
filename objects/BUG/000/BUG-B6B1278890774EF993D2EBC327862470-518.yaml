@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The occupied-worktree recheck in review_watch.rs (~:1699, :1836) runs its git probes OUTSIDE the global admission and train-member locks, then REVALIDATES the probed state cheaply inside the lock (refuse/retry if it changed). Test: a slow probe does not hold the admission lock (another admission proceeds meanwhile).
   - AC2: Test: a worktree state that changes between probe and revalidation is detected and not admitted on stale evidence.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:52:59.317891783Z
-modified_at: 2026-11-25T12:42:34.607557583Z
+modified_at: 2026-11-25T17:06:44.736698470Z
 req_type: Bug
 tags:
 - admission
@@ -92,6 +92,20 @@ history:
   timestamp: 2026-11-25T12:41:34.668274230Z
   session_id: 01a2127ec8ae
   changes: []
+- id: 01a213ac-8b3b-78e2-af76-92791da8f85d
+  author: aida-auto-bump
+  timestamp: 2026-11-25T17:06:44.667509841Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a213ac-8b80-7213-be7e-7a91d6f938a1
+  timestamp: 2026-11-25T17:06:44.736694075Z
+  agent: aida
+  commit_sha: d9e1d55c3c38a6f5961cd16b230746f1098102a0
+  summary: 'BUG-2757 PASS. AC1 [behavioral-test] verified: select_with_probes (review_watch.rs:1908-1953) captures WorktreeProbe and runs the branch preflight, retained-history, history_for_head, freshness and waiting_retry_at reads before store.transaction takes admission.lock; round_for and probe_unneeded likewise hoist history/freshness out of the transaction. Inside the lock it revalidates cheaply via stat stamps (dev/ino/ctime of .git, commondir, common HEAD, worktrees/* HEAD, lease tomls, clone checkout paths) and retained-set equality, refusing with retry-next-pass on change. Test bug2757_bug2720_exited_pickup_retries_after_worktree_release acquires train_members (which takes admission.lock) inside the probe callback and succeeds, proving the probe does not hold admission; bug2757_bug2746 shows train admission while a live reviewer child runs. AC2 [behavioral-test] verified: the same test adds a real worktree for the branch after a successful preflight; selection skips with ''worktree ownership changed'', the Exited receipt is retained, and a retry is admitted after removal. Probe/receipt matching uses the same first-attempt-for-head lookup as the transaction, so token [REDACTED] are transient; revalidation failures set backoff without consuming the retry cap. load_unchecked now reads the initialized marker before state (fixes a first-init race); git_common_dir byte-path change has one other caller (internal_cmd.rs:125) with unchanged semantics for git''s newline-terminated output. Store-writer inventory updated for the renamed item. Base is 4 commits ahead but none touch review_watch.rs or internal_cmd.rs. CI fast tier green at head (fast gates, fast compile, build); no findings.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
@@ -100,3 +114,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-25T17:06:44.667503020Z
+  completion_sha: d9e1d55c3c38a6f5961cd16b230746f1098102a0
