@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-24T03:27:37.129845341Z
+modified_at: 2026-11-25T16:20:06.236172039Z
 req_type: Story
 tags:
 - docs
@@ -80,6 +80,11 @@ comments:
   content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-24T03:27:37.129835102Z
   modified_at: 2026-11-24T03:27:37.129835102Z
+- id: 01a21381-d7dc-7ee0-b949-60b5bbab2ad3
+  author: joe
+  content: 'REFERENCE IMPLEMENTATION (Joe 2026-11-25 09:19): commit b5826a0f949 on branch story-3120-ci-review (37 files, +4159): recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Light/Dark toggle (localStorage aida-theme), Markdown table renderer in docs/showcase/build.py, docs/getting-started.md, Multi-Seat Workflow + 8 SVGs (docs/product-workflow.md, docs/operator-setup.md); build.py --check and all 17 tests in tests/test_showcase_build.py pass. Port it in <=300-line slices (small-PR rule): (a) build.py table renderer + tests, (b) topbar dropdowns + theme toggle, (c) getting-started.md, (d) multi-seat workflow docs + SVGs (STORY-2852), (e) the terminology field guide (STORY-2839).'
+  created_at: 2026-11-25T16:20:06.236172039Z
+  modified_at: 2026-11-25T16:20:06.236172039Z
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
