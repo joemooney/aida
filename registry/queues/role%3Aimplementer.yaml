@@ -1,8 +1,8 @@
 - user_id: role:implementer
   requirement_id: 01a20f0a-b813-7a23-964d-75633c5c4032
-  position: -1187000
+  position: -1188000
   added_by: role:implementer
-  added_at: 2026-11-25T01:08:29.026135611Z
+  added_at: 2026-11-25T01:25:30.286661691Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a20e71-b96a-79b3-8452-d24f9bbeca75
