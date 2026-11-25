@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T19:04:52.216014935Z
+modified_at: 2026-11-25T19:08:49.523008690Z
 req_type: Task
 tags:
 - integration
@@ -413,6 +413,12 @@ comments:
   created_at: 2026-11-25T18:53:35.961269741Z
   modified_at: 2026-11-25T18:53:35.961269741Z
   session_id: 01a213c53f76
+- id: 01a2141c-4ff3-7462-acc0-1077aab2df3c
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int40-task-3882-r4` at head `f2a3f7e714822de74070ad357b1d32d95d89754f`.'
+  created_at: 2026-11-25T19:08:49.523005245Z
+  modified_at: 2026-11-25T19:08:49.523005245Z
+  session_id: 01a214146730
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
