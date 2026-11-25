@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
 
   The archive key omits the package versions selected by the fresh apt index (.github/workflows/ci.yml:158, 167-175). If a repository publishes new package versions while the runner image and workflow are unchanged, restore still reports an exact hit, apt fetches the replacement archives, and save is skipped. Subsequent retries keep restoring the obsolete archive and fetching the replacements. Tie the key to the resolved package versions or otherwise allow a refreshed immutable entry when apt must fetch replacements.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:21:16.131764461Z
-modified_at: 2026-11-25T07:19:47.551969778Z
+modified_at: 2026-11-25T07:19:50.767363792Z
 req_type: Task
 tags:
 - carried-from:BUG-2744
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21193-38ef-7882-834a-9ba914005a7d
+  author: joe
+  timestamp: 2026-11-25T07:19:50.767356570Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: ea821ddd34be72fe4f36d7ad25ca50577df3ff66
   branch: pr-4503
