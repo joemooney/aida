@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T11:54:19.571322651Z
+modified_at: 2026-11-25T11:56:20.751843421Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -115,6 +115,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T11:54:19.400019590Z
   modified_at: 2026-11-25T11:54:19.400019590Z
+- id: 01a21290-95ca-7870-8cee-28fa6f1961cb
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:56):
+    # TASK-3895 / PR #4572 r2: REDESIGN (advisor-122 ruling 2026-11-25 05:03 at 3ff1519f; STRICT; product-15). Lane: CODEX. MAIN, existing branch task-b6b1278890774ef993d2ebc327862470-1401. <=150 lines. Lesson from tonight: a /proc scan cannot prove a lane is dead.
+    (F1-F3) DELETE the /proc cwd/environ scan. LIVENESS EVIDENCE = BOTH:
+      (a) the lease's recorded owner identity (pid + start time + pid namespace) is NOT alive, AND
+      (b) a NON-BLOCKING EXCLUSIVE acquisition of the lease's OWN lock (the one the live owner holds) SUCCEEDS, and is HELD across the release.
+      If the lease has no such lock, or either check is unknown → REFUSE ("needs operator attest"). Mandate release only handles leases whose owner protocol makes (b) meaningful; everything else stays on the operator path.
+    (F4) Read the opt-in knob ONLY via the PROTECTED-REF trusted resolver; protected ref absent → OFF (fail closed); NEVER fall back to local main/master.
+    (F5) HOLD the mandate authority lock (the same one start/renew/stop use) from the mandate read THROUGH the journal publication.
+    (F6) Tests through the PRODUCTION entry: the knob read from a protected ref vs a local-only commit (local-only → off); a concurrent mandate stop → refuse; a lease lock held by a live child → refuse; dead + lock acquired → released + audited.
+    One targeted cargo run, then make check-ci-fast, then push to #4572. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T11:56:20.751843421Z
+  modified_at: 2026-11-25T11:56:20.751843421Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
