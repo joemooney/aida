@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T03:29:23.190321400Z
+modified_at: 2026-11-25T04:17:32.008052357Z
 req_type: Bug
 tags:
 - launch
@@ -209,6 +209,27 @@ comments:
   modified_at: 2026-11-25T03:22:52.791657578Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210ea-cf9b-7080-8324-2dd4b6d1e161
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 79d0fab9bef73b4dbb21556e13a24033ff518303 (merge-base diff plus native working-tree changes).
+    AC1: [evidence: behavioral-test] story_2254_bg_corrupt_receipt_never_frees_scope passed, including admission and retirement refusal for earlier unreadable command-line evidence after supervisor transfer. codex_bg_receipt.rs:800. The verified legacy recovery fixture at story_2254_codex_bg_receipt_tests.rs:119 also passed, including rejection with the reconciliation marker removed.
+    AC2: [evidence: behavioral-test] story_2254_codex_bg_receipt_tests.rs:183 exercises missing attribution individually and together, preservation and inspection instructions. docs/cli/06-roles-sessions.md:477 checked against the recovery and retirement branches.
+    Probes covered the tagged owner format, omitted versus explicit null identities, zero and multiple process entries, transfer timing and both paths that release unknown reservations. Existing ordinary supervisor scan retained. Final story_2254_bg run: 34 passed, 6 failed in live-proc supervisor tests (permission-denied cwd and RecoveryRequired outcomes). Both requested regressions passed. Fast gate reached manual verification. No CI on unpublished edits.
+  created_at: 2026-11-25T04:15:52.675220747Z
+  modified_at: 2026-11-25T04:15:52.675220747Z
+  session_id: 01a210bfe4fa
+  harness_version: codex-cli 0.167.0
+- id: 01a210ec-51b5-7481-b627-5c957b2a8cdc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 79d0fab9bef73b4dbb21556e13a24032ff518303 plus native working-tree changes (corrects the preceding SHA transcription). Final make check-ci-fast passed, exit 0. The targeted receipt regressions passed. The six supervisor test failures remain disclosed above.
+  created_at: 2026-11-25T04:17:32.008052357Z
+  modified_at: 2026-11-25T04:17:32.008052357Z
+  session_id: 01a210bfe4fa
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20df3-505b-72d1-b2c3-b05949512cef
   author: joe

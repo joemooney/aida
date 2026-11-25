@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T03:36:57.611460125Z
+modified_at: 2026-11-25T04:17:46.475538160Z
 req_type: Task
 tags:
 - integration
@@ -126,6 +126,17 @@ comments:
   modified_at: 2026-11-25T02:57:28.629389422Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a210ec-8bc1-7870-a05e-a3851045f7b7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 48f3c087305d2d3aa11251a0c6db6936e56bf7e4 plus native working-tree edits. Reviewed origin/main...HEAD and git diff HEAD. No untracked additions.
+    AC1: [evidence: behavioral-test] forge.rs:7161 disables lazy fetching. forge.rs:7173 applies both bundle overrides on the credential-configured fetch. tests/task_3874_review_risk.rs:26 exercises the production PR caller with a missing advanced commit and a promisor origin, observes one explicit transport, and verifies the common ancestor. The same test retains seat refusal checks for present and missing objects.
+    AC2: [evidence: behavioral-test] stalled_version_probe_exhausts_risk_budget exercised the resolver deadline and STRICT fallback. Both targeted tests passed, make check-ci-fast exited 0, and git diff --check passed. Runner reported overlay-stale at teardown. Reviewed OID validation, command argument boundaries, zero vs multiple transports and credential/seat refusal paths. Local fixtures cover Git transport and stub GitHub response. Requested Refs-only integration fix-forward.
+  created_at: 2026-11-25T04:17:46.475538160Z
+  modified_at: 2026-11-25T04:17:46.475538160Z
+  session_id: 01a210c5f448
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
