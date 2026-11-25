@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 490b4f038373cee57d13037518da1b43d6c6da40
 
   aida-cli-lib/src/codex_bg_receipt.rs:740,824. The scope-less corrupt-receipt admission check now also requires the environment to be readable for every potentially relevant same-UID process. For a malformed receipt with no usable start tick or log, an unrelated process with readable stat and argv but inaccessible environ makes the proof Unknown, blocking admission for every scope and preventing retirement despite no other matching evidence. This expands a recovery-ancestry fix into an admission availability regression. Preserve the existing admission behavior for unrelated processes while retaining fail-closed handling for plausible holders, and cover the no-birth-bound corrupt-receipt case. Linux implements separate access checks for environ in https://linux.googlesource.com/linux/kernel/git/torvalds/linux/+/e96493229a6399e902062213c6381162464cdd50/fs/proc/base.c#1005.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T01:59:51.150438181Z
-modified_at: 2026-11-25T07:33:30.589517445Z
+modified_at: 2026-11-25T07:33:32.458149309Z
 req_type: Task
 tags:
 - carried-from:BUG-2747
@@ -35,6 +35,13 @@ history:
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a2119f-c2aa-7df3-9f17-0c8f5dff88cd
+  author: joe
+  timestamp: 2026-11-25T07:33:32.458141872Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 490b4f038373cee57d13037518da1b43d6c6da40
   branch: pr-4540
