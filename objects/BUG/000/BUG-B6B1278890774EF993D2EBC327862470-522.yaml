@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T06:57:05.251121107Z
+modified_at: 2026-11-25T06:59:10.290436014Z
 req_type: Bug
 tags:
 - lanes
@@ -77,6 +77,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T06:57:05.077789984Z
   modified_at: 2026-11-25T06:57:05.077789984Z
+- id: 01a21180-8608-71a0-8e90-69fa7f2316bb
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:59):
+    # BUG-2761 / PR #4564 r2 (advisor-122 ruling 2026-11-24 23:54 at 2a9f9059; STRICT; HIGH; product-15). Lane: CODEX. MAIN, existing branch. <=150 lines. ONE round.
+    (F1, MUST) The queue-rework ADOPTION path routes to the SAME host-repair completion as the original conflict lane: pass the repair routing (no_human / host-repair mode) consistently. A resumed repair that adopts but cannot finish is worse than none.
+    (F2, MUST) BASE ADVANCED since the punt: if origin's base moved past MERGE_HEAD, do NOT reject. Abort the stale staged merge CLEANLY (capture its patch to the journal/salvage FIRST), then restart the merge on the NEW base under the SAME lease, offering the old resolution as reference. Test: an unrelated commit on main between the punt and the resume → the resume COMPLETES.
+    (F3, p2) Only REAL launch modes may adopt a retained repair; --no-launch / --plan-only / --guided must NOT transfer the journal or remove the predecessor; they only report "retained repair available". Test.
+    (F4, MUST test-gap) ONE end-to-end test through `queue rework` dispatch → session start → host repair → merge completes, with REAL refs (no synthetic fetch injection).
+    One targeted cargo run, then make check-ci-fast, then push to #4564. COMMIT your work. TITLE TRAILER: keep the existing PR title unchanged.
+  created_at: 2026-11-25T06:59:10.290436014Z
+  modified_at: 2026-11-25T06:59:10.290436014Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
