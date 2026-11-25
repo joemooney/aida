@@ -1,9 +1,8 @@
 - user_id: role:implementer
   requirement_id: 01a210b8-0b89-7b72-a5d9-49f67101d886
-  position: -1297000
+  position: -1298000
   added_by: role:implementer
-  note: PR-4583 at c5538b6d6e694a79e4f195a4f755fb5c10ca22ff conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-25T21:23:47.771997815Z
+  added_at: 2026-11-25T22:16:27.181137832Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a20bea-575b-7210-9136-af2771724df6
