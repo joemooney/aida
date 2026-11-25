@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T12:02:32.617343530Z
-modified_at: 2026-11-25T12:02:32.617343530Z
+modified_at: 2026-11-25T21:06:51.259608383Z
 req_type: Task
 tags:
 - carried-from:BUG-2730
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20849-a5b1-7dc0-a524-4d02cb690ac9
   created_at: 2026-11-25T12:02:32.617385676Z
+comments:
+- id: 01a21488-5efb-7292-b011-8f632a45c569
+  author: joe
+  content: FOLDED into a comment on BUG-2730 (backlog cleanup 2026-11-25; findings are not requirements, STORY-3118). Rejected as a stand-alone spec.
+  created_at: 2026-11-25T21:06:51.259608383Z
+  modified_at: 2026-11-25T21:06:51.259608383Z
 history:
 - id: 01a2129b-5a20-7250-931f-7b3c66c71711
   author: joe
