@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T11:15:53.967326985Z
+modified_at: 2026-11-25T11:25:52.041538394Z
 req_type: Bug
 tags:
 - store
@@ -312,6 +312,11 @@ comments:
   created_at: 2026-11-25T10:37:34.125180009Z
   modified_at: 2026-11-25T10:37:34.125180009Z
   session_id: 01a21207b0f2
+- id: 01a21274-7629-75a3-b3b5-d616efa9e6f1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2750 slice A AC1 fails because an account lookup in the Git attribute hardening fallback can outlive the refresh deadline. The fetch-only update and skipped hooks profile are present. AC2 passes for the covered stalled credential probe and transport cases. The train-handler fixture checks the writer lock, timeout diagnostic and continuation. The implementer reported the focused regression passed. FAST gates and compile passed on the exact head. No local tests or builds were run. The advisor split assigns fetched-evidence admission to BUG-2753.. No triage reason was given.'
+  created_at: 2026-11-25T11:25:52.041528891Z
+  modified_at: 2026-11-25T11:25:52.041528891Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -531,6 +536,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21274-7629-75a3-b3b5-d60d35804148
+  author: joe
+  timestamp: 2026-11-25T11:25:52.041515381Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -539,11 +551,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Reviewed the full landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2750 slice A AC1 fails because an account lookup in the Git attribute hardening fallback can outlive the refresh deadline. The fetch-only update and skipped hooks profile are present. AC2 passes for the covered stalled credential probe and transport cases. The train-handler fixture checks the writer lock, timeout diagnostic and continuation. The implementer reported the focused regression passed. FAST gates and compile passed on the exact head. No local tests or builds were run. The advisor split assigns fetched-evidence admission to BUG-2753.
-  recovery_hint: address the review findings, move BUG-2750 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T11:15:53.967326985Z
