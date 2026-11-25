@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T06:36:33.481157179Z
+modified_at: 2026-11-25T07:09:23.713485850Z
 req_type: Task
 tags:
 - integration
@@ -202,6 +202,12 @@ comments:
   modified_at: 2026-11-25T06:36:33.481157179Z
   session_id: 01a211465bf0
   harness_version: codex-cli 0.167.0
+- id: 01a21189-a781-72a1-838f-bd0626a84635
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int38-task-3874-r3` at head `3e62e18bdfa165724e1624670bbcc4d28190019e`.'
+  created_at: 2026-11-25T07:09:23.713480858Z
+  modified_at: 2026-11-25T07:09:23.713480858Z
+  session_id: 01a211465bf0
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
