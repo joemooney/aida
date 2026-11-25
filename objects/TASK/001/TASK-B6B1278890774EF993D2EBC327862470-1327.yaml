@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   docs/showcase/code-review.html:523–532 and 843–849 mark the facet picker as a tablist but supply no tab or tabpanel roles, selected state, or focus relationship. Implement the tab keyboard and accessibility semantics, or use ordinary labeled buttons with programmatic expanded or pressed state.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:25:04.738383659Z
-modified_at: 2026-11-25T07:21:57.588953809Z
+modified_at: 2026-11-25T07:22:00.122257934Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21195-323a-7551-990d-06ec06e4b93f
+  author: joe
+  timestamp: 2026-11-25T07:22:00.122255364Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
