@@ -1,0 +1,32 @@
+id: 01a210e8-47ae-71e3-a7e8-19458ed78a15
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-302
+title: 'Review PR-4558: [AI:codex] fix(review-watch): bind FULL requests to settled FAST runs for the reviewed PR (TASK-3877)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a210ad`) for branch `int38-task-3877`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4558>
+  - Branch: `int38-task-3877` → `integration`
+
+  ## Covers
+
+  - TASK-3877
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4558` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T04:13:07.886998514Z
+modified_at: 2026-11-25T04:13:07.886998514Z
+req_type: Story
+filed_at:
+  code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 45206d90a1
+  session: 01a210ad058e

@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When recording ci:full intent, RE-READ the PR head and skip if it moved since the snapshot (head-snapshot-then-verdict race). Use the workflow run's CONCLUSION, not the marker's run_in_progress flag, to decide settlement.
   - AC2: Key the FAST marker by PR number + base, not by SHA+name alone, so PRs sharing a head cannot match each other's marker. A test for each of the three cases.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T03:47:58.890271222Z
+modified_at: 2026-11-25T04:12:31.258751637Z
 req_type: Task
 tags:
 - ci
@@ -36,6 +36,12 @@ comments:
   modified_at: 2026-11-25T03:47:58.890271222Z
   session_id: 01a210ad058e
   harness_version: codex-cli 0.167.0
+- id: 01a210e7-b89a-7842-b9db-fe4f2f0119db
+  author: aida-publication-done
+  content: Implementer push dfdc2a82a951 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-25T04:12:31.258750641Z
+  modified_at: 2026-11-25T04:12:31.258750641Z
+  session_id: 01a210ad058e
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
@@ -61,6 +67,14 @@ history:
   session_id: 01a210ad058e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a210e7-b89a-7842-b9db-fe30e817104a
+  author: aida-publication-done
+  timestamp: 2026-11-25T04:12:31.258746539Z
+  session_id: 01a210ad058e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f2a1ab1e1eecfb09b9ac8938c8a53992d7903c69
