@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T17:23:33.510229186Z
-modified_at: 2026-11-23T17:23:33.510229186Z
+modified_at: 2026-11-25T07:20:39.078998043Z
 req_type: Task
 tags:
 - carried-from:TASK-3155
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1f2e4-2e49-7053-b35a-0d432f76ac3c
   created_at: 2026-11-23T17:23:47.501745151Z
+comments:
+- id: 01a21193-f5a7-76e1-b346-4364793c3836
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): likely already fixed. Parent: TASK-3155 / #4443. Evidence: store-writers.toml now ''backend-owned'' + queue_update_notes rows; 8a4c9ba. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:20:39.078998043Z
+  modified_at: 2026-11-25T07:20:39.078998043Z
 history:
 - id: 01a20990-d7c8-7610-beef-79e07acf0f07
   author: joe
