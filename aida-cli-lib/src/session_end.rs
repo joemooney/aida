@@ -1632,7 +1632,7 @@ pub(crate) fn session_end_with_discard_unpushed(
                     .to_string_lossy()
                     .escape_debug()
                     .to_string();
-                let evidence = dirty_entries.join("; ").replace('\n', "; ");
+                let evidence = dirty_entries.join("\n");
                 let mut msg = if is_clone {
                     format!("seat clone {location} holds work origin does not have: {evidence}\n")
                 } else {

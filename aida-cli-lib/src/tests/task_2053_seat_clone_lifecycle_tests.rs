@@ -1909,7 +1909,7 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
     );
 }
 
-// trace:TASK-3882 | ai:codex
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:codex
 #[test]
 fn task_3882_refusal_quotes_trailing_spaces_on_each_rename_path() {
     let facts = parse_status_v2(
@@ -1925,7 +1925,7 @@ fn task_3882_refusal_quotes_trailing_spaces_on_each_rename_path() {
     );
 }
 
-// trace:TASK-3882 | ai:codex
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:codex
 #[test]
 fn task_3882_agent_refusal_keeps_quoted_worktree_filename() {
     let fx = fixture();
@@ -1940,12 +1940,19 @@ fn task_3882_agent_refusal_keeps_quoted_worktree_filename() {
     let mut record = crate::list_leases(&fx.main).remove(0);
     record.tree_kind = TreeKind::Worktree;
     std::fs::write(&lease, toml::to_string(&record).unwrap()).unwrap();
-    std::fs::write(tree.join("notes  "), "pending").unwrap();
+    std::fs::create_dir(tree.join("notes")).unwrap();
+    std::fs::write(tree.join("notes/todo "), "pending").unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
     let err = end_session(id, false).unwrap_err();
     let msg = format!("{err:#}");
     let (summary, _) = crate::agent_error_summary_help(&msg);
-    assert!(summary.contains(r#"?? "notes  ""#), "{msg}");
+    assert!(summary.contains(r#"?? "notes/todo ""#), "{msg}");
+    std::fs::write(tree.join("a; untracked: z"), "pending").unwrap();
+    let msg = format!("{:#}", end_session(id, false).unwrap_err());
+    assert!(
+        msg.contains("?? \"a; untracked: z\"\n?? \"notes/todo \""),
+        "{msg}"
+    );
     assert!(tree.exists() && lease.exists());
 }
 

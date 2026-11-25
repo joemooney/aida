@@ -4825,7 +4825,12 @@ fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
     // trace:TASK-1952 | trace:TASK-2146 | ai:claude
     let out = host_git_command(&top)
         .args(["-c", "core.quotePath=true"])
-        .args(["status", "--porcelain", "--ignore-submodules=dirty"])
+        .args([
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignore-submodules=dirty",
+        ])
         .output()
         .context("run git status")?;
     anyhow::ensure!(
@@ -4915,12 +4920,12 @@ fn porcelain_unquote(field: &str) -> String {
 }
 
 /// `path` quoted as porcelain v1 prints it under the default
-/// `core.quotePath=true`: bare unless it holds a control byte, `"`, `\\` or
+/// `core.quotePath=true`: bare unless it holds a space, control byte, `"`, `\\` or
 /// a non-ASCII byte.
 // trace:TASK-1952 | trace:TASK-1943 | ai:claude
 fn porcelain_quote(path: &str) -> String {
     let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
-    if !path.bytes().any(needs) {
+    if !path.contains(' ') && !path.bytes().any(needs) {
         return path.to_string();
     }
     let mut out = String::from("\"");
@@ -5048,7 +5053,12 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
         contained_safety_scan(worktree_path)?.0
     } else {
         let out = host_git_command(worktree_path)
-            .args(["status", "--porcelain", "--ignore-submodules=none"])
+            .args([
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--ignore-submodules=none",
+            ])
             .output()
             .context("run git status")?;
         anyhow::ensure!(
@@ -12825,6 +12835,30 @@ mod tests {
         assert!(err.contains("host-owned"), "{err}");
         assert!(worktree_is_dirty(&wt), "the tree must be kept");
         assert!(worktree_status_porcelain(&wt).is_err());
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn task_3882_dirty_only_submodule_quotes_trailing_space() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, _) = bug_1929_main_with_store(dir.path());
+        let wt = dir.path().join("wt");
+        bug_1985_sub_git(&main, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+        bug_1985_sub_git(
+            &wt,
+            &[
+                "submodule",
+                "add",
+                "--name",
+                "dep",
+                main.to_str().unwrap(),
+                "dep ",
+            ],
+        );
+        bug_1985_sub_git(&wt, &["commit", "-qm", "register dep"]);
+        std::fs::write(wt.join("dep /pending"), "pending").unwrap();
+        assert_eq!(contained_safety_scan(&wt).unwrap().0, " M \"dep \"\n");
     }
 
     // F6: an unmerged (`u`) submodule record with inner edits is reported, so
