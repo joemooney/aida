@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:28:51.020426408Z
+modified_at: 2026-11-25T16:29:28.028340390Z
 req_type: Story
 tags:
 - integration
@@ -296,6 +296,13 @@ comments:
   modified_at: 2026-11-25T16:28:51.020426408Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2138a-b4b5-73b2-bf75-a019e915ba69
+  author: joe
+  content: 'ADVISOR RULING (advisor-122 2026-11-25 09:33): integration-30''s S3 security pre-check is ACCEPTED in full. All 8 blocking items are binding ACs, and S3 is STRICT tier. SPLIT S3 into two slices. S3a: one hardened spawn helper used by every runner path, including S4''s challenger. It runs in an empty temp cwd with no project settings or tools; clears the environment and passes a per-vendor allowlist; requires an absolute runner path outside the checkout; sends the prompt on stdin from a writer thread; enforces a deadline and an output cap; and has no default-to-claude arm (unknown agent → refuse). Then --run-review on top of it. S3b: --effort/--model with allowlists validated at every precedence source before argv is built, codex effort only from a fixed enum, and review-rules.toml read from the trusted base (refuse if the PR modifies it). The should-fixes (git_text env/--no-textconv/no silent full-file fallback) go in S3a. Each ≤300, independent review.'
+  created_at: 2026-11-25T16:29:28.028340390Z
+  modified_at: 2026-11-25T16:29:28.028340390Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
