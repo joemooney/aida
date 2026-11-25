@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T04:44:34.742928775Z
+modified_at: 2026-11-25T04:44:46.448450567Z
 req_type: Task
 tags:
 - integration
@@ -71,6 +71,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-b6b1278890774ef993d2ebc327862470-1369.AC1: unverified. No triage reason was given.'
   created_at: 2026-11-25T04:44:34.742917889Z
   modified_at: 2026-11-25T04:44:34.742917889Z
+- id: 01a21105-3f54-7d13-8e50-346f00357817
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3882):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 876ace623dbe
+    Recorded: 2026-11-25T04:39:49.440649705+00:00
+    Findings:
+    1. TASK-b6b1278890774ef993d2ebc327862470-1369.AC1: A sole untracked file named 'notes/todo ' is still invisible in the agent refusal. session_end.rs:1584 and :1635 pass through default porcelain v1 status, which collapses that tree to '?? notes/'. The only directory expansion is for '.aida/' at :2554. This is the nested filename from the original F2 finding. Expand collapsed untracked directories for refusal evidence while preserving the existing teardown decision and runtime-link filtering, and exercise the exact nested filename with cargo test -p aida-cli-lib task_3882_agent_refusal_keeps_quoted_worktree_filename.
+    2. TASK-b6b1278890774ef993d2ebc327862470-1369.AC1: The worktree path does not always receive Git's own porcelain v1 quoting. A validated submodule at 'dep ' whose only changes are internal can be reported by the contained-worktree scan as a synthetic ' M dep ' line. git_ops.rs:4861 uses porcelain_quote at :4921, whose predicate omits ASCII spaces. session_end.rs:1635 passes that line through, and the agent summary trim removes the final space when it is the last entry. Quote space-containing synthetic porcelain paths and cover the dirty-only validated submodule case.
+    3. The supplied untraced acceptance list still applies to TASK-b6b1278890774ef993d2ebc327862470-1369.AC1. Both new tests at aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:1912 and :1928 carry only trace:TASK-3882, which identifies the task but does not anchor the tests to AC1. Add the generated criterion trace to the new coverage so AIDA can recognize it.
+    4. The new inline list at session_end.rs:1635 makes a private clone with one untracked file named 'a; untracked: z' indistinguishable from a clone with two untracked files named 'a' and 'z'. Both summaries show 'untracked: a; untracked: z' because seat_clone.rs:2256 leaves the delimiter unescaped. The previous detailed session-end output used a separate line per entry. Use a representation that keeps entry boundaries intact and add a case with a delimiter in a filename.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T04:44:46.292848389Z
+  modified_at: 2026-11-25T04:44:46.292848389Z
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
