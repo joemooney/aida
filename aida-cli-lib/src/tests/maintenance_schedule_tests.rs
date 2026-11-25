@@ -3815,3 +3815,33 @@ fn landing_health_tick_routes_to_live_codex_advisor_or_product() {
         }
     }
 }
+
+// trace:BUG-2762 | ai:codex
+#[test]
+fn bug_2762_repository_job_commands_are_allowlisted() {
+    let config: ConfigFile = toml::from_str(include_str!("../../../.aida/config.toml")).unwrap();
+    for job in config.schedule.unwrap().jobs {
+        if let Some(command) = job.command {
+            parse_scheduled_command(&command)
+                .unwrap_or_else(|err| panic!("job {}: {err}", job.name));
+        }
+    }
+}
+
+// trace:BUG-2762 | ai:codex
+#[test]
+fn bug_2762_stalled_reviews_is_a_scheduler_only_gate() {
+    let command =
+        parse_scheduled_command("doctor check stalled-reviews --fail-on-findings").unwrap();
+    assert_eq!(
+        command.args,
+        [
+            "doctor",
+            "check",
+            "stalled-reviews",
+            "--json",
+            "--fail-on-findings"
+        ]
+    );
+    assert!(!command.hook_allowed);
+}
