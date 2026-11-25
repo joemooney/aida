@@ -7112,28 +7112,83 @@ pub(crate) fn pr_state_batch(
 /// Pin the advisory risk comparison to origin's PR at the reviewed head.
 // trace:BUG-2737 | ai:codex
 pub(crate) fn review_risk_pr_base(root: &Path, number: u64, head: &str) -> Option<String> {
-    let (host, project) = pr_state_repository(root).ok()?;
-    let mut cmd = forge_read_command(&crate::resolve_gh_binary_for_probe()?);
-    pr_state_pin(&mut cmd, root, &host);
-    cmd.args([
-        "pr",
-        "view",
-        &number.to_string(),
-        "--repo",
-        &format!("{host}/{project}"),
-        "--json",
-        "headRefOid,baseRefOid",
-    ]);
-    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))?;
-    if !out.status.success() {
-        return None;
-    }
-    let row: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    if !row["headRefOid"].as_str()?.eq_ignore_ascii_case(head) {
-        return None;
-    }
-    Some(row["baseRefOid"].as_str()?.to_owned())
+    // trace:TASK-3874 | ai:codex
+    review_risk_pr_base_with_budget(root, number, head, std::time::Duration::from_secs(15))
 }
+
+fn review_risk_pr_base_with_budget(
+    root: &Path,
+    number: u64,
+    head: &str,
+    budget: std::time::Duration,
+) -> Option<String> {
+    crate::forge_lookup::with_forge_lookup_deadline(budget, || {
+        let (host, project) = pr_state_repository(root).ok()?;
+        let mut cmd = forge_read_command(&crate::resolve_gh_binary_for_probe()?);
+        pr_state_pin(&mut cmd, root, &host);
+        cmd.args([
+            "pr",
+            "view",
+            &number.to_string(),
+            "--repo",
+            &format!("{host}/{project}"),
+            "--json",
+            "headRefOid,baseRefOid",
+        ]);
+        let out = crate::forge_lookup::forge_lookup_output(cmd).ok()??;
+        if !out.status.success() {
+            return None;
+        }
+        let row: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        if !row["headRefOid"].as_str()?.eq_ignore_ascii_case(head) {
+            return None;
+        }
+        let base = row["baseRefOid"].as_str()?;
+        review_risk_base_object(root, base)?;
+        Some(base.to_owned())
+    })
+}
+
+// The target can move after checkout. Fetch only the immutable forge observation
+// and leave branch refs and FETCH_HEAD alone. trace:TASK-3874 | ai:codex
+fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
+    use aida_core::git_ops::{host_git_command, host_remote_git_command};
+    if !matches!(base.len(), 40 | 64) || !base.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut check = host_git_command(root);
+    check.args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
+    if crate::forge_lookup::forge_lookup_output(check)
+        .ok()??
+        .status
+        .success()
+    {
+        return Some(());
+    }
+    let mut fetch = host_remote_git_command(root, "origin");
+    fetch
+        .args([
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--no-recurse-submodules",
+            "--no-auto-maintenance",
+            "--refmap=",
+            "--",
+            "origin",
+            base,
+        ])
+        .stdin(std::process::Stdio::null());
+    crate::forge_lookup::forge_lookup_output(fetch)
+        .ok()??
+        .status
+        .success()
+        .then_some(())
+}
+
+#[cfg(test)]
+#[path = "tests/task_3874_review_risk.rs"]
+mod task_3874_review_risk;
 
 // trace:STORY-2688 | ai:codex
 fn pr_state_repository(root: &Path) -> Result<(String, String)> {
