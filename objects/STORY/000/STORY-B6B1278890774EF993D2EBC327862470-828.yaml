@@ -1,0 +1,29 @@
+id: 01a21085-0d0e-7fd2-bd47-3449203e54d0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-828
+agreed_id: STORY-3118
+title: 'Review findings are not requirements: record deferred findings on the parent spec/PR, keep them out of aida list, promote explicitly (127 review follow-up drafts flood the list)'
+description: |
+  Joe 2026-11-24 19:05: "`aida list` is showing 313 requirements… maybe reviews need to be treated differently, there seems to be muddying of the waters." Analysis (product-15): of 318 open specs, 184 are Draft, and 127 of those are reviewer-filed "Review follow-up:" drafts, with ~20 more deferral follow-ups filed as Approved LOW tasks. 82 drafts were touched on 11-24 alone and ~95% are <4 days old. Deferred review findings are flooding the requirement list.
+
+  ## Acceptance
+  - AC1: Deferred review findings are recorded as FINDINGS attached to their spec/PR (the findings ledger), NOT as new requirement specs. Reviewers and deferral rulings stop creating "Review follow-up:" drafts; `aida list` (default) shows no findings.
+  - AC2: `aida findings` (or `aida findings list --area <path|tag>`) shows open review debt grouped by area/spec; a finding is PROMOTED to a requirement only by an explicit command that groups related findings into one spec with acceptance criteria.
+  - AC3: A one-time migration converts existing open "Review follow-up:" drafts into findings on their parent spec (dry-run + operator sign-off), preserving their text and provenance.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T02:24:44.814524472Z
+modified_at: 2026-11-25T02:24:44.814524472Z
+req_type: Story
+tags:
+- backlog
+- findings
+- review
+filed_at:
+  code_sha: 260a82ae939faf34a8e6505a6f765f2151655610
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc27cf1f4cb
+  vendor: claude
