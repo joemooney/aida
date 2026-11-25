@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
 
   docs/showcase/code-review.html:88–90 and 235–257 use a fixed-height sticky header with wrapping controls and an unwrapped fixed dock with a 215px status minimum. At phone widths the header spills beyond its 74px box and the combined dock is wider than the viewport, clipping navigation. Add a responsive layout for both controls and keep scroll offsets aligned to the rendered header.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T08:24:51.768794989Z
-modified_at: 2026-11-25T07:21:18.979930788Z
+modified_at: 2026-11-25T07:21:54.901479846Z
 req_type: Task
 tags:
 - carried-from:TASK-3864
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21195-1dd5-7850-a8b9-5be52096ddc4
+  author: joe
+  timestamp: 2026-11-25T07:21:54.901475146Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 417ba689a6ea369ed6664055289418bb0e2c3c5c
   branch: pr-4504
