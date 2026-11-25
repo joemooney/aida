@@ -572,3 +572,86 @@ fn bug_2548_retained_owner_cannot_report_successful_rollback() {
     assert!(crate::lease_path(&fx.main, &id).is_file());
     assert!(tree.exists());
 }
+
+/// BUG-2761: a reservation this pickup's attempt wrote is retired, with its
+/// tree, when the spawn fails before any child starts; once a child was
+/// spawned the tree and the reservation both stay.
+// trace:BUG-2761 | ai:claude
+#[test]
+fn bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation() {
+    use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome};
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let (head, base) = ("b".repeat(40), "c".repeat(40));
+    let entry = |pr: u64, lane: &str, tree: &Path| RepairEntry {
+        key: RepairKey {
+            repository: fx.main.clone(),
+            pr,
+            original_head: head.clone(),
+        },
+        dispatched_by: "direct-rework".into(),
+        reserved_at: chrono::Utc::now().to_rfc3339(),
+        lane_id: lane.into(),
+        tree_path: tree.into(),
+        branch: "repair".into(),
+        base: base.clone(),
+        spawn: SpawnOutcome::Unknown,
+        original_conflict_paths: vec!["src/lib.rs".into()],
+        regeneration_success: None,
+        regenerated_tree: None,
+        preparation_success: None,
+        validation: None,
+        refusal_notice: None,
+    };
+    let reserved = |tree: &Path| {
+        RepairGuard::lock(&fx.main)
+            .unwrap()
+            .for_tree(tree, "repair", &head, &base)
+            .is_ok()
+    };
+    let reserve = |agent: &AgentLaunchMark, pr: u64, lane: &str, tree: &Path| {
+        let attempt = RepairGuard::lock(&fx.main)
+            .unwrap()
+            .reserve(entry(pr, lane, tree))
+            .unwrap();
+        *agent.repair.borrow_mut() = Some(attempt);
+    };
+
+    // A failed spawn after the reservation: tree and reservation both go.
+    let scope = "TASK-927611";
+    let receipt = launching_setup(scope);
+    let (lease_id, tree) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+    let missing = fx.main.join("no-such-bin").join("codex");
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |agent| {
+        reserve(agent, 27611, &lease_id, &tree);
+        assert!(reserved(&tree));
+        spawn_reviewer(&missing)?;
+        unreachable!("the spawn fails");
+    });
+    assert!(result.is_err());
+    assert!(rolled_back);
+    assert_gone(&fx.main, &tree, scope);
+    assert!(
+        !reserved(&tree),
+        "the unspawned attempt's reservation is retired"
+    );
+
+    // A spawned child: tree and reservation both stay, even on a later error.
+    let scope = "TASK-927612";
+    let receipt = launching_setup(scope);
+    let (lease_id, tree) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |agent| {
+        reserve(agent, 27612, &lease_id, &tree);
+        spawn_reviewer(Path::new("true"))?;
+        std::fs::write(tree.join("agent-work.txt"), "uncommitted\n").unwrap();
+        anyhow::bail!("the implementer exited without opening a PR")
+    });
+    assert!(result.is_err());
+    assert!(!rolled_back);
+    assert_kept(&fx.main, &tree, scope, &lease_id);
+    assert!(
+        reserved(&tree),
+        "a spawned attempt's reservation is retained"
+    );
+}

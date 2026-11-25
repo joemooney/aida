@@ -4065,7 +4065,19 @@ fn prepare_host_repair_routed(
         }
         match execute(&["merge", "--no-edit", "--no-verify", &base]) {
             Ok(_) => {
-                anyhow::bail!("conflict observation changed; reservation retained for recovery")
+                // State the journal as it is: the entry stands with an unknown
+                // spawn; only a pickup attempt's pre-agent rollback (which
+                // removes the tree) retires it. trace:BUG-2761 | ai:claude
+                let state = if attempt.is_some() {
+                    "until this pickup's rollback removes the tree and retires it"
+                } else {
+                    "for recovery"
+                };
+                anyhow::bail!(
+                    "conflict observation changed: the merge applied without conflicts; \
+                     the repair reservation for PR #{pr} stays recorded with an unknown \
+                     spawn {state}"
+                )
             }
             Err(why) => {
                 execute(&["rev-parse", "--verify", "MERGE_HEAD"])
