@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-25T18:13:27.031182614Z
+modified_at: 2026-11-25T18:23:49.981461234Z
 req_type: Bug
 tags:
 - lanes
@@ -417,6 +417,12 @@ comments:
   modified_at: 2026-11-25T18:06:47.264428253Z
   session_id: 01a213a055e9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a213f3-1edd-7e62-b620-b92e96967fe0
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2761-s3-route-before-reserve` at head `a299decaf1388ee3f0eec3ce11c023cf4269f111`.'
+  created_at: 2026-11-25T18:23:49.981457509Z
+  modified_at: 2026-11-25T18:23:49.981457509Z
+  session_id: 01a213a055e9
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
