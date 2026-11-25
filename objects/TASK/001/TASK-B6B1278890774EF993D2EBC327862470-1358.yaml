@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T16:42:55.697112433Z
+modified_at: 2026-11-25T16:43:29.608960266Z
 req_type: Task
 tags:
 - integration
@@ -362,6 +362,13 @@ comments:
   modified_at: 2026-11-25T16:42:55.697112433Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21397-8255-7550-b057-a4a709b04fb7
+  author: joe
+  content: 'ADVISOR SIGNOFF on SKETCH (integration-30), advisor-122 2026-11-25 09:45. APPROVED. No network git in the risk path. The merge base comes from the pinned gh compare API, is hex-validated, and must pass a local is-ancestor check before any diff. The RiskGit builder spawns nothing at construction; it uses an env_clear() allowlist and a promisor/alternates probe first, with typestate. DECISION: YES. An Unknown or partial-clone probe also SKIPS patch_identity in verdict_event, and the carry-over then fails closed (re-review). Also: since both existing env denylists have drifted, file ONE follow-up comment on BUG-2760 suggesting the shared git spawn helpers move to an allowlist. Slices: S1 = RiskGit + probe + local assess + AC2 deadline; S2 = forge merge base. Both strict, ≤300, independent review.'
+  created_at: 2026-11-25T16:43:29.608960266Z
+  modified_at: 2026-11-25T16:43:29.608960266Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
