@@ -10,12 +10,12 @@ description: |
   - AC1: A built-in, configurable LANDING-DROUGHT check: `[landing.drought] max_minutes` (default 60) + `action = "report" | "investigate"` (default "investigate"). When main has had no landing for max_minutes AND at least one PR is landable (approved at head + required CI green + holds cleared), it fires once per drought episode. Runs from the existing scheduler.
   - AC2: action="investigate" produces a DIAGNOSIS without operator prompting: per ready PR, the `aida pr train --dry-run` refusal reason; the auto-train controller's last exit + its error; the mandate coverage; the guard's own health. It routes the diagnosis to the advisor (mail + CronJobFailed-style route) and records it as a doctor finding.
   - AC3: The guard is itself bounded and watched: the drought check has a hard deadline; a timeout or error is ITSELF a finding/alert ("landing guard unhealthy"), never silent. Tests: drought + ready PR → fires once with the diagnosis; no ready PR → silent; the check times out → a "guard unhealthy" alert.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T18:17:45.210312621Z
+modified_at: 2026-11-25T18:30:24.899657148Z
 req_type: Story
 tags:
 - landing
@@ -99,6 +99,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a213f9-2601-72a0-9022-c4a07dcd1615
+  author: joe
+  timestamp: 2026-11-25T18:30:25.025537112Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594
