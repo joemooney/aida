@@ -13,12 +13,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T04:20:51.625484185Z
-modified_at: 2026-11-25T04:21:01.990028989Z
+modified_at: 2026-11-25T04:47:06.818496555Z
 req_type: Task
 tags:
 - privacy
 - store
 - strict
+comments:
+- id: 01a21107-6442-7811-98fd-0cbc582ee82c
+  author: joe
+  content: 'BINDING CONSTRAINT for the sketch (advisor-122 2026-11-24 21:36): the scrub is a FORWARD redaction commit on aida-store (replace the email in CURRENT objects; keep work nodes redacted going forward), NOT a history rewrite. NO force-push of either hub''s aida-store. The sketch must state plainly that OLDER commits still contain the email, so Joe chooses with that known. Purging it from history is a separate explicit decision of Joe''s with its own plan (it breaks every clone).'
+  created_at: 2026-11-25T04:47:06.818496555Z
+  modified_at: 2026-11-25T04:47:06.818496555Z
 history:
 - id: 01a210ef-8407-78c1-834c-abce880fd3c5
   author: joe
