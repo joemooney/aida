@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T20:53:01.618709110Z
+modified_at: 2026-11-25T21:45:05.599480176Z
 req_type: Bug
 tags:
 - admission
@@ -56,6 +56,28 @@ comments:
     - A cooperative manual train already shares the mode with the watcher; the starved party during a long scan is an exclusive ship/land (and the train via intents). AC2 asserts both a ship and a manual train get in mid-scan. Idle between passes still holds the claim (it yields within 1s to any intent, as before).
   created_at: 2026-11-25T20:53:01.618709110Z
   modified_at: 2026-11-25T20:53:01.618709110Z
+  session_id: 01a2147671bd
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a214ab-613f-7ed0-9915-ea0179963205
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4e8bd1d0f6 (diff origin/main...HEAD: review_watch.rs +204/-47, tests +161).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: run_with_program now builds a PassClaim after the claim check, sweeps leaked probe refs under it, then releases it before hub sync, gh discovery and every per-change forge read in admit_change. admit_change retakes it via PassClaim::decide right before select_with_coverage, and releases it again on skip/notify before the forge-reading readiness report. watch_pass releases it after every change. decide rechecks snapshot age under the claim; a stale snapshot is released, re-read outside the claim and retried, or deferred if head/base moved. Test: review_watch::tests::bug2765_stale_snapshot_is_reread_outside_the_claim (asserts no claim held during the re-read).
+    - AC2 [behavioral-test]: review_watch::tests::bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan drives the production watch_pass with a stub forge that sleeps 1.5s per PR. A ship (exclusive) and a manual train are each admitted while a read is in flight. When a ship still holds exclusive admission, the decision is deferred (refusal path).
+    - AC3 [behavioral-test]: review_watch::tests::bug2765_long_admission_hold_warns_with_its_phase. A hold over 30s logs 'review-watch: admission held Ns during <phase>'.
+    Validation: lane job cargo test review_watch::tests::bug27: all BUG-2703/2746/2757 regressions passed (including the real worker-loop and ship-handler tests); bug2765 3/3 pass. make check-ci-fast passed (exit 0).
+
+    Probe findings:
+    - P3 (0/1/N): with no changes, the claim is released and retaken for idle. With N changes, it is released after each.
+    - P5 (authority): a reservation or launch happens only after decide returns None while holding the claim. Err or Some(reason) never launches. A dispatched Reserved attempt still blocks exclusive admission via admission_quiescent.
+    - Fixed during review: (1) the readiness report after a skip or notify ran under the claim, so the claim is now released first; (2) two AC2 test assertion bugs.
+
+    Residual risks: stale-author branch updates (forge_update), rework routing and supersede signalling happen before the decision, so they now run without the claim. These are settlement-like actions, but a branch update could race a ship of the same unreviewed PR (low likelihood: a ship needs an approval at that head). In --once mode a land can now interleave between decisions. Idle still holds the claim and yields within 1s, as before. The diff is over the brief's 250-line guide: about 204 production lines, the rest tests.
+  created_at: 2026-11-25T21:45:05.599480176Z
+  modified_at: 2026-11-25T21:45:05.599480176Z
   session_id: 01a2147671bd
   harness_version: 2.1.319 (Claude Code)
 history:
