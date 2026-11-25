@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T12:27:02.334575019Z
+modified_at: 2026-11-25T15:17:53.097205863Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -149,6 +149,11 @@ comments:
   created_at: 2026-11-25T12:27:02.334571112Z
   modified_at: 2026-11-25T12:27:02.334571112Z
   session_id: 01a212937179
+- id: 01a21348-e149-7f20-846e-076420d33f47
+  author: joe
+  content: 'PARKED (advisor-122 2026-11-25 05:37): r2 punted on design: SessionLease has only the shared short-lived metadata writer lock, and session start hands an ID to an existing shell, so no repair lease currently qualifies for the required owner-lifetime lock (b). Needs a launch/adoption protocol covering surviving lane processes. FOLDED INTO BUG-2761''s sketch (the same reservation-lifecycle design).'
+  created_at: 2026-11-25T15:17:53.097205863Z
+  modified_at: 2026-11-25T15:17:53.097205863Z
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
