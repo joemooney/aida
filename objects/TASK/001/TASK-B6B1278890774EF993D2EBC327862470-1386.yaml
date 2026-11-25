@@ -1,0 +1,31 @@
+id: 01a2104f-683a-7781-96c3-d1ecc3bdd9ee
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1386
+title: 'Review follow-up: aida-cli-lib/src/session_reap.rs:1422 and aida-cli-lib/src/seat_clone.rs:6063 (pinned land'
+description: |-
+  From STORY-3059
+  Reviewed sha: 1deb5e4d92f5160624c66dc67dcf15035af2ae08
+
+  aida-cli-lib/src/session_reap.rs:1422 and aida-cli-lib/src/seat_clone.rs:6063 (pinned landing tree) — Scanning every eligible clone now force-fetches all remote heads into the primary checkout's shared refs/remotes/origin namespace. This includes hygiene --dry-run, which the CLI guide promises changes nothing, and the maintenance condition that only counts reapable sessions. A preview can now advance or rewind unrelated local tracking refs without cleanup confirmation. Use isolated proof refs or another read-only observation for scans, and keep any write outside the shared tracking namespace.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T01:26:09.210611902Z
+modified_at: 2026-11-25T01:26:09.210611902Z
+req_type: Task
+tags:
+- carried-from:STORY-3059
+- finding-hash:c01d32d2
+- from-review:STORY-3059
+relationships:
+- rel_type: References
+  target_id: 01a20bea-575b-7210-9136-af2771724df6
+  created_at: 2026-11-25T01:26:26.799729059Z
+filed_at:
+  code_sha: 1deb5e4d92f5160624c66dc67dcf15035af2ae08
+  branch: pr-4552
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b3
+  vendor: claude
+  session: 01a2104b7a7c
