@@ -187,13 +187,14 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
 
     // 5. Collect distinct resolved playbooks referenced by reviewable files and
     //    enrich each with diff/content-triggered facets (ANSSI / Tokio / Rust API).
-    let mut playbooks_by_id: BTreeMap<String, (ResolvedPlaybook, Vec<&str>)> = BTreeMap::new();
+    let mut playbooks_by_id: BTreeMap<String, (ResolvedPlaybook, Vec<(&str, &str)>)> =
+        BTreeMap::new();
     for rf in &inventory.reviewable_files {
         let entry = playbooks_by_id
             .entry(rf.playbook_id.clone())
             .or_insert_with(|| (registry.resolve(&rf.path), Vec::new()));
         if let Some(body) = content_cache.get(&rf.path) {
-            entry.1.push(body.as_str());
+            entry.1.push((&rf.path, body.as_str()));
         }
     }
     let playbooks: Vec<ResolvedPlaybook> = playbooks_by_id
