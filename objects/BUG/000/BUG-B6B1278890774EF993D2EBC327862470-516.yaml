@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the recorded tree is verifiably ABSENT (ENOENT on the path AND no mount), the heal ends the lease and records "tree absent, nothing to salvage". Test.
   - AC2: An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T06:09:09.036677414Z
+modified_at: 2026-11-25T06:11:59.024477244Z
 req_type: Bug
 tags:
 - leases
@@ -207,6 +207,11 @@ comments:
   created_at: 2026-11-25T05:51:16.483677401Z
   modified_at: 2026-11-25T05:51:16.483677401Z
   session_id: 01a210f85542
+- id: 01a21155-17b0-7901-ba7f-3dd4452e6fa2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against protected main 2d346c274965961d1e187e5d48a6dbe611232393, landed tree daa7804c3df65ef42615d49384d5397bfac9c994. The PR head is one commit behind and no finding depends on that intervening review-watch change. Applied the latest advisor-approved BUG-2755 r3 attestation design, which supersedes the earlier mount-proof approach in the worksheet. AC1 partial: the helper covers release of an absent clone with a typed ID, but does not bind confirmation to the observed path state. AC2 partial: the helper uses nonreplacing atomic rename and exercises mail preservation and EXDEV refusal, but can move a replacement directory. AC3 partial: missing or wrong confirmation refuses in the helper and the CLI has an operator gate, but the stale decision can race lease updates and the CLI authority checks have no regression. Exact-head GitHub fast gates, fast compile and Build (ubuntu-latest) passed. Merge-hold clearance remained pending. No local tests or builds were run. The explicit review claim was refused.. No triage reason was given.'
+  created_at: 2026-11-25T06:11:59.024465892Z
+  modified_at: 2026-11-25T06:11:59.024465892Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
@@ -313,6 +318,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21155-17b0-7901-ba7f-3dc7daee4613
+  author: joe
+  timestamp: 2026-11-25T06:11:59.024455744Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
@@ -321,11 +333,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Reviewed the complete landed diff against protected main 2d346c274965961d1e187e5d48a6dbe611232393, landed tree daa7804c3df65ef42615d49384d5397bfac9c994. The PR head is one commit behind and no finding depends on that intervening review-watch change. Applied the latest advisor-approved BUG-2755 r3 attestation design, which supersedes the earlier mount-proof approach in the worksheet. AC1 partial: the helper covers release of an absent clone with a typed ID, but does not bind confirmation to the observed path state. AC2 partial: the helper uses nonreplacing atomic rename and exercises mail preservation and EXDEV refusal, but can move a replacement directory. AC3 partial: missing or wrong confirmation refuses in the helper and the CLI has an operator gate, but the stale decision can race lease updates and the CLI authority checks have no regression. Exact-head GitHub fast gates, fast compile and Build (ubuntu-latest) passed. Merge-hold clearance remained pending. No local tests or builds were run. The explicit review claim was refused.'
-  recovery_hint: address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-25T06:09:09.036677414Z
