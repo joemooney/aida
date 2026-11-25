@@ -1366,7 +1366,7 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
         });
 
         let level = match severity_rank(&f.severity) {
-            Some(3..=4) => "error",
+            Some(3..=4) | None => "error",
             Some(2) => "warning",
             _ => "note",
         };
@@ -1598,6 +1598,8 @@ mod tests {
         for severity in ["blocker", ""] {
             let mut unknown = findings[0].clone();
             unknown.severity = severity.into();
+            let report = findings_to_sarif_json(std::slice::from_ref(&unknown));
+            assert_eq!(report["runs"][0]["results"][0]["level"], "error");
             assert_eq!(
                 findings_exceeding_threshold(&[unknown], "critical")
                     .unwrap()
