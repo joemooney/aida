@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T03:05:15.993605412Z
+modified_at: 2026-11-25T03:05:19.025915090Z
 req_type: Story
 tags:
 - hygiene
@@ -184,6 +184,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full six-file landing diff for STORY-3059 against protected main 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 (landed tree 651b8f77b9207ca58905f07669f61fb456224e2d). The PR head is two commits behind the pinned base. The findings apply to the landed tree and do not depend on either intervening base commit. AC1 is partial: the fixture verifies successful removal and the owning-spec comment for a directly advertised head, but published ancestors can be refused when the new remote tip is absent from the primary checkout. AC2–AC5 have corresponding source and fixture evidence for an unpublished current commit, unavailable origin, stash and an unpublished side branch. The final removal still has gaps in preserving late local and remote changes and commit recovery roots. The branch-only ruling is reflected in code and documentation. Exact-head FAST gates passed, FAST compile was pending at review time, full shards were skipped, and merge-hold clearance was pending. No local tests or builds were run.. No triage reason was given.'
   created_at: 2026-11-25T03:05:15.993591022Z
   modified_at: 2026-11-25T03:05:15.993591022Z
+- id: 01a210aa-31b1-7700-aeaa-a145c8ac1ef9
+  author: joe
+  content: 'advisor-122 20:14: REDESIGN BY REMOVAL. Reap never deletes: an atomic move to ~/salvage/reaped/<spec>-<lane>-<ts>/ + record path/refs/origin evidence + release the lease; deletion only via a later explicit aida salvage purge --older-than 14d (out of scope). r3 <=150 net, shrinking the PR.'
+  created_at: 2026-11-25T03:05:19.025915090Z
+  modified_at: 2026-11-25T03:05:19.025915090Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
