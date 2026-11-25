@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T22:13:32.375320681Z
+modified_at: 2026-11-25T22:45:48.698367344Z
 req_type: Story
 tags:
 - hygiene
@@ -565,6 +565,12 @@ comments:
   modified_at: 2026-11-25T22:13:32.375320681Z
   session_id: 01a21493f5a1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a214e2-f81a-7221-baea-2d9e35519608
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-3059-report` at head `25f566de3e3e8be1755f545d03deae33fb641887`.'
+  created_at: 2026-11-25T22:45:48.698361900Z
+  modified_at: 2026-11-25T22:45:48.698361900Z
+  session_id: 01a21493f5a1
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
