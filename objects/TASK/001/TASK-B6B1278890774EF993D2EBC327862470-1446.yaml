@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
 
   Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_deadline_keeps_listed_pages calls Repository::discover_with directly. No test drives a cut discovery through scan_with_budgets/observe, so nothing checks the 'changes past the discovery deadline unknown' partial line (land_stalls.rs observe), the metrics::record skip in land.rs live_pass_with (rows.len()==changes.len() && !discovery_cut), or that routing is deferred on a cut. The prior review asked for a regression through the guard. Add a GitLab guard fixture whose page 2 hangs.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T18:27:17.150856879Z
-modified_at: 2026-11-25T21:07:18.533966173Z
+modified_at: 2026-11-25T21:07:20.440379370Z
 req_type: Task
 tags:
 - carried-from:BUG-2730
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T18:30:12.067092229Z
   changes: []
+- id: 01a21488-d0f8-7143-b630-2712c61bb568
+  author: joe
+  timestamp: 2026-11-25T21:07:20.440376702Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 08ee6da5263965a55c163aef2b8cb0a425781f6f
   branch: pr-4457
