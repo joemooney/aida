@@ -2089,12 +2089,17 @@ pub(crate) fn probe_until(
     // `--ignore-submodules=none`: a seat's `.gitmodules` `ignore = dirty`
     // must not hide anything, should a submodule appear after the check.
     // trace:TASK-2053 | ai:claude
-    let status = match probe_run(
+    // TASK-3882: raw NUL-separated records, so each path is quoted exactly
+    // once from its bytes (never by Git, never through lossy text).
+    // trace:TASK-3882 | ai:claude
+    let status = match run_sandboxed_until(
         clone,
         main,
+        "git",
         &[
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
+            "-z".as_ref(),
             "--branch".as_ref(),
             "--ignored=no".as_ref(), // trace:BUG-2742 | ai:codex
             "--untracked-files=all".as_ref(),
@@ -2105,23 +2110,25 @@ pub(crate) fn probe_until(
             ".".as_ref(),
             format!(":(exclude){MARKER_RELATIVE}").as_ref(),
         ],
-        "git",
+        PROBE_OUTPUT_CAP,
+        deadline,
     ) {
         Ok(out) => out,
         Err(why) => return Probe::Unknown(format!("working tree status: {why}")),
     };
-    let mut facts = parse_status_v2(&status);
     // The sandbox's empty `.gitmodules` placeholder holds no work, so it
     // does not make a clean clone read as dirty.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
-    if is_empty_gitmodules_placeholder(clone) {
-        facts.dirty.retain(|line| line != "? .gitmodules");
-    }
-    // The session's runtime links and build/cache output are not work.
+    let placeholder = is_empty_gitmodules_placeholder(clone);
+    // The session's runtime links and build/cache output are not work; they
+    // are judged on the raw path, before it is quoted for display.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-    facts.dirty.retain(|line| {
-        !is_runtime_noise_entry(clone, line) && !is_mirrored_handshake_entry(main, clone, line)
+    let lines = aida_core::git_ops::porcelain_v2_z_lines(&status, false, |line| {
+        (placeholder && line == "? .gitmodules")
+            || is_runtime_noise_entry(clone, line)
+            || is_mirrored_handshake_entry(main, clone, line)
     });
+    let mut facts = parse_status_v2(&lines.join("\n"));
     let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -2244,24 +2251,22 @@ pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
 
 /// A `git status --porcelain=v2` entry as `<kind>: <path>`, so a refusal
 /// names the file rather than printing modes and object ids. A line that does
-/// not parse is shown as it is. The path is seat-written, so it is escaped.
+/// not parse is shown escaped. Paths arrive already quoted once by
+/// [`aida_core::git_ops::porcelain_v2_z_lines`], so they are shown as given.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// trace:TASK-3882 | ai:claude
 pub(crate) fn describe_status_entry(line: &str) -> String {
     let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
     let xy = line.split(' ').nth(1).unwrap_or("");
     let described = match line.as_bytes().first() {
-        Some(b'?') => field(1).map(|p| format!("untracked: {}", p.escape_debug())),
-        Some(b'!') => field(1).map(|p| format!("ignored: {}", p.escape_debug())),
-        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", p.escape_debug())),
+        Some(b'?') => field(1).map(|p| format!("untracked: {p}")),
+        Some(b'!') => field(1).map(|p| format!("ignored: {p}")),
+        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {p}")),
         Some(b'2') => field(9).map(|p| match p.split_once('\t') {
-            Some((to, from)) => format!(
-                "renamed ({xy}): {} -> {}",
-                from.escape_debug(),
-                to.escape_debug()
-            ),
-            None => format!("renamed ({xy}): {}", p.escape_debug()),
+            Some((to, from)) => format!("renamed ({xy}): {from} -> {to}"),
+            None => format!("renamed ({xy}): {p}"),
         }),
-        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", p.escape_debug())),
+        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {p}")),
         _ => None,
     };
     described.unwrap_or_else(|| line.escape_debug().to_string())
