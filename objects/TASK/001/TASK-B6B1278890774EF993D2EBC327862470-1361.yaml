@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T04:34:12.628528648Z
+modified_at: 2026-11-25T04:34:38.469801207Z
 req_type: Task
 tags:
 - ci
@@ -65,6 +65,13 @@ comments:
     Cost: about 2-3 extra gh reads per pending intent per 2-minute tick, only while an intent is pending. No new git calls, and forge reads go through the existing pinned paths. READY after FAST.
   created_at: 2026-11-25T04:15:54.082307134Z
   modified_at: 2026-11-25T04:15:54.082307134Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a210fc-410e-7ea0-816e-a2bbad348d13
+  author: joe
+  content: 'ADVISOR RULING relayed by integration-30 (advisor 21:26 on #4558 @ dfdc2a82, STRICT): one round, ≤60 lines. F1 MUST: settlement uses the LATEST FAST run for (PR, base, SHA); a newer queued or in-progress run means not settled. Test: old completed marker + newer queued run → not settled. F2: the FULL-request receipt key includes the base (head+base), so a same-SHA retarget is not suppressed. Test. F3: multi-PR same head stays fail-closed (accepted). F4: reuse the commit-check reader''s run metadata instead of the duplicate actions/runs fetch if trivial; otherwise defer with a comment here.'
+  created_at: 2026-11-25T04:34:38.469801207Z
+  modified_at: 2026-11-25T04:34:38.469801207Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
