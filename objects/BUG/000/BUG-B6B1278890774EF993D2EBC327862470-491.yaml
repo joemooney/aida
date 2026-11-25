@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-25T18:30:01.482904401Z
+modified_at: 2026-11-25T18:33:52.032628435Z
 req_type: Bug
 tags:
 - doctor
@@ -363,6 +363,11 @@ comments:
   content: 'DEFERRED follow-ups (advisor-122 override-approval of #4457 r4 @ 08ee6da5, 2026-11-25 11:35; one comment per the findings-as-comments rule):'
   created_at: 2026-11-25T18:30:01.482904401Z
   modified_at: 2026-11-25T18:30:01.482904401Z
+- id: 01a213fc-4ea0-7570-a34e-6fe8d11b4cbd
+  author: joe
+  content: "DEFERRED follow-ups (advisor-122 override-approval of #4457 r4 @ 08ee6da5, 2026-11-25 11:35; one comment per the findings-as-comments rule):\n- Deferred follow-up (BUG-2730, p2): aida-cli-lib/src/land_stalls.rs scan_with_budgets (~:2019-2039) still routes synchronously on a COMPLETE pass whenever more than 5s of the 220s run budget remain. route() -> raise_due -> schedule_ledger::w\n- Deferred follow-up (BUG-2730, test-gap): the discovery-cut regression bug_2730_discovery_deadline_keeps_listed_pages calls Repository::discover_with directly. No test drives a cut discovery through scan_with_budgets/observe, so nothing chec\n- Deferred follow-up (BUG-2730, p3): on GitHub, discover_rich -> forge::github_open_changes_detailed uses remaining_call_budget and propagates its error with `?` from live_pass_with. If the listing itself outlives the scoped run deadline, the\n- Deferred follow-up (BUG-2730, test-gap): in bug_2730_slow_approval_forge_reports_partial_before_ceiling, the assertion `git branch --list aida-store` runs against the fixture's root repo, but the aida-store branch only exists in the nested "
+  created_at: 2026-11-25T18:33:52.032628435Z
+  modified_at: 2026-11-25T18:33:52.032628435Z
 history:
 - id: 01a2085d-2595-7341-829a-08340572cc1a
   author: aida-session-start
