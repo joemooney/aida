@@ -386,12 +386,22 @@ impl PlaybookRegistry {
     pub fn enrich_with_content_facets(
         &self,
         mut playbook: ResolvedPlaybook,
-        corpus_samples: &[&str],
+        corpus_samples: &[(&str, &str)],
     ) -> ResolvedPlaybook {
-        if !playbook.id.starts_with("rust") || corpus_samples.is_empty() {
+        // trace:TASK-3880 | ai:codex
+        let rust_samples: Vec<_> = corpus_samples
+            .iter()
+            .filter_map(|&(path, body)| {
+                Path::new(path)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+                    .then_some(body)
+            })
+            .collect();
+        if rust_samples.is_empty() {
             return playbook;
         }
-        let facets = detect_rust_content_facets(corpus_samples);
+        let facets = detect_rust_content_facets(&rust_samples);
         for facet in facets {
             playbook.active_facets.push(facet.id.clone());
             playbook.checklist.push_str(&format!(
@@ -817,15 +827,13 @@ pub struct ReviewBatch {
 
 /// Normalize a file stem so implementation files and their sibling/companion test
 /// files (`foo.rs` + `foo_test.rs` + `foo_tests.rs` + `foo.test.ts`) share a stem key.
-/// Generic entry-point stems (`lib`, `mod`, `main`, `index`) are qualified with their
-/// parent directory so unrelated crates (`aida-core/src/lib.rs` vs `aida-cli-lib/src/lib.rs`)
-/// are not erroneously paired together.
+/// Keep repository directories case-sensitive when identifying companions.
+// trace:TASK-3880 | ai:codex
 pub fn canonical_module_stem(path: &str) -> String {
-    let norm = path.replace('\\', "/");
-    let file_name = Path::new(&norm)
+    let file_name = Path::new(path)
         .file_name()
         .and_then(|s| s.to_str())
-        .unwrap_or(&norm)
+        .unwrap_or(path)
         .to_ascii_lowercase();
 
     let without_ext = match file_name.rfind('.') {
@@ -850,21 +858,14 @@ pub fn canonical_module_stem(path: &str) -> String {
         }
     }
 
-    if matches!(core_stem, "lib" | "mod" | "main" | "index") {
-        let parent_dir = Path::new(&norm)
-            .parent()
-            .map(|p| p.to_string_lossy().to_ascii_lowercase())
-            .unwrap_or_default();
-        if !parent_dir.is_empty() {
-            return format!("{parent_dir}/{core_stem}");
-        }
-    }
-
-    core_stem.to_string()
+    Path::new(path)
+        .with_file_name(core_stem)
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Bundle reviewable files into semantic, token-bounded batches:
-/// 1. Files sharing a canonical module stem (e.g. `foo.rs` and `tests/foo_test.rs`)
+/// 1. Files sharing a canonical module stem (e.g. `foo.rs` and `foo_test.rs`)
 ///    are paired first so implementation and test changes are reviewed together.
 /// 2. Unpaired files are grouped by shared `playbook_id`, packing into batches
 ///    that respect `max_tokens_per_batch` and `max_files_per_batch`.
@@ -919,21 +920,27 @@ pub fn bundle_review_batches(
     for (playbook_id, group) in unpaired_by_playbook {
         let mut current: Vec<&ReviewableFile> = Vec::new();
         let mut current_tokens = 0usize;
+        let mut current_stems = BTreeMap::new();
         let mut part = 1usize;
 
         for f in group {
             let would_exceed_files = current.len() >= file_cap;
             let would_exceed_tokens = !current.is_empty()
                 && f.estimated_tokens > token_cap.saturating_sub(current_tokens);
-            if would_exceed_files || would_exceed_tokens {
+            let key = canonical_module_stem(&f.path);
+            let (dir, stem) = key.rsplit_once('/').unwrap_or(("", &key));
+            let other_directory = current_stems.get(stem).is_some_and(|seen| seen != dir);
+            if would_exceed_files || would_exceed_tokens || other_directory {
                 raw_batches.push((
                     format!("playbook:{playbook_id}#{}", part),
                     std::mem::take(&mut current),
                 ));
                 current_tokens = 0;
+                current_stems.clear();
                 part += 1;
             }
             current_tokens = current_tokens.saturating_add(f.estimated_tokens);
+            current_stems.insert(stem.to_owned(), dir.to_owned());
             current.push(f);
         }
         if !current.is_empty() {
@@ -1714,7 +1721,10 @@ mod tests {
         // Pure arithmetic file triggers zero conditional facets
         let pure_enriched = reg.enrich_with_content_facets(
             base.clone(),
-            &["pub fn add(a: i32, b: i32) -> i32 { a + b }"],
+            &[(
+                "pure_math.rs",
+                "pub fn add(a: i32, b: i32) -> i32 { a + b }",
+            )],
         );
         assert!(pure_enriched.active_facets.is_empty());
         assert!(!pure_enriched.checklist.contains("Conditional Facet:"));
@@ -1727,7 +1737,7 @@ mod tests {
                 unsafe { libc::getpid(); }
             }
         ";
-        let enriched = reg.enrich_with_content_facets(base, &[io_unsafe_sample]);
+        let enriched = reg.enrich_with_content_facets(base, &[("src/run.rs", io_unsafe_sample)]);
         assert_eq!(
             enriched.active_facets,
             vec![
@@ -1739,6 +1749,33 @@ mod tests {
         assert!(enriched.checklist.contains("rust_io_subprocess_security"));
         assert!(!enriched.checklist.contains("rust_macros"));
         assert!(!enriched.checklist.contains("rust_async_concurrency"));
+    }
+
+    #[test]
+    fn h2c_rust_facets_follow_sample_paths() {
+        let reg = PlaybookRegistry::default();
+        let mut pb = reg.resolve("a.rs");
+        pb.id = "custom".into();
+        let samples = [("a.Rs", "unsafe {"), ("a.py", "Command::new(")];
+        let enriched = reg.enrich_with_content_facets(pb.clone(), &samples);
+        assert_eq!(enriched.active_facets, ["rust_unsafe_ffi"]);
+        pb.id = "rust-custom".into();
+        assert!(reg
+            .enrich_with_content_facets(pb, &samples[1..])
+            .active_facets
+            .is_empty());
+    }
+
+    #[test]
+    fn h2c_equal_stems_in_different_directories_stay_separate() {
+        let files = inventory(
+            &["A/src/file.rs", "a/src/file_test.rs", "a/tests/file.rs"],
+            false,
+        )
+        .reviewable_files;
+        let batches = bundle_review_batches(&files, usize::MAX, 10).unwrap();
+        assert_eq!(batches.len(), 3);
+        assert!(batches.iter().all(|batch| batch.files.len() == 1));
     }
 
     #[test]
@@ -1755,7 +1792,7 @@ mod tests {
                 has_trace_comment: true,
             },
             ReviewableFile {
-                path: "tests/parser_test.rs".to_string(),
+                path: "src/parser_test.rs".to_string(),
                 old_path: None,
                 kind: FileChangeKind::Modified,
                 additions: 40,
@@ -1786,16 +1823,16 @@ mod tests {
             },
         ];
 
-        // Budget 2000 tokens: parser.rs + parser_test.rs (1400 tokens) pair into `module:parser`,
+        // Budget 2000 tokens: parser.rs + parser_test.rs (1400 tokens) pair into `module:src/parser`,
         // while alpha.rs (1500) and beta.rs (1500) split into two separate playbook batches.
         let batches = bundle_review_batches(&files, 2000, 4).unwrap();
         assert_eq!(batches.len(), 3);
-        assert_eq!(batches[0].label, "module:parser");
+        assert_eq!(batches[0].label, "module:src/parser");
         assert_eq!(
             batches[0].files,
             vec![
                 "src/parser.rs".to_string(),
-                "tests/parser_test.rs".to_string()
+                "src/parser_test.rs".to_string()
             ]
         );
         assert_eq!(batches[0].estimated_tokens, 1400);
