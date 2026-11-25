@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T06:16:11.080824831Z
-modified_at: 2026-11-23T06:16:11.080824831Z
+modified_at: 2026-11-25T07:18:25.021978170Z
 req_type: Task
 tags:
 - carried-from:BUG-2722
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20637-3865-75e2-add6-0c87270d0c56
   created_at: 2026-11-23T06:16:48.568487008Z
+comments:
+- id: 01a21191-e9fe-7a52-9357-ec9cb8e39faf
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: BUG-2722 / #4403. Evidence: no salvage probes under journal lock in landed dc27cf1. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:18:25.021978170Z
+  modified_at: 2026-11-25T07:18:25.021978170Z
 history:
 - id: 01a2071c-570a-7b12-b4ee-a42a93f8db81
   author: joe
