@@ -1,0 +1,26 @@
+id: 01a21352-9a2c-7550-8d5c-bca18a7c5902
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1443
+agreed_id: TASK-3908
+title: 'TEMPORARY: default agent vendor to claude while codex is usage-limited (review-watch falls back to it)'
+description: |
+  Codex hit its usage limit (2026-11-25 ~05:27; resets 2026-11-29 10:41 AM). Lanes already pass --vendor claude per launch, but review-watch has NO vendor key of its own and falls back to the tracked `[agents] vendor = "codex"`, so every automatic review dispatch fails. advisor-122 ruling 2026-11-25 08:34; Joe chose Claude lanes 08:15. Filed by product-15.
+
+  ## Acceptance
+  - AC1: `.aida/config.toml` sets `[agents] vendor = "claude"` with the comment "TEMPORARY: codex usage limit until 2026-11-29 10:41; revert to codex then". One small PR to main, <=10 lines.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T15:28:30.252627712Z
+modified_at: 2026-11-25T15:28:30.252627712Z
+req_type: Task
+tags:
+- codex-limit
+- config
+filed_at:
+  code_sha: 664f260222408056dbef136fe156d48f843f1329
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 664f2602224
+  vendor: claude
