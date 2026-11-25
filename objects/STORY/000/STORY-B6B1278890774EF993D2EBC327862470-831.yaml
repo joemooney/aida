@@ -21,10 +21,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T15:17:17.386340590Z
-modified_at: 2026-11-25T15:17:17.386340590Z
+modified_at: 2026-11-25T15:17:29.886079186Z
 req_type: Story
 tags:
 - review
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a20e71-8c11-79c3-b45e-f8241b82465e
+  created_at: 2026-11-25T15:17:29.886030248Z
+  created_by: joe
+history:
+- id: 01a21348-8ccb-7052-aeb7-bd30766a8a18
+  author: joe
+  timestamp: 2026-11-25T15:17:31.467704146Z
+  changes: []
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
   branch: main
