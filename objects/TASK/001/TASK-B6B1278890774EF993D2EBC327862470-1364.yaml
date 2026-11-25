@@ -51,6 +51,12 @@ comments:
   created_at: 2026-11-25T05:01:40.342969511Z
   modified_at: 2026-11-25T05:01:40.342969511Z
   session_id: 01a210ddafaf
+- id: 01a21116-e71d-7d61-b342-97cdb244e71b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int38-task-3880` at head `1cd44c480f3f25ab579bb8494a4154b560f89a5f`.'
+  created_at: 2026-11-25T05:04:03.357745090Z
+  modified_at: 2026-11-25T05:04:03.357745090Z
+  session_id: 01a210ddafaf
 - id: 01a21118-8407-7d20-a80e-b68c7e089882
   author: joe
   content: |-
