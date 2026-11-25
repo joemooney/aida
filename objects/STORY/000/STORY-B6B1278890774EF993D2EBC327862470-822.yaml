@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: InProgress
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T15:27:48.475866266Z
+modified_at: 2026-11-25T16:22:57.940314578Z
 req_type: Story
 tags:
 - hygiene
@@ -614,6 +614,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21384-7694-7bd1-bb08-bbf2b486a891
+  author: joe
+  timestamp: 2026-11-25T16:22:57.940309473Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
