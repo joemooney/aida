@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:37:37.780326585Z
-modified_at: 2026-11-25T02:32:46.646227255Z
+modified_at: 2026-11-25T02:32:54.999440813Z
 req_type: Bug
 tags:
 - codex
@@ -196,6 +196,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against protected main 260a82ae939faf34a8e6505a6f765f2151655610 and landed tree 013b40ee0972bff8521951575770ac21506d5c48. BUG-2752 AC1 is partial. The Codex-only PTY fixture covers consent, the committed default-branch policy, a controlled advisor launch, topic-branch refusal and clean re-init, but re-init loses the required publication hint when the working config is dirty. AC2 passes. A missing trusted policy gives the Codex-specific config remedy, and a local committed opt-in missing from the tracking ref gives the push hint while the launch continues to refuse. The head is four commits behind main. The base advance does not affect either finding. Exact-head FAST gates, compilation and Build (ubuntu-latest) passed. The merge-hold status was pending. Behavioral tests were assessed from source and the recorded implementer runs.. No triage reason was given.'
   created_at: 2026-11-25T02:32:46.646219837Z
   modified_at: 2026-11-25T02:32:46.646219837Z
+- id: 01a2108c-8737-7420-be5c-209464928ee0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2752):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c94fab4e76a9
+    Recorded: 2026-11-25T02:00:14.058833500+00:00
+    Findings:
+    1. BUG-2752 AC1 and the r3 publication requirement. In aida-cli-lib/src/config_cmd.rs:1744, setup_init_native_policy checks working-copy cleanliness before it checks the committed refs for an unpublished policy at line 1749. On main with codex = "native" already committed and origin/main still lacking it, an unrelated staged or unstaged edit to .aida/config.toml makes init tell the operator to commit the file and rerun init. The launch refusal correctly gives the push hint for the same committed state. Report the committed-ref publication hint before checking cleanliness, keep the cleanliness check for edits, and extend the PTY fixture at aida-cli/tests/support/codex_init.py:79 to verify the hint and preservation of unrelated edits.
+    2. Deferred follow-up TASK-3881. In aida-cli-lib/src/config_cmd.rs:1744,1762,1811–1823, the prompt-time check does not bind the starting clean config or the saved output to the subsequent Git path commit. A concurrent config edit outside that check can be swept into the native policy commit.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T02:32:54.839038095Z
+  modified_at: 2026-11-25T02:32:54.839038095Z
 history:
 - id: 01a20eb1-bea4-7272-851e-853307031185
   author: joe
