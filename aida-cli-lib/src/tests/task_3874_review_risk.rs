@@ -40,6 +40,15 @@ fn fetches_target_advanced_after_checkout() {
         .status()
         .unwrap()
         .success());
+    // The same origin and object IDs are usable outside the seat clone.
+    // trace:TASK-3874 | ai:codex
+    let seat = remote.join("aida-seat-review");
+    std::fs::rename(&review, &seat).unwrap();
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
+        assert!(review_risk_base_object(&seat, &common).is_none());
+        assert!(review_risk_base_object(&seat, &base).is_none());
+    });
+    std::fs::rename(&seat, &review).unwrap();
     crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
         review_risk_base_object(&review, &base).unwrap();
     });

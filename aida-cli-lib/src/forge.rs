@@ -7150,14 +7150,12 @@ fn review_risk_pr_base_with_budget(
 // The target can move after checkout. Fetch only the immutable forge observation
 // and leave branch refs and FETCH_HEAD alone. trace:TASK-3874 | ai:codex
 fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
-    use aida_core::git_ops::RemoteCredentialsExt as _;
+    use aida_core::git_ops::{host_git_command, host_remote_git_command};
     if !matches!(base.len(), 40 | 64) || !base.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
-    let mut check = Command::new("git");
-    check
-        .current_dir(root)
-        .args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
+    let mut check = host_git_command(root);
+    check.args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
     if crate::forge_lookup::forge_lookup_output(check)
         .ok()??
         .status
@@ -7165,9 +7163,8 @@ fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
     {
         return Some(());
     }
-    let mut fetch = Command::new("git");
+    let mut fetch = host_remote_git_command(root, "origin");
     fetch
-        .current_dir(root)
         .args([
             "fetch",
             "--no-tags",
@@ -7179,8 +7176,7 @@ fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
             "origin",
             base,
         ])
-        .stdin(std::process::Stdio::null())
-        .remote_credentials(root, "origin");
+        .stdin(std::process::Stdio::null());
     crate::forge_lookup::forge_lookup_output(fetch)
         .ok()??
         .status
