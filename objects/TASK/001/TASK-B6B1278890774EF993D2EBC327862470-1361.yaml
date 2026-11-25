@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T16:44:12.177622684Z
-modified_at: 2026-11-25T06:27:25.343726141Z
+modified_at: 2026-11-25T06:28:44.664415686Z
 req_type: Task
 tags:
 - ci
@@ -148,6 +148,13 @@ comments:
   content: 'FOLLOW-UP (integration-30 23:10, LOW, filed as a comment per the findings-as-comments rule): when request_full_ci returns Leave (label present and FULL already ran), no receipt is written, so an approved PR is re-evaluated every 2-minute tick at 3-4 gh reads each, indefinitely. Write the receipt on Leave when FULL exists for head+base.'
   created_at: 2026-11-25T06:11:44.427443994Z
   modified_at: 2026-11-25T06:11:44.427443994Z
+- id: 01a21164-a979-7f50-9c81-bc1130abc907
+  author: joe
+  content: 'DEFERRED (advisor 23:30, not a lane instruction): two p2 races from the r2 review @ bbd4a4f3. (1) The workflow inventory is read once before the attempt jobs and the label edit, so a FAST run queued or rerun in between is missed. (2) After a same-SHA retarget, the old-base ci-tier: full check may still count. Both are recoverable (an early or duplicate FULL request). Fix together if ghost cancels recur.'
+  created_at: 2026-11-25T06:28:44.664415686Z
+  modified_at: 2026-11-25T06:28:44.664415686Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
