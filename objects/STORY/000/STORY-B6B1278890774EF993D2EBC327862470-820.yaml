@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-25T09:11:13.199796805Z
+modified_at: 2026-11-25T21:03:29.952736599Z
 req_type: Story
 tags:
 - autonomy
@@ -510,6 +510,18 @@ comments:
   created_at: 2026-11-25T09:11:13.199787524Z
   modified_at: 2026-11-25T09:11:13.199787524Z
   session_id: 01a211b66540
+- id: 01a21485-4ca0-7dd0-a416-c1bfa0f2aed3
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 2 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3288: Review follow-up: The strict_terms check at lines 282–284 and 375–412 treats common words as strict metadata
+      From STORY-3038 Reviewed sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397 The strict_terms check at lines 282–284 and 375–412 treats common words as strict metadata without regard to what they modify. An Approved small change titled 'Fix Shift key handling' in ordinary UI code is held solely because 'shift' was intended to catch night-shift guards. Use explicit tier metadata and scoped path classification, and test an ordinary title containing a colliding word.
+
+    - TASK-3290: Review follow-up: The new paragraph at line 75 says approved-small ignores drain_types, but line 85 says a m
+      From STORY-3038 Reviewed sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397 The new paragraph at line 75 says approved-small ignores drain_types, but line 85 says a missing list or an unknown type keeps supervision. The parser also processes drain_types for approved-small and can accumulate a warning saying no type gets the drain default even while approved-small is active (unset_mode.rs:154–184, 252–255). Scope both the documentation and drain_types validation to the legacy default = "drain" mode, and regenerate the showcase.
+  created_at: 2026-11-25T21:03:29.952736599Z
+  modified_at: 2026-11-25T21:03:29.952736599Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
