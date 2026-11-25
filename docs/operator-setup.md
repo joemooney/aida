@@ -1,6 +1,6 @@
 # Set up AIDA for conversational development
 
-<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-112 | ai:codex -->
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-112 STORY-2852 | ai:codex -->
 
 Operator setup connects AIDA to the coding agent and project policy. It is separate from the normal user journey: people can keep discussing and implementing changes with their agent while the agent maintains structured intent. Start readers with the [conversational guide](getting-started.md).
 
@@ -45,5 +45,27 @@ Execution requires the documented reviewed private deny policy, trusted baseline
 ## Inspect queues at the right scope
 
 Project queues can live in the store, while role-global queues live under `~/.aida/queue/`. A store push cannot transfer a different machine's role-global queue. Active roles, explicit filters and user identity affect what a queue view selects. Use the [multi-node guide](advanced/multi-node.md) to distinguish identity, routing and unpublished history before attempting repairs.
+
+## Enable scheduled guards, deputies and multi-seat mandates
+
+`aida init` seeds the project's job registry (`.aida-store/schedule/*.yaml`, inspected with `aida schedule status`). To drive the `guard → route` schedule automatically on a host machine without model-side polling, install the 15-minute `aida schedule tick` driver at an interactive terminal:
+
+```bash
+# Install a 15-minute crontab entry for this repository (idempotent)
+aida schedule install-cron
+
+# Or install a systemd user timer on Linux (requires an interactive terminal)
+aida schedule install-systemd
+```
+
+When running a multi-seat fleet (`product`, `advisor`, `integration`, and `implementer` lanes), an operator at an interactive terminal can grant time-boxed shipping authority with `aida mandate start --ship-held --ttl 8h --reason "…"` (or `aida mandate start --drive` to also enable the 15-minute `mandate-drive` tick), and start a terminal deputy (`aida deputy` or `aida deputy shell run`) so contained seats can submit allow-listed host or TTY commands.
+
+## Operator-specific setup
+
+> **Operator-specific setup (beyond `aida init` today):** A fresh `aida init` scaffolds the roles, two-seat protocol, advisor and integration standing orders, `aida schedule` guard jobs, merge trains, and `aida mailbox`. Two high-scale pieces used in the reference multi-seat deployment are currently operator-configured rather than built into `aida init`, alongside the planned capabilities that will bring them into the core substrate:
+
+- **1. Remote build host for implementer lanes (operator SSH scripts today; native remote lane host planned):** `aida queue work` and `aida agent new` spawn lanes on the local host where you invoke them; AIDA does not yet ship a built-in command to dispatch N headless lanes onto a separate remote build server over SSH. In the reference multi-seat setup, the operator offloads headless implementer lanes and heavy Rust compilation/test runs to a dedicated Linux build host over SSH using small host-side wrapper scripts (`~/lane-start.sh`, `lane-run.sh`, `seat-snap.sh`, `store-sync.sh`, and `end-finished.sh`) that synchronize the `aida-store` ref, run the lane in a remote worktree, and publish the resulting branch back to the forge. *Aspirational / planned direction:* native remote lane host support in AIDA so `aida queue work` and `aida lane job` can target an SSH build host directly from `.aida/config.toml` without custom wrapper scripts.
+- **2. Sandbox and permission exemptions for the terminal deputy (`"aida deputy shell submit *"`):** When the `advisor` or `integration` seat runs inside a contained or permission-gated harness and needs to submit a multi-step host script to a human-started script deputy (`aida deputy shell run`), it invokes `aida deputy shell submit --file <path> --wait`. In Claude Code, allow-listing the bare prefix without a wildcard does not match invocations that pass `--file`, `--spec`, or `--wait` flags; add the wildcard pattern `"aida deputy shell submit *"` (or `"Bash(aida deputy shell submit *)"` in `.claude/settings.json` / `.claude/settings.local.json`) so the harness permits deputy submissions without stalling on an interactive confirmation prompt.
+- **3. Product-seat standing orders, landing sweeps and fleet policy knobs (standing orders & handoffs today; first-class templates & config knobs planned):** While `aida init` seeds template standing orders for the advisor and integration seats, operators running a dedicated `product` seat today record product-seat standing orders via `aida session handoff --seat product --standing-orders add "<text>"` and encode fleet sizing rules (such as capping concurrent implementer lanes at 4 and concurrent reviews at 2, reserving top-tier reasoning models for conflict/design forks, re-scoping specs at rework round 3, and never moving an approved or train-pinned PR head via raw forge CLI commands) in repo-local standing orders. *Aspirational / planned direction:* promoting product standing orders, scheduled landing-health and landing-sweep seat jobs, head-pin refusal guards, and integration promotion pipelining (`integration.pipeline_depth`) into first-class `.aida/config.toml` knobs and default `aida init` templates.
 
 The [administrator guide](advanced/admin-guide.md), [multi-hub guide](advanced/multi-hub-sync.md) and [setup reference](cli/07-project-setup.md) provide detail. The [configuration guide](configuration-guide.md) explains feature-specific scopes. For source evidence, inspect [clone allocation](../aida-core/src/allocation_authority.rs), [transport dispatch](../aida-cli-lib/src/transport_profile.rs), [recoverable pull](../aida-cli-lib/src/transport_pull.rs), and [agent scaffolding](../aida-cli-lib/src/init_cmd.rs).

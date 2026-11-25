@@ -1158,14 +1158,27 @@ aida list --type bug --status draft</code></pre>
 </main>
 
 <script>
-  // Theme toggle
+  // Theme toggle (persisted across showcase pages via localStorage 'aida-theme')
   const themeBtn = document.getElementById('theme-toggle');
   const themeLabel = document.getElementById('theme-label');
+  function syncReviewThemeLabel() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'terminal';
+    if (themeLabel) themeLabel.textContent = isDark ? 'Paper Mode' : 'Terminal Mode';
+  }
+  try {
+    const savedTheme = localStorage.getItem('aida-theme');
+    if (savedTheme === 'terminal' || savedTheme === 'paper') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  } catch (_) {}
+  syncReviewThemeLabel();
   themeBtn?.addEventListener('click', () => {
     const html = document.documentElement;
     const isDark = html.getAttribute('data-theme') === 'terminal';
-    html.setAttribute('data-theme', isDark ? 'paper' : 'terminal');
-    if (themeLabel) themeLabel.textContent = isDark ? 'Terminal Mode' : 'Paper Mode';
+    const next = isDark ? 'paper' : 'terminal';
+    html.setAttribute('data-theme', next);
+    try { localStorage.setItem('aida-theme', next); } catch (_) {}
+    syncReviewThemeLabel();
   });
 
   // trace:TASK-3865 | ai:codex

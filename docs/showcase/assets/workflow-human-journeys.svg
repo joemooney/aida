@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 510" role="img" aria-labelledby="title desc">
+  <title id="title">From spark of an idea to main: the human workflow decision flowchart</title>
+  <desc id="desc">Decision flowchart from a human perspective showing how an idea is captured as a spec, evaluated at decision diamonds for ambiguity and risk, routed through Decide, Guided, Drive, or Drain execution modes, verified by gates, and landed on main.</desc>
+  <style>
+    svg {
+      --paper: #f4f1e9;
+      --card: #faf8f2;
+      --panel: #ece8de;
+      --ink: #252a26;
+      --muted: #5e635a;
+      --line: #c9c5b8;
+      --orange: #ba3916;
+      --orange-tint: #f5e2da;
+      --green: #2d5a3c;
+      --green-tint: #dfece3;
+      --blue: #284b63;
+      --blue-tint: #dde7ee;
+      --amber: #8a5a14;
+      --amber-tint: #f3e8d2;
+      --red: #9b2c2c;
+      --red-tint: #f5dfdf;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, "Helvetica Neue", Arial, sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --paper: #161a17;
+        --card: #1f2521;
+        --panel: #252c27;
+        --ink: #ece9e0;
+        --muted: #a3a9a1;
+        --line: #3d443f;
+        --orange: #ff8658;
+        --orange-tint: #3a231b;
+        --green: #68b684;
+        --green-tint: #1d3325;
+        --blue: #7eb0d5;
+        --blue-tint: #1d2b36;
+        --amber: #e6ad4c;
+        --amber-tint: #332917;
+        --red: #f27979;
+        --red-tint: #381e1e;
+      }
+    }
+    .bg { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .panel { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; rx: 8; }
+    .card { fill: var(--card); stroke: var(--line); stroke-width: 1.3; rx: 6; }
+    .card-orange { fill: var(--orange-tint); stroke: var(--orange); stroke-width: 1.5; rx: 6; }
+    .card-green { fill: var(--green-tint); stroke: var(--green); stroke-width: 1.5; rx: 6; }
+    .card-blue { fill: var(--blue-tint); stroke: var(--blue); stroke-width: 1.5; rx: 6; }
+    .card-amber { fill: var(--amber-tint); stroke: var(--amber); stroke-width: 1.5; rx: 6; }
+    .card-red { fill: var(--red-tint); stroke: var(--red); stroke-width: 1.5; rx: 6; }
+    .diamond { fill: var(--card); stroke: var(--orange); stroke-width: 1.6; }
+    .eyebrow { font: 600 9.5px var(--mono); letter-spacing: 1.1px; fill: var(--orange); }
+    .h-serif { font: 400 16px var(--serif); fill: var(--ink); }
+    .title { font: 600 11.5px var(--sans); fill: var(--ink); }
+    .body { font: 400 10px var(--sans); fill: var(--muted); }
+    .mono { font: 500 9.5px var(--mono); fill: var(--ink); }
+    .mono-muted { font: 400 8.5px var(--mono); fill: var(--muted); }
+    .arrow { stroke: var(--ink); stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+    .arrow-green { stroke: var(--green); stroke-width: 1.5; fill: none; marker-end: url(#arr-green); }
+    .arrow-orange { stroke: var(--orange); stroke-width: 1.5; fill: none; marker-end: url(#arr-orange); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--ink)"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--green)"/>
+    </marker>
+    <marker id="arr-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--orange)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="978" height="508" rx="8"/>
+  <text class="eyebrow" x="24" y="28">HUMAN PERSPECTIVE FLOWCHART · HOW AN IDEA BECOMES REALIZED ACROSS AIDA WORKFLOWS</text>
+
+  <!-- Step 1: Spark & Intent Capture -->
+  <rect class="panel" x="22" y="42" width="936" height="92"/>
+  <text class="eyebrow" x="38" y="60">STEP 1 · YOU HAVE AN IDEA, BUG REPORT, OR ARCHITECTURAL GOAL</text>
+
+  <rect class="card-orange" x="38" y="70" width="206" height="52"/>
+  <text class="title" x="50" y="90">1A · Conversational Spark</text>
+  <text class="body" x="50" y="106">Explain goal or bug to your agent</text>
+  <text class="mono-muted" x="50" y="118">"Add invoice export / Fix retry bug"</text>
+
+  <path class="arrow" d="M244,96 L278,96"/>
+  <rect class="card-blue" x="280" y="70" width="246" height="52"/>
+  <text class="title" x="292" y="90">1B · Capture Intent &amp; Criteria</text>
+  <text class="body" x="292" y="106">File Spec + Acceptance Criteria + ADR</text>
+  <text class="mono-muted" x="292" y="118">/aida-req · /aida-clarify · /aida-decompose</text>
+
+  <path class="arrow" d="M526,96 L560,96"/>
+  <rect class="card" x="562" y="70" width="380" height="52"/>
+  <text class="title" x="574" y="90">1C · Advisor Blessing &amp; Mode Selection (`aida approve`)</text>
+  <text class="body" x="574" y="106">Verify graph dependencies (`BlockedBy`) &amp; pick the ExecutionMode</text>
+  <text class="mono-muted" x="574" y="118">How much human involvement does this specific change warrant?</text>
+
+  <!-- Step 2: Decision Tree into 4 Workflows -->
+  <path class="arrow-orange" d="M752,122 L752,150 L125,150 L125,172"/>
+  <path class="arrow-orange" d="M752,150 L365,150 L365,172"/>
+  <path class="arrow-orange" d="M752,150 L605,150 L605,172"/>
+  <path class="arrow-orange" d="M752,150 L845,150 L845,172"/>
+
+  <!-- Column 1: Decide / Clarify -->
+  <rect class="card-red" x="22" y="174" width="212" height="214"/>
+  <text class="eyebrow" x="34" y="194">PATH 0 · UNRESOLVED FORK?</text>
+  <text class="h-serif" x="34" y="213">Decide &amp; Clarify Loop</text>
+  <text class="mono" x="34" y="231">execution_mode = "decide"</text>
+  <rect class="card" x="34" y="242" width="188" height="48"/>
+  <text class="title" x="44" y="260">Hard Block Before Coding</text>
+  <text class="body" x="44" y="276">No agent lane may start yet</text>
+  <path class="arrow" d="M128,290 L128,308"/>
+  <rect class="card" x="34" y="310" width="188" height="64"/>
+  <text class="title" x="44" y="328">Human Resolves Fork</text>
+  <text class="mono-muted" x="44" y="344">/aida-grill · /aida-decide</text>
+  <text class="body" x="44" y="360">Updates criteria → re-routes</text>
+
+  <!-- Column 2: Guided Mode -->
+  <rect class="card-amber" x="250" y="174" width="224" height="214"/>
+  <text class="eyebrow" x="262" y="194">WORKFLOW 1 · KEYSTONE / HIGH-RISK</text>
+  <text class="h-serif" x="262" y="213">Interactive Guided Mode</text>
+  <text class="mono" x="262" y="231">execution_mode = "guided"</text>
+  <rect class="card" x="262" y="242" width="200" height="54"/>
+  <text class="title" x="272" y="260">Step-by-Step Dialog</text>
+  <text class="mono-muted" x="272" y="275">/aida-guided-implement</text>
+  <text class="body" x="272" y="289">You &amp; agent co-design each slice</text>
+  <path class="arrow" d="M362,296 L362,312"/>
+  <rect class="card" x="262" y="314" width="200" height="60"/>
+  <text class="title" x="272" y="332">Mandatory Merge Hold</text>
+  <text class="body" x="272" y="348">Independent review + `ci:full`</text>
+  <text class="mono-muted" x="272" y="363">You run: aida merge-hold clear</text>
+
+  <!-- Column 3: Drive Mode -->
+  <rect class="card-blue" x="490" y="174" width="224" height="214"/>
+  <text class="eyebrow" x="502" y="194">WORKFLOW 2 · SINGLE FEATURE</text>
+  <text class="h-serif" x="502" y="213">Supervised Drive Mode</text>
+  <text class="mono" x="502" y="231">execution_mode = "drive"</text>
+  <rect class="card" x="502" y="242" width="200" height="54"/>
+  <text class="title" x="512" y="260">Autonomous Build → CI</text>
+  <text class="mono-muted" x="512" y="275">aida do &lt;SPEC&gt; (isolated lane)</text>
+  <text class="body" x="512" y="289">Agent codes, tests &amp; opens PR</text>
+  <path class="arrow" d="M602,296 L602,312"/>
+  <rect class="card" x="502" y="314" width="200" height="60"/>
+  <text class="title" x="512" y="332">Pauses at PR for You</text>
+  <text class="body" x="512" y="348">Reviewer seat approves HEAD</text>
+  <text class="mono-muted" x="512" y="363">You inspect &amp; run: aida pr ship</text>
+
+  <!-- Column 4: Drain + Merge Train -->
+  <rect class="card-green" x="730" y="174" width="228" height="214"/>
+  <text class="eyebrow" x="742" y="194">WORKFLOW 3 · READY BACKLOG</text>
+  <text class="h-serif" x="742" y="213">Autonomous Drain &amp; Train</text>
+  <text class="mono" x="742" y="231">execution_mode = "drain"</text>
+  <rect class="card" x="742" y="242" width="204" height="54"/>
+  <text class="title" x="752" y="260">Parallel Lanes + Auto-Review</text>
+  <text class="mono-muted" x="752" y="275">aida queue work --auto-complete</text>
+  <text class="body" x="752" y="289">Punts forks; runs delta reviews</text>
+  <path class="arrow" d="M844,296 L844,312"/>
+  <rect class="card" x="742" y="314" width="204" height="60"/>
+  <text class="title" x="752" y="332">Merge Train &amp; Autoland</text>
+  <text class="body" x="752" y="348">Batches riders → 1× `ci:full`</text>
+  <text class="mono-muted" x="752" y="363">Green lands; Red auto-bisects</text>
+
+  <!-- Arrow from Decide back to Workflows -->
+  <path class="arrow" d="M222,342 L250,342"/>
+
+  <!-- Step 3: Convergence on main & Sync -->
+  <path class="arrow-green" d="M362,388 L362,418"/>
+  <path class="arrow-green" d="M602,388 L602,418"/>
+  <path class="arrow-green" d="M844,388 L844,418"/>
+
+  <rect class="panel" x="22" y="420" width="936" height="72"/>
+  <text class="eyebrow" x="38" y="440">STEP 3 · REALIZED ON MAIN — AUTO-BUMP, POST-TRAIN PULL &amp; LIVING MEMORY</text>
+
+  <rect class="card-green" x="38" y="448" width="290" height="34"/>
+  <text class="title" x="48" y="469">1. Commit Lands on `main` (Done → Completed)</text>
+
+  <path class="arrow-green" d="M328,465 L356,465"/>
+  <rect class="card" x="358" y="448" width="286" height="34"/>
+  <text class="title" x="368" y="469">2. You Run `aida pull` (Post-Train Sync)</text>
+
+  <path class="arrow-green" d="M644,465 L672,465"/>
+  <rect class="card-blue" x="674" y="448" width="268" height="34"/>
+  <text class="title" x="684" y="469">3. Query Anytime via `aida why` &amp; `digest`</text>
+</svg>

@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 500" role="img" aria-labelledby="title desc">
+  <title id="title">End-to-end swimlane: how one idea travels from human prompt to main</title>
+  <desc id="desc">Five-row swimlane diagram showing how an idea starts with a human at the terminal, is blessed and routed by the Advisor seat, implemented in an isolated Implementer lane and worktree, checked by an independent Reviewer seat and CI ratchets, and landed by the Merge Train onto main.</desc>
+  <style>
+    svg {
+      --paper: #f4f1e9;
+      --card: #faf8f2;
+      --panel: #ece8de;
+      --lane-alt: #f0ece1;
+      --ink: #252a26;
+      --muted: #5e635a;
+      --line: #c9c5b8;
+      --orange: #ba3916;
+      --orange-tint: #f5e2da;
+      --green: #2d5a3c;
+      --green-tint: #dfece3;
+      --blue: #284b63;
+      --blue-tint: #dde7ee;
+      --amber: #8a5a14;
+      --amber-tint: #f3e8d2;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, "Helvetica Neue", Arial, sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --paper: #161a17;
+        --card: #1f2521;
+        --panel: #252c27;
+        --lane-alt: #1b201c;
+        --ink: #ece9e0;
+        --muted: #a3a9a1;
+        --line: #3d443f;
+        --orange: #ff8658;
+        --orange-tint: #3a231b;
+        --green: #68b684;
+        --green-tint: #1d3325;
+        --blue: #7eb0d5;
+        --blue-tint: #1d2b36;
+        --amber: #e6ad4c;
+        --amber-tint: #332917;
+      }
+    }
+    .bg { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .lane { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+    .lane-even { fill: var(--lane-alt); stroke: var(--line); stroke-width: 1; }
+    .lane-hdr { fill: var(--card); stroke: var(--line); stroke-width: 1.2; }
+    .card { fill: var(--card); stroke: var(--line); stroke-width: 1.3; rx: 5; }
+    .card-orange { fill: var(--orange-tint); stroke: var(--orange); stroke-width: 1.5; rx: 5; }
+    .card-green { fill: var(--green-tint); stroke: var(--green); stroke-width: 1.5; rx: 5; }
+    .card-blue { fill: var(--blue-tint); stroke: var(--blue); stroke-width: 1.5; rx: 5; }
+    .card-amber { fill: var(--amber-tint); stroke: var(--amber); stroke-width: 1.5; rx: 5; }
+    .eyebrow { font: 600 9.5px var(--mono); letter-spacing: 1.1px; fill: var(--orange); }
+    .seat-title { font: 600 11.5px var(--sans); fill: var(--ink); }
+    .seat-sub { font: 400 9px var(--mono); fill: var(--muted); }
+    .title { font: 600 10.5px var(--sans); fill: var(--ink); }
+    .body { font: 400 9.5px var(--sans); fill: var(--muted); }
+    .mono { font: 500 9px var(--mono); fill: var(--ink); }
+    .arrow { stroke: var(--ink); stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+    .arrow-orange { stroke: var(--orange); stroke-width: 1.5; fill: none; marker-end: url(#arr-orange); }
+    .arrow-green { stroke: var(--green); stroke-width: 1.5; fill: none; marker-end: url(#arr-green); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--ink)"/>
+    </marker>
+    <marker id="arr-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--orange)"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--green)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="978" height="498" rx="8"/>
+  <text class="eyebrow" x="24" y="26">END-TO-END SWIMLANE · TRACING ONE IDEA ("WEBHOOK RETRY BACKOFF") FROM SPARK TO MAIN</text>
+
+  <!-- Swimlane 1: Human Operator -->
+  <rect class="lane" x="20" y="38" width="940" height="86"/>
+  <rect class="lane-hdr" x="20" y="38" width="144" height="86"/>
+  <text class="seat-title" x="32" y="68">1. You (Human)</text>
+  <text class="seat-sub" x="32" y="84">Interactive TTY</text>
+  <text class="seat-sub" x="32" y="98">Grant &amp; Mandate</text>
+
+  <!-- Swimlane 2: Advisor / Orchestrator -->
+  <rect class="lane-even" x="20" y="124" width="940" height="86"/>
+  <rect class="lane-hdr" x="20" y="124" width="144" height="86"/>
+  <text class="seat-title" x="32" y="154">2. Advisor Seat</text>
+  <text class="seat-sub" x="32" y="170">Groom &amp; Dispatch</text>
+  <text class="seat-sub" x="32" y="184">Orchestrator</text>
+
+  <!-- Swimlane 3: Implementer Lane -->
+  <rect class="lane" x="20" y="210" width="940" height="90"/>
+  <rect class="lane-hdr" x="20" y="210" width="144" height="90"/>
+  <text class="seat-title" x="32" y="240">3. Implementer</text>
+  <text class="seat-sub" x="32" y="256">Isolated Lane</text>
+  <text class="seat-sub" x="32" y="270">Git Worktree + Lease</text>
+
+  <!-- Swimlane 4: Reviewer Seat + CI -->
+  <rect class="lane-even" x="20" y="300" width="940" height="90"/>
+  <rect class="lane-hdr" x="20" y="300" width="144" height="90"/>
+  <text class="seat-title" x="32" y="330">4. Reviewer &amp; CI</text>
+  <text class="seat-sub" x="32" y="346">Separate Seat</text>
+  <text class="seat-sub" x="32" y="360">Fast CI + Ratchets</text>
+
+  <!-- Swimlane 5: Merge Train & Main -->
+  <rect class="lane" x="20" y="390" width="940" height="92"/>
+  <rect class="lane-hdr" x="20" y="390" width="144" height="92"/>
+  <text class="seat-title" x="32" y="420">5. Merge Train</text>
+  <text class="seat-sub" x="32" y="436">Autoland + Riders</text>
+  <text class="seat-sub" x="32" y="450">Remote `main`</text>
+
+  <!-- Step 1: Human captures idea -->
+  <rect class="card-orange" x="176" y="48" width="154" height="66"/>
+  <text class="title" x="186" y="65">① Describe Idea</text>
+  <text class="body" x="186" y="80">"Add jittered retry to</text>
+  <text class="body" x="186" y="93">webhook client"</text>
+  <text class="mono" x="186" y="107">aida req / clarify</text>
+
+  <!-- Step 2: Advisor blesses & queues -->
+  <path class="arrow-orange" d="M253,114 L253,134"/>
+  <rect class="card-blue" x="176" y="136" width="174" height="62"/>
+  <text class="title" x="186" y="153">② Bless &amp; Route Spec</text>
+  <text class="body" x="186" y="168">Draft → Approved (drain)</text>
+  <text class="mono" x="186" y="182">aida approve --mode drain</text>
+  <text class="body" x="186" y="194">Pickability check: OK</text>
+
+  <!-- Step 3: Implementer Lane Launch -->
+  <path class="arrow" d="M263,198 L263,220"/>
+  <rect class="card" x="176" y="222" width="184" height="66"/>
+  <text class="title" x="186" y="239">③ Launch Isolated Lane</text>
+  <text class="mono" x="186" y="254">aida queue work</text>
+  <text class="body" x="186" y="268">Creates ../aida-story-n</text>
+  <text class="body" x="186" y="281">worktree + lease + sandbox</text>
+
+  <!-- Step 4: Implementer Commits & Opens PR -->
+  <path class="arrow" d="M360,255 L384,255"/>
+  <rect class="card-orange" x="386" y="222" width="180" height="66"/>
+  <text class="title" x="396" y="239">④ Code, Test &amp; Open PR</text>
+  <text class="body" x="396" y="254">Writes backoff + unit tests</text>
+  <text class="mono" x="396" y="268">commit (... (SPEC-ID))</text>
+  <text class="body" x="396" y="281">Opens PR · State → Done</text>
+
+  <!-- Step 5: Fast CI & Independent Review -->
+  <path class="arrow" d="M476,288 L476,310"/>
+  <rect class="card-blue" x="386" y="312" width="180" height="66"/>
+  <text class="title" x="396" y="329">⑤ Fast CI + Review</text>
+  <text class="body" x="396" y="344">Fast guards &amp; ratchets pass</text>
+  <text class="body" x="396" y="357">Reviewer seat checks diff</text>
+  <text class="mono" x="396" y="371">Verdict: Changes Requested</text>
+
+  <!-- Step 6: Rework & Delta Review -->
+  <path class="arrow" d="M566,345 L590,345 L590,255 L606,255"/>
+  <rect class="card-amber" x="608" y="222" width="164" height="66"/>
+  <text class="title" x="618" y="239">⑥ Rework Round</text>
+  <text class="mono" x="618" y="254">aida rework</text>
+  <text class="body" x="618" y="268">Fixes edge case on branch</text>
+  <text class="body" x="618" y="281">Pushes new HEAD commit</text>
+
+  <path class="arrow" d="M690,288 L690,310"/>
+  <rect class="card-green" x="608" y="312" width="164" height="66"/>
+  <text class="title" x="618" y="329">⑦ Delta Review</text>
+  <text class="body" x="618" y="344">Inspects new HEAD delta</text>
+  <text class="mono" x="618" y="358">aida review record</text>
+  <text class="body" x="618" y="371">Approved · Rework hold clears</text>
+
+  <!-- Step 8: Merge Train & Riders -->
+  <path class="arrow-green" d="M690,378 L690,400"/>
+  <rect class="card-blue" x="596" y="402" width="176" height="68"/>
+  <text class="title" x="606" y="419">⑧ Boards Merge Train</text>
+  <text class="body" x="606" y="434">Main-track candidate</text>
+  <text class="body" x="606" y="447">joins batch as a Rider</text>
+  <text class="mono" x="606" y="461">1× ci:full (7 shards) Green</text>
+
+  <!-- Step 9: Lands on main -->
+  <path class="arrow-green" d="M772,436 L794,436"/>
+  <rect class="card-green" x="796" y="402" width="152" height="68"/>
+  <text class="title" x="806" y="419">⑨ Lands on `main`</text>
+  <text class="body" x="806" y="434">Train merges batch</text>
+  <text class="body" x="806" y="447">Trailer triggers</text>
+  <text class="mono" x="806" y="461">Done → Completed</text>
+
+  <!-- Step 10: Human Post-Train Pull -->
+  <path class="arrow-green" d="M872,402 L872,116"/>
+  <rect class="card-green" x="796" y="48" width="152" height="66"/>
+  <text class="title" x="806" y="65">⑩ Post-Train Pull</text>
+  <text class="mono" x="806" y="80">aida pull &amp; digest</text>
+  <text class="body" x="806" y="94">Local repo + store sync</text>
+  <text class="body" x="806" y="107">Feature live &amp; traced!</text>
+</svg>

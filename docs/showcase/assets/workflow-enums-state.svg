@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" role="img" aria-labelledby="title desc">
+  <title id="title">System state machines and core enums</title>
+  <desc id="desc">Visual map of RequirementStatus transitions (Draft, Approved, Planned, InProgress, Done, Completed, NeedsAttention, Superseded, Rejected), the ExecutionMode autonomy ladder (Drain, Drive, Guided, Operator, Decide), and Pickability and LockingPosture gates.</desc>
+  <style>
+    svg {
+      --paper: #f4f1e9;
+      --card: #faf8f2;
+      --panel: #ece8de;
+      --ink: #252a26;
+      --muted: #5e635a;
+      --line: #c9c5b8;
+      --orange: #ba3916;
+      --orange-tint: #f5e2da;
+      --green: #2d5a3c;
+      --green-tint: #dfece3;
+      --blue: #284b63;
+      --blue-tint: #dde7ee;
+      --amber: #8a5a14;
+      --amber-tint: #f3e8d2;
+      --red: #9b2c2c;
+      --red-tint: #f5dfdf;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, "Helvetica Neue", Arial, sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --paper: #161a17;
+        --card: #1f2521;
+        --panel: #252c27;
+        --ink: #ece9e0;
+        --muted: #a3a9a1;
+        --line: #3d443f;
+        --orange: #ff8658;
+        --orange-tint: #3a231b;
+        --green: #68b684;
+        --green-tint: #1d3325;
+        --blue: #7eb0d5;
+        --blue-tint: #1d2b36;
+        --amber: #e6ad4c;
+        --amber-tint: #332917;
+        --red: #f27979;
+        --red-tint: #381e1e;
+      }
+    }
+    .bg { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .panel { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; rx: 8; }
+    .card { fill: var(--card); stroke: var(--line); stroke-width: 1.3; rx: 6; }
+    .card-orange { fill: var(--orange-tint); stroke: var(--orange); stroke-width: 1.5; rx: 6; }
+    .card-green { fill: var(--green-tint); stroke: var(--green); stroke-width: 1.5; rx: 6; }
+    .card-blue { fill: var(--blue-tint); stroke: var(--blue); stroke-width: 1.5; rx: 6; }
+    .card-amber { fill: var(--amber-tint); stroke: var(--amber); stroke-width: 1.5; rx: 6; }
+    .card-red { fill: var(--red-tint); stroke: var(--red); stroke-width: 1.5; rx: 6; }
+    .eyebrow { font: 600 9.5px var(--mono); letter-spacing: 1.1px; fill: var(--orange); }
+    .h-serif { font: 400 16px var(--serif); fill: var(--ink); }
+    .title { font: 600 11.5px var(--sans); fill: var(--ink); }
+    .body { font: 400 10px var(--sans); fill: var(--muted); }
+    .mono { font: 500 9.5px var(--mono); fill: var(--ink); }
+    .mono-muted { font: 400 8.5px var(--mono); fill: var(--muted); }
+    .arrow { stroke: var(--ink); stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+    .arrow-green { stroke: var(--green); stroke-width: 1.5; fill: none; marker-end: url(#arr-green); }
+    .arrow-amber { stroke: var(--amber); stroke-width: 1.4; stroke-dasharray: 4 3; fill: none; marker-end: url(#arr-amber); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--ink)"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--green)"/>
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--amber)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="978" height="428" rx="8"/>
+  <text class="eyebrow" x="24" y="28">ACT 06 · STATE MACHINES IN CODE — REQUIREMENTSTATUS, EXECUTIONMODE &amp; PICKABILITY ENUMS</text>
+
+  <!-- Top Panel: RequirementStatus State Machine -->
+  <rect class="panel" x="22" y="42" width="936" height="186"/>
+  <text class="eyebrow" x="38" y="62">ENUM 1 · REQUIREMENTSTATUS (9 STATES: 5 OPEN · 4 CLOSED)</text>
+  <text class="h-serif" x="38" y="82">The Spec Lifecycle &amp; Off-Mainline Forks</text>
+
+  <!-- Mainline states -->
+  <rect class="card" x="38" y="96" width="106" height="54"/>
+  <text class="title" x="48" y="115">Draft</text>
+  <text class="mono-muted" x="48" y="130">Open · Intake</text>
+  <text class="body" x="48" y="143">Untriaged spec</text>
+
+  <path class="arrow" d="M144,123 L172,123"/>
+  <rect class="card-blue" x="174" y="96" width="112" height="54"/>
+  <text class="title" x="184" y="115">Approved</text>
+  <text class="mono-muted" x="184" y="130">Open · Blessed</text>
+  <text class="body" x="184" y="143">Advisor gated</text>
+
+  <path class="arrow" d="M286,123 L314,123"/>
+  <rect class="card" x="316" y="96" width="108" height="54"/>
+  <text class="title" x="326" y="115">Planned</text>
+  <text class="mono-muted" x="326" y="130">Open · Pinned</text>
+  <text class="body" x="326" y="143">docs/plans/…</text>
+
+  <path class="arrow" d="M424,123 L452,123"/>
+  <rect class="card-orange" x="454" y="96" width="122" height="54"/>
+  <text class="title" x="464" y="115">InProgress</text>
+  <text class="mono-muted" x="464" y="130">Open · Leased</text>
+  <text class="body" x="464" y="143">Active lane work</text>
+
+  <path class="arrow" d="M576,123 L604,123"/>
+  <rect class="card-blue" x="606" y="96" width="114" height="54"/>
+  <text class="title" x="616" y="115">Done</text>
+  <text class="mono-muted" x="616" y="130">Closed · Branch</text>
+  <text class="body" x="616" y="143">PR open / review</text>
+
+  <path class="arrow-green" d="M720,123 L762,123"/>
+  <text class="mono-muted" x="723" y="115">auto-bump</text>
+  <rect class="card-green" x="764" y="96" width="176" height="54"/>
+  <text class="title" x="774" y="115">Completed</text>
+  <text class="mono-muted" x="774" y="130">Closed · On main</text>
+  <text class="body" x="774" y="143">Merged + trailer verified</text>
+
+  <!-- Off-mainline NeedsAttention & Terminal exits -->
+  <path class="arrow-amber" d="M515,150 L515,168"/>
+  <rect class="card-amber" x="356" y="170" width="318" height="46"/>
+  <text class="title" x="368" y="188">NeedsAttention (Open · Paused)</text>
+  <text class="body" x="368" y="205">PuntCategory: design-fork | ambiguous-spec | blocked-dependency</text>
+  <path class="arrow-amber" d="M356,193 L230,193 L230,152"/>
+  <text class="mono-muted" x="240" y="186">triage resolves → Approved</text>
+
+  <rect class="card-green" x="692" y="170" width="120" height="46"/>
+  <text class="title" x="702" y="188">Superseded</text>
+  <text class="mono-muted" x="702" y="205">Closed · Replaced</text>
+
+  <rect class="card-red" x="822" y="170" width="118" height="46"/>
+  <text class="title" x="832" y="188">Rejected</text>
+  <text class="mono-muted" x="832" y="205">Closed · Declined</text>
+
+  <!-- Bottom Left Panel: ExecutionMode & Autonomy Mode -->
+  <rect class="panel" x="22" y="242" width="484" height="168"/>
+  <text class="eyebrow" x="38" y="262">ENUM 2 · EXECUTIONMODE LADDER (RANK 0 → 3 + BLOCK)</text>
+  <text class="h-serif" x="38" y="282">Per-Spec Routing (`aida do`) vs. Runtime Presence</text>
+
+  <rect class="card-green" x="38" y="294" width="84" height="64"/>
+  <text class="title" x="46" y="312">0 · Drain</text>
+  <text class="mono-muted" x="46" y="327">Autonomous</text>
+  <text class="body" x="46" y="344">Auto → merge</text>
+
+  <rect class="card-blue" x="128" y="294" width="84" height="64"/>
+  <text class="title" x="136" y="312">1 · Drive</text>
+  <text class="mono-muted" x="136" y="327">Autonomous</text>
+  <text class="body" x="136" y="344">Auto → CI; hold</text>
+
+  <rect class="card-orange" x="218" y="294" width="88" height="64"/>
+  <text class="title" x="226" y="312">2 · Guided</text>
+  <text class="mono-muted" x="226" y="327">Supervised</text>
+  <text class="body" x="226" y="344">Keystone dialog</text>
+
+  <rect class="card" x="312" y="294" width="88" height="64"/>
+  <text class="title" x="320" y="312">3 · Operator</text>
+  <text class="mono-muted" x="320" y="327">Human-only</text>
+  <text class="body" x="320" y="344">Checklist only</text>
+
+  <rect class="card-red" x="406" y="294" width="84" height="64"/>
+  <text class="title" x="414" y="312">∅ · Decide</text>
+  <text class="mono-muted" x="414" y="327">Hard Block</text>
+  <text class="body" x="414" y="344">Clarify first</text>
+
+  <text class="mono" x="38" y="380">Autonomy Mode (session prompt axis): default | --zen | --no-human</text>
+  <text class="body" x="38" y="396">Climbing UP rank (more human oversight) is free; climbing DOWN requires --force.</text>
+
+  <!-- Bottom Right Panel: Pickability, LockingPosture & Project Graph -->
+  <rect class="panel" x="520" y="242" width="438" height="168"/>
+  <text class="eyebrow" x="536" y="262">ENUMS 3–5 · PICKABILITY, LOCKINGPOSTURE &amp; GRAPH EDGES</text>
+  <text class="h-serif" x="536" y="282">Pre-Pickup &amp; Commit Boundary Bouncers</text>
+
+  <rect class="card" x="536" y="294" width="196" height="102"/>
+  <text class="title" x="548" y="312">Pickability &amp; BlockedReason</text>
+  <text class="mono-muted" x="548" y="328">Precedence order at pickup:</text>
+  <text class="body" x="548" y="343">1. KnowledgeType (ADR/Doc/Term)</text>
+  <text class="body" x="548" y="357">2. HumanOnly (durable flag)</text>
+  <text class="body" x="548" y="371">3. NeedsTriage (NeedsAttention)</text>
+  <text class="body" x="548" y="385">4. BlockedBy (Rejected / Open)</text>
+
+  <rect class="card" x="744" y="294" width="198" height="102"/>
+  <text class="title" x="756" y="312">LockingPosture &amp; Graph</text>
+  <text class="mono-muted" x="756" y="328">[locking] posture (default):</text>
+  <text class="body" x="756" y="343">• ContextAware (refuse on drain)</text>
+  <text class="body" x="756" y="357">• Off | Warn | Enforce</text>
+  <text class="mono-muted" x="756" y="373">RelationshipType edges:</text>
+  <text class="body" x="756" y="387">Parent/Child · Blocks · Supersedes</text>
+</svg>

@@ -220,6 +220,22 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.build(expected=1)
         self.assertEqual(before, self.snapshot())
 
+    # trace:STORY-2839 | ai:antigravity
+    def test_markdown_tables_render_headers_cells_and_links(self):
+        self.source.write_text(
+            '# Fixture guide\n\n'
+            '| Step | Role |\n'
+            '| --- | --- |\n'
+            '| `aida approve` | [advisor](elsewhere.md) |\n'
+        )
+        self.git('add', '.')
+        self.build()
+        page = (self.site / 'guide.html').read_text()
+        self.assertIn('<div class="table-wrap"><table><thead><tr><th>Step</th><th>Role</th></tr></thead>', page)
+        self.assertIn('<tbody><tr><td><code>aida approve</code></td><td><a href="../elsewhere.md">advisor</a></td></tr></tbody></table></div>', page)
+        self.git('add', '.')
+        self.build('--check')
+
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_term_cards_show_only_for_a_search(self):
         script = r'''

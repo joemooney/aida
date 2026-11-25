@@ -10,14 +10,15 @@
   <link rel="icon" href="assets/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="assets/aida-icon.png">
   <link rel="stylesheet" href="styles.css">
+  <script>(function(){try{var t=localStorage.getItem('aida-theme');if(t==='terminal'||t==='paper')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <script src="app.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="nav">
-  <a class="brand" href="#" aria-label="AIDA home"><span class="brand-symbol" aria-hidden="true"><img src="assets/aida-icon.png" width="36" height="36" alt=""></span>AIDA<span class="brand-caption">THE GOVERNED SOFTWARE FACTORY</span></a>
-  <nav aria-label="Main navigation"><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="#factory">The factory</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="code-review.html">Code review</a><a href="metrics.html">Metrics</a><a href="engineering-audit.html">Engineering audit</a><a href="features.html">All features</a><a href="library.html">Library</a><a href="#capabilities">Capabilities</a><a href="integrations.html">Integrations</a></nav>
-  <a class="nav-cta" href="#start">Explore AIDA <span aria-hidden="true">↗</span></a>
+  <a class="brand" href="index.html" aria-label="AIDA home"><span class="brand-symbol" aria-hidden="true"><img src="assets/aida-icon.png" width="36" height="36" alt=""></span>AIDA<span class="brand-caption">THE GOVERNED SOFTWARE FACTORY</span></a>
+  <nav aria-label="Product navigation"><a href="index.html" aria-current="page">Product</a><a href="getting-started.html">Get started</a><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">How it works <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="capabilities.html">Capabilities</a><a href="code-review.html">Code review</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Governance <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="authority.html">Authority</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="engineering-audit.html">Engineering audit</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Operations <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="setup.html">Setup</a><a href="configuration.html">Configuration</a><a href="integrations.html">Integrations</a><a href="air-gapped.html">Air-gapped</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Reference <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="library.html">Library</a><a href="glossary.html">Glossary</a><a href="features.html">All features</a><a href="executive-brief.html">Executive brief</a></div></div></nav>
+  <div class="nav-actions"><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light and dark theme"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark</span></button><a class="nav-cta" href="#start">Explore AIDA <span aria-hidden="true">↗</span></a></div>
 </header>
 <main id="main">
 <section class="hero shell">

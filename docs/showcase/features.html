@@ -985,11 +985,27 @@
   }
   function hideTip() { tooltip.style.opacity = '0'; }
 
+  function syncFeaturesThemeLabel() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+    const label = document.getElementById('theme-label');
+    if (label) label.textContent = dark ? 'Light' : 'Dark';
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.textContent = dark ? '☀' : '☾';
+  }
+  try {
+    const savedTheme = localStorage.getItem('aida-theme');
+    if (savedTheme === 'terminal' || savedTheme === 'paper') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  } catch (_) {}
+  syncFeaturesThemeLabel();
+
   function toggleTheme() {
     const htmlEl = document.documentElement;
     const next = htmlEl.getAttribute('data-theme') === 'terminal' ? 'paper' : 'terminal';
     htmlEl.setAttribute('data-theme', next);
-    document.getElementById('theme-label').textContent = next === 'terminal' ? 'Paper Mode' : 'Terminal Mode';
+    try { localStorage.setItem('aida-theme', next); } catch (_) {}
+    syncFeaturesThemeLabel();
   }
 
   function filterDiff(cat, btn) {

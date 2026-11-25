@@ -5,12 +5,13 @@
 <title>Setup — AIDA</title>
 <link rel="icon" type="image/png" href="assets/aida-icon.png"><link rel="icon" href="assets/favicon.ico" sizes="any"><link rel="apple-touch-icon" href="assets/aida-icon.png">
 <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
-
+<script>(function(){try{var t=localStorage.getItem('aida-theme');if(t==='terminal'||t==='paper')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script src="search-data.js" defer></script>
 </head>
 <body>
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
 <a class="skip" href="#main">Skip to content</a>
-<header class="guide-header"><a class="brand" href="index.html"><span class="brand-symbol" aria-hidden="true"><img src="assets/aida-icon-64.png" width="28" height="28" alt=""></span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html" aria-current="page">Setup</a><a href="capabilities.html">Capabilities</a><a href="integrations.html">Integrations</a><a href="air-gapped.html">Air-gapped</a><a href="authority.html">Authority</a><a href="glossary.html">Glossary</a></nav></header>
+<header class="guide-header"><a class="brand" href="index.html"><span class="brand-symbol" aria-hidden="true"><img src="assets/aida-icon-64.png" width="36" height="36" alt=""></span>AIDA<span class="brand-caption">THE GOVERNED SOFTWARE FACTORY</span></a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html">Get started</a><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">How it works <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="capabilities.html">Capabilities</a><a href="code-review.html">Code review</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Governance <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="authority.html">Authority</a><a href="engineering-audit.html">Engineering audit</a></div></div><div class="nav-group nav-group-active"><button type="button" class="nav-trigger" aria-expanded="false">Operations <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="configuration.html">Configuration</a><a href="setup.html" aria-current="page">Setup</a><a href="integrations.html">Integrations</a><a href="air-gapped.html">Air-gapped</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Reference <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="library.html">Library</a><a href="glossary.html">Glossary</a><a href="features.html">All features</a><a href="executive-brief.html">Executive brief</a></div></div></nav><div class="nav-actions"><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light and dark theme"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark</span></button></div></header>
 <main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="set-up-aida-for-conversational-development">Set up AIDA for conversational development</h1>
 <p>Operator setup connects AIDA to the coding agent and project policy. It is separate from the normal user journey: people can keep discussing and implementing changes with their agent while the agent maintains structured intent. Start readers with the <a href="getting-started.html">conversational guide</a>.</p>
 <h2 id="install-on-a-supported-system">Install on a supported system</h2>
@@ -37,7 +38,154 @@
 <p>Execution requires the documented reviewed private deny policy, trusted baseline and store/hook checks. Dry-run/JSON plans inspect metadata and do not prove content safety. Supported prepared sanitized writes use the scanner; unsupported writers refuse while the profile is enabled. Raw Git, foreign writers, receiving-side enforcement and automatic public forwarding remain outside this client boundary. Read the full <a href="../cli/07-project-setup.md#aida-config-transport">transport contract</a> before enabling it.</p>
 <h2 id="inspect-queues-at-the-right-scope">Inspect queues at the right scope</h2>
 <p>Project queues can live in the store, while role-global queues live under <code>~/.aida/queue/</code>. A store push cannot transfer a different machine&#x27;s role-global queue. Active roles, explicit filters and user identity affect what a queue view selects. Use the <a href="../advanced/multi-node.md">multi-node guide</a> to distinguish identity, routing and unpublished history before attempting repairs.</p>
+<h2 id="enable-scheduled-guards-deputies-and-multi-seat-mandates">Enable scheduled guards, deputies and multi-seat mandates</h2>
+<p><code>aida init</code> seeds the project&#x27;s job registry (<code>.aida-store/schedule/*.yaml</code>, inspected with <code>aida schedule status</code>). To drive the <code>guard → route</code> schedule automatically on a host machine without model-side polling, install the 15-minute <code>aida schedule tick</code> driver at an interactive terminal:</p>
+<pre><code># Install a 15-minute crontab entry for this repository (idempotent)
+aida schedule install-cron
+
+# Or install a systemd user timer on Linux (requires an interactive terminal)
+aida schedule install-systemd</code></pre>
+<p>When running a multi-seat fleet (<code>product</code>, <code>advisor</code>, <code>integration</code>, and <code>implementer</code> lanes), an operator at an interactive terminal can grant time-boxed shipping authority with <code>aida mandate start --ship-held --ttl 8h --reason &quot;…&quot;</code> (or <code>aida mandate start --drive</code> to also enable the 15-minute <code>mandate-drive</code> tick), and start a terminal deputy (<code>aida deputy</code> or <code>aida deputy shell run</code>) so contained seats can submit allow-listed host or TTY commands.</p>
+<h2 id="operator-specific-setup">Operator-specific setup</h2>
+<blockquote><p><strong>Operator-specific setup (beyond <code>aida init</code> today):</strong> A fresh <code>aida init</code> scaffolds the roles, two-seat protocol, advisor and integration standing orders, <code>aida schedule</code> guard jobs, merge trains, and <code>aida mailbox</code>. Two high-scale pieces used in the reference multi-seat deployment are currently operator-configured rather than built into <code>aida init</code>, alongside the planned capabilities that will bring them into the core substrate:</p></blockquote>
+<ul>
+<li><strong>1. Remote build host for implementer lanes (operator SSH scripts today; native remote lane host planned):</strong> <code>aida queue work</code> and <code>aida agent new</code> spawn lanes on the local host where you invoke them; AIDA does not yet ship a built-in command to dispatch N headless lanes onto a separate remote build server over SSH. In the reference multi-seat setup, the operator offloads headless implementer lanes and heavy Rust compilation/test runs to a dedicated Linux build host over SSH using small host-side wrapper scripts (<code>~/lane-start.sh</code>, <code>lane-run.sh</code>, <code>seat-snap.sh</code>, <code>store-sync.sh</code>, and <code>end-finished.sh</code>) that synchronize the <code>aida-store</code> ref, run the lane in a remote worktree, and publish the resulting branch back to the forge. *Aspirational / planned direction:* native remote lane host support in AIDA so <code>aida queue work</code> and <code>aida lane job</code> can target an SSH build host directly from <code>.aida/config.toml</code> without custom wrapper scripts.</li>
+<li>**2. Sandbox and permission exemptions for the terminal deputy (<code>&quot;aida deputy shell submit *&quot;</code>):** When the <code>advisor</code> or <code>integration</code> seat runs inside a contained or permission-gated harness and needs to submit a multi-step host script to a human-started script deputy (<code>aida deputy shell run</code>), it invokes <code>aida deputy shell submit --file &lt;path&gt; --wait</code>. In Claude Code, allow-listing the bare prefix without a wildcard does not match invocations that pass <code>--file</code>, <code>--spec</code>, or <code>--wait</code> flags; add the wildcard pattern <code>&quot;aida deputy shell submit *&quot;</code> (or <code>&quot;Bash(aida deputy shell submit *)&quot;</code> in <code>.claude/settings.json</code> / <code>.claude/settings.local.json</code>) so the harness permits deputy submissions without stalling on an interactive confirmation prompt.</li>
+<li><strong>3. Product-seat standing orders, landing sweeps and fleet policy knobs (standing orders &amp; handoffs today; first-class templates &amp; config knobs planned):</strong> While <code>aida init</code> seeds template standing orders for the advisor and integration seats, operators running a dedicated <code>product</code> seat today record product-seat standing orders via <code>aida session handoff --seat product --standing-orders add &quot;&lt;text&gt;&quot;</code> and encode fleet sizing rules (such as capping concurrent implementer lanes at 4 and concurrent reviews at 2, reserving top-tier reasoning models for conflict/design forks, re-scoping specs at rework round 3, and never moving an approved or train-pinned PR head via raw forge CLI commands) in repo-local standing orders. *Aspirational / planned direction:* promoting product standing orders, scheduled landing-health and landing-sweep seat jobs, head-pin refusal guards, and integration promotion pipelining (<code>integration.pipeline_depth</code>) into first-class <code>.aida/config.toml</code> knobs and default <code>aida init</code> templates.</li>
+</ul>
 <p>The <a href="../advanced/admin-guide.md">administrator guide</a>, <a href="../advanced/multi-hub-sync.md">multi-hub guide</a> and <a href="../cli/07-project-setup.md">setup reference</a> provide detail. The <a href="configuration.html">configuration guide</a> explains feature-specific scopes. For source evidence, inspect <a href="../../aida-core/src/allocation_authority.rs">clone allocation</a>, <a href="../../aida-cli-lib/src/transport_profile.rs">transport dispatch</a>, <a href="../../aida-cli-lib/src/transport_pull.rs">recoverable pull</a>, and <a href="../../aida-cli-lib/src/init_cmd.rs">agent scaffolding</a>.</p></main>
 <footer class="guide-footer"><p>Generated from <a href="../operator-setup.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var themeBtn = document.getElementById('theme-toggle');
+  function syncThemeLabel() {
+    var dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+    var icon = document.getElementById('theme-icon');
+    var label = document.getElementById('theme-label');
+    if (icon) icon.textContent = dark ? '☀' : '☾';
+    if (label) label.textContent = dark ? 'Light' : 'Dark';
+  }
+  syncThemeLabel();
+  if (themeBtn && !themeBtn.getAttribute('data-bound')) {
+    themeBtn.setAttribute('data-bound', 'true');
+    themeBtn.addEventListener('click', function () {
+      var dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+      var next = dark ? 'paper' : 'terminal';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('aida-theme', next); } catch (e) {}
+      syncThemeLabel();
+    });
+  }
+  var navGroups = document.querySelectorAll('.nav-group');
+  function closeNav(except) {
+    navGroups.forEach(function (g) {
+      if (g === except) return;
+      g.removeAttribute('data-open');
+      var b = g.querySelector('.nav-trigger');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  navGroups.forEach(function (g) {
+    var b = g.querySelector('.nav-trigger');
+    if (!b || b.getAttribute('data-nav-bound')) return;
+    b.setAttribute('data-nav-bound', 'true');
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = g.getAttribute('data-open') === 'true';
+      closeNav(g);
+      if (open) {
+        g.removeAttribute('data-open');
+        b.setAttribute('aria-expanded', 'false');
+      } else {
+        g.setAttribute('data-open', 'true');
+        b.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+  document.addEventListener('click', function () { closeNav(null); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(null); });
+  if (!Array.isArray(window.AIDA_DOCS)) return;
+  var terms = {}, bySlug = {};
+  for (var i = 0; i < window.AIDA_DOCS.length; i++) {
+    var d = window.AIDA_DOCS[i];
+    if (d && d.kind === 'term' && d.url) {
+      terms[d.url] = d;
+      var hash = d.url.indexOf('#');
+      if (hash !== -1) {
+        var frag = d.url.slice(hash);
+        terms[frag] = d;
+        bySlug[frag.slice(1)] = d;
+      }
+    }
+  }
+  var aliases = {
+    'pr': 'pull-request', 'mr': 'pull-request', 'pr/mr': 'pull-request',
+    'lanes': 'lane', 'leases': 'lease', 'grants': 'grant', 'seats': 'seat',
+    'riders': 'rider', 'trains': 'merge-train', 'train': 'merge-train',
+    'gates': 'gate', 'ratchets': 'ratchet',
+    'specs': 'spec', 'adrs': 'adr', 'worktrees': 'lane-vs-worktree', 'worktree': 'lane-vs-worktree',
+    'cifull': 'full-ci-tier', 'ci:full': 'full-ci-tier', 'head': 'head', 'refs': 'refs',
+    'cache.db': 'cache', '.aida/cache-db/cache.db': 'cache', 'cache.db-wal': 'wal', 'wal': 'wal',
+    'aida-store': 'git-canonical', '.aida-store/': 'git-canonical', '.aida-store': 'git-canonical',
+    'aida groom': 'groom', 'aida punt': 'punt', 'aida worktree gc': 'gc', 'git gc': 'gc',
+    'runner_seat': 'runner-seat', 'aida:merge-hold': 'merge-hold',
+    'in-progress': 'inprogress', 'in_progress': 'inprogress'
+  };
+  var pop = document.createElement('div');
+  pop.className = 'glossary-pop';
+  pop.setAttribute('role', 'tooltip');
+  pop.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(pop);
+  function summary(text) {
+    if (!text) return '';
+    var m = text.match(/^(.{25,210}?[.!?])(?:\s|$)/);
+    var s = m ? m[1] : text.slice(0, 200);
+    return s.length < text.length && !s.endsWith('.') ? s + '…' : s;
+  }
+  function show(el, term) {
+    pop.innerHTML = '<div class="glossary-pop-head"><span>' + term.title.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span><span>GLOSSARY ↗</span></div><p class="glossary-pop-body">' + summary(term.text).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</p>';
+    pop.setAttribute('data-visible', 'true');
+    pop.setAttribute('aria-hidden', 'false');
+    var r = el.getBoundingClientRect();
+    var pw = pop.offsetWidth || 320, ph = pop.offsetHeight || 96;
+    var left = Math.max(12, Math.min(r.left, window.innerWidth - pw - 12));
+    var top = r.top - ph - 10;
+    if (top < 12) top = r.bottom + 10;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+  function hide() {
+    pop.removeAttribute('data-visible');
+    pop.setAttribute('aria-hidden', 'true');
+  }
+  function bindTooltip(a, term) {
+    a.classList.add('glossary-term');
+    a.addEventListener('mouseenter', function () { show(a, term); });
+    a.addEventListener('mouseleave', hide);
+    a.addEventListener('focus', function () { show(a, term); });
+    a.addEventListener('blur', hide);
+  }
+  var links = document.querySelectorAll('.guide a[href*="glossary.html#"], .guide a[href^="#"]');
+  links.forEach(function (a) {
+    var href = a.getAttribute('href') || '';
+    var key = href.startsWith('#') ? href : 'glossary.html#' + href.split('#')[1];
+    var term = terms[key];
+    if (term) bindTooltip(a, term);
+  });
+  var codes = document.querySelectorAll('.guide p code, .guide li code, .guide td code');
+  codes.forEach(function (code) {
+    if (code.closest('a, pre, h1, h2, h3')) return;
+    var raw = (code.textContent || '').trim().toLowerCase();
+    var key = aliases[raw] || raw.replace(/[^a-z0-9 -]/g, '').replace(/\s+/g, '-');
+    var term = bySlug[key];
+    if (!term) return;
+    var a = document.createElement('a');
+    a.href = term.url;
+    code.parentNode.insertBefore(a, code);
+    a.appendChild(code);
+    bindTooltip(a, term);
+  });
+});
+</script>
 </body>
 </html>

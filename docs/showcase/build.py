@@ -27,6 +27,70 @@ PAGES = [(p['source'], p['output'], p['label']) for p in MANIFEST['pages']]
 # docs/. Every other selected source must live under docs/.
 GLOSSARY_SOURCE_DIR = ROOT / 'aida-core/templates/.aida/discipline'
 
+# trace:STORY-2839 | ai:antigravity
+NAV_GROUP_ORDER = ('How it works', 'Governance', 'Operations', 'Reference')
+NAV_GROUPS = {
+    'workflow.html': 'How it works',
+    'autonomy.html': 'How it works',
+    'capabilities.html': 'How it works',
+    'code-review.html': 'How it works',
+    'authority.html': 'Governance',
+    'trust.html': 'Governance',
+    'metrics.html': 'Governance',
+    'engineering-audit.html': 'Governance',
+    'setup.html': 'Operations',
+    'configuration.html': 'Operations',
+    'integrations.html': 'Operations',
+    'air-gapped.html': 'Operations',
+    'library.html': 'Reference',
+    'glossary.html': 'Reference',
+    'features.html': 'Reference',
+    'executive-brief.html': 'Reference',
+}
+EXTRA_NAV_PAGES = (
+    ('code-review.html', 'Code review'),
+    ('engineering-audit.html', 'Engineering audit'),
+    ('features.html', 'All features'),
+    ('executive-brief.html', 'Executive brief'),
+)
+
+
+def build_nav(current):
+    """Render top-level direct links and grouped dropdown menus for guide headers."""
+    all_items = [('library.html', 'Library')] + [(dest, label) for _, dest, label in PAGES]
+    for dest, label in EXTRA_NAV_PAGES:
+        if (SITE / dest).is_file():
+            all_items.append((dest, label))
+    direct = []
+    grouped = {group: [] for group in NAV_GROUP_ORDER}
+    for dest, label in all_items:
+        group = NAV_GROUPS.get(dest)
+        if group in grouped:
+            grouped[group].append((dest, label))
+        else:
+            direct.append((dest, label))
+    parts = [
+        f'<a href="{dest}"' + (' aria-current="page"' if dest == current else '') + f'>{html.escape(label)}</a>'
+        for dest, label in direct
+    ]
+    for group in NAV_GROUP_ORDER:
+        items = grouped[group]
+        if not items:
+            continue
+        is_active = any(dest == current for dest, _ in items)
+        active_cls = ' nav-group-active' if is_active else ''
+        links = ''.join(
+            f'<a href="{dest}"' + (' aria-current="page"' if dest == current else '') + f'>{html.escape(label)}</a>'
+            for dest, label in items
+        )
+        parts.append(
+            f'<div class="nav-group{active_cls}">'
+            f'<button type="button" class="nav-trigger" aria-expanded="false">{html.escape(group)} <span class="nav-caret" aria-hidden="true">▾</span></button>'
+            f'<div class="nav-menu">{links}</div>'
+            f'</div>'
+        )
+    return ''.join(parts)
+
 
 def slug(title):
     return re.sub(r'[^a-z0-9 -]', '', title.lower()).replace(' ', '-')
@@ -46,6 +110,7 @@ def inline(text, base='.'):
             path = posixpath.relpath(posixpath.normpath(posixpath.join(docs, base, path)), docs)
             mapped = {source: output for source, output, _ in PAGES}
             mapped["what-is-aida.md"] = "../what-is-aida.html"
+            mapped["showcase/code-review.html"] = "code-review.html"
             target = mapped.get(path, '../' + path) + (marker + anchor if marker else '')
         return f'<a href="{target}">{label}</a>'
     text = re.sub(r'\[([^\]]+)\]\(([^\s)]+)\)', link, text)
@@ -75,8 +140,17 @@ def figure(graphic_path, fallback):
 FIGURE = re.compile(r'^!\[([^\]]+)\]\(([^)]+\.svg)\)$')
 
 
+def parse_table_row(line):
+    return [cell.strip() for cell in line.strip().strip('|').split('|')]
+
+
+def is_table_separator(line):
+    cells = parse_table_row(line)
+    return bool(cells) and all(re.fullmatch(r':?-{3,}:?', c) for c in cells)
+
+
 def render(source, base='.'):
-    output, paragraph, listing, code, slugs = [], [], None, None, set()
+    output, paragraph, listing, table, code, slugs = [], [], None, None, None, set()
     def flush():
         if paragraph:
             output.append('<p>' + inline(' '.join(paragraph), base) + '</p>')
@@ -86,19 +160,46 @@ def render(source, base='.'):
         if listing:
             output.append(f'</{listing}>')
             listing = None
-    for line in source.splitlines():
+    def close_table():
+        nonlocal table
+        if table:
+            headers, rows = table
+            thead = '<thead><tr>' + ''.join(f'<th>{inline(h, base)}</th>' for h in headers) + '</tr></thead>'
+            tbody_rows = []
+            for row in rows:
+                padded = (row + [''] * len(headers))[:len(headers)]
+                tbody_rows.append('<tr>' + ''.join(f'<td>{inline(c, base)}</td>' for c in padded) + '</tr>')
+            tbody = '<tbody>' + ''.join(tbody_rows) + '</tbody>'
+            output.append('<div class="table-wrap"><table>' + thead + tbody + '</table></div>')
+            table = None
+    lines = source.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         if line.startswith('```'):
-            flush(); close_list()
+            flush(); close_list(); close_table()
             if code is None:
                 code = []
             else:
                 output.append('<pre><code>' + html.escape('\n'.join(code)) + '</code></pre>')
                 code = None
+            i += 1
             continue
         if code is not None:
-            code.append(line); continue
+            code.append(line); i += 1; continue
         if line.startswith('<!--'):
-            continue
+            i += 1; continue
+        if line.strip().startswith('|') and line.strip().endswith('|'):
+            if table is None and i + 1 < len(lines) and lines[i + 1].strip().startswith('|') and is_table_separator(lines[i + 1]):
+                flush(); close_list()
+                table = (parse_table_row(line), [])
+                i += 2
+                continue
+            elif table is not None:
+                table[1].append(parse_table_row(line))
+                i += 1
+                continue
+        close_table()
         image = FIGURE.match(line)
         if image:
             flush(); close_list()
@@ -109,6 +210,7 @@ def render(source, base='.'):
             if not graphic_path.is_file():
                 raise ValueError('Missing figure asset: ' + image[2])
             output.append(figure(graphic_path, image[1]))
+            i += 1
             continue
         if line.startswith('!['):
             raise ValueError('Figures must be a whole line naming showcase/assets/<name>.svg: ' + line)
@@ -119,7 +221,9 @@ def render(source, base='.'):
         if item:
             if listing is None:
                 listing = 'ul'; output.append('<ul>')
-            output.append('<li>' + inline(item[1], base) + '</li>'); continue
+            output.append('<li>' + inline(item[1], base) + '</li>')
+            i += 1
+            continue
         close_list()
         if heading:
             level, title = len(heading[1]), heading[2]
@@ -132,7 +236,8 @@ def render(source, base='.'):
             output.append('<blockquote><p>' + inline(line[2:], base) + '</p></blockquote>')
         elif line.strip():
             paragraph.append(line)
-    flush(); close_list()
+        i += 1
+    flush(); close_list(); close_table()
     if code is not None:
         raise ValueError('Unclosed code fence')
     return '\n'.join(output)
@@ -144,6 +249,8 @@ def search_text(content):
     text = re.sub(r'\[([^\]]+)\]\([^\s)]+\)', r'\1', text)
     text = re.sub(r'^#{1,6} ', '', text, flags=re.M)
     text = re.sub(r'^> ?', '', text, flags=re.M)
+    text = re.sub(r'^\|(?:\s*:?-{3,}:?\s*\|)+\s*$', ' ', text, flags=re.M)
+    text = text.replace('|', ' ')
     text = text.replace('`', '').replace('**', '')
     return re.sub(r'\s+', ' ', text).strip()
 
@@ -198,18 +305,18 @@ def render_outputs():
         entries.append({'title': content.splitlines()[0].removeprefix('# '), 'url': output, 'source': '../' + source, 'category': metadata['category'], 'text': search_text(content), 'sha256': hashlib.sha256(content.encode()).hexdigest()})
         if is_glossary:
             terms.extend(glossary_terms(content, output, source, metadata['category']))
-        nav = '<a href="library.html">Library</a>' + ''.join(f'<a href="{dest}"' + (' aria-current="page"' if dest == output else '') + f'>{html.escape(label)}</a>' for _, dest, label in PAGES)
+        nav = build_nav(output)
         graphic_path = SITE / 'assets' / (Path(output).stem + '.svg')
         graphic = ''
         if graphic_path.exists():
             graphic = figure(graphic_path, title)
         interactive = ''
-        scripts = ''
+        scripts = '<script src="search-data.js" defer></script>'
         # trace:TASK-B6B1278890774EF993D2EBC327862470-109 | ai:codex
         if output == 'autonomy.html':
             landing = (SITE / 'index.html').read_text()
             interactive = re.search(r'<section class="autonomy shell" id="autonomy">.*?</section>', landing, re.S).group(0)
-            scripts = '<script src="app.js" defer></script>'
+            scripts += '<script src="app.js" defer></script>'
         # trace:TASK-B6B1278890774EF993D2EBC327862470-113 | ai:codex
         heading, separator, body = render(content, posixpath.dirname(source) or '.').partition('</h1>')
         if not separator or not heading.startswith('<h1 '):
@@ -231,7 +338,7 @@ def render_library(template, entries, terms=()):
         cards.append(f'<article class="library-card term-card" data-url="{term["url"]}" data-category="{term["category"]}" data-term hidden><p class="eyebrow">glossary term</p><h2><a href="{term["url"]}">{html.escape(term["title"])}</a></h2><p class="excerpt">{html.escape(term["text"][:180])}…</p></article>')
     entries = list(entries) + list(terms)
     content = (SITE / 'library-template.html').read_text().replace('{{cards}}', '\n'.join(cards))
-    nav = '<a href="library.html" aria-current="page">Library</a>' + ''.join(f'<a href="{output}">{html.escape(title)}</a>' for _, output, title in PAGES)
+    nav = build_nav('library.html')
     scripts = '<script src="search-data.js" defer></script><script src="library.js" defer></script>'
     page = template.replace('{{heading}}', '').replace('{{title}}', 'Documentation library').replace('{{nav}}', nav).replace('{{source}}', 'publication.json').replace('{{content}}', content).replace('{{graphic}}', '').replace('{{interactive}}', '').replace('{{scripts}}', scripts)
     page = page.replace('{{provenance}}', 'the publication manifest')

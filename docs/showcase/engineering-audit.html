@@ -1230,11 +1230,26 @@
 
   // Theme Toggle
   const themeBtn = document.getElementById('theme-toggle');
+  function syncAuditThemeLabel() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+    const label = document.getElementById('theme-label');
+    if (label) label.textContent = dark ? 'Light' : 'Dark';
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.textContent = dark ? '☀' : '☾';
+  }
+  try {
+    const savedTheme = localStorage.getItem('aida-theme');
+    if (savedTheme === 'terminal' || savedTheme === 'paper') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  } catch (_) {}
+  syncAuditThemeLabel();
   themeBtn.addEventListener('click', () => {
     const html = document.documentElement;
-    const next = html.getAttribute('data-theme') === 'paper' ? 'terminal' : 'paper';
+    const next = html.getAttribute('data-theme') === 'terminal' ? 'paper' : 'terminal';
     html.setAttribute('data-theme', next);
-    document.getElementById('theme-label').textContent = next === 'paper' ? 'Terminal Mode' : 'Editorial Paper';
+    try { localStorage.setItem('aida-theme', next); } catch (_) {}
+    syncAuditThemeLabel();
   });
 
   // 1. Scorecard Filter

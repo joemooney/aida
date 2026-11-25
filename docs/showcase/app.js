@@ -20,3 +20,51 @@ tabs.forEach((tab, index) => {
   tab.addEventListener('click', () => chooseMode(tab.dataset.mode));
   tab.addEventListener('keydown', event => { let next; if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;event.preventDefault();chooseMode(tabs[next].dataset.mode,true); });
 });
+// trace:STORY-2839 | ai:antigravity
+const themeBtn = document.getElementById('theme-toggle');
+function syncThemeButton() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+  const icon = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+  if (icon) icon.textContent = dark ? '☀' : '☾';
+  if (label) label.textContent = dark ? 'Light' : 'Dark';
+}
+syncThemeButton();
+if (themeBtn && !themeBtn.getAttribute('data-bound')) {
+  themeBtn.setAttribute('data-bound', 'true');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+    const next = dark ? 'paper' : 'terminal';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('aida-theme', next); } catch (_) {}
+    syncThemeButton();
+  });
+}
+const navGroups = Array.from(document.querySelectorAll('.nav-group'));
+function closeNavGroups(except = null) {
+  navGroups.forEach(group => {
+    if (group === except) return;
+    group.removeAttribute('data-open');
+    const btn = group.querySelector('.nav-trigger');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+}
+navGroups.forEach(group => {
+  const btn = group.querySelector('.nav-trigger');
+  if (!btn || btn.getAttribute('data-nav-bound')) return;
+  btn.setAttribute('data-nav-bound', 'true');
+  btn.addEventListener('click', event => {
+    event.stopPropagation();
+    const open = group.getAttribute('data-open') === 'true';
+    closeNavGroups(group);
+    if (open) {
+      group.removeAttribute('data-open');
+      btn.setAttribute('aria-expanded', 'false');
+    } else {
+      group.setAttribute('data-open', 'true');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+});
+document.addEventListener('click', () => closeNavGroups());
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeNavGroups(); });

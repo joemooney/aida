@@ -5,12 +5,13 @@
 <title>Authority — AIDA</title>
 <link rel="icon" type="image/png" href="assets/aida-icon.png"><link rel="icon" href="assets/favicon.ico" sizes="any"><link rel="apple-touch-icon" href="assets/aida-icon.png">
 <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
-
+<script>(function(){try{var t=localStorage.getItem('aida-theme');if(t==='terminal'||t==='paper')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script src="search-data.js" defer></script>
 </head>
 <body>
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
 <a class="skip" href="#main">Skip to content</a>
-<header class="guide-header"><a class="brand" href="index.html"><span class="brand-symbol" aria-hidden="true"><img src="assets/aida-icon-64.png" width="28" height="28" alt=""></span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html">Setup</a><a href="capabilities.html">Capabilities</a><a href="integrations.html">Integrations</a><a href="air-gapped.html">Air-gapped</a><a href="authority.html" aria-current="page">Authority</a><a href="glossary.html">Glossary</a></nav></header>
+<header class="guide-header"><a class="brand" href="index.html"><span class="brand-symbol" aria-hidden="true"><img src="assets/aida-icon-64.png" width="36" height="36" alt=""></span>AIDA<span class="brand-caption">THE GOVERNED SOFTWARE FACTORY</span></a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html">Get started</a><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">How it works <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="capabilities.html">Capabilities</a><a href="code-review.html">Code review</a></div></div><div class="nav-group nav-group-active"><button type="button" class="nav-trigger" aria-expanded="false">Governance <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="authority.html" aria-current="page">Authority</a><a href="engineering-audit.html">Engineering audit</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Operations <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="configuration.html">Configuration</a><a href="setup.html">Setup</a><a href="integrations.html">Integrations</a><a href="air-gapped.html">Air-gapped</a></div></div><div class="nav-group"><button type="button" class="nav-trigger" aria-expanded="false">Reference <span class="nav-caret" aria-hidden="true">▾</span></button><div class="nav-menu"><a href="library.html">Library</a><a href="glossary.html">Glossary</a><a href="features.html">All features</a><a href="executive-brief.html">Executive brief</a></div></div></nav><div class="nav-actions"><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light and dark theme"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark</span></button></div></header>
 <main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="who-may-do-what-roles-seats-grants-and-mandates">Who may do what: roles, seats, grants and mandates</h1>
 <p>AIDA runs a team of agents and people in one repository. Some actions change what everyone else sees: approving a spec, recording a review, shipping a held change. AIDA decides who may take those actions with a small set of records. This page explains each one, how they fit together, and which steps always need a person at a keyboard.</p>
 <blockquote><p>Most of what follows is built and in the current release. Two pieces are planned and are marked <strong>Planned</strong> where they appear: a per-deputy command policy, and handing authority from one person to another.</p></blockquote>
@@ -59,7 +60,7 @@
 <h2 id="mandates-keeping-work-moving-while-you-are-away">Mandates: keeping work moving while you are away</h2>
 <p><strong>Status: built.</strong> Normally a held change waits for a person. A mandate lets the advisor seat do named things without you, for a set time. You start it at your terminal:</p>
 <pre><code>aida mandate start --ship-held --ttl 8h --reason &quot;overnight run&quot;</code></pre>
-<figure><img class="guide-graphic" src="assets/authority-mandate.svg" alt="A mandate: started by a person, scoped, time-boxed, checked on every action. A person at an interactive terminal starts a mandate with a scope such as ship-held, dispatch or drive, a duration of 8 hours by default and at most 24, and a reason. While it lasts, the advisor seat may act within that scope. Every ship re-checks the mandate and still needs an independent approval and green CI. Operator-only specs are never covered, and supervised specs only when the person opts in."></figure>
+<figure><img class="guide-graphic" src="assets/authority-mandate.svg" alt="A mandate: started by a person, scoped, time-boxed, checked on every action. A person at an interactive terminal starts a mandate with a scope such as ship-held, dispatch or drive, a duration window of 8 hours by default and at most 24, and optional overrides such as --include-supervised or --include-gate-paths. While the window is open, the advisor seat may execute covered privileged steps. Every ship re-checks the mandate, independent approval, and green CI. Operator-only specs remain with a human."></figure>
 <ul>
 <li><strong>Time-boxed.</strong> 8 hours by default, at most 24. <code>aida mandate renew</code> extends it in place, keeping its scope and reason unless the renewal&#x27;s own flags change them (each change is recorded with the renewal); <code>aida mandate stop</code> ends it at once. Start, renew and stop need a person at an interactive terminal. <code>aida mandate status</code> is open to anyone.</li>
 <li><strong>Operator identity.</strong> Mandates use <code>USER</code> (falling back to <code>USERNAME</code>), independently of a seat’s <code>AIDA_USER</code> queue identity. An advisor seat can see the operator’s mandate; dispatch still requires a valid advisor grant with a matching principal. An unknown operator refuses mandate selection.</li>
@@ -120,5 +121,137 @@
 <h2 id="where-to-read-more">Where to read more</h2>
 <p>For exact flags and defaults, <code>aida &lt;command&gt; --help</code> is the source of truth. The <a href="../cli/06-roles-sessions.md">roles and sessions reference</a> covers roles, grants, launchers and the deputy. The mandate section of the <a href="../cli/04-git-lifecycle.md">Git lifecycle reference</a> covers mandates, drive mandates and human gates. <a href="trust.html">Trust and evidence</a> explains review, CI and holds.</p></main>
 <footer class="guide-footer"><p>Generated from <a href="../advanced/authority-and-seats.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var themeBtn = document.getElementById('theme-toggle');
+  function syncThemeLabel() {
+    var dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+    var icon = document.getElementById('theme-icon');
+    var label = document.getElementById('theme-label');
+    if (icon) icon.textContent = dark ? '☀' : '☾';
+    if (label) label.textContent = dark ? 'Light' : 'Dark';
+  }
+  syncThemeLabel();
+  if (themeBtn && !themeBtn.getAttribute('data-bound')) {
+    themeBtn.setAttribute('data-bound', 'true');
+    themeBtn.addEventListener('click', function () {
+      var dark = document.documentElement.getAttribute('data-theme') === 'terminal';
+      var next = dark ? 'paper' : 'terminal';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('aida-theme', next); } catch (e) {}
+      syncThemeLabel();
+    });
+  }
+  var navGroups = document.querySelectorAll('.nav-group');
+  function closeNav(except) {
+    navGroups.forEach(function (g) {
+      if (g === except) return;
+      g.removeAttribute('data-open');
+      var b = g.querySelector('.nav-trigger');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  navGroups.forEach(function (g) {
+    var b = g.querySelector('.nav-trigger');
+    if (!b || b.getAttribute('data-nav-bound')) return;
+    b.setAttribute('data-nav-bound', 'true');
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = g.getAttribute('data-open') === 'true';
+      closeNav(g);
+      if (open) {
+        g.removeAttribute('data-open');
+        b.setAttribute('aria-expanded', 'false');
+      } else {
+        g.setAttribute('data-open', 'true');
+        b.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+  document.addEventListener('click', function () { closeNav(null); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(null); });
+  if (!Array.isArray(window.AIDA_DOCS)) return;
+  var terms = {}, bySlug = {};
+  for (var i = 0; i < window.AIDA_DOCS.length; i++) {
+    var d = window.AIDA_DOCS[i];
+    if (d && d.kind === 'term' && d.url) {
+      terms[d.url] = d;
+      var hash = d.url.indexOf('#');
+      if (hash !== -1) {
+        var frag = d.url.slice(hash);
+        terms[frag] = d;
+        bySlug[frag.slice(1)] = d;
+      }
+    }
+  }
+  var aliases = {
+    'pr': 'pull-request', 'mr': 'pull-request', 'pr/mr': 'pull-request',
+    'lanes': 'lane', 'leases': 'lease', 'grants': 'grant', 'seats': 'seat',
+    'riders': 'rider', 'trains': 'merge-train', 'train': 'merge-train',
+    'gates': 'gate', 'ratchets': 'ratchet',
+    'specs': 'spec', 'adrs': 'adr', 'worktrees': 'lane-vs-worktree', 'worktree': 'lane-vs-worktree',
+    'cifull': 'full-ci-tier', 'ci:full': 'full-ci-tier', 'head': 'head', 'refs': 'refs',
+    'cache.db': 'cache', '.aida/cache-db/cache.db': 'cache', 'cache.db-wal': 'wal', 'wal': 'wal',
+    'aida-store': 'git-canonical', '.aida-store/': 'git-canonical', '.aida-store': 'git-canonical',
+    'aida groom': 'groom', 'aida punt': 'punt', 'aida worktree gc': 'gc', 'git gc': 'gc',
+    'runner_seat': 'runner-seat', 'aida:merge-hold': 'merge-hold',
+    'in-progress': 'inprogress', 'in_progress': 'inprogress'
+  };
+  var pop = document.createElement('div');
+  pop.className = 'glossary-pop';
+  pop.setAttribute('role', 'tooltip');
+  pop.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(pop);
+  function summary(text) {
+    if (!text) return '';
+    var m = text.match(/^(.{25,210}?[.!?])(?:\s|$)/);
+    var s = m ? m[1] : text.slice(0, 200);
+    return s.length < text.length && !s.endsWith('.') ? s + '…' : s;
+  }
+  function show(el, term) {
+    pop.innerHTML = '<div class="glossary-pop-head"><span>' + term.title.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span><span>GLOSSARY ↗</span></div><p class="glossary-pop-body">' + summary(term.text).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</p>';
+    pop.setAttribute('data-visible', 'true');
+    pop.setAttribute('aria-hidden', 'false');
+    var r = el.getBoundingClientRect();
+    var pw = pop.offsetWidth || 320, ph = pop.offsetHeight || 96;
+    var left = Math.max(12, Math.min(r.left, window.innerWidth - pw - 12));
+    var top = r.top - ph - 10;
+    if (top < 12) top = r.bottom + 10;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+  function hide() {
+    pop.removeAttribute('data-visible');
+    pop.setAttribute('aria-hidden', 'true');
+  }
+  function bindTooltip(a, term) {
+    a.classList.add('glossary-term');
+    a.addEventListener('mouseenter', function () { show(a, term); });
+    a.addEventListener('mouseleave', hide);
+    a.addEventListener('focus', function () { show(a, term); });
+    a.addEventListener('blur', hide);
+  }
+  var links = document.querySelectorAll('.guide a[href*="glossary.html#"], .guide a[href^="#"]');
+  links.forEach(function (a) {
+    var href = a.getAttribute('href') || '';
+    var key = href.startsWith('#') ? href : 'glossary.html#' + href.split('#')[1];
+    var term = terms[key];
+    if (term) bindTooltip(a, term);
+  });
+  var codes = document.querySelectorAll('.guide p code, .guide li code, .guide td code');
+  codes.forEach(function (code) {
+    if (code.closest('a, pre, h1, h2, h3')) return;
+    var raw = (code.textContent || '').trim().toLowerCase();
+    var key = aliases[raw] || raw.replace(/[^a-z0-9 -]/g, '').replace(/\s+/g, '-');
+    var term = bySlug[key];
+    if (!term) return;
+    var a = document.createElement('a');
+    a.href = term.url;
+    code.parentNode.insertBefore(a, code);
+    a.appendChild(code);
+    bindTooltip(a, term);
+  });
+});
+</script>
 </body>
 </html>

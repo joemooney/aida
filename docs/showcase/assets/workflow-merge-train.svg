@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 510" role="img" aria-labelledby="title desc">
+  <title id="title">Act 3: The three landing paths — direct ship, merge train with riders and bisect, and integration promotion</title>
+  <desc id="desc">Approved main-track candidates reach main through one of three landing paths: direct ship for a single PR with full CI, the merge train where multiple riders board a single train job to run full CI together (and automatically bisect if the train goes red to isolate the blocker), or an integration branch that batches related work for promotion to main.</desc>
+  <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-762 | ai:antigravity -->
+  <style>
+    .bg { fill: #f4f1e9; }
+    .panel { fill: #e9e5da; stroke: #7b826f; stroke-width: 1.5; }
+    .box { fill: #faf8f3; stroke: #7b826f; stroke-width: 1.5; }
+    .hl { fill: #f7dccd; stroke: #ba3916; stroke-width: 1.8; }
+    .green { fill: #dff0d8; stroke: #2f855a; stroke-width: 1.6; }
+    .red { fill: #fde8e8; stroke: #c53030; stroke-width: 1.6; }
+    .ink { fill: #172116; }
+    .muted { fill: #4a5446; }
+    .accent { fill: #913b17; font-weight: 600; }
+    .ok-text { fill: #22543d; font-weight: 700; }
+    .bad-text { fill: #9b2c2c; font-weight: 700; }
+    .edge { stroke: #5e635a; stroke-width: 2; fill: none; }
+    .edge-accent { stroke: #ba3916; stroke-width: 2; fill: none; }
+    text { font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+    .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #141c13; }
+      .panel { fill: #1e2a1c; stroke: #687360; }
+      .box { fill: #263423; stroke: #75806b; }
+      .hl { fill: #42261a; stroke: #ffb485; }
+      .green { fill: #1c3829; stroke: #68d391; }
+      .red { fill: #441c1c; stroke: #fc8181; }
+      .ink { fill: #f4f1e9; }
+      .muted { fill: #c4cabe; }
+      .accent { fill: #ffb485; }
+      .ok-text { fill: #9ae6b4; }
+      .bad-text { fill: #feb2b2; }
+      .edge { stroke: #a8b0a0; }
+      .edge-accent { stroke: #ffb485; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="muted"/>
+    </marker>
+    <marker id="aarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="accent"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="860" height="510" rx="6"/>
+  <text class="ink" x="28" y="36" font-size="20" font-weight="700">The Three Landing Paths: Direct Ship, Merge Train &amp; Integration Promotion</text>
+
+  <!-- Path 1: Direct Ship -->
+  <rect class="panel" x="28" y="56" width="804" height="84" rx="6"/>
+  <text class="ink" x="46" y="84" font-size="15" font-weight="700">Path A · Direct Ship</text>
+  <text class="mono accent" x="46" y="106" font-size="12">aida pr ship &lt;PR&gt;</text>
+  <text class="muted" x="46" y="124" font-size="11.5">Single PR with ci:full</text>
+
+  <rect class="box" x="236" y="68" width="210" height="60" rx="4"/>
+  <text class="ink" x="341" y="92" font-size="13" font-weight="700" text-anchor="middle">Preflight &amp; Merge Lease</text>
+  <text class="muted" x="341" y="112" font-size="11.5" text-anchor="middle">Verifies verdict, ci:full &amp; holds</text>
+
+  <path class="edge" d="M446 98L652 98" marker-end="url(#arrow)"/>
+
+  <rect class="green" x="656" y="68" width="160" height="60" rx="4"/>
+  <text class="ok-text" x="736" y="94" font-size="13" text-anchor="middle">Squash to main</text>
+  <text class="muted" x="736" y="114" font-size="11.5" text-anchor="middle">1 PR → 1 commit</text>
+
+  <!-- Path 2: Merge Train & Autoland (Featured Centerpiece) -->
+  <rect class="hl" x="28" y="156" width="804" height="236" rx="6"/>
+  <text class="ink" x="46" y="186" font-size="16" font-weight="700">Path B · The Merge Train &amp; Autoland</text>
+  <text class="mono accent" x="355" y="186" font-size="12.5">aida pr train / aida land run</text>
+  <text class="muted" x="46" y="208" font-size="12.5">Packs multiple approved main-track candidates (riders) into one train job so full 7-shard CI runs once for the batch.</text>
+
+  <!-- Admission Gate -->
+  <rect class="box" x="46" y="224" width="184" height="148" rx="5"/>
+  <text class="ink" x="138" y="248" font-size="13.5" font-weight="700" text-anchor="middle">1. Admission Filter</text>
+  <text class="muted" x="138" y="270" font-size="11.5" text-anchor="middle">• Approved head SHA</text>
+  <text class="muted" x="138" y="288" font-size="11.5" text-anchor="middle">• No merge-hold</text>
+  <text class="muted" x="138" y="306" font-size="11.5" text-anchor="middle">• Refuses merge conflicts</text>
+  <text class="muted" x="138" y="324" font-size="11.5" text-anchor="middle">• Prevents "Wrong PR</text>
+  <text class="muted" x="138" y="340" font-size="11.5" text-anchor="middle">  admitted" or duplicate</text>
+  <text class="muted" x="138" y="356" font-size="11.5" text-anchor="middle">  train riders</text>
+
+  <path class="edge" d="M230 296L260 296" marker-end="url(#arrow)"/>
+
+  <!-- Train Job with Riders -->
+  <rect class="box" x="264" y="224" width="212" height="148" rx="5"/>
+  <text class="ink" x="370" y="248" font-size="13.5" font-weight="700" text-anchor="middle">2. Train Job (ci:full)</text>
+  <rect class="panel" x="280" y="260" width="180" height="24" rx="3"/>
+  <text class="mono ink" x="370" y="276" font-size="11" text-anchor="middle">Rider #1 (PR-4012) ✓</text>
+  <rect class="panel" x="280" y="290" width="180" height="24" rx="3"/>
+  <text class="mono ink" x="370" y="306" font-size="11" text-anchor="middle">Rider #2 (PR-4015) ✗</text>
+  <rect class="panel" x="280" y="320" width="180" height="24" rx="3"/>
+  <text class="mono ink" x="370" y="336" font-size="11" text-anchor="middle">Rider #3 (PR-4019) ✓</text>
+  <text class="muted" x="370" y="362" font-size="11" text-anchor="middle">Ownership: open-train + ride</text>
+
+  <path class="edge" d="M476 262L514 262" marker-end="url(#arrow)"/>
+  <path class="edge-accent" d="M476 330L514 330" marker-end="url(#aarrow)"/>
+
+  <!-- Green Train Outcome -->
+  <rect class="green" x="518" y="224" width="298" height="64" rx="5"/>
+  <text class="ok-text" x="667" y="248" font-size="13" text-anchor="middle">If GREEN → Land All Riders on main</text>
+  <text class="muted" x="667" y="268" font-size="11.5" text-anchor="middle">Acquires merge lease, verifies final gates &amp; merges</text>
+
+  <!-- Red Train Outcome: Bisect -->
+  <rect class="red" x="518" y="300" width="298" height="72" rx="5"/>
+  <text class="bad-text" x="667" y="322" font-size="13" text-anchor="middle">If RED → Automatic Train Bisect</text>
+  <text class="muted" x="667" y="340" font-size="11.5" text-anchor="middle">Retires red train (retire-train releases riders),</text>
+  <text class="muted" x="667" y="356" font-size="11.5" text-anchor="middle">splits batch in half to isolate the single blocker</text>
+
+  <!-- Path 3: Integration Track & Promotion -->
+  <rect class="panel" x="28" y="408" width="804" height="80" rx="6"/>
+  <text class="ink" x="46" y="436" font-size="15" font-weight="700">Path C · Integration Track &amp; Promotion</text>
+  <text class="muted" x="46" y="458" font-size="12">Related branches combine on an integration branch first, verify together, then land on main in one promotion PR.</text>
+
+  <rect class="box" x="656" y="418" width="160" height="60" rx="4"/>
+  <text class="ink" x="736" y="444" font-size="13" font-weight="700" text-anchor="middle">Promote Batch</text>
+  <text class="muted" x="736" y="464" font-size="11.5" text-anchor="middle">Integration → main</text>
+</svg>
