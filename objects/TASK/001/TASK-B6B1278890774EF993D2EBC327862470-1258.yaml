@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T17:57:49.176693892Z
-modified_at: 2026-11-23T17:57:49.176693892Z
+modified_at: 2026-11-25T07:18:57.104417776Z
 req_type: Task
 tags:
 - carried-from:BUG-2732
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20918-0377-7fa0-a0a0-0c6f9fdf29c2
   created_at: 2026-11-23T17:58:04.038548433Z
+comments:
+- id: 01a21192-6750-7ce3-a0d0-a455b5a667be
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): obsolete. Parent: BUG-2732 / #4449. Evidence: PR-body ask; BUG-2732 already done. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:18:57.104417776Z
+  modified_at: 2026-11-25T07:18:57.104417776Z
 history:
 - id: 01a20991-474e-7462-8c93-3baaaa0864e3
   author: joe
