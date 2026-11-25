@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 12d08b65ca03deba668c2099d203c9d999d33a95
 
   aida-cli-lib/src/codex_bg_receipt.rs:708 and aida-cli-lib/src/agent_codex_background.rs:2068 and 2190 still tell operators to retire an incomplete receipt once its processes are gone. The new retirement check refuses even after all processes exit. Update the guidance for incomplete evidence, retain the attempt-specific launch-status command in the refusals, and describe retirement as conditional on sufficient attribution as well as a clear scan.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T01:42:49.917277720Z
-modified_at: 2026-11-25T07:33:04.340898440Z
+modified_at: 2026-11-25T07:33:09.399596579Z
 req_type: Task
 tags:
 - carried-from:BUG-2748
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-25T01:44:30.152644978Z
   changes: []
+- id: 01a2119f-6897-73f2-929a-92b570cfdeec
+  author: joe
+  timestamp: 2026-11-25T07:33:09.399590902Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 12d08b65ca03deba668c2099d203c9d999d33a95
   branch: pr-4542
