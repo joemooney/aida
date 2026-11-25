@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-25T22:56:45.565772970Z
+modified_at: 2026-11-25T23:18:05.077576033Z
 req_type: Bug
 tags:
 - admission
@@ -118,6 +118,26 @@ comments:
   created_at: 2026-11-25T22:56:45.565769958Z
   modified_at: 2026-11-25T22:56:45.565769958Z
   session_id: 01a2147671bd
+- id: 01a21500-8415-7543-a918-ba89cd326568
+  author: dirtlab
+  content: |-
+    ## Implementer approach (r1: advisor-122 F1-F3)
+
+    ### Acceptance criteria and evidence
+    - **F1 (command-level, real admit_change):** the stale-head follow-up (whose `gh pr update-branch` is a forge write) now runs under the pass claim, released before the readiness report; the review launch already ran under the claim after `decide`. Test `bug2765_admit_change_reads_unclaimed_then_writes_under_the_claim`.
+    - **F2:** same test drives the production `admit_change` with `Some(claim)` against fake gh/git/launcher that log whether the claim is held: expects `gh pr update-branch claim=held`, base-probe `fetch claim=free`, `launch claim=held`, in that order.
+    - **F3 (unit):** `PassClaim` no longer carries `once`; its new `acquire()` calls `hold_admission(.., false)`, so a mid-pass land/ship defers the change (`Skipped(deferred)`) in `--once` too instead of erroring. Covered by `bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan` (the only PassClaim mode now).
+
+    ### Expected files
+    - `aida-cli-lib/src/review_watch.rs`
+    - `aida-cli-lib/src/tests/task_1993_review_watch_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None (TTL item deferred per ruling).
+  created_at: 2026-11-25T23:18:05.077576033Z
+  modified_at: 2026-11-25T23:18:05.077576033Z
+  session_id: 01a214f7261f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
