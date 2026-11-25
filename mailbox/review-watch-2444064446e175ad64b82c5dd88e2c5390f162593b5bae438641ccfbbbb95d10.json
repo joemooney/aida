@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-2444064446e175ad64b82c5dd88e2c5390f162593b5bae438641ccfbbbb95d10",
+  "thread_id": "review-watch-2444064446e175ad64b82c5dd88e2c5390f162593b5bae438641ccfbbbb95d10",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795633836722,
+  "body": "PR-4580 at f4ed770fcef7e7969ed45022e445bb1fee83950c is ready to ship: an authorized approval of f4ed770fcef7e7969ed45022e445bb1fee83950c covers the head, every CI check on f4ed770fcef7e7969ed45022e445bb1fee83950c passed, it is 1 commit(s) behind `main` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 4580`, then run `aida pr ship 4580` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-4580: ready to ship after its branch is updated",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
