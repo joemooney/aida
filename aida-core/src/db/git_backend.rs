@@ -1296,7 +1296,23 @@ impl GitBackend {
     /// probe of a missing or partial store has no filesystem side effect.
     // trace:BUG-1629 | ai:claude
     pub fn read_metadata_only(root: &Path) -> Result<RequirementsStore> {
-        let backend = Self {
+        Self::without_initialization(root).load_metadata_only()
+    }
+
+    /// Access an existing store without creating directories during observation.
+    // trace:STORY-3095 | ai:codex
+    pub fn open_existing(root: &Path) -> Result<Self> {
+        let backend = Self::without_initialization(root);
+        anyhow::ensure!(
+            backend.objects_root.is_dir() && backend.metadata_path.is_file(),
+            "incomplete canonical store at {}",
+            root.display()
+        );
+        Ok(backend)
+    }
+
+    fn without_initialization(root: &Path) -> Self {
+        Self {
             root: root.to_path_buf(),
             objects_root: root.join("objects"),
             metadata_path: root.join("metadata.yaml"),
@@ -1304,8 +1320,7 @@ impl GitBackend {
             auto_commit: false,
             oplog_enabled: false,
             pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
-        };
-        backend.load_metadata_only()
+        }
     }
 
     /// Save metadata to the metadata.yaml file.
