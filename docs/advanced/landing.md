@@ -95,35 +95,23 @@ Each watch call to git or the forge has a time limit, and so does the whole pass
 
 ## Two CI tiers on a pull request
 
+For ordinary pull requests under the default repository configuration:
+
 | Tier | Runs when | What it runs |
 | --- | --- | --- |
-| FAST | every push to a pull request | source guards and a workspace compile check |
-| FULL | the head is approved, or carries the `ci:full` label | the complete test shards, the same ones a train runs |
+| FAST | a push updates the PR head | source guards and a workspace compile check |
+| FULL | `ci:full` is added, or the PR opens or reopens with it | the complete test shards, the same ones a train runs |
 
-A push always runs FAST, including a push to a pull request that still carries
-`ci:full` from an earlier approval. The new head runs FULL only after it is
-approved again.
+A push runs FAST even when the PR carries `ci:full` from an earlier approval.
+A fresh approval requests FULL for the updated head.
 
 ## Full CI starts when a head is approved
 
-`aida review record <ID> --verdict approved --pr <N>` applies the `ci:full`
-label to the pull request after it records the verdict. GitHub starts a FULL
-run on the head that was approved.
-
-Any label change on a pull request cancels its CI run in flight, so the command
-changes labels only when that starts a run without losing one:
-
-- The label is absent: it is added.
-- The label is present from an earlier head and no check is running on the
-  current head: it is removed and added again, because adding a label that is
-  already there starts nothing.
-- A single full-tier run is verified completed and cancelled, with no checks
-  still running: the label is added, or removed and added again if present.
-- A check is still running on a labelled head, or an existing full-tier run
-  is successful, failed, or ambiguous: nothing changes. `aida pr train` asks
-  again for missing or red full-tier evidence on approved heads; only a
-  verified cancelled run qualifies for an automatic retry.
-<!-- trace:TASK-3105 | ai:codex -->
+<!-- trace:TASK-3282 | ai:codex -->
+Manual and review-watch approvals persist the reviewed SHA as a FULL request.
+The two-minute `approved-head-full-ci` job waits for that head’s FAST workflow to finish, then adds
+`ci:full` (removing it first if inherited). Removal triggers no workflow. Label-triggered
+FULL runs have their own per-PR concurrency group. The train can retry a missing or cancelled run.
 
 An advisor can start the same run by hand:
 
@@ -132,10 +120,10 @@ gh pr edit <N> --add-label ci:full
 ```
 
 FULL runs for different pull requests run at the same time, within the
-repository's Actions concurrency limits. Only a superseded run of the same
-pull request is cancelled.
+repository's Actions concurrency limits. Reapplying `ci:full` can supersede an earlier label-triggered FULL run
+on that PR. Its FAST run continues in a separate group.
 
-A change to any other label (a merge hold, for example) starts a run in which
+Adding any other label (a merge hold, for example) starts a run in which
 every job is skipped. That run is ignored: it does not replace the FAST or FULL
 run on the head, and a head that carries only such a run has no CI result.
 

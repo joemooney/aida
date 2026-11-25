@@ -122,18 +122,12 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     let project_root = find_project_root()?;
     let rules_cfg = load_review_rules(&project_root)?;
-    let registry = PlaybookRegistry::new(rules_cfg.rules.clone());
+    let registry = PlaybookRegistry::new(rules_cfg.rules.clone())?;
 
     let mut excludes = rules_cfg.exclude.clone();
     excludes.extend(args.exclude.iter().cloned());
 
-    let excludes = compile_exclusions(&excludes);
-    for (pattern, glob) in &excludes {
-        anyhow::ensure!(
-            glob.is_valid(),
-            "exclusion glob exceeds compilation limits: {pattern}"
-        );
-    }
+    let excludes = compile_exclusions(&excludes)?;
 
     // 1. Resolve comparison mode and git endpoints.
     let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
@@ -155,11 +149,14 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     }
 
     // 3. Classify inventory and cache target revision file contents for trace + facet detection.
+    let token_budget = rules_cfg
+        .batch_token_budget
+        .unwrap_or(DEFAULT_BATCH_TOKEN_BUDGET);
     let target_rev = head_ref.as_deref();
     let mut content_cache: BTreeMap<String, String> = BTreeMap::new();
     let mut read_error = None;
-    let inventory = classify_with_exclusions(&raw_entries, &registry, &excludes, |rel_path| {
-        match read_file_at_revision(&project_root, target_rev, rel_path) {
+    let detect_trace =
+        |rel_path: &str| match read_file_at_revision(&project_root, target_rev, rel_path) {
             Ok(Some(content)) => {
                 let has_trace = content.contains("trace:");
                 content_cache.insert(rel_path.to_owned(), content);
@@ -170,20 +167,23 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
                 false
             }
             Ok(None) => false,
-        }
-    });
+        };
+    let inventory = classify_with_exclusions(
+        &raw_entries,
+        &registry,
+        &excludes,
+        token_budget,
+        detect_trace,
+    );
     if let Some(err) = read_error {
         return Err(err);
     }
 
     // 4. Bundle reviewable files into semantic, token-bounded batches.
-    let token_budget = rules_cfg
-        .batch_token_budget
-        .unwrap_or(DEFAULT_BATCH_TOKEN_BUDGET);
     let max_files = rules_cfg
         .max_files_per_batch
         .unwrap_or(DEFAULT_MAX_FILES_PER_BATCH);
-    let batches = bundle_review_batches(&inventory.reviewable_files, token_budget, max_files);
+    let batches = bundle_review_batches(&inventory.reviewable_files, token_budget, max_files)?;
 
     // 5. Collect distinct resolved playbooks referenced by reviewable files and
     //    enrich each with diff/content-triggered facets (ANSSI / Tokio / Rust API).
@@ -262,9 +262,10 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     if let Some(cov) = &bundle.coverage_verification {
         if !cov.passed {
             anyhow::bail!(
-                "file coverage verification failed ({}% accounted; missing: {:?}, skipped without reason: {:?})",
+                "file coverage verification failed ({}% accounted; missing: {:?}, ambiguous: {:?}, skipped without reason: {:?})",
                 cov.coverage_rate_pct,
                 cov.unaccounted_files,
+                cov.ambiguous_files,
                 cov.skipped_without_reason
             );
         }
@@ -489,7 +490,7 @@ fn collect_git_diff_entries(
             additions,
             deletions,
             is_binary,
-            patch_bytes: (additions + deletions) * 48,
+            patch_bytes: additions.saturating_add(deletions).saturating_mul(48),
         });
     }
     if mode == "workspace" {
@@ -790,6 +791,18 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
             "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
             cov.passed, cov.coverage_rate_pct, cov.total_reviewable
         ));
+        for file in &cov.not_reviewable_by_batch {
+            out.push_str(&format!(
+                "- **Not reviewable by batch**: `{}` ({})\n",
+                file.path, file.reason
+            ));
+        }
+        if !cov.ambiguous_files.is_empty() {
+            out.push_str(&format!(
+                "- **Ambiguous ledger rows**: `{}`\n",
+                cov.ambiguous_files.join(", ")
+            ));
+        }
         if !cov.unaccounted_files.is_empty() {
             out.push_str(&format!(
                 "- **Unaccounted files**: `{}`\n",
@@ -823,6 +836,19 @@ mod tests {
         let store = Storage::new(root.path().join("requirements.yaml"));
         let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store).unwrap_err();
         assert_eq!(error.to_string(), "load .aida/review-rules.toml");
+        let pattern = format!("{{{}z}}", "x,".repeat(256));
+        std::fs::write(
+            config_dir.join("review-rules.toml"),
+            format!("[[rules]]\nid = 'custom-check'\npattern = '{pattern}'\nchecklist = 'inspect'"),
+        )
+        .unwrap();
+        let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("custom-check") && error.contains(&pattern),
+            "{error}"
+        );
     }
 
     #[test]

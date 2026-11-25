@@ -260,9 +260,10 @@ impl StoreHistoryBatch {
     pub(crate) fn read(
         store_root: &Path,
         spec_ids: &[String],
+        publish_index: bool,
     ) -> std::result::Result<Self, String> {
         Self::read_listed(store_root, spec_ids, |paths| {
-            let index = history_index::HistoryIndex::current(store_root)?;
+            let index = history_index::HistoryIndex::current(store_root, publish_index)?;
             let mut wanted = Vec::new();
             for (key, rel) in paths {
                 for sha in index.versions.get(rel).into_iter().flatten() {
@@ -443,7 +444,7 @@ pub(crate) fn store_history_versions_optional(
     store_root: &Path,
     spec_id: &str,
 ) -> std::result::Result<Vec<aida_core::Requirement>, String> {
-    StoreHistoryBatch::read(store_root, &[spec_id.to_string()])?.versions(spec_id)
+    StoreHistoryBatch::read(store_root, &[spec_id.to_string()], true)?.versions(spec_id)
 }
 
 /// TASK-1800 / BUG-2179: for each of `ids`, the stored object IDs whose YAML
@@ -461,6 +462,7 @@ pub(crate) fn store_history_versions_optional(
 pub(crate) fn store_history_alias_map(
     store_root: &Path,
     ids: &[String],
+    publish_index: bool,
 ) -> std::result::Result<std::collections::BTreeMap<String, Vec<String>>, String> {
     let mut found = searchable_ids(ids)?;
     if found.is_empty() {
@@ -468,7 +470,7 @@ pub(crate) fn store_history_alias_map(
     }
     // BUG-2554: answered from the store-history index, which walks only
     // commits it has not seen; a doubtful index rebuilds by a full walk.
-    let index = history_index::HistoryIndex::current(store_root)
+    let index = history_index::HistoryIndex::current(store_root, publish_index)
         .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
     for (id, aliases) in found.iter_mut() {
         let Some(hit) = index.aliases.get(id) else {
@@ -670,7 +672,7 @@ pub(crate) fn store_history_alias_ids(
     store_root: &Path,
     id: &str,
 ) -> std::result::Result<Vec<String>, String> {
-    let mut map = store_history_alias_map(store_root, &[id.to_string()])?;
+    let mut map = store_history_alias_map(store_root, &[id.to_string()], true)?;
     Ok(map.remove(&id.to_ascii_uppercase()).unwrap_or_default())
 }
 

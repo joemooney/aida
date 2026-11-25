@@ -36,6 +36,8 @@ use std::process::Command;
 mod commit_ci;
 #[path = "forge_throughput.rs"]
 mod throughput;
+#[path = "forge_tier_runs.rs"]
+pub(crate) mod tier_runs;
 pub(crate) use commit_ci::*;
 
 /// One CI job as [`Forge::run_job_report`] reads it; the log is an error
@@ -1894,6 +1896,15 @@ fn describe_core_budget(body: &[u8]) -> Option<(String, bool)> {
 
 // trace:TASK-3847 | ai:codex
 pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
+    github_core_budget_with_cache(root, true)
+}
+
+// trace:STORY-3095 | ai:codex
+pub(crate) fn github_core_budget_uncached(root: &Path) -> Option<(String, bool)> {
+    github_core_budget_with_cache(root, false)
+}
+
+fn github_core_budget_with_cache(root: &Path, cache: bool) -> Option<(String, bool)> {
     use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
     use crate::review_watch::forge::{main_root, Repository};
     use std::time::Duration;
@@ -1911,8 +1922,11 @@ pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
             repo.pin_command(&mut command);
             command
                 .current_dir(&root)
-                .args(["api", "rate_limit", "--cache", "60s"])
+                .args(["api", "rate_limit"])
                 .stdin(std::process::Stdio::null());
+            if cache {
+                command.args(["--cache", "60s"]);
+            }
             let remaining = crate::forge_lookup::forge_lookup_deadline()?
                 .checked_duration_since(std::time::Instant::now())?;
             let BoundedCommandOutput::Completed(out) =
@@ -7095,6 +7109,87 @@ pub(crate) fn pr_state_batch(
     anyhow::ensure!(rows.len() < 1000, "PR state snapshot truncated at 1000 PRs");
     Ok(rows)
 }
+/// Pin the advisory risk comparison to origin's PR at the reviewed head.
+// trace:BUG-2737 | ai:codex
+pub(crate) fn review_risk_pr_base(root: &Path, number: u64, head: &str) -> Option<String> {
+    // trace:TASK-3874 | ai:codex
+    review_risk_pr_base_with_budget(root, number, head, std::time::Duration::from_secs(15))
+}
+
+fn review_risk_pr_base_with_budget(
+    root: &Path,
+    number: u64,
+    head: &str,
+    budget: std::time::Duration,
+) -> Option<String> {
+    crate::forge_lookup::with_forge_lookup_deadline(budget, || {
+        let (host, project) = pr_state_repository(root).ok()?;
+        let mut cmd = forge_read_command(&crate::resolve_gh_binary_for_probe()?);
+        pr_state_pin(&mut cmd, root, &host);
+        cmd.args([
+            "pr",
+            "view",
+            &number.to_string(),
+            "--repo",
+            &format!("{host}/{project}"),
+            "--json",
+            "headRefOid,baseRefOid",
+        ]);
+        let out = crate::forge_lookup::forge_lookup_output(cmd).ok()??;
+        if !out.status.success() {
+            return None;
+        }
+        let row: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        if !row["headRefOid"].as_str()?.eq_ignore_ascii_case(head) {
+            return None;
+        }
+        let base = row["baseRefOid"].as_str()?;
+        review_risk_base_object(root, base)?;
+        Some(base.to_owned())
+    })
+}
+
+// The target can move after checkout. Fetch only the immutable forge observation
+// and leave branch refs and FETCH_HEAD alone. trace:TASK-3874 | ai:codex
+fn review_risk_base_object(root: &Path, base: &str) -> Option<()> {
+    use aida_core::git_ops::{host_git_command, host_remote_git_command};
+    if !matches!(base.len(), 40 | 64) || !base.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut check = host_git_command(root);
+    check.args(["cat-file", "-e", &format!("{base}^{{commit}}")]);
+    if crate::forge_lookup::forge_lookup_output(check)
+        .ok()??
+        .status
+        .success()
+    {
+        return Some(());
+    }
+    let mut fetch = host_remote_git_command(root, "origin");
+    fetch
+        .args([
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--no-recurse-submodules",
+            "--no-auto-maintenance",
+            "--refmap=",
+            "--",
+            "origin",
+            base,
+        ])
+        .stdin(std::process::Stdio::null());
+    crate::forge_lookup::forge_lookup_output(fetch)
+        .ok()??
+        .status
+        .success()
+        .then_some(())
+}
+
+#[cfg(test)]
+#[path = "tests/task_3874_review_risk.rs"]
+mod task_3874_review_risk;
+
 // trace:STORY-2688 | ai:codex
 fn pr_state_repository(root: &Path) -> Result<(String, String)> {
     let mut git = Command::new("git");

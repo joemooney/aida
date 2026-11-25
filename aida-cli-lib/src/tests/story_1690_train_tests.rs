@@ -1061,7 +1061,7 @@ struct FakeChecks {
     drive: Option<String>,
     records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
     tty: bool,
-    mandate: std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>,
+    mandate: std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>>,
     /// BUG-2214: whether the gate defers a held member to the mandate cover.
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
@@ -1197,7 +1197,7 @@ impl MemberChecks for FakeChecks {
         _ids: &[String],
         _head_ref: &str,
         _head: &str,
-    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>> {
         self.calls.push("mandate");
         self.mandate.clone()
     }
@@ -2163,6 +2163,17 @@ fn bug_2214_gate_defers_a_held_member_to_the_mandate_cover() {
     let why = gate_member_with(&mut c, "main", 41).unwrap_err();
     assert!(why.contains("it is under a merge hold"), "{why}");
     assert!(why.contains("TASK-9 is in an excluded class"), "{why}");
+
+    c.mandate = Err(Some(MemberGateError::Unavailable(
+        "unreadable exclusion history".into(),
+    )));
+    let row = check::check_one(&mut c, "main", 41, Ok(None));
+    let json = check::render_json(Some("main"), &[row]);
+    assert_eq!(json["prs"][0]["evidence"], "unavailable");
+    assert!(json["prs"][0]["reason"]
+        .as_str()
+        .unwrap()
+        .contains("unreadable exclusion history"));
 }
 
 // trace:BUG-2214.ac2ec1b2 | ai:claude
@@ -2981,6 +2992,7 @@ case "$*" in
   'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) if [ -f runs.json ]; then cat runs.json; else echo '{"total_count":0,"workflow_runs":[]}'; fi ;;
   'pr checks '*) cat rows.json ;;
   'api repos/{owner}/{repo}/actions/jobs/17')
     if [ -f job-denied ]; then echo 'HTTP 403' >&2; exit 1; fi
@@ -3057,6 +3069,11 @@ esac
             _ => matches!(state, TrainCiReadiness::Red(_)),
         });
     }
+    // Unreadable pinned evidence cannot turn a stale failed Build into a bisection.
+    write(dir, "runs.json", "invalid JSON");
+    let error = host.train_ci_snapshot(&change, &tip, &[]).unwrap_err();
+    assert!(error.is::<TrainCiReadError>() && error.to_string().contains("invalid JSON"));
+    std::fs::remove_file(dir.join("runs.json")).unwrap();
     // trace:BUG-2671 | ai:codex
     let mut rows: Vec<serde_json::Value> = serde_json::from_str(&rows_json(None)).unwrap();
     rows.extend([
@@ -3483,6 +3500,7 @@ case "$*" in
   'pr view '*) cat head.json ;;
   'api repos/{owner}/{repo}/branches/main/protection') cat protection.json ;;
   'api repos/{owner}/{repo}/rules/branches/main?per_page=100&page='*) echo '[]' ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) echo '{"total_count":0,"workflow_runs":[]}' ;;
   'pr checks '*) n=$(cat poll); cat "rows-$n.json" ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
@@ -6486,4 +6504,135 @@ fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
             vec!["TASK-3797"]
         );
     }
+}
+
+// trace:BUG-2723 | ai:codex
+#[test]
+fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
+    use crate::forge::tier_runs::fixture::{read, run, HEAD};
+    let fast = run(10, "fast", "cancelled");
+    let full = run(11, "full", "success");
+    let judge = |runs: &[serde_json::Value]| {
+        let selection = read(runs).unwrap();
+        // The PR rollup omitted FULL Build and retained a stale FAST failure.
+        let mut row = bug2401_row(TRAIN_CI_AGGREGATE, "fail");
+        row.run_id = Some("10".into());
+        let mut rows = vec![row];
+        super::apply_train_selection(&mut rows, &selection).unwrap();
+        let required = [TRAIN_CI_AGGREGATE.into()];
+        let cfg = Default::default();
+        let mut state = train_ci_readiness(&rows, &required, &cfg, false);
+        super::describe_train_ci_refusal(&mut state, &rows, &required, &cfg, false, &selection);
+        state
+    };
+    assert_eq!(
+        judge(&[fast.clone(), full.clone()]),
+        TrainCiReadiness::Green
+    );
+    let mut jobless = run(11, "", "cancelled");
+    jobless["fixture_tier"] = serde_json::Value::Null;
+    assert_eq!(
+        judge(&[fast.clone(), jobless.clone(), run(12, "full", "success")]),
+        TrainCiReadiness::Green
+    );
+    assert!(
+        matches!(judge(&[run(10, "full", "success"), jobless]), TrainCiReadiness::InfraRed(detail) if detail.contains("run 11 attempt 1 tier unavailable conclusion cancelled"))
+    );
+    let mut rerun = run(10, "fast", "failure");
+    rerun["run_attempt"] = 2.into();
+    assert_eq!(
+        judge(&[rerun.clone(), full.clone()]),
+        TrainCiReadiness::Green
+    );
+    assert!(
+        matches!(judge(&[rerun.clone(),run(12,"fast","cancelled")]),TrainCiReadiness::InfraRed(s) if s.contains("run 12 attempt 1 tier FAST conclusion cancelled"))
+    );
+    assert!(matches!(
+        judge(&[rerun.clone(), run(12, "fast", "in_progress")]),
+        TrainCiReadiness::Pending(_)
+    ));
+    assert!(
+        matches!(judge(&[rerun.clone(),run(12,"fast","failure")]), TrainCiReadiness::Red(reason)
+        if reason.contains("run 12 attempt 1") && !reason.contains("run 10"))
+    );
+    for cause in ["failure", "cancelled"] {
+        assert!(
+            matches!(judge(&[rerun.clone(),run(11,"full",cause)]),TrainCiReadiness::Red(s) if s.contains("run 10 attempt 2 tier FAST conclusion failure"))
+        );
+    }
+    for (field, value) in [
+        ("path", serde_json::json!("another.yml")),
+        ("workflow_id", 2.into()),
+        ("head_repository", serde_json::json!({"id":2})),
+        ("head_branch", "another".into()),
+    ] {
+        let mut other = full.clone();
+        other[field] = value;
+        assert!(
+            matches!(judge(&[rerun.clone(), other]), TrainCiReadiness::Red(_)),
+            "{field}"
+        );
+    }
+    // An untiered workflow can cancel even though one of its jobs reports failure.
+    let mut external = run(42, "", "cancelled");
+    external["path"] = ".github/workflows/audit.yml".into();
+    external["fixture_tier"] = serde_json::Value::Null;
+    let selection = read(&[external]).unwrap();
+    let mut row = bug2401_row("audit", "fail");
+    row.run_id = Some("42".into());
+    let cfg = Default::default();
+    let rows = [row];
+    let mut state = train_ci_readiness(&rows, &[], &cfg, false);
+    super::describe_train_ci_refusal(&mut state, &rows, &[], &cfg, false, &selection);
+    assert!(
+        matches!(state, TrainCiReadiness::Red(s) if s.contains("run 42 conclusion cancelled") && s.contains("supersession unavailable"))
+    );
+    let checks = crate::forge::CommitChecks {
+        sha: HEAD.into(),
+        checks: vec![crate::forge::CommitCheck {
+            name: "audit".into(),
+            outcome: crate::forge::CheckOutcome::Failed,
+            run_id: Some("42".into()),
+            workflow_id: None,
+            cancelled: false,
+            job_id: Some(123),
+            run_attempt: Some(1),
+            run_in_progress: false,
+        }],
+    };
+    assert!(
+        matches!(selection.judge_commit_checks(checks, &[]).unwrap(),
+        crate::forge::CommitCi::Failed(names) if names[0].contains("run 42 conclusion cancelled") && names[0].contains("supersession unavailable"))
+    );
+    let target = serde_json::json!({"number":1,"base":{"ref":"main"}});
+    for owners in [
+        serde_json::json!([{"number":2,"base":{"ref":"integration"}}]),
+        serde_json::json!([{"number":2,"base":{"ref":"main"}}]),
+        serde_json::json!([{"number":1,"base":{"ref":"integration"}}]),
+        serde_json::json!([target, {"number":2,"base":{"ref":"integration"}}]),
+        serde_json::json!([]),
+        serde_json::Value::Null,
+    ] {
+        let mut foreign = full.clone();
+        foreign["pull_requests"] = owners;
+        let error = read(&[rerun.clone(), foreign]).unwrap_err();
+        assert!(error.to_string().contains("not uniquely associated"));
+    }
+    let mut wrong = full;
+    wrong["head_sha"] = "b".repeat(40).into();
+    assert!(read(&[fast, wrong]).is_err());
+    for bytes in [
+        b"broken".as_slice(),
+        br#"{"total_count":1,"workflow_runs":[]}"#,
+    ] {
+        assert!(
+            crate::forge::tier_runs::latest_runs_at(HEAD, 1, "main", |_| Ok(bytes.to_vec()))
+                .is_err()
+        );
+    }
+    let err = crate::forge::tier_runs::latest_runs_at(HEAD, 1, "main", |_| {
+        anyhow::bail!("checkpoint failure")
+    })
+    .unwrap_err();
+    assert!(err.to_string().contains("checkpoint failure"));
 }

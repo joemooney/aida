@@ -23,10 +23,12 @@ Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
    leave edits uncommitted, write a final handoff with changed files, validation results and
    any blockers, then exit. The host launcher commits, pushes and opens the PR after exit;
    Declare the subject with `aida ship -m '[AI:codex] type(scope): subject (ID)'`
-   and add `--partial-slice` for an approved partial slice. Always write `(ID)`:
-   the trailer is derived from the declaration (`(Refs ID)` when partial or when
+   when the exit summary claims every acceptance criterion.
+   Add `--partial-slice` only when the brief or exit summary declares a partial slice.
+   The trailer is derived from the declaration (`(Refs ID)` when partial or when
    child slices are outstanding), and a completing push marks the spec Done.
    This only records a lease-bound declaration; failed exits always retain Refs.
+   <!-- trace:TASK-3876 | ai:codex -->
    <!-- trace:BUG-2696 | ai:claude -->
    Omit `--commit-body-file <UTF-8-file>` when no body trailers are needed.
    <!-- trace:TASK-3735 | ai:codex -->

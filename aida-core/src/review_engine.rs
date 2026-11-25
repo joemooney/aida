@@ -207,14 +207,14 @@ pub struct PlaybookRegistry {
 
 impl Default for PlaybookRegistry {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new(Vec::new()).expect("built-in playbook globs compile")
     }
 }
 
 impl PlaybookRegistry {
     /// Construct a registry with built-in Rust-first + polyglot review playbooks
     /// layered beneath optional project-specific rules.
-    pub fn new(custom_rules: Vec<CustomPathRule>) -> Self {
+    pub fn new(custom_rules: Vec<CustomPathRule>) -> anyhow::Result<Self> {
         let builtin_rules = vec![
             ResolvedPlaybook {
                 id: "rust".to_string(),
@@ -317,17 +317,27 @@ impl PlaybookRegistry {
             active_facets: Vec::new(),
         };
 
-        Self {
+        Ok(Self {
             custom_rules: custom_rules
                 .into_iter()
-                .map(|rule| (CompiledGlob::new(&rule.pattern), rule))
-                .collect(),
+                .map(|rule| {
+                    let glob = CompiledGlob::new(&rule.pattern).with_context(|| {
+                        format!("invalid playbook {} pattern {:?}", rule.id, rule.pattern)
+                    })?;
+                    Ok((glob, rule))
+                })
+                .collect::<anyhow::Result<_>>()?,
             builtin_rules: builtin_rules
                 .into_iter()
-                .map(|rule| (CompiledGlob::new(&rule.pattern), rule))
-                .collect(),
+                .map(|rule| {
+                    let glob = CompiledGlob::new(&rule.pattern).with_context(|| {
+                        format!("invalid playbook {} pattern {:?}", rule.id, rule.pattern)
+                    })?;
+                    Ok((glob, rule))
+                })
+                .collect::<anyhow::Result<_>>()?,
             default_playbook,
-        }
+        })
     }
 
     /// Resolve the effective base playbook for a relative repository path.
@@ -501,22 +511,18 @@ pub fn detect_rust_content_facets(samples: &[&str]) -> Vec<PlaybookFacet> {
 /// Matching is case-insensitive on ASCII path characters and normalizes path separators to `/`.
 // trace:STORY-3076 | ai:antigravity
 pub fn glob_matches(pattern: &str, candidate: &str) -> bool {
-    CompiledGlob::new(pattern).matches(candidate)
+    CompiledGlob::new(pattern).is_ok_and(|glob| glob.matches(candidate))
 }
 
 // trace:TASK-3872 | ai:codex
 #[derive(Debug, Clone)]
-pub struct CompiledGlob(Option<Regex>);
+pub struct CompiledGlob(Regex);
 
 #[cfg(test)]
 thread_local! { static GLOB_COMPILES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
 
 impl CompiledGlob {
-    pub fn is_valid(&self) -> bool {
-        self.0.is_some()
-    }
-
-    fn new(pattern: &str) -> Self {
+    fn new(pattern: &str) -> anyhow::Result<Self> {
         #[cfg(test)]
         GLOB_COMPILES.set(GLOB_COMPILES.get() + 1);
         let alternatives = expand_braces(pattern)
@@ -524,15 +530,14 @@ impl CompiledGlob {
             .map(|pat| glob_to_regex(&pat.replace('\\', "/").to_ascii_lowercase()))
             .collect::<Vec<_>>();
         if alternatives.is_empty() {
-            return Self(None);
+            anyhow::bail!("brace expansion exceeds compilation limits");
         }
-        Self(Regex::new(&alternatives.join("|")).ok())
+        Ok(Self(Regex::new(&alternatives.join("|"))?))
     }
 
     fn matches(&self, candidate: &str) -> bool {
         self.0
-            .as_ref()
-            .is_some_and(|re| re.is_match(&candidate.replace('\\', "/").to_ascii_lowercase()))
+            .is_match(&candidate.replace('\\', "/").to_ascii_lowercase())
     }
 }
 
@@ -595,8 +600,8 @@ fn glob_to_regex(pat: &str) -> String {
 
 /// Estimate review token weight from patch byte count and line churn.
 pub fn estimate_file_tokens(patch_bytes: usize, additions: usize, deletions: usize) -> usize {
-    let from_bytes = (patch_bytes + 3) / 4;
-    let from_lines = (additions + deletions) * 12;
+    let from_bytes = patch_bytes.div_ceil(4);
+    let from_lines = additions.saturating_add(deletions).saturating_mul(12);
     from_bytes.max(from_lines).max(32)
 }
 
@@ -604,14 +609,22 @@ pub fn estimate_file_tokens(patch_bytes: usize, additions: usize, deletions: usi
 pub fn classify_exclusion(
     entry: &RawDiffEntry,
     user_excludes: &[String],
-) -> Option<ExclusionReason> {
-    classify_compiled(entry, &compile_exclusions(user_excludes))
+) -> anyhow::Result<Option<ExclusionReason>> {
+    Ok(classify_compiled(
+        entry,
+        &compile_exclusions(user_excludes)?,
+    ))
 }
 
-pub fn compile_exclusions(patterns: &[String]) -> Vec<(&str, CompiledGlob)> {
+pub fn compile_exclusions(patterns: &[String]) -> anyhow::Result<Vec<(&str, CompiledGlob)>> {
     patterns
         .iter()
-        .map(|p| (p.as_str(), CompiledGlob::new(p)))
+        .map(|p| {
+            Ok((
+                p.as_str(),
+                CompiledGlob::new(p).with_context(|| format!("invalid exclusion pattern {p:?}"))?,
+            ))
+        })
         .collect()
 }
 
@@ -679,7 +692,7 @@ fn classify_path_exclusion(
 
     // Check user/project configured exclusion patterns.
     for (pat, glob) in user_excludes {
-        if glob.0.is_none() || glob.matches(&norm) {
+        if glob.matches(&norm) {
             return Some(ExclusionReason::UserExcludedPattern((*pat).to_owned()));
         }
     }
@@ -712,19 +725,27 @@ pub fn classify_diff_inventory<F>(
     entries: &[RawDiffEntry],
     registry: &PlaybookRegistry,
     user_excludes: &[String],
+    token_cap: usize,
     trace_detector: F,
-) -> ClassifiedInventory
+) -> anyhow::Result<ClassifiedInventory>
 where
     F: FnMut(&str) -> bool,
 {
-    let excludes = compile_exclusions(user_excludes);
-    classify_with_exclusions(entries, registry, &excludes, trace_detector)
+    let excludes = compile_exclusions(user_excludes)?;
+    Ok(classify_with_exclusions(
+        entries,
+        registry,
+        &excludes,
+        token_cap,
+        trace_detector,
+    ))
 }
 
 pub fn classify_with_exclusions(
     entries: &[RawDiffEntry],
     registry: &PlaybookRegistry,
     excludes: &[(&str, CompiledGlob)],
+    token_cap: usize,
     mut trace_detector: impl FnMut(&str) -> bool,
 ) -> ClassifiedInventory {
     let mut reviewable_files = Vec::new();
@@ -735,14 +756,25 @@ pub fn classify_with_exclusions(
 
     let mut hasher = Sha256::new();
 
+    // trace:TASK-3867 | ai:codex
+    let mut frame = |fields: &[&str]| {
+        for field in fields {
+            hasher.update((field.len() as u64).to_be_bytes());
+            hasher.update(field.as_bytes());
+        }
+    };
     for entry in &sorted_entries {
-        if let Some(reason) = classify_compiled(entry, excludes) {
-            let reason_str = reason.label();
-            hasher.update(b"excluded:");
-            hasher.update(entry.path.as_bytes());
-            hasher.update(b":");
-            hasher.update(reason_str.as_bytes());
-            hasher.update(b"\n");
+        let estimated_tokens =
+            estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
+        let reason = classify_compiled(entry, excludes)
+            .map(|r| r.label())
+            .or_else(|| {
+                (estimated_tokens > token_cap).then(|| {
+                    format!("oversize: {estimated_tokens} estimated tokens > cap {token_cap}")
+                })
+            });
+        if let Some(reason_str) = reason {
+            frame(&["excluded", &entry.path, &reason_str]);
             excluded_files.push(ExcludedFile {
                 path: entry.path.clone(),
                 kind: entry.kind,
@@ -750,16 +782,8 @@ pub fn classify_with_exclusions(
             });
         } else {
             let playbook = registry.resolve(&entry.path);
-            let estimated_tokens =
-                estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
             let has_trace_comment = trace_detector(&entry.path);
-            hasher.update(b"reviewable:");
-            hasher.update(entry.path.as_bytes());
-            hasher.update(b":");
-            hasher.update(entry.kind.as_str().as_bytes());
-            hasher.update(b":");
-            hasher.update(playbook.id.as_bytes());
-            hasher.update(b"\n");
+            frame(&["reviewable", &entry.path, entry.kind.as_str(), &playbook.id]);
             reviewable_files.push(ReviewableFile {
                 path: entry.path.clone(),
                 old_path: entry.old_path.clone(),
@@ -844,16 +868,21 @@ pub fn canonical_module_stem(path: &str) -> String {
 ///    are paired first so implementation and test changes are reviewed together.
 /// 2. Unpaired files are grouped by shared `playbook_id`, packing into batches
 ///    that respect `max_tokens_per_batch` and `max_files_per_batch`.
+/// Returns an error when a single file exceeds the token budget.
 // trace:STORY-3076 | ai:antigravity
 pub fn bundle_review_batches(
     files: &[ReviewableFile],
     max_tokens_per_batch: usize,
     max_files_per_batch: usize,
-) -> Vec<ReviewBatch> {
-    if files.is_empty() {
-        return Vec::new();
+) -> anyhow::Result<Vec<ReviewBatch>> {
+    let token_cap = max_tokens_per_batch;
+    if let Some(file) = files.iter().find(|f| f.estimated_tokens > token_cap) {
+        anyhow::bail!(
+            "{} requires {} tokens, exceeding batch budget {token_cap}",
+            file.path,
+            file.estimated_tokens
+        );
     }
-    let token_cap = max_tokens_per_batch.max(256);
     let file_cap = max_files_per_batch.max(1);
 
     // Group by canonical module stem first to detect source+test companions.
@@ -870,8 +899,10 @@ pub fn bundle_review_batches(
 
     for (stem, group) in by_stem {
         if group.len() > 1 && group.len() <= file_cap {
-            let sum_tokens: usize = group.iter().map(|f| f.estimated_tokens).sum();
-            if sum_tokens <= token_cap {
+            let sum_tokens = group
+                .iter()
+                .try_fold(0usize, |sum, f| sum.checked_add(f.estimated_tokens));
+            if sum_tokens.is_some_and(|sum| sum <= token_cap) {
                 raw_batches.push((format!("module:{stem}"), group));
                 continue;
             }
@@ -892,8 +923,8 @@ pub fn bundle_review_batches(
 
         for f in group {
             let would_exceed_files = current.len() >= file_cap;
-            let would_exceed_tokens =
-                !current.is_empty() && current_tokens + f.estimated_tokens > token_cap;
+            let would_exceed_tokens = !current.is_empty()
+                && f.estimated_tokens > token_cap.saturating_sub(current_tokens);
             if would_exceed_files || would_exceed_tokens {
                 raw_batches.push((
                     format!("playbook:{playbook_id}#{}", part),
@@ -902,7 +933,7 @@ pub fn bundle_review_batches(
                 current_tokens = 0;
                 part += 1;
             }
-            current_tokens += f.estimated_tokens;
+            current_tokens = current_tokens.saturating_add(f.estimated_tokens);
             current.push(f);
         }
         if !current.is_empty() {
@@ -915,7 +946,7 @@ pub fn bundle_review_batches(
         }
     }
 
-    raw_batches
+    Ok(raw_batches
         .into_iter()
         .enumerate()
         .map(|(idx, (label, members))| {
@@ -925,7 +956,7 @@ pub fn bundle_review_batches(
             for m in members {
                 playbooks.insert(m.playbook_id.clone());
                 paths.push(m.path.clone());
-                estimated_tokens += m.estimated_tokens;
+                estimated_tokens = estimated_tokens.saturating_add(m.estimated_tokens);
             }
             ReviewBatch {
                 batch_index: idx + 1,
@@ -935,7 +966,7 @@ pub fn bundle_review_batches(
                 estimated_tokens,
             }
         })
-        .collect()
+        .collect())
 }
 
 /// Disposition recorded by a reviewer for one file in the coverage ledger.
@@ -965,9 +996,13 @@ pub struct CoverageLedger {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoverageVerificationReport {
     pub passed: bool,
+    #[serde(default)]
+    pub not_reviewable_by_batch: Vec<ExcludedFile>,
     pub total_reviewable: usize,
     pub reviewed_count: usize,
     pub skipped_count: usize,
+    #[serde(default)]
+    pub ambiguous_files: Vec<String>,
     pub unaccounted_files: Vec<String>,
     pub skipped_without_reason: Vec<String>,
     pub coverage_rate_pct: usize,
@@ -981,8 +1016,11 @@ pub fn verify_coverage_ledger(
     ledger: &CoverageLedger,
 ) -> CoverageVerificationReport {
     let mut by_path: BTreeMap<&str, &FileCoverageEntry> = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
     for entry in &ledger.files {
-        by_path.insert(entry.path.as_str(), entry);
+        if by_path.insert(entry.path.as_str(), entry).is_some() {
+            ambiguous.insert(entry.path.clone());
+        }
     }
 
     let mut reviewed_count = 0usize;
@@ -991,6 +1029,9 @@ pub fn verify_coverage_ledger(
     let mut skipped_without_reason = Vec::new();
 
     for req_file in &inventory.reviewable_files {
+        if ambiguous.contains(&req_file.path) {
+            continue;
+        }
         match by_path.get(req_file.path.as_str()) {
             Some(entry) => match entry.status {
                 FileCoverageStatus::Reviewed => {
@@ -1022,13 +1063,21 @@ pub fn verify_coverage_ledger(
         (accounted * 100) / total_reviewable
     };
 
-    let passed = unaccounted_files.is_empty() && skipped_without_reason.is_empty();
+    let passed =
+        ambiguous.is_empty() && unaccounted_files.is_empty() && skipped_without_reason.is_empty();
 
     CoverageVerificationReport {
         passed,
+        not_reviewable_by_batch: inventory
+            .excluded_files
+            .iter()
+            .filter(|f| f.reason.starts_with("oversize: "))
+            .cloned()
+            .collect(),
         total_reviewable,
         reviewed_count,
         skipped_count,
+        ambiguous_files: ambiguous.into_iter().collect(),
         unaccounted_files,
         skipped_without_reason,
         coverage_rate_pct,
@@ -1095,6 +1144,9 @@ pub fn anchor_snippet_lines(
 }
 
 // trace:TASK-3872 | ai:codex
+#[cfg(test)]
+thread_local! { static LINE_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
 fn matching_spans(
     needle: &[&str],
     lines: &[&str],
@@ -1103,10 +1155,15 @@ fn matching_spans(
     let needle: Vec<_> = needle.iter().map(|line| normalize(line)).collect();
     let mut prefix = vec![0; needle.len()];
     let advance = |mut n: usize, line: &str, prefix: &[usize]| {
-        while n > 0 && needle[n] != line {
+        let equals = |n: usize| {
+            #[cfg(test)]
+            LINE_COMPARISONS.set(LINE_COMPARISONS.get() + 1);
+            needle[n] == line
+        };
+        while n > 0 && !equals(n) {
             n = prefix[n - 1];
         }
-        n + usize::from(needle[n] == line)
+        n + usize::from(equals(n))
     };
     for i in 1..needle.len() {
         prefix[i] = advance(prefix[i - 1], needle[i], &prefix);
@@ -1151,16 +1208,18 @@ pub struct ReviewObservation {
     pub has_error: bool,
 }
 
-/// Validation result for `[[obs-NNNNNN]]` citations inside a review report or verdict.
+/// Validation result for observation citations inside a review report or verdict.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CitationVerification {
     pub valid: bool,
     pub cited_ids: Vec<String>,
     pub unknown_ids: Vec<String>,
+    #[serde(default)]
+    pub ambiguous_ids: Vec<String>,
     pub errored_ids: Vec<String>,
 }
 
-/// Parse all `[[obs-...]]` markers in `markdown_text` and verify that each cited
+/// Parse single- and double-bracket observation markers in `markdown_text` and verify that each cited
 /// observation exists in `observations` and did not record an error.
 // trace:STORY-3076 | ai:antigravity
 pub fn verify_observation_citations(
@@ -1168,17 +1227,23 @@ pub fn verify_observation_citations(
     observations: &[ReviewObservation],
 ) -> CitationVerification {
     static OBS_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-        Regex::new(r"\[\[(obs-[A-Za-z0-9_-]+)\]\]").expect("static obs citation regex is valid")
+        Regex::new(r"\[\[(obs-[A-Za-z0-9_-]+)\]\]|\[(obs-[A-Za-z0-9_-]+)\]")
+            .expect("static obs citation regex is valid")
     });
     let mut cited_set = BTreeSet::new();
     for cap in OBS_RE.captures_iter(markdown_text) {
-        if let Some(m) = cap.get(1) {
+        if let Some(m) = cap.get(1).or_else(|| cap.get(2)) {
             cited_set.insert(m.as_str().to_string());
         }
     }
 
-    let obs_map: BTreeMap<&str, &ReviewObservation> =
-        observations.iter().map(|o| (o.id.as_str(), o)).collect();
+    let mut obs_map = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
+    for obs in observations {
+        if obs_map.insert(obs.id.as_str(), obs).is_some() {
+            ambiguous.insert(obs.id.clone());
+        }
+    }
 
     let mut cited_ids = Vec::new();
     let mut unknown_ids = Vec::new();
@@ -1186,6 +1251,9 @@ pub fn verify_observation_citations(
 
     for id in cited_set {
         cited_ids.push(id.clone());
+        if ambiguous.contains(&id) {
+            continue;
+        }
         match obs_map.get(id.as_str()) {
             None => unknown_ids.push(id),
             Some(obs) if obs.has_error => errored_ids.push(id),
@@ -1193,11 +1261,12 @@ pub fn verify_observation_citations(
         }
     }
 
-    let valid = unknown_ids.is_empty() && errored_ids.is_empty();
+    let valid = ambiguous.is_empty() && unknown_ids.is_empty() && errored_ids.is_empty();
     CitationVerification {
         valid,
         cited_ids,
         unknown_ids,
+        ambiguous_ids: ambiguous.into_iter().collect(),
         errored_ids,
     }
 }
@@ -1264,7 +1333,7 @@ mod tests {
     fn h2b_compiled_globs_bound_expansion() {
         let rules = [String::from("*{*,x}/FoO")];
         let registry = PlaybookRegistry::default();
-        let compiled = compile_exclusions(&rules);
+        let compiled = compile_exclusions(&rules).unwrap();
         let before = GLOB_COMPILES.get();
         for path in ["one.rs", "two.rs"] {
             registry.resolve(path);
@@ -1272,7 +1341,16 @@ mod tests {
         assert!(compiled[0].1.matches(r"a\b\foo"));
         assert!(compiled[0].1.matches("foo"));
         assert_eq!(GLOB_COMPILES.get(), before);
-        assert!(!CompiledGlob::new(&format!("{{{}z}}", "x,".repeat(256))).is_valid());
+        let invalid = format!("{{{}z}}", "x,".repeat(256));
+        let error = classify_diff_inventory(
+            &diff_entries(&["ordinary.rs"], false),
+            &registry,
+            std::slice::from_ref(&invalid),
+            usize::MAX,
+            |_| panic!("classified invalid inventory"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains(&invalid));
     }
 
     #[test]
@@ -1300,6 +1378,7 @@ mod tests {
 
     #[test]
     fn h2b_linear_repeated_prefix() {
+        LINE_COMPARISONS.set(0);
         let file = format!("{}b", "a\n".repeat(32000));
         let snippet = format!("{}b", "a\n".repeat(16000));
         assert_eq!(
@@ -1308,6 +1387,112 @@ mod tests {
                 .start_line,
             16001
         );
+        assert!((1..=3 * (32001 + 16001)).contains(&LINE_COMPARISONS.get()));
+    }
+
+    // trace:TASK-3867 | ai:codex
+    fn diff_entries(paths: &[&str], binary: bool) -> Vec<RawDiffEntry> {
+        paths
+            .iter()
+            .map(|p| RawDiffEntry {
+                path: (*p).into(),
+                old_path: None,
+                kind: FileChangeKind::Modified,
+                additions: 0,
+                deletions: 0,
+                patch_bytes: 0,
+                is_binary: binary,
+            })
+            .collect()
+    }
+
+    fn inventory(paths: &[&str], binary: bool) -> ClassifiedInventory {
+        let entries = diff_entries(paths, binary);
+        classify_diff_inventory(&entries, &Default::default(), &[], usize::MAX, |_| false).unwrap()
+    }
+
+    #[test]
+    fn h2a_digest_frames_paths() {
+        let pair = inventory(&["a", "b"], true).inventory_sha256;
+        assert_eq!(
+            pair,
+            "820722b38f0f59d7c5bdbe39d59476b82e641280521335f50b4b359fd5f024e5"
+        );
+        assert_eq!(pair, inventory(&["b", "a"], true).inventory_sha256);
+        assert_ne!(
+            pair,
+            inventory(&["a:binary_file\nexcluded:b"], true).inventory_sha256
+        );
+    }
+
+    #[test]
+    fn h2a_duplicates_are_ambiguous() {
+        let row = FileCoverageEntry {
+            path: "a".into(),
+            status: FileCoverageStatus::Reviewed,
+            reason: None,
+        };
+        let coverage = verify_coverage_ledger(
+            &inventory(&["a"], false),
+            &CoverageLedger {
+                files: vec![row.clone(), row],
+            },
+        );
+        assert!(!coverage.passed);
+        assert_eq!(coverage.reviewed_count, 0);
+        assert_eq!(coverage.ambiguous_files, ["a"]);
+        let obs = ReviewObservation {
+            id: "obs-1".into(),
+            path: "a".into(),
+            start_line: 1,
+            end_line: 1,
+            content_sha256: String::new(),
+            has_error: false,
+        };
+        let citations = verify_observation_citations("[[obs-1]]", &[obs.clone(), obs]);
+        assert!(!citations.valid);
+        assert_eq!(citations.ambiguous_ids, ["obs-1"]);
+    }
+
+    #[test]
+    fn h2a_token_overflow() {
+        assert_eq!(estimate_file_tokens(usize::MAX, 0, 0), usize::MAX / 4 + 1);
+        assert_eq!(estimate_file_tokens(0, usize::MAX, 1), usize::MAX);
+        let mut files = inventory(&["a.rs", "a_test.rs"], false).reviewable_files;
+        files[0].estimated_tokens = usize::MAX;
+        let batches = bundle_review_batches(&files, usize::MAX, 2).unwrap();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].estimated_tokens, usize::MAX);
+    }
+
+    #[test]
+    fn h2a_budget_is_a_cap() {
+        let files = inventory(&["a", "b"], false).reviewable_files;
+        assert_eq!(bundle_review_batches(&files, 32, 2).unwrap().len(), 2);
+        let mut entries = diff_entries(&["large.rs", "small.rs"], false);
+        entries[0].additions = 3;
+        let inv =
+            classify_diff_inventory(&entries, &Default::default(), &[], 32, |_| false).unwrap();
+        assert_eq!(inv.excluded_files.len(), 1);
+        assert_eq!(inv.excluded_files[0].path, "large.rs");
+        assert_eq!(
+            inv.excluded_files[0].reason,
+            "oversize: 36 estimated tokens > cap 32"
+        );
+        assert_eq!(
+            verify_coverage_ledger(&inv, &CoverageLedger::default()).not_reviewable_by_batch,
+            inv.excluded_files
+        );
+        let batches = bundle_review_batches(&inv.reviewable_files, 32, 2).unwrap();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].files, ["small.rs"]);
+    }
+
+    #[test]
+    fn h2a_single_bracket_citations() {
+        let citations = verify_observation_citations("[obs-1] [[obs-2]] [obs-1] obs-3", &[]);
+        assert!(!citations.valid);
+        assert_eq!(citations.unknown_ids, ["obs-1", "obs-2"]);
     }
 
     // trace:TASK-3866 | ai:codex
@@ -1340,7 +1525,7 @@ mod tests {
                 patch_bytes: 0,
             };
             assert_eq!(
-                classify_exclusion(&entry, &[]),
+                classify_exclusion(&entry, &[]).unwrap(),
                 Some(ExclusionReason::SecretSensitivePath)
             );
         }
@@ -1450,9 +1635,11 @@ mod tests {
         ];
 
         let user_excludes = vec!["docs/legacy/**".to_string()];
-        let inv = classify_diff_inventory(&entries, &registry, &user_excludes, |path| {
-            path.ends_with("review_engine.rs")
-        });
+        let inv =
+            classify_diff_inventory(&entries, &registry, &user_excludes, usize::MAX, |path| {
+                path.ends_with("review_engine.rs")
+            })
+            .unwrap();
 
         assert_eq!(inv.reviewable_files.len(), 1);
         assert_eq!(
@@ -1502,7 +1689,7 @@ mod tests {
                 merge_builtin: false,
             },
         ];
-        let reg = PlaybookRegistry::new(custom);
+        let reg = PlaybookRegistry::new(custom).unwrap();
 
         let merged = reg.resolve("aida-cli-lib/src/gate/review_verdict.rs");
         assert_eq!(merged.id, "rust+gate_strict");
@@ -1601,7 +1788,7 @@ mod tests {
 
         // Budget 2000 tokens: parser.rs + parser_test.rs (1400 tokens) pair into `module:parser`,
         // while alpha.rs (1500) and beta.rs (1500) split into two separate playbook batches.
-        let batches = bundle_review_batches(&files, 2000, 4);
+        let batches = bundle_review_batches(&files, 2000, 4).unwrap();
         assert_eq!(batches.len(), 3);
         assert_eq!(batches[0].label, "module:parser");
         assert_eq!(

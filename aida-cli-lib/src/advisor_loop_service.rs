@@ -148,7 +148,7 @@ pub(crate) fn rebind(root: &Path, deputy: &str, grant: &SeatGrant) -> Result<()>
     let binding = Binding::from_grant(grant);
     binding.validate(root)?;
     let dir = directory(root, true)?.context("missing advisor loop directory")?;
-    let _lock = dir.lock("admission.lock")?;
+    let _lock = dir.admission_lock(&format!("{NAME} rebinding controller"))?;
     // Revalidate at the locked acceptance boundary, including the full parent chain.
     binding.validate(root)?;
     let state = match read(&dir)? {
@@ -203,7 +203,7 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
-            let _lock = dir.lock("admission.lock")?;
+            let _lock = dir.admission_lock(&format!("{NAME} reading status"))?;
             let Some(state) = read(&dir)? else {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
@@ -545,13 +545,14 @@ fn status_lines(
     // trace:BUG-2674 | ai:claude
     if let Some(pass) = pass {
         lines.push(format!(
-            "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
+            "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused{}",
             pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
             pass.changes,
             pass.dispatched,
             pass.unadmitted,
             pass.busy,
-            pass.refused
+            pass.refused,
+            skipped_summary(pass)
         ));
     }
     for reason in degraded {
@@ -619,7 +620,7 @@ pub(super) fn check_controller(root: &Path) -> Result<()> {
         return Ok(());
     }
     let dir = directory(root, false)?.context("advisor loop service state disappeared")?;
-    let _lock = dir.lock("admission.lock")?;
+    let _lock = dir.admission_lock(&format!("{NAME} checking controller"))?;
     check_controller_locked(root, &dir)
 }
 
@@ -703,7 +704,7 @@ fn worker(root: &Path) -> Result<()> {
     loop {
         let dir = directory(root, false)?.context("advisor loop service state missing")?;
         let ready = {
-            let _lock = dir.lock("admission.lock")?;
+            let _lock = dir.admission_lock(&format!("{NAME} confirming worker"))?;
             let state = read(&dir)?.context("advisor loop service state missing")?;
             anyhow::ensure!(
                 state.child_grant.as_ref() == Some(&child.id),
@@ -950,7 +951,7 @@ fn tick_with_launcher(
     let Some(dir) = directory(root, false)? else {
         return Ok(None);
     };
-    let _lock = match dir.lock("admission.lock") {
+    let _lock = match dir.admission_lock(&format!("{NAME} supervising worker")) {
         Ok(lock) => lock,
         Err(error) => return contended(root, error),
     };
@@ -1161,9 +1162,10 @@ fn contended(root: &Path, error: anyhow::Error) -> Result<Option<u32>> {
     }
     match crate::admission_owner::service_holder(root, HOLDER_PURPOSE) {
         crate::admission_owner::ServiceHolder::Verified(pid) => Ok(Some(pid)),
-        crate::admission_owner::ServiceHolder::Unverified(evidence) => Err(error.context(format!(
-            "{NAME} admission.lock busy; holder not verified: {evidence}"
-        ))),
+        crate::admission_owner::ServiceHolder::Unverified(evidence) => {
+            let message = format!("{NAME} admission.lock busy; holder not verified: {error}; {evidence}");
+            Err(error.context(message))
+        }
     }
 }
 
@@ -1344,7 +1346,7 @@ fn rebind_after_launch_with(
     request: impl FnOnce(&str, &Path, &SeatGrant, bool) -> Result<()>,
 ) -> Result<()> {
     let state = if let Some(dir) = directory(root, false)? {
-        let _lock = dir.lock("admission.lock")?;
+        let _lock = dir.admission_lock(&format!("{NAME} checking deputy binding"))?;
         read(&dir)?
     } else {
         None
@@ -1516,6 +1518,18 @@ mod loop_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
+    // trace:BUG-2720 | ai:codex
+    #[test]
+    fn bug2720_pass_summary_names_skipped_heads() {
+        let mut counts = PassCounts::default();
+        counts.skipped.insert("held by exited attempts".into(), vec!["PR-7".into(), "MR-9".into()]);
+        counts.skipped.insert("capped".into(), vec!["PR-10".into()]);
+        let report = next_pass_report(None, &counts, &[], Utc::now());
+        let line = pass_log_line(&report);
+        assert!(line.contains("2 held by exited attempts (PR-7, MR-9)"));
+        assert!(line.contains("1 capped (PR-10)"));
+    }
+
     // trace:BUG-2621 | ai:claude
     fn bug2621_sleeper() -> std::process::Child {
         std::process::Command::new("sleep")
@@ -1576,6 +1590,32 @@ mod loop_tests {
         // A stale, unlocked lock file cannot hide a real receipt refusal.
         let error = tick(temp.path(), "fixture", true, &mut None).unwrap_err();
         assert!(format!("{error:#}").contains("invalid advisor loop service receipt"));
+    }
+
+    // trace:BUG-2746 | ai:codex
+    #[test]
+    fn bug2746_busy_alert_carries_activity_and_age() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let _lock = dir.admission_lock("checking deputy binding").unwrap();
+        let mut skipped = None;
+        let mut reported = None;
+        for _ in 0..3 {
+            settle(
+                temp.path(),
+                bug2621_busy_tick(temp.path()),
+                Ok(()),
+                &mut skipped,
+                &mut reported,
+            );
+        }
+        let alert = failure_state(temp.path()).unwrap().alert.unwrap();
+        let (_, age) = alert
+            .message
+            .body
+            .split_once("last recorded activity checking deputy binding, age ")
+            .unwrap();
+        assert!(age.split_once('s').unwrap().0.parse::<u64>().is_ok());
     }
 
     // Every other contention stays a counted, alerting refusal carrying the
@@ -2430,7 +2470,7 @@ mod loop_tests {
             dispatched: 1,
             unadmitted: Vec::new(),
             busy: watched.busy,
-            stopped: None,
+            ..Default::default()
         };
 
         // Without a controller (a manual watcher) nothing is recorded.
@@ -2666,7 +2706,7 @@ mod loop_tests {
         while at < Utc::now() {
             // The production selection each pass runs for this head.
             let reason = probe_unneeded(&store, &change).unwrap().unwrap();
-            let super::super::Admission::Unadmitted(cause) = skipped_admission(&reason) else {
+            let super::super::Admission::Unadmitted(cause) = skipped_admission(&store, &reason) else {
                 panic!("an unresolved remote hold is not settled: {reason}");
             };
             let counts = PassCounts {
@@ -2736,7 +2776,7 @@ mod loop_tests {
         .unwrap()
         .unwrap();
         assert_eq!(
-            skipped_admission(&covered),
+            skipped_admission(&store, &covered),
             super::super::Admission::Settled
         );
         let settled = next_pass_report(Some(&report), &PassCounts::default(), &[], now);
@@ -3410,6 +3450,7 @@ mod loop_tests {
 // trace:BUG-2674 | ai:claude
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct PassCounts {
+    pub(super) skipped: std::collections::BTreeMap<String, Vec<String>>,
     pub(super) changes: usize,
     pub(super) dispatched: usize,
     /// Heads local state found eligible that the admission hub holds for
@@ -3446,6 +3487,8 @@ struct Held {
 // trace:BUG-2674 | ai:claude
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct PassReport {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    skipped: std::collections::BTreeMap<String, Vec<String>>,
     at: DateTime<Utc>,
     changes: usize,
     dispatched: usize,
@@ -3511,6 +3554,7 @@ fn next_pass_report(
         .collect();
     PassReport {
         at: now,
+        skipped: counts.skipped.clone(),
         changes: counts.changes,
         dispatched: counts.dispatched,
         unadmitted: counts.unadmitted.len(),
@@ -3527,17 +3571,27 @@ fn next_pass_report(
     }
 }
 
+// trace:BUG-2720 | ai:codex
+fn skipped_summary(report: &PassReport) -> String {
+    report
+        .skipped
+        .iter()
+        .map(|(category, keys)| format!("; {} {category} ({})", keys.len(), keys.join(", ")))
+        .collect()
+}
+
 /// The one bounded `service.log` line every pass writes.
 // trace:BUG-2674 | ai:claude
 fn pass_log_line(report: &PassReport) -> String {
     format!(
-        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused",
+        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused{}",
         report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         report.changes,
         report.dispatched,
         report.unadmitted,
         report.busy,
-        report.refused
+        report.refused,
+        skipped_summary(report)
     )
 }
 

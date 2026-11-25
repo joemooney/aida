@@ -676,7 +676,7 @@ pub(crate) fn carryover_change_identity(
     root: &std::path::Path,
     pr: u64,
 ) -> Result<(String, String), String> {
-    let metadata = crate::forge::forge_for(root)
+    let metadata = crate::forge::forge_for_kind(root, crate::forge::peek_forge_kind(root))
         .change_metadata(pr, &mut crate::network_retry::NoopSink)
         .map_err(|why| why.to_string())?;
     Ok((metadata.head_sha, metadata.base_ref))
