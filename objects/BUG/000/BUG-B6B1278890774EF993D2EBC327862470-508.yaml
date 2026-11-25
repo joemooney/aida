@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:34.375254361Z
-modified_at: 2026-11-25T04:13:46.270069379Z
+modified_at: 2026-11-25T04:25:40.016924930Z
 req_type: Bug
 tags:
 - launch
@@ -155,6 +155,13 @@ comments:
     Probes covered exact UUID bytes, NUL field boundaries, zero/one/extra arguments, unreadable executable identity, and non-AIDA recovery-like argv. The normal supervisor-exit policy remains separate. The CLI rejects --attempt, so the strict F1 syntax ruling has been punted. F3 remains deferred by the pickup brief. Targeted Cargo and check-ci-fast results pending at review.
   created_at: 2026-11-25T04:13:46.270069379Z
   modified_at: 2026-11-25T04:13:46.270069379Z
+  session_id: 01a210dd8a50
+  harness_version: codex-cli 0.167.0
+- id: 01a210f3-c38e-7c31-9340-3fedd3174ab2
+  author: dirtlab
+  content: 'Validation update: the executable-identity regression and the occupied real-ancestor child passed. The control with no spoofing ancestor released the known receipt, but retire_unknown refused the version-2 receipt as not provably dead. Its boolean fresh scan supplies no PID or reason. The earlier run observed EACCES on a shell environment. F3 is explicitly deferred, and this test remains red in the lane. Both criterion IDs are linked; AC2 is not validated. Publication remains vetoed by the F1 punt.'
+  created_at: 2026-11-25T04:25:40.016924930Z
+  modified_at: 2026-11-25T04:25:40.016924930Z
   session_id: 01a210dd8a50
   harness_version: codex-cli 0.167.0
 history:
