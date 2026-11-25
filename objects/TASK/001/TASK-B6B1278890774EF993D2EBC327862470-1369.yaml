@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: (F2) refusal summaries quote dirty-path filenames that have trailing spaces unambiguously. Test.
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T15:27:30.416082917Z
+modified_at: 2026-11-25T15:27:42.309385224Z
 req_type: Task
 tags:
 - integration
@@ -429,6 +429,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21351-dee5-7de3-a355-57b4186ebcb4
+  author: aida-pr-open
+  timestamp: 2026-11-25T15:27:42.309383563Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 8a4c9ba4ba59688cb5f8b320e9b0c0bf19925dc0
