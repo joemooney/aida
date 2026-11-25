@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T03:03:00.704105673Z
-modified_at: 2026-11-25T11:35:36.648503144Z
+modified_at: 2026-11-25T16:44:28.430400633Z
 req_type: Bug
 tags:
 - data-loss
@@ -39,6 +39,34 @@ comments:
   content: 'NOTE (advisor-122 2026-11-25 04:43): BUG-2749''s new guard (landed 33a7b137a89) REFUSES `aida session end` when the checkout is already GONE, even with --force. The advisor had to restore the checkouts of 3 dead reviewer sessions (4560/4458/4457) just to end them normally. Add to this widening: a verifiably absent checkout (ENOENT, no mount, no staged index evidence) must end cleanly, or report the exact recovery, rather than refusing forever.'
   created_at: 2026-11-25T11:35:36.648503144Z
   modified_at: 2026-11-25T11:35:36.648503144Z
+- id: 01a21398-6494-7af2-9550-9e9e1d9edc32
+  author: joe
+  content: |-
+    FINDING (integration-30, from the TASK-3874 sketch; the advisor asked for it here, 09:45): the env DENYLISTS on forge and git child processes have drifted. Move them to an ALLOWLIST.
+
+    Sites (integration @ 0fd72225028):
+    - aida-cli-lib/src/review_watch_forge.rs:43 `clear_routing`. It removes GH_REPO/GLAB_REPO/GITLAB_REPO, GIT_DIR, WORK_TREE, COMMON_DIR, INDEX_FILE, NAMESPACE, OBJECT_DIRECTORY, ALTERNATE_OBJECT_DIRECTORIES, CONFIG_COUNT and CONFIG_PARAMETERS.
+    - aida-cli-lib/src/forge.rs:~7155 `pr_state_pin`. It pins GH_HOST and removes a SHORTER list that also misses GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES.
+
+    Missing from both:
+    - Config sources: GIT_CONFIG (legacy file), GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_CONFIG_NOSYSTEM, XDG_CONFIG_HOME, HOME (global config / credential helpers).
+    - Command execution: GIT_SSH, GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_ASKPASS, SSH_ASKPASS, GIT_EXEC_PATH, GIT_EXTERNAL_DIFF, GIT_PAGER/PAGER.
+    - Object substitution: GIT_REPLACE_REF_BASE, GIT_GRAFT_FILE, GIT_SHALLOW_FILE, GIT_QUARANTINE_PATH.
+    - Discovery: GIT_CEILING_DIRECTORIES, GIT_DISCOVERY_ACROSS_FILESYSTEM.
+    - Trace/output redirection: GIT_TRACE*.
+
+    Git reads 40+ GIT_* variables, and each release adds more, so a hand-kept denylist drifts by design (two lists, two different drifts).
+
+    Proposed shape (one shared helper in aida_core::git_ops, used by both sites and by the TASK-3874 RiskGit builder):
+    - git children: env_clear(), then an explicit allowlist (PATH, LC_ALL=C, GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL=/dev/null where global config isn't needed, GIT_TERMINAL_PROMPT=0, GIT_NO_REPLACE_OBJECTS=1, GIT_NO_LAZY_FETCH=1, plus whatever the call site adds explicitly).
+    - gh/glab children: they need their own auth env (GH_TOKEN, GH_CONFIG_DIR, GLAB_*, HOME for the config dir), so a full allowlist isn't practical. Instead, remove EVERY GIT_* variable by PREFIX (iterate std::env::vars_os) plus the repo-routing vars, and pin GH_HOST, GH_PROMPT_DISABLED=1, GH_NO_UPDATE_NOTIFIER=1 and GH_PAGER=cat. Prefix removal can't drift.
+    - Test: a hostile ambient env (GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL=<file>, GIT_SSH_COMMAND=<logging shim>, XDG_CONFIG_HOME, GIT_DIR) set on a re-exec'd test child. Assert the shim never runs and the routing never changes, for each site.
+
+    Scope note: this is a sibling hardening item, not BUG-2760's quarantine-rename race. If BUG-2760's slice gets too big, file it as its own child, or fold it into TASK-3874 S1 (which builds the allowlist helper anyway).
+  created_at: 2026-11-25T16:44:28.430400633Z
+  modified_at: 2026-11-25T16:44:28.430400633Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210a8-d5f3-7f70-837f-115f437b6824
   author: joe
