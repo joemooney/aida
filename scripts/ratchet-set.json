@@ -16,6 +16,8 @@
         "h2b_crlf_padding",
         "h2b_resolved_span_preserves_hints",
         "h2b_linear_repeated_prefix",
+        "h2c_equal_stems_in_different_directories_stay_separate",
+        "h2c_rust_facets_follow_sample_paths",
         "h2a_budget_is_a_cap",
         "h2a_digest_frames_paths",
         "h2a_duplicates_are_ambiguous",
