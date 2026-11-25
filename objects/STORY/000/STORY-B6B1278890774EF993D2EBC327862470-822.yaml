@@ -320,6 +320,19 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-822` at head `unavailable`.'
   created_at: 2026-11-25T08:29:08.296563762Z
   modified_at: 2026-11-25T08:29:08.296563762Z
+- id: 01a211d3-4fd6-7120-bc8a-b6b1396b27dc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:29):
+    # STORY-3059: REPORT-ONLY slice (advisor-122 ruling 2026-11-25 00:52; auto-reap PARKED; product-15). Lane: CODEX. MAIN, NEW branch from origin/main. <=100 lines.
+    Read `aida show STORY-3059 --comments`. The old #4552 (auto-reap by moving clones) is CLOSED: a repack + alternates removal was reproduced losing a borrowed commit.
+    NEW SCOPE: session hygiene REPORTS closed-unmerged / published seats as "recoverable; run `aida doctor heal … --attest`" and NEVER moves, repacks, deletes or otherwise mutates them. The manual move is BUG-2755's attested path (#4541).
+    Tests: a closed-unmerged published seat → reported as recoverable with the attest hint; the seat's tree, refs and alternates are byte-for-byte unchanged afterwards; dry-run and real run are identical (report only).
+    One targeted cargo run, then make check-ci-fast. Open a NEW PR to main with the completing (STORY-3059) trailer. COMMIT your work.
+  created_at: 2026-11-25T08:29:36.506042582Z
+  modified_at: 2026-11-25T08:29:36.506042582Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
