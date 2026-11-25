@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T04:57:22.562538111Z
+modified_at: 2026-11-25T04:57:31.770395255Z
 req_type: Story
 tags:
 - hygiene
@@ -252,6 +252,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the entire pinned landing diff for STORY-3059 against main 45206d90a1df483c1caff91dee5abf345df4a8d2, landed tree f659856f265cc8429db8b4b810e36c80aae52934. The PR is one commit behind main. The intervening commit changes remote reconciliation diagnostics and none of the findings depends on it. AC1 is partial under the latest advisor decision: the change uses same-filesystem rename and the fixtures cover a closed-unmerged PR, the successful comment and lease release, EXDEV, a live holder on entry and hygiene dry-run. Saved histories can still depend on unpinned objects, the owning-spec note and lease release have an interruption gap, and the idle/ref evidence can go stale before the move. AC2''s interim parked state ended with the recorded policy decision. Exact-head FAST gates, FAST compile and Build (ubuntu-latest) passed. Full shards were skipped and the merge-hold gate was pending clearance. The implementer reported five focused tests passing. No local tests or builds were run during review.. No triage reason was given.'
   created_at: 2026-11-25T04:57:22.562526562Z
   modified_at: 2026-11-25T04:57:22.562526562Z
+- id: 01a21110-eccf-7082-b1f2-efc51da1e838
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3059):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8e61bbfdfcb8
+    Recorded: 2026-11-25T04:50:44.919825046+00:00
+    Findings:
+    1. aida-cli-lib/src/seat_clone.rs:575–585, 6054–6058 (STORY-3059 whole-clone recovery). A network seat is created with git clone --reference main, so it can borrow objects anywhere in main, including history outside the pinned base. The move keeps that alternate and pins only the base. If a seat ref points to a borrowed commit from a side branch outside that base, removing the side branch from main and pruning its unreachable objects can leave the saved clone with a ref whose objects are gone. Preserve all borrowed objects needed by the saved clone, including its recovery history, before releasing the lease. Exercise an alternate-only commit outside base ancestry and verify that its objects remain readable after the primary ref is dropped and maintenance runs. The existing fixture at line 1761 resolves the ORIG_HEAD name to an ID without verifying its object contents.
+    2. aida-cli-lib/src/seat_clone.rs:6082–6092 and aida-cli-lib/src/session_reap.rs:2576–2589 (STORY-3059 owning-spec recovery note). If the process is interrupted after the rename and before the comment persists, the only destination pointer is in memory. On the next quiet reap, generic missing-worktree cleanup can release the dead lease, count it as reaped, and clear the original seat pin without recording the path on the spec. A rename makes the directory move atomic but leaves this transition without a durable recovery record. Persist a recoverable move intent or use an equivalent resumable handoff, and make missing-tree cleanup finish or explicitly report pending salvage before releasing the lease. Cover interruption between the rename and the comment.
+    3. aida-cli-lib/src/seat_clone.rs:6039–6045, 6070–6084 (STORY-3059 clean idle seat and saved refs). Reap reads the ref inventory before the origin round trip and performs a synchronous Git update-ref after its last holder check. A resumed process can enter in the interval before rename, including while a primary reference-transaction hook is running, and the move then retires a live checkout. A process that updates only a side ref and exits during the earlier origin lookup can also leave the note describing refs that differ from the saved clone while HEAD and dirt checks pass. Move preparatory work ahead of the final checks, coordinate the move with session admission, and capture the ref inventory at the saved tree boundary. Extend the existing holder fixture to cover admission after the preliminary checks.
+    4. aida-cli-lib/src/session_reap.rs:1498–1505 and aida-cli-lib/src/session_hygiene.rs:139–153 (hygiene error routing). The new catch-all maps storage or rename I/O errors to skipped, including a failed restore after moving the seat. Hygiene routes failed outcomes and activation refusals, so a permanently blocked save or a clone already moved with failed mail settlement can now produce a successful scheduled hygiene run. The generic 'seat clone kept' message also hides whether it actually moved. Distinguish expected eligibility refusals from operational failures and keep the salvage path in the latter outcome when the move already happened.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T04:57:31.599356087Z
+  modified_at: 2026-11-25T04:57:31.599356087Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
