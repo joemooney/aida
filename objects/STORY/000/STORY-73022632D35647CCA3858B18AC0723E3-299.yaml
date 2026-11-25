@@ -1,5 +1,6 @@
 id: 01a21036-a639-7591-902e-1ee4eb0cb133
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-299
+agreed_id: STORY-3116
 title: 'Review PR-4550: [AI:codex] fix(review-watch): tolerate additive runtime state fields (BUG-2758)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21006`) for branch `bug-b6b1278890774ef993d2ebc327862470-519`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T00:59:14.771569902Z
   session_id: 01a21006d380
+  changes: []
+- id: 01a21038-9e2e-7e32-944c-1e362cf8da44
+  author: joe
+  timestamp: 2026-11-25T01:01:15.694980632Z
   changes: []
 filed_at:
   code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
