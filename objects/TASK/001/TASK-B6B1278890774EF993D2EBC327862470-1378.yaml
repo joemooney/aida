@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T20:52:46.765208585Z
-modified_at: 2026-11-24T20:52:46.765208585Z
+modified_at: 2026-11-25T07:36:44.660389112Z
 req_type: Task
 tags:
 - carried-from:BUG-2756
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20f0a-b813-7a23-964d-75633c5c4032
   created_at: 2026-11-24T20:53:00.788286006Z
+comments:
+- id: 01a211a2-b174-7712-970f-8bec2d34503b
+  author: joe
+  content: 'Folded into TASK-3904 (review debt: repair/conflict) in the 2026-11-24 triage (Joe approved).'
+  created_at: 2026-11-25T07:36:44.660389112Z
+  modified_at: 2026-11-25T07:36:44.660389112Z
 history:
 - id: 01a20f61-f046-7011-adf7-d76522f92d28
   author: joe
