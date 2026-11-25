@@ -1,0 +1,32 @@
+id: 01a2103c-d425-7dd1-b333-b8b2f54e3303
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-300
+title: 'Review PR-4552: [AI:codex] fix(reap): verify origin coverage before removing seat clones (STORY-3059)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21000`) for branch `story-b6b1278890774ef993d2ebc327862470-822`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4552>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-822` → `main`
+
+  ## Covers
+
+  - STORY-3059
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4552` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-25T01:05:51.653899357Z
+modified_at: 2026-11-25T01:05:51.653899357Z
+req_type: Story
+filed_at:
+  code_sha: 71bb63b62b39af8acab3724b1ec8d938c651df11
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 71bb63b62b
+  session: 01a21000a7c5
