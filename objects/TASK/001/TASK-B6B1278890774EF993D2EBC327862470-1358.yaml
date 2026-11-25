@@ -219,6 +219,13 @@ comments:
   created_at: 2026-11-25T07:09:23.713480858Z
   modified_at: 2026-11-25T07:09:23.713480858Z
   session_id: 01a211465bf0
+- id: 01a2118a-3d50-7c43-8e4d-b05021ee5259
+  author: joe
+  content: 'FOLLOW-UP (advisor 00:10, not a lane instruction): integration-30''s pre-check of r4 found that gate/ledger/event.rs patch_identity runs git before the risk path, with no partial-clone guard. It''s pre-existing and out of this slice''s scope. It needs the same fail-closed partial-clone probe in one small later slice.'
+  created_at: 2026-11-25T07:09:47.193420159Z
+  modified_at: 2026-11-25T07:09:47.193420159Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
