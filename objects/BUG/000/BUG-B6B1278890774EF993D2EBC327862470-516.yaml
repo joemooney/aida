@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T23:08:09.351045248Z
+modified_at: 2026-11-25T23:52:53.843076952Z
 req_type: Bug
 tags:
 - leases
@@ -388,6 +388,20 @@ comments:
   modified_at: 2026-11-25T22:37:58.931577524Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21520-6353-7452-b2ab-5c875713b629
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a27b058adf (r6, PR #4541)
+    - F1 / AC2 [behavioral-test]: repair_attestation.py now moves the clone under a mode-000 parent (skipped when euid==0), runs the attested heal with the correct ID, and checks for a nonzero exit, the EACCES strerror in the output, unchanged lease bytes, no new attestation event, and the tree still present once permissions are restored. verified_clone_main returns None for an unreadable path, so the refusal comes from pin()'s non-ENOENT arm. Passed: cargo test --profile agent -p aida-cli --test bug_2722_repair_attestation (Ran 2 tests OK).
+    - F2: the write-ahead event now records outcome=pending with planned=<action>. A second immutable event records the final outcome or 'failed: <error chain>' (rename EXDEV/EEXIST, lease-removal failure). The EXDEV case checks the pending and failed events. The success cases check both records.
+    - F3: restored the read_exact_lease_snapshot|OpenOptions::new row to read_only with its BUG-2655 gate and evidence test.
+    - make check-ci-fast: exit 0.
+    Residual: if the final-outcome event write itself fails, only the pending intent survives and the command returns that write error rather than the operation's error. The mode-000 test is skipped when the tests run as root.
+  created_at: 2026-11-25T23:52:53.843076952Z
+  modified_at: 2026-11-25T23:52:53.843076952Z
+  session_id: 01a214f723cb
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe

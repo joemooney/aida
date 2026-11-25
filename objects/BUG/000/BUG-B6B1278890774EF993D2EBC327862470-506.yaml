@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:24:10.635879426Z
-modified_at: 2026-11-25T23:25:48.293333910Z
+modified_at: 2026-11-25T23:52:56.445919376Z
 req_type: Bug
 comments:
 - id: 01a21493-6f47-7ed1-8c8e-85fdd72abf7f
@@ -58,6 +58,13 @@ comments:
     Tests: 4/4 bug_2745 passed (lane job). make check-ci-fast is running on this head.
   created_at: 2026-11-25T23:25:48.293333910Z
   modified_at: 2026-11-25T23:25:48.293333910Z
+  session_id: 01a214ed601d
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21520-6d7d-7132-8ab8-52df13299ca1
+  author: dirtlab
+  content: 'PR #4602 opened at 3e675a5c6e (single commit, rebased on a387b7e87b). The self-review above holds for this head. make check-ci-fast passed (exit 0) and the bug_2745 tests pass 4/4.'
+  created_at: 2026-11-25T23:52:56.445919376Z
+  modified_at: 2026-11-25T23:52:56.445919376Z
   session_id: 01a214ed601d
   harness_version: 2.1.319 (Claude Code)
 history:
