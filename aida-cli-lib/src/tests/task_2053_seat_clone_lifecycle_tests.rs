@@ -1168,7 +1168,12 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     }
     let still_held =
         || clone.exists() && ref_exists(&fx.main, &pin) && crate::lease_path(&fx.main, id).exists();
-    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let _ambient = fixture_pr_history(&fx);
     for force in [false, true] {
         let refused = format!("{:#}", end_session(id, force).unwrap_err());
         assert!(refused.contains("submodules"), "{refused}");
@@ -1692,12 +1697,21 @@ fn task_2053_bwrap_probe_reads_a_reftable_clone() {
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     if !bwrap_live() {
         return;
     }
     let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "reap", "c0ffee000024");
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let _ambient = fixture_pr_history(&fx);
     let lease = || {
         crate::list_leases(&fx.main)
             .into_iter()
@@ -2639,6 +2653,28 @@ fn bug2454_hanging_sandbox_allows_explicit_lease_release() {
     assert_eq!(std::fs::read_to_string(calls).unwrap().lines().count(), 4);
 }
 
+fn fixture_pr_history(fx: &Fixture) -> crate::test_env::AmbientGuard {
+    std::fs::write(fx.main.join(".aida/test-pr-history"), "[]").unwrap();
+    let shims = fx.root.join("shims");
+    std::fs::create_dir_all(&shims).unwrap();
+    crate::test_exec::write_executable(
+        &shims.join("gh"),
+        r#"#!/bin/sh
+[ "$1" = --version ] && exit 0
+case " $* " in *' --head feat '*) ;; *) exit 1;; esac
+case "$*" in
+  *'--state all'*) cat .aida/test-pr-history ;;
+  *headRefOid*) exit 0 ;;
+  *'--state merged'*) printf '2473\tFinished work\thttps://github.com/test/repo/pull/2473\tfeat\n' ;;
+  *) exit 1 ;;
+esac
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
+    crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))])
+}
+
 /// A legacy MCP claim must inspect the physical clone through the sandbox,
 /// even when it omitted the branch and tree_kind. A clean published clone is
 /// not salvageable; the existing completion/merge gates still decide reap.
@@ -2748,17 +2784,16 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     let persisted = crate::list_leases(&fx.main).remove(0);
     assert_eq!(persisted.tree_kind, TreeKind::Worktree);
     assert!(persisted.branch.is_empty());
-    let shims = fx.root.join("shims");
-    std::fs::create_dir_all(&shims).unwrap();
-    // Refuse an empty/wrong branch and serve only a merged PR for feat.
-    crate::test_exec::write_executable(
-        &shims.join("gh"),
-        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *'--state all'*) echo '[]'; exit 0;; *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
-    );
-    let environment = aida_core::exec_context::Environment::capture();
-    let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
-    let _ambient =
-        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let _ambient = fixture_pr_history(&fx);
+    let history = fx.main.join(".aida/test-pr-history");
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let pr = |state, sha: &str, fork| {
+        serde_json::json!([{
+            "state": state, "headRefName": "feat", "headRefOid": sha, "isCrossRepository": fork
+        }])
+        .to_string()
+    };
+    std::fs::write(&history, pr("OPEN", &head, false)).unwrap();
     let report = crate::session_reap::scan_reapable(&fx.main);
     let row = report
         .reapable
@@ -2780,21 +2815,19 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
 
     // trace:STORY-3059 | ai:codex
     // Missing exact-tip history cannot authorize reap through the historical merge.
-    crate::test_exec::write_executable(&shims.join("gh"), "#!/bin/sh\ncase \" $* \" in *' --state all '*) echo invalid;; *' --state merged '*) printf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n';; esac\n");
+    std::fs::write(&history, "invalid").unwrap();
     let unknown = crate::session_reap::scan_reapable(&fx.main);
     assert!(unknown.reapable.is_empty());
     assert!(unknown
         .skipped
         .iter()
         .any(|r| r.session == lease.id && r.reason.contains("could not verify PR history")));
-    let head = row.branch_tip.as_ref().unwrap();
-    let closed = serde_json::json!([{
-        "state": "CLOSED", "headRefName": "feat", "headRefOid": head, "isCrossRepository": false
-    }]);
-    crate::test_exec::write_executable(
-        &shims.join("gh"),
-        &format!("#!/bin/sh\ncase \" $* \" in *' --state all '*) echo '{closed}';; esac\n"),
-    );
+    let reap_saved =
+        || crate::session_reap::reap_one(&fx.main, &persisted, row.branch_tip.as_deref());
+    assert!(reap_saved().contains("could not verify PR history"));
+    std::fs::write(&history, pr("CLOSED", "", false)).unwrap();
+    assert!(reap_saved().contains("could not verify PR history"));
+    std::fs::write(&history, pr("CLOSED", &head, false)).unwrap();
     let snapshot = || {
         // Archive the entire fixture including loose/packed refs, index, files and alternate.
         assert!(clone.join(".git/objects/info/alternates").is_file());
@@ -2807,10 +2840,12 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
         archive.stdout
     };
     let before = snapshot();
+    assert!(reap_saved().contains("recoverable"));
     let dry = crate::session_reap::scan_reapable(&fx.main);
     assert!(dry.reapable.is_empty());
     assert!(snapshot() == before, "hygiene changed the seat clone");
-    let (real, skipped) = crate::session_reap::reap_quiet_with_skips(&fx.main);
+    let (real, scan) = crate::session_reap::reap_quiet_with_report(&fx.main);
+    assert!(scan.clone_cache_names.contains(clone.file_name().unwrap()));
     assert!(real.leases.is_empty());
     let report_line = |rows, dry_run| {
         let outcome = crate::session_hygiene::HygieneOutcome {
@@ -2824,11 +2859,31 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
             .to_owned()
     };
     let hint = report_line(dry.skipped, true);
-    assert!(hint.contains(&format!(
-        "aida doctor heal stale-leases --id {} --attest",
-        lease.id
-    )));
-    assert_eq!(report_line(skipped, false), hint);
+    assert!(hint.contains("(published)"));
+    assert!(hint.contains(&format!("BUG-2755 / `aida session show {}`", lease.id)));
+    crate::session_misc::session_show(Some(&lease.id), false).unwrap();
+    let caches = fx.main.join("target/worktrees");
+    let retained = caches.join(clone.file_name().unwrap());
+    let orphan = caches.join("unrelated-orphan");
+    std::fs::create_dir_all(&retained).unwrap();
+    std::fs::create_dir_all(&orphan).unwrap();
+    crate::session_hygiene::run(&crate::session_hygiene::HygieneOptions {
+        dry_run: false,
+        idle_hours: 0,
+    })
+    .unwrap();
+    assert!(retained.is_dir() && !orphan.exists());
+    for args in [
+        vec!["update-ref", "refs/heads/feat", "main"],
+        vec!["update-ref", "-d", "refs/heads/feat"],
+    ] {
+        git_ok(&fx.origin, &args);
+        assert_eq!(git_ok(&clone, &["rev-parse", "origin/feat"]), head);
+        let scan = crate::session_reap::scan_reapable(&fx.main);
+        assert!(report_line(scan.skipped, true).contains("publication unverified"));
+    }
+    git_ok(&fx.origin, &["update-ref", "refs/heads/feat", &head]);
+    assert_eq!(report_line(scan.skipped, false), hint);
     assert!(snapshot() == before, "hygiene changed the seat clone");
     assert!(crate::lease_path(&fx.main, &lease.id).is_file());
 
@@ -2897,6 +2952,27 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     );
     assert!(clone.exists());
     assert!(!crate::list_leases(&fx.main).is_empty());
+    git_ok(&clone, &["restore", "published.txt"]);
+    git_ok(&clone, &["branch", "-D", "unpublished"]);
+    let parent = git_ok(&clone, &["rev-parse", "HEAD^"]);
+    for evidence in [
+        pr("CLOSED", &parent, false),
+        pr("CLOSED", &head, true),
+        pr("MERGED", &head, false),
+    ] {
+        std::fs::write(&history, evidence).unwrap();
+        assert_eq!(
+            crate::session_reap::scan_reapable(&fx.main).reapable.len(),
+            1
+        );
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    // Actual teardown also needs the independently verified host/mail binding.
+    write_clone_lease(&fx.main, &clone, &lease.id);
+    let verified = crate::list_leases(&fx.main).remove(0);
+    let removed = crate::session_reap::reap_one(&fx.main, &verified, Some(&head));
+    assert!(removed.starts_with("reaped"), "{removed}");
+    assert!(!clone.exists());
 }
 
 /// A broken clone is unknown, and the guard's ordinary Display carries the
