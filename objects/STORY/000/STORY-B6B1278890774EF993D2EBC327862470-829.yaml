@@ -352,6 +352,32 @@ comments:
   modified_at: 2026-11-25T18:03:02.249173779Z
   session_id: 01a21396870a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a213e5-562e-7c20-bd63-c85819e53607
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4582 @ b39e428e49 (STORY-3120 S3a, hardened review-runner spawn helper only; Refs-only; +396, of which about 150 are tests and 13 are ratchet entries).
+
+    Result: PASS as a helper slice. STRICT tier, so it still needs an INDEPENDENT review at the final head (no self-approve, no carry-over).
+
+    Binding items from comment 19:
+    1. cwd: a fresh tempdir. For claude: --setting-sources=user, --settings {"disableAllHooks":true}, --strict-mcp-config with no --mcp-config (so no servers), --tools "" (no tools), --disable-slash-commands, --no-session-persistence. For codex: exec --sandbox=read-only --ephemeral. The test plants .claude/settings.json + hook.sh in the checkout and asserts the marker is absent. ✔
+    2. env: env_clear(), then PATH/HOME/LANG/TERM/LC_* and that vendor's auth vars only. The custom cmd gets NO vendor auth. The test uses sentinels for GH_TOKEN, AIDA_SESSION_GRANT and the cross-vendor key, and checks each never arrives. The three AIDA_REVIEW_* keys are added to DROPPED_AIDA_KEYS, so seats never inherit the operator's runner cmd. ✔
+    3. AIDA_REVIEW_RUNNER_CMD: read only from the operator env; must be absolute; canonicalised (symlinks resolved) before the regular-file check and the outside-checkout check. The PATH-resolved vendor binary gets the same checks, and relative PATH entries are skipped. Tests cover relative, inside-checkout, directory and empty values. ✔
+    4. stdin: the prompt goes in from a writer thread; argv must equal the fixed table exactly. Tests: a 200 KiB prompt, and a "deaf" runner that doesn't read stdin is an error. SIGPIPE is ignored by the Rust runtime, so the deaf case gives EPIPE, not a kill. ✔
+    5. Deadline: process_group(0); waitid(WNOWAIT) polling, so the leader stays unreaped and the pgid can't be reused before kill(-pgid). Caps: 4 MiB stdout, 64 KiB stderr; the reader stops at cap+1, then the group is killed. Tests: a 1s deadline finishes in under 10s; each cap overflows; a non-zero exit puts stderr in the error. ✔
+    6. Closed match over LaunchVendor::parse with no default arm. gemini, agy, antigravity, '' and claude-x are refused. ✔
+
+    SHOULD-FIX, before or in the --run-review slice:
+    (a) UNBOUNDED JOINS. The stdout/stderr reader joins and the stdin writer join have no deadline. A descendant that calls setsid() (or a double-forked daemon) leaves the group and keeps the pipe fds, so read_to_end/write_all never return and `run` hangs past its deadline. This fails as a hang, not open, but a CI gate needs a bound. Fix: after kill(-pgid), wait for each thread with a short grace (poll JoinHandle::is_finished for about 5s). If one hasn't finished, return "review runner left descendants holding its pipes" and leak the thread. Test: a runner that runs `setsid sleep 60 &` with inherited stdout, then exits.
+    (b) The out-of-inventory refusal test (item 11) and the git_text should-fixes (env scrub, --no-textconv, no silent full-file fallback) are deferred to the --run-review slice. The PR body says so, and the next brief must carry them.
+    (c) Nit: var() returns the FIRST non-empty match, while cmd.env applies the LAST duplicate. std::env::vars_os never yields duplicate keys, so the --run-review caller must pass vars_os() unchanged.
+
+    Residual risks the PR body states (accepted): codex read-only can still read host files; claude loads the operator's ~/.claude user settings with hooks disabled; a setsid escape (see (a)).
+    Merge-tree against integration: CLEAN (new files only, plus additive lines in launch/mod.rs, vendors/mod.rs, launch_env_keys.rs, ratchet-set.json and store-writers.toml).
+  created_at: 2026-11-25T18:08:29.596043852Z
+  modified_at: 2026-11-25T18:08:29.596043852Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
