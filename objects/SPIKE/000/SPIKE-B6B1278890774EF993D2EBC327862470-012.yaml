@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: one `aida comment add BUG-2761 "S1 SPIKE REPORT: ..."` with a table (spawn path × fd survives? × held after exit? × holder) for bwrap containment, plain headless, the codex native sandbox and a claude headless lane, plus inherited daemons (sccache-server, cargo jobserver, git fsmonitor); a verdict (owner-lock fd K viable, or fall back to a supervisor-held lock with heartbeat); and the evidence commands. No PR, no production code.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:26:36.718610073Z
-modified_at: 2026-11-25T23:03:20.750578911Z
+modified_at: 2026-11-25T23:06:18.131118462Z
 req_type: Spike
 tags:
 - leases
@@ -65,6 +65,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a214f5-ba93-7b10-8d6c-f27d7ee06b42
+  author: lane-recovery
+  timestamp: 2026-11-25T23:06:18.131117586Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 34c86b75a25da79cf648a68dfdd1d593949567b4
