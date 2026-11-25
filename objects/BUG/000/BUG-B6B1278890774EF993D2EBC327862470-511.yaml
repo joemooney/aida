@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T09:05:18.246690488Z
+modified_at: 2026-11-25T09:05:25.798573074Z
 req_type: Bug
 tags:
 - store
@@ -254,6 +254,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594. BUG-2750 slice A AC1 FAIL: fetch-only ref update and lock-free execution are present, but synchronous store hook account lookup still escapes the refresh deadline. Fetched-evidence admission is assigned to BUG-2753 by the advisor''s scope split. AC2 PASS for the requested stalled-Git cases: the real train handler exercises stalled rev-parse and upload-pack with a recognized store, checks writer-lock availability and verifies the timeout diagnostic and continuation. The implementer reported the focused test passed. On the reviewed head, FAST gates passed and FAST compile was running. No local build or test was run in this review.. No triage reason was given.'
   created_at: 2026-11-25T09:05:18.246680325Z
   modified_at: 2026-11-25T09:05:18.246680325Z
+- id: 01a211f3-e296-7cd2-ae60-44949d5886b6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2750):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 41cf0a48d5e7
+    Recorded: 2026-11-25T09:04:39.997695276+00:00
+    Findings:
+    1. BUG-2750.AC1 — aida-cli-lib/src/pr_train_store_refresh.rs:22,31 and aida-core/src/store_hooks.rs:264. The five-second deadline reaches Git subprocesses, but command construction still synchronously establishes the store hooks profile. establish() calls private_primary_gid(), which uses getpwuid_r/getgrgid_r and may enumerate the password database with getpwent (store_hooks.rs:108–181). On a host with a stalled network-backed NSS provider, this runs on the train thread before a timed subprocess can start. The train can exceed the refresh deadline indefinitely and never emit the timeout diagnostic or continue with the cached store. Put hook preparation within the same cancellable deadline, or use fetch-specific hardening that avoids this lookup while preserving Git and credential protections.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T09:05:25.654406711Z
+  modified_at: 2026-11-25T09:05:25.654406711Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
