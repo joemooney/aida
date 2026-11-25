@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T16:20:06.236172039Z
+modified_at: 2026-11-25T16:41:43.864039826Z
 req_type: Story
 tags:
 - docs
@@ -85,6 +85,27 @@ comments:
   content: 'REFERENCE IMPLEMENTATION (Joe 2026-11-25 09:19): commit b5826a0f949 on branch story-3120-ci-review (37 files, +4159): recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Light/Dark toggle (localStorage aida-theme), Markdown table renderer in docs/showcase/build.py, docs/getting-started.md, Multi-Seat Workflow + 8 SVGs (docs/product-workflow.md, docs/operator-setup.md); build.py --check and all 17 tests in tests/test_showcase_build.py pass. Port it in <=300-line slices (small-PR rule): (a) build.py table renderer + tests, (b) topbar dropdowns + theme toggle, (c) getting-started.md, (d) multi-seat workflow docs + SVGs (STORY-2852), (e) the terminology field guide (STORY-2839).'
   created_at: 2026-11-25T16:20:06.236172039Z
   modified_at: 2026-11-25T16:20:06.236172039Z
+- id: 01a21395-ead7-7283-864a-7bce9295d8b5
+  author: joe
+  content: |-
+    GROOMING (integration-30, 2026-11-25 09:45): how to port reference commit b5826a0f949 to integration, for p39/p40. This is a suggested slice plan, not a lane instruction.
+
+    The commit is +4159 lines, but most of it is mechanical. docs/showcase/*.html pages (except code-review.html, workflow.html and getting-started.html, which have hand-written bodies) are GENERATED from page-template.html by build.py; that's the +137 lines per page. So, for the <=300 rule, count the hand-written lines (template, js, css, build.py, md, tests) and list the regenerated pages separately in the PR body. CI checks them with `build.py --check`.
+
+    (a) build.py Markdown table renderer + tests/test_showcase_build.py (+129/+16). Security lens: the renderer must HTML-escape every cell (cell text comes from docs; a stray <script> must stay inert). Add a test for a cell containing `<b>` and `|` escaping.
+    (b) Topbar dropdown submenus + Light/Dark toggle: page-template.html, app.js (+48), styles.css (+33), guide.css (+24), index.html, search-data.js, plus the regenerated pages. The toggle should only read and write the 'aida-theme' key, whitelisted to light/dark. No innerHTML from search data.
+    (c) docs/getting-started.md (+88) + getting-started.html. Docs only.
+    (d) Multi-seat workflow: docs/product-workflow.md (+342), operator-setup.md (+24) and 8 SVGs (~1100 lines of assets). Too big for one PR. Split it:
+        d1: product-workflow.md plus the swimlane, lanes-leases, merge-train and post-train-sync SVGs;
+        d2: enums-state, exception-paths, gates-review and human-journeys SVGs plus operator-setup.md.
+        STORY-2852 is still DRAFT, and its description is about tracked verbs (`aida lane relay`), not docs. Either promote STORY-2852 (advisor disposition first) or attach d1/d2 as Refs STORY-2839 and leave STORY-2852 open. Don't let a docs slice complete STORY-2852.
+    (e) Terminology field guide: workflow.html (+321 hand-written) + workflow.svg (+165) + authority-mandate.svg. Right at the line limit; it may need e1 (html) and e2 (svg).
+    Order: a → b (b regenerates every page, so it should land early to avoid churn) → c, d1, d2, e in parallel. Each slice is docs/tests only, so it qualifies for integration self-approve. Exceptions: a and b touch build.py/app.js, which still needs the escaping check above in pre-check.
+    Title rule: Refs-only on every slice, except the final slice of STORY-2839, which carries (STORY-2839) as its completing group.
+  created_at: 2026-11-25T16:41:43.864039826Z
+  modified_at: 2026-11-25T16:41:43.864039826Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
