@@ -13,16 +13,24 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T20:53:36.980920917Z
-modified_at: 2026-11-24T20:54:11.654642488Z
+modified_at: 2026-11-25T02:46:20.278494047Z
 req_type: Task
 tags:
 - conflict-repair
+- integration
 - lanes
 history:
 - id: 01a20f56-6c1a-7c13-8bdd-1a29b59f834a
   author: joe
   timestamp: 2026-11-24T20:54:11.738306611Z
   changes: []
+- id: 01a21098-d176-7112-83a0-33490a5feb63
+  author: joe
+  timestamp: 2026-11-25T02:46:20.278492758Z
+  changes:
+  - field_name: tags
+    old_value: conflict-repair, lanes
+    new_value: conflict-repair, integration, lanes
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
