@@ -129,6 +129,20 @@ comments:
   created_at: 2026-11-25T06:08:38.550757691Z
   modified_at: 2026-11-25T06:08:38.550757691Z
   session_id: 01a2110fb451
+- id: 01a21152-5bdf-7c92-b3b8-1313fd0b1571
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4558 r2 @ bbd4a4f3a1 (integration-30): PASS. vs integration afbea08b75a: 2 files (review_watch.rs, forge_tier_runs.rs list made pub(crate)), +106/-21. merge-tree is clean (the branch merged integration).
+    F1 (latest FAST): reviewed_fast_settled lists ci.yml pull_request runs for the head. It keeps those uniquely owned by (PR, base), keyed by run_number, and walks newest-first. ANY newer pending owned run means not settled. Otherwise it settles on the newest completed run that has a 'ci-tier: fast' job, read from that attempt's jobs, so FULL and label-event runs are skipped. Test 'newer': an old completed run plus a newer queued run gives no edit.
+    F2: the receipt identity is head+NL+base. The test retargets main to release and gets a second ci:full request. Legacy SHA-only receipts re-run once; request_full_ci_with's label_plan still refuses an edit that would cancel a running FULL (BUG-2723-safe).
+    F3: accepted as is.
+    F4: the per-row actions/runs/<id> fetches are replaced by one paged list plus one jobs read for the newest run.
+    OBSERVATION (pre-existing, not blocking): when request_full_ci returns Ok(false) (Leave), no receipt is written, so an approved PR whose label is already present and settled is re-evaluated every 2-minute tick, about 3-4 gh reads each, until its verdict closes. The legacy-receipt retry adds the currently approved PRs to that set once. Worth a follow-up to write the receipt on Leave when the label is present and FULL exists for this head+base.
+    READY after FAST plus the independent APPROVED.
+  created_at: 2026-11-25T06:08:43.830962169Z
+  modified_at: 2026-11-25T06:08:43.830962169Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20e71-b3b7-77d2-9951-9c983c5e09ad
   author: joe
