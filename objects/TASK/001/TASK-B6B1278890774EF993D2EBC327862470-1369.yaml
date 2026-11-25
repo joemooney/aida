@@ -12,7 +12,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:47:51.671464379Z
-modified_at: 2026-11-25T07:49:36.325393363Z
+modified_at: 2026-11-25T07:50:02.530416155Z
 req_type: Task
 tags:
 - integration
@@ -183,6 +183,18 @@ comments:
   modified_at: 2026-11-25T07:25:44.252176483Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a211ae-a14a-7a00-9802-4e04a54be2a1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3882):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a80ec1e9e930
+    Recorded: 2026-11-25T06:22:23.015851455+00:00
+    Findings:
+    1. TASK-b6b1278890774ef993d2ebc327862470-1369.AC1: aida-cli-lib/src/seat_clone.rs:2254 still uses a clone-only formatter that quotes only paths ending in an ASCII space. A porcelain-v2 entry for a clone file named ' notes' therefore renders as 'untracked:  notes', leaving the leading space outside any quotes. The advisor's round 3 brief requires using the shared Git porcelain quoting rule for every clone path, and the fixture at aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:1914 still lacks the required leading-space case. Reuse the core porcelain path formatter for each path and rename endpoint, assert that ' notes' renders as a quoted filename, and update the existing internal-space expectation at line 1967 to match the shared rule.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T07:49:46.954489715Z
+  modified_at: 2026-11-25T07:49:46.954489715Z
 history:
 - id: 01a20f19-d867-79e2-b806-168ad169ed97
   author: joe
