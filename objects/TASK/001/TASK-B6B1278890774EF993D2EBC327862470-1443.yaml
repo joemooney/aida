@@ -12,11 +12,29 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T15:28:30.252627712Z
-modified_at: 2026-11-25T16:18:21.974816652Z
+modified_at: 2026-11-25T16:18:59.944006152Z
 req_type: Task
 tags:
 - codex-limit
 - config
+comments:
+- id: 01a21380-d4e8-72f2-a089-d02e600edd69
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (configuration-validation):** `.aida/config.toml` `[agents] vendor = "claude"` with the TEMPORARY comment; validated by TOML parse + `make check-ci-fast`.
+
+    ### Expected files
+    - `.aida/config.toml`
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-25T16:18:59.944006152Z
+  modified_at: 2026-11-25T16:18:59.944006152Z
+  session_id: 01a213800b55
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2137c-4a25-75e1-9b38-1a6bc91e68c2
   author: joe
