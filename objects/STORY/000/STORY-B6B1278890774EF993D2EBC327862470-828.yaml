@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T03:30:24.481802259Z
+modified_at: 2026-11-25T03:39:32.809011638Z
 req_type: Story
 tags:
 - backlog
@@ -70,6 +70,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Design sketch posted. Advisor sign-off is required before S1 implementation.. No triage reason was given.'
   created_at: 2026-11-25T03:13:17.386087765Z
   modified_at: 2026-11-25T03:13:17.386087765Z
+- id: 01a210c9-8849-7191-9f32-9f93c7057409
+  author: joe
+  content: 'SKETCH AMENDMENT (advisor-122 2026-11-24 20:44, answering the S1 punt): findings on a change with ZERO credited specs are ALREADY durable in the gate ledger (PR-N.jsonl verdict: findings + finding_dispositions). S1 writes NOTHING new for them: no draft, no guessed parent, no refusal; approval delivery is unchanged. S1 covers ONLY the spec-bound path. Test: the collected PR-only approval (story_2698 shape) delivers and mints NO draft. S2''s `aida findings` then reads ledger-only deferrals via --pr N / an "unparented" group straight from the ledger. No re-parenting machinery.'
+  created_at: 2026-11-25T03:39:32.809011638Z
+  modified_at: 2026-11-25T03:39:32.809011638Z
 history:
 - id: 01a21087-762e-7253-a4ae-33628f3dae2c
   author: joe
