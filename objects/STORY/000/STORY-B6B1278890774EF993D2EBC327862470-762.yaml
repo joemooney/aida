@@ -6,12 +6,12 @@ description: |
   Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
 
   Targets and done check (advisor 13:58, product seat batch): edit docs/showcase/glossary.html (the canonical product glossary), docs/showcase/authority.html and docs/showcase/autonomy.html (workflow/authority guides), and add a new docs/showcase/field-guide.html (the 5-act field guide) registered in docs/showcase/build.py's page list. New SVGs go under docs/showcase/assets/ named field-guide-act1.svg to field-guide-act5.svg, each with light and dark variants following the existing assets' convention. Done when: every term listed in the description has a glossary entry; the five SVGs render in both themes; make check-ci-fast (docs gates) passes.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-25T20:44:33.070500054Z
+modified_at: 2026-11-25T20:51:51.403670722Z
 req_type: Story
 tags:
 - docs
@@ -226,6 +226,11 @@ comments:
   created_at: 2026-11-25T20:44:33.070490988Z
   modified_at: 2026-11-25T20:44:33.070490988Z
   session_id: 01a214459c68
+- id: 01a2147a-a3eb-7eb2-9650-ec95c6325071
+  author: lane-recovery
+  content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-25T20:51:51.403663289Z
+  modified_at: 2026-11-25T20:51:51.403663289Z
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
@@ -321,6 +326,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2147a-a3eb-7eb2-9650-eca9236b914e
+  author: lane-recovery
+  timestamp: 2026-11-25T20:51:51.403670654Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
