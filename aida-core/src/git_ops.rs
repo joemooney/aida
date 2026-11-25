@@ -3950,6 +3950,19 @@ pub fn restore_stranded_autostash(repo: &Path, pre_stash_top: Option<&str>) -> A
 // Orphan Branch + Worktree
 // ---------------------------------------------------------------------------
 
+// trace:BUG-2749 | ai:codex
+fn retire_missing_registration(repo: &Path, path: &Path) -> Result<()> {
+    use crate::worktree_registration::{inspect_missing_registration, RegistrationClearOutcome};
+    let path = repo.canonicalize()?.join(path);
+    let outcome = inspect_missing_registration(repo, &path, None, false, false, || {}, || {});
+    anyhow::ensure!(
+        outcome != RegistrationClearOutcome::Declined,
+        "retained worktree registration for {}: restore the checkout and inspect its index before retrying",
+        path.display()
+    );
+    Ok(())
+}
+
 /// Create an orphan branch and worktree for the AIDA store.
 ///
 /// This is the recommended approach for single-repo projects:
@@ -3981,17 +3994,12 @@ pub fn create_store_worktree(
         );
     }
 
+    retire_missing_registration(repo_root, Path::new(worktree_dir))?;
+
     // Check if the orphan branch already exists (e.g., after clone)
     let branch_exists = git(repo_root, &["rev-parse", "--verify", branch_name])
         .map(|r| r.success)
         .unwrap_or(false);
-
-    // BUG-39: drop any stale worktree registrations before trying to add
-    // a fresh one. `git worktree prune` is a no-op when nothing's stale,
-    // so always-running it is safe and avoids the cryptic "missing but
-    // already registered worktree" error users hit after manually
-    // deleting the worktree directory. trace:BUG-39 | ai:claude
-    let _ = git(repo_root, &["worktree", "prune"]);
 
     if branch_exists {
         // Branch exists (e.g., from a clone) — just add the worktree
@@ -4287,8 +4295,6 @@ mod bug2188_publish_fallback_tests {
 // expected admin directory before add; a failed hook cannot leave a pool orphan.
 // trace:BUG-2188 | ai:codex
 pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Result<()> {
-    // Preserve stale-registration cleanup before allocating a new pool tree.
-    let _ = git(repo_root, &["worktree", "prune"]);
     anyhow::ensure!(
         matches!(std::fs::symlink_metadata(path), Err(ref e) if e.kind() == std::io::ErrorKind::NotFound),
         "pool worktree path {} already exists or is unreadable",
@@ -4951,6 +4957,7 @@ fn submodule_has_changes(work_tree: &Path, git_dir: &Path, depth: usize) -> Resu
     let out = host_git_command(work_tree)
         .arg(format!("--git-dir={}", git_dir.display()))
         .arg(format!("--work-tree={}", work_tree.display()))
+        .arg("--no-optional-locks")
         .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status in a submodule")?;
@@ -5034,7 +5041,9 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
 // trace:BUG-2713 | ai:codex
 fn status_porcelain(tree: &Path, submodules: &str, expand_untracked: bool) -> Result<String> {
     let mut cmd = host_git_command(tree);
-    cmd.args(["status", "--porcelain=v1", "-z", submodules]);
+    // Raw paths from -z are quoted locally, including synthesized submodule entries.
+    cmd.arg("--no-optional-locks")
+        .args(["status", "--porcelain=v1", "-z", submodules]);
     if expand_untracked {
         cmd.arg("--untracked-files=all");
     }
@@ -5176,6 +5185,10 @@ pub fn remove_worktree_unguarded(
     worktree_path: &Path,
     force: bool,
 ) -> Result<()> {
+    let target = repo_root.join(worktree_path);
+    if !target.try_exists()? {
+        return retire_missing_registration(repo_root, worktree_path);
+    }
     let path_str = worktree_path.to_string_lossy();
     let mut args: Vec<&str> = vec!["worktree", "remove"];
     // `--` below keeps a dash-led path a path. trace:BUG-1622 | ai:claude
@@ -5555,6 +5568,8 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
     }
 }
 
+const KEEP_WORKTREES: &str = "gc.worktreePruneExpire=never";
+
 /// Run `git gc --auto` on the store repo — a cheap no-op unless the (lowered)
 /// `gc.auto` threshold is exceeded, in which case git repacks loose objects.
 /// Best-effort: failures are swallowed.
@@ -5569,7 +5584,7 @@ pub fn gc_auto(repo: &Path) -> bool {
     {
         return false;
     }
-    git(repo, &["gc", "--auto"])
+    git(repo, &["-c", KEEP_WORKTREES, "gc", "--auto"])
         .map(|out| out.success)
         .unwrap_or(false)
 }
@@ -5692,7 +5707,7 @@ pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
         !crate::db::any_store_write_lock_held(),
         "store GC must run outside the store writer transaction"
     );
-    git(repo, &["gc", "--aggressive"])
+    git(repo, &["-c", KEEP_WORKTREES, "gc", "--aggressive"])
 }
 
 /// Outcome of squashing the orphan store branch to a single snapshot commit.

@@ -13455,6 +13455,9 @@ Options:
       --id <ID>
           Heal only this exact finding ID (as shown by doctor check)
 
+      --attest <ATTEST>
+          Operator's reason for releasing one conflict repair reservation
+
   -y, --yes
           Skip confirmation prompts
 
@@ -16117,9 +16120,7 @@ branch (or it is detached/branchless), the worktree is CLEAN, it is NOT locked, 
 Removal uses `git worktree remove` (NOT --force), so git's own safety checks add a second guard; a
 worktree git refuses to remove is skipped, never forced.
 
-Always runs the lossless `git worktree prune` first (clears bookkeeping for already-deleted worktree
-dirs). Never runs on the hot `aida status` read path — only on this explicit operator command and on
-`aida session end`.
+Applied cleanup checks missing registrations for recoverable staged changes.
 
 Usage: aida session gc [OPTIONS]
 
@@ -46630,6 +46631,11 @@ Working on aida itself
         "name": "all",
         "takes_value": false,
         "help": "Show older completed-without-commit findings individually"
+      },
+      {
+        "name": "attest",
+        "takes_value": true,
+        "help": "Operator's reason for releasing one conflict repair reservation"
       },
       {
         "name": "canonical-ids",

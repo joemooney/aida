@@ -25,7 +25,8 @@ pub(crate) fn agent_error_block(err: &anyhow::Error, msg: &str) -> String {
 }
 
 pub(crate) fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
-    let first = msg.lines().next().unwrap_or("").trim();
+    // A summary may end with a literal space in a Git filename. trace:BUG-2713
+    let first = msg.lines().next().unwrap_or("").trim_start();
     let summary = first
         .strip_prefix("Error: ")
         .or_else(|| first.strip_prefix("error: "))

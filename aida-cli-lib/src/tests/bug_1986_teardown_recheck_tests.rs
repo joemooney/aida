@@ -186,6 +186,15 @@ fn a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty() {
         "runtime links alone are not work"
     );
 
+    let expanded = aida_core::git_ops::session_refusal_porcelain_lines(&wt).unwrap();
+    for link in ["agents", "cache.db", "sessions"] {
+        assert!(
+            expanded.contains(&format!("?? .aida/{link}")),
+            "{expanded:?}"
+        );
+    }
+    assert!(dirty_entries_ignoring_runtime_links(&wt, expanded).is_empty());
+
     std::fs::write(wt.join(".aida/notes.txt"), "real work").unwrap();
     assert_eq!(
         dirty_entries_ignoring_runtime_links(&wt, worktree_dirty_entries(&wt)),
