@@ -1436,14 +1436,59 @@ fn real_directory(path: &std::path::Path) -> Result<bool> {
     }
 }
 
+// trace:BUG-2755 | ai:codex
+fn check_namespace_mounts(tree: &std::path::Path) -> Result<()> {
+    let reader = aida_core::proc_identity::ProcIdentity::capture(std::process::id())
+        .map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        reader.pidns_inode == aida_core::process_probe::INITIAL_PID_NAMESPACE_INODE,
+        "host PID namespace unavailable"
+    );
+    for entry in std::fs::read_dir("/proc")? {
+        let entry = entry?;
+        if entry.file_name().to_string_lossy().parse::<u32>().is_ok() {
+            let pid = entry.path();
+            let root = pid.join("root");
+            anyhow::ensure!(
+                std::fs::read_link(&root)? == std::path::Path::new("/"),
+                "process root differs in {}",
+                pid.display()
+            );
+            for ancestor in tree.ancestors().take_while(|p| p.parent().is_some()) {
+                let exists = real_directory(&root.join(ancestor.strip_prefix("/")?))?;
+                anyhow::ensure!(
+                    ancestor != tree || !exists,
+                    "clone visible in {}",
+                    pid.display()
+                );
+            }
+            crate::worktree_lifecycle_gc::ensure_no_tree_mount(
+                tree,
+                &std::fs::read(pid.join("mountinfo"))?,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// An unbound clone cannot authorize destruction. Doctor can release its lease
 /// alone when the tree has no work to salvage and holds no local mail.
 // trace:BUG-2755 | ai:codex
 fn unbound_clone_heal(
     main: &std::path::Path,
     tree: &std::path::Path,
+    lease_id: &str,
+    mounts: impl FnOnce(&std::path::Path) -> Result<()>,
 ) -> Result<Option<&'static str>> {
     anyhow::ensure!(tree.is_absolute(), "clone path must be absolute");
+    let normalized: std::path::PathBuf = tree.components().collect();
+    anyhow::ensure!(
+        normalized.as_os_str() == tree.as_os_str()
+            && !tree
+                .components()
+                .any(|c| c == std::path::Component::ParentDir),
+        "ambiguous clone path"
+    );
     if !real_directory(tree)? {
         // Resolve the closest existing ancestor. A dangling ancestor link or
         // traversal component is not evidence that the recorded tree is gone.
@@ -1453,17 +1498,9 @@ fn unbound_clone_heal(
                 break;
             }
         }
-        anyhow::ensure!(
-            !tree
-                .components()
-                .any(|c| c == std::path::Component::ParentDir),
-            "ambiguous clone path"
-        );
-        crate::worktree_lifecycle_gc::ensure_no_tree_mount(
-            tree,
-            &std::fs::read("/proc/self/mountinfo")?,
-        )?;
+        mounts(tree).context("absence unverifiable")?;
         anyhow::ensure!(!real_directory(tree)?, "clone reappeared");
+        crate::land::run::release_lease(main, lease_id)?;
         return Ok(Some("tree absent, nothing to salvage"));
     }
     if crate::mail_retention::verified_clone_main(main, tree).is_some() {
@@ -1479,6 +1516,13 @@ fn unbound_clone_heal(
         "unrecognised seat clone path {}",
         tree.display()
     );
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let mut open_directory = std::fs::OpenOptions::new();
+    open_directory
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW);
+    let directory = open_directory.open(tree)?;
+    let git_dir = open_directory.open(tree.join(".git"))?;
     match crate::seat_clone::probe_counting_origin(main, tree, None, &[], None) {
         crate::seat_clone::Probe::Known(facts) => {
             anyhow::ensure!(!facts.unshipped(), "unbound seat clone has unsaved work")
@@ -1488,19 +1532,59 @@ fn unbound_clone_heal(
             anyhow::bail!("could not verify unbound seat clone: {reason}")
         }
     }
+    fs2::FileExt::try_lock_exclusive(&directory).context("local mail writer active")?;
+    aida_core::worktree_holders::check_worktree_removal(tree)
+        .map_err(|e| anyhow::anyhow!("{}", e.summary()))?;
     let mailbox = aida_core::mailbox::local_mailbox_dir(tree);
-    if real_directory(&tree.join(".aida"))? && real_directory(&mailbox)? {
+    let empty_mail = || -> Result<()> {
+        if real_directory(&tree.join(".aida"))? && real_directory(&mailbox)? {
+            anyhow::ensure!(
+                std::fs::read_dir(mailbox)?.next().transpose()?.is_none(),
+                "unbound seat clone holds mail"
+            );
+        }
+        Ok(())
+    };
+    if let Err(e) = empty_mail() {
+        let refusal = aida_core::mailbox_lifecycle::guard::RetentionRefusal {
+            checkout: tree.into(),
+            reason: e.to_string(),
+            needs_activation: false,
+            retained_dir: None,
+        };
+        crate::mail_retention::keep_ending_retained(&crate::lease_path(main, lease_id), &refusal);
+        return Err(refusal.into());
+    }
+    anyhow::ensure!(
+        tree.canonicalize()? == tree
+            && crate::mail_retention::verified_clone_main(main, tree).is_none(),
+        "clone binding changed"
+    );
+    for (handle, path) in [
+        (directory.metadata()?, tree.to_owned()),
+        (git_dir.metadata()?, tree.join(".git")),
+    ] {
+        let now = std::fs::symlink_metadata(path)?;
         anyhow::ensure!(
-            std::fs::read_dir(mailbox)?.next().transpose()?.is_none(),
-            "unbound seat clone holds mail"
+            now.is_dir() && (now.dev(), now.ino()) == (handle.dev(), handle.ino()),
+            "clone identity changed"
         );
     }
+    crate::land::run::release_lease(main, lease_id)?;
     Ok(Some("clean unbound clone retained; no local mail"))
 }
 
 pub(super) fn heal_doctor_lease(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    heal_lease_with_mounts(project_root, finding, check_namespace_mounts)
+}
+
+pub(super) fn heal_lease_with_mounts(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+    mounts: impl FnOnce(&std::path::Path) -> Result<()>,
 ) -> Result<DoctorHealResult> {
     // trace:BUG-2655 | ai:codex
     if let Some(id) = finding.id.strip_prefix("shared-") {
@@ -1554,8 +1638,9 @@ pub(super) fn heal_doctor_lease(
     }
     // trace:BUG-2755 | ai:codex
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
-        if let Some(detail) = unbound_clone_heal(project_root, &lease.worktree_path)? {
-            crate::land::run::release_lease(project_root, &lease.id)?;
+        if let Some(detail) =
+            unbound_clone_heal(project_root, &lease.worktree_path, &lease.id, mounts)?
+        {
             return Ok(DoctorHealResult {
                 category: finding.category.clone(),
                 id: finding.id.clone(),

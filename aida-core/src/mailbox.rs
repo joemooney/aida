@@ -1131,6 +1131,16 @@ pub fn local_mailbox_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("mailbox")
 }
 
+/// Keep clone lease release outside an in-flight local mailbox publication.
+// trace:BUG-2755 | ai:codex
+#[cfg(all(unix, feature = "native"))]
+pub fn lock_local_mail_writer(root: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::create_dir_all(root)?;
+    let directory = std::fs::File::open(root)?;
+    fs2::FileExt::try_lock_shared(&directory)?;
+    Ok(directory)
+}
+
 /// First line of the manifest file that replaces a retired legacy mailbox
 /// directory. An old binary's `create_dir_all`/`read_dir` fails on the file;
 /// a binary that knows the marker refuses with the upgrade instruction.
@@ -1228,6 +1238,8 @@ pub fn write_local_message_with_deliveries(
     }
     let dir = local_mailbox_dir(project_root);
     mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
+    #[cfg(all(unix, feature = "native"))]
+    let _writer = lock_local_mail_writer(project_root)?;
     ensure_local_mailbox_dir(project_root)?;
     let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
     // Every written message carries a real epoch-millis time: a writer that

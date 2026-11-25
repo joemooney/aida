@@ -367,6 +367,7 @@ pub fn write_handover(project_root: &Path, record: &DeliveryRecord) -> std::io::
     parse_handover(&json, &name).map_err(|_| std::io::Error::other("invalid handover record"))?;
     let mailbox = crate::mailbox::local_mailbox_dir(project_root);
     crate::mailbox::mailbox_dir_guard(&mailbox)?;
+    let _writer = crate::mailbox::lock_local_mail_writer(project_root)?;
     let coverage = crate::mailbox_lifecycle::cover_local_write(project_root)?;
     let dir = mailbox.join(DELIVERIES_DIR).join(HANDOVER_DIR);
     std::fs::create_dir_all(&dir)?;
@@ -538,6 +539,7 @@ pub fn bind_queued_delivery(
             outcome
         }
         None => {
+            let _writer = crate::mailbox::lock_local_mail_writer(checkout)?;
             let mailbox = crate::mailbox::local_mailbox_dir(checkout);
             crate::mailbox::mailbox_dir_guard(&mailbox)?;
             std::fs::create_dir_all(&mailbox)?;
