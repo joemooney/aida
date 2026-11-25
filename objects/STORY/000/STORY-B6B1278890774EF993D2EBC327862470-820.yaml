@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-25T02:32:59.716320030Z
+modified_at: 2026-11-25T02:33:12.140284511Z
 req_type: Story
 tags:
 - autonomy
@@ -448,6 +448,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Size-limited split. Slice 2 = ship/train live recheck (F1/F5/F6). The per-attempt policy, eligibility, draft-only and path rechecks and production unattended-ship regression remain open. Slice 1 keeps landing supervised and removes F4''s final list lookup.. No triage reason was given.'
   created_at: 2026-11-25T02:32:59.716312622Z
   modified_at: 2026-11-25T02:32:59.716312622Z
+- id: 01a2108c-ca31-7690-b727-9bb944b22fa3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4532):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5c4150371109
+    Recorded: 2026-11-25T02:01:21.117277008+00:00
+    Findings:
+    1. STORY-3038.AC1, slice 1, aida-cli-lib/src/gate/unset_mode.rs:680–703. The approval preview treats successful porcelain Git diff output as a complete path set, but the command leaves Git submodule filtering enabled. In an ordinary project checkout with diff.ignoreSubmodules=all or a registered submodule with ignore=all, a branch that changes docs/cli/test.md and advances a gitlink outside the allow-list can report only the Markdown file and receive a drain preview. The host wrapper preserves configured submodule handling in ordinary code checkouts (aida-core/src/git_ops.rs:436–446). Read the complete committed path set regardless of display configuration while retaining the host wrapper’s submodule-recursion protections. Cover a mixed Markdown/gitlink change with ignore=all. This affects the signed approval-time every-path rule. Landing still requires supervision.
+    2. aida-cli-lib/src/gate/tests/story_2884_unset_mode_tests.rs:571–650. The new Git-backed preview test exercises a Markdown addition and ambiguous refs. The mixed-path and unreadable-path assertions inject paths directly, so they cannot detect a regression in how the preview obtains those paths. In particular, removing --no-renames from gate/unset_mode.rs:686 would pass these tests while Git configured with rename detection can report only the destination for an unchanged file moved from outside the allow-list into docs/cli. Add a Git-backed preview case with rename detection enabled that moves an identical file from an excluded path into the allow-list and requires supervision.
+    3. Deferred follow-up. aida-cli-lib/src/requirements_cli.rs:7105–7111, :7779–7785, and :9344–9351 render the new result as Effective mode: drain, including the TOON effective_mode field. The actual resolver still requires supervision for an unset mode. Label eligible approved-small output as a preview so operators and consumers can distinguish it from the effective legacy drain policy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T02:33:11.985934648Z
+  modified_at: 2026-11-25T02:33:11.985934648Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
