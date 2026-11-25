@@ -595,7 +595,7 @@ fn spec_worktree_core_mints_fresh_when_lease_tree_was_deleted() {
         |p, branch| {
             assert!(!p.exists(), "no bare dir may be created before the mint");
             minted.set(true);
-            git(repo.path(), &["worktree", "prune"]);
+            crate::worktree_gc::lossless_prune_worktrees(repo.path());
             git(
                 repo.path(),
                 &[

@@ -1842,7 +1842,6 @@ pub(crate) fn open_or_extend_pr(
         }))
     })();
     let _ = git(project_root, &["worktree", "remove", "--force", &dir_s]);
-    let _ = git(project_root, &["worktree", "prune"]);
     result
 }
 
