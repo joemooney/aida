@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T11:45:34.034461235Z
+modified_at: 2026-11-25T12:22:18.099276837Z
 req_type: Story
 tags:
 - integration
@@ -167,6 +167,19 @@ comments:
   modified_at: 2026-11-25T11:38:18.183700013Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a212a8-2381-7103-98f0-08fc00a5073d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8e55ef94e2b0d8a5cc3cdfaba882060473b53f47 plus native working tree on int39-story-3120-s2. The integration merge-base diff is empty before host publication. Reviewed origin/main...HEAD context, git diff HEAD and untracked inventory (empty).
+    AC1: [evidence: behavioral-test] review_prepare.rs:878 tests SARIF output and inclusive fail-on gating, including a passing higher threshold and a usable report after failure.
+    AC2: [evidence: behavioral-test] review_engine.rs:1601 tests empty and unknown severity as SARIF error and fail-closed gating.
+    AC3: [evidence: behavioral-test] review_prepare.rs:878 supplies a changed path and a real unchanged path together and verifies refusal before export. At review_prepare.rs:241 membership is exact and scoped to the classified reviewable paths; duplicates cannot bypass the check. Bare arrays and runner envelopes use the same S1 parser. Output uses the existing repository-confined writer and its symlink/metadata refusal tests. No test weakened. Updated the help golden after checking both user-visible surfaces.
+    AC4: [evidence: configuration-validation] scripts/ratchet-set.json:47 registers the CLI regression. Both targeted cargo tests executed and passed, make check-ci-fast exited 0 including help snapshot, all 8 CLI module tests and all 24 core module tests. git diff --check passed. Host PR CI pending publication. Refs-only S2; automated agent execution and forge posting are outside the slice.
+  created_at: 2026-11-25T12:22:18.099276837Z
+  modified_at: 2026-11-25T12:22:18.099276837Z
+  session_id: 01a21285c99f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
