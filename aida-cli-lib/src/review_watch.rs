@@ -3860,19 +3860,50 @@ fn spec_approvals_by_head(root: &Path) -> std::collections::BTreeMap<String, Str
     by_head
 }
 
-/// The promotion pass. Both recorders persist the PR and attested SHA in the
-/// verdict; a consumed intent is remembered while GitHub registers the FULL
-/// run. Returns one line per approved PR (promoted, or skipped with its
-/// reason). Each failure is written to stderr, which is all schedule.log
-/// keeps: agent output mode prints the final error on stdout.
+/// The promotion pass. Writes one line per approved PR it considered to
+/// `out` (promoted, or skipped with its reason) and every failure, per-PR or
+/// pass-level, to `err` before returning an error: schedule.log keeps only
+/// stderr, and agent output mode prints the final error on stdout.
+// trace:BUG-2764 | ai:claude
+pub(crate) fn promote_approved_heads(
+    root: &Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<()> {
+    let (lines, failures) = match promotion_pass(root) {
+        Ok(pass) => pass,
+        Err(error) => {
+            let _ = writeln!(err, "promotion pass failed: {error:#}");
+            return Err(error);
+        }
+    };
+    // A closed stdout must not hide the failures below.
+    for line in &lines {
+        let _ = writeln!(out, "{line}");
+    }
+    for failure in &failures {
+        let _ = writeln!(err, "{failure}");
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "{} approved PR(s) could not be promoted",
+        failures.len()
+    );
+    Ok(())
+}
+
+/// Both recorders persist the PR and attested SHA in the verdict; a consumed
+/// intent is remembered while GitHub registers the FULL run. Returns the
+/// per-PR outcome lines and the per-PR failures.
 // trace:BUG-2729 | ai:codex
 // trace:BUG-2764 | ai:claude
-pub(crate) fn promote_approved_heads(root: &Path) -> Result<Vec<String>> {
+fn promotion_pass(root: &Path) -> Result<(Vec<String>, Vec<String>)> {
     use crate::full_tier::{bounded, request_full_ci_with};
     use crate::gate::review_verdict::read_recorded_verdict;
-    let repo = forge::Repository::load(root)?;
-    let runtime = Directory::shared(&root.join(".aida"))?;
-    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))?;
+    let repo = forge::Repository::load(root).context("load the forge repository")?;
+    let runtime = Directory::shared(&root.join(".aida")).context("open .aida")?;
+    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))
+        .context("open .aida/full-ci-requests")?;
     let spec_approvals = std::cell::OnceCell::new();
     let promote = |change: forge::Change| -> Result<Option<String>> {
         let pr = change.id;
@@ -3950,22 +3981,25 @@ pub(crate) fn promote_approved_heads(root: &Path) -> Result<Vec<String>> {
         )))
     };
     let (mut lines, mut failures) = (Vec::new(), Vec::new());
-    for change in repo.discover(root)?.into_iter().filter(|c| !c.gitlab) {
+    let changes = repo.discover(root).context("discover open pull requests")?;
+    for change in changes.into_iter().filter(|c| !c.gitlab) {
         let key = change.key();
         match promote(change) {
             Ok(line) => lines.extend(line),
             Err(error) => failures.push(format!("{key}: failed: {error:#}")),
         }
     }
-    for failure in &failures {
-        eprintln!("{failure}");
-    }
-    anyhow::ensure!(
-        failures.is_empty(),
-        "{} approved PR(s) could not be promoted",
-        failures.len()
-    );
-    Ok(lines)
+    Ok((lines, failures))
+}
+
+/// Runs a promotion pass, capturing (result, stdout lines, stderr text).
+#[cfg(test)]
+fn promote_captured(root: &Path) -> (Result<()>, Vec<String>, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let result = promote_approved_heads(root, &mut out, &mut err);
+    let out = String::from_utf8(out).unwrap();
+    let lines = out.lines().map(str::to_owned).collect();
+    (result, lines, String::from_utf8(err).unwrap())
 }
 
 #[cfg(test)]
@@ -3993,7 +4027,7 @@ pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, reco
         let completed = matches!(state, "done" | "again");
         write("state", if completed { "completed" } else { state });
         write("current", head);
-        let result = promote_approved_heads(root);
+        let result = promote_captured(root).0;
         assert_eq!(
             result.is_err(),
             matches!(state, "missing" | "moved"),
@@ -4005,7 +4039,7 @@ pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, reco
     let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
     assert_eq!(edits.trim(), expected);
     write("base", "release");
-    promote_approved_heads(root).unwrap();
+    promote_captured(root).0.unwrap();
     assert_eq!(
         std::fs::read_to_string(root.join("edits")).unwrap(),
         format!("{expected}\n{expected}\n")
@@ -4051,7 +4085,8 @@ fn bug2764_spec_keyed_approval_promotes_in_both_orders() {
             std::fs::write(dir.join("BUG-1.json"), body.to_string()).unwrap();
         };
         let tick = || {
-            let lines = promote_approved_heads(&root).unwrap();
+            let (result, lines, _) = promote_captured(&root);
+            result.unwrap();
             assert_eq!(lines.len(), 1, "{lines:?}");
             lines[0].clone()
         };
@@ -4067,7 +4102,8 @@ fn bug2764_spec_keyed_approval_promotes_in_both_orders() {
         } else {
             write("state", "completed");
             // No approval yet: nothing considered, nothing edited.
-            let lines = promote_approved_heads(&root).unwrap();
+            let (result, lines, _) = promote_captured(&root);
+            result.unwrap();
             assert!(lines.is_empty(), "{lines:?}");
             approve();
         }
@@ -4079,6 +4115,77 @@ fn bug2764_spec_keyed_approval_promotes_in_both_orders() {
         assert!(line.contains("already requested"), "{line}");
         assert_eq!(edits().lines().count(), 1);
     }
+}
+
+/// AC3 failure path: a PR whose promotion fails is reported on stderr while
+/// the other PR's line still reaches stdout, and the pass fails; a failed
+/// discovery leaves its reason on stderr too.
+// trace:BUG-2764 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2764_promotion_failures_reach_stderr() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&root).unwrap();
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("AIDA_PROJECT_ROOT", Some(root.to_str().unwrap())),
+        ("AIDA_DRIVE_ROOT", Some(root.to_str().unwrap())),
+        ("PATH", Some(path.as_str())),
+    ]);
+    let head = crate::test_git::commit_fixture(&root);
+    forge::git(
+        &root,
+        &["remote", "add", "origin", "git@github.com:o/r.git"],
+    )
+    .unwrap();
+    let change = |pr: u64| {
+        serde_json::json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,
+            "baseRefName":"main","author":{"login":"alice"}})
+    };
+    let script = format!(
+        "#!/bin/sh\n[ -f fail-list ] && exit 1\ncase \"$*\" in\n  *\"pr list\"*) echo '[{},{}]';;\n  *) exit 1;;\nesac\n",
+        change(71),
+        change(72)
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let verdict = |name: &str, attested: bool| {
+        let mut body = serde_json::json!({"verdict":"approved","reviewed_sha":head,"summary":"ok"});
+        if attested {
+            body["recorder_attestation"] = serde_json::json!({"sha": head});
+        }
+        std::fs::write(dir.join(name), body.to_string()).unwrap();
+    };
+    // PR-71 is skipped before any forge call; PR-72's `pr view` fails.
+    verdict("PR-71.json", false);
+    verdict("PR-72.json", true);
+    let (result, lines, err) = promote_captured(&root);
+    assert!(result.is_err(), "{lines:?}");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("PR-71: skipped (approval carries no recorder"),
+        "{lines:?}"
+    );
+    assert!(err.starts_with("PR-72: failed: "), "{err}");
+    assert!(err.contains("forge discovery failed"), "{err}");
+    // A pass-level failure (discovery) also leaves its reason on stderr.
+    std::fs::write(root.join("fail-list"), "").unwrap();
+    let (result, lines, err) = promote_captured(&root);
+    assert!(result.is_err() && lines.is_empty(), "{lines:?}");
+    assert!(
+        err.starts_with("promotion pass failed: discover open pull requests: "),
+        "{err}"
+    );
 }
 
 #[cfg(test)]
