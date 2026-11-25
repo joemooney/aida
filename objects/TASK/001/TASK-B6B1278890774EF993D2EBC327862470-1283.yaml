@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T03:38:30.764547327Z
-modified_at: 2026-11-24T03:38:30.764547327Z
+modified_at: 2026-11-25T07:20:53.389660115Z
 req_type: Task
 tags:
 - carried-from:TASK-3852
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20af8-20fa-7e32-9eaf-838b3b1af49c
   created_at: 2026-11-24T03:38:43.162823021Z
+comments:
+- id: 01a21194-2d8d-7c01-a37b-fc3f01e4a597
+  author: joe
+  content: 'Rejected in the 2026-11-24 review-follow-up triage (Joe approved 2026-11-25 00:16; product-15): likely already fixed. Parent: TASK-3852 / #4478. Evidence: deadline wraps main_root/Repository::load (forge.rs:1915) 103bb2e. Full table: docs/plans/2026-11-24-review-followup-triage.md'
+  created_at: 2026-11-25T07:20:53.389660115Z
+  modified_at: 2026-11-25T07:20:53.389660115Z
 history:
 - id: 01a20be9-ef25-7243-8a28-c30b9452f2fa
   author: joe
