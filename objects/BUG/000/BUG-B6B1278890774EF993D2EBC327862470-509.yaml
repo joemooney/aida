@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A partial receipt with ANY missing attribution field fails CLOSED: it returns Unknown, blocks admission, is never retired, and the refusal keeps the inspection command.
   - AC2: Replace the grant-only success expectation in aida-cli-lib/src/tests/story_2254_codex_bg_receipt_tests.rs:161 with a regression proving incomplete evidence keeps the reservation.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:43.963681475Z
-modified_at: 2026-11-25T03:07:31.562763706Z
+modified_at: 2026-11-25T03:17:55.182491348Z
 req_type: Bug
 tags:
 - launch
@@ -242,6 +242,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a210b5-bb6e-7060-bc08-ef4acb68751a
+  author: aida-orchestrator
+  timestamp: 2026-11-25T03:17:55.182502402Z
+  session_id: 01a210b285e1
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
@@ -250,3 +258,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8dfad228d58
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2748 AC1 is partial. Missing worker, supervisor, worktree and owner fields are refused in the covered cases, and CLI diagnostics retain the inspection command. The Supervisor-owner scan still uses a start-time bound without dispatcher evidence. AC2 passes source review. The replacement test exercises grant-only and individual missing-field refusals, with separate occupied, unknown and clear scanner outcomes. Review used protected main 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 and landed tree 3b8635f9365227ebc3d504bd53a7c72c3ba11d9c. The original head is one commit behind. None of the findings depends on code changed by that base advance. Fast gates passed and fast compile was pending at review time. No local tests were run.
+  recovery_hint: address the review findings, move BUG-2748 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T03:17:55.182491348Z
