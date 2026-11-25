@@ -507,3 +507,45 @@ fn containment_agy_refusal_names_supported_vendors_and_stays_closed() {
             .unwrap();
     }
 }
+
+// trace:BUG-2752 | ai:codex
+#[test]
+fn bug_2752_remote_policy_refuses_until_published() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    policy(root.path(), "");
+    let error = session::containment_posture_in(root.path(), "codex", true)
+        .unwrap_err()
+        .to_string();
+    for detail in [
+        "aida init --agent codex",
+        "[contained.vendors] codex = \"native\"",
+        ".aida/config.toml",
+        "trusted default branch",
+    ] {
+        assert!(error.contains(detail), "{error}");
+    }
+    assert!(!error.contains("--vendor claude"), "{error}");
+
+    assert!(
+        crate::config_cmd::offer_init_codex_native(root.path(), true, true, || Ok(true)).unwrap()
+    );
+    git(root.path(), &["commit", "-qam", "local native policy"]);
+    // Remote-backed launches trust the published tip. Local writes alone
+    // must still refuse until the default branch receives the init commit.
+    let error = session::containment_posture_in(root.path(), "codex", true).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("policy committed locally but not pushed: run `git push origin main`"));
+    assert!(!error.to_string().contains("aida init"));
+    git(
+        root.path(),
+        &["update-ref", "refs/remotes/origin/main", "main"],
+    );
+    assert_eq!(
+        session::containment_posture_in(root.path(), "codex", true).unwrap(),
+        ContainmentPosture::Native
+    );
+}
