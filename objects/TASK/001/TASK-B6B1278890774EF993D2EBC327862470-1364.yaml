@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T17:22:20.643705009Z
-modified_at: 2026-11-25T05:12:42.802692221Z
+modified_at: 2026-11-25T05:21:49.208439762Z
 req_type: Task
 tags:
 - integration
@@ -133,6 +133,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a21127-658f-7da2-afc2-bad582ef9d58
+  author: joe
+  timestamp: 2026-11-25T05:22:04.303738256Z
+  session_id: 01a21124b641
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 289cc394a334ee2760c79067fd871bbe66f9c5a9
@@ -144,3 +149,15 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Full sweep of all three changed files against the forge-pinned integration base afbea08b75a58cf8d9618068cb5efd495790b244. The worksheet's base lookup was indeterminate. Forge metadata and the local commit graph established the exact comparison. The PR claims completion of TASK-3880 (origin TASK-b6b1278890774ef993d2ebc327862470-1364).
+    TASK-b6b1278890774ef993d2ebc327862470-1364.AC1: unverified
+    TASK-b6b1278890774ef993d2ebc327862470-1364.AC2: unverified
+    GitHub FAST checks and merge-hold status passed. The FAST ratchet log for this head shows 23 passing core review-engine tests, including the regressions selectable with cargo test -p aida-core h2c_equal_stems_in_different_directories_stay_separate and cargo test -p aida-core h2c_rust_facets_follow_sample_paths. These verify cross-directory separation with spare capacity and path-based facet triggering within the helper. The companion layouts required by the advisor ruling and the language scope of facets in the emitted bundle have the defects below. No local tests or builds were run.
+  recovery_hint: address the review findings, move TASK-3880 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T05:21:49.208439762Z
