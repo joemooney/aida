@@ -1,0 +1,31 @@
+id: 01a214d5-773c-7e13-a9dc-3d3c509d9dc9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1454
+title: 'Review follow-up: aida-cli-lib/src/review_watch.rs admit_change: besides forge reads, the forge WRITES that '
+description: |-
+  From BUG-2765
+  Reviewed sha: 5f2421b51c8220f2ba2035bb3bf7140b1e493b03
+
+  aida-cli-lib/src/review_watch.rs admit_change: besides forge reads, the forge WRITES that precede PassClaim::decide now run without the admission claim: stale_follow_up -> update::forge_update (`gh pr update-branch`), review_launch::route_rework, and the readiness report(). Before this PR the whole pass ran under the shared claim, so a land/ship holding Exclusive admission excluded them. pr-head.protect=true (pr_head_guard::check) still refuses approved or train-pinned heads, so the ship case is mitigated, but it is check-then-act, and after decide() yields mid-pass the remaining changes still get update-branch/rework routing while the land runs. The PassClaim doc comment ('Forge reads ... run without it') understates this. Follow-up: short-circuit the rest of the pass once decide() reports a yield, or take the claim around forge mutations.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T22:31:03.740099376Z
+modified_at: 2026-11-25T22:31:03.740099376Z
+req_type: Task
+tags:
+- carried-from:BUG-2765
+- finding-hash:7900099f
+- from-review:BUG-2765
+relationships:
+- rel_type: References
+  target_id: 01a21471-4e55-7201-be4e-604408724146
+  created_at: 2026-11-25T22:31:03.740159799Z
+filed_at:
+  code_sha: 5f2421b51c8220f2ba2035bb3bf7140b1e493b03
+  branch: pr-4597
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 34c86b75a25
+  vendor: claude
+  session: 01a214d24e6e
