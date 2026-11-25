@@ -44,6 +44,7 @@
       "filter": "review_prepare::tests::",
       "source": "aida-cli-lib/src/review_prepare.rs",
       "tests": [
+        "s2_export_gate_checks_changed_paths",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",

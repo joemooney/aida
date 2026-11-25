@@ -74,6 +74,14 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "FINDINGS_JSON")]
     pub anchor_findings: Option<PathBuf>,
 
+    /// Write a SARIF 2.1.0 report inside the repository.
+    #[clap(long, value_name = "PATH", requires = "anchor_findings")]
+    pub sarif: Option<PathBuf>,
+
+    /// Exit with an error when any finding meets or exceeds this severity.
+    #[clap(long, value_name = "SEVERITY", requires = "anchor_findings")]
+    pub fail_on: Option<String>,
+
     /// Emit machine-readable JSON output.
     #[clap(long)]
     pub json: bool,
@@ -226,8 +234,22 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let anchored_findings = if let Some(findings_path) = &args.anchor_findings {
         let raw_findings = std::fs::read_to_string(findings_path)
             .with_context(|| format!("read findings JSON {}", findings_path.display()))?;
-        let parsed: Vec<RawReviewFinding> = serde_json::from_str(&raw_findings)
+        // trace:STORY-3120 | ai:codex
+        let (parsed, _) = aida_core::review_engine::parse_runner_findings_json(&raw_findings)
+            .map_err(anyhow::Error::msg)
             .with_context(|| format!("parse findings JSON {}", findings_path.display()))?;
+        let allowed: BTreeSet<_> = inventory
+            .reviewable_files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+        for finding in &parsed {
+            anyhow::ensure!(
+                allowed.contains(finding.path.as_str()),
+                "finding path outside reviewable inventory: {:?}",
+                finding.path
+            );
+        }
         Some(anchor_findings_with(&parsed, |path| {
             content_cache.get(path).cloned()
         }))
@@ -254,10 +276,34 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         render_bundle_markdown(&bundle)
     };
 
+    // trace:STORY-3120 | ai:codex
+    let findings = bundle.anchored_findings.as_deref().unwrap_or_default();
+    let exceeded = args
+        .fail_on
+        .as_deref()
+        .map(|threshold| {
+            aida_core::review_engine::findings_exceeding_threshold(findings, threshold)
+                .map_err(anyhow::Error::msg)
+        })
+        .transpose()?;
+
     if let Some(write_path) = &args.write {
         write_output(&project_root, write_path, &rendered)?;
     } else {
         println!("{rendered}");
+    }
+
+    if let Some(path) = &args.sarif {
+        let report = aida_core::review_engine::findings_to_sarif_json(findings);
+        write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
+            .with_context(|| format!("write SARIF {}", path.display()))?;
+    }
+    if let (Some(threshold), Some(matches)) = (&args.fail_on, exceeded) {
+        anyhow::ensure!(
+            matches.is_empty(),
+            "{} findings meet or exceed --fail-on {threshold}",
+            matches.len()
+        );
     }
 
     if let Some(cov) = &bundle.coverage_verification {
@@ -826,6 +872,60 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-3120 | ai:codex
+    #[test]
+    fn s2_export_gate_checks_changed_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("unchanged.rs"), "old").unwrap();
+        git_text(root, &["add", "unchanged.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        std::fs::write(root.join("changed.rs"), "new").unwrap();
+        git_text(root, &["add", "changed.rs"]).unwrap();
+        crate::test_git::commit_fixture(root);
+        let input = root.join("findings.json");
+        let output = root.join("report.sarif");
+        let mut args = ReviewPrepareArgs {
+            from: Some(base),
+            anchor_findings: Some(input.clone()),
+            sarif: Some(output.clone()),
+            fail_on: Some("high".into()),
+            ..Default::default()
+        };
+        let finding = |path| {
+            serde_json::json!({"path":path,"severity":"high",
+            "category":"bug","message":"example","existing_code":"new"})
+        };
+        let valid = finding("changed.rs");
+        std::fs::write(
+            &input,
+            serde_json::json!([valid, finding("unchanged.rs")]).to_string(),
+        )
+        .unwrap();
+        let error = handle_review_prepare(&args, &store).unwrap_err();
+        assert!(error.to_string().contains("outside reviewable inventory"));
+        assert!(!output.exists());
+        std::fs::write(
+            &input,
+            serde_json::json!({"findings":[valid],"files":[]}).to_string(),
+        )
+        .unwrap();
+        let error = handle_review_prepare(&args, &store).unwrap_err();
+        assert!(error.to_string().contains("1 findings meet or exceed"));
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap();
+        let result = &report["runs"][0]["results"][0];
+        assert_eq!(
+            result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "changed.rs"
+        );
+        args.fail_on = Some("critical".into());
+        handle_review_prepare(&args, &store).unwrap();
+    }
 
     #[test]
     fn invalid_review_rules_errors() {
