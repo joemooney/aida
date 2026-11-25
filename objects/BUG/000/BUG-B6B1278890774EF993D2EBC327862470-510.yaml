@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:25:53.341692173Z
-modified_at: 2026-11-25T07:10:10.548091518Z
+modified_at: 2026-11-25T21:05:11.329758899Z
 req_type: Bug
 tags:
 - data-loss
@@ -282,6 +282,15 @@ comments:
   content: 'advisor-122 20:10: r3 at the round cap; the residual live-to-missing race is split to BUG-2760 (STRICT, sketch first). The advisor rules on #4537 after the independent verdict on the r3 head (71b61e0938): override-approve if the only blocker is that race.'
   created_at: 2026-11-25T03:03:52.590543751Z
   modified_at: 2026-11-25T03:03:52.590543751Z
+- id: 01a21486-d8a1-7882-aec9-a181b153e1be
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3400: Review follow-up: aida-cli-lib/src/worktree_gc.rs:246-248,300-303. Session GC dry-run skips missing-registra
+      From BUG-2749 Reviewed sha: 71b61e09385fc46ea829ff72ae8e2191d7a7e635 aida-cli-lib/src/worktree_gc.rs:246-248,300-303. Session GC dry-run skips missing-registration inspection, so it can report an agent-managed checkout as preserved even though applied GC would immediately clear its clean registration. Use the read-only inspection to report the proposed registration cleanup and leave the repository unchanged.
+  created_at: 2026-11-25T21:05:11.329758899Z
+  modified_at: 2026-11-25T21:05:11.329758899Z
 history:
 - id: 01a20df3-8e0a-7c21-bd43-659879104650
   author: joe
