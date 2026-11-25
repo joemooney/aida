@@ -202,6 +202,17 @@ comments:
   modified_at: 2026-11-25T06:36:33.481157179Z
   session_id: 01a211465bf0
   harness_version: codex-cli 0.167.0
+- id: 01a21189-c869-75e2-990d-34239ef5d060
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR-4560 r4 FINAL @ 3e62e18bdf (integration-30): PASS. merge-tree is clean vs integration 7ff13906a1a.
+    Fail-closed design per the advisor's 21:58 ruling: review_risk_pr_base_with_budget first runs host_git_command config --type=bool --get-regexp '^(extensions.partialclone|remote.*.promisor)$'. It proceeds ONLY when no key matches (exit 1, empty output) or every match is 'remote.<x>.promisor false'. A set extensions.partialClone, which is a remote name, fails --type=bool, so it is treated as partial. Any true promisor, or any error, returns None. review_risk::assess with base None returns STRICT before running any git (evidence() exits at base?), so a partial clone touches no objects anywhere in the risk path. The bundle-URI disables stay on the pinned fetch.
+    Tests: (F3) the seat-refusal assertions go through review_risk_pr_base in an aida-seat-* path with the gh, ssh and trace fixtures in place. Partial-clone cases remote.other.promisor=yes and extensions.partialClone=origin, with a real missing blob, both give None and STRICT. A TRACE2 log proves no cat-file, merge-base, diff, fetch or remote-https process ran. (F4) A nonempty fetch.bundleURI points at a real bundle with an epoch atime. The pinned fetch succeeds with the atime unchanged; a control plain fetch then advances it, proving the probe can detect a read.
+    OBSERVATION (pre-existing, out of TASK-3874 scope): gate/ledger/event.rs runs patch_identity(root, head) before the risk path, and that git work is not covered by this partial-clone guard. READY after FAST plus the independent APPROVED (advisor rule for this PR).
+  created_at: 2026-11-25T07:09:17.130574164Z
+  modified_at: 2026-11-25T07:09:17.130574164Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a21189-a781-72a1-838f-bd0626a84635
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int38-task-3874-r3` at head `3e62e18bdfa165724e1624670bbcc4d28190019e`.'
