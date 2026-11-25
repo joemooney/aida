@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T15:56:09.934312389Z
-modified_at: 2026-11-25T12:06:57.342083438Z
+modified_at: 2026-11-25T12:07:43.345255753Z
 req_type: Task
 tags:
 - integration
@@ -240,6 +240,17 @@ comments:
   modified_at: 2026-11-25T12:06:57.342083438Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2129a-c7f1-7ec1-ac87-4a96ed5cfc08
+  author: joe
+  content: |-
+    PARKED (advisor-122 2026-11-25 05:13): #4560 r4 FINAL @3e62e18b still has 2 HIGH security findings; integration-30 is reverting the r2 squash out of integration so promotion 38 ships the rest. r4 findings:
+    - [high] F1 — forge.rs:7127 constructs the partial-clone probe with host_git_command before it knows whether any object read is safe. In linked worktrees, the builder runs the .gitmodules discovery at aida-core/src/git_ops.rs:228–230 and :325–361. When the worktree fil
+    - [high] F2 — forge.rs:7127–7145 inherits GIT_CONFIG. Git honors that variable for the config subcommand alone. In a process with a config-file override, the guard can see no promisor markers even though the subsequent object commands use the checkout's actual partial-
+    - [medium] F3 — forge.rs:7147 calls pr_state_repository after the bounded config probe. The helper at :7219–7223 gives remote discovery a fresh 500 ms timeout even when little or none of the 15-second budget remains. Cap this step by the remaining scoped deadline and kee
+    - [low] F4 — task_3874_review_risk.rs:65–69 and :133–135 use filesystem atime as the bundle-read oracle. On a Linux noatime mount, a successful control read leaves the timestamp unchanged and the test fails despite correct behavior. Use an access observation independe
+    NEEDS A SKETCH: guard with a sanitized env (no GIT_CONFIG*), no object access before the decision, a minimal raw command builder. Not relaunched tonight.
+  created_at: 2026-11-25T12:07:43.345255753Z
+  modified_at: 2026-11-25T12:07:43.345255753Z
 history:
 - id: 01a20e46-2692-71e1-aae2-dea35b28f635
   author: joe
