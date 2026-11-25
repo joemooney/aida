@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-25T07:12:15.753631455Z
+modified_at: 2026-11-25T07:13:46.854582448Z
 req_type: Bug
 tags:
 - hygiene
@@ -243,6 +243,18 @@ comments:
   content: PR-4416 at 2ba09f28b0b1a54438ab431a2e40d653ddb43289 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-25T07:07:59.014021643Z
   modified_at: 2026-11-25T07:07:59.014021643Z
+- id: 01a2118d-e8d8-7f23-86b9-f88cbe3964d1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:13):
+    # BUG-2713 / PR #4416 CONFLICT REPAIR (product-15 conflict sweep 2026-11-25 00:15; product-15). Lane: CODEX. MAIN, existing branch. NO SCOPE CHANGE.
+    #4416 now CONFLICTS with main (found by the product conflict check (main moved under 2ba09f28)). Merge current origin/main into the branch, resolve conflicts preserving BOTH sides' intent, and change nothing else. One targeted cargo run on the touched module, then make check-ci-fast, then push to #4416. COMMIT your work.
+    TITLE TRAILER: keep the existing PR title unchanged.
+    Keep the PR content at 2ba09f28 intact; only merge main. If a conflict is a BEHAVIOURAL overlap (not textual), resolve it in favour of the STRICTER / fail-closed behaviour and say so in the PR body rather than punting.
+  created_at: 2026-11-25T07:13:46.854582448Z
+  modified_at: 2026-11-25T07:13:46.854582448Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
