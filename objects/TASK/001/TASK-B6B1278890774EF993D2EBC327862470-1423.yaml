@@ -1,0 +1,31 @@
+id: 01a211b5-5a38-7a11-be5d-7ef5221b3bf5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1423
+title: 'Review follow-up: Deferred follow-up TASK-3881 (F6), aida-cli-lib/src/config_cmd.rs:1750,1762,1787,1811–1823'
+description: |-
+  From BUG-2752
+  Reviewed sha: 0b6c3b11e21ca26cdaf15c5de0ce0341d87f70f9
+
+  Deferred follow-up TASK-3881 (F6), aida-cli-lib/src/config_cmd.rs:1750,1762,1787,1811–1823. The config clean check, initial read and path commit use separate snapshots. An unrelated concurrent edit before the initial read or after saving can be included in the native-policy commit. Bind the commit to the verified starting config and intended output under TASK-3881.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-25T07:57:07.512834105Z
+modified_at: 2026-11-25T07:57:07.512834105Z
+req_type: Task
+tags:
+- carried-from:BUG-2752
+- finding-hash:7eb5a07c
+- from-review:BUG-2752
+relationships:
+- rel_type: References
+  target_id: 01a20ea2-75f4-7c30-810d-dfbe626bcafd
+  created_at: 2026-11-25T07:57:22.183568600Z
+filed_at:
+  code_sha: 0b6c3b11e21ca26cdaf15c5de0ce0341d87f70f9
+  branch: pr-4529
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 33a7b137a89
+  vendor: claude
+  session: 01a211b2ef97
