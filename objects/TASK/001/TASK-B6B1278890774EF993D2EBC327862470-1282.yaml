@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-24T00:44:32.975509778Z
-modified_at: 2026-11-24T00:44:32.975509778Z
+modified_at: 2026-11-25T07:31:54.453751630Z
 req_type: Task
 tags:
 - carried-from:TASK-3847
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20a78-c995-7b21-9027-9613acbeb45d
   created_at: 2026-11-24T00:44:47.211290251Z
+comments:
+- id: 01a2119e-43d5-7882-aa2f-20836359fd4a
+  author: joe
+  content: 'Folded into TASK-3899 (review debt: doctor) in the 2026-11-24 triage (Joe approved).'
+  created_at: 2026-11-25T07:31:54.453751630Z
+  modified_at: 2026-11-25T07:31:54.453751630Z
 history:
 - id: 01a20b5c-cb67-7f33-9d48-89aa6c0211f8
   author: joe
