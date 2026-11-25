@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-25T18:30:27.738722619Z
+modified_at: 2026-11-25T18:32:19.327200625Z
 req_type: Story
 tags:
 - landing
@@ -96,6 +96,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-25T18:30:27.553413Z
   modified_at: 2026-11-25T18:30:27.553413Z
+- id: 01a213fb-1f30-7492-86d7-e3c178804b52
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:32):
+    # STORY-3131 S1 r2 (advisor-122 ruling 2026-11-25 11:35 on #4584 @ 55061590; product-15). Lane: CLAUDE. MAIN, existing branch story-3131-s1-landing-drought / PR #4584. <=60 lines. First REBASE/merge onto current main.
+    (F1, p2 major) An UNSET execution_mode counts as SUPERVISED, matching gate::ship::merge_requires_supervision (only Some(Drain) = drain). Test both.
+    (F2) Remove the duplicate stalled-reviews row in command_table (main already has it); rebase onto main.
+    (F3) Pending fast CI → report "CI still running", NOT "full tier missing"; reorder the arms, plus a test.
+    (F4) Count only LANDABLE PRs (green, no full-tier gap) in "while N ready PRs wait".
+    (F5) Test command_timeout() = 60s for landing-drought, and the ledger selection (the latest record wins).
+    Nothing else. One targeted cargo test run on this host, make check-ci-fast, then push to #4584. COMMIT your work. Keep the PR title.
+  created_at: 2026-11-25T18:32:19.327200625Z
+  modified_at: 2026-11-25T18:32:19.327200625Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
