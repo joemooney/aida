@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-25T21:33:03.040814589Z
+modified_at: 2026-11-25T22:31:44.753923736Z
 req_type: Bug
 tags:
 - landing
@@ -65,6 +65,13 @@ comments:
   modified_at: 2026-11-25T21:23:24.686145292Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a214d6-1771-77a2-a8bb-b4c91bc0881a
+  author: dirtlab
+  content: Commit 9e55228e42 references this requirement
+  created_at: 2026-11-25T22:31:44.753923736Z
+  modified_at: 2026-11-25T22:31:44.753923736Z
+  session_id: 01a2149c38e5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
