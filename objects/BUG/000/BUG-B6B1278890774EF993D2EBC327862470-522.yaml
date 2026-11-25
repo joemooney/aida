@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872839Z
-modified_at: 2026-11-25T04:31:44.346397216Z
+modified_at: 2026-11-25T04:59:33.878705092Z
 req_type: Bug
 tags:
 - lanes
@@ -28,6 +28,13 @@ history:
   author: joe
   timestamp: 2026-11-25T04:31:44.507580469Z
   changes: []
+- id: 01a21112-ca76-75f0-8409-66eba9789f61
+  author: aida-session-start
+  timestamp: 2026-11-25T04:59:33.878703349Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
