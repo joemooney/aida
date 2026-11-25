@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T09:14:47.209880783Z
+modified_at: 2026-11-25T09:14:55.564432438Z
 req_type: Bug
 tags:
 - leases
@@ -283,6 +283,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, landed tree 9d629481b3c4dcc3103e2aab5eb319e66389f5bd, under the advisor''s operator-attested redesign and round-four brief. AC1 partial: an absent clone can be released with typed confirmation, but release can succeed with no durable outcome or reason. AC2 and present-clone recovery partial: non-ENOENT path lookup errors refuse and the move is atomic, nonreplacing and performs no repack or alternates mutation. The EXDEV fixture checks device identity, but the required alternates preservation assertion is missing. Round four partial: real CLI tests cover operator gating, directory replacement, absent-to-present changes and a lease stamp change, but stale-finding eligibility can still admit a live stamped worker. Fast source gates passed and fast compile was pending at review time. No local builds or tests run.. No triage reason was given.'
   created_at: 2026-11-25T09:14:47.209872039Z
   modified_at: 2026-11-25T09:14:47.209872039Z
+- id: 01a211fc-942a-76c3-99ea-57862fa71796
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2755):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 04abb2b5add6
+    Recorded: 2026-11-25T09:13:44.102999578+00:00
+    Findings:
+    1. BUG-2755 r4 stale-holder requirement — aida-cli-lib/src/doctor/worktrees.rs:1442 and aida-cli-lib/src/doctor_root.rs:1134. The attested path accepts any stale-leases finding, but the report emits one when the creator PID is dead or the branch is merged even if lease_state_for returned Live for the stamped active worker. A detached worker can outlive its creator. Its unchanged lease bytes satisfy the final comparison, so the command can move its checkout and revoke its grant. Refuse a live stamped holder independently of the diagnostic finding and verify the current holder under the lease lock before changing the checkout. Add a CLI regression with a dead creator and a live stamped worker.
+    2. BUG-2755 r4 F4 and AC1 audit — aida-cli-lib/src/doctor/worktrees.rs:1524 and aida-cli-lib/src/ownership/dual.rs:332. The reason and outcome are passed only to best-effort ownership mirroring. With an old local lease that has no corresponding ownership holder, release_steps is empty, and the command deletes the lease and reports success without an audit event. The absent path also never prints the absence outcome. Persist the lease ID, operator reason and salvage destination or absence outcome independently of whether an ownership holder exists, and assert the record for a legacy lease.
+    3. BUG-2755 advisor review requirement on alternates — aida-cli/tests/support/repair_attestation.py:102. The rename path does not repack or mutate alternates, but the CLI regression builds a plain directory and only checks pending mail. It cannot catch a later removal or rewrite of .git/objects/info/alternates. Populate the otherwise unverified clone fixture with a Git alternates file and assert its exact contents in the salvaged checkout.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T09:14:55.402108119Z
+  modified_at: 2026-11-25T09:14:55.402108119Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
