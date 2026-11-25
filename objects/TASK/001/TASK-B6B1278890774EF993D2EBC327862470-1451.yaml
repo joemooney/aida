@@ -13,11 +13,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-25T20:14:03.432463687Z
+modified_at: 2026-11-25T20:24:28.789835945Z
 req_type: Task
 tags:
 - ci
 - disk
+comments:
+- id: 01a21461-9376-7213-b47a-6b469cdc6032
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 13:27): APPROVED, HIGH, standard, drain. Evidence: /var/cache/aida-ci reached 255G (incremental target-v2 dirs, never pruned) and took the imac root to 90%. Prune is bounded (size + age), skips while a CI job holds the cache (lock or job check), and alerts at a configurable size. One slice, at most 300 lines.'
+  created_at: 2026-11-25T20:24:28.789835945Z
+  modified_at: 2026-11-25T20:24:28.789835945Z
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
   branch: main
