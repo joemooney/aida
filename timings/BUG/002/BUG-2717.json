@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2717",
+  "publishes": [
+    {
+      "at": "2026-11-25T12:13:25.145604595Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-22T23:42:40.990131167Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4398,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "557a8da6d331c05d8a8a63724953478f0735c871"
+      }
+    },
+    {
+      "ts": "2026-11-22T23:42:47.055687461Z",
+      "spec": "BUG-2717",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2717 bug protocol met. The PR changes tests/test_store_mutation.py and traces BUG-2717 in the test and production guard.\nAC1 — unverified. The 10-second subprocess watchdog and absent exec-v1 cover a hangup already observable at dispatch. A hangup between poll and blocking receive can still strand preflight.\nAC2 — verified by the open mode of python3 -m unittest tests.test_store_mutation.ContainedHostPreflightTests. The fixture checks the notification reply and the shim's exec-v1 release.\nAC3 — unverified. The hangup fixture checks the explicit diagnostic with a live wrapper. A concurrent wrapper exit takes the generic refusal first.\nReviewed the landed diff against the pinned base. CI pending at review time. Evidence comes from source inspection and the implementer's recorded targeted run.",
+        "recovery_hint": "address the review findings, move BUG-2717 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T03:58:45.954258370Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T04:44:32.033370712Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4398,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c2b8be87c1108180ef8e204cc0291a1c859b4d18"
+      }
+    },
+    {
+      "ts": "2026-11-23T04:44:36.647364679Z",
+      "spec": "BUG-2717",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2717 AC2 passes. The open-listener control checks the service reply and exec release. AC1 and AC3 remain unmet on the pinned head. The rework described in the implementer's worktree notes is absent from the landing diff. Fast CI passed.",
+        "recovery_hint": "address the review findings, move BUG-2717 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T05:15:30.372342955Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4398,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "08c0bc451ff0dd60aaaa481a8412da2bb8e54c62"
+      }
+    },
+    {
+      "ts": "2026-11-23T05:16:20.978614450Z",
+      "spec": "BUG-2717",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "The supervisor now checks for listener hangup while the receive is in flight, and reports hangup when wrapper exit is also observable. The watchdog covers both refusal paths and checks that the shim receives no exec release. One containment regression gap remains in the open-listener control for BUG-2717 AC2. CI pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2717 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T05:23:20.062114491Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:53:13.706654420Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4398,
+        "verdict": "APPROVED",
+        "reviewed_sha": "817d99e97e6347e1a37b08d22c2d20e955e7325d"
+      }
+    },
+    {
+      "ts": "2026-11-25T12:07:19.726304253Z",
+      "spec": "BUG-2717",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4398
+      }
+    },
+    {
+      "ts": "2026-11-25T12:13:24.918541317Z",
+      "spec": "BUG-2717",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1f65b4af017fd69abed1fb7725dc184065d92a3c",
+        "pr": 4398,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
