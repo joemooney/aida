@@ -5919,8 +5919,10 @@ fn bug2758_rollover_loads_additive_fields_and_omits_zero_retries() {
     );
 }
 
-// trace:BUG-b6b1278890774ef993d2ebc327862470-524.AC1 | ai:codex
-// trace:BUG-b6b1278890774ef993d2ebc327862470-524.AC2 | ai:codex
+// Local half of the head-keyed hold: no liveness probe, same head held until
+// --release, a moved head dispatched, and the old head's verdict not counted.
+// trace:BUG-2763.AC1 | ai:claude
+// trace:BUG-2763.AC2 | ai:codex
 #[test]
 fn bug2763_exited_hold_is_scoped_to_reviewed_head() {
     let (_temp, store) = fixture();
