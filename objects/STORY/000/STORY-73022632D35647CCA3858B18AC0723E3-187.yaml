@@ -19,12 +19,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4376` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T18:50:55.641507443Z
-modified_at: 2026-11-25T21:19:25.435555238Z
+modified_at: 2026-11-25T21:19:28.938811548Z
 req_type: Story
 relationships:
 - rel_type:
@@ -51,6 +51,13 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a21493-eeaa-77f3-829d-d9413cf4db9d
+  author: joe
+  timestamp: 2026-11-25T21:19:28.938808963Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 06d0850cdfca3fa6c056a544a13ee8d810c0c478
   branch: bug-b6b1278890774ef993d2ebc327862470-433
