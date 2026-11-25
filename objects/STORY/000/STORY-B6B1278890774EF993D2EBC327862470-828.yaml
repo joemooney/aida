@@ -9,12 +9,12 @@ description: |
   - AC1: Deferred review findings are recorded as FINDINGS attached to their spec/PR (the findings ledger), NOT as new requirement specs. Reviewers and deferral rulings stop creating "Review follow-up:" drafts; `aida list` (default) shows no findings.
   - AC2: `aida findings` (or `aida findings list --area <path|tag>`) shows open review debt grouped by area/spec; a finding is PROMOTED to a requirement only by an explicit command that groups related findings into one spec with acceptance criteria.
   - AC3: A one-time migration converts existing open "Review follow-up:" drafts into findings on their parent spec (dry-run + operator sign-off), preserving their text and provenance.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T02:24:44.814524472Z
-modified_at: 2026-11-25T02:27:25.709200616Z
+modified_at: 2026-11-25T03:01:43.347530390Z
 req_type: Story
 tags:
 - backlog
@@ -34,6 +34,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a210a6-e733-73e1-be84-4efcda160bfd
+  author: aida-session-start
+  timestamp: 2026-11-25T03:01:43.347529387Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 260a82ae939faf34a8e6505a6f765f2151655610
   branch: main
