@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T20:44:44.076389575Z
+modified_at: 2026-11-25T21:08:59.985076340Z
 req_type: Bug
 tags:
 - ci
@@ -149,6 +149,11 @@ comments:
   modified_at: 2026-11-25T20:44:44.076389575Z
   session_id: 01a214529616
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2148a-55d1-7983-bbb5-d89016277835
+  author: joe
+  content: "FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:\n\n- TASK-b6b1278890774ef993d2ebc327862470-1450: Review follow-up: Test gap: bug2764_spec_keyed_approval_promotes_in_both_orders covers only promoted/skipped\n  "
+  created_at: 2026-11-25T21:08:59.985076340Z
+  modified_at: 2026-11-25T21:08:59.985076340Z
 history:
 - id: 01a213e4-8e14-7832-810b-df00ae26b297
   author: joe
