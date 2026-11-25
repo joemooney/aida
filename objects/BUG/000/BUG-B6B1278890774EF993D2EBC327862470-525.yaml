@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T18:07:01.153149577Z
-modified_at: 2026-11-25T18:19:19.719517852Z
+modified_at: 2026-11-25T19:06:51.672763084Z
 req_type: Bug
 tags:
 - ci
@@ -60,6 +60,28 @@ comments:
     - Fallback scope: a spec-keyed approval is applied only when its reviewed_sha equals the PR head exactly, and only when the PR has no verdict of its own at that head. Recording an approval does not call the forge inline; the 2-minute job promotes within one tick.
   created_at: 2026-11-25T18:19:19.719517852Z
   modified_at: 2026-11-25T18:19:19.719517852Z
+  session_id: 01a213ea88d0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2141a-8398-7461-b9aa-0903c663d1a4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ec67910f78 (diff origin/main...HEAD: aida-cli-lib/src/review_watch.rs, aida-cli-lib/src/review_cmd.rs).
+
+    Acceptance evidence:
+    - AC1: promote_approved_heads now also applies an open, attested spec-keyed approval whose reviewed_sha equals the PR head exactly (spec_approvals_by_head). The root cause was that review record <SPEC> without --pr or a reviewer lease writes only the spec key, while the job read only PR-<n> and skipped silently.
+    - AC2: review_watch::bug2764_spec_keyed_approval_promotes_in_both_orders covers both orders. (a) FAST complete, then approve: the next tick adds ci:full. (b) Approve while FAST is in_progress: no edit and a 'skipped (FAST CI ...)' line; the first tick after FAST completes promotes. Both cases also check the receipt dedupe. The existing PR-keyed path standalone_review_verdict_parent_records_after_unbound_child_refusal_and_retries still passes. Lane job: 2 passed.
+    - AC3: one stdout line per approved PR: 'PR-N: promoted|skipped (<reason>) [<verdict key> @ <sha12>]'. Each failure is written to stderr as 'PR-N: failed: <err>' before the non-zero exit. Root cause of the empty stderr: scheduled children are non-TTY, so cli_entry agent mode printed the final error on stdout, and schedule.log records only stderr.
+    - make check-ci-fast passed. It first failed on the store-writer inventory and trace-header stranding gates; both were fixed in code, with no inventory or allow-list edits.
+
+    Probe findings / residual risks:
+    - Precedence: a PR's own verdict at its current head (including changes-requested) wins over any spec-keyed approval. A spec key is used only when the PR has no verdict at its head.
+    - Matching is exact on the SHA. A spec-keyed record carrying a short or differently-cased SHA would not match; the old PR-keyed path had the same limitation.
+    - Cost: spec_approvals_by_head reads every spec-keyed verdict once per tick, lazily, only when some PR lacks its own verdict at its head. This is unmeasured on the production corpus.
+    - On success, schedule.log still records nothing, because the scheduler logs only failures. The per-PR lines are visible when the job is run by hand. A generic scheduler change (log stdout when stderr is empty) is not in this diff.
+    - I could not confirm against production state that the evidence PRs (#4580, #4458) were recorded spec-keyed. Their verdict records are not readable from this host.
+  created_at: 2026-11-25T19:06:51.672763084Z
+  modified_at: 2026-11-25T19:06:51.672763084Z
   session_id: 01a213ea88d0
   harness_version: 2.1.319 (Claude Code)
 history:
