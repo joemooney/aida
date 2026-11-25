@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-25T04:33:30.041764421Z
+modified_at: 2026-11-25T21:08:28.451137158Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1089,6 +1089,15 @@ comments:
   created_at: 2026-11-25T04:33:30.041759071Z
   modified_at: 2026-11-25T04:33:30.041759071Z
   session_id: 01a210f8d435
+- id: 01a21489-daa3-7733-b128-995aca63459b
+  author: joe
+  content: |-
+    FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 1 stand-alone finding-specs are recorded here and rejected:
+
+    - TASK-3830: Mass-change deferred findings from PR #4380 (BUG-2629) final round
+      Deferred under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST) from the PR #4380 (BUG-2629) Changes Requested verdict at 367c23a772. These findings were blocking (unmet claimed AC / below-tier) and now defer; #4380 fixes only p1, data loss and security findings in its final round. ## Findings to address 1. [major/unmet-claimed-ac] aida-cli-lib/src/queue_cmd/work.rs:3328 — BUG-2629 AC3 still fails for N fingerprinted changes bound to one spec. reconcile_waiting_verdicts calls current_verdict for each review key. Each local change projection opens another discovery, and Inventory::current lists all N bindings and stats all N folded ledgers on each open. active_verdicts_for repeats t
+  created_at: 2026-11-25T21:08:28.451137158Z
+  modified_at: 2026-11-25T21:08:28.451137158Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
