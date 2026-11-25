@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3877",
+  "publishes": [
+    {
+      "at": "2026-11-25T17:46:30.956126293Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T04:33:59.809753285Z",
+      "spec": "TASK-3877",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4558,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "dfdc2a82a951731a9174a3f8020e7d7a3b721ad7"
+      }
+    },
+    {
+      "ts": "2026-11-25T04:34:32.956068024Z",
+      "spec": "TASK-3877",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep of PR #4558 at dfdc2a82a951731a9174a3f8020e7d7a3b721ad7. The generated worksheet identifies TASK-3877 as completing, with two acceptance criteria.\nTASK-b6b1278890774ef993d2ebc327862470-1361.AC1 — unverified. The stale and moved fixture cases cover both head reads. The queued, in_progress, missing-conclusion and completed cases distinguish workflow conclusion from the marker flag for one visible run. The current workflow can still be missing from the marker listing while an older run is concluded.\nTASK-b6b1278890774ef993d2ebc327862470-1361.AC2 — verified by source inspection of the singleton owner PR/base check and the foreign and retargeted cases, alongside a matching positive control, in cargo test -p aida-cli-lib standalone_review_verdict_parent_records_after_unbound_child_refusal_and_retries. The supplied untraced-criteria list names both ACs. The diff extends the existing behavioral fixture for all three requested cases. Same-head association and receipt follow-ups are listed separately.\nThe implementer reported the focused regression passed. FAST CI and merge-hold-gate were green at this SHA (Actions run 45545237927 for FAST). Local tests were not run under reviewer policy. The actual base is integration at afbea08b75a, one commit ahead of the merge base. Its intervening review-engine change affects none of the findings.",
+        "recovery_hint": "address the review findings, move TASK-3877 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T06:27:22.656587132Z",
+      "spec": "TASK-3877",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4558,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bbd4a4f3a1a9cb04e3cc1aa1c28019e28af3fbbf"
+      }
+    },
+    {
+      "ts": "2026-11-25T06:27:27.727014585Z",
+      "spec": "TASK-3877",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3877 review at bbd4a4f3a1a9cb04e3cc1aa1c28019e28af3fbbf against integration afbea08b75a58cf8d9618068cb5efd495790b244. AC1 PARTIAL. The live PR head and base are checked before consuming the verdict and around label edits. Settlement uses the workflow conclusion, and the fixture covers an already-queued successor. A successor or rerun that appears during selection can still trigger an early FULL request. AC2 PARTIAL. FAST ownership and the receipt are scoped to the PR and base, and ambiguous shared-head ownership remains fail-closed as accepted. An old-base FULL marker can still suppress the request after a same-SHA retarget because label planning uses a commit-scoped rollup. FAST gates, compile and the aggregate Build passed at the pinned head. The merge-hold status remains pending. Source review and existing CI evidence only.",
+        "recovery_hint": "address the review findings, move TASK-3877 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T06:27:50.552123060Z",
+      "spec": "TASK-3877",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4558,
+        "verdict": "APPROVED",
+        "reviewed_sha": "bbd4a4f3a1a9cb04e3cc1aa1c28019e28af3fbbf"
+      }
+    },
+    {
+      "ts": "2026-11-25T15:46:38.021002611Z",
+      "spec": "TASK-3877",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4574,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2bb36e329773e7c93e25e912bf0fd65862e0cc21"
+      }
+    },
+    {
+      "ts": "2026-11-25T17:38:40.724155568Z",
+      "spec": "TASK-3877",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4574
+      }
+    },
+    {
+      "ts": "2026-11-25T17:46:30.658709546Z",
+      "spec": "TASK-3877",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d738e6c6f16627da24f96a1aa62b4c6518f658a8",
+        "pr": 4574,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
