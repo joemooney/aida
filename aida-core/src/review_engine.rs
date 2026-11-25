@@ -349,7 +349,7 @@ impl PlaybookRegistry {
             .map(|(_, rule)| rule)
             .unwrap_or(&self.default_playbook);
 
-        for (glob, custom) in &self.custom_rules {
+        for (index, (glob, custom)) in self.custom_rules.iter().enumerate() {
             if glob.matches(rel_path) {
                 if custom.merge_builtin {
                     return ResolvedPlaybook {
@@ -366,11 +366,11 @@ impl PlaybookRegistry {
                     };
                 } else {
                     return ResolvedPlaybook {
-                        id: custom.id.clone(),
+                        id: format!("rule:{index}:{}", custom.id),
                         title: format!("Project Rule ({})", custom.id),
                         pattern: custom.pattern.clone(),
                         checklist: custom.checklist.trim().to_string(),
-                        active_facets: Vec::new(),
+                        active_facets: vec![custom.id.clone()],
                     };
                 }
             }
@@ -858,10 +858,11 @@ pub fn canonical_module_stem(path: &str) -> String {
         }
     }
 
-    Path::new(path)
-        .with_file_name(core_stem)
-        .to_string_lossy()
-        .into_owned()
+    let mut dir = Path::new(path).parent().unwrap_or(Path::new(""));
+    if dir.ends_with("tests") || dir.ends_with("test") {
+        dir = dir.parent().unwrap_or(dir);
+    }
+    dir.join(core_stem).to_string_lossy().into_owned()
 }
 
 /// Bundle reviewable files into semantic, token-bounded batches:
@@ -888,11 +889,20 @@ pub fn bundle_review_batches(
 
     // Group by canonical module stem first to detect source+test companions.
     let mut by_stem: BTreeMap<String, Vec<&ReviewableFile>> = BTreeMap::new();
+    let keys: BTreeSet<_> = files
+        .iter()
+        .map(|f| canonical_module_stem(&f.path))
+        .collect();
     for f in files {
-        by_stem
-            .entry(canonical_module_stem(&f.path))
-            .or_default()
-            .push(f);
+        let mut key = canonical_module_stem(&f.path);
+        if matches!(
+            Path::new(&f.path).parent().and_then(Path::to_str),
+            Some("tests" | "test")
+        ) && keys.contains(&format!("src/{key}"))
+        {
+            key = format!("src/{key}");
+        }
+        by_stem.entry(key).or_default().push(f);
     }
 
     let mut raw_batches: Vec<(String, Vec<&ReviewableFile>)> = Vec::new();
@@ -1690,7 +1700,7 @@ mod tests {
                 merge_builtin: true,
             },
             CustomPathRule {
-                id: "proto_custom".to_string(),
+                id: "rust".to_string(),
                 pattern: "**/*.proto".to_string(),
                 checklist: "- Ensure field numbers are never reused.".to_string(),
                 merge_builtin: false,
@@ -1706,7 +1716,11 @@ mod tests {
             .contains("Verify gate authority never fails open."));
 
         let replaced = reg.resolve("proto/aida.proto");
-        assert_eq!(replaced.id, "proto_custom");
+        let unrelated = reg.resolve("other.rs");
+        assert_ne!(replaced.id, unrelated.id);
+        assert_eq!(replaced.active_facets, ["rust"]);
+        assert!(unrelated.active_facets.is_empty());
+        assert!(!unrelated.checklist.contains("field numbers"));
         assert_eq!(
             replaced.checklist,
             "- Ensure field numbers are never reused."
@@ -1751,6 +1765,7 @@ mod tests {
         assert!(!enriched.checklist.contains("rust_async_concurrency"));
     }
 
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-1364.AC2 | ai:codex
     #[test]
     fn h2c_rust_facets_follow_sample_paths() {
         let reg = PlaybookRegistry::default();
@@ -1766,8 +1781,13 @@ mod tests {
             .is_empty());
     }
 
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-1364.AC1 | ai:codex
     #[test]
     fn h2c_equal_stems_in_different_directories_stay_separate() {
+        assert_eq!(
+            canonical_module_stem("src/foo.rs"),
+            canonical_module_stem("src/tests/foo_tests.rs")
+        );
         let files = inventory(
             &["A/src/file.rs", "a/src/file_test.rs", "a/tests/file.rs"],
             false,
@@ -1792,7 +1812,7 @@ mod tests {
                 has_trace_comment: true,
             },
             ReviewableFile {
-                path: "src/parser_test.rs".to_string(),
+                path: "tests/parser_test.rs".to_string(),
                 old_path: None,
                 kind: FileChangeKind::Modified,
                 additions: 40,
@@ -1832,7 +1852,7 @@ mod tests {
             batches[0].files,
             vec![
                 "src/parser.rs".to_string(),
-                "src/parser_test.rs".to_string()
+                "tests/parser_test.rs".to_string()
             ]
         );
         assert_eq!(batches[0].estimated_tokens, 1400);
