@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T20:25:09.888435693Z
+modified_at: 2026-11-25T20:25:20.686156971Z
 req_type: Story
 tags:
 - integration
@@ -404,6 +404,19 @@ comments:
     A reference merge (commit bd150e16c1ee, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-25T19:13:07.214877415Z
   modified_at: 2026-11-25T19:13:07.214877415Z
+- id: 01a21462-5d6c-7833-b11d-2473481f7e61
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4582):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b39e428e49dd
+    Recorded: 2026-11-25T20:20:11.649937564+00:00
+    Findings:
+    1. aida-cli-lib/src/launch/review_runner.rs:109-110,131-135: the stdin writer thread writes to the runner pipe with the process's default SIGPIPE disposition. The aida binary restores SIGPIPE to SIG_DFL at startup (cli_entry.rs install_sigpipe_handler, BUG-99; agent_claude_background.rs:83 already works around this with MSG_NOSIGNAL). So in production, every 'fail closed' path where the prompt is not fully consumed kills the whole aida process with signal 141 instead of returning the documented error: (a) a 'deaf' runner that exits without reading a prompt larger than the 64 KiB pipe buffer; (b) a deadline kill, or (c) a stdout/stderr cap trip, while the writer is still blocked in write_all (kill(-pgid) closes the read end and the next write raises SIGPIPE). The caller gets no diagnostic, and the temp workdir is not cleaned up. The tests pass only because libtest leaves SIGPIPE ignored; the integration-30 pre-check (comment 25, item 4) made the same assumption ('SIGPIPE is ignored by the Rust runtime'). Fix: block SIGPIPE in the writer thread (pthread_sigmask SIG_BLOCK before write_all) or write through a path that cannot raise it, and prove it with a test that runs the deaf, deadline and cap cases in a subprocess or thread with SIGPIPE set to SIG_DFL. This is an untested refusal path in the hardened spawn (containment) helper, so it blocks under ADR-76. Not affected by the stale base: none of the base's changes touch this module or cli_entry.rs.
+    2. aida-cli-lib/src/launch/review_runner.rs:150 and the PR body / self-review item 4: 'a runner that exits without reading the whole prompt fails' holds only when the prompt is larger than the pipe buffer (about 64 KiB). For a smaller prompt write_all completes into the kernel buffer, so a runner that ignores stdin and prints canned output (for example '{}') with exit 0 passes. The test uses a 1 MiB prompt, so it does not show this. Either narrow the claim in the docs and PR, or detect the unread prompt (for example check the pipe is drained before exit). Follow-up for the --run-review slice.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T20:25:20.492577616Z
+  modified_at: 2026-11-25T20:25:20.492577616Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
