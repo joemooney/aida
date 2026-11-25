@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2749",
+  "publishes": [
+    {
+      "at": "2026-11-25T07:10:19.137610951Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T21:45:33.918391487Z",
+      "spec": "BUG-2749",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4537,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5203d57dcf278cdeece61e35a6339995273e5a11"
+      }
+    },
+    {
+      "ts": "2026-11-24T21:46:00.454671763Z",
+      "spec": "BUG-2749",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2749 FAIL. Reviewed the full pinned landing diff against protected main 5665f7c661c7b100b06434132c000715144387e7 and attested the original head. The original head is two commits behind. Neither base commit changed the code any finding depends on.\nBUG-b6b1278890774ef993d2ebc327862470-510.AC1 unverified — repository-wide prune bypasses the check, concurrent index publication can invalidate the checked snapshot, and a structurally parseable index with a bad checksum can pass.\nBUG-b6b1278890774ef993d2ebc327862470-510.AC2 verified by source inspection of aida-cli-lib/src/tests/bug_1694_registration_clear_claim_tests.rs:207. The new regression stages a unique file, deletes the checkout, asserts Declined and compares the retained index bytes. It also checks invalid-header and missing indexes. Runnable command `cargo test -p aida-cli-lib bug_2749_missing_checkout_preserves_registered_index`.\nBUG-2749 (bug protocol), PR touches at least one test file — met. The new test covers both worksheet criteria's ordinary staged-only case, with the AC1 gaps listed in findings.\nExact-head CI at review time had fast gates and merge-hold checks green, fast compile running, and full test shards skipped for the fast tier. The focused test was inspected in source. No local tests or builds ran.",
+        "recovery_hint": "address the review findings, move BUG-2749 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:50:23.068944558Z",
+      "spec": "BUG-2749",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4537,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "d25b5af04f87df8c3b029616494669bf94562d0b"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:51:26.232960992Z",
+      "spec": "BUG-2749",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2749 AC1 FAIL: ordinary session end and linked-store maintenance can still discard a staged-only index after its checkout disappears. AC2 PASS on source review: the regression checks byte-for-byte preservation of a staged-only index through the new guarded cleanup and checks that applied GC removes a clean sibling. The implementer reports targeted test passes. The exact PR head passed FAST compilation and source guards, with the merge-hold status pending in the observed check rollup. No local build or tests were run. Reviewed the full pinned landing diff against main at 260a82ae939faf34a8e6505a6f765f2151655610 and attest the original PR head, which is three commits behind. None of the findings depends on the two overlapping files changed by the base. The standalone claim command refused to mark the PR under review, and the checklist was generated.",
+        "recovery_hint": "address the review findings, move BUG-2749 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:28:59.234720804Z",
+      "spec": "BUG-2749",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4537,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "71b61e09385fc46ea829ff72ae8e2191d7a7e635"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:29:30.099805751Z",
+      "spec": "BUG-2749",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2749 AC1 FAIL. Guarded missing-at-entry cleanup compares the registered index and preserves staged or unreadable indexes, but direct removal and Git maintenance can still bypass the check, and relative backlinks prevent guarded store recovery. The live-to-missing race is separately tracked as BUG-2760 and is distinct from the other blockers. AC2 PASS on source review: the traced regressions assert staged index retention through the shared guard, session end, and applied GC. Exact-head FAST source guards and compilation passed in run 45537109508, full test shards were skipped, and merge-hold-gate was pending. No local tests or builds were run. Reviewed the entire pinned landing diff against main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3. The PR head is one commit behind and none of the findings depends on the intervening base change.",
+        "recovery_hint": "address the review findings, move BUG-2749 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:29:34.774943265Z",
+      "spec": "BUG-2749",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4537,
+        "verdict": "APPROVED",
+        "reviewed_sha": "71b61e09385fc46ea829ff72ae8e2191d7a7e635"
+      }
+    },
+    {
+      "ts": "2026-11-25T07:01:22.035007455Z",
+      "spec": "BUG-2749",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4537
+      }
+    },
+    {
+      "ts": "2026-11-25T07:10:18.916799687Z",
+      "spec": "BUG-2749",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "33a7b137a89cf1fb813b2e7313cfe1de28da7594",
+        "pr": 4537,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
