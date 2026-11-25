@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:23:56.206173407Z
-modified_at: 2026-11-25T12:06:25.448452727Z
+modified_at: 2026-11-25T12:16:36.271286428Z
 req_type: Task
 comments:
 - id: 01a21127-ae95-7061-89f0-777f9c145c79
@@ -132,6 +132,17 @@ comments:
   modified_at: 2026-11-25T11:56:20.751843421Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a212a3-0218-7092-a717-6cb8b7e24939
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 40fe08aac69ec8621c46f6cf0dc2055c30d7e829 plus native working changes.
+    AC1: [evidence: manual-inspection] Partial. repair_journal.rs now refuses all current lease formats before any mandate publication. session/lease_lock.rs:29 holds only a shared metadata writer lock during updates, and session_start.rs:4110 exports the ID into a shell. The protected default ref is resolved through dispatch_authority before reading committed policy. Adversarial probes covered missing/dangling refs, strict TOML booleans, multiple process owners, and lease replacement. Safe positive admission and publication under the mandate authority lock remain blocked.
+    AC2: [evidence: behavioral-test] Partial. task_3895_mandate_release exercises the production refusal with local-only and origin-tracked opt-in and checks unchanged journal state. No positive production lease fixture exists. The punt keeps publication vetoed.
+  created_at: 2026-11-25T12:16:36.271286428Z
+  modified_at: 2026-11-25T12:16:36.271286428Z
+  session_id: 01a212937179
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a210f3-0494-7051-bffa-7f144d13fb39
   author: joe
