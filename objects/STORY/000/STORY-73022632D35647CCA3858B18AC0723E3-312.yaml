@@ -1,5 +1,6 @@
 id: 01a21260-b3ad-7a63-a5b9-2455f44adc9e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-312
+agreed_id: STORY-3132
 title: 'Review PR-4570: [AI:codex] fix(hygiene): report recoverable closed-PR seat clones (STORY-3059)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21226`) for branch `story-3059-report`.
@@ -34,6 +35,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T11:04:35.127563646Z
   session_id: 01a21226b039
+  changes: []
+- id: 01a2129b-5d47-70a1-93f4-f7a77dd24eb3
+  author: joe
+  timestamp: 2026-11-25T12:08:21.575403696Z
   changes: []
 filed_at:
   code_sha: 33a7b137a89cf1fb813b2e7313cfe1de28da7594

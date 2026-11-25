@@ -1,5 +1,6 @@
 id: 01a21283-815f-7df3-ae7c-81c143d66538
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1433
+agreed_id: TASK-3427
 title: 'Review follow-up: aida-cli-lib/src/review_watch.rs:930 and :3899: Release clears the saved skip under the st'
 description: |-
   From BUG-2763
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a211d8-3bd8-79c1-9bbf-09bd1c29f5d9
   created_at: 2026-11-25T11:42:35.020141842Z
+history:
+- id: 01a2129b-5a86-7131-b3eb-e85334d3d23d
+  author: joe
+  timestamp: 2026-11-25T12:08:20.870857921Z
+  changes: []
 filed_at:
   code_sha: 2753e3c99e8b00ce74a377dd77550baa87c92efd
   branch: pr-4568
