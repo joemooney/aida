@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 5d32993516df48bf679c28db590822c4724702b9
 
   Plain --check --json labels unavailable mandate evidence as read. At aida-cli-lib/src/pr_train.rs:2260-2266 every preview refusal becomes a string, so trace-collection errors and unreadable exclusion history or ledger evidence become MemberGateError::Refused and check_one emits evidence="read" (aida-cli-lib/src/pr_train_check.rs:147-160). The command guide promises evidence="unavailable" when an evidence read fails. Preserve the refusal classification across both supervised and hold paths, and assert JSON output for unreadable evidence and a settled policy refusal.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T13:33:49.418472596Z
-modified_at: 2026-11-25T07:38:38.461473905Z
+modified_at: 2026-11-25T07:38:40.436019390Z
 req_type: Task
 tags:
 - carried-from:TASK-3115
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a211a4-75b4-7233-8649-22780a921649
+  author: joe
+  timestamp: 2026-11-25T07:38:40.436014185Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 5d32993516df48bf679c28db590822c4724702b9
   branch: pr-4432
