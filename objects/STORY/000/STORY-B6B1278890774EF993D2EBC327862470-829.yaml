@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133904Z
-modified_at: 2026-11-25T16:18:32.361359913Z
+modified_at: 2026-11-25T16:20:03.717015552Z
 req_type: Story
 tags:
 - integration
@@ -234,6 +234,11 @@ comments:
   content: Integrated recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Dark/Light theme toggle, Getting Started installation prompts, and multi-seat workflow SVG diagrams (from /home/joe/ai/aida-story-2839-showcase, STORY-2839 / STORY-2852) with code-review.html on branch story-3120-ci-review (commit b5826a0f9497994ecb4e9b76ecbbc0746819fdc9). Wired ('code-review.html', 'Code review') under the 'How it works' dropdown submenu in docs/showcase/build.py and docs/showcase/index.html, synced localStorage('aida-theme') in code-review.html, rebuilt all showcase HTML pages via build.py, and verified all 17 tests in tests/test_showcase_build.py pass.
   created_at: 2026-11-25T16:18:32.361359913Z
   modified_at: 2026-11-25T16:18:32.361359913Z
+- id: 01a21381-ce05-77f2-98d4-60dfeddd6ded
+  author: joe
+  content: 'REFERENCE COMMITS (Joe 2026-11-25 09:19; branch story-3120-ci-review): 0d21f696ebf adds --effort / --challenger-effort (default_effort and challenger_effort in .aida/review-rules.toml; finder_effort/challenger_effort on AdversarialReviewSummary; codex gets -c model_reasoning_effort=<LEVEL>, claude and agy get --effort <LEVEL>). It goes into S3 (--effort) and S4 (--challenger-effort). b5826a0f949 (37 files, +4159) is the unified showcase integration: S5 takes ONLY docs/showcase/code-review.html and its ''How it works ▾'' menu entry; the rest belongs to STORY-2839/STORY-2852 (see those comments). Product-15 slices briefs to <=300 lines.'
+  created_at: 2026-11-25T16:20:03.717015552Z
+  modified_at: 2026-11-25T16:20:03.717015552Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
