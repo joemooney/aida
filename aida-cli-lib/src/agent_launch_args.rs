@@ -761,10 +761,7 @@ pub enum SessionCommand {
     /// `git worktree remove` (NOT --force), so git's own safety checks add a
     /// second guard; a worktree git refuses to remove is skipped, never forced.
     ///
-    /// Always runs the lossless `git worktree prune` first (clears bookkeeping
-    /// for already-deleted worktree dirs). Never runs on the hot `aida status`
-    /// read path — only on this explicit operator command and on
-    /// `aida session end`.
+    /// Applied cleanup checks missing registrations for recoverable staged changes.
     // trace:BUG-614 | ai:claude
     Gc {
         /// Show what would be removed and what is preserved without touching
