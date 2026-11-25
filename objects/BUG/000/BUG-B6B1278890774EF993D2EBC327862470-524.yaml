@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T08:35:13.496269615Z
-modified_at: 2026-11-25T11:48:19.103291844Z
+modified_at: 2026-11-25T11:48:39.681306383Z
 req_type: Bug
 tags:
 - review-watch
@@ -128,6 +128,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landed diff from protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594 to tree 63cd86e202fd7ca9e3810a5640664390285ac990 for BUG-2763. AC1 and AC2 fail as canonically recorded. The revised local design holds the same head and treats a late old-head approval as evidence for that old head. Production hub admission can still prevent the claimed moved-head dispatch, and a stale skip write can race release. GitHub fast gates, fast compile and Build (ubuntu-latest) passed for the reviewed head. The merge-hold status was pending. No local tests were run.. No triage reason was given.'
   created_at: 2026-11-25T11:48:19.103286042Z
   modified_at: 2026-11-25T11:48:19.103286042Z
+- id: 01a21289-2569-7522-ab80-297f3e9c27a8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2763):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2753e3c99e8b
+    Recorded: 2026-11-25T11:42:09.738045319+00:00
+    Findings:
+    1. BUG-2763 AC1 and AC2 (aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:5922): The authoritative round-two brief deliberately removes the death-proof and doctor requirements, but the canonical AIDA acceptance criteria still require them and this PR adds traces claiming both. The tagged fixture makes worker liveness unknown, then expects the new head to be admitted without a doctor finding. It also supplies no verified-dead or live-process case for the moved head. Update BUG-2763's canonical criteria to the already authorized round-two scope and align the claims and traces before completing the spec.
+    2. BUG-2763 moved-head dispatch (aida-cli-lib/src/review_watch.rs:2688 and :3929, aida-cli-lib/src/gate/review_publication/admission.rs:540): In a hub-enabled deployment an exited A with an unrecorded descendant can leave its hub claim Running because finish_admission skips the terminal publication. The test at task_1993_review_watch_tests.rs:5943 only calls local select. Production selects B, replaces the local receipt, then the hub rejects B because A is still active for the change. The dispatcher never spawns. Scope the completion claim to local admission where the hub hold is an intentional exception, or address moved-head dispatch through the authoritative hub and verify that path without bypassing the claim fence.
+    3. aida-cli-lib/src/review_watch.rs:930 and :3899: Release clears the saved skip under the state lock, but the watcher computes its skip and saves it in separate transactions. If release runs after selection returns the exited-hold reason and before record_skip saves it, that stale result recreates the skip with no held attempt. Tie publishing the exited-hold skip to the current attempt or serialize the relevant selection and skip write with release. The sequential release test does not exercise this interleaving.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-25T11:48:27.625525Z
+  modified_at: 2026-11-25T11:48:27.625525Z
 history:
 - id: 01a211d8-c53e-7832-948c-7d2ea13d75a2
   author: joe
