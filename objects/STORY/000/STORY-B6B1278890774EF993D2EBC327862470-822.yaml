@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: Done
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T17:59:17.158179427Z
+modified_at: 2026-11-25T18:31:07.890274047Z
 req_type: Story
 tags:
 - hygiene
@@ -680,6 +680,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a213f9-cd72-7353-ae2b-8d1eb872b1d8
+  author: aida-orchestrator
+  timestamp: 2026-11-25T18:31:07.890433477Z
+  session_id: 01a213f64908
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
@@ -688,3 +696,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5e3711c9f9
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'CHANGES REQUESTED for STORY-3059 (round 2 of report-only slice). I reviewed the whole five-file landing diff of original head a9b2089aaaa9 against pinned main d738e6c6 (landed tree 84827a5e). The head is 2 commits behind main, and neither finding depends on the intervening base commits. AC1 [documentation-inspection]: verified. The policy is recorded on the spec in comments 0, 15, 25 and 27 and the r2 brief: auto-reap is parked, hygiene reports only, and manual recovery goes through BUG-2755. AC2 [behavioral-test]: verified by bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates, which checks the hint text ''(published)'', the BUG-2755 / `aida session show <id>` pointer, and ''publication unverified'' when the origin branch is rewound or deleted while a stale origin/feat exists. Skipped rows render as report lines, and keep_items does not count them as failures. All four prior findings are addressed. F1: the hint now points at the real path. F2: a live, bounded ls-remote through origin_branch_at decides ''published''. F3: reap_one_clone re-runs the veto before mail retirement and teardown, and is tested with an OPEN-to-CLOSED change at the same SHA. Hygiene''s cache reclaim now spares the caches of clone-leased seats. F4: the scan and the real reap see a historical merged row and an exact-tip closed row together, and the negative cases (HEAD^, fork, merged-only, empty sha, invalid JSON) are covered. CI: fast gates, fast compile and Build pass at the head, and merge-hold-gate is pending clearance. One blocking ADR-76 finding remains: the GitLab arm of the new unmerged-only veto in the seat-destruction path has no test. One p3 follow-up: the hint omits the PR number.'
+  recovery_hint: address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-25T18:31:07.890274047Z
