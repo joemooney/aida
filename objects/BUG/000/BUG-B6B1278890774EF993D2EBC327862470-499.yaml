@@ -143,6 +143,12 @@ comments:
   modified_at: 2026-11-26T15:09:17.343200421Z
   session_id: 01a218395b6c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21874-5881-72f3-b23e-622bab4d8fb8
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-26T15:23:27.745043438Z
+  modified_at: 2026-11-26T15:23:27.745043438Z
+  session_id: 01a2186f32f3
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
@@ -206,6 +212,14 @@ history:
   session_id: 01a218395b6c
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21874-5881-72f3-b23e-621cd6b21b2f
+  author: aida-orchestrator
+  timestamp: 2026-11-26T15:23:27.745040745Z
+  session_id: 01a2186f32f3
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
