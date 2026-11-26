@@ -16,12 +16,12 @@ description: |-
     - `parse_runner_findings_json(&str) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String>` parsing structured JSON findings and file coverage emitted by an automated batch review runner.
   - `aida review prepare` in `aida-cli-lib` supports `--sarif <PATH>`, `--post-comment` (requires `--pr <N>`), and `--run-review` (executes per-batch review via `AIDA_REVIEW_RUNNER_CMD` or `claude --print`, anchors findings, and verifies coverage).
   - Unit tests in `aida-core` and `aida-cli-lib` verify SARIF generation, forge markdown rendering, and runner JSON parsing.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T03:20:10.757269833Z
+modified_at: 2026-11-26T03:46:22.827639259Z
 req_type: Story
 tags:
 - integration
@@ -770,6 +770,34 @@ comments:
   modified_at: 2026-11-26T03:16:40.172756496Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a215f6-6162-7060-b942-5d647c2d1016
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4619 @ a73b2c2f044 (STORY-3120 S3a-2, replaces #4614; Refs-only; +431/-40).
+
+    Result: PASS. STRICT tier, so it needs an INDEPENDENT review at this head (no carry-over from #4614, which was never reviewed).
+
+    Method: I diffed this PR's change against #4614's change, line by line, both vs origin/integration. The ONLY differences are:
+    1. ensure_in_inventory now refuses is_credential_path(finding.path) first ("finding cites a credential path, which review never reads"), then applies the inventory check. Both --anchor-findings and --run-review go through it, so runner findings get the TASK-3320 check too.
+    2. #4604's inline check in the --anchor-findings loop is removed, since it moved into the shared function. #4604's test (root_credential_dirs_excluded_reported_and_refused_as_findings) is kept unchanged.
+    3. s3a2_run_review_refuses_findings_outside_the_inventory adds a --run-review case: findings citing .netrc, .aws/credentials and nested/.docker/config.json each refuse with "credential path".
+
+    Everything else is byte-identical to #4614, so my #4614 pre-check (STORY-3120 comment, 19:58) applies in full:
+    - bounded joins plus the setsid test;
+    - item-11 refusal;
+    - git_text env allowlist, --no-textconv, and diff failure as an error;
+    - vars_os unchanged;
+    - the merge base as the only trust base (workspace/scan/commit refuse);
+    - no default agent;
+    - the per-batch deadline and caps.
+
+    The should-fixes carry over: (a) git_text should use host_git_command for the seat-clone refusal (pre-existing; a follow-up); (b) S5 docs should advise a CI job timeout across batches.
+
+    Merge-tree against origin/integration (which includes #4604): CLEAN.
+  created_at: 2026-11-26T03:46:22.827639259Z
+  modified_at: 2026-11-26T03:46:22.827639259Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
@@ -912,13 +940,6 @@ history:
   author: joe
   timestamp: 2026-11-26T03:13:55.868085846Z
   changes: []
-- id: 01a215de-2905-7602-bf19-936c7558d477
-  author: aida-session-start
-  timestamp: 2026-11-26T03:20:10.757267628Z
-  changes:
-  - field_name: status
-    old_value: Approved
-    new_value: InProgress
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
