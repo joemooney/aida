@@ -1,0 +1,31 @@
+id: 01a21a4c-14a3-7481-a2c5-f9a6c17cd56b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1542
+title: 'Review follow-up: find_verdicts retries a full JSON parse from every ''{'' in the challenger output. Adversari'
+description: |-
+  From BUG-2779
+  Reviewed sha: a963decc80235e4a5d15b2382fd08c3dab1b58e6
+
+  find_verdicts retries a full JSON parse from every '{' in the challenger output. Adversarial output with many '{' that each start a long, deep or unterminated value costs O(n^2) parse work. The output is bounded runner text, so this is a performance note, not a correctness or safety issue. A follow-up could cap the number of attempts or the output size.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T23:58:43.363006283Z
+modified_at: 2026-11-26T23:58:43.363006283Z
+req_type: Task
+tags:
+- carried-from:BUG-2779
+- finding-hash:4b3f24b1
+- from-review:BUG-2779
+relationships:
+- rel_type: References
+  target_id: 01a21a0e-a62f-7412-8eeb-9ba30b2b9a68
+  created_at: 2026-11-26T23:59:00.252268230Z
+filed_at:
+  code_sha: a963decc80235e4a5d15b2382fd08c3dab1b58e6
+  branch: pr-4698
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b728c3373d1
+  vendor: claude
+  session: 01a21a4a45de
