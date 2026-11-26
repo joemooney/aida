@@ -26,6 +26,9 @@
 #[path = "pr_train_check.rs"]
 mod check;
 pub(crate) use check::{next_actors, pr_train_check_handler, CheckOptions, NextActor};
+// trace:BUG-2767 | ai:claude
+#[path = "pr_train_culprit.rs"]
+pub(crate) mod culprit;
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
@@ -437,6 +440,16 @@ pub(crate) trait Rails {
     fn reconciled_landed(&self) -> Vec<(u64, String)> {
         Vec::new()
     }
+    /// Why no further train may start now (an active drain), checked
+    /// between waves only, so in-flight CI is never cut short.
+    // trace:BUG-2767 | ai:claude
+    fn drained(&mut self) -> Option<String> {
+        None
+    }
+    /// The train PR number `train` was tested as, when known.
+    fn train_id(&self, _train: &Built) -> Option<u64> {
+        None
+    }
 }
 
 /// The result of a train run.
@@ -450,6 +463,9 @@ pub(crate) struct Outcome {
     /// The error that stopped the run early. CI-unavailable stops retain
     /// in-flight members without ejecting them.
     pub error: Option<String>,
+    /// (PR, head, train PR) of each member red alone on top of main.
+    // trace:BUG-2767 | ai:claude
+    pub culprits: Vec<(u64, String, Option<u64>)>,
 }
 
 /// Drive `members` to main through `rails`: build on the current main, test,
@@ -518,6 +534,17 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
     while !pending.is_empty() {
+        // A drain starts no further train, bisect halves included; the
+        // waiting members ride a later train. trace:BUG-2767 | ai:claude
+        if let Some(why) = rails.drained() {
+            for (group, _) in pending.drain(..) {
+                out.ejected.extend(group.into_iter().map(|m| Ejected {
+                    pr: m.pr,
+                    reason: format!("no new train starts while {why}; re-train"),
+                }));
+            }
+            break;
+        }
         if waves_left == 0 {
             for (group, _) in pending.drain(..) {
                 for m in group {
@@ -595,6 +622,12 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                 // this arm. trace:BUG-2577 | ai:claude
                 CiVerdict::InfraRed(detail) | CiVerdict::Red(detail) => {
                     if members.len() == 1 {
+                        // trace:BUG-2767 | ai:claude
+                        out.culprits.push((
+                            members[0].pr,
+                            members[0].head.clone(),
+                            rails.train_id(&train),
+                        ));
                         out.ejected.push(Ejected {
                             pr: members[0].pr,
                             reason: format!(
@@ -4897,6 +4930,23 @@ impl Rails for ForgeRails<'_> {
         self.finish_landed(&change, &checked)
     }
 
+    // trace:BUG-2767 | ai:claude
+    fn drained(&mut self) -> Option<String> {
+        if !ADVISOR_LOOP.with(std::cell::Cell::get) {
+            return None;
+        }
+        let root = self.journal_dir.as_deref()?.parent()?.parent()?;
+        match crate::admission_drain::active(root) {
+            Ok(drain) => drain.map(|d| d.to_string()),
+            Err(e) => Some(format!("the drain record is unreadable ({e:#})")),
+        }
+    }
+
+    fn train_id(&self, train: &Built) -> Option<u64> {
+        let found = self.opened.iter().rev().find(|(tip, _)| *tip == train.tip);
+        found.map(|(_, change)| change.id)
+    }
+
     fn ejected(&mut self, e: &Ejected) {
         self.ports.comment(
             e.pr,
@@ -5245,6 +5295,12 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             pr,
         ) {
             Ok(m) => {
+                // trace:BUG-2767 | ai:claude
+                if let Some(reason) = culprit_admission(&main_worktree, opts, &m)? {
+                    println!("  ✗ #{pr} not eligible: {reason}");
+                    refused.push(Ejected { pr, reason });
+                    continue;
+                }
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
             }
@@ -5397,6 +5453,14 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
+    // trace:BUG-2767 | ai:claude
+    if !opts.dry_run {
+        for (pr, head, train) in outcome.culprits.iter().chain(&recovered.culprits) {
+            if let Err(e) = culprit::record(&main_worktree, *pr, head, *train) {
+                warnings.push(format!("could not record #{pr} as a train culprit: {e:#}"));
+            }
+        }
+    }
     outcome.ejected.extend(review_ejected);
     outcome.ejected.extend(claim_ejected);
     outcome.landed.extend(recovered.landed);
@@ -5483,6 +5547,30 @@ pub(crate) fn complete_landed_specs(main_worktree: &Path, landed: &[(u64, String
             "  warning: could not complete the landed specs ({e:#}); the next `aida pull` will"
         ),
     }
+}
+
+/// A culprit hold refuses a swept-in PR at the head that was red; naming the
+/// PR on the command line is the operator's recorded clearance.
+// trace:BUG-2767 | ai:claude
+fn culprit_admission(root: &Path, opts: &TrainOptions, m: &Member) -> Result<Option<String>> {
+    if !prs_named_on_command_line(opts) {
+        return Ok(culprit::hold(root, m.pr, &m.head));
+    }
+    if opts.dry_run {
+        return Ok(None);
+    }
+    let by = format!(
+        "{} (named on `aida pr train`)",
+        crate::kernel::current_user_id(None)
+    );
+    if culprit::clear(root, m.pr, &m.head, &by)? {
+        println!(
+            "  #{} culprit hold cleared at {} by {by}",
+            m.pr,
+            short(&m.head)
+        );
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
