@@ -9,12 +9,12 @@ description: |
   - AC1: the auto-train pre-scan (train_wanted) and the real pass use ONE predicate (typed_gate_member_with + ownership), not the legacy eligible gate, so they cannot disagree.
   - AC2: dedupe or cache the pre-scan forge (gh) reads per poll so an idle loop does not spend the shared ~5000/h GitHub budget.
   - AC3: tests for the running-train and recovery AC4 phases, and reset TEST_HOLD_WARN_MS after the bug2769 tests (a test-isolation leak).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-26T13:08:29.010329860Z
+modified_at: 2026-11-26T13:44:09.233353556Z
 req_type: Task
 tags:
 - landing
@@ -25,6 +25,11 @@ relationships:
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T12:59:32.538037922Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21818-e7b3-79f1-9cbe-68c6e338a7d3
+  created_at: 2026-11-26T13:44:09.233324874Z
+  created_by: dirtlab
 comments:
 - id: 01a217f2-aafe-74b1-a440-f043357149f2
   author: joe
@@ -57,6 +62,37 @@ comments:
   modified_at: 2026-11-26T13:08:29.010329860Z
   session_id: 01a217f59d73
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21817-f7f1-70c3-b620-0977c35be86f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ee342144b5 (git diff origin/main...HEAD; 3 files).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: pr_train.rs admit_member is the one predicate (ownership + train-rider refusal, typed_gate_member_with, culprit hold). The real pass's member loop calls it; the pre-scan calls it through AutomaticPrescan::admits (read-only LiveChecks, dry_run ownership, ADVISOR_LOOP guard set and restored). train_wanted no longer calls train::eligible directly; eligible still runs inside the typed gate under the advisor loop, as it does in the pass. Test: pr_train::tests::task3917_member_predicate_refuses_a_rider_before_any_gate_read.
+    - AC2 [behavioral-test]: Refusals cache keyed by (PR, head), 10 min window; Unavailable never cached; live-train listing loaded lazily. Test: task3917_idle_polls_rejudge_a_refusal_only_on_a_new_head_or_after_the_window.
+    - AC3 [behavioral-test]: task3917_a_long_hold_names_the_running_train_phase and task3917_a_long_hold_names_the_recovery_phase. TEST_HOLD_WARN_MS is reset by a drop guard that also serializes the tests that shorten it.
+    - Local: one lane cargo run, filter 'pr_train:: train:: admission', 425 passed, 0 failed. make check-ci-fast: exit 0.
+
+    Probes:
+    - Consistency: the pre-scan keeps only candidates the pass lists (train branches excluded, other base refused and cached).
+    - Multiplicity: 0 changes means not wanted; it stops at the first admitted change; abandoned trains mean wanted (the pass closes them, freeing their riders).
+    - Fail-open/authority: the pre-scan only decides whether to claim. An Unavailable verdict or a load error still means a pass runs or a failure is recorded, as before. The pass re-judges everything under the claim, so a wrong 'wanted' costs one pass and grants nothing.
+
+    Residual risks:
+    - A refusal that clears without a head move (CI turning green, an approval recorded) waits up to 10 min before the pre-scan sees it. I chose that trade between forge budget and latency.
+    - The diff is 352 insertions, above the brief's 200-line budget. About 200 of those lines are tests; production code is about 150 net.
+  created_at: 2026-11-26T13:42:33.713381307Z
+  modified_at: 2026-11-26T13:42:33.713381307Z
+  session_id: 01a217f59d73
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21818-5c05-7cd0-acb5-58f680d1eb2e
+  author: aida-publication-done
+  content: Implementer push 02ed97be57e0 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T13:42:59.333137527Z
+  modified_at: 2026-11-26T13:42:59.333137527Z
+  session_id: 01a217f59d73
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217f0-9b85-7542-b16e-c93c789c7c07
   author: joe
@@ -73,6 +109,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21818-5c05-7cd0-acb5-58e9eebfbf09
+  author: aida-publication-done
+  timestamp: 2026-11-26T13:42:59.333134789Z
+  session_id: 01a217f59d73
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21819-758d-7f01-b1a5-3b0c7c2168ad
+  author: dirtlab
+  timestamp: 2026-11-26T13:44:11.405533623Z
+  session_id: 01a217f59d73
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
