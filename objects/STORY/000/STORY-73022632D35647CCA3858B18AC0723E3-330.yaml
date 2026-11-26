@@ -18,12 +18,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4615` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T02:52:31.750775686Z
-modified_at: 2026-11-26T02:53:06.014726266Z
+modified_at: 2026-11-26T06:23:11.106537328Z
 req_type: Story
 relationships:
 - rel_type:
@@ -36,6 +36,12 @@ relationships:
   target_id: 01a2050a-58ee-7470-a810-e7b93d9a7867
   created_at: 2026-11-26T02:53:06.014700311Z
   created_by: dirtlab
+comments:
+- id: 01a21685-d009-7800-aaa3-cbdd71898951
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4615 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-26T06:23:18.025294813Z
+  modified_at: 2026-11-26T06:23:18.025294813Z
 history:
 - id: 01a215c5-07bc-7b70-83bf-c185e45c5fc5
   author: dirtlab
@@ -53,6 +59,13 @@ history:
   author: joe
   timestamp: 2026-11-26T05:11:50.959515641Z
   changes: []
+- id: 01a21685-d009-7800-aaa3-cbed9cdcf336
+  author: aida-auto-bump
+  timestamp: 2026-11-26T06:23:18.025301455Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: f7538e24f20a874b18dea010f8fb2bc85be59679
   branch: fix-train-culprit-readmit
@@ -62,3 +75,6 @@ filed_at:
   vendor: claude
   session: 01a215928946
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T06:23:18.025291359Z
