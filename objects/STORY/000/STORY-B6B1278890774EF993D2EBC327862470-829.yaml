@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T12:31:07.495625013Z
+modified_at: 2026-11-26T12:59:01.810517110Z
 req_type: Story
 tags:
 - integration
@@ -1090,6 +1090,19 @@ comments:
   created_at: 2026-11-26T12:25:17.758819037Z
   modified_at: 2026-11-26T12:25:17.758819037Z
   session_id: 01a21780d476
+- id: 01a217f0-1d32-72e2-bd35-188511bd0e16
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a1fc54eb793ac8a4e9af23aef8b6c9e408ac1a09 (S4 r1 on #4650).
+    Acceptance evidence: S1 [behavioral-test]: resolve_challenger reads only --challenger-effort > AIDA_REVIEW_CHALLENGER_EFFORT > base challenger_effort > the challenger vendor's base reviewer seat, and takes its model only from that seat. s4_challenger_spawn_contract_and_opposition: a claude finder with AIDA_REVIEW_EFFORT=max, claude models in env/rules and --challenger-effort high runs a codex challenger with no error, model_reasoning_effort=high and no -m. D1 [behavioral-test]: --fail-on counts refuted findings too; SARIF emits them with suppressions kind=external and the challenger's justification. s4_adversarial_run_suppresses_but_gates_refuted_findings: the only high finding is refuted, the run still fails --fail-on high, and SARIF result[1] is suppressed.
+    Probes: (1) a custom-runner challenger no longer inherits AIDA_REVIEW_EFFORT, which is consistent with S1. (4) A prompt-injected challenger verdict can only add a SARIF suppression. It cannot clear the gate (fail-closed). The justification text is JSON-encoded and is not a SARIF message format string.
+    Residual risks: the markdown bundle lists refuted findings, but the --fail-on error message does not say how many of the matches were refuted. Size: 51% tests+fixtures (46% strict), kept as one PR; this is noted in the PR body.
+    Validation: lane job cargo test -p aida-cli-lib --lib s4_ (26 passed), help snapshot passed, make check-ci-fast exit 0.
+  created_at: 2026-11-26T12:59:01.810517110Z
+  modified_at: 2026-11-26T12:59:01.810517110Z
+  session_id: 01a217d62f1d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
