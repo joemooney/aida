@@ -117,8 +117,45 @@ fn the_retention_dry_run_reports_stranded_tombs() {
     let dir = repo();
     let full = dir.path().join(".aida").join(".mailbox-tomb-cccc");
     tomb_like(&full, &["late.json"]);
-    let report = super::activation::dry_run_report(dir.path());
+    let scope = Scope {
+        min_age: None,
+        owner: &|_: &Owner| OwnerLiveness::Live,
+    };
+    let report = super::activation::dry_run_report(dir.path(), &scope);
     assert_eq!(report.leftovers.stranded_tombs, [full]);
+}
+
+/// The retention dry run judges leftovers with the caller's owner scope, as
+/// `aida agent gc` does: a live owner's stale tomb is held, not reapable.
+// trace:TASK-3918 | ai:claude
+#[test]
+fn task3918_retention_dry_run_holds_a_live_owners_leftovers() {
+    let dir = repo();
+    let empty = dir.path().join(".aida").join(".mailbox-tomb-dddd");
+    tomb_like(&empty, &[]);
+    let judged = |liveness: OwnerLiveness| {
+        let owner = move |_: &Owner| liveness;
+        let scope = Scope {
+            min_age: None,
+            owner: &owner,
+        };
+        super::activation::dry_run_report_at(dir.path(), &scope, later()).leftovers
+    };
+    let live = judged(OwnerLiveness::Live);
+    assert!(live.reapable.is_empty(), "{live:?}");
+    assert_eq!(
+        live.held,
+        [HeldLeftover {
+            path: empty.clone(),
+            owner: OwnerLiveness::Live,
+        }]
+    );
+    let dead = judged(OwnerLiveness::Dead);
+    assert_eq!(dead.reapable, [empty.clone()]);
+    assert!(
+        dead.held.is_empty() && empty.is_dir(),
+        "a report removes nothing"
+    );
 }
 
 /// A drop aside an earlier build left is touched only once old: a stale one
