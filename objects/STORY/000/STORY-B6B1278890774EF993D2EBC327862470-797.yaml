@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-26T11:10:28.139709873Z
+modified_at: 2026-11-26T11:13:21.788932061Z
 req_type: Story
 tags:
 - landing
@@ -1560,6 +1560,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: #4569 lib-1 "hang": no hang from this PR. Runner trouble; no code changed. The round-2 findings 1-4 (and the open_episode part of 5) were already fixed in 638611daca on the PR; the rest of 5 is the follow-up the reviewer allowed.. No triage reason was given.'
   created_at: 2026-11-26T11:10:28.139703206Z
   modified_at: 2026-11-26T11:10:28.139703206Z
+- id: 01a2178f-ac96-7b81-afa2-3f36c5e509af
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:13):
+    # STORY-2897 perf round on #4569 (advisor-122 ruling 2026-11-26 04:16; product-15 evidence 04:18). Lane: CLAUDE. MAIN, existing branch story-2897-fresh / PR #4569. <=60 lines. NO test-budget changes. Keep the "(Refs STORY-2897)" title.
+    EVIDENCE: on main's new CI workflow, only #4569's lib-0 trips the test-time budget: gate::review_publication::entry_tests::two_node_ship_watch_rework_and_train_entry_points took 155.9s (budget 155s; 128.4s on promote/integration-44's run), and codex_tool_env::tests::bug_2398_final_spawn_boundary_ratchet took 33.7s (unbudgeted 30s limit; not even SLOW elsewhere). The same PR had repeated lib-1 45-min timeouts.
+    1. TIME both tests on this branch AND on origin/main locally (e.g. `cargo nextest run -p aida-cli-lib -E 'test(two_node_ship_watch_rework_and_train_entry_points) | test(bug_2398_final_spawn_boundary_ratchet)'`, three runs each, recording wall times).
+    2. Find what this PR made slower. Likely candidates: the main_watch open_episode / waiting-needs paths doing extra I/O, git calls or polling/sleeps per call, or a retry loop with a fixed delay.
+    3. FIX it (cache, bound or remove the extra work) so both tests come back to main's times, and keep all behaviour tests green.
+    Record the before/after timings in the PR body. make check-ci-fast, then push to #4569. COMMIT your work.
+  created_at: 2026-11-26T11:13:21.788932061Z
+  modified_at: 2026-11-26T11:13:21.788932061Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
