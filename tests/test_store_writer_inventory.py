@@ -27,6 +27,11 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    def test_bounded_store_lock_is_a_writer(self):
+        path = "aida-cli-lib/src/coordination.rs"
+        self.put(path, "fn heal_exited_claim() { with_store_write_lock_bounded(root, heal); }")
+        self.assertIn(f"{path}|heal_exited_claim|with_store_write_lock_bounded", guard.discover(self.root))
+
     # trace:TASK-3787 | ai:codex
     def test_textual_includes_keep_private_module_wrapper_routes(self):
         self.put("aida-cli-lib/src/session/mod.rs", 'include!("parts.rs");')
