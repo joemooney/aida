@@ -1103,6 +1103,17 @@ comments:
   modified_at: 2026-11-26T12:59:01.810517110Z
   session_id: 01a217d62f1d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a217f1-71b1-7d43-af56-3ddc0fb70cbd
+  author: joe
+  content: |-
+    Integration re-check: PR #4650 @a1fc54eb (S4 r1) — S1 and D1 both RESOLVED; security lens PASS. Size: ~41% tests (below the advisor's 50% keep-whole line).
+    - S1: resolve_challenger reads effort only from --challenger-effort > AIDA_REVIEW_CHALLENGER_EFFORT > base challenger_effort > the challenger vendor's base [agents.<v>.seats.reviewer] effort, and model only from that seat. AIDA_REVIEW_EFFORT/MODEL and default_effort/default_model are never read. Tests: the spawn test sets AIDA_REVIEW_EFFORT=max, AIDA_REVIEW_MODEL and default_* to claude values, and a codex challenger receives no -m/--model and none of those values; a unit test shows max/claude-x/claude-y ignored with --challenger-effort high.
+    - D1 (fail-closed): refuted findings are anchored too and appended to the --fail-on set (gated = kept + refuted). SARIF emits them as results with suppressions [{kind: external, justification: "refuted by challenger: <reason>"}] via findings_to_sarif_json_with_suppressed; the old findings_to_sarif_json delegates with an empty set. The e2e test: the only high finding is refuted, --fail-on high still fails ("1 findings meet or exceed"), SARIF has 2 results and only the refuted one carries the suppression. The SARIF file is written before the gate error.
+    - Size (my count): 755 added lines across 10 files; test-module additions ≈311 (challenger 214, review_prepare 97), non-test ≈400, plus golden/ratchet. About 41% tests, so under the 50% rule this would split S4a (challenger + tuning) / S4b (fail-on/SARIF suppression). Advisor's call; I see no correctness reason to split.
+  created_at: 2026-11-26T13:00:12.945455548Z
+  modified_at: 2026-11-26T13:00:12.945455548Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
