@@ -2627,7 +2627,7 @@ fn invoke_review_runner(
     let effective_model = model_override.map(str::to_string).or(tuning.model);
     let effective_effort = effort_override.map(str::to_string).or(tuning.effort);
 
-    let (program, mut argv) = match agent {
+    let (program, mut argv, pipe_stdin) = match agent {
         "codex" => {
             let mut args = vec![
                 "exec".to_string(),
@@ -2643,9 +2643,8 @@ fn invoke_review_runner(
                 args.push("-c".to_string());
                 args.push(format!("model_reasoning_effort={effort}"));
             }
-            args.push("--".to_string());
-            args.push(prompt.to_string());
-            ("codex", args)
+            args.push("-".to_string());
+            ("codex", args, true)
         }
         "agy" => {
             let mut args = Vec::new();
@@ -2659,7 +2658,7 @@ fn invoke_review_runner(
             }
             args.push("-p".to_string());
             args.push(prompt.to_string());
-            ("agy", args)
+            ("agy", args, false)
         }
         "gemini" => {
             let mut args = Vec::new();
@@ -2669,7 +2668,7 @@ fn invoke_review_runner(
             }
             args.push("-p".to_string());
             args.push(prompt.to_string());
-            ("gemini", args)
+            ("gemini", args, false)
         }
         _ => {
             let mut args = vec!["--print".to_string()];
@@ -2681,21 +2680,32 @@ fn invoke_review_runner(
                 args.push("--effort".to_string());
                 args.push(effort);
             }
-            args.push("-p".to_string());
-            args.push(prompt.to_string());
-            ("claude", args)
+            ("claude", args, true)
         }
     };
 
-    let out = Command::new(program)
+    let mut child = Command::new(program)
         .current_dir(project_root)
         .args(&mut argv)
-        .output()
+        .stdin(if pipe_stdin {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .with_context(|| {
             format!(
                 "failed to run `{program}` review runner (use `--agent <claude|codex|agy|gemini>`, configure `[agents] vendor` / `aida init`, or set `AIDA_REVIEW_RUNNER_CMD`)"
             )
         })?;
+    if pipe_stdin {
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(prompt.as_bytes())?;
+        }
+    }
+    let out = child.wait_with_output()?;
     anyhow::ensure!(
         out.status.success(),
         "`{program}` review runner failed: {}",
