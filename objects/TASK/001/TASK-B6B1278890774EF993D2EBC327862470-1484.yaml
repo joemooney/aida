@@ -1,0 +1,31 @@
+id: 01a21642-6e14-7cf0-833b-1a0dfebe37ce
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1484
+title: 'Review follow-up: Test gap (lane_job.rs:1890-1906): no test drives run_one_authorized to show the job really'
+description: |-
+  From TASK-3911
+  Reviewed sha: dcc174ec7be643fcf34c7170094b967c265431b2
+
+  Test gap (lane_job.rs:1890-1906): no test drives run_one_authorized to show the job really waits on a held compile slot, holds the slot for the job's whole run, or receives CARGO_BUILD_JOBS in its environment. The three new tests exercise admit_job directly; AC2's test only checks that cargo_build_jobs comes back from admission. A follow-up should add a fixture-lane test (Sandbox::TestUnwrapped) that sets cargo_build_jobs and asserts the child sees CARGO_BUILD_JOBS. Source reading confirms the wiring is correct: the admission binding lives until the function returns, and the bwrap lane wrapper does not --clearenv.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T05:09:42.036929983Z
+modified_at: 2026-11-26T05:09:42.036929983Z
+req_type: Task
+tags:
+- carried-from:TASK-3911
+- finding-hash:c88809a8
+- from-review:TASK-3911
+relationships:
+- rel_type: References
+  target_id: 01a214b5-d807-7f73-ac35-a8f2d9d840c5
+  created_at: 2026-11-26T05:09:57.737964248Z
+filed_at:
+  code_sha: dcc174ec7be643fcf34c7170094b967c265431b2
+  branch: pr-4624
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 68ecbd82409
+  vendor: claude
+  session: 01a2163f05cb
