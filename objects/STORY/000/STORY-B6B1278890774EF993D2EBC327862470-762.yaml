@@ -398,6 +398,17 @@ comments:
   content: Reference merge `a387b7e87b96e611ba9da42e196f44f36b538739` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-26T10:48:06.217694826Z
   modified_at: 2026-11-26T10:48:06.217694826Z
+- id: 01a21779-6735-7a90-9652-641ee60827c8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:49):
+    # STORY-2839 slice (d2): the remaining 4 SVGs + operator-setup.md (integration-30 grooming on STORY-2839; Joe's reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int45-story-2839-d2 (cut from the integration tip after (d1) #4642 merged). Title "(Refs STORY-2839)" (do NOT complete STORY-2852). Docs and assets only, <=300 hand-written lines (list the SVG assets separately in the PR body). Do NOT rebase onto main.
+    PORT from b5826a0f949 ONLY: the enums-state, exception-paths, gates-review and human-journeys SVGs plus docs/operator-setup.md (+24). Check every command and term against the current CLI/docs. operator-setup.md must document that lane-admission knobs live in the HOST file /etc/aida/lanes.toml (root-owned, [lanes], deny_unknown_fields): max_concurrent_cold_starts, min_memory_headroom_gib, max_compile_concurrency, cargo_build_jobs, min_job_memory_headroom_gib (the TASK-3911 doc gap; see the TASK-3911 comment).
+    Avoid nested lists and *italics* (build.py renders neither; slice (e) fixes that). SVG safety: no <script>, no event handlers, no external hrefs. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T10:49:02.617308128Z
+  modified_at: 2026-11-26T10:49:02.617308128Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
