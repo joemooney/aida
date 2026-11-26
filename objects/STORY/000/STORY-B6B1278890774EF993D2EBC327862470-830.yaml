@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T21:33:37.925875937Z
+modified_at: 2026-11-26T22:44:50.996059665Z
 req_type: Story
 tags:
 - landing
@@ -374,6 +374,18 @@ comments:
   modified_at: 2026-11-26T20:34:31.268686247Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a08-72b4-7823-a224-8c62ade086d0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bd517cb44d (PR #4695, replaces closed #4634).
+    Acceptance evidence: this ports the r1 head of #4634 with the advisor binding (a)-(d); the PR body says where each lives. The targeted lib tests (story_3131, stalled_reviews, story_2823, task_1945) passed 21/21, and make check-ci-fast passed.
+    Probe findings and fixes: resolving against BUG-2776 would have emitted two landing-drought findings for one held PR: a review-held finding and a retained-checkout finding. Fix: Ready.retained now carries the watcher's retained block and cause() uses it as the hold's why/fix. Leftover retained blocks are emitted only for PRs with no finding. The retained key is matched exactly against the watcher keys, which are the same key space as review_heads.
+    Residual risks: the slice is about 1039 insertions, mostly tests, above the advisor's 300-line guidance (it is inherited from r1). If a retained PR also has a conflict, the conflict finding replaces the retained one, because the conflict outranks it.
+  created_at: 2026-11-26T22:44:50.996059665Z
+  modified_at: 2026-11-26T22:44:50.996059665Z
+  session_id: 01a219c6d913
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
