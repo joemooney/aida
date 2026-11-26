@@ -148,9 +148,9 @@
   for_role: implementer
 - user_id: dirtlab
   requirement_id: 01a21683-5eb7-7160-8571-456bcf8c8c55
-  position: 1431000
+  position: 1425000
   added_by: dirtlab
-  note: auto-queued by `session end` (01a2161a); covers 0 specs
-  added_at: 2026-11-26T06:20:49.065104688Z
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-26T07:42:01.270575425Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
