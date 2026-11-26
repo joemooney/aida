@@ -1,3 +1,4 @@
+// mandate-gate
 //! Vendor-agnostic substrate gate for the advisor-no-code-write invariant
 //! (STORY-684).
 //!

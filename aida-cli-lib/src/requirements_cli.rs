@@ -7108,7 +7108,8 @@ fn run_show(
                                 }) {
                                     // STORY-2884: the project default an unset
                                     // mode takes. trace:STORY-2884 | ai:claude
-                                    lines.push(crate::toon::scalar("effective_mode", &label));
+                                    let (key, _) = crate::gate::unset_mode::label_fields(&label);
+                                    lines.push(crate::toon::scalar(key, &label));
                                 }
                                 // STORY-634: the multi-repo origin dimension, emitted
                                 // only when set. trace:STORY-634 | ai:claude
@@ -7782,7 +7783,8 @@ fn run_show(
                             }) {
                                 // STORY-2884: the project default an unset mode
                                 // takes at merge. trace:STORY-2884 | ai:claude
-                                println!("\n{} {}", "Effective mode:".bold(), label.cyan());
+                                let (_, heading) = crate::gate::unset_mode::label_fields(&label);
+                                println!("\n{} {}", heading.bold(), label.cyan());
                             }
                             // Human output at an interactive terminal renders the
                             // markdown in the description (the knowledge body for
@@ -9341,6 +9343,19 @@ fn run_edit(
                             }
                         }
 
+                        if new_status_for_manifest.as_deref() == Some("Approved") {
+                            if let Ok(root) = find_project_root() {
+                                if let Some(label) =
+                                    crate::gate::unset_mode::show_label(&root, &req, || {
+                                        backend.load().ok().map(|s| s.requirements)
+                                    })
+                                {
+                                    let (_, heading) =
+                                        crate::gate::unset_mode::label_fields(&label);
+                                    eprintln!("  {heading} {label}");
+                                }
+                            }
+                        }
                         // STORY-106: workflow hint when a status flip to Completed
                         // emptied the queue for the active role+scope. Mirrors the
                         // queue-done hint so direct `aida edit --status completed`
