@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T03:01:40.126033678Z
-modified_at: 2026-11-26T03:06:14.007906357Z
+modified_at: 2026-11-26T06:24:07.121584413Z
 req_type: Task
 tags:
 - landing
@@ -25,6 +25,18 @@ relationships:
   target_id: 01a2158d-3ada-73e3-b86a-91dc240139ef
   created_at: 2026-11-26T03:06:09.058356820Z
   created_by: joe
+comments:
+- id: 01a21686-d5e9-7971-ba29-e4a4d5e9e749
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:24):
+    # TASK-3913: bisect halves drop moved-head members (advisor-122 20:05; product-15). Lane: CLAUDE. MAIN, NEW branch from main AFTER #4615 (BUG-2767) has landed. STRICT (train path). <=120 lines. Completing (TASK-3913) trailer.
+    READ: `aida show TASK-3913`, plus BUG-2767's landed change (#4615) for the culprit/drain bookkeeping you build on. AC1-AC3 as written.
+    Keep the pr_train tests green (incl. task_3792). One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T06:24:07.121584413Z
+  modified_at: 2026-11-26T06:24:07.121584413Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a215d1-59b6-70d0-8f00-cbfb6c5757d5
   author: joe
