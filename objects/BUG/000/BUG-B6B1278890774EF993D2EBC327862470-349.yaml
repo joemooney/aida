@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-26T22:54:47.443639174Z
+modified_at: 2026-11-26T22:55:58.193349105Z
 req_type: Bug
 tags:
 - landing
@@ -203,6 +203,13 @@ comments:
     A reference merge (commit 52825e81d1c3, `(Refs BUG-2584)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T22:54:47.443632249Z
   modified_at: 2026-11-26T22:54:47.443632249Z
+- id: 01a21a12-a0f1-75e2-a06d-ea69be30bb53
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 788660cb0bfd
+    A reference merge (commit 788660cb0bfd, `(Refs BUG-2584)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T22:55:58.193345562Z
+  modified_at: 2026-11-26T22:55:58.193345562Z
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
