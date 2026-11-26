@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T10:52:49.893038388Z
+modified_at: 2026-11-26T11:18:59.210920294Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -409,6 +409,20 @@ comments:
   modified_at: 2026-11-26T10:49:02.617308128Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21794-858a-7200-b7a4-4ce9ae25bf73
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2fa3df9ef8 (slice d2, git diff HEAD~1; base integration).
+    Scope: ported workflow-{enums-state,exception-paths,gates-review,human-journeys}.svg from b5826a0f949, embedded them in docs/product-workflow.md (steering, Act 5 gates, detours, Act 6 enums), and added scheduled jobs/deputies/mandates, lane admission and not-yet-in-init sections to docs/operator-setup.md. 89 hand-written lines.
+    [evidence: documentation-inspection] Commands were checked against --help: aida approve does not exist (now aida edit --status approved), and neither does aida clarify (now aida decide). worktree gc only reports clean trees, so 'Preserves dirty diffs' became 'Skips dirty trees'. The reference said ci:full was required for direct ship, which full_tier.rs does not support; it now says it is required at each train rider's head. Enum names, order, ladder --force rule, pickability precedence and the 7 CI shards were checked against models.rs, pickability.rs, lock.rs and ci.yml.
+    [evidence: documentation-inspection] Lane admission: all five knobs, their defaults, fail-closed invalid-file behaviour and the /etc/aida/lanes.toml location match lane_admission.rs Settings::load and admit_job (TASK-3911 doc gap).
+    SVG safety: no script, event handlers or hrefs; only internal url(#marker) refs; each parses as XML. build.py --check OK; unittest tests/test_showcase_build.py + test_showcase_publish.py OK (29, 2 skipped); make check-ci-fast exit 0.
+    Residual: the aida doctor hint for effective lane-admission values (TASK-3911 comment) is code and not in this docs slice. The gates SVG was renumbered Act 2 to Act 5 to fit d1's acts. Done in the enums SVG is labelled closed, as in the reference.
+  created_at: 2026-11-26T11:18:59.210920294Z
+  modified_at: 2026-11-26T11:18:59.210920294Z
+  session_id: 01a2177c5fc8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
