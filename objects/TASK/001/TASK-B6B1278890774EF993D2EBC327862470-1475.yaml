@@ -9,12 +9,12 @@ description: |
   - AC1: a tracked config knob `[landing] max_prs_per_train` (default unset = today's behaviour) caps how many members the AUTO-train admits into one train; the rest wait for the next train in priority order. Explicit operator `aida pr train N...` lists are unaffected unless they pass --max.
   - AC2: a test showing that with max_prs_per_train=3 and 6 ready PRs, the train admits 3 and the next pass admits the next 3.
   - AC3: once landed, set `max_prs_per_train = 3` in .aida/config.toml, with a comment citing #4605 (a follow-up config change).
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T11:07:59.465327931Z
+modified_at: 2026-11-26T15:43:13.556187975Z
 req_type: Task
 tags:
 - landing
@@ -136,6 +136,13 @@ history:
   session_id: 01a215aaf8ca
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21886-7094-72a0-9f7d-c855f8d44d14
+  author: joe
+  timestamp: 2026-11-26T15:43:13.556180387Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: fa7028b4df8d8ce2aa0e3f270a743cca265b957e
@@ -148,3 +155,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T03:10:42.377681051Z
   implemented_by: dirtlab
+  reopened_at_sha: cb26bf94b379497686eaaaae5ad1e1e4b2ab18a0
