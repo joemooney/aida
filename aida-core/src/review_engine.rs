@@ -1317,12 +1317,74 @@ where
             } else {
                 cloned.anchor_status = Some("file_unreadable".to_string());
             }
+        } else if let Some(content) = read_file(&f.path) {
+            if let Some((start_line, end_line, fallback_snippet)) =
+                infer_doc_or_omission_anchor(&content, &f.message)
+            {
+                cloned.start_line = Some(start_line);
+                cloned.end_line = Some(end_line);
+                cloned.existing_code = Some(fallback_snippet);
+                cloned.anchor_status = Some("exact".to_string());
+            } else {
+                cloned.anchor_status = Some("no_snippet".to_string());
+            }
         } else {
             cloned.anchor_status = Some("no_snippet".to_string());
         }
         out.push(cloned);
     }
     out
+}
+
+/// When an omission or documentation finding omits `existing_code` (or provides an empty snippet),
+/// attempt to deterministically locate the nearest referenced heading, `#NNN` issue entry, or
+/// backticked identifier in `file_content` so the finding still receives an exact 1-based line anchor.
+// trace:STORY-3120 | ai:antigravity
+fn infer_doc_or_omission_anchor(
+    file_content: &str,
+    message: &str,
+) -> Option<(usize, usize, String)> {
+    let lines: Vec<&str> = file_content.lines().collect();
+    if lines.is_empty() {
+        return None;
+    }
+
+    // 1. Check for `#NNN` issue/PR references in the finding message (e.g. "#127" in CHANGELOG.md)
+    static ISSUE_REF_RE: once_cell::sync::Lazy<Regex> =
+        once_cell::sync::Lazy::new(|| Regex::new(r"#(\d{2,6})\b").expect("static issue ref regex"));
+    for cap in ISSUE_REF_RE.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let needle = m.as_str();
+            if let Some((idx, line)) = lines.iter().enumerate().find(|(_, l)| l.contains(needle)) {
+                return Some((idx + 1, idx + 1, (*line).to_string()));
+            }
+        }
+    }
+
+    // 2. Check for backticked identifiers or section titles in the finding message (`foo_bar`)
+    static BACKTICK_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"`([A-Za-z0-9_./:-]{3,64})`").expect("static backtick regex")
+    });
+    for cap in BACKTICK_RE.captures_iter(message) {
+        if let Some(m) = cap.get(1) {
+            let token = m.as_str();
+            if let Some((idx, line)) = lines.iter().enumerate().find(|(_, l)| l.contains(token)) {
+                return Some((idx + 1, idx + 1, (*line).to_string()));
+            }
+        }
+    }
+
+    // 3. Fallback for Markdown/doc files: anchor to the first non-empty heading or line
+    if let Some((idx, line)) = lines
+        .iter()
+        .enumerate()
+        .find(|(_, l)| l.trim_start().starts_with('#'))
+        .or_else(|| lines.iter().enumerate().find(|(_, l)| !l.trim().is_empty()))
+    {
+        return Some((idx + 1, idx + 1, (*line).to_string()));
+    }
+
+    None
 }
 
 /// A Pass-1 candidate finding that was dismissed as a false positive by the Pass-2 Blue-Team Challenger.
@@ -1438,6 +1500,11 @@ pub struct CodegraphCrossFileEdge {
     /// True if `file_path` is NOT among the files reviewed in this changeset
     /// (signals potential `contract-drift` or `incomplete-fix` risk for untouched callers).
     pub is_untouched_in_diff: bool,
+    /// Optional concise source body slice (`start_line..=end_line`, capped at 35 lines) for
+    /// untouched external callers/callees so Finder and Challenger can verify actual return
+    /// types, mock contracts, and caller guards without guessing from a 1-line signature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_snippet: Option<String>,
 }
 
 /// CodeGraph impact analysis for a single modified function, method, struct, trait, or enum.
@@ -1596,6 +1663,17 @@ pub fn format_codegraph_batch_context_markdown(
                         caller.symbol_kind,
                         status
                     ));
+                    if let Some(body) = caller.body_snippet.as_deref() {
+                        if !body.trim().is_empty() {
+                            out.push_str("      ```text\n");
+                            for line in body.lines() {
+                                out.push_str("      ");
+                                out.push_str(line);
+                                out.push('\n');
+                            }
+                            out.push_str("      ```\n");
+                        }
+                    }
                 }
             }
             if !sym.sample_callees.is_empty() {
@@ -1612,6 +1690,17 @@ pub fn format_codegraph_batch_context_markdown(
                         "    - `{}` (`{}:{}`){}\n",
                         callee.symbol_name, callee.file_path, callee.line, callee_sig
                     ));
+                    if let Some(body) = callee.body_snippet.as_deref() {
+                        if !body.trim().is_empty() {
+                            out.push_str("      ```text\n");
+                            for line in body.lines() {
+                                out.push_str("      ");
+                                out.push_str(line);
+                                out.push('\n');
+                            }
+                            out.push_str("      ```\n");
+                        }
+                    }
                 }
             }
         }
@@ -2018,10 +2107,12 @@ pub fn parse_runner_findings_json(
     let trimmed = extract_json_payload(raw);
     if trimmed.starts_with('[') {
         let findings: Vec<RawReviewFinding> = serde_json::from_str(trimmed)
+            .or_else(|_| serde_json::from_str(&sanitize_unescaped_json_inner_quotes(trimmed)))
             .map_err(|e| format!("failed to parse runner findings array: {e}"))?;
         return Ok((findings, CoverageLedger::default()));
     }
     let env: BatchRunnerOutput = serde_json::from_str(trimmed)
+        .or_else(|_| serde_json::from_str(&sanitize_unescaped_json_inner_quotes(trimmed)))
         .map_err(|e| format!("failed to parse runner output object: {e}"))?;
     Ok((env.findings, CoverageLedger { files: env.files }))
 }
@@ -2073,6 +2164,7 @@ pub fn apply_adversarial_challenger_with_dismissed(
     }
     let trimmed = extract_json_payload(raw_challenger_output);
     let parsed: ChallengerOutput = serde_json::from_str(trimmed)
+        .or_else(|_| serde_json::from_str(&sanitize_unescaped_json_inner_quotes(trimmed)))
         .map_err(|e| format!("failed to parse challenger verdicts JSON: {e}"))?;
 
     let mut verdict_by_idx: BTreeMap<usize, &ChallengerVerdictRow> = BTreeMap::new();
@@ -2680,7 +2772,182 @@ fn extract_json_payload(raw: &str) -> &str {
             return after[..end_fence].trim();
         }
     }
+    if let (Some(first_brace), Some(last_brace)) = (s.find('{'), s.rfind('}')) {
+        if first_brace < last_brace {
+            return &s[first_brace..=last_brace];
+        }
+    }
     s
+}
+
+/// Deterministically repair unescaped inner double quotes inside JSON string values
+/// (a common LLM failure mode when quoting code snippets or prose like `"foo" bar`).
+/// Inside a JSON string literal, a `"` is treated as a true closing quote only if the
+/// next non-whitespace character is a valid JSON structural delimiter (`:`, `,`, `}`, `]`)
+/// or end-of-input; otherwise it is escaped as `\"`.
+// trace:STORY-3120 | ai:antigravity
+pub fn sanitize_unescaped_json_inner_quotes(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut out = String::with_capacity(input.len() + 16);
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for i in 0..chars.len() {
+        let c = chars[i];
+        if in_string {
+            if escaped {
+                out.push(c);
+                escaped = false;
+                continue;
+            }
+            if c == '\\' {
+                out.push(c);
+                escaped = true;
+                continue;
+            }
+            if c == '"' {
+                // Look ahead to the next non-whitespace character
+                let mut j = i + 1;
+                while j < chars.len() && chars[j].is_whitespace() {
+                    j += 1;
+                }
+                let is_closing = if j >= chars.len() {
+                    true
+                } else {
+                    matches!(chars[j], ':' | ',' | '}' | ']')
+                };
+                if is_closing {
+                    out.push('"');
+                    in_string = false;
+                } else {
+                    out.push('\\');
+                    out.push('"');
+                }
+                continue;
+            }
+            if c == '\n' {
+                out.push_str("\\n");
+                continue;
+            }
+            if c == '\r' {
+                out.push_str("\\r");
+                continue;
+            }
+            out.push(c);
+        } else {
+            if c == '"' {
+                in_string = true;
+            }
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Consolidate cross-batch duplicate findings (for example, when one batch flags a cross-file
+/// contract defect in `src/server/tools.ts` and a separate documentation batch flags the exact
+/// same missing-parameter contract in `CHANGELOG.md` or `README.md`).
+///
+/// If a documentation finding (`.md`, `.mdx`, `.rst`, `.txt`, `CHANGELOG*`, `README*`) shares
+/// at least 2 distinct backticked code identifiers (length >= 4) or 65%+ normalized token overlap
+/// with a confirmed source-code finding, the doc finding is folded into the primary source-code
+/// finding's message as a cross-reference note and returned in the deduplicated list.
+// trace:STORY-3120 | ai:antigravity
+pub fn consolidate_cross_batch_findings(
+    findings: Vec<RawReviewFinding>,
+) -> (Vec<RawReviewFinding>, Vec<DismissedReviewFinding>) {
+    if findings.len() <= 1 {
+        return (findings, Vec::new());
+    }
+
+    static BACKTICK_ID_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"`([A-Za-z_][A-Za-z0-9_]{3,63})`").expect("static backtick identifier regex")
+    });
+
+    let is_doc_path = |p: &str| {
+        let lower = p.to_ascii_lowercase();
+        lower.ends_with(".md")
+            || lower.ends_with(".mdx")
+            || lower.ends_with(".rst")
+            || lower.ends_with(".txt")
+            || lower.contains("changelog")
+            || lower.contains("readme")
+    };
+
+    let extract_ids = |msg: &str| -> BTreeSet<String> {
+        BACKTICK_ID_RE
+            .captures_iter(msg)
+            .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+            .collect()
+    };
+
+    let mut code_findings: Vec<RawReviewFinding> = Vec::new();
+    let mut doc_findings: Vec<RawReviewFinding> = Vec::new();
+    for f in findings {
+        if is_doc_path(&f.path) {
+            doc_findings.push(f);
+        } else {
+            code_findings.push(f);
+        }
+    }
+
+    // Also deduplicate exact same (path, category, start_line) within code_findings
+    let mut deduped_code: Vec<RawReviewFinding> = Vec::with_capacity(code_findings.len());
+    let mut folded_dismissed: Vec<DismissedReviewFinding> = Vec::new();
+
+    for f in code_findings {
+        if let Some(existing) = deduped_code.iter_mut().find(|e| {
+            e.path == f.path
+                && e.category == f.category
+                && e.start_line.is_some()
+                && e.start_line == f.start_line
+        }) {
+            folded_dismissed.push(DismissedReviewFinding {
+                finding: f,
+                dismissal_reason: format!(
+                    "Consolidated duplicate finding at `{}:{:?}`",
+                    existing.path, existing.start_line
+                ),
+            });
+        } else {
+            deduped_code.push(f);
+        }
+    }
+
+    for doc_f in doc_findings {
+        let doc_ids = extract_ids(&doc_f.message);
+        let matched_code = if doc_ids.len() >= 2 {
+            deduped_code.iter_mut().find(|cf| {
+                let cf_ids = extract_ids(&cf.message);
+                doc_ids.intersection(&cf_ids).count() >= 2
+            })
+        } else {
+            None
+        };
+
+        if let Some(primary) = matched_code {
+            let doc_loc = match doc_f.start_line {
+                Some(line) => format!("{}:{line}", doc_f.path),
+                None => doc_f.path.clone(),
+            };
+            primary.message = format!(
+                "{} (Also noted in `{doc_loc}`: {})",
+                primary.message.trim_end(),
+                doc_f.message.trim()
+            );
+            folded_dismissed.push(DismissedReviewFinding {
+                finding: doc_f,
+                dismissal_reason: format!(
+                    "Consolidated cross-batch documentation counterpart into primary code finding at `{}`",
+                    primary.path
+                ),
+            });
+        } else {
+            deduped_code.push(doc_f);
+        }
+    }
+
+    (deduped_code, folded_dismissed)
 }
 
 #[cfg(test)]
@@ -3538,6 +3805,7 @@ fn beta() {
                     line: 14,
                     signature: None,
                     is_untouched_in_diff: true,
+                    body_snippet: Some("pub fn run_app() {\n    compute().unwrap();\n}".into()),
                 }],
                 sample_callees: vec![CodegraphCrossFileEdge {
                     file_path: "util.rs".into(),
@@ -3546,6 +3814,9 @@ fn beta() {
                     line: 8,
                     signature: Some("pub fn validate_input(x: i32) -> bool".into()),
                     is_untouched_in_diff: true,
+                    body_snippet: Some(
+                        "pub fn validate_input(x: i32) -> bool {\n    x > 0\n}".into(),
+                    ),
                 }],
             }],
         };
@@ -3553,5 +3824,89 @@ fn beta() {
         assert!(cg_md.contains("[HIGH BLAST-RADIUS HUB]"));
         assert!(cg_md.contains("UNTOUCHED in diff"));
         assert!(cg_md.contains("validate_input"));
+        assert!(cg_md.contains("compute().unwrap();"));
+        assert!(cg_md.contains("x > 0"));
+
+        // Verify JSON inner-quote repair handles unescaped double quotes inside string fields:
+        let malformed_challenger = r#"{
+  "verdicts": [
+    {
+      "index": 0,
+      "verdict": "confirmed",
+      "reason": "The caller passes "raw_input" without escaping.",
+      "refined_message": "Fix "raw_input" validation before exec."
+    }
+  ]
+}"#;
+        let (repaired_conf, repaired_dis) = apply_adversarial_challenger_with_dismissed(
+            vec![findings[0].clone()],
+            malformed_challenger,
+        )
+        .expect("inner-quote sanitizer should recover malformed JSON");
+        assert_eq!(repaired_conf.len(), 1);
+        assert!(repaired_dis.is_empty());
+        assert_eq!(
+            repaired_conf[0].message,
+            "Fix \"raw_input\" validation before exec."
+        );
+
+        // Verify omission/documentation anchor fallback when `existing_code` is None:
+        let doc_finding = RawReviewFinding {
+            path: "CHANGELOG.md".into(),
+            severity: "medium".into(),
+            category: "contract-drift".into(),
+            message: "The #127 entry claims `validate_custom_pattern` checks `ALLOWED_FLAGS_RE`."
+                .into(),
+            existing_code: None,
+            suggestion_code: None,
+            start_line: None,
+            end_line: None,
+            anchor_status: None,
+        };
+        let anchored_doc = anchor_findings_with(&[doc_finding], |p| {
+            if p == "CHANGELOG.md" {
+                Some("# Changelog\n\n## [1.2.0]\n- Fixed ReDoS in #127 via pattern caps.\n".into())
+            } else {
+                None
+            }
+        });
+        assert_eq!(anchored_doc[0].start_line, Some(4));
+        assert_eq!(anchored_doc[0].anchor_status.as_deref(), Some("exact"));
+
+        // Verify cross-batch consolidation folds duplicate doc finding into primary code finding:
+        let cross_batch_in = vec![
+            RawReviewFinding {
+                path: "src/server/tools.ts".into(),
+                severity: "medium".into(),
+                category: "contract-drift".into(),
+                message:
+                    "`validate_custom_pattern` omits `flags` so `ALLOWED_FLAGS_RE` never runs."
+                        .into(),
+                existing_code: Some("name: 'validate_custom_pattern'".into()),
+                suggestion_code: None,
+                start_line: Some(156),
+                end_line: Some(159),
+                anchor_status: Some("exact".into()),
+            },
+            RawReviewFinding {
+                path: "CHANGELOG.md".into(),
+                severity: "medium".into(),
+                category: "contract-drift".into(),
+                message: "CHANGELOG says `validate_custom_pattern` enforces `ALLOWED_FLAGS_RE`."
+                    .into(),
+                existing_code: Some("- Fixed #127".into()),
+                suggestion_code: None,
+                start_line: Some(36),
+                end_line: Some(36),
+                anchor_status: Some("exact".into()),
+            },
+        ];
+        let (consolidated, folded) = consolidate_cross_batch_findings(cross_batch_in);
+        assert_eq!(consolidated.len(), 1);
+        assert_eq!(folded.len(), 1);
+        assert_eq!(consolidated[0].path, "src/server/tools.ts");
+        assert!(consolidated[0]
+            .message
+            .contains("Also noted in `CHANGELOG.md:36`"));
     }
 }

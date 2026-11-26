@@ -8,11 +8,11 @@ use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_r
 use aida_core::review_engine::{
     anchor_findings_with, apply_adversarial_challenger_with_dismissed, bundle_review_batches,
     classify_diff_inventory, compute_addressed_findings_with, compute_severity_weighted_score,
-    detect_ai_authors, estimate_review_cost_usd, extract_confirmed_findings_from_sarif,
-    findings_exceeding_threshold, findings_to_sarif_json_with_telemetry,
-    format_codegraph_batch_context_markdown, format_forge_review_markdown_with_adversarial,
-    format_review_telemetry_report_markdown, parse_runner_findings_json,
-    parse_unified_diff_new_line_ranges, resolve_ab_arm_assignment,
+    consolidate_cross_batch_findings, detect_ai_authors, estimate_review_cost_usd,
+    extract_confirmed_findings_from_sarif, findings_exceeding_threshold,
+    findings_to_sarif_json_with_telemetry, format_codegraph_batch_context_markdown,
+    format_forge_review_markdown_with_adversarial, format_review_telemetry_report_markdown,
+    parse_runner_findings_json, parse_unified_diff_new_line_ranges, resolve_ab_arm_assignment,
     summarize_review_telemetry_by_arm, verify_coverage_ledger, AdversarialReviewSummary,
     ClassifiedInventory, CodegraphCrossFileEdge, CodegraphFileFanIn, CodegraphReviewContext,
     CodegraphTouchedSymbol, CoverageLedger, CoverageVerificationReport, DismissedReviewFinding,
@@ -1674,7 +1674,7 @@ fn build_codegraph_review_context(
 
     let mut callers_stmt = conn
         .prepare(
-            "SELECT caller.file_path, caller.name, caller.kind, COALESCE(e.line, caller.start_line), caller.signature
+            "SELECT caller.file_path, caller.name, caller.kind, COALESCE(e.line, caller.start_line), caller.signature, caller.start_line, caller.end_line
              FROM edges e
              JOIN nodes caller ON e.source = caller.id
              WHERE e.target = ?1
@@ -1686,7 +1686,7 @@ fn build_codegraph_review_context(
 
     let mut callees_stmt = conn
         .prepare(
-            "SELECT target.file_path, target.name, target.kind, COALESCE(e.line, target.start_line), target.signature
+            "SELECT target.file_path, target.name, target.kind, COALESCE(e.line, target.start_line), target.signature, target.start_line, target.end_line
              FROM edges e
              JOIN nodes target ON e.target = target.id
              WHERE e.source = ?1
@@ -1792,10 +1792,12 @@ fn build_codegraph_review_context(
                     r.get::<_, String>(2)?,
                     r.get::<_, isize>(3)?.max(1) as usize,
                     r.get::<_, Option<String>>(4)?,
+                    r.get::<_, isize>(5)?.max(1) as usize,
+                    r.get::<_, isize>(6)?.max(1) as usize,
                 ))
             }) {
                 for c in caller_rows.flatten() {
-                    let (c_path, c_name, c_kind, c_line, c_sig) = c;
+                    let (c_path, c_name, c_kind, c_line, c_sig, c_start, c_end) = c;
                     let dedup_key = format!("{c_path}:{c_name}:{c_line}");
                     if !seen_callers.insert(dedup_key) {
                         continue;
@@ -1806,6 +1808,11 @@ fn build_codegraph_review_context(
                         untouched_external_callers += 1;
                     }
                     if sample_callers.len() < 6 {
+                        let body_snippet = if is_untouched && sample_callers.len() < 3 {
+                            slice_external_symbol_body(project_root, &c_path, c_start, c_end, 35)
+                        } else {
+                            None
+                        };
                         sample_callers.push(CodegraphCrossFileEdge {
                             file_path: c_path,
                             symbol_name: c_name,
@@ -1813,6 +1820,7 @@ fn build_codegraph_review_context(
                             line: c_line,
                             signature: c_sig.map(|s| truncate_str(&s, 120)),
                             is_untouched_in_diff: is_untouched,
+                            body_snippet,
                         });
                     }
                 }
@@ -1827,22 +1835,31 @@ fn build_codegraph_review_context(
                     r.get::<_, String>(2)?,
                     r.get::<_, isize>(3)?.max(1) as usize,
                     r.get::<_, Option<String>>(4)?,
+                    r.get::<_, isize>(5)?.max(1) as usize,
+                    r.get::<_, isize>(6)?.max(1) as usize,
                 ))
             }) {
                 for c in callee_rows.flatten() {
-                    let (t_path, t_name, t_kind, t_line, t_sig) = c;
+                    let (t_path, t_name, t_kind, t_line, t_sig, t_start, t_end) = c;
                     let dedup_key = format!("{t_path}:{t_name}");
                     if !seen_callees.insert(dedup_key) {
                         continue;
                     }
                     if sample_callees.len() < 5 {
+                        let is_untouched = !diff_files.contains(t_path.as_str());
+                        let body_snippet = if is_untouched && sample_callees.len() < 3 {
+                            slice_external_symbol_body(project_root, &t_path, t_start, t_end, 35)
+                        } else {
+                            None
+                        };
                         sample_callees.push(CodegraphCrossFileEdge {
-                            file_path: t_path.clone(),
+                            file_path: t_path,
                             symbol_name: t_name,
                             symbol_kind: t_kind,
                             line: t_line,
                             signature: t_sig.map(|s| truncate_str(&s, 120)),
-                            is_untouched_in_diff: !diff_files.contains(t_path.as_str()),
+                            is_untouched_in_diff: is_untouched,
+                            body_snippet,
                         });
                     }
                 }
@@ -1887,6 +1904,110 @@ fn truncate_str(s: &str, max_chars: usize) -> String {
         out.push('…');
         out
     }
+}
+
+/// Slice the source lines (`start_line..=end_line`, 1-based, capped at `max_lines`) of an
+/// untouched external caller or callee symbol from disk so Finder and Challenger can verify
+/// real return values, parameter contracts, and caller invariants without guessing.
+// trace:STORY-3120 | ai:antigravity
+fn slice_external_symbol_body(
+    project_root: &Path,
+    rel_path: &str,
+    start_line: usize,
+    end_line: usize,
+    max_lines: usize,
+) -> Option<String> {
+    let probe = RawDiffEntry {
+        path: rel_path.to_string(),
+        old_path: None,
+        kind: FileChangeKind::Scanned,
+        additions: 0,
+        deletions: 0,
+        is_binary: false,
+        patch_bytes: 0,
+    };
+    if aida_core::review_engine::classify_exclusion(&probe, &[]).is_some() {
+        return None;
+    }
+    let bytes = read_workspace_file(project_root, rel_path).ok()??;
+    let text = String::from_utf8(bytes).ok()?;
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() || start_line == 0 || start_line > lines.len() {
+        return None;
+    }
+    let s_idx = start_line - 1;
+    let e_idx = end_line.max(start_line).min(lines.len()) - 1;
+    let take_count = (e_idx - s_idx + 1).min(max_lines);
+    let mut snippet = lines[s_idx..s_idx + take_count].join("\n");
+    if e_idx - s_idx + 1 > max_lines {
+        snippet.push_str("\n// ... (truncated)");
+    }
+    if snippet.trim().is_empty() {
+        None
+    } else {
+        Some(snippet)
+    }
+}
+
+/// Discover and read the nearest package/dependency manifest (`pyproject.toml`, `package.json`,
+/// `Cargo.toml`, `go.mod`, `pom.xml`, `requirements.txt`, `build.gradle`, `build.gradle.kts`)
+/// for a batch of reviewed files when that manifest is not itself in the batch.
+///
+/// This enables Pass-1 Finder and Pass-2 Challenger to detect undeclared third-party imports
+/// or missing test runner plugins (such as `pytest-mock` or `pytest-asyncio` in `pyproject.toml`).
+// trace:STORY-3120 | ai:antigravity
+fn collect_batch_dependency_manifests(
+    project_root: &Path,
+    batch_files: &[String],
+) -> Vec<(String, String)> {
+    const MANIFEST_NAMES: &[&str] = &[
+        "pyproject.toml",
+        "requirements.txt",
+        "package.json",
+        "Cargo.toml",
+        "go.mod",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+    ];
+    let batch_set: BTreeSet<&str> = batch_files.iter().map(String::as_str).collect();
+    let mut candidate_dirs: BTreeSet<PathBuf> = BTreeSet::new();
+    candidate_dirs.insert(PathBuf::new());
+    for file in batch_files {
+        let mut cur = Path::new(file).parent();
+        while let Some(dir) = cur {
+            candidate_dirs.insert(dir.to_path_buf());
+            cur = dir.parent();
+        }
+    }
+
+    let mut manifests = Vec::new();
+    let mut seen_paths = BTreeSet::new();
+    for dir in candidate_dirs {
+        for &name in MANIFEST_NAMES {
+            let rel = if dir.as_os_str().is_empty() {
+                name.to_string()
+            } else {
+                format!("{}/{name}", dir.to_string_lossy().replace('\\', "/"))
+            };
+            if batch_set.contains(rel.as_str()) || !seen_paths.insert(rel.clone()) {
+                continue;
+            }
+            if let Ok(Some(bytes)) = read_workspace_file(project_root, &rel) {
+                if bytes.len() <= 16_384 {
+                    if let Ok(text) = String::from_utf8(bytes) {
+                        if !text.trim().is_empty() {
+                            manifests.push((rel, text));
+                        }
+                    }
+                }
+            }
+            if manifests.len() >= 2 {
+                return manifests;
+            }
+        }
+    }
+    manifests
 }
 
 /// File confirmed findings at or above `min_severity` as draft `BUG` requirements in the AIDA store.
@@ -2293,66 +2414,143 @@ fn execute_automated_batch_reviews(
     let mut total_candidates = 0usize;
     let mut metrics = RunnerExecutionMetrics::default();
 
-    for batch in batches {
-        let prompt = build_batch_review_prompt(
-            project_root,
-            mode,
-            merge_base,
-            head_ref,
-            batch,
-            &playbooks_map,
-            linked_specs,
-            content_cache,
-            codegraph_context,
-        )?;
-        metrics.finder_prompt_bytes += prompt.len();
-        let finder_start = Instant::now();
-        let raw_out = invoke_review_runner(project_root, agent, model, effort, "finder", &prompt)?;
-        metrics.finder_elapsed_ms += finder_start.elapsed().as_millis() as u64;
-        metrics.finder_response_bytes += raw_out.len();
+    // Execute batches with bounded parallelism (up to 4 concurrent batches via `std::thread::scope`)
+    // while preserving deterministic batch_index ordering of findings, coverage, and telemetry.
+    const MAX_CONCURRENT_BATCHES: usize = 4;
+    for chunk in batches.chunks(MAX_CONCURRENT_BATCHES) {
+        let chunk_results: Vec<
+            Result<(
+                Vec<RawReviewFinding>,
+                Vec<aida_core::review_engine::FileCoverageEntry>,
+                Vec<DismissedReviewFinding>,
+                usize,
+                RunnerExecutionMetrics,
+            )>,
+        > = std::thread::scope(|s| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|batch| {
+                    let playbooks_ref = &playbooks_map;
+                    s.spawn(move || {
+                        let mut b_metrics = RunnerExecutionMetrics::default();
+                        let prompt = build_batch_review_prompt(
+                            project_root,
+                            mode,
+                            merge_base,
+                            head_ref,
+                            batch,
+                            playbooks_ref,
+                            linked_specs,
+                            content_cache,
+                            codegraph_context,
+                        )?;
+                        b_metrics.finder_prompt_bytes += prompt.len();
+                        let finder_start = Instant::now();
+                        let raw_out = invoke_review_runner(
+                            project_root,
+                            agent,
+                            model,
+                            effort,
+                            "finder",
+                            &prompt,
+                        )?;
+                        b_metrics.finder_elapsed_ms += finder_start.elapsed().as_millis() as u64;
+                        b_metrics.finder_response_bytes += raw_out.len();
 
-        let (mut batch_findings, batch_ledger) = parse_runner_findings_json(&raw_out)
-            .map_err(|e| anyhow::anyhow!("batch {} runner output error: {e}", batch.batch_index))?;
+                        let (mut batch_findings, batch_ledger) =
+                            parse_runner_findings_json(&raw_out).map_err(|e| {
+                                anyhow::anyhow!(
+                                    "batch {} runner output error: {e}",
+                                    batch.batch_index
+                                )
+                            })?;
 
-        if let Some((challenger_agent, challenger_model, challenger_effort)) = challenger {
-            total_candidates += batch_findings.len();
-            if !batch_findings.is_empty() {
-                let challenger_prompt = build_adversarial_challenger_prompt(
-                    batch,
-                    &batch_findings,
-                    linked_specs,
-                    content_cache,
-                    codegraph_context,
-                );
-                metrics.challenger_prompt_bytes += challenger_prompt.len();
-                let chall_start = Instant::now();
-                let raw_challenger = invoke_review_runner(
-                    project_root,
-                    challenger_agent,
-                    challenger_model.as_deref(),
-                    challenger_effort.as_deref(),
-                    "challenger",
-                    &challenger_prompt,
-                )?;
-                metrics.challenger_elapsed_ms += chall_start.elapsed().as_millis() as u64;
-                metrics.challenger_response_bytes += raw_challenger.len();
+                        let mut b_dismissed = Vec::new();
+                        let mut b_candidates = 0usize;
+                        if let Some((challenger_agent, challenger_model, challenger_effort)) =
+                            challenger
+                        {
+                            b_candidates = batch_findings.len();
+                            if !batch_findings.is_empty() {
+                                let challenger_prompt = build_adversarial_challenger_prompt(
+                                    project_root,
+                                    batch,
+                                    &batch_findings,
+                                    linked_specs,
+                                    content_cache,
+                                    codegraph_context,
+                                );
+                                b_metrics.challenger_prompt_bytes += challenger_prompt.len();
+                                let chall_start = Instant::now();
+                                let raw_challenger = invoke_review_runner(
+                                    project_root,
+                                    challenger_agent,
+                                    challenger_model.as_deref(),
+                                    challenger_effort.as_deref(),
+                                    "challenger",
+                                    &challenger_prompt,
+                                )?;
+                                b_metrics.challenger_elapsed_ms +=
+                                    chall_start.elapsed().as_millis() as u64;
+                                b_metrics.challenger_response_bytes += raw_challenger.len();
 
-                let (confirmed, dismissed) =
-                    apply_adversarial_challenger_with_dismissed(batch_findings, &raw_challenger)
-                        .map_err(|e| {
-                            anyhow::anyhow!(
-                                "batch {} adversarial challenger error: {e}",
-                                batch.batch_index
-                            )
-                        })?;
-                batch_findings = confirmed;
-                all_dismissed.extend(dismissed);
-            }
+                                let (confirmed, dismissed) =
+                                    apply_adversarial_challenger_with_dismissed(
+                                        batch_findings,
+                                        &raw_challenger,
+                                    )
+                                    .map_err(|e| {
+                                        anyhow::anyhow!(
+                                            "batch {} adversarial challenger error: {e}",
+                                            batch.batch_index
+                                        )
+                                    })?;
+                                batch_findings = confirmed;
+                                b_dismissed = dismissed;
+                            }
+                        }
+
+                        Ok((
+                            batch_findings,
+                            batch_ledger.files,
+                            b_dismissed,
+                            b_candidates,
+                            b_metrics,
+                        ))
+                    })
+                })
+                .collect();
+
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join()
+                        .unwrap_or_else(|_| Err(anyhow::anyhow!("batch review thread panicked")))
+                })
+                .collect()
+        });
+
+        for res in chunk_results {
+            let (b_findings, b_cov, b_dismissed, b_candidates, b_metrics) = res?;
+            all_findings.extend(b_findings);
+            all_coverage.extend(b_cov);
+            all_dismissed.extend(b_dismissed);
+            total_candidates += b_candidates;
+            metrics.finder_elapsed_ms += b_metrics.finder_elapsed_ms;
+            metrics.challenger_elapsed_ms += b_metrics.challenger_elapsed_ms;
+            metrics.finder_prompt_bytes += b_metrics.finder_prompt_bytes;
+            metrics.finder_response_bytes += b_metrics.finder_response_bytes;
+            metrics.challenger_prompt_bytes += b_metrics.challenger_prompt_bytes;
+            metrics.challenger_response_bytes += b_metrics.challenger_response_bytes;
         }
-
-        all_findings.extend(batch_findings);
-        all_coverage.extend(batch_ledger.files);
     }
+
+    // Consolidate cross-batch duplicate findings (e.g., when a doc/CHANGELOG batch and a code
+    // batch flag the exact same missing parameter or contract defect).
+    let (consolidated_findings, consolidated_dismissed) =
+        consolidate_cross_batch_findings(all_findings);
+    all_findings = consolidated_findings;
+    all_dismissed.extend(consolidated_dismissed);
 
     let total_dismissed = all_dismissed.len();
     let adv_summary = challenger.map(|(challenger_agent, challenger_model, challenger_effort)| {
@@ -2382,6 +2580,7 @@ fn execute_automated_batch_reviews(
 }
 
 fn build_adversarial_challenger_prompt(
+    project_root: &Path,
     batch: &ReviewBatch,
     candidates: &[RawReviewFinding],
     linked_specs: &[LinkedSpecAcceptance],
@@ -2399,7 +2598,7 @@ fn build_adversarial_challenger_prompt(
     prompt.push_str("3. **Actionable & Non-Trivial**: The finding surfaces a substantive correctness, security, concurrency, error-handling, contract, or test defect — not stylistic bikeshedding or linter noise.\n");
     prompt.push_str("- Mark a finding `\"dismissed\"` if it fails ANY of the three conditions above, and state which condition failed in `reason`.\n");
     prompt.push_str("- Mark a finding `\"confirmed\"` only if it satisfies ALL THREE conditions (`True + Relevant + Non-Trivial`).\n\n");
-    prompt.push_str("Return ONLY a valid JSON object matching this exact schema:\n");
+    prompt.push_str("Return ONLY a valid JSON object matching this exact schema (use single quotes or backticks inside JSON strings instead of unescaped double quotes):\n");
     prompt.push_str("{\n  \"verdicts\": [\n    {\n      \"index\": 0,\n      \"verdict\": \"confirmed|dismissed\",\n      \"reason\": \"Concise evidence from the code explaining why the finding holds or fails\",\n      \"refined_message\": \"Optional sharpened message when confirmed\"\n    }\n  ]\n}\n\n");
 
     if !linked_specs.is_empty() {
@@ -2418,6 +2617,19 @@ fn build_adversarial_challenger_prompt(
         let cg_md = format_codegraph_batch_context_markdown(cg, Some(&batch.files));
         if !cg_md.is_empty() {
             prompt.push_str(&cg_md);
+        }
+    }
+
+    let manifests = collect_batch_dependency_manifests(project_root, &batch.files);
+    if !manifests.is_empty() {
+        prompt
+            .push_str("## Nearest Package & Dependency Manifest Context (Read-Only Reference)\n\n");
+        for (m_path, m_body) in manifests {
+            prompt.push_str(&format!("### Manifest: `{m_path}`\n```text\n{m_body}"));
+            if !m_body.ends_with('\n') {
+                prompt.push('\n');
+            }
+            prompt.push_str("```\n\n");
         }
     }
 
@@ -2467,9 +2679,9 @@ fn build_batch_review_prompt(
     let mut prompt = String::new();
     prompt.push_str("You are an AIDA deterministic batch code reviewer. Review every file in this batch against the linked AIDA acceptance criteria and active playbooks.\n\n");
     prompt.push_str(
-        "Return ONLY a valid JSON object matching this exact schema (no extra commentary):\n",
+        "Return ONLY a valid JSON object matching this exact schema (no extra commentary; ALWAYS populate `existing_code` with an exact verbatim line or heading from the target file, even for omissions or documentation issues):\n",
     );
-    prompt.push_str("{\n  \"findings\": [\n    {\n      \"path\": \"relative/path.rs\",\n      \"severity\": \"critical|high|medium|low\",\n      \"category\": \"fail-open|absent-evidence-reads-as-good|incomplete-fix|untested-path|contract-drift|race|perf|portability|security|bug\",\n      \"message\": \"Concise explanation of the defect and its runtime/contract impact\",\n      \"existing_code\": \"Exact verbatim lines from the new file where the defect occurs\",\n      \"suggestion_code\": \"Optional replacement code\"\n    }\n  ],\n  \"files\": [\n    { \"path\": \"relative/path.rs\", \"status\": \"reviewed\" }\n  ]\n}\n\n");
+    prompt.push_str("{\n  \"findings\": [\n    {\n      \"path\": \"relative/path.rs\",\n      \"severity\": \"critical|high|medium|low\",\n      \"category\": \"fail-open|absent-evidence-reads-as-good|incomplete-fix|untested-path|contract-drift|race|perf|portability|security|bug\",\n      \"message\": \"Concise explanation of the defect and its runtime/contract impact\",\n      \"existing_code\": \"REQUIRED: Exact verbatim lines (or nearest enclosing heading/bullet for omissions) from the target file where the defect occurs\",\n      \"suggestion_code\": \"Optional replacement code\"\n    }\n  ],\n  \"files\": [\n    { \"path\": \"relative/path.rs\", \"status\": \"reviewed\" }\n  ]\n}\n\n");
 
     if !linked_specs.is_empty() {
         prompt.push_str("## Linked AIDA Requirement Acceptance Criteria\n\n");
@@ -2497,6 +2709,20 @@ fn build_batch_review_prompt(
         let cg_md = format_codegraph_batch_context_markdown(cg, Some(&batch.files));
         if !cg_md.is_empty() {
             prompt.push_str(&cg_md);
+        }
+    }
+
+    let manifests = collect_batch_dependency_manifests(project_root, &batch.files);
+    if !manifests.is_empty() {
+        prompt
+            .push_str("## Nearest Package & Dependency Manifest Context (Read-Only Reference)\n\n");
+        prompt.push_str("Use these manifests to verify whether third-party packages, test plugins (e.g., `pytest-mock`, `pytest-asyncio`), or runtime features imported by the reviewed files are actually declared:\n\n");
+        for (m_path, m_body) in manifests {
+            prompt.push_str(&format!("### Manifest: `{m_path}`\n```text\n{m_body}"));
+            if !m_body.ends_with('\n') {
+                prompt.push('\n');
+            }
+            prompt.push_str("```\n\n");
         }
     }
 
