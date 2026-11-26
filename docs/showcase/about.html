@@ -803,9 +803,9 @@ aida session start --owns STORY-3076 --role implementer</code></pre>
             </ul>
           </div>
           <div style="background:var(--bg-panel);border:1px solid var(--line);padding:20px;">
-            <div style="font-family:var(--mono);font-size:10.5px;color:var(--emerald);font-weight:700;margin-bottom:8px;">EMPIRICAL PROOF ON GITHUB REVIEWBENCH</div>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--emerald);font-weight:700;margin-bottom:8px;">EMPIRICAL PROOF ON GITHUB REVIEWBENCH (<a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--emerald);text-decoration:underline;">REVIEW-BENCH.AI LEADERBOARD ↗</a>)</div>
             <p style="font-size:13px;color:var(--ink-secondary);margin-top:0;">
-              When evaluated on GitHub’s open <strong>ReviewBench</strong> multi-language corpus (TypeScript, Python, Go, Rust), AIDA’s clean-room design discovered a critical engine refinement:
+              When evaluated on GitHub’s open <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">ReviewBench Leaderboard</a> multi-language corpus (TypeScript, Python, Go, Rust), AIDA’s clean-room design discovered a critical engine refinement:
             </p>
             <ul style="font-size:12.5px;line-height:1.6;padding-left:16px;margin-bottom:0;">
               <li><strong>Full Target-Revision File Context (&le; 32 KB) + Diff Hunks:</strong> Enabled Pass-1 Finder to trace cross-function state (such as Go YAML slice clearing and Rust SQLite loop connections), jumping <strong>High-Severity Golden TP Recall from 50.0% to 83.3%</strong>.</li>
