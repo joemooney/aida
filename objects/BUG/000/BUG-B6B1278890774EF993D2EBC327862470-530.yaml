@@ -10,12 +10,12 @@ description: |
   - AC2: a manual `aida pr train N` waiting on an idle auto-train is admitted within one auto-train poll interval.
   - AC3: a test: an idle auto-train loop does not hold admission across polls, and a contending manual train is admitted.
   - AC4: a log/status line names the holder and the phase whenever the auto-train holds admission for more than N seconds.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:25:41.160967090Z
+modified_at: 2026-11-26T09:25:43.280804266Z
 req_type: Bug
 tags:
 - admission
@@ -79,6 +79,11 @@ comments:
   content: 'DEFERRED p3, an EARLY follow-up (advisor-122 2026-11-26 02:27 on #4640 @ 0f9abd22): the auto-train pre-scan repeats forge (gh) reads every poll; dedupe or cache them per poll because they spend the shared ~5000/h GitHub budget.'
   created_at: 2026-11-26T09:25:41.160967090Z
   modified_at: 2026-11-26T09:25:41.160967090Z
+- id: 01a2172c-d2f0-75c0-90ec-463ad6dd45b0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2769 review at 0f9abd22. AC1 verified: run_passes now runs an unclaimed pre-scan (train_wanted: journal recovery_needed, or any discovered change passing the automatic train::eligible gate, Unavailable counted as wanted) and takes the claim only for a wanted pass, dropping it right after the pass (advisor_loop_train.rs run_passes). The pre-scan is a sound superset of the pass''s automatic gate: typed_gate_member applies advisor_train_eligible -> train::eligible under ADVISOR_LOOP, and discover() drops draft/closed changes the same way repo.change() refuses them. AC2 verified by bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train (manual_train_admission succeeds in <1s while idle). AC3 verified by the same test plus the adapted bug2703 real-worker-loop test. AC4 unverified: the holder/phase line is emitted only after the claim is released, with a constant phase, and only the formatter is tested. Protocol checklist: BUG-2769 ''PR touches at least one test file'' = met (advisor_loop_train.rs test module, task_1993_review_watch_tests.rs). CI pending at review time. Request changes for AC4 only.. No triage reason was given.'
+  created_at: 2026-11-26T09:25:43.280801315Z
+  modified_at: 2026-11-26T09:25:43.280801315Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
@@ -103,6 +108,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a2172c-d2f0-75c0-90ec-462fb4acf977
+  author: joe
+  timestamp: 2026-11-26T09:25:43.280788327Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
@@ -111,11 +123,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0cb984b75d1
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2769 review at 0f9abd22. AC1 verified: run_passes now runs an unclaimed pre-scan (train_wanted: journal recovery_needed, or any discovered change passing the automatic train::eligible gate, Unavailable counted as wanted) and takes the claim only for a wanted pass, dropping it right after the pass (advisor_loop_train.rs run_passes). The pre-scan is a sound superset of the pass''s automatic gate: typed_gate_member applies advisor_train_eligible -> train::eligible under ADVISOR_LOOP, and discover() drops draft/closed changes the same way repo.change() refuses them. AC2 verified by bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train (manual_train_admission succeeds in <1s while idle). AC3 verified by the same test plus the adapted bug2703 real-worker-loop test. AC4 unverified: the holder/phase line is emitted only after the claim is released, with a constant phase, and only the formatter is tested. Protocol checklist: BUG-2769 ''PR touches at least one test file'' = met (advisor_loop_train.rs test module, task_1993_review_watch_tests.rs). CI pending at review time. Request changes for AC4 only.'
-  recovery_hint: address the review findings, move BUG-2769 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-26T09:25:06.836226730Z
