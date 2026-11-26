@@ -1,5 +1,6 @@
 id: 01a21923-5823-7a23-9303-83d4407d1bf3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-366
+agreed_id: STORY-3192
 title: 'Review PR-4678: [AI:claude] fix(review-watch): reclaim a clean exited reviewer checkout when the PR head moved (BUG-2776)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a218e2`) for branch `bug-2776-rw-reclaim-held`.
@@ -43,6 +44,12 @@ history:
   timestamp: 2026-11-26T18:34:48.098210103Z
   session_id: 01a218e28a8c
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2194e-08f8-75e3-997b-8d806430e377
+  author: joe
+  timestamp: 2026-11-26T19:21:14.232182339Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 1eba036e95ffbc060aba8b5844232897f0def674

@@ -1,5 +1,6 @@
 id: 01a2192c-408c-7113-ae31-6b4d1ba0161f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-367
+agreed_id: STORY-3191
 title: 'Review PR-4679: [AI:claude] test(auto-train): trace the BUG-2771 acceptance criteria to the loop test (BUG-2771)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21905`) for branch `train-fair-admission-fresh`.
@@ -42,6 +43,12 @@ history:
   timestamp: 2026-11-26T18:44:28.483355080Z
   session_id: 01a219055533
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2194d-c9bc-71b3-b9ec-01cc6c250099
+  author: joe
+  timestamp: 2026-11-26T19:20:58.044276312Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: a68c57341021443485650e7f20ddbe165affcfbd
