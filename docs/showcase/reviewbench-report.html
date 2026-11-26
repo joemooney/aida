@@ -92,6 +92,7 @@
     .brand {
       display: flex; align-items: center; gap: 12px;
       font-weight: 750; font-size: 22px; letter-spacing: -0.8px;
+      order: 1;
     }
     .brand-mark {
       display: grid; place-items: center; width: 34px; height: 34px;
@@ -104,7 +105,10 @@
       color: var(--ink-secondary); border-left: 1px solid var(--line);
       padding-left: 12px; font-weight: 500;
     }
-    .nav-links { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .nav-links {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      order: 3; width: 100%; padding-top: 6px; border-top: 1px dashed var(--line);
+    }
     .nav-links a {
       font-family: var(--mono); font-size: 11px; letter-spacing: 0.6px;
       color: var(--ink-secondary); text-transform: uppercase;
@@ -112,7 +116,7 @@
       transition: color 0.15s, border-color 0.15s;
     }
     .nav-links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-    .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; order: 2; margin-left: auto; }
     .btn-ghost {
       background: var(--bg-elevated); color: var(--ink);
       border: 1px solid var(--line); padding: 7px 11px;
