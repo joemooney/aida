@@ -10,12 +10,12 @@ description: |
   - AC2: AIDA records the vendor as unavailable until <time> (in the substrate, visible in `aida status` / `aida doctor`), and launches/reviews for that vendor are REFUSED up front, with a clear message, instead of starting and failing.
   - AC3: a knob `[agents] fallback_vendor` (default unset = alert only, the old behaviour) names a vendor to use while the primary is unavailable, for lanes AND review-watch. When it is unset, the operator gets ONE notification with the reset time and the exact command to switch.
   - AC4: when the reset time passes, the vendor becomes available again automatically, with no manual revert (this replaces TASK-3908/TASK-3909-style config flips).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T19:39:13.175513012Z
+modified_at: 2026-11-26T22:02:03.156867459Z
 req_type: Story
 tags:
 - agents
@@ -229,6 +229,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a219e1-4414-71a0-944d-cd2e89c3089b
+  author: aida-session-start
+  timestamp: 2026-11-26T22:02:03.156863762Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 664f260222408056dbef136fe156d48f843f1329
