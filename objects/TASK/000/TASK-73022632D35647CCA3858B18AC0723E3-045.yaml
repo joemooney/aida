@@ -7,8 +7,8 @@ status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-24T07:31:04.331376844Z
-modified_at: 2026-11-26T00:03:59.182955550Z
+created_at: 2026-11-24 07:31:04.331376+00:00
+modified_at: 2026-11-26 00:03:59.182955+00:00
 req_type: Task
 tags:
 - from-advisor:STORY-3076
@@ -19,77 +19,107 @@ comments:
 - id: 01a21493-c91c-7340-95db-49a2d79578cc
   author: joe
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED HIGH, strict. A security observation (the review engine misses repository-root credential directories). Fold its AC into STORY-3120 S3a-2''s runner path inventory / refusal work.'
-  created_at: 2026-11-25T21:19:19.324859398Z
-  modified_at: 2026-11-25T21:19:19.324859398Z
+  created_at: 2026-11-25 21:19:19.324859+00:00
+  modified_at: 2026-11-25 21:19:19.324859+00:00
 - id: 01a214de-e92f-7262-b6e9-b3cb51e673a3
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:40):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:40):
+
     # TASK-3320: the review engine misses repository-root credential directories (advisor-122 approved 2026-11-25 14:30, HIGH, STRICT; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-task-3320 (cut from the integration tip after STORY-3120 S3a #4582 merged). Completing (TASK-3320) trailer. <=200 lines.
-    READ: `aida show TASK-3320 --comments`. The advisor ruled its AC belongs with the S3a runner-path inventory: the review engine's file inventory and secret/credential screening must cover repository-ROOT credential directories (e.g. .aws/, .ssh/, .gnupg/, .config/gcloud, .docker/config.json, .netrc and similar at the repo root, not only nested). Findings that cite such paths must be flagged, and their contents must never be put into a runner prompt.
+
+    READ: `aida show TASK-3320 --comments`. The advisor ruled its AC belongs with the S3a runner-path inventory: the review engine''s file inventory and secret/credential screening must cover repository-ROOT credential directories (e.g. .aws/, .ssh/, .gnupg/, .config/gcloud, .docker/config.json, .netrc and similar at the repo root, not only nested). Findings that cite such paths must be flagged, and their contents must never be put into a runner prompt.
+
     TESTS: a fixture repo with root-level credential dirs → excluded from the prompt and reported; nested equivalents are still handled.
-    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
-  created_at: 2026-11-25T22:40:59.922465700Z
-  modified_at: 2026-11-25T22:40:59.922465700Z
+
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.'
+  created_at: 2026-11-25 22:40:59.922465+00:00
+  modified_at: 2026-11-25 22:40:59.922465+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21529-345f-75a0-af4e-79e60056c237
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 6812830d0d (PR #4604 -> integration).
+
+    Acceptance evidence: [behavioral-test] root+nested credential dirs excluded from the bundle/prompt and reported as secret_sensitive_path: review_prepare::tests::root_credential_dirs_excluded_reported_and_refused_as_findings (a sentinel in the credential files is absent from the rendered bundle). Findings citing such paths are refused with a dedicated error (same test). The broader path set, case and backslash forms, and nested depth are covered by review_engine::tests::root_and_nested_credential_paths_are_excluded. Targeted runs: aida-core review_engine::tests 25/25, aida-cli-lib review_prepare::tests 9/9; make check-ci-fast passes.
+
+    Probes: normalization agrees between is_credential_path and classify_path_exclusion (both fold backslashes; component match lowercased). 0/1/N components are safe (windows(2) is empty for one component). No existing test was weakened; the earlier any-component .aws/.ssh match is kept, including a final component.
+
+    Fixes during review: added the new tests to scripts/ratchet-set.json (the gate flagged it).
+
+    Residual risks: only ASCII case folding, no Unicode lookalikes. .npmrc is intentionally not excluded. Scan mode relies on the same classify_compiled screen ahead of the read, but the new fixture does not exercise it.'
+  created_at: 2026-11-26 00:02:31.647600+00:00
+  modified_at: 2026-11-26 00:02:31.647600+00:00
+  session_id: 01a2150928f8
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a2152a-4e83-72b2-9c90-308d4804d4e5
   author: joe
-  content: |-
-    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4604 @ 6812830d0d (TASK-3320; completes it; +164/-5, of which about 120 are tests).
+  content: 'AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4604 @ 6812830d0d (TASK-3320; completes it; +164/-5, of which about 120 are tests).
+
 
     Result: PASS.
 
+
     AC (root and nested credential paths, component matching, fixtures):
+
     - The base already matched `.aws`/`.ssh` as path components. This PR adds `.gnupg` and `.azure` components; `.config/gcloud`, `.config/gh`, `.docker/config.json` and `.kube/config` as adjacent-component pairs; and the file names .netrc, _netrc, .git-credentials, .pgpass, .pypirc, id_dsa, id_ecdsa and *.pfx.
+
     - Matching is ASCII case-insensitive, which is right for case-insensitive checkouts.
+
     - The unit test covers each path at the root, under nested/ and under a/b/, with both / and \ separators. Negative cases: .docker/Dockerfile, .config/nvim, gcloud/setup.md, src/netrc.rs and .kube-docs/config.
+
     - The end-to-end test commits sentinel-bearing credential files at the root and nested. It asserts they land in excluded_files with secret_sensitive_path, that only ordinary.rs is reviewable, and that the sentinel never appears in the bundle.
 
-    New: --anchor-findings refuses a runner finding that cites a credential path ("review never reads"), before the inventory check. That only tightens fail-closed behaviour, and it's tested for .netrc and a nested .docker/config.json.
+
+    New: --anchor-findings refuses a runner finding that cites a credential path ("review never reads"), before the inventory check. That only tightens fail-closed behaviour, and it''s tested for .netrc and a nested .docker/config.json.
+
 
     Security: no new I/O, process or network. It only adds exclusions, so nothing that was excluded before becomes reviewable.
 
+
     Should-fix (non-blocking, later): other common token files are not yet screened: .npmrc, .cargo/credentials(.toml), .vault-token, .terraform.d/credentials.tfrc.json, .config/hub. File these as a TASK-3320 follow-up comment, not a new spec, per the "findings are not requirements" rule.
+
 
     Self-approve limits: this is credential-screening safety code, so I recommend an INDEPENDENT review rather than advisor self-merge.
 
-    Merge-tree: CLEAN against origin/integration and against #4603 (S3b).
-  created_at: 2026-11-26T00:03:28.347004045Z
-  modified_at: 2026-11-26T00:03:28.347004045Z
+
+    Merge-tree: CLEAN against origin/integration and against #4603 (S3b).'
+  created_at: 2026-11-26 00:03:28.347004+00:00
+  modified_at: 2026-11-26 00:03:28.347004+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2152a-cb42-7383-8d5c-c5de5e0b78b4
   author: joe
   content: 'FOLLOW-UP (advisor 17:06, not a lane instruction): extend the screened credential set to .npmrc, .cargo/credentials(.toml), .vault-token and terraform credential/token files (credentials.tfrc.json) in one small later slice.'
-  created_at: 2026-11-26T00:03:59.182955550Z
-  modified_at: 2026-11-26T00:03:59.182955550Z
+  created_at: 2026-11-26 00:03:59.182955+00:00
+  modified_at: 2026-11-26 00:03:59.182955+00:00
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20c83-b64f-7602-98cc-554db51f875e
   author: joe
-  timestamp: 2026-11-24T07:44:48.207571762Z
+  timestamp: 2026-11-24 07:44:48.207571+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
 - id: 01a21493-cfc0-7ee2-9cb7-699e82cd2eb0
   author: joe
-  timestamp: 2026-11-25T21:19:21.024616100Z
+  timestamp: 2026-11-25 21:19:21.024616+00:00
   changes:
   - field_name: status
     old_value: Draft
     new_value: Approved
 - id: 01a21493-d717-7862-8160-ebb8a43706d4
   author: joe
-  timestamp: 2026-11-25T21:19:22.903906249Z
+  timestamp: 2026-11-25 21:19:22.903906+00:00
   changes:
   - field_name: priority
     old_value: Medium
     new_value: High
 - id: 01a21509-5cf0-7e83-8521-339021f40155
   author: aida-session-start
-  timestamp: 2026-11-25T23:27:44.880765240Z
+  timestamp: 2026-11-25 23:27:44.880765+00:00
   changes:
   - field_name: status
     old_value: Approved
