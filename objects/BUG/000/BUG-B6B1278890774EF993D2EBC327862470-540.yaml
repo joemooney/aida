@@ -37,6 +37,11 @@ comments:
   modified_at: 2026-11-26T22:58:36.443338727Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a19-f1d4-78c0-bd9d-d913add91ada
+  author: joe
+  content: 'SCOPE ADD (advisor-122 2026-11-26 16:06, from the product-15 trial): the adversarial run on #4661 (S5c build e5db545, claude/claude) failed with `error: "review batch 1 output"`, i.e. parse_runner_findings_json rejected the FINDER output. The same PR''s finder-only run on main b728c3373d1 succeeded, so the finder''s output shape varies run to run. In this PR: (a) make the finder-output parse as robust as the challenger one (a real JSON scanner; tolerate a fenced block or surrounding prose); a truly malformed output fails closed with the cause; (b) when a batch output fails to parse, save the raw runner output to a local, 0600, size-capped file under .aida/tmp/ and name its path in the error, so a failure can be diagnosed. Tests with valid-but-wrapped output (a fence plus prose) and truly malformed output.'
+  created_at: 2026-11-26T23:03:57.652155634Z
+  modified_at: 2026-11-26T23:03:57.652155634Z
 history:
 - id: 01a21a12-632b-7fd1-8ace-6d3a575c7e9f
   author: joe
