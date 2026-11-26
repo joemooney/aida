@@ -1,5 +1,6 @@
 id: 01a219f4-e6f2-7d42-a7ce-2240a735fa81
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-374
+agreed_id: STORY-3201
 title: 'Review PR-4691: [AI:claude] perf(train): final-gate evidence asks the approval policy once per distinct verdict (Refs BUG-2584)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21965`) for branch `bug-2584-train-merge-cpu`.
@@ -35,6 +36,12 @@ history:
 - id: 01a219f5-2385-7eb3-b135-adae9806702f
   author: dirtlab
   timestamp: 2026-11-26T22:23:45.541392518Z
+  changes: []
+- id: 01a21a11-522d-7f33-9b9a-6a84ac0fada1
+  author: joe
+  timestamp: 2026-11-26T22:54:32.493522449Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc

@@ -1,5 +1,6 @@
 id: 01a21989-7b81-7eb2-a9da-414dc7e53451
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-371
+agreed_id: STORY-3199
 title: 'Review PR-4685: [AI:claude] chore(store-writers): inventory the stacked-diff-drift hold writer (BUG-2777)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21953`) for branch `bug-2777-ejection-routing`.
@@ -88,6 +89,12 @@ history:
   timestamp: 2026-11-26T20:26:57.257632006Z
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21a10-cd4e-7512-8d23-3c31a87212aa
+  author: joe
+  timestamp: 2026-11-26T22:53:58.478799313Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
