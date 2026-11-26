@@ -14,7 +14,7 @@ description: |
   - AC3: find and fix why a claude runner batch on a ~560-line PR hits the 15-min deadline (e.g. the claude CLI waiting on a prompt or auth in the cleared env, or a missing non-interactive flag); a test with a stub runner for each of the AC1 causes.
 status: Approved
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
 modified_at: 2026-11-26T16:21:44.655142438Z
@@ -53,6 +53,13 @@ history:
   author: joe
   timestamp: 2026-11-26T16:16:21.881631182Z
   changes: []
+- id: 01a218a9-3ae8-74d1-a0fd-7270ba5e55c7
+  author: aida-session-start
+  timestamp: 2026-11-26T16:21:13.576131058Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
