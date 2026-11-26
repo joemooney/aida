@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T11:14:20.860240258Z
+modified_at: 2026-11-26T22:25:49.617435812Z
 req_type: Bug
 tags:
 - architecture
@@ -608,6 +608,18 @@ comments:
   created_at: 2026-11-02T11:13:48.000294707Z
   modified_at: 2026-11-02T11:13:48.000294707Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a219f7-0831-7131-a878-ecbe0fe95f4f
+  author: dirtlab
+  content: |-
+    ## Speedup request: bug_2398_final_spawn_boundary_ratchet hits the 30s budget
+
+    Train run 45891504610 (PR #4683, TASK-3919) failed the test-timings gate: `aida-cli-lib codex_tool_env::tests::bug_2398_final_spawn_boundary_ratchet` took 30.1s in CI (debug, nextest), with no budget entry. This is not a regression from that PR. Same host, targeted `cargo test --profile agent` runs, 3 each: origin/main b728c3373d 7.95 / 7.57 / 5.27s (median 7.57s); branch 7.76 / 8.14 / 7.42s (median 7.76s). TASK-3919 added a budget entry of 40s (p90 30.1s x1.3, rounded up) with the reason "pre-existing, touched by TASK-3919".
+
+    Please speed the ratchet up. The cost is `production_launch_source`, which syn-parses every production file in aida-cli-lib/src, including files that contain no launch marker at all. A cheap fix: count markers on the raw text first and skip the syn blanking when the count is 0, since blanking test items can only remove markers. Check that claim for markers that span a blanked region. When the test is back under budget, lower or remove the entry in scripts/test-time-budget.toml.
+  created_at: 2026-11-26T22:25:49.617435812Z
+  modified_at: 2026-11-26T22:25:49.617435812Z
+  session_id: 01a219c6b4dc
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
