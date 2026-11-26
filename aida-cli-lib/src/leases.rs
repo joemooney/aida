@@ -3855,22 +3855,17 @@ pub(crate) fn shelve_status_flip(req: &mut aida_core::Requirement) -> bool {
 }
 
 /// BUG-2738: why a refusing verdict must not shelve its spec — the spec has
-/// already landed. A Completed spec, or one whose PR is MERGED or CLOSED, is
-/// past review; a stale request-changes must not reopen it. `pr_state` is the
-/// forge's PR state (`OPEN` / `MERGED` / `CLOSED`, any case), `None` when it
-/// could not be read, which leaves today's shelve in place.
+/// already landed: it is Completed, or its PR is merged. Anything else shelves,
+/// including Done with an open PR (published and awaiting review) and a closed
+/// unmerged PR. `pr_merged` is false whenever the forge could not say.
 // trace:BUG-2738 | ai:claude
-pub(crate) fn landed_refusal(
-    status: &RequirementStatus,
-    pr_state: Option<&str>,
-) -> Option<&'static str> {
+pub(crate) fn landed_refusal(status: &RequirementStatus, pr_merged: bool) -> Option<&'static str> {
     if matches!(status, RequirementStatus::Completed) {
-        return Some("the spec is already Completed");
-    }
-    match pr_state.map(|s| s.trim().to_ascii_uppercase()).as_deref() {
-        Some("MERGED") => Some("its PR is already merged"),
-        Some("CLOSED") => Some("its PR is already closed"),
-        _ => None,
+        Some("the spec is already Completed")
+    } else if pr_merged {
+        Some("its PR is already merged")
+    } else {
+        None
     }
 }
 
@@ -3878,13 +3873,14 @@ pub(crate) fn landed_refusal(
 /// The verdict itself is already in the gate ledger (written by `aida review
 /// record` before any spec side effect); this adds only a spec comment naming
 /// the writer and the verdict, and leaves status and `failure_reason` alone.
-/// Returns the landed reason when it applied, `None` when the caller should
-/// shelve as before.
+/// The landed check is repeated on the copy read under the store lock, so a
+/// concurrent status change is judged on what is written. Returns the landed
+/// reason when it applied, `None` when the caller should shelve as before.
 // trace:BUG-2738 | ai:claude
 pub(crate) fn record_refusal_on_landed_spec(
     project_root: &std::path::Path,
     spec: &str,
-    pr_state: Option<&str>,
+    pr_merged: bool,
     writer: &str,
     verdict: &str,
 ) -> anyhow::Result<Option<&'static str>> {
@@ -3898,21 +3894,24 @@ pub(crate) fn record_refusal_on_landed_spec(
     let Some(req) = backend.get_requirement_unambiguous(spec)? else {
         return Ok(None);
     };
-    let Some(reason) = landed_refusal(&req.status, pr_state) else {
+    if landed_refusal(&req.status, pr_merged).is_none() {
         return Ok(None);
-    };
-    let status = req.status.clone();
+    }
+    let mut landed = None;
     backend.update_spec_atomically(&req, |req| {
+        landed = landed_refusal(&req.status, pr_merged);
+        let Some(reason) = landed else { return };
         req.add_comment(aida_core::Comment::new(
             writer.to_string(),
             format!(
                 "{verdict} verdict recorded by {writer}; not shelved because {reason} \
-                 (status left {status})."
+                 (status left {}).",
+                req.status
             ),
         ));
         req.modified_at = chrono::Utc::now();
     })?;
-    Ok(Some(reason))
+    Ok(landed)
 }
 
 // trace:BUG-2738 | ai:claude

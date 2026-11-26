@@ -3606,14 +3606,15 @@ fn handle_review_record_context_with_policy_at(
             "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
             spec.to_ascii_uppercase()
         );
-        // BUG-2738: a stale refusal must not reopen a landed spec. An
-        // unreadable PR state leaves the shelve below in place.
+        // BUG-2738: a stale refusal must not reopen a landed spec (Completed,
+        // or its PR merged). An unreadable PR state counts as not merged, so
+        // the shelve below runs as before, with a note saying so.
         // trace:BUG-2738 | ai:claude
-        let pr_state = pr.and_then(|n| crate::forge::github_pr_state(&project_root, n));
+        let pr_merged = pr.is_some_and(|n| refused_change_merged(&project_root, n));
         if let Some(reason) = crate::leases::record_refusal_on_landed_spec(
             &project_root,
             spec,
-            pr_state.as_deref(),
+            pr_merged,
             &recorded_by,
             kind.label(),
         )? {
@@ -3656,6 +3657,25 @@ fn handle_review_record_context_with_policy_at(
         );
     }
     Ok(())
+}
+
+/// BUG-2738: whether refused change `n` has merged, read through the
+/// project's forge. A forge that cannot answer (pure-git, no CLI, no network)
+/// is "not merged": the refusal then shelves as before, and says why.
+// trace:BUG-2738 | ai:claude
+fn refused_change_merged(project_root: &std::path::Path, n: u64) -> bool {
+    match crate::forge::forge_for(project_root)
+        .change_metadata(n, &mut crate::network_retry::NoopSink)
+    {
+        Ok(meta) => meta.state == crate::forge::ChangeState::Merged,
+        Err(err) => {
+            eprintln!(
+                "  {} could not read change {n}'s state ({err:#}); treating it as not merged",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            );
+            false
+        }
+    }
 }
 
 /// Audit identity for a supported seat-written verdict. The launched seat's

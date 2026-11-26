@@ -1447,24 +1447,6 @@ pub(crate) fn observe_github_pr_merged_with_binary(
     number: u64,
     timeout: std::time::Duration,
 ) -> Observed<bool> {
-    observe_github_pr_state_with_binary(root, gh_bin, number, timeout).and_then(|state| match state
-        .as_str()
-    {
-        "MERGED" => Observed::Known(true),
-        "OPEN" | "CLOSED" => Observed::Known(false),
-        _ => Observed::Transient("missing or unrecognised PR state".into()),
-    })
-}
-
-/// A PR's raw forge `state` string; a failed read or malformed JSON is
-/// `Transient`. Shared by the merged probe and the BUG-2738 refusal guard.
-// trace:STORY-2402 trace:BUG-2738 | ai:claude
-fn observe_github_pr_state_with_binary(
-    root: &Path,
-    gh_bin: &Path,
-    number: u64,
-    timeout: std::time::Duration,
-) -> Observed<String> {
     let mut command = Command::new(gh_bin);
     command
         .current_dir(root)
@@ -1478,26 +1460,11 @@ fn observe_github_pr_state_with_binary(
                 }
             };
             match value.get("state").and_then(serde_json::Value::as_str) {
-                Some(state) => Observed::Known(state.to_string()),
-                None => Observed::Transient("missing or unrecognised PR state".into()),
+                Some("MERGED") => Observed::Known(true),
+                Some("OPEN" | "CLOSED") => Observed::Known(false),
+                _ => Observed::Transient("missing or unrecognised PR state".into()),
             }
         })
-}
-
-/// BUG-2738: a PR's raw forge state (`OPEN` / `MERGED` / `CLOSED`), `None`
-/// when gh is missing or the read fails or is malformed.
-// trace:BUG-2738 | ai:claude
-pub(crate) fn github_pr_state(root: &Path, number: u64) -> Option<String> {
-    let gh_bin = crate::resolve_gh_binary()?;
-    match observe_github_pr_state_with_binary(
-        root,
-        &gh_bin,
-        number,
-        std::time::Duration::from_secs(15),
-    ) {
-        Observed::Known(state) => Some(state),
-        Observed::Pending(_) | Observed::Transient(_) => None,
-    }
 }
 
 /// How far `head` is behind `base` on GitHub (the compare API's
