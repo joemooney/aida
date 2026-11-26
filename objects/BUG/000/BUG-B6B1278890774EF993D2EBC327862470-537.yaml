@@ -9,12 +9,12 @@ description: |
   - AC1: when a PR's current head differs from the head checked out in a leftover reviewer worktree that is CLEAN, holds no merge-hold marker, has no live process, and whose lease is stale or ending-retained, review-watch reclaims it itself: it copies any merge-hold marker to the primary first (BUG-2176), runs the same path as `aida session end --yes`, and dispatches the new head in the SAME pass. A test drives the exact shape above.
   - AC2: a dirty, locked, merge-held or process-held leftover is still kept, and the pass line names WHY for each held PR (dirty / live pid N / merge-hold / lock), not just "held by exited attempt".
   - AC3: a held-PR count above 0 for longer than 30 min surfaces in `aida doctor` and in the landing-drought watchdog (STORY-3131) as "review blocked by a retained reviewer worktree", with the exact fix.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T19:41:26.655015914Z
+modified_at: 2026-11-26T20:16:04.797639566Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -196,6 +196,20 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a21980-3e78-73a3-bb1b-abfc59937f86
+  author: aida-auto-bump
+  timestamp: 2026-11-26T20:16:04.728220105Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a21980-3ebd-7861-bec5-51464af78be1
+  timestamp: 2026-11-26T20:16:04.797636981Z
+  agent: aida
+  commit_sha: e910c836480ecc3fea8b67584420d7ad0d1a72a9
+  summary: 'BUG-2776 PASS. AC1 [behavioral-test]: verified by bug_2776_review_watch_reclaims_only_a_clean_exited_leftover_on_a_moved_head (this PR''s marker is collected onto the ledger, then the lease ends and the tree is gone) and bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass (dispatches the moved head in the same pass). The reclaim runs before WorktreeProbe::capture (review_watch.rs:1970). AC2 [behavioral-test]: verified by the dirty / live pid N / lock / merge-hold (foreign marker) / live-lease / at-current-head negatives in the bug_2776 test, plus the Admission::Held{why} pass line asserted in bug2776_reclaimed... and bug2757_bug2720. AC3 [behavioral-test]: verified by bug2776_retained_checkout_block_surfaces_after_thirty_minutes (30-minute aging, pass_degradation line with the exact fix, landing_drought::retained_findings; cleared when no longer held). Wired into landing_drought::scan, which `aida doctor check landing-drought` and the landing-drought cron run. The fix command it prints (`session end --branch`) exists. Protocol: BUG-2776 bug protocol ''PR touches at least one test file'': met (3 test files). Deep-pass: the reclaim fails closed on every check error, and it reuses the BUG-2176 preserve_review_worktree_holds plus the established `session end --yes --skip-ci` subprocess pattern. No existing test weakened: the bug2757 assertion was broadened to Held{why}. Two non-blocking follow-ups: test-gap and p3. CI pending at review time.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
@@ -208,4 +222,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T18:36:01.146891345Z
   implemented_by: dirtlab
+  completed_at: 2026-11-26T20:16:04.728212919Z
+  completion_sha: e910c836480ecc3fea8b67584420d7ad0d1a72a9
   reopened_at_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
