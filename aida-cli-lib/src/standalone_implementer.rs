@@ -451,7 +451,7 @@ pub(crate) fn vendor_unavailable_exit(
         detail.push_str(&format!("; could not record the outage: {e:#}"));
     }
     let side = crate::vendor_outage::side_branch(branch);
-    match crate::vendor_outage::preserve_seat(worktree, branch) {
+    match crate::vendor_outage::preserve_seat(main, worktree, branch) {
         Ok(commit) => {
             detail.push_str(&format!("; work preserved on `{side}` at {commit}"));
             let discard = ["--force", "--discard-unpushed"];

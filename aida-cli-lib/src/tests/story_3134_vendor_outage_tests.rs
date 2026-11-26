@@ -246,3 +246,69 @@ fn ac1_a_failed_side_branch_push_keeps_the_lease() {
     );
     assert!(!log.exists(), "no session end without the side branch");
 }
+
+#[test]
+fn ac1_only_the_terminal_event_is_classified() {
+    let tmp = tempfile::tempdir().unwrap();
+    let detect = |vendor, lines: &[&str]| {
+        let log = log_with(tmp.path(), lines);
+        crate::vendors::usage_limit::detect_log(vendor, &log, Utc::now())
+    };
+    let later_failure = r#"{"type":"turn.failed","error":{"message":"stream disconnected"}}"#;
+    assert_eq!(
+        detect(HeadlessVendor::Codex, &[CODEX_LIMIT, later_failure]),
+        None
+    );
+    let rejected = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1795356000}}"#;
+    let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}"#;
+    let failed = r#"{"type":"result","is_error":true,"result":"limit"}"#;
+    let ok = r#"{"type":"result","is_error":false,"result":"done"}"#;
+    assert!(detect(HeadlessVendor::Claude, &[rejected, failed]).is_some());
+    assert_eq!(
+        detect(HeadlessVendor::Claude, &[rejected, allowed, failed]),
+        None
+    );
+    assert_eq!(detect(HeadlessVendor::Claude, &[rejected, ok]), None);
+}
+
+#[test]
+fn ac2_lane_host_preflight_refuses_a_vendor_in_outage() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    vendor_outage::record(main, &outage("codex", Utc::now() + Duration::hours(2))).unwrap();
+    // The gate `queue work --no-human` runs before any lease exists.
+    assert!(crate::lane_host::needs_preflight(true, false, false, false));
+    let err = crate::lane_host::preflight(main, "codex", false).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("`codex` is unavailable until"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn ac1_a_seat_clone_is_never_touched_by_host_git() {
+    let tmp = tempfile::tempdir().unwrap();
+    let seat = dirty_seat(tmp.path());
+    let marker = seat.join(aida_core::seat_clone_detect::MARKER_RELATIVE);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "").unwrap();
+    let pwned = tmp.path().join("pwned");
+    let hook = format!("#!/bin/sh\ntouch '{}'\n", pwned.display());
+    for name in ["pre-push", "pre-commit", "post-index-change"] {
+        crate::test_exec::write_executable(&seat.join(".git/hooks").join(name), hook.clone());
+    }
+    let (log, _aida) = fake_aida(tmp.path());
+    let limit = outage("codex", Utc::now() + Duration::hours(1));
+    let detail = vendor_unavailable_exit(
+        (tmp.path(), "0123456789ab", "lane-x"),
+        tmp.path(),
+        &seat,
+        &limit,
+    );
+    assert!(
+        detail.contains("not a seat clone this checkout recorded"),
+        "{detail}"
+    );
+    assert!(!pwned.exists(), "a seat hook ran on the host");
+    assert!(!log.exists(), "the lease is kept");
+}

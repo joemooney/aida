@@ -18,11 +18,37 @@ pub(crate) fn detect_log(
     log: &std::path::Path,
     now: DateTime<Utc>,
 ) -> Option<crate::vendor_outage::Outage> {
-    crate::vendor_outage::detect_log(vendor.as_str(), |e| from_event(vendor, e), log, now)
+    crate::vendor_outage::detect_log(
+        vendor.as_str(),
+        |t, e| from_terminal(vendor, t, e),
+        log,
+        now,
+    )
 }
 
-/// The usage-limit signal one headless log line carries, if any.
-pub(crate) fn from_event(vendor: HeadlessVendor, event: &serde_json::Value) -> Option<UsageLimit> {
+/// The usage-limit signal a run's `terminal` event carries, if any. Claude's
+/// terminal error `result` counts only when the newest rate-limit event
+/// before it (`earlier`) is a rejection.
+pub(crate) fn from_terminal(
+    vendor: HeadlessVendor,
+    terminal: &serde_json::Value,
+    earlier: &[serde_json::Value],
+) -> Option<UsageLimit> {
+    if vendor == HeadlessVendor::Claude
+        && terminal["type"] == "result"
+        && terminal["is_error"] == true
+    {
+        let last_limit = earlier
+            .iter()
+            .rev()
+            .find(|e| e["type"] == "rate_limit_event")?;
+        return from_event(vendor, last_limit);
+    }
+    from_event(vendor, terminal)
+}
+
+/// The usage-limit signal one headless event carries, if any.
+fn from_event(vendor: HeadlessVendor, event: &serde_json::Value) -> Option<UsageLimit> {
     match vendor {
         // `{"type":"turn.failed","error":{"message":"You've hit your usage limit ... try again at <time>."}}`
         HeadlessVendor::Codex => {
