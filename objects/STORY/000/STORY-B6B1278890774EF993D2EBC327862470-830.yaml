@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T17:48:41.369682516Z
+modified_at: 2026-11-26T17:48:52.562109857Z
 req_type: Story
 tags:
 - landing
@@ -307,6 +307,21 @@ comments:
   created_at: 2026-11-26T08:57:38.573704845Z
   modified_at: 2026-11-26T08:57:38.573704845Z
   session_id: 01a216e39ca1
+- id: 01a218f9-7939-7502-a7d7-2905d8bf1001
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4634):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3caca775d97a
+    Recorded: 2026-11-26T17:22:38.163469748+00:00
+    Findings:
+    1. landing_drought.rs scan/evaluate: only Reserved|Running watcher attempts count as review_in_flight (review_watch.rs reviewing_heads via admitted()). A green unreviewed PR waiting for watcher capacity (no attempt yet), or one whose latest attempt is RemoteHeld (a peer hub owns the review) or Superseding, is reported as a failing landing-drought finding ('review verdict missing or held'), so a normal review backlog deeper than max_concurrent turns `aida doctor --check landing-drought --fail-on-findings` red, contrary to the commit's stated intent that review backlog is informational. Count RemoteHeld/Superseding as in flight and treat a PR the watcher has not yet admitted (but is eligible for) as backlog.
+    2. Default lock_hold_minutes = 20 (.aida/config.toml, landing_drought.rs Policy::read) is shorter than a healthy train run: the train holds run.lock for the whole run, including waiting on train CI (the fast-compile job alone took 19m on this PR). A healthy train past 20m makes every waiting approved PR report 'train lock held Nm by pid P ... stop pid P if it is hung', advising the operator to kill a working train. Raise the default or key staleness to the train's step clock / last checkpoint rather than total hold time.
+    3. landing_drought.rs scan hardcodes `pr["baseRefName"] != "main"`; a project whose protected/default branch is not literally `main` gets no landing-drought findings at all. Resolve the default branch the way the train/ship code does.
+    4. Test gap (reporting code): the new tests exercise evaluate()/ledger_at_head() only. The scan() wiring (draft/base filter, mergeable==CONFLICTING mapping, unreviewed-green inclusion, review_in_flight key/head matching), pr_train_status::lock_driver (orphaned-lock age from the record's since), review_watch::reviewing_heads and stalled_reviews::ReworkLanes::covers have no direct tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T17:48:52.409718659Z
+  modified_at: 2026-11-26T17:48:52.409718659Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
