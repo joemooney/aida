@@ -1,5 +1,6 @@
 id: 01a2182f-5a62-75f0-9e4a-a99e5a5cc637
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1511
+agreed_id: TASK-3495
 title: 'Review follow-up: AC2 display wiring is untested: the new manual_waiter line in `aida advisor loops train-st'
 description: |-
   From BUG-2771
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
   created_at: 2026-11-26T14:08:06.242081050Z
+history:
+- id: 01a2183a-1b9c-7732-b211-ffef1ba7587c
+  author: joe
+  timestamp: 2026-11-26T14:19:51.068396519Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d50327f98225c7efecf58776048dfded12f1843e
   branch: pr-4659

@@ -1,5 +1,6 @@
 id: 01a21818-e7b3-79f1-9cbe-68c6e338a7d3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-354
+agreed_id: STORY-3174
 title: 'Review PR-4656: [AI:claude] fix(auto-train): pre-scan shares the pass''s member predicate and caches refusals (TASK-3917)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a217f5`) for branch `autotrain-one-predicate`.
@@ -47,6 +48,12 @@ history:
   timestamp: 2026-11-26T13:44:14.851852249Z
   session_id: 01a217f59d73
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2183a-99a9-79d3-b129-aa3eedc4e2a1
+  author: joe
+  timestamp: 2026-11-26T14:20:23.337075113Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 02ed97be57e00b936cfb972411934302f69ce733
