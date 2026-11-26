@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A CR verdict on a spec that is already COMPLETED, or whose PR is MERGED or CLOSED, does NOT flip its status. The verdict is still recorded in the gate ledger and a spec comment names the writer and the verdict. Test: a CR on a Completed spec leaves it Completed, with a ledger entry plus a comment.
   - AC2: A live In Progress spec still shelves exactly as today. Test.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T14:14:32.641916990Z
+modified_at: 2026-11-26T14:19:14.785680525Z
 req_type: Bug
 tags:
 - leases
@@ -107,6 +107,13 @@ history:
   author: joe
   timestamp: 2026-11-26T14:12:44.461764945Z
   changes: []
+- id: 01a21839-8de1-7243-847b-0e3df47c6be6
+  author: aida-session-start
+  timestamp: 2026-11-26T14:19:14.785678642Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
