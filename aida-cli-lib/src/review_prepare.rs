@@ -892,7 +892,10 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
         )
         .envs(pins)
         .env("GIT_NO_REPLACE_OBJECTS", "1")
-        .current_dir(root);
+        .current_dir(root)
+        // Repo-controlled paths (`.e*`, `a[b]`, a rename's old path) are never
+        // globs or magic. trace:STORY-3120 | ai:claude
+        .arg("--literal-pathspecs");
     // No textconv driver from the reviewed tree's attributes ever runs.
     match args.split_first() {
         Some((sub @ (&"diff" | &"show" | &"log"), rest)) => {
@@ -1100,7 +1103,7 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         out.push_str(&format!("- **Merge base**: `{mb}`\n"));
     }
     if let Some(head) = &bundle.head_ref {
-        out.push_str(&format!("- **Head**: `{head}`\n"));
+        out.push_str(&format!("- **Head**: {}\n", code_span(head)));
     }
     out.push_str(&format!(
         "- **Inventory SHA-256**: `{}`\n",
@@ -1150,11 +1153,12 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
     }
     if let Some(adv) = &bundle.adversarial {
         let agent = adv.challenger_agent.as_deref().unwrap_or("custom runner");
+        let agent = code_span(agent);
         out.push_str(&format!(
-            "## Adversarial Challenge\n\n- **Challenger**: `{agent}`\n"
+            "## Adversarial Challenge\n\n- **Challenger**: {agent}\n"
         ));
         if let Some(note) = &adv.note {
-            out.push_str(&format!("- **Note**: {note}\n"));
+            out.push_str(&format!("- **Note**: {}\n", code_span(note)));
         }
         push(std::mem::take(&mut out), 0);
         for r in &adv.refuted {
@@ -1173,10 +1177,10 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         for spec in &bundle.linked_specs {
             push(
                 format!(
-                    "### {} — {} (`{}`)\n\n{}\n\n",
+                    "### {} — {} ({})\n\n{}\n\n",
                     code_span(&aida_core::node_alias::display_spec_id(&spec.spec_id)),
-                    spec.title,
-                    spec.status,
+                    code_span(&spec.title),
+                    code_span(&spec.status),
                     spec.acceptance_markdown
                 ),
                 0,
@@ -1199,13 +1203,13 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
             };
             push(
                 format!(
-                    "- {} ({}, +{} / -{}, ~{} tok, playbook:`{}`, {})\n",
+                    "- {} ({}, +{} / -{}, ~{} tok, playbook:{}, {})\n",
                     code_span(&f.path),
                     f.kind.as_str(),
                     f.additions,
                     f.deletions,
                     f.estimated_tokens,
-                    f.playbook_id,
+                    code_span(&f.playbook_id),
                     trace_badge
                 ),
                 0,
@@ -1218,11 +1222,11 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         push("## Token-Budgeted Semantic Review Batches\n\n".into(), 0);
         for b in &bundle.batches {
             let mut text = format!(
-                "### Batch {} — `{}` (~{} tokens, playbooks: `{}`)\n",
+                "### Batch {} — {} (~{} tokens, playbooks: {})\n",
                 b.batch_index,
-                b.label,
+                code_span(&b.label),
                 b.estimated_tokens,
-                b.playbook_ids.join(", ")
+                code_span(&b.playbook_ids.join(", "))
             );
             for path in &b.files {
                 text.push_str(&format!("  - {}\n", code_span(path)));
@@ -1237,10 +1241,10 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         for pb in &bundle.playbooks {
             push(
                 format!(
-                    "### Playbook `{}` — {} (`{}`)\n\n{}\n\n",
-                    pb.id,
+                    "### Playbook {} — {} ({})\n\n{}\n\n",
+                    code_span(&pb.id),
                     code_span(&pb.title),
-                    pb.pattern,
+                    code_span(&pb.pattern),
                     pb.checklist
                 ),
                 0,
@@ -1253,10 +1257,10 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         for ex in &bundle.inventory.excluded_files {
             push(
                 format!(
-                    "- {} ({}) -> `{}`\n",
+                    "- {} ({}) -> {}\n",
                     code_span(&ex.path),
                     ex.kind.as_str(),
-                    ex.reason
+                    code_span(&ex.reason)
                 ),
                 0,
             );
@@ -1309,11 +1313,9 @@ fn comment_markdown(bundle: &ReviewPreparationBundle, full_report: &str) -> Stri
 fn cut_balanced(text: &str, room: usize) -> String {
     let (mut out, mut open) = (String::new(), None::<String>);
     for line in text.split_inclusive('\n') {
-        let trimmed = line.trim();
-        let ticks: String = trimmed.chars().take_while(|&c| c == '`').collect();
         let after = match &open {
-            Some(fence) if trimmed == fence => None,
-            None if ticks.len() >= 3 => Some(ticks),
+            Some(fence) if fence_closes(line, fence) => None,
+            None => fence_opener(line),
             other => other.clone(),
         };
         let closer = after.as_ref().map_or(0, |f| f.len() + 4);
@@ -1327,6 +1329,23 @@ fn cut_balanced(text: &str, room: usize) -> String {
         Some(fence) => format!("{out}  {fence}\n"),
         None => out,
     }
+}
+
+/// The fence `line` opens, per CommonMark: three or more backticks or
+/// tildes; a backtick run whose rest holds a backtick is inline code.
+// trace:STORY-3120 | ai:claude
+fn fence_opener(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    let mark = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))?;
+    let run = trimmed.chars().take_while(|&c| c == mark).count();
+    let inline = mark == '`' && trimmed[run..].contains('`');
+    (run >= 3 && !inline).then(|| mark.to_string().repeat(run))
+}
+
+/// Whether `line` closes `fence`: only its mark, at least as long.
+fn fence_closes(line: &str, fence: &str) -> bool {
+    let (trimmed, mark) = (line.trim(), fence.chars().next());
+    trimmed.len() >= fence.len() && trimmed.chars().all(|c| Some(c) == mark)
 }
 
 /// One finding: severity, category and location as code spans, the message
@@ -2034,6 +2053,51 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         handle_review_prepare(&args, &store).unwrap();
     }
 
+    /// Repo-controlled names that are pathspec magic match only themselves:
+    /// each glob's decoy, and the rename's, stays out of the prompt.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5b_batch_diff_pathspecs_are_literal() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        // Shared lines keep the edited `o[1]` -> `n.rs` move a rename.
+        let write = |path: &str, last: &str| {
+            std::fs::write(root.join(path), format!("{}{last}", "keep\n".repeat(20))).unwrap()
+        };
+        git_text(root, &["init", "-q"]).unwrap();
+        let names = [".e*", ".eX", "a[b]", "ab", "x?", "xy", "o[1]", "o1"];
+        for name in names {
+            write(name, &format!("old {name}\n"));
+        }
+        git_text(root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        for name in names {
+            write(name, &format!("new {name}\n"));
+        }
+        git_text(root, &["mv", "o[1]", "n.rs"]).unwrap();
+        git_text(root, &["add", "-A"]).unwrap();
+        let head = crate::test_git::commit_fixture(root);
+        let batch = ReviewBatch {
+            batch_index: 1,
+            label: "b".into(),
+            playbook_ids: Vec::new(),
+            files: [".e*", "a[b]", "x?", "n.rs"].map(String::from).to_vec(),
+            estimated_tokens: 0,
+        };
+        let renames = BTreeMap::from([("n.rs", "o[1]")]);
+        let range = format!("{base}..{head}");
+        let prompt = batch_prompt(root, &range, &batch, &renames, &[], &[]).unwrap();
+        for hit in ["+new .e*", "+new a[b]", "+new x?", "rename from o[1]"] {
+            assert!(prompt.contains(hit), "{hit} missing:\n{prompt}");
+        }
+        for decoy in [".eX", "ab\n", "xy\n", "o1\n"] {
+            assert!(
+                !prompt.contains(&format!("new {decoy}")),
+                "{decoy}:\n{prompt}"
+            );
+        }
+    }
+
     // trace:STORY-3120 | ai:claude
     #[test]
     fn s3a2_run_review_base_and_sanitized_diff() {
@@ -2182,9 +2246,27 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 excluded_files: Vec::new(),
                 inventory_sha256: String::new(),
             },
-            batches: Vec::new(),
-            playbooks: Vec::new(),
-            linked_specs: Vec::new(),
+            // Spec and playbook titles and ids render as code, too.
+            batches: vec![ReviewBatch {
+                batch_index: 1,
+                label: "@batch **b**".into(),
+                playbook_ids: vec!["@pb".into()],
+                files: Vec::new(),
+                estimated_tokens: 0,
+            }],
+            playbooks: vec![ResolvedPlaybook {
+                id: "@pb".into(),
+                title: hostile.into(),
+                pattern: "@glob <b>".into(),
+                checklist: "- check".into(),
+                active_facets: Vec::new(),
+            }],
+            linked_specs: vec![LinkedSpecAcceptance {
+                spec_id: "STORY-1".into(),
+                title: hostile.into(),
+                status: "@status".into(),
+                acceptance_markdown: "- ok".into(),
+            }],
             coverage_verification: None,
             anchored_findings: Some(vec![finding.clone()]),
             adversarial: Some(AdversarialSummary {
@@ -2208,6 +2290,10 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             "@octocat",
             "@team",
             "@admin",
+            "@batch",
+            "@pb",
+            "@glob",
+            "@status",
             "<img",
             "<b>",
             "**bold**",
@@ -2230,13 +2316,11 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let mut prose = String::new();
         let mut fence: Option<String> = None;
         for line in body.lines() {
-            let trimmed = line.trim_start();
-            let ticks: String = trimmed.chars().take_while(|&c| c == '`').collect();
-            match &fence {
-                Some(open) if trimmed.trim_end() == open => fence = None,
-                Some(_) => {}
-                None if ticks.len() >= 3 => fence = Some(ticks),
-                None => prose.push_str(&strip_code_spans(line)),
+            match (&fence, fence_opener(line)) {
+                (Some(open), _) if fence_closes(line, open) => fence = None,
+                (Some(_), _) => {}
+                (None, Some(open)) => fence = Some(open),
+                (None, None) => prose.push_str(&strip_code_spans(line)),
             }
         }
         assert!(fence.is_none(), "unclosed fence:\n{body}");
@@ -2324,6 +2408,67 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             body.contains("truncated: 1 findings omitted"),
             "{body:.300}"
         );
+    }
+
+    /// A pinned client names its repository on `gh pr comment`, and a hung
+    /// `gh` is killed at the forge deadline instead of blocking the post.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5b_pinned_post_names_repo_and_hung_gh_times_out() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::EnvVarsGuard::set(&[]);
+        git_text(root, &["init", "-q"]).unwrap();
+        let origin = "https://github.com/acme/widgets.git";
+        git_text(root, &["remote", "add", "origin", origin]).unwrap();
+        let gh = root.join("gh");
+        let fake = |tail: &str| {
+            let body = format!(
+                "#!/bin/sh\necho \"$@\" > '{0}/argv'\ncat > '{0}/body'\n{tail}",
+                root.display()
+            );
+            crate::test_exec::write_executable(&gh, &body);
+        };
+        env.set_key("AIDA_TEST_GH_BINARY", &gh);
+        let bundle: ReviewPreparationBundle = serde_json::from_value(serde_json::json!({
+            "mode": "range", "base_ref": null, "head_ref": null, "merge_base": null,
+            "inventory": {"reviewable_files": [], "excluded_files": [], "inventory_sha256": ""},
+            "batches": [], "playbooks": [], "linked_specs": []
+        }))
+        .unwrap();
+        fake("");
+        let forge = crate::forge::GitHubForge::for_review(root).unwrap();
+        post_review_comment(&forge, 9, &bundle, "r.md").unwrap();
+        let argv = std::fs::read_to_string(root.join("argv")).unwrap();
+        assert_eq!(argv.trim(), "pr comment 9 --body-file - -R acme/widgets");
+        let body = std::fs::read_to_string(root.join("body")).unwrap();
+        assert!(body.starts_with("# AIDA Deterministic Review Preparation"));
+        fake("sleep 30\n");
+        let started = std::time::Instant::now();
+        let budget = std::time::Duration::from_secs(1);
+        let err = crate::forge_lookup::with_forge_lookup_deadline(budget, || {
+            post_review_comment(&forge, 9, &bundle, "r.md").unwrap_err()
+        });
+        assert!(format!("{err:#}").contains("timed out"), "{err:#}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(15));
+    }
+
+    /// A cut inside a `~~~` fence closes it with tildes; an inline triple
+    /// backtick span at a line start opens nothing, so nothing is appended.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5b_cut_balanced_tracks_tilde_fences_and_inline_spans() {
+        let tilde = format!("intro\n~~~~text\n{}~~~~\n", "x ``` y\n".repeat(50));
+        let cut = cut_balanced(&tilde, 100);
+        assert!(cut.starts_with("intro\n~~~~text\n"), "{cut}");
+        assert!(cut.ends_with("  ~~~~\n") && cut.len() <= 100, "{cut}");
+        prose_outside_code(&cut);
+        let inline = format!("```a``` b\n{}", "line\n".repeat(50));
+        let cut = cut_balanced(&inline, 60);
+        assert!(!cut.contains("```\n") && cut.ends_with("line\n"), "{cut}");
+        // A shorter run inside a fence does not close it.
+        let long = format!("````\n```\n{}````\n", "z\n".repeat(50));
+        assert!(cut_balanced(&long, 40).ends_with("  ````\n"));
     }
 
     /// `line` with CommonMark code spans removed (equal-length backtick runs).
