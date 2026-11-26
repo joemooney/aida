@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T22:18:46.849337472Z
+modified_at: 2026-11-26T22:19:06.856157522Z
 req_type: Bug
 tags:
 - landing
@@ -173,6 +173,17 @@ comments:
   created_at: 2026-11-26T22:18:47.087403610Z
   modified_at: 2026-11-26T22:18:47.087403610Z
   session_id: 01a219eba530
+- id: 01a219f1-2288-7342-a5e6-bf635caba107
+  author: joe
+  content: |-
+    ADVISOR RULING 15:22 (binding for #4685 r2; the r1 CR is valid):
+    1. Add a LiveDriftRouter test for the authority-refusal path: dispatch_abort is already set, so the hold is recorded and nothing is dispatched.
+    2. Drift caused by an EARLIER TRAIN MEMBER is NOT a conflict repair. In that case the branch is already up to date with main, so update-branch is a no-op. Classify it as 'member-induced drift' and re-queue the PR for the next train, alone or behind that member. Do not re-review it when its own diff vs main is unchanged (patch-id check), and do not escalate. Add a test for this.
+    Only a real update-branch conflict escalates.
+  created_at: 2026-11-26T22:19:06.856157522Z
+  modified_at: 2026-11-26T22:19:06.856157522Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
