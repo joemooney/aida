@@ -1,0 +1,30 @@
+id: 01a215a5-1661-7d81-984f-eca5198e20e1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1475
+agreed_id: TASK-3912
+title: '[landing] max_prs_per_train knob: cap how many PRs the auto-train admits per train (default unset = today)'
+description: |
+  advisor-122 2026-11-25 19:21 (filed by product-15). The AUTO-train built train #4605 with 6 PRs. One culprit (#4482, an unclassified store-writer inventory row) made it red, and the bisect into #4608/#4609 plus a same-head re-admission (BUG-2767) cost ~2.5h of landing time. There is no config to cap auto-train size: `aida pr train --max` exists, but every caller sets max = the length of its list (dispatch_flow.rs ~:293 `max: prs.len()`).
+
+  ## Acceptance
+  - AC1: a tracked config knob `[landing] max_prs_per_train` (default unset = today's behaviour) caps how many members the AUTO-train admits into one train; the rest wait for the next train in priority order. Explicit operator `aida pr train N...` lists are unaffected unless they pass --max.
+  - AC2: a test showing that with max_prs_per_train=3 and 6 ready PRs, the train admits 3 and the next pass admits the next 3.
+  - AC3: once landed, set `max_prs_per_train = 3` in .aida/config.toml, with a comment citing #4605 (a follow-up config change).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T02:17:50.433674416Z
+modified_at: 2026-11-26T02:17:50.433674416Z
+req_type: Task
+tags:
+- landing
+- process-policy
+- throughput
+- train
+filed_at:
+  code_sha: fa7028b4df8d8ce2aa0e3f270a743cca265b957e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa7028b4df8
+  vendor: claude
