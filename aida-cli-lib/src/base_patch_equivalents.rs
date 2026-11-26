@@ -81,6 +81,22 @@ fn git_stdout(repo: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// `cmd`'s output, killed at the scoped read deadline when one is active
+/// (a train check), so neither half of the patch-id pipeline outlives it.
+// trace:BUG-2733 | ai:claude
+fn scoped_output(mut cmd: Command) -> Result<std::process::Output> {
+    if crate::forge_lookup::forge_lookup_deadline().is_none() {
+        return Ok(cmd.output()?);
+    }
+    let budget = crate::forge_lookup::remaining_call_budget(std::time::Duration::MAX)?;
+    use crate::bounded_process::{command_output_with_timeout_detail, BoundedCommandOutput};
+    match command_output_with_timeout_detail(cmd, budget) {
+        BoundedCommandOutput::Completed(out) => Ok(out),
+        BoundedCommandOutput::TimedOut => anyhow::bail!("read deadline expired"),
+        BoundedCommandOutput::SpawnFailed => anyhow::bail!("could not start git"),
+    }
+}
+
 /// patch-id → the non-merge commits in `revs` that carry it.
 fn patch_ids(repo: &Path, revs: &[&str]) -> Result<HashMap<String, Vec<String>>> {
     let mut log = Command::new("git");
@@ -96,19 +112,23 @@ fn patch_ids(repo: &Path, revs: &[&str]) -> Result<HashMap<String, Vec<String>>>
         ])
         .args(revs)
         .arg("--")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let mut log = log.spawn().context("running git log -p")?;
-    let stdin = log.stdout.take().context("git log -p has no stdout")?;
-    let pid = Command::new("git")
-        .arg("-C")
+        .stdin(Stdio::null());
+    let log = scoped_output(log).context("running git log -p")?;
+    ensure!(log.status.success(), "git log -p {} failed", revs.join(" "));
+    // Fed through a pipe so `patch-id` runs as its own bounded child; a
+    // killed reader ends the feeder with EPIPE.
+    let (reader, mut writer) = std::io::pipe().context("piping git log -p")?;
+    let feeder = std::thread::spawn(move || {
+        let _ = std::io::copy(&mut log.stdout.as_slice(), &mut writer);
+    });
+    let mut pid = Command::new("git");
+    pid.arg("-C")
         .arg(repo)
         .args(["patch-id", "--stable"])
-        .stdin(Stdio::from(stdin))
-        .output()
-        .context("running git patch-id")?;
-    let status = log.wait().context("waiting for git log -p")?;
-    ensure!(status.success(), "git log -p {} failed", revs.join(" "));
+        .stdin(Stdio::from(reader));
+    let pid = scoped_output(pid).context("running git patch-id");
+    let _ = feeder.join();
+    let pid = pid?;
     ensure!(pid.status.success(), "git patch-id failed");
     let mut out: HashMap<String, Vec<String>> = HashMap::new();
     for line in String::from_utf8_lossy(&pid.stdout).lines() {
