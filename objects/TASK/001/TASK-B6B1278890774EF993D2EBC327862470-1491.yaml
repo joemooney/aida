@@ -1,5 +1,6 @@
 id: 01a216c1-b843-74d0-ab0f-912c155a1a98
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1491
+agreed_id: TASK-3476
 title: 'Review follow-up: AC1 says ''ENOENT on the path AND no mount'', but attest_clone_lease''s pin() (aida-cli-lib/s'
 description: |-
   From BUG-2755
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20efd-700f-73b2-b5e9-0a2875617f3f
   created_at: 2026-11-26T07:28:59.553847703Z
+history:
+- id: 01a216f7-6ff0-7c10-a88c-0cf0f04339e8
+  author: joe
+  timestamp: 2026-11-26T08:27:24.528893975Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f694d9696a374985b149f9ee6227fe59e0e98c8e
   branch: pr-4632

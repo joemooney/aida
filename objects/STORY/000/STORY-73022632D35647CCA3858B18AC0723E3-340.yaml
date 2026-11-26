@@ -1,5 +1,6 @@
 id: 01a216d6-1923-7fd3-acb0-c73e5d3e4836
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-340
+agreed_id: STORY-3165
 title: 'Review PR-4632: [AI:claude] fix(doctor): release stale leases for absent or clean unbound seat clones (BUG-2755)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21692`) for branch `bug-2755-fresh`.
@@ -33,6 +34,12 @@ history:
 - id: 01a216d6-5b83-7c82-819e-88f553dd438f
   author: dirtlab
   timestamp: 2026-11-26T07:51:16.611821968Z
+  changes: []
+- id: 01a216f8-2eef-7d40-90cb-2b449e972d57
+  author: joe
+  timestamp: 2026-11-26T08:28:13.423205373Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
