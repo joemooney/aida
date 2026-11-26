@@ -1,5 +1,6 @@
 id: 01a21895-04bd-74b0-9078-5b87e67c6223
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-053
+agreed_id: TASK-3505
 title: Contained reviewer's CR shelve lost its status/failure_reason before reaching the shared store
 description: 'BUG-2738 r1 incident (2026-11-26). The reviewer''s request-changes shelve on BUG-2738 at 15:23:27Z reached the shared store as commit ccd1c48310 (authored 08:23:28, committed 08:24:10 -0700) carrying ONLY the shelve''s comment and its Done->NeedsAttention history entry; the object''s status stayed Done, failure_reason stayed empty and modified_at stayed 15:11:49 (from 3f707dd1b2, the implementer''s contained-session store commit). So the scalar half of the shelve was dropped while the append-only half survived. It is NOT publication-done: done_after_push_flip only moves Approved/Planned/InProgress, and BUG-2738 PR #4663 adds a test that a repeated publish-done write cannot override the CR''s park. merge_spec_three_way would keep NeedsAttention (only one side changed status, and that side is newer), so the loss happens elsewhere: suspects are the contained child-store commit path (child_store_commit.rs) racing the host''s 3f707dd1b2 commit, a store-sync stash/re-apply of the reviewer''s uncommitted object, or a whole-object rewrite from a stale copy that unions comments/history. Repro target: contained reviewer writes the shelve uncommitted while the host commits another contained session''s change to the same object; check the committed status.'
 status: Draft
@@ -14,6 +15,13 @@ tags:
 - kind:observation
 - linked:BUG-2738
 - severity:major
+history:
+- id: 01a218a3-14b0-7601-a39b-0ad83bc099c3
+  author: joe
+  timestamp: 2026-11-26T16:14:30.576260667Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: bug-2738-shelve-completed

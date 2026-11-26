@@ -1,5 +1,6 @@
 id: 01a21878-e37c-7643-9c17-3537ccd5b196
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-359
+agreed_id: STORY-3185
 title: 'Review PR-4667: [AI:claude] fix(auto-train): report a deputy on a stale or deleted binary in train-status and doctor (Refs BUG-2774)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21856`) for branch `autotrain-recovery-release`.
@@ -52,6 +53,12 @@ history:
   timestamp: 2026-11-26T15:28:40.051205429Z
   session_id: 01a21856ec44
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a218a4-1894-7700-a6a7-3aae6f408acd
+  author: joe
+  timestamp: 2026-11-26T16:15:37.108373071Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: a0728ce1ad1a823bdb19f5cd3002be81ccf0b101

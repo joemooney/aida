@@ -1,5 +1,6 @@
 id: 01a2187f-1425-7fb1-8919-4a3d87f01e44
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-360
+agreed_id: STORY-3186
 title: 'Review PR-4665: [AI:claude] feat(review): --post-comment posts the report through the pinned forge client with agent text fenced inert (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21843`) for branch `int46-story-3120-s5`.
@@ -35,6 +36,12 @@ history:
 - id: 01a2187f-3493-7ad1-83f7-410400c73725
   author: dirtlab
   timestamp: 2026-11-26T15:35:19.443392564Z
+  changes: []
+- id: 01a218a4-586a-7f53-833b-80c00dd4b038
+  author: joe
+  timestamp: 2026-11-26T16:15:53.450472059Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: cb26bf94b379497686eaaaae5ad1e1e4b2ab18a0

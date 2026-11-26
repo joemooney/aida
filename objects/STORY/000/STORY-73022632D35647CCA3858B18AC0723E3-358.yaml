@@ -1,5 +1,6 @@
 id: 01a21875-0f1b-7700-aaa8-0d65feb66cde
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-358
+agreed_id: STORY-3184
 title: 'Review PR-4666: [AI:claude] fix(leases): heal unbound shared claims with a dead creator; refusal hint shares the heal predicate (BUG-2773)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2184e`) for branch `bug-2773-unbound-claim-heal`.
@@ -47,6 +48,12 @@ history:
   timestamp: 2026-11-26T15:24:28.237427421Z
   session_id: 01a2184e943e
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a218a3-d846-7a41-9612-50725cf8e097
+  author: joe
+  timestamp: 2026-11-26T16:15:20.646637645Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: d169b25498d0770d01241a37abe8cf81163753ec

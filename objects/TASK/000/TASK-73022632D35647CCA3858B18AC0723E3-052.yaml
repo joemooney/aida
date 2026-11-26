@@ -1,5 +1,6 @@
 id: 01a21876-6fed-7a92-9a5a-d6943e2831c1
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-052
+agreed_id: TASK-3506
 title: Unbound shared claims are now heal- and force-claim-eligible on creator death (reverses a BUG-2697 assertion)
 description: |
   BUG-2773 made exited_holder_is_dead (aida-cli-lib/src/coordination.rs) accept a claim with lease_id = None. Eligibility requires the same host, a claim that is neither process-backed nor a reviewer claim, a provably dead creator, a heartbeat past its TTL and the clone present here. Because the admission --force-claim path uses the same predicate, unbound claims are now also force-reclaimable on that evidence. The BUG-2697 test assertion "no lease binding => refused" was replaced by "unbound with an absent clone => refused".
@@ -18,6 +19,13 @@ tags:
 - from-implementer:BUG-2773
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a218a3-5505-7b62-894f-f24dd1b77b0f
+  author: joe
+  timestamp: 2026-11-26T16:14:47.045738700Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d169b25498d0770d01241a37abe8cf81163753ec
   branch: bug-2773-unbound-claim-heal
