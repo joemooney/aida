@@ -5601,7 +5601,7 @@ fn bug2703_watcher_retakes_its_claim_beside_a_manual_train_after_a_ship_gives_up
     let mut watcher = None;
     assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
     // A manual train takes its cooperative claim and runs (holds run.lock).
-    let train = crate::admission_owner::manual_train_admission(&root, false)
+    let train = crate::admission_owner::manual_train_admission(&root, false, &[])
         .unwrap()
         .expect("the manual train coexists with the watcher");
     std::fs::create_dir_all(root.join(".aida/train")).unwrap();
@@ -6040,7 +6040,7 @@ fn bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan() {
             let id = change.id;
             std::thread::spawn(move || {
                 let got = if id == 2 {
-                    crate::admission_owner::manual_train_admission(&waiter, false)
+                    crate::admission_owner::manual_train_admission(&waiter, false, &[])
                 } else {
                     crate::admission_owner::ship_admission(&waiter)
                 };

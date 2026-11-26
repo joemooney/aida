@@ -5252,6 +5252,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         crate::admission_owner::manual_train_admission(
             &main_worktree,
             ADVISOR_LOOP.with(std::cell::Cell::get),
+            opts.prs, // trace:BUG-2771 | ai:claude
         )?
     };
     let kind = crate::forge::resolve_forge_kind(&project_root);

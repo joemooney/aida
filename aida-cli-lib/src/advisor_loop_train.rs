@@ -570,7 +570,7 @@ mod bug2769_idle_admission_tests {
             polls.load(Ordering::SeqCst) >= 3
         });
         let started = Instant::now();
-        let manual = crate::admission_owner::manual_train_admission(&root, false)
+        let manual = crate::admission_owner::manual_train_admission(&root, false, &[])
             .unwrap()
             .expect("the manual train takes its own claim");
         assert!(
@@ -637,6 +637,96 @@ mod bug2769_idle_admission_tests {
         assert!(line.contains("phase assembly"), "{line}");
         release.store(true, Ordering::SeqCst);
         wait_for("the hold ends", || live_hold_line(&root).is_none());
+        crate::review_watch::stop_test_loops(&root);
+        assert!(worker.join().unwrap().is_err(), "stopped by the fixture");
+    }
+
+    /// BUG-2771 AC1-AC3 through the real worker loop: a manual train that
+    /// gives up waiting while train A runs stays recorded; the auto-train
+    /// does not start train B until that manual train has run and released,
+    /// and train-status/`--check`'s line names it.
+    // trace:BUG-2771 | ai:claude
+    #[test]
+    fn bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter() {
+        let (_temp, root) = ci_gated_repo();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[admission]\nwait_secs = 1\n",
+        )
+        .unwrap();
+        assert_eq!(
+            crate::gate::landing_merge::train_stand_down(&root),
+            Ok(None)
+        );
+        let (polls, trains) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+        let release = Arc::new(AtomicBool::new(false));
+        let worker = {
+            let (root, polls, trains, release) =
+                (root.clone(), polls.clone(), trains.clone(), release.clone());
+            std::thread::spawn(move || {
+                run_passes(
+                    &root,
+                    1,
+                    move || {
+                        polls.fetch_add(1, Ordering::SeqCst);
+                        Ok(true)
+                    },
+                    move || {
+                        trains.fetch_add(1, Ordering::SeqCst);
+                        while !release.load(Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(20));
+                        }
+                        Ok(())
+                    },
+                )
+            })
+        };
+        wait_for("train A runs", || trains.load(Ordering::SeqCst) == 1);
+        let error = crate::admission_owner::manual_train_admission(&root, false, &[4464])
+            .err()
+            .expect("train A holds admission past the manual train's bound");
+        assert!(format!("{error:#}").contains("gave up"), "{error:#}");
+        let line = crate::admission_owner::manual_waiter(&root)
+            .expect("the manual train stays recorded")
+            .describe();
+        assert!(
+            line.starts_with("operator train for #4464 waiting since "),
+            "{line}"
+        );
+        assert!(line.ends_with("; auto-train yields next"), "{line}");
+        assert_eq!(
+            crate::admission_owner::yield_reason(&root, "legacy review-watch"),
+            None,
+            "review controllers coexist with a manual train"
+        );
+
+        release.store(true, Ordering::SeqCst);
+        let after = polls.load(Ordering::SeqCst);
+        wait_for("three polls after train A", || {
+            polls.load(Ordering::SeqCst) >= after + 3
+        });
+        assert_eq!(trains.load(Ordering::SeqCst), 1, "train B waits");
+        assert!(claims(&root).is_empty(), "the auto-train yielded admission");
+
+        let manual = crate::admission_owner::manual_train_admission(&root, false, &[4464])
+            .unwrap()
+            .expect("the manual train is admitted");
+        assert!(crate::admission_owner::manual_waiter(&root).is_none());
+        let during = polls.load(Ordering::SeqCst);
+        wait_for("a poll while the manual train runs", || {
+            polls.load(Ordering::SeqCst) > during
+        });
+        assert_eq!(
+            trains.load(Ordering::SeqCst),
+            1,
+            "not beside the manual train"
+        );
+        drop(manual);
+        wait_for("train B after the manual train released", || {
+            trains.load(Ordering::SeqCst) == 2
+        });
+
         crate::review_watch::stop_test_loops(&root);
         assert!(worker.join().unwrap().is_err(), "stopped by the fixture");
     }
