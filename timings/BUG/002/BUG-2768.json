@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2768",
+  "publishes": [
+    {
+      "at": "2026-11-26T07:14:29.285532597Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T05:09:22.731753460Z",
+      "spec": "BUG-2768",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4623,
+        "verdict": "WAITING",
+        "reviewed_sha": "e430c0baf88df0c260070b7093e640e9838d6a29"
+      }
+    },
+    {
+      "ts": "2026-11-26T05:20:08.288841216Z",
+      "spec": "BUG-2768",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4623,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "e430c0baf88df0c260070b7093e640e9838d6a29"
+      }
+    },
+    {
+      "ts": "2026-11-26T05:21:13.421845047Z",
+      "spec": "BUG-2768",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2768 (completing trailer; head is 2 commits behind main, and no finding depends on the base change). AC3 [behavioral] verified: test_resource_watch_names_shard_and_cause (floor strikes, reset on recovery, deadline, unset disables) and test_breach_kills_the_lane_and_main_fails_with_the_cause (a real child is killed and main returns 1 with the shard named). The existing main() tests were moved to the run_watched seam. Bug protocol 'the PR touches at least one test file': met (tests/test_ci_test_shards.py). AC1 unverified: no confirm/refute is recorded on the spec. AC2 unverified: there are no 3 consecutive green hosted lib-1 runs, and this head's lib-1 is still running (CI pending at review time; fast, compile and build jobs are green). The code and workflow changes look correct: the profile override is consistent between build and test, it is hosted lib lanes only, the cache key is split, and the dell1 floor is disabled. Rework: record the AC1/AC2 CI evidence on the spec, or switch the trailer to Refs. Three p3 follow-ups are noted.",
+        "recovery_hint": "address the review findings, move BUG-2768 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T05:40:00.066569448Z",
+      "spec": "BUG-2768",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4623,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e430c0baf88df0c260070b7093e640e9838d6a29"
+      }
+    },
+    {
+      "ts": "2026-11-26T07:09:35.186916670Z",
+      "spec": "BUG-2768",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4623
+      }
+    },
+    {
+      "ts": "2026-11-26T07:14:28.996370754Z",
+      "spec": "BUG-2768",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "883a5800d15469bbe8ae6a9140c387a85392203a",
+        "pr": 4623,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
