@@ -1,5 +1,6 @@
 id: 01a216b1-f95d-7613-a0df-bffc00480a22
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-338
+agreed_id: STORY-3163
 title: 'Review PR-4631: [AI:claude] fix(train): drop a member whose head moved from bisect halves instead of re-testing it (TASK-3913)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21688`) for branch `train-bisect-drop-moved`.
@@ -43,6 +44,12 @@ history:
   timestamp: 2026-11-26T07:11:44.448296812Z
   session_id: 01a21688f171
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a216c0-20be-7d31-9f2b-9a164f5d316c
+  author: joe
+  timestamp: 2026-11-26T07:26:59.774661542Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f581c7122990913411cdfa9104546a6ae698104c

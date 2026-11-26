@@ -1,5 +1,6 @@
 id: 01a21635-3a7a-71b2-865f-7d50d6e86f88
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-334
+agreed_id: STORY-3162
 title: 'Review PR-4623: [AI:claude] fix(ci): bound hosted lib-lane memory and fail lanes early by cause (BUG-2768)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21610`) for branch `ci-lib1-hosted-memory`.
@@ -78,6 +79,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a216bf-e494-7dd2-ac81-f81518a168b1
+  author: joe
+  timestamp: 2026-11-26T07:26:44.372320163Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e430c0baf88df0c260070b7093e640e9838d6a29
   branch: ci-lib1-hosted-memory
