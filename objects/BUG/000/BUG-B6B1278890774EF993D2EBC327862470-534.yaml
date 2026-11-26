@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T15:49:01.265653061Z
+modified_at: 2026-11-26T16:38:47.849603991Z
 req_type: Bug
 tags:
 - admission
@@ -140,6 +140,18 @@ comments:
   created_at: 2026-11-26T15:49:01.265649952Z
   modified_at: 2026-11-26T15:49:01.265649952Z
   session_id: 01a2184e943e
+- id: 01a218b9-5129-7081-8501-bf66b0942e4f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 67629843c4 (round 2, addresses r1 findings 1 and 2 under the advisor-122 ruling).
+    Acceptance evidence: an unbound claim now releases only when unbound_claim_blocker (coordination.rs) returns None. That requires no lease binding, heartbeat older than max(24h, 3x TTL), a dead creator (supporting signal only), and no session lease for the scope (any state), lane record naming the claim id, or unended agent row on the scope in the holder clone's registries. The clone must also be absent or clean. Tests: bug2773_unbound_claim_is_retained_unless_every_release_condition_holds covers a fresh heartbeat, a dormant session lease, a lane record, an agent row and a dirty clone across 4 surfaces (predicate, doctor listing, targeted heal, force-claim admission), then confirms the clean case heals. bug2773_other_host_refusal_hint_names_the_holder_host covers r1 finding 2. The 11-day dell1 shape stays positive (bug2773_unbound_claim_with_dead_creator_is_listed_and_healed). 28 targeted tests pass (lane job j20261126T160307966-3-0).
+    Probe findings: all scope matches are case-insensitive, matching find_scope_lease_conflict. A symlinked clone path or an unreadable lease or lane table retains the claim. Deliberate change: an unbound claim whose clone is absent is now releasable (ruling condition 4); the bug2697 refusal test assertion was updated to match.
+    Residual risks: (a) agent_registry::load_active_entries silently skips unparseable rows, so a corrupt agent row on the scope is not seen. The lease table and lane records still fail closed. (b) Agent rows that merely share the clone path do not block release, because the session running the heal is registered in that clone too. (c) In a primary checkout with any untracked file, the dirty check retains the claim. That fails closed; the hint names the reason.
+  created_at: 2026-11-26T16:38:47.849603991Z
+  modified_at: 2026-11-26T16:38:47.849603991Z
+  session_id: 01a2188eff7b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
