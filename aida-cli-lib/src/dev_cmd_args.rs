@@ -149,6 +149,21 @@ pub enum DevCommand {
         force: bool,
     },
 
+    /// Outage use only: build and smoke-test a PR's or branch's head in a
+    /// fresh worktree, then promote it as the live binary before it lands,
+    /// marked PROVISIONAL (the previous build stays in `live/prev/`; `aida dev
+    /// rollback` restores it). Operator only: run it from a terminal or an
+    /// operator deputy job.
+    // trace:STORY-3148 | ai:claude
+    Provisional {
+        /// PR number (`4615` or `#4615`) or branch name on `origin`.
+        target: String,
+
+        /// Why this head runs live before review (recorded in the marker).
+        #[clap(long)]
+        reason: String,
+    },
+
     /// Internal pre-build safety gate used by `make build-fast`.
     #[command(hide = true)]
     BuildGuard {
