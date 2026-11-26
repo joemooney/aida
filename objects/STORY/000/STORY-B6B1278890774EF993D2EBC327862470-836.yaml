@@ -1,0 +1,37 @@
+id: 01a21871-c944-74d1-9eb6-e7ae2055843d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-836
+agreed_id: STORY-3183
+title: 'Shadow trial: run the automated adversarial review next to the normal reviewer for a week, then decide on gating'
+description: |
+  Shadow trial of the automated adversarial review (`aida review prepare --pr N --run-review --adversarial`) next to the normal independent reviewer, so we decide from evidence whether it should become a review gate. Operator-requested 2026-11-26.
+
+  Starts after promotion 48 (#4661, STORY-3120 S4 `--adversarial`) is on main. It must use only main-landed review features: the S7 telemetry when it lands, otherwise a local results file.
+
+  ## Scope
+  - For each PR that review-watch dispatches to a normal reviewer, also run the automated adversarial review in SHADOW mode for 7 days (or 30 PRs, whichever comes first).
+  - SHADOW means it never records a verdict, never sets or clears a merge hold, never posts to the forge, and never blocks or delays the normal review. A failure or timeout is logged and ignored.
+  - It runs through the S3a hardened runner path only, with the normal deadline and caps. It runs at most 2 at a time, inside the existing review concurrency budget, so it never starves real reviews.
+  - It records the findings per PR: severity, file:line, whether the challenger refuted them, and duration.
+
+  ## Acceptance criteria
+  1. A project knob `[review] shadow_adversarial = false` (default off; process-policy rule). When on, review-watch launches a shadow run for each dispatched review, as described in Scope, with a test proving it writes nothing to the gate ledger, merge holds or the forge.
+  2. A report command (or a `aida report` section) that compares, for each trial PR, the shadow findings with the normal reviewer's verdict findings. It shows matched findings, shadow-only findings, reviewer-only findings, how many shadow-only findings were later confirmed (a CR in a later round, or a follow-up fix), and the median and p90 duration. The output is plain text plus JSON.
+
+  ## Out of scope
+  Making it a gate; that is a follow-up decision based on the report. No vendor or effort changes beyond the defaults.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T15:20:40.004099676Z
+modified_at: 2026-11-26T15:20:40.004099676Z
+req_type: Story
+filed_at:
+  code_sha: cb26bf94b379497686eaaaae5ad1e1e4b2ab18a0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fd10cfd3049
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
