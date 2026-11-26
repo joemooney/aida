@@ -5,6 +5,10 @@ fn ready(number: u64, age_min: i64, now: DateTime<Utc>) -> Ready {
     Ready {
         number,
         since: now - TimeDelta::minutes(age_min),
+        approved: true,
+        conflict: false,
+        repairing: false,
+        spec: Some("STORY-1".into()),
         ci: Ci::Green,
         full_tier_gap: None,
         supervised: false,
@@ -21,6 +25,7 @@ fn story_3131_defaults_when_section_absent() {
             enabled: true,
             drought_minutes: 60,
             ready_dwell_minutes: 30,
+            lock_hold_minutes: 20,
             action: Action::Investigate,
         }
     );
@@ -62,7 +67,7 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
         running_no_full,
     ];
     let recent_landing = Some(now - TimeDelta::minutes(10));
-    let findings = evaluate(&prs, &policy, now, recent_landing);
+    let findings = evaluate(&prs, &policy, now, recent_landing, None);
     let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
     assert_eq!(ids, ["PR-7", "PR-8", "PR-9", "PR-12"]);
     assert!(findings[0].summary.contains("supervised"));
@@ -78,7 +83,7 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
     assert!(findings[3].action.starts_with("investigate"));
 
     // Drought: main idle past drought_minutes while ready PRs wait.
-    let dry = evaluate(&prs, &policy, now, Some(now - TimeDelta::minutes(90)));
+    let dry = evaluate(&prs, &policy, now, Some(now - TimeDelta::minutes(90)), None);
     assert_eq!(dry.len(), 5);
     assert!(dry[4]
         .summary
@@ -86,17 +91,17 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
     // Only unlandable (red) PRs stuck: no drought finding.
     let mut only_red = ready(8, 45, now);
     only_red.ci = Ci::Red("build".into());
-    let red_only = evaluate(&[only_red], &policy, now, None);
+    let red_only = evaluate(&[only_red], &policy, now, None, None);
     assert_eq!(red_only.len(), 1);
     assert_eq!(red_only[0].id, "PR-8");
     // No drought finding without a ready PR.
     let fresh = [ready(13, 5, now)];
-    assert!(evaluate(&fresh, &policy, now, None).is_empty());
+    assert!(evaluate(&fresh, &policy, now, None, None).is_empty());
     let off = Policy {
         enabled: false,
         ..policy
     };
-    assert!(evaluate(&prs, &off, now, None).is_empty());
+    assert!(evaluate(&prs, &off, now, None, None).is_empty());
 }
 
 #[test]
@@ -157,7 +162,7 @@ fn story_3131_latest_ledger_record_wins_and_must_approve_head() {
     let t1 = "2026-11-02T10:00:00+00:00";
     let t2 = "2026-11-02T11:00:00+00:00";
     // Latest approval at head wins over an older refusal, in any order.
-    let got = approved_at_head(
+    let got = ledger_at_head(
         vec![
             rec("approved", HEAD, t2),
             rec("changes_requested", HEAD, t1),
@@ -165,21 +170,117 @@ fn story_3131_latest_ledger_record_wins_and_must_approve_head() {
         HEAD,
     )
     .unwrap();
-    assert_eq!(got, Some(DateTime::parse_from_rfc3339(t2).unwrap().into()));
+    assert_eq!(
+        got,
+        AtHead::Approved(DateTime::parse_from_rfc3339(t2).unwrap().into())
+    );
     // A later refusal supersedes an earlier approval.
     let refused = vec![
         rec("approved", HEAD, t1),
         rec("changes_requested", HEAD, t2),
     ];
-    assert_eq!(approved_at_head(refused, HEAD).unwrap(), None);
+    assert_eq!(ledger_at_head(refused, HEAD).unwrap(), AtHead::Settled);
     // An approval of an older head does not count.
     assert_eq!(
-        approved_at_head(vec![rec("approved", OLD, t1)], HEAD).unwrap(),
-        None
+        ledger_at_head(vec![rec("approved", OLD, t1)], HEAD).unwrap(),
+        AtHead::Missing
     );
     // A closed (merged) verdict is skipped.
     let (at, mut closed) = rec("approved", HEAD, t1);
     closed.insert("closed_by_merge".into(), "abc123".into());
-    assert_eq!(approved_at_head(vec![(at, closed)], HEAD).unwrap(), None);
-    assert_eq!(approved_at_head(Vec::new(), HEAD).unwrap(), None);
+    assert_eq!(
+        ledger_at_head(vec![(at, closed)], HEAD).unwrap(),
+        AtHead::Settled
+    );
+    assert_eq!(ledger_at_head(Vec::new(), HEAD).unwrap(), AtHead::Missing);
+}
+
+#[test]
+fn story_3131_s2_conflict_without_repair_lane() {
+    let now = Utc::now();
+    let policy = Policy::read(None).unwrap();
+    let mut conflict = ready(20, 45, now);
+    conflict.conflict = true;
+    conflict.ci = Ci::Pending; // a conflict holds CI; still reported
+    let mut repairing = ready(21, 45, now);
+    repairing.conflict = true;
+    repairing.repairing = true;
+    let mut no_spec = conflict.clone();
+    no_spec.number = 22;
+    no_spec.spec = None;
+    let findings = evaluate(&[conflict, repairing, no_spec], &policy, now, None, None);
+    let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
+    // A repair lane owns PR-21: not a conflict cause, and not landable either.
+    assert_eq!(ids, ["PR-20", "PR-21", "PR-22"]);
+    assert!(findings[0]
+        .summary
+        .contains("merge conflict with no repair lane"));
+    assert_eq!(
+        findings[0].action,
+        "route the conflict repair: `aida rework STORY-1`"
+    );
+    assert!(!findings[1].summary.contains("conflict"));
+    assert!(findings[2].action.contains("rebase PR 22 onto main"));
+    assert!(!findings.iter().any(|f| f.id == "main"));
+}
+
+#[test]
+fn story_3131_s2_review_verdict_missing_at_head() {
+    let now = Utc::now();
+    let policy = Policy::read(None).unwrap();
+    let mut unreviewed = ready(30, 45, now);
+    unreviewed.approved = false;
+    unreviewed.full_tier_gap = Some("missing"); // not reported before review
+    let findings = evaluate(&[unreviewed], &policy, now, None, None);
+    assert_eq!(
+        findings.len(),
+        1,
+        "an unreviewed PR is not landable: no drought"
+    );
+    assert!(findings[0].summary.starts_with("PR-30 green 45m"));
+    assert!(findings[0]
+        .summary
+        .contains("review verdict missing or held"));
+    assert!(findings[0]
+        .action
+        .contains("aida review watch --release PR-30"));
+}
+
+#[test]
+fn story_3131_s2_train_lock_held_past_threshold() {
+    let now = Utc::now();
+    let policy = Policy::read(None).unwrap();
+    let mut supervised = ready(40, 45, now);
+    supervised.supervised = true;
+    let mut red = ready(41, 45, now);
+    red.ci = Ci::Red("build".into());
+    let prs = [supervised, red];
+    let holder = |m: i64| LockHolder {
+        pid: Some(4242),
+        held_minutes: Some(m),
+        command: Some("aida pr train 4000".into()),
+    };
+    let held = evaluate(&prs, &policy, now, None, Some(&holder(25)));
+    assert!(held[0]
+        .summary
+        .contains("train lock held 25m by pid 4242 (aida pr train 4000)"));
+    assert!(held[0].action.contains("stop pid 4242 if it is hung"));
+    assert!(
+        held[1].summary.contains("red required check"),
+        "red outranks the lock"
+    );
+    // Within lock_hold_minutes, or of unknown age: the first-pass cause stands.
+    let fresh = evaluate(&prs, &policy, now, None, Some(&holder(20)));
+    assert!(fresh[0].summary.contains("supervised"));
+    let unknown_age = LockHolder {
+        held_minutes: None,
+        ..holder(0)
+    };
+    let unknown = evaluate(&prs, &policy, now, None, Some(&unknown_age));
+    assert!(unknown[0].summary.contains("supervised"));
+    // The knob is read and validated like the other minutes.
+    let cfg: toml::Value = toml::from_str("[landing_watchdog]\nlock_hold_minutes = 5").unwrap();
+    assert_eq!(Policy::read(Some(&cfg)).unwrap().lock_hold_minutes, 5);
+    let zero: toml::Value = toml::from_str("[landing_watchdog]\nlock_hold_minutes = 0").unwrap();
+    assert!(Policy::read(Some(&zero)).is_err());
 }

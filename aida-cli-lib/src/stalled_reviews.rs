@@ -40,6 +40,61 @@ pub(crate) fn scan(exec: &aida_core::exec_context::ExecContext) -> Result<Vec<Do
     scan_open(exec, threshold, open_prs)
 }
 
+/// Rework lanes: queued non-reviewer work and retained implementer leases.
+/// Shared with landing-drought's conflict cause. trace:STORY-3131 | ai:claude
+pub(crate) struct ReworkLanes {
+    queued: HashSet<uuid::Uuid>,
+    active: Vec<crate::leases::SessionLease>,
+}
+
+impl ReworkLanes {
+    pub(crate) fn load(
+        root: &Path,
+        storage: &aida_core::GitBackend,
+        store: &aida_core::RequirementsStore,
+    ) -> Result<Self> {
+        use aida_core::DatabaseBackend;
+        let ownership = crate::ownership::reader::LeaseReader::with_store(root, store);
+        let mut queued = HashSet::new();
+        for user in storage.queue_users()? {
+            for entry in storage.queue_list(&user, false)? {
+                if entry
+                    .for_role
+                    .as_deref()
+                    .is_none_or(|r| !r.eq_ignore_ascii_case("reviewer"))
+                {
+                    queued.insert(entry.requirement_id);
+                }
+            }
+        }
+        let active = crate::list_leases(root)
+            .into_iter()
+            .filter(|l| {
+                l.role
+                    .as_deref()
+                    .is_some_and(|r| r.eq_ignore_ascii_case("implementer"))
+            })
+            .filter(|lease| ownership.retained(lease))
+            .collect();
+        Ok(Self { queued, active })
+    }
+
+    pub(crate) fn covers(
+        &self,
+        store: &aida_core::RequirementsStore,
+        spec: &str,
+        branch: &str,
+    ) -> bool {
+        store
+            .get_requirement_by_spec_id(spec)
+            .is_some_and(|r| self.queued.contains(&r.id))
+            || self
+                .active
+                .iter()
+                .any(|l| aida_core::id_identity::same_id(&l.scope, spec) || l.branch == branch)
+    }
+}
+
 pub(crate) fn open_prs(root: &Path) -> Result<Vec<serde_json::Value>> {
     let repo = crate::review_watch::forge::Repository::load(root)?;
     let slug = repo
@@ -65,29 +120,8 @@ fn scan_open(
     use aida_core::DatabaseBackend;
     let storage = aida_core::GitBackend::open_existing(&root.join(".aida-store"))?;
     let store = storage.load_for_read()?;
-    let ownership = crate::ownership::reader::LeaseReader::with_store(root, &store);
-    let mut queued = HashSet::new();
-    for user in storage.queue_users()? {
-        for entry in storage.queue_list(&user, false)? {
-            if entry
-                .for_role
-                .as_deref()
-                .is_none_or(|r| !r.eq_ignore_ascii_case("reviewer"))
-            {
-                queued.insert(entry.requirement_id);
-            }
-        }
-    }
+    let lanes = ReworkLanes::load(root, &storage, &store)?;
     let now = DateTime::<Utc>::from(exec.clock().wall_now());
-    let active: Vec<_> = crate::list_leases(root)
-        .into_iter()
-        .filter(|l| {
-            l.role
-                .as_deref()
-                .is_some_and(|r| r.eq_ignore_ascii_case("implementer"))
-        })
-        .filter(|lease| ownership.retained(lease))
-        .collect();
     let mut findings = Vec::new();
     for pr in prs {
         let number = pr["number"].as_u64().context("PR number missing")?;
@@ -124,12 +158,7 @@ fn scan_open(
         let since = green_at.map_or(at, |ci| at.max(ci));
         let on_train = green && !crate::pr_train::pr_head_pins(root, number)?.is_empty();
         for spec in specs {
-            let reworking = store
-                .get_requirement_by_spec_id(&spec)
-                .is_some_and(|r| queued.contains(&r.id))
-                || active.iter().any(|l| {
-                    aida_core::id_identity::same_id(&l.scope, &spec) || l.branch == branch
-                });
+            let reworking = lanes.covers(&store, &spec, branch);
             let Some(reason) = stall(
                 verdict.kind,
                 verdict.reviewed_sha.as_deref(),

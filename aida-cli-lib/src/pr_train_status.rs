@@ -152,6 +152,18 @@ fn live_driver(dir: &Path, probes: &Probes<'_>) -> Result<Option<DriverView>> {
     }))
 }
 
+/// The live train-lock driver as (pid, seconds held); `None` when no
+/// process holds the lock. For the landing-drought watchdog.
+// trace:STORY-3131 | ai:claude
+pub(crate) fn lock_driver(root: &Path) -> Result<Option<(Option<u32>, Option<u64>)>> {
+    let probes = Probes {
+        now: chrono::Utc::now(),
+        observe: &|holder| holder.observe().ok(),
+        ci: &|_| Ok(Vec::new()),
+    };
+    Ok(live_driver(&root.join(".aida/train"), &probes)?.map(|d| (d.pid, d.running_secs)))
+}
+
 fn ci_view(rows: &[crate::ci_gate::CheckRow]) -> CiView {
     let count = |bucket: &[&str]| {
         rows.iter()

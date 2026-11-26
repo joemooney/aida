@@ -24,6 +24,7 @@ pub(crate) struct Policy {
     pub enabled: bool,
     pub drought_minutes: i64,
     pub ready_dwell_minutes: i64,
+    pub lock_hold_minutes: i64,
     pub action: Action,
 }
 
@@ -56,6 +57,7 @@ impl Policy {
             enabled,
             drought_minutes: minutes("drought_minutes", 60)?,
             ready_dwell_minutes: minutes("ready_dwell_minutes", 30)?,
+            lock_hold_minutes: minutes("lock_hold_minutes", 20)?,
             action,
         })
     }
@@ -67,12 +69,20 @@ impl Policy {
     }
 }
 
-/// One approved PR's landing evidence, read cheaply from the open-PR listing.
+/// One approved (or green, unreviewed) PR's landing evidence, read cheaply
+/// from the open-PR listing.
 #[derive(Debug, Clone)]
 pub(crate) struct Ready {
     pub number: u64,
     /// When the PR became ready: approval, or later green CI.
     pub since: DateTime<Utc>,
+    /// An open approval at the current head; otherwise no verdict there yet.
+    pub approved: bool,
+    /// The forge reports a merge conflict with the base.
+    pub conflict: bool,
+    /// A rework lane (queued work or a retained implementer lease) owns it.
+    pub repairing: bool,
+    pub spec: Option<String>,
     pub ci: Ci,
     /// Full-tier CI at the head is missing or cancelled in a tiered repo.
     pub full_tier_gap: Option<&'static str>,
@@ -80,9 +90,41 @@ pub(crate) struct Ready {
     pub on_train: bool,
 }
 
-fn cause(ready: &Ready) -> Option<(String, String)> {
+/// The live train-lock driver. trace:STORY-3131 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LockHolder {
+    pub pid: Option<u32>,
+    pub held_minutes: Option<i64>,
+    pub command: Option<String>,
+}
+
+impl LockHolder {
+    fn stale(&self, policy: &Policy) -> bool {
+        self.held_minutes
+            .is_some_and(|m| m > policy.lock_hold_minutes)
+    }
+}
+
+fn cause(ready: &Ready, stale_lock: Option<&LockHolder>) -> Option<(String, String)> {
     let n = ready.number;
+    // A conflict blocks CI and landing alike, so it outranks every CI state.
+    if ready.conflict && !ready.repairing {
+        let fix = ready.spec.as_ref().map_or_else(
+            || format!("rebase PR {n} onto main"),
+            |s| format!("`aida rework {s}`"),
+        );
+        return Some((
+            "merge conflict with no repair lane".into(),
+            format!("route the conflict repair: {fix}"),
+        ));
+    }
     Some(match &ready.ci {
+        Ci::Green if !ready.approved => (
+            "review verdict missing or held at the current head".into(),
+            format!(
+                "check `aida review watch status`; clear an exited-attempt hold with `aida review watch --release PR-{n}`"
+            ),
+        ),
         Ci::Red(failed) => (
             format!("red required check ({failed})"),
             format!("inspect `gh pr checks {n}`; rerun a flake or route rework"),
@@ -96,6 +138,18 @@ fn cause(ready: &Ready) -> Option<(String, String)> {
             (
                 format!("full CI tier {} at the approved head", ready.full_tier_gap?),
                 format!("add the `ci:full` label to PR {n} to run full-tier CI at its head"),
+            )
+        }
+        Ci::Green if stale_lock.is_some() => {
+            let lock = stale_lock?;
+            let pid = lock.pid.map_or("an unidentified process".into(), |p| format!("pid {p}"));
+            let command = lock.command.as_ref().map_or(String::new(), |c| format!(" ({c})"));
+            (
+                format!(
+                    "train lock held {}m by {pid}{command}",
+                    lock.held_minutes.unwrap_or_default()
+                ),
+                format!("inspect `aida pr train --status`; stop {pid} if it is hung, then train PR {n}"),
             )
         }
         Ci::Green if ready.supervised => (
@@ -116,21 +170,28 @@ pub(crate) fn evaluate(
     policy: &Policy,
     now: DateTime<Utc>,
     last_landing: Option<DateTime<Utc>>,
+    lock: Option<&LockHolder>,
 ) -> Vec<DoctorFinding> {
     if !policy.enabled {
         return Vec::new();
     }
+    let stale_lock = lock.filter(|l| l.stale(policy));
     let dwell = TimeDelta::minutes(policy.ready_dwell_minutes);
     let mut findings: Vec<DoctorFinding> = prs
         .iter()
         .filter(|r| !r.on_train && now.signed_duration_since(r.since) > dwell)
         .filter_map(|r| {
-            let (why, action) = cause(r)?;
+            let (why, action) = cause(r, stale_lock)?;
+            let state = if r.approved {
+                "approved and ready"
+            } else {
+                "green"
+            };
             Some(DoctorFinding {
                 category: CATEGORY.into(),
                 id: format!("PR-{}", r.number),
                 summary: format!(
-                    "PR-{} approved and ready {}m, not on a train: {why}",
+                    "PR-{} {state} {}m, not on a train: {why}",
                     r.number,
                     now.signed_duration_since(r.since).num_minutes()
                 ),
@@ -141,11 +202,12 @@ pub(crate) fn evaluate(
         .collect();
     let drought = TimeDelta::minutes(policy.drought_minutes);
     let dry = last_landing.is_none_or(|at| now.signed_duration_since(at) > drought);
-    // Only landable PRs (green, no full-tier gap) make main's idleness a drought.
+    // Only landable PRs (approved, green, no full-tier gap, no conflict)
+    // make main's idleness a drought.
     let landable = prs
         .iter()
         .filter(|r| !r.on_train && now.signed_duration_since(r.since) > dwell)
-        .filter(|r| r.ci == Ci::Green && r.full_tier_gap.is_none())
+        .filter(|r| r.approved && r.ci == Ci::Green && r.full_tier_gap.is_none() && !r.conflict)
         .count();
     if dry && landable > 0 {
         let since = last_landing.map_or("ever".into(), |at| {
@@ -198,12 +260,21 @@ fn last_landing(root: &Path) -> Result<Option<DateTime<Utc>>> {
     bail!("cannot read the last landing on main")
 }
 
-/// The time of the latest ledger record when it is an open approval at
-/// `head`; `None` when the latest record is anything else.
-fn approved_at_head(
+/// The latest ledger record as seen from `head`.
+#[derive(Debug, PartialEq, Eq)]
+enum AtHead {
+    /// An open approval at `head`, recorded then.
+    Approved(DateTime<Utc>),
+    /// No record, or the latest one reviewed an older head.
+    Missing,
+    /// A closed verdict, or a non-approval at `head` (stalled-reviews' case).
+    Settled,
+}
+
+fn ledger_at_head(
     records: Vec<(String, crate::gate::review_verdict::JsonObj)>,
     head: &str,
-) -> Result<Option<DateTime<Utc>>> {
+) -> Result<AtHead> {
     let mut latest = None;
     for (at, record) in records {
         let at = DateTime::parse_from_rfc3339(&at)?.with_timezone(&Utc);
@@ -212,15 +283,22 @@ fn approved_at_head(
         }
     }
     let Some((at, record)) = latest else {
-        return Ok(None);
+        return Ok(AtHead::Missing);
     };
     let verdict = parse_ledger_record(&record).context("invalid ledger verdict")?;
     let at_head = verdict
         .reviewed_sha
         .as_deref()
         .is_some_and(|s| s.eq_ignore_ascii_case(head));
-    let open = !verdict.is_closed() && verdict.kind == VerdictKind::Approved;
-    Ok((open && at_head).then_some(at))
+    Ok(if verdict.is_closed() {
+        AtHead::Settled
+    } else if !at_head {
+        AtHead::Missing
+    } else if verdict.kind == VerdictKind::Approved {
+        AtHead::Approved(at)
+    } else {
+        AtHead::Settled
+    })
 }
 
 /// Fail closed like the ship gate: a PR needs supervision unless every spec
@@ -252,17 +330,26 @@ pub(crate) fn scan(
     let storage = aida_core::GitBackend::open_existing(&root.join(".aida-store"))?;
     let store = storage.load_for_read()?;
     let tiered = crate::full_tier::repo_is_tiered(root)?;
+    let lanes = crate::stalled_reviews::ReworkLanes::load(root, &storage, &store)?;
     let mut ready = Vec::new();
     for pr in crate::stalled_reviews::open_prs(root)? {
+        // Drafts and other bases never land on main. trace:STORY-3131 | ai:claude
+        if pr["isDraft"] == true || pr["baseRefName"] != "main" {
+            continue;
+        }
         let number = pr["number"].as_u64().context("PR number missing")?;
         let head = pr["headRefOid"].as_str().context("invalid PR head")?;
         let records = project::change_verdicts_checked(root, ChangeKey::pr(number))
             .map_err(anyhow::Error::msg)?;
-        let Some(at) = approved_at_head(records, head)? else {
-            continue;
-        };
         let rollup = &pr["statusCheckRollup"];
+        let ci = crate::land::ci_of_rollup(rollup);
         let green_at = crate::land::green_rollup_at(rollup).map(|t| t.with_timezone(&Utc));
+        // An unreviewed head counts once its CI is green: the review is the wait.
+        let (approved, since) = match (ledger_at_head(records, head)?, green_at) {
+            (AtHead::Approved(at), green) => (true, green.map_or(at, |ci| at.max(ci))),
+            (AtHead::Missing, Some(green)) if ci == Ci::Green => (false, green),
+            _ => continue,
+        };
         let branch = pr["headRefName"].as_str().unwrap_or_default();
         let title = pr["title"].as_str().unwrap_or_default();
         let spec_ids = crate::pr_ship::extract_pr_spec_ids(branch, title);
@@ -273,16 +360,33 @@ pub(crate) fn scan(
         }));
         ready.push(Ready {
             number,
-            since: green_at.map_or(at, |ci| at.max(ci)),
-            ci: crate::land::ci_of_rollup(rollup),
+            since,
+            approved,
+            conflict: pr["mergeable"] == "CONFLICTING",
+            repairing: spec_ids.iter().any(|s| lanes.covers(&store, s, branch)),
+            spec: spec_ids.first().cloned(),
+            ci,
             full_tier_gap: tiered.then(|| full_tier_gap(rollup)).flatten(),
             supervised,
             on_train: !crate::pr_train::pr_head_pins(root, number)?.is_empty(),
         });
     }
     let now = DateTime::<Utc>::from(exec.clock().wall_now());
-    let findings = evaluate(&ready, &policy, now, last_landing(root)?);
+    let lock = crate::pr_train::lock_driver(root)?.map(|(pid, secs)| LockHolder {
+        pid,
+        held_minutes: secs.map(|s| i64::try_from(s / 60).unwrap_or(i64::MAX)),
+        command: pid.and_then(command_line),
+    });
+    let findings = evaluate(&ready, &policy, now, last_landing(root)?, lock.as_ref());
     Ok((policy, findings))
+}
+
+/// A process's command line, shortened for a finding.
+fn command_line(pid: u32) -> Option<String> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let line = String::from_utf8_lossy(&raw).replace('\0', " ");
+    let line = line.trim();
+    (!line.is_empty()).then(|| line.chars().take(80).collect())
 }
 
 #[cfg(test)]
