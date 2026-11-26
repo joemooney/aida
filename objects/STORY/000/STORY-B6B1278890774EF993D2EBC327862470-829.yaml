@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T14:58:34.414273294Z
+modified_at: 2026-11-26T15:13:04.568995091Z
 req_type: Story
 tags:
 - integration
@@ -1162,6 +1162,14 @@ comments:
   modified_at: 2026-11-26T14:58:34.414273294Z
   session_id: 01a2184399d3
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2186a-d639-78e1-8c23-e9653d69d7ee
+  author: joe
+  content: |-
+    REFERENCE COMMITS ADDENDUM (branch origin/story-3120-ci-review @ a1777130882):
+    - ed89b6bd632: Added native runner support for opencode (`opencode run [--model <M>]` via stdin) and pi (`pi --print [--model <M>] [--thinking <EFFORT>]` via stdin) alongside claude, codex, antigravity/agy, and gemini; added `step_up_challenger_effort` so single-vendor (e.g. Codex-only) `--adversarial` runs automatically step up Challenger reasoning effort by one tier (`low` -> `medium` -> `high` -> `xhigh`) when `--challenger-effort` is omitted.
+    - a1777130882: Updated CLI `--help` docstrings (`aida-cli-lib/src/review_prepare.rs` + golden snapshot `cli_help_snapshot.txt`) and Showcase User Manual (`docs/showcase/code-review.html` Slides 01, 05, 07, 08) to document `opencode`, `pi`, single-vendor auto effort step-up, and the v4 capabilities (4-thread parallel batch execution, nearest package-manifest context, CodeGraph 35-line untouched caller/callee body slicing).
+  created_at: 2026-11-26T15:13:04.568995091Z
+  modified_at: 2026-11-26T15:13:04.568995091Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
