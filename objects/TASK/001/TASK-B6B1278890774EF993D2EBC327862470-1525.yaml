@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T21:03:37.518541580Z
+modified_at: 2026-11-26T21:06:28.046019811Z
 req_type: Task
 tags:
 - deputy
@@ -127,6 +127,18 @@ comments:
   created_at: 2026-11-26T20:33:25.964388974Z
   modified_at: 2026-11-26T20:33:25.964388974Z
   session_id: 01a218eed076
+- id: 01a219ae-9f69-73f2-86b3-dcd047630974
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:06):
+    # TASK-3919 r1 on #4683 (product-15 2026-11-26 14:10; train #4686 went RED on this alone). Lane: CLAUDE. MAIN, existing branch task-3919-deputy-reexec / PR #4683. Keep the "(TASK-3919)" title. <=20 lines.
+    CAUSE (train run 45891504610, job CI (lib-0)): all 8614 tests PASSED. The test-timings gate failed: "BUDGET: aida-cli-lib codex_tool_env::tests::bug_2398_final_spawn_boundary_ratchet: 30.1s with no budget entry (limit 30s for an unbudgeted test)". It is a TOUCHED test (this PR edits aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs), so it gets the strict limit. The Build job failed only as the aggregate of lib-0.
+    FIX: first check whether this PR's edit made the ratchet slower (e.g. a new scanned file or a new spawn site). If a cheap speedup exists, take it. Otherwise add the test to scripts/test-time-budget.toml with the measured time plus headroom (e.g. 45s) and a one-line reason (it is a whole-tree spawn-boundary ratchet scan). Follow the file's existing entry format. Say which you did in the PR body.
+    make check-ci-fast, then push to #4683. COMMIT your work.
+  created_at: 2026-11-26T21:06:28.046019811Z
+  modified_at: 2026-11-26T21:06:28.046019811Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a218ef-06e9-70b1-85a7-aae51066fd02
   author: aida-session-start
