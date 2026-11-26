@@ -9,12 +9,12 @@ description: |
   - AC1: confirm or refute the memory cause from the evidence (e.g. a lib-1 run with `/usr/bin/time -v` or memory sampling around the build, or the hosted runner diagnostics), recorded on the spec.
   - AC2: if memory: bound lib-1's peak (e.g. CARGO_BUILD_JOBS for that shard, codegen-units/debuginfo trimming for the test profile, or split lib-1 further by module) so lib-1 completes under the hosted limits in 3 consecutive runs.
   - AC3: a clear, early failure in place of the silent shutdown: if the shard approaches its memory budget or the deadline, fail with a message naming the shard and the cause.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T04:12:06.555554921Z
+modified_at: 2026-11-26T04:15:09.651417894Z
 req_type: Bug
 tags:
 - ci
@@ -37,6 +37,13 @@ history:
   author: joe
   timestamp: 2026-11-26T04:10:36.079498711Z
   changes: []
+- id: 01a21610-7f53-7a91-9cde-721985f9d52f
+  author: aida-session-start
+  timestamp: 2026-11-26T04:15:09.651415373Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
