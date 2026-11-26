@@ -131,6 +131,28 @@ def is_table_separator(line, width):
     return len(cells) == width and all(re.fullmatch(r':?-+:?', cell) for cell in cells)
 
 
+# trace:STORY-2839 | ai:claude
+# The renderer has no nested lists and no single-asterisk emphasis, so either
+# would publish literal "  - " or "*text*". Refuse the source instead, naming
+# file:line, rather than render it wrong.
+NESTED_ITEM = re.compile(r'^\s+(?:[-*+]|\d+[.)])\s')
+STRAY_ASTERISK = re.compile(r'\*(?=\S)|(?<=\S)\*')
+
+
+def refuse_unrendered(source, name):
+    code = False
+    for number, line in enumerate(source.splitlines(), 1):
+        if line.startswith('```'):
+            code = not code
+        if code or line.startswith(('```', '<!--')):
+            continue
+        if NESTED_ITEM.match(line):
+            raise ValueError(f'{name}:{number}: nested list items are not rendered; flatten the list')
+        text = re.sub(r'`[^`]+`', '', re.sub(r'^[-*] ', '', line))
+        if STRAY_ASTERISK.search(re.sub(r'\*\*[^*]+\*\*', '', text)):
+            raise ValueError(f'{name}:{number}: single-asterisk emphasis is not rendered; use **bold** or plain text')
+
+
 def render(source, base='.'):
     output, paragraph, listing, table, code, slugs = [], [], None, None, None, set()
     def flush():
@@ -276,6 +298,7 @@ def render_outputs():
             raise ValueError('Only ordinary Markdown sources may be selected')
         subprocess.run(['git', 'ls-files', '--error-unmatch', '--', str(resolved.relative_to(ROOT.resolve()))], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
         content = source_path.read_text()
+        refuse_unrendered(content, str(resolved.relative_to(ROOT.resolve())))
         entries.append({'title': content.splitlines()[0].removeprefix('# '), 'url': output, 'source': '../' + source, 'category': metadata['category'], 'text': search_text(content), 'sha256': hashlib.sha256(content.encode()).hexdigest()})
         if is_glossary:
             terms.extend(glossary_terms(content, output, source, metadata['category']))
