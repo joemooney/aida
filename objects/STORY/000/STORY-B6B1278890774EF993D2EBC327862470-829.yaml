@@ -25,6 +25,10 @@ modified_at: 2026-11-26T15:20:05.373269485Z
 req_type: Story
 tags:
 - integration
+relationships:
+- rel_type: Parent
+  target_id: 01a21871-c944-74d1-9eb6-e7ae2055843d
+  created_at: 2026-11-26T15:20:52.126126529Z
 comments:
 - id: 01a2111c-fce8-75b3-b3f1-6b82c0da1ef7
   author: joe
@@ -1413,6 +1417,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21872-9655-7520-a1d4-bd6b85d29c9e
+  author: joe
+  timestamp: 2026-11-26T15:21:32.501313629Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
