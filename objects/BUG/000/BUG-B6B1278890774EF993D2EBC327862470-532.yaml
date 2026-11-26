@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T13:24:20.435753808Z
+modified_at: 2026-11-26T13:49:14.916527571Z
 req_type: Bug
 tags:
 - admission
@@ -60,6 +60,32 @@ comments:
     - None (brief picks the yield-on-recorded-waiter option over FIFO).
   created_at: 2026-11-26T13:24:20.435753808Z
   modified_at: 2026-11-26T13:24:20.435753808Z
+  session_id: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2181e-1724-7271-8a3a-4909b7bd28f2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d9834c5a9a (diff origin/main...HEAD, 7 files).
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: `review_watch::train::bug2769_idle_admission_tests::bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter` (real `run_passes` loop): after train A, three polls start no train B and hold no claim while the waiter is recorded. Mechanism: `admission_owner::manual_train_admission` records the waiter on a busy give-up; `yield_reason` (auto-train purpose only) yields in `hold_admission`.
+    - AC2 [behavioral-test]: the same test asserts the line `operator train for #4464 waiting since HH:MM; auto-train yields next`; it is shown in train-status (`advisor_loop_service.rs` status_value/status_lines `manual_waiter`) and `pr train --check` (text `admission: ...`, JSON `manual_waiter` only when present).
+    - AC3 [behavioral-test]: the same test: manual train admitted (record cleared), a poll while it holds starts nothing, train B starts only after it releases.
+
+    Targeted run: `cargo test --profile agent -p aida-cli-lib --lib -- admission`: 116 passed, 0 failed.
+
+    **Probe findings**
+    - P1 consistency: purpose string `legacy auto-train` matches `ADMISSION_PURPOSE`; review-watch purpose asserted not to yield.
+    - P3 multiplicity: one record per repo; a second waiting manual train with different PRs overwrites (latest PR list shown, `since` reset). The auto-train still yields; only the description is lossy.
+    - P4/P5 authority: the record grants nothing. An unreadable, unparsable, expired or far-future (beyond TTL) record is ignored: the auto-train proceeds as before. Not pid-bound by design (it outlives the waiter). Worst case a stale record delays the auto-train by its 15 min TTL. No test weakened; the only test edits add the new `prs` argument.
+    - Running trains are never cut short: yield is consulted only between passes.
+
+    **Fixes during review**: added store-writer inventory rows for the new write sites.
+
+    **Residual risks**: TTL of 15 min is a constant tuned to a 5-min operator retry; an operator retrying less often than 15 min loses priority again.
+  created_at: 2026-11-26T13:49:14.916527571Z
+  modified_at: 2026-11-26T13:49:14.916527571Z
   session_id: 01a21805300e
   harness_version: 2.1.319 (Claude Code)
 history:
