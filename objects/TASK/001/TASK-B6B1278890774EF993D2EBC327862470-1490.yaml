@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:24:37.851118978Z
-modified_at: 2026-11-26T07:48:16.400980815Z
+modified_at: 2026-11-26T07:48:36.107886654Z
 req_type: Task
 tags:
 - config
@@ -24,6 +24,13 @@ relationships:
   target_id: 01a214b5-d807-7f73-ac35-a8f2d9d840c5
   created_at: 2026-11-26T07:28:15.271857510Z
   created_by: joe
+comments:
+- id: 01a216d3-e88b-72a1-9a6c-709f0b9a6aeb
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `lanes-compile-cfg` at head `0cb984b75d1e780e6f0fc2bcad86651d202d948d`.'
+  created_at: 2026-11-26T07:48:36.107880908Z
+  modified_at: 2026-11-26T07:48:36.107880908Z
+  session_id: 01a216d27be6
 history:
 - id: 01a216c1-400d-76b0-bbdd-cf8524ab2043
   author: joe
