@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T08:15:35.902936860Z
+modified_at: 2026-11-26T08:18:11.172372197Z
 req_type: Story
 tags:
 - planning
@@ -85,6 +85,21 @@ comments:
     A reference merge (commit 0cb984b75d1e, `(Refs STORY-3143)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T07:16:17.092308355Z
   modified_at: 2026-11-26T07:16:17.092308355Z
+- id: 01a216ef-3a53-7a62-b9c8-173319d98f79
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:18):
+    # STORY-3143 S2: `aida report backlog` flow metrics + recommendations (S1 landed 2026-11-26 00:09; product-15). Lane: CLAUDE. MAIN, NEW branch report-backlog-s2. Completing (STORY-3143) trailer if this finishes the ACs. <=300 lines.
+    READ: `aida show STORY-3143 --comments` (AC3, AC4, and the S1 deferred findings, ESPECIALLY "give the default area map path prefixes for the code areas"). Build on S1's command.
+    SCOPE:
+     - AC3 flow: landings per day (main + integration, matching train-landed PRs by "(#N)" in commit subjects, because GitHub shows them CLOSED), median/p90 open→landed, CR rounds before landing (from the gate ledger), rework sinks (specs by CR count in 7d), stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
+     - AC4 recommendations: fold noise, release stale claims, park rework sinks, each with the exact command. The report never acts on its own.
+     - S1 deferred: default path prefixes for the code areas in the area map.
+    TESTS with fixture data. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T08:18:11.172372197Z
+  modified_at: 2026-11-26T08:18:11.172372197Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
