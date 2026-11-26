@@ -58,6 +58,13 @@ class CiTiers(unittest.TestCase):
         self.assertIn('After `gh pr update-branch`, wait for its FAST run to finish '
                       'before removing and re-adding `ci:full`.', ' '.join(guide.split()))
 
+    def test_task3266_wait_for_fast_before_retoggling_inherited_full(self):
+        # trace:TASK-3266 | ai:claude
+        guide = ' '.join((ROOT / 'docs/internal/testing/ci-test-shards.md').read_text().split())
+        self.assertIn('After `gh pr update-branch`, wait for FAST on the updated head to finish '
+                      'before manually removing and re-adding an inherited `ci:full` label. '
+                      'Re-adding it starts FULL on the updated head.', guide)
+
     def test_selection_and_check_name_agree_for_all_events(self):
         select = JOBS['tier']['steps'][0]
         expression = select['env']['FULL'].removeprefix('${{').removesuffix('}}').strip()
