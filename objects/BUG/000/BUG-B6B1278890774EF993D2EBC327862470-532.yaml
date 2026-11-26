@@ -1,0 +1,29 @@
+id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-532
+agreed_id: BUG-2771
+title: 'Manual (operator) trains starve behind back-to-back auto-trains: the auto-train re-takes admission between its trains before a waiting manual train gets in'
+description: |
+  advisor-122 2026-11-26 06:15 (filed by product-15). #4464 BUG-2735 (supervised, approved, full-CI green) has waited for a manual train since about 21:00 on 2026-11-25. Joe's operator train loop retries `aida pr train 4464` every 5 min, but the auto-train re-takes admission between its own back-to-back trains every time, so the manual train never gets in (it is starved, not deadlocked). BUG-2769 (idle hold) and BUG-2765/2757 (review-watch holds) are fixed; this is the fairness gap between two legitimate train sources. Workaround tonight: the advisor drained the auto-train loops for 40 min so #4464 gets the lock after train #4654.
+
+  ## Acceptance
+  - AC1: a manual train waiting on admission is admitted BEFORE the auto-train starts its NEXT train: FIFO across waiters, or the auto-train yields whenever a cooperative manual waiter is recorded.
+  - AC2: the waiting manual train is visible in `aida advisor loops train-status` / `aida pr train --check` ("operator train for #N waiting since HH:MM; auto-train yields next").
+  - AC3: a test: an auto-train finishing train A with a recorded manual waiter does not start train B until the manual train has run (or released).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T13:12:13.855583833Z
+modified_at: 2026-11-26T13:12:13.855583833Z
+req_type: Bug
+tags:
+- admission
+- landing
+- train
+filed_at:
+  code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 15bbbc68222
+  vendor: claude
