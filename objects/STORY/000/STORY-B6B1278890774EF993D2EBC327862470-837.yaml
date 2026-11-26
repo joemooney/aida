@@ -1,0 +1,39 @@
+id: 01a21a2e-62ea-7e00-8684-13f8ad52587b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-837
+agreed_id: STORY-3202
+title: agy (Antigravity) as a contained lane vendor and review runner, to share token cost with claude/codex
+description: |
+  Joe 2026-11-26 16:16: "Is there any chance we can use agy in lieu of claude for some of the work going forward. I would like to make sure agy works and also share some of the token costs." Filed by product-15.
+
+  Findings (2026-11-26 16:28):
+  - `aida queue work SPEC --role implementer --no-human --vendor agy` on dell1 REFUSES: "the `agy` vendor cannot run a contained session: Supported [contained.vendors] settings: claude = "aida" (AIDA containment), codex = "native" ...". Every product lane is a contained session, so agy cannot take lanes today.
+  - `review prepare --run-review` accepts only claude|codex (REVIEW_VENDORS).
+  - Host auth: on the imac (desktop session) `agy -p` works (12s). On dell1, after an interactive login (agy 1.5.18, the same user scope), NON-INTERACTIVE `agy -p` still says "authentication required". The token appears to live in the GNOME keyring (secret service), which a headless/ssh session cannot unlock. The lane-host doctor does not check agy auth at all.
+
+  STRICT (containment + credentials): an architecture SKETCH with advisor signoff comes before code.
+
+  ## Acceptance
+  - AC1 (sketch): how agy runs contained, either `[contained.vendors] agy = "aida"` (the AIDA bubblewrap containment like claude: workspace confinement, env allowlist, no ambient forge credentials, network per policy) or `agy = "native"` (its own --sandbox) as an explicit trusted-config opt-in like codex, plus what agy's headless mode (`-p/--print`, `--output-format stream-json`, `--dangerously-skip-permissions` vs `--mode`, `--settings`, `--print-timeout`) needs from the lane runner (session id/resume, completion detection, commit/push/publish).
+  - AC2: an agy implementer lane runs end to end on dell1 (claim, edit, commit, push, publish) under the chosen containment; a canary on one small standard spec.
+  - AC3: `aida doctor --lane-host` checks agy auth NON-INTERACTIVELY (the way a lane will run it) and, when the token is keyring-only, names the fix (a headless-usable credential mode, or keyring unlock guidance).
+  - AC4 (follow-up slice): agy as a `review prepare` runner vendor through the S3a hardened spawn helper (with STORY-3120 S9), giving a real opposite-vendor challenger when one vendor is rate-limited.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T23:26:17.322312937Z
+modified_at: 2026-11-26T23:26:17.322312937Z
+req_type: Story
+tags:
+- containment
+- cost
+- lanes
+- strict
+- vendors
+filed_at:
+  code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b728c3373d1
+  vendor: claude
