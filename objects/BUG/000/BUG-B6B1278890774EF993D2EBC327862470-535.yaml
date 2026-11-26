@@ -9,12 +9,12 @@ description: |
   - AC1: auto-train RECOVERY releases admission while it waits on any deputy job (or any external job), and re-takes it only for the decision.
   - AC2: a deputy runner on a stale or deleted binary is DETECTED and reported (train-status + aida doctor: the deputy name, pid, binary path and age, and the fix: restart with the binding reset) instead of silently blocking.
   - AC3: tests: recovery waiting on a deputy job does not hold admission; a stale-binary deputy is reported.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T14:56:46.778922487Z
+modified_at: 2026-11-26T15:28:59.529388610Z
 req_type: Bug
 tags:
 - admission
@@ -58,6 +58,19 @@ comments:
   modified_at: 2026-11-26T14:56:46.778922487Z
   session_id: 01a21856ec44
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21878-6686-7b80-9374-c7781a88afec
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3bf2ccc98a (git diff origin/main...HEAD; partial slice, Refs).
+    Acceptance evidence: AC2 [behavioral-test] review_watch::{service,train_service}::loop_tests::bug2774_a_deputy_on_a_stale_or_deleted_binary_is_reported (lane job, 2 passed): replaced image (other inode + other sha) and the '(deleted)' marker are reported with deputy, pid, path, age and the fix line; a live image and an identical copy are not. train-status/loops status JSON gains deputy_binary; doctor category deputy-binary (aliases stale-deputy) reuses the same probe. AC1: NOT implemented (design fork; punted). AC3: covered for AC2 only.
+    Probes: P1 deleted marker matched on the readlink suffix the kernel writes; inode mismatch alone is not stale (sha must differ, so a copied build is quiet). P3 doctor dedups the two services' findings by deputy:pid. P4 unreadable live build / unreadable exe / dead host -> no report (fail quiet, matches BUG-2645). P5 report-only, no authority path touched.
+    Fixes during review: age shown as XhYm instead of whole hours (after the test compile; untested formatting only).
+    Residual risks: doctor finding builder has no fixture test (state receipt + live /proc needed); the sha probe executes the deputy image with --version only when inodes differ, like binary_status does for the worker. make check-ci-fast exit 0.
+  created_at: 2026-11-26T15:27:53.478951284Z
+  modified_at: 2026-11-26T15:27:53.478951284Z
+  session_id: 01a21856ec44
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe
@@ -74,6 +87,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21879-6889-7f12-8493-432a08e57975
+  author: dirtlab
+  timestamp: 2026-11-26T15:28:59.529433069Z
+  session_id: 01a21856ec44
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
@@ -82,3 +104,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: fd10cfd3049
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'AC1 (release admission while recovery waits on an external job) conflicts with the train run lock: recovery holds .aida/train/run.lock for its whole CI wait, so once the auto-train drops its admission receipt, admission_owner::acquire_mode refuses every contender with ''prior train is not quiescent'' (admission_train_running), INCLUDING review-watch controllers that today join the auto-train''s live receipt (joining_train). A plain release therefore regresses review-watch, a waiting manual train still cannot run (TrainJournalBusy) and its intent still blocks review-watch for wait_secs, and the re-take for the decision yields to that same intent. Needs an admission design call (strict tier). AC2 shipped separately in PR-4667 (Refs).'
+  lean: (A) a parked-recovery marker (live pid + phase) that acquire_mode treats as a joinable live train for review controllers, that makes a manual train/land/ship refuse at once naming the parked recovery instead of registering a waiting intent, and a re-take for the decision that does not yield to train intents. Smaller and keeps the run lock semantics; (B) dropping the run lock during the wait is riskier.
+  raised_by: implementer
+  raised_at: 2026-11-26T15:28:59.529388610Z

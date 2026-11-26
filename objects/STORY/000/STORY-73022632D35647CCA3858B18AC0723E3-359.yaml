@@ -1,0 +1,64 @@
+id: 01a21878-e37c-7643-9c17-3537ccd5b196
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-359
+title: 'Review PR-4667: [AI:claude] fix(auto-train): report a deputy on a stale or deleted binary in train-status and doctor (Refs BUG-2774)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21856`) for branch `autotrain-recovery-release`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4667>
+  - Branch: `autotrain-recovery-release` → `main`
+
+  ## Covers
+
+  - TASK-3917
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2774
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4667` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T15:28:25.468731090Z
+modified_at: 2026-11-26T15:28:37.865069097Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a217ec-e057-7183-910a-f5f1a34e508a
+  created_at: 2026-11-26T15:28:29.810274983Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a2184f-3bb1-71a3-bc25-7077aac7bbc8
+  created_at: 2026-11-26T15:28:37.865012607Z
+  created_by: dirtlab
+history:
+- id: 01a21878-fcb3-7ff2-bc37-f5dcae3e7583
+  author: dirtlab
+  timestamp: 2026-11-26T15:28:31.923235353Z
+  session_id: 01a21856ec44
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21879-1c73-7c72-a195-25deb2681d1c
+  author: dirtlab
+  timestamp: 2026-11-26T15:28:40.051205429Z
+  session_id: 01a21856ec44
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: a0728ce1ad1a823bdb19f5cd3002be81ccf0b101
+  branch: autotrain-recovery-release
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cb26bf94b3
+  vendor: claude
+  session: 01a21856ec44
+  harness_version: 2.1.319 (Claude Code)
