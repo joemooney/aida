@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T03:11:51.535624864Z
+modified_at: 2026-11-26T03:16:40.172756496Z
 req_type: Story
 tags:
 - integration
@@ -756,6 +756,18 @@ comments:
     One targeted cargo test run on this host, make check-ci-fast, then push to #4614. COMMIT your work.
   created_at: 2026-11-26T03:08:32.879842817Z
   modified_at: 2026-11-26T03:08:32.879842817Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a215db-2dbd-7c71-a9d2-9f715141b201
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:16):
+    # STORY-3120 S3a-2 FRESH SLICE (replaces closed #4614; product-15 2026-11-25 20:15). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch int40-story-3120-s3a2b (cut from the current integration tip, which already contains #4604 TASK-3320). Title "(Refs STORY-3120)". <=300 lines.
+    #4614 (S3a-2, pre-check PASS @ 69bd3b98) conflicted with #4604 in aida-cli-lib/src/review_prepare.rs, and conflict repair refuses a self-published Claude lane. Do NOT merge or rebase #4614. PORT its change onto this branch: `git diff origin/integration...origin/int40-story-3120-s3a2` is the reference, and the original brief is .aida/tmp/brief-STORY-3120-S3a2.md (ACs 1-6: bounded joins + the setsid test; item-11 inventory refusal; git_text sanitized builder + --no-textconv + diff failure = error; vars_os unchanged; trusted base = merge-base(target, reviewed head), never the tip or a PR value; re-validate the resolved effort against BASE_EFFORTS for custom runners).
+    PLUS: MOVE #4604's is_credential_path check into ensure_in_inventory, so --run-review findings also get the credential check, keep BOTH test sets, and add a test that a --run-review finding on a root credential path is refused.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration whose body says "Replaces #4614 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T03:16:40.172756496Z
+  modified_at: 2026-11-26T03:16:40.172756496Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
