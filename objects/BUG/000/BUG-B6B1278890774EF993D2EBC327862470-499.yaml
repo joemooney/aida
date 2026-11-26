@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T14:02:13.594296398Z
+modified_at: 2026-11-26T14:04:28.237815887Z
 req_type: Bug
 tags:
 - leases
@@ -50,6 +50,17 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-499` at head `unavailable`.'
   created_at: 2026-11-24T02:21:37.280667209Z
   modified_at: 2026-11-24T02:21:37.280667209Z
+- id: 01a2182c-4c7f-7842-8244-1acba9b5174b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:04):
+    # BUG-2738 (approved; product-15 2026-11-26 07:10, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch bug-2738-shelve-completed. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2738) and say what remains. Otherwise use the completing (BUG-2738) trailer.
+    READ FIRST: `aida show BUG-2738 --comments` (evidence, ACs, rulings). STANDARD, small. A request-changes verdict must not shelve or reopen a spec that is already Completed or whose PR is merged; record the verdict only. A test for both cases.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T14:04:28.237815887Z
+  modified_at: 2026-11-26T14:04:28.237815887Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
