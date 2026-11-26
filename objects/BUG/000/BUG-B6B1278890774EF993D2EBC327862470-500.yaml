@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-500
 agreed_id: BUG-2739
 title: doctor heal stale-leases and session hygiene hang silently (rc=124, no output)
 description: '2026-11-23 ~18:15-18:30 MST: on dell1, `aida doctor heal stale-leases --id shared-207c3564-6f8b-424c-beba-2fef6d8adaa4 --yes` hung to a 120s timeout with zero output; the eligible expired shared claim (task-...-1278-3acc2856dc7c47e2.toml, lease 01a20b0d78d6, dead creator) stayed, so TASK-3851 relaunch was refused twice. Same window on imac: the hourly session-hygiene cron failed exit 1 with empty output, and `aida session hygiene --dry-run` ran >240s with no output. throughput-guard also timed out at 300s twice today. Suspects: a store mutation lock wait or an unbounded forge call under GitHub rate pressure. AC1: each command emits progress/diagnostic naming what it waits on within 10s and fails with a named cause before its deadline instead of hanging silently. AC2: repro test with a held store lock.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-25T22:41:51.142520718Z
+modified_at: 2026-11-26T01:40:45.085498442Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -263,6 +263,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21583-219d-78c1-970a-0155c3ecc90e
+  author: joe
+  timestamp: 2026-11-26T01:40:45.085496539Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
