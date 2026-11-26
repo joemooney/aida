@@ -81,6 +81,22 @@ comments:
   modified_at: 2026-11-26T18:12:24.549782660Z
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2196a-66ad-70a2-be36-415fcafc8597
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (update)
+    Reviewed HEAD: 209f21abba. Since 4a005dc2f6: the re-exec Command build and exec moved into launch/control.rs (`runner_reexec`, `exec_runner`) so the STORY-2326 launch ledger is unchanged; recorded launch/control.rs in the BUG-2398 LAUNCH_INVENTORY as NotACodexLaunch; classified the marker write in scripts/store-writers.toml (one row). make check-ci-fast: exit 0. Targeted: task3919 (5), bug2774 (2), story_2326 ratchets pass.
+  created_at: 2026-11-26T19:52:13.229910018Z
+  modified_at: 2026-11-26T19:52:13.229910018Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2196a-b3b7-77f3-aa94-e10ca66e574c
+  author: dirtlab
+  content: Commit 51fa960c9f references this requirement
+  created_at: 2026-11-26T19:52:32.951556349Z
+  modified_at: 2026-11-26T19:52:32.951556349Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21982-5121-7e22-836c-65c955902701
   author: joe
   content: 'FOLLOW-UP (advisor-122 2026-11-26 13:12, on the #4683 approval; not blocking): Joe''s default deputy runs WITHOUT --loop, so a failed re-exec (which exits rather than continuing stale) leaves NO default deputy. `aida doctor` should flag a "no default deputy" state (no live runner bound for the default name) with the restart command, and train-status should name it when the auto-train is blocked on it.'
