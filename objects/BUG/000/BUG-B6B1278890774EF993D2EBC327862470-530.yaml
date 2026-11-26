@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:25:54.334832387Z
+modified_at: 2026-11-26T09:27:48.000434994Z
 req_type: Bug
 tags:
 - admission
@@ -127,6 +127,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T09:25:54.181237364Z
   modified_at: 2026-11-26T09:25:54.181237364Z
+- id: 01a2172e-f6c4-7772-8f24-755de8451f04
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:27):
+    # BUG-2769 r1 micro-round on #4640 (advisor-122 ruling 2026-11-26 02:27 at 0f9abd22: the core fix is accepted, only AC4 is missing; product-15). Lane: CLAUDE. STRICT. MAIN, existing branch fix-autotrain-idle-admission / PR #4640. <=40 lines. Keep the title "(BUG-2769)".
+    (F1 = AC4) While the auto-train HOLDS admission longer than N seconds, emit the holder + phase line DURING the hold (e.g. from the pass's poll/heartbeat), and show it in `aida advisor loops train-status`, not only after the pass returns.
+    TEST: a hold still in progress past N → the line appears (and train-status shows it).
+    DEFERRED (do NOT do): the pre-scan repeating forge reads (p3).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4640. COMMIT your work.
+  created_at: 2026-11-26T09:27:48.000434994Z
+  modified_at: 2026-11-26T09:27:48.000434994Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
