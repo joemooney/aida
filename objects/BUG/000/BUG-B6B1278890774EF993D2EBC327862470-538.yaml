@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T22:19:25.478587398Z
+modified_at: 2026-11-26T22:19:36.961557693Z
 req_type: Bug
 tags:
 - landing
@@ -189,6 +189,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 round 2 at 4cbdf727. Most of round 1 is resolved. Advisor binding (2): the drift hold is written even when authority is lost, tested in bug2777_train_routes_and_records_a_drift_ejection_only_under_authority. Binding (3): the route text is accurate, and the TASK-1960 gate is untouched. Binding (4): landing_drought::scan reads train state from the main worktree via main_worktree_root_from, tested from a git-worktree seat in bug2777_scan_reads_train_state_from_the_main_worktree. Binding (5): a drift row and a red row at the same head have an explicit, tested precedence. AC2 is met by bug2777_a_drifted_head_is_refused_even_when_named: the head is refused even when named and the route is printed. AC3 is met by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC1 is met at the extracted-loop level: route_drift_ejections, fed by a real build() drift ejection through a fake DriftRouter, checks routing, the typed row, per-PR dedupe and that a red ejection is not routed. One blocking gap remains on the strict train/authority path, which ADR-76 treats as blocking. The live authority adapter LiveDriftRouter::authority has no test: neither its dispatch_abort short-circuit nor its mapping of a dispatch_check failure. Neither does the handler call site that feeds it. A mutation that makes authority() always return Ok, or that drops the route_drift_ejections call, passes every test in this PR, and round 1 named this gap (items b and d). The implementer''s self-review says the abort caching is covered by inspection only. The tests module is a child of pr_train, and existing tests build LiveTrainForge with dispatch_ctx None and a fake forge, so the missing test is cheap to write. The base moved by one commit (BUG-2775, review vendor table); it touches none of these files, so no finding depends on it. CI was pending at review time: fast gates pass, fast compile pending, and merge-hold-gate is awaiting clearance.. No triage reason was given.'
   created_at: 2026-11-26T22:19:25.478581242Z
   modified_at: 2026-11-26T22:19:25.478581242Z
+- id: 01a219f1-57e6-73b2-91db-989182f61a39
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2777):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4cbdf727160d
+    Recorded: 2026-11-26T22:16:12.617217580+00:00
+    Findings:
+    1. [aida-cli-lib/src/pr_train.rs LiveDriftRouter::authority and its call site in pr_train_handler_with_dispatch_ctx] Untested authority refusal path in the live adapter. route_drift_ejections is tested only through FakeRouter, so nothing exercises (a) the short-circuit when dispatch_abort is already set (drive lost authority, so the branch update must not run); (b) mapping a ports.dispatch_check() failure to Err and caching it in abort, so that later PRs in the same loop are refused without another check; or (c) the handler wiring that builds LiveDriftRouter with &mut dispatch_abort and calls route_drift_ejections. A mutation that makes authority() return Ok(()) unconditionally lets update_change_branch run after the train's dispatch authority is gone, and a mutation that drops the route_drift_ejections call returns the train to the BUG-2777 loop. Both pass every test in this PR. Round 1 named these (items b and d), and the implementer's self-review lists the abort caching as inspection-only. Fix: in story_1690_train_tests.rs (a child module of pr_train), build LiveDriftRouter over a LiveTrainForge (dispatch_ctx None, a fake or GitHub forge as the existing tests at about line 3370 do) with abort = Some("lease expired"). Call route_drift_ejections with a drift ejection and assert that no branch update was attempted, that the warning names the abort reason, and that the hold reads 'not routed: lease expired'. If practical, also cover a failing dispatch_check.
+    2. [aida-cli-lib/src/pr_train.rs route_drift] Sometimes the drift comes from an earlier train member rather than from main, so the PR branch is already up to date with main. Then update_change_branch fails as a no-op, and route_drift reports 'the branch does not update cleanly ... conflict repair' and escalates to the advisor, which misdiagnoses a train-ordering drift as a merge conflict. The implementer listed this as a residual risk. Suggested follow-up: tell an already-up-to-date refusal apart from a real conflict, and route it to a re-train without the earlier member (or a re-review).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T22:19:36.806100605Z
+  modified_at: 2026-11-26T22:19:36.806100605Z
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
