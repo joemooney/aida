@@ -14,12 +14,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T17:17:58.533127386Z
+modified_at: 2026-11-26T17:19:44.587475168Z
 req_type: Bug
 tags:
 - BUG-2763
 - review-watch
 - throughput
+comments:
+- id: 01a218df-0c80-70c2-8812-1707feedaaff
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:19):
+    # BUG-2776: review-watch reclaims a clean, exited reviewer worktree when the PR head has moved (BUG-2763 regression; product-15 2026-11-26). Lane: CLAUDE. MAIN, NEW branch bug-2776-rw-reclaim-held. <=250 lines. Completing (BUG-2776) trailer.
+    READ: `aida show BUG-2776` (the exact live shape, heads and pass line) and BUG-2763's change (`git log --grep BUG-2763 origin/main`); review_watch.rs (the held-by-exited-attempt path and the BUG-2763 retry) and the BUG-2176 merge-hold copy rule.
+    AC1: reclaim (copy the merge-hold marker first, then the session-end path) a CLEAN, unlocked, hold-free, process-free leftover whose lease is stale or ending-retained, when the PR head != the worktree head; dispatch in the same pass. AC2: keep anything dirty, locked, merge-held or process-held, and name WHY in the pass line. AC3: >30 min held surfaces in doctor + the drought watchdog with the fix. Tests: the exact shape (positive), plus dirty, live-pid and merge-hold negatives.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T17:19:44.587475168Z
+  modified_at: 2026-11-26T17:19:44.587475168Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a218dd-3006-7b12-a565-eb8e5e0a12d8
   author: joe
