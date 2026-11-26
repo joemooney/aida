@@ -43,6 +43,12 @@ impl Environment {
         Self::from_pairs(std::env::vars_os())
     }
 
+    /// The whole snapshot as owned pairs, for a consumer that projects its own
+    /// child environment from the parent's. trace:STORY-3120 | ai:claude
+    pub fn to_pairs(&self) -> Vec<(OsString, OsString)> {
+        self.0.clone().into_iter().collect()
+    }
+
     pub fn get(&self, key: impl AsRef<OsStr>) -> Option<&OsStr> {
         self.0.get(key.as_ref()).map(OsString::as_os_str)
     }

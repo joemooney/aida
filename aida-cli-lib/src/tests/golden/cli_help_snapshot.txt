@@ -22873,6 +22873,19 @@ Options:
           Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact
           1-based `(start_line, end_line)` spans on the target revision
 
+      --run-review
+          Review every batch with an agent and anchor its findings. Needs `--pr` or `--from`; review
+          settings come from the merge base
+
+      --agent <AGENT>
+          Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)
+
+      --effort <LEVEL>
+          Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max)
+
+      --model <MODEL>
+          Model for `--run-review`
+
       --sarif <PATH>
           Write a SARIF 2.1.0 report inside the repository
 
@@ -56328,6 +56341,11 @@ Working on aida itself
     "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
     "flags": [
       {
+        "name": "agent",
+        "takes_value": true,
+        "help": "Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)"
+      },
+      {
         "name": "anchor-findings",
         "takes_value": true,
         "help": "Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact 1-based `(start_line, end_line)` spans on the target revision"
@@ -56341,6 +56359,11 @@ Working on aida itself
         "name": "commit",
         "takes_value": true,
         "help": "Single commit SHA to inspect against its parent"
+      },
+      {
+        "name": "effort",
+        "takes_value": true,
+        "help": "Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max)"
       },
       {
         "name": "exclude",
@@ -56373,6 +56396,11 @@ Working on aida itself
         "help": "Emit machine-readable JSON output"
       },
       {
+        "name": "model",
+        "takes_value": true,
+        "help": "Model for `--run-review`"
+      },
+      {
         "name": "path",
         "takes_value": true,
         "help": "Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable (`--path aida-core/src --path aida-cli-lib/src`)"
@@ -56381,6 +56409,11 @@ Working on aida itself
         "name": "pr",
         "takes_value": true,
         "help": "Pull spec IDs and base/head refs from PR/MR number N"
+      },
+      {
+        "name": "run-review",
+        "takes_value": false,
+        "help": "Review every batch with an agent and anchor its findings. Needs `--pr` or `--from`; review settings come from the merge base"
       },
       {
         "name": "sarif",
