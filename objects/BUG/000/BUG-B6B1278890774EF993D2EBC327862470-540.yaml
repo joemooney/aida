@@ -1,0 +1,33 @@
+id: 01a21a0e-a62f-7412-8eeb-9ba30b2b9a68
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-540
+agreed_id: BUG-2779
+title: review challenger panics on untrusted output whose first { follows its last } (slice start > end); top-level review prepare errors drop their cause
+description: |
+  Found 2026-11-26 15:50 by the finder pass of `aida review prepare --run-review` (the product-15 trial on #4661, at Joe's request); confirmed on main by product-15. aida-cli-lib/src/launch/review_challenger.rs:154-155:
+      let span = raw.find('{').zip(raw.rfind('}'));
+      let payload = span.map_or(raw, |(start, end)| &raw[start..=end]);
+  The challenger subprocess output is UNTRUSTED. When the first "{" comes after the last "}" (e.g. "} sorry {" or "done} {"), start > end and the slice PANICS, crashing the whole review instead of failing closed with a parse error. The same pattern may exist in the finder output parser (check parse_runner_findings_json and any other first-{/last-} extraction).
+
+  Also found in the same trial (minor, same area): a top-level `review prepare` error prints only the outer context. E.g. `--sarif /tmp/x.sarif` fails with just `error: "write SARIF /tmp/x.sarif"`, dropping the cause "--write outside repository". BUG-2775 fixed the cause chain only for runner errors.
+
+  ## Acceptance
+  - AC1: every first-{/last-} (or similar) extraction of untrusted runner/challenger output checks start <= end and otherwise returns a typed parse error (the challenge fails closed; no panic). Tests: "} sorry {", "done} {", "}" alone, empty output, and a fenced block with trailing text.
+  - AC2: `review prepare`'s top-level error prints the full cause chain (e.g. "write SARIF /tmp/x.sarif: --write outside repository: paths must be inside the project root"). Test.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T22:51:37.391070504Z
+modified_at: 2026-11-26T22:51:37.391070504Z
+req_type: Bug
+tags:
+- STORY-3120
+- review
+- security
+filed_at:
+  code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b728c3373d1
+  vendor: claude
