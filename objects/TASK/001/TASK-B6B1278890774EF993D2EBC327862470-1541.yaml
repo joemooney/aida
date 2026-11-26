@@ -1,0 +1,31 @@
+id: 01a21a37-a81f-7b80-b118-5c6f7644d295
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1541
+title: 'Review follow-up: Member-induced drift has no hold or ordering change (aida-cli-lib/src/pr_train.rs route_dr'
+description: |-
+  From BUG-2777
+  Reviewed sha: 7f1fa7dfed0edf8dc9313469364795b5f3f05194
+
+  Member-induced drift has no hold or ordering change (aida-cli-lib/src/pr_train.rs route_drift_ejections). The message says the PR is 're-queued for the next train, alone or behind the earlier member', but nothing reorders or isolates it. If the earlier member keeps boarding without landing or being held as a red culprit, overlap::order puts it ahead again, and the PR is re-ejected for member-induced drift every train with no hold and no landing-drought cause. Classification also compares against the train's initial main, so a member landed mid-run costs one extra re-ejection; the implementer listed both as residual risks. Follow-up: record a soft member-induced row, or board the PR alone or first on the next train.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T23:36:24.863574321Z
+modified_at: 2026-11-26T23:36:24.863574321Z
+req_type: Task
+tags:
+- carried-from:BUG-2777
+- finding-hash:35b41cdf
+- from-review:BUG-2777
+relationships:
+- rel_type: References
+  target_id: 01a21923-0137-7800-b20b-147dfab06724
+  created_at: 2026-11-26T23:36:42.698292184Z
+filed_at:
+  code_sha: 7f1fa7dfed0edf8dc9313469364795b5f3f05194
+  branch: pr-4685
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b728c3373d1
+  vendor: claude
+  session: 01a21a342f65
