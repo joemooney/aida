@@ -10,12 +10,12 @@ description: |
   - AC2: a knob `[lanes] cargo_build_jobs` (default unset) sets CARGO_BUILD_JOBS for lane jobs, so each lane's peak memory stays bounded.
   - AC3: lane-job admission also checks available memory at JOB start (not only at lane launch) and waits when below a configurable floor.
   - AC4: a test showing that with max_compile_concurrency=2, a third compile job waits until one finishes.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-26T04:58:25.013184076Z
+modified_at: 2026-11-26T05:15:35.965090357Z
 req_type: Task
 tags:
 - dell1
@@ -53,6 +53,12 @@ comments:
   modified_at: 2026-11-26T04:58:25.013184076Z
   session_id: 01a216198508
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21647-d49d-7e02-9f5f-1bd860b368ba
+  author: aida-publication-done
+  content: Implementer push dcc174ec7be6 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T05:15:35.965089448Z
+  modified_at: 2026-11-26T05:15:35.965089448Z
+  session_id: 01a216198508
 history:
 - id: 01a214b7-0985-7a31-bf46-c7f9bea6c072
   author: joe
@@ -72,6 +78,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21647-d49d-7e02-9f5f-1bc32efd7a2a
+  author: aida-publication-done
+  timestamp: 2026-11-26T05:15:35.965085324Z
+  session_id: 01a216198508
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f03f5255aae977b47ceb09666ba5e0dc2024de6d
