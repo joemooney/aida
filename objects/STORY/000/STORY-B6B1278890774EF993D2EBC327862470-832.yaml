@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T04:17:51.028821141Z
+modified_at: 2026-11-26T04:20:23.848456750Z
 req_type: Story
 tags:
 - agents
@@ -32,6 +32,17 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 09:50): APPROVED, HIGH, standard, drive. Evidence: on 2026-11-25 at 05:27 the codex limit killed 5 lanes mid-round. They left retained leases that blocked every relaunch until a manual cleanup about 4h later, and review dispatch also silently used codex. Binding notes: (1) Detection uses the vendor''s exit/stream signal, never free-text guessing alone; record the reset time when the vendor gives one. (2) Ending a lane on a usage limit pushes its partial work to a side branch first, then ends cleanly with no retained lease. (3) fallback_vendor is opt-in per project config (default none = refuse launches until the reset) and applies to reviews too. (4) Auto-recover at the reset time, with an event. Slices ≤300.'
   created_at: 2026-11-25T16:46:43.335592640Z
   modified_at: 2026-11-25T16:46:43.335592640Z
+- id: 01a21615-95f1-7901-877b-1e01ffc08b63
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:20):
+    # STORY-3134 (approved; product-15 2026-11-25 21:25, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch vendor-outage-typed. STANDARD. <=300 changed lines; if it doesn't fit, ship a first slice with (Refs STORY-3134) and say what remains in the PR body, otherwise use the completing (STORY-3134) trailer.
+    READ FIRST: `aida show STORY-3134 --comments` (evidence, ACs, rulings). Slice 1 = AC1+AC2 only (detect the usage-limit error, end lanes cleanly with no retained lease, record the vendor unavailable-until, refuse launches up front). The fallback vendor (AC3) and auto-recover (AC4) can be slice 2.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T04:20:23.848456750Z
+  modified_at: 2026-11-26T04:20:23.848456750Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
