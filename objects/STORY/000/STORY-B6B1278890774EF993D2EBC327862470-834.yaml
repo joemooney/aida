@@ -1,0 +1,34 @@
+id: 01a215dc-fc11-79e3-8698-4fd1fc947461
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-834
+agreed_id: STORY-3148
+title: 'aida dev provisional <branch|PR>: run a fail-closed outage fix as the live binary before review, with a visible marker, service rebind, autobuild guard, auto-revert on landing and rollback'
+description: |
+  Joe 2026-11-25 (relayed by advisor-122 20:16; drafted by product-15). Today's outage lesson: during a landing or tooling outage, run a FAIL-CLOSED fix as the live binary at once, while its PR goes through normal review and the train, and roll back instantly if it misbehaves. What exists now: `aida dev build` promotes only from a clean main (or an integration worktree); `aida dev activate` only changes one shell's PATH (it does NOT change live, contrary to what the advisor assumed today); `aida dev rollback` restores the previous pair. So today's provisional run of BUG-2767 (#4615) depended on advisor memory and hand steps.
+
+  ## Acceptance
+  - AC1: `aida dev provisional <branch|PR>` builds and smoke-tests the named head in a fresh worktree, then promotes it as LIVE with a PROVISIONAL marker naming the PR, head SHA, operator and reason. The marker is shown in `aida dev status`, train-status and `aida doctor`.
+  - AC2: it refuses unless an operator runs it (TTY or the operator deputy), and records who and why. It refuses a PR whose diff touches gate/approval permissiveness (only fail-closed change classes are allowed), unless `--override "<reason>"` is given, and the override is recorded.
+  - AC3: after promotion, the long-running services (review-watch, auto-train / advisor loops, deputy runners, relays) are restarted or rebound so they actually run the provisional binary; the command reports which were rebound and which still need a manual restart.
+  - AC4: the scheduled `aida dev build --if-main-green` (autobuild) does NOT silently overwrite a provisional live: it skips with a loud notice. When the PR lands on main, the next green main build replaces the provisional and clears the marker automatically; a TTL (default 24h) also reverts to green main, with a notice.
+  - AC5: `aida dev rollback` restores the previous pair and clears the PROVISIONAL marker.
+  - AC6: an operator doc section, "Outage playbook: provisional live" (when to use it, the fail-closed rule, how to roll back), in the operator docs.
+  - AC7: tests for the refusal rules (non-operator; permissive diff without override), autobuild skip, auto-revert on landing, and rollback clearing the marker.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T03:18:53.713795642Z
+modified_at: 2026-11-26T03:18:53.713795642Z
+req_type: Story
+tags:
+- dev
+- landing
+- operator
+- outage
+filed_at:
+  code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 467f62335ce
+  vendor: claude
