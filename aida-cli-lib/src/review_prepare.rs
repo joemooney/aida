@@ -84,14 +84,14 @@ pub struct ReviewPrepareArgs {
     pub anchor_findings: Option<PathBuf>,
 
     /// Execute automated batch code review across the prepared batches using
-    /// the resolved project agent (`claude`, `codex`, `antigravity`/`agy`, or `gemini`)
+    /// the resolved project agent (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`)
     /// or `AIDA_REVIEW_RUNNER_CMD`, automatically anchoring reported `existing_code`
     /// snippets to exact 1-based line numbers and verifying 100% file coverage.
     // trace:STORY-3120 | ai:antigravity
     #[clap(long)]
     pub run_review: bool,
 
-    /// Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
+    /// Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`).
     /// When omitted, resolves from `.aida/review-rules.toml` (`default_agent`),
     /// `[agents] vendor` (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`),
     /// or the project's `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo).
@@ -118,7 +118,7 @@ pub struct ReviewPrepareArgs {
     #[clap(long)]
     pub adversarial: bool,
 
-    /// Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
+    /// Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`).
     /// When omitted in `--adversarial` mode, automatically selects an opposing enabled vendor from
     /// `.aida/config.toml` if multiple agents are enabled, or falls back to the Finder agent.
     // trace:STORY-3120 | ai:antigravity
@@ -132,8 +132,8 @@ pub struct ReviewPrepareArgs {
     pub challenger_model: Option<String>,
 
     /// Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of
-    /// `--adversarial` (enables same-model asymmetric-effort adversarial review — e.g. Finder at
-    /// `medium`, Challenger at `high`).
+    /// `--adversarial`. When omitted in single-vendor mode (Finder and Challenger share the same agent),
+    /// AIDA automatically steps up Challenger reasoning effort by one tier (`low` -> `medium` -> `high` -> `xhigh`).
     // trace:STORY-3120 | ai:antigravity
     #[clap(long, value_name = "LEVEL")]
     pub challenger_effort: Option<String>,

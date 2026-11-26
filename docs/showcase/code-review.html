@@ -438,9 +438,9 @@
         <div class="kpi-foot"><span class="badge badge-elite">2-Pass</span> Exact + whitespace fallback</div>
       </div>
       <div class="kpi-cell">
-        <div class="kpi-label">Reviewer seats</div>
-        <div class="kpi-value">3 vendors</div>
-        <div class="kpi-foot"><span class="badge badge-elite">Multi-Vendor</span> Claude · Codex · Antigravity</div>
+        <div class="kpi-label">Reviewer seats &amp; CLIs</div>
+        <div class="kpi-value">6 agents</div>
+        <div class="kpi-foot"><span class="badge badge-elite">Multi-Agent</span> Claude · Codex · Agy · Gemini · OpenCode · Pi</div>
       </div>
     </section>
 
@@ -808,13 +808,19 @@
                 <td><strong>Two-Pass Adversarial Verification</strong></td>
                 <td>Single-pass prompt (rubber-stamps own blind spots)</td>
                 <td>Single-vendor LLM post-filter</td>
-                <td><span class="badge badge-elite">Red-Team Finder → Blue-Team Challenger</span> (<code>--adversarial</code>) with auto cross-vendor or cross-model opposition (<code>--model</code> / <code>--challenger-model</code>)</td>
+                <td><span class="badge badge-elite">Red-Team Finder → Blue-Team Challenger</span> (<code>--adversarial</code>) with auto cross-vendor opposition, single-vendor auto effort step-up (<code>low</code> → <code>medium</code> → <code>high</code> → <code>xhigh</code>), or cross-model pairing (<code>--model</code> / <code>--challenger-model</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>CodeGraph AST &amp; Dependency Manifest Context</strong></td>
+                <td>Diff hunks only (blind to callers &amp; declared dependencies)</td>
+                <td>Full changed file only; no cross-file AST caller bodies or manifest injection</td>
+                <td><span class="badge badge-elite">AST Call-Graph + Manifests</span> auto-injects <code>.codegraph/codegraph.db</code> untouched caller/callee 35-line bodies + nearest <code>pyproject.toml</code> / <code>Cargo.toml</code> / <code>package.json</code> / <code>go.mod</code> / <code>pom.xml</code></td>
               </tr>
               <tr>
                 <td><strong>Turnkey CI, SARIF 2.1.0 &amp; PR/MR Comments</strong></td>
                 <td>Manual copy-paste</td>
                 <td>Requires separate LLM provider credentials</td>
-                <td><span class="badge badge-elite">Native CI Runner</span> (<code>--run-review --sarif &lt;path&gt; --post-comment</code>) using project's <code>aida init</code> default agent (<code>codex</code>, <code>claude</code>, <code>agy</code>, <code>gemini</code>)</td>
+                <td><span class="badge badge-elite">4-Thread Parallel CI Runner</span> (<code>--run-review --sarif &lt;path&gt; --post-comment</code>) supporting 6 native agent CLIs (<code>claude</code>, <code>codex</code>, <code>agy</code>, <code>gemini</code>, <code>opencode</code>, <code>pi</code>) + <code>AIDA_REVIEW_RUNNER_CMD</code></td>
               </tr>
             </tbody>
           </table>
@@ -970,17 +976,17 @@ aida review prepare --scan --path aida-core/src --run-review</code></pre>
                 <tr>
                   <td><strong>1 (Highest)</strong></td>
                   <td><code>--agent</code> / <code>--model</code></td>
-                  <td>Per-command CLI override (<code>claude</code>, <code>codex</code>, <code>agy</code>, <code>gemini</code>).</td>
+                  <td>Per-command CLI override (<code>claude</code>, <code>codex</code>, <code>agy</code>, <code>gemini</code>, <code>opencode</code>, or <code>pi</code>).</td>
                 </tr>
                 <tr>
                   <td><strong>2</strong></td>
                   <td><code>AIDA_REVIEW_AGENT</code> / <code>_MODEL</code></td>
-                  <td>CI or shell environment variable override (or <code>AIDA_REVIEW_RUNNER_CMD</code>).</td>
+                  <td>CI or shell environment variable override (or custom command via <code>AIDA_REVIEW_RUNNER_CMD</code>).</td>
                 </tr>
                 <tr>
                   <td><strong>3</strong></td>
                   <td><code>.aida/review-rules.toml</code></td>
-                  <td>Project review config (<code>default_agent</code>, <code>default_model</code>).</td>
+                  <td>Project review config (<code>default_agent</code>, <code>default_model</code>, <code>challenger_agent</code>, <code>challenger_model</code>).</td>
                 </tr>
                 <tr>
                   <td><strong>4</strong></td>
@@ -990,12 +996,12 @@ aida review prepare --scan --path aida-core/src --run-review</code></pre>
                 <tr>
                   <td><strong>5</strong></td>
                   <td><code>[AI:author]</code> Auto-Opposition</td>
-                  <td>On dual-vendor repos (<code>claude</code> + <code>codex</code>), automatically picks the <strong>non-author</strong> vendor from commit/trace tags.</td>
+                  <td>On multi-agent repos (<code>claude</code>, <code>codex</code>, <code>opencode</code>, <code>pi</code>, etc.), automatically picks an enabled <strong>non-author</strong> vendor from commit/trace tags.</td>
                 </tr>
                 <tr>
                   <td><strong>6</strong></td>
                   <td><code>aida init</code> <code>[agents] enabled</code></td>
-                  <td>If initialized with <code>aida init --agents codex</code>, automatically defaults to <code>codex</code>.</td>
+                  <td>If initialized with <code>aida init --agents codex</code>, automatically defaults to <code>codex</code> and steps up Challenger reasoning effort (<code>low</code> → <code>medium</code> → <code>high</code> → <code>xhigh</code>) in <code>--adversarial</code> mode.</td>
                 </tr>
               </tbody>
             </table>
@@ -1016,15 +1022,26 @@ aida review prepare --scan --path aida-core/src --run-review</code></pre>
             Single-pass AI reviews either miss subtle bugs or flood PRs with speculative noise. <code>--adversarial</code> runs two opposing passes per batch:
           </p>
           <ul style="font-size:13px;line-height:1.6;padding-left:18px;margin-bottom:14px;">
-            <li><strong>Pass 1 (Red-Team Finder)</strong>: Hunts aggressively for failure modes (<code>fail-open</code>, <code>absent-evidence-reads-as-good</code>, ANSSI/Tokio/SQL hazards, and AIDA <code>## Acceptance</code> drift) with mandatory verbatim <code>existing_code</code> quotes.</li>
-            <li><strong>Pass 2 (Blue-Team Challenger)</strong>: Inspects every candidate finding against full file context, type bounds, and callers to <strong>disprove</strong> false positives before they ever reach the developer.</li>
+            <li><strong>Pass 1 (Red-Team Finder)</strong>: Hunts aggressively for failure modes (<code>fail-open</code>, <code>absent-evidence-reads-as-good</code>, ANSSI/Tokio/SQL hazards, and AIDA <code>## Acceptance</code> drift) with mandatory verbatim <code>existing_code</code> quotes, nearest package-manifest context (<code>pyproject.toml</code>, <code>Cargo.toml</code>, <code>package.json</code>, <code>go.mod</code>, <code>pom.xml</code>), and CodeGraph 35-line untouched caller/callee bodies.</li>
+            <li><strong>Pass 2 (Blue-Team Challenger)</strong>: Inspects every candidate finding against full file context, type bounds, and callers under the 3-condition rubric (<em>Technically True + Change-Relevant + Non-Trivial</em>) to <strong>disprove</strong> false positives before they ever reach the developer.</li>
+            <li><strong>Single-Vendor / Enterprise Work Environments (Codex-Only, OpenCode, Pi)</strong>: When only one vendor is available at work, AIDA creates strong adversarial separation across three orthogonal dimensions:
+              <ol style="margin-top:4px;margin-bottom:4px;padding-left:18px;">
+                <li><strong>Automatic Reasoning-Effort Step-Up</strong>: When Finder and Challenger share the same vendor and <code>--challenger-effort</code> is not pinned, AIDA automatically steps up Challenger reasoning effort by one tier (<code>low</code> → <code>medium</code> → <code>high</code> → <code>xhigh</code>).</li>
+                <li><strong>Cross-Model Pairing</strong>: Pair a fast coding Finder with a deep-reasoning Challenger on the same CLI (e.g. <code>--agent codex --model gpt-5.3-codex --challenger-model o3</code>).</li>
+                <li><strong>Multi-CLI Pairing</strong>: Pair <code>codex</code> with <code>opencode</code> (<code>opencode run --model &lt;provider/model&gt;</code>), <code>pi</code> (<code>pi --print --model &lt;M&gt; --thinking &lt;LEVEL&gt;</code>), or any internal enterprise gateway via <code>AIDA_REVIEW_RUNNER_CMD</code>.</li>
+              </ol>
+            </li>
           </ul>
-<pre><code># Enterprise Codex-only setup: pair fast Finder with high-reasoning Challenger
-aida review prepare --from main --run-review --adversarial \
-  --model gpt-5.3-codex --challenger-model o3
+<pre><code># 1. Codex-only zero-flag setup: Finder runs at medium, Challenger auto-steps up to high
+aida review prepare --from main --run-review --adversarial --agent codex
 
-# Dual-vendor setup: Claude finds -> Codex challenges (automatic when both enabled)
-aida review prepare --from main --run-review --adversarial</code></pre>
+# 2. Codex-only cross-model setup: fast Finder (gpt-5.3-codex) -> deep Challenger (o3)
+aida review prepare --from main --run-review --adversarial \
+  --agent codex --model gpt-5.3-codex --challenger-model o3
+
+# 3. Pair Codex with OpenCode or Pi (or dual-vendor Claude -> Codex)
+aida review prepare --from main --run-review --adversarial \
+  --agent codex --challenger-agent opencode --challenger-model anthropic/claude-sonnet-4-5</code></pre>
         </div>
 
         <div class="card">
@@ -1107,22 +1124,22 @@ aida review prepare --telemetry-report</code></pre>
               <tr>
                 <td class="code-cell">--run-review</td>
                 <td>Execution</td>
-                <td>Execute automated batch reviews, anchor quoted snippets to exact 1-based lines, and verify 100% file coverage.</td>
+                <td>Execute automated batch reviews (up to 4 batches concurrently in parallel), inject nearest package manifests &amp; CodeGraph caller/callee bodies, consolidate cross-batch findings, anchor snippets to exact 1-based lines, and verify 100% file coverage.</td>
               </tr>
               <tr>
                 <td class="code-cell">--agent &lt;AGENT&gt;</td>
                 <td>Execution</td>
-                <td>Agent CLI for <code>--run-review</code> (<code>claude</code>, <code>codex</code>, <code>antigravity</code>/<code>agy</code>, <code>gemini</code>). Defaults to project configuration.</td>
+                <td>Agent CLI for <code>--run-review</code> (<code>claude</code>, <code>codex</code>, <code>antigravity</code>/<code>agy</code>, <code>gemini</code>, <code>opencode</code>, or <code>pi</code>). Defaults to project configuration.</td>
               </tr>
               <tr>
                 <td class="code-cell">--model &lt;MODEL&gt;</td>
                 <td>Execution</td>
-                <td>Model override passed to the review runner CLI (e.g. <code>gpt-5.3-codex</code>, <code>o3</code>, <code>claude-opus-4-6</code>).</td>
+                <td>Model override passed to the review runner CLI (e.g. <code>gpt-5.3-codex</code>, <code>o3</code>, <code>claude-opus-4-6</code>, <code>anthropic/claude-sonnet-4-5</code>).</td>
               </tr>
               <tr>
                 <td class="code-cell">--effort &lt;LEVEL&gt;</td>
                 <td>Execution</td>
-                <td>Reasoning effort level (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>) passed via <code>-c model_reasoning_effort=&lt;LEVEL&gt;</code> (Codex) or <code>--effort &lt;LEVEL&gt;</code> (Claude/Antigravity).</td>
+                <td>Reasoning effort level (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>) passed via <code>-c model_reasoning_effort=&lt;LEVEL&gt;</code> (Codex), <code>--effort &lt;LEVEL&gt;</code> (Claude/Antigravity), or <code>--thinking &lt;LEVEL&gt;</code> (Pi).</td>
               </tr>
               <tr>
                 <td class="code-cell">--adversarial</td>
@@ -1132,7 +1149,7 @@ aida review prepare --telemetry-report</code></pre>
               <tr>
                 <td class="code-cell">--challenger-agent &lt;AGENT&gt;</td>
                 <td>Adversarial</td>
-                <td>Agent CLI for Pass 2 Challenger (auto-selects opposing enabled vendor when omitted).</td>
+                <td>Agent CLI for Pass 2 Challenger (<code>claude</code>, <code>codex</code>, <code>antigravity</code>/<code>agy</code>, <code>gemini</code>, <code>opencode</code>, or <code>pi</code>; auto-selects opposing enabled vendor when omitted).</td>
               </tr>
               <tr>
                 <td class="code-cell">--challenger-model &lt;MODEL&gt;</td>
@@ -1142,7 +1159,7 @@ aida review prepare --telemetry-report</code></pre>
               <tr>
                 <td class="code-cell">--challenger-effort &lt;LEVEL&gt;</td>
                 <td>Adversarial</td>
-                <td>Reasoning effort override for Pass 2 Challenger (enables same-model asymmetric-effort review — e.g. Finder at <code>medium</code>, Challenger at <code>high</code>).</td>
+                <td>Reasoning effort override for Pass 2 Challenger. When omitted in single-vendor mode, AIDA automatically steps up Challenger effort by one tier (<code>low</code> → <code>medium</code> → <code>high</code> → <code>xhigh</code>).</td>
               </tr>
               <tr>
                 <td class="code-cell">--fail-on &lt;SEVERITY&gt;</td>
@@ -1379,10 +1396,10 @@ aida review prepare --telemetry-report</code></pre>
                 <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
               </tr>
               <tr>
-                <td><strong>7. CodeGraph AST Blast-Radius &amp; Call-Graph Enrichment</strong></td>
-                <td>Program-analysis call-graph impact analysis</td>
-                <td>Diff-only prompts blind to untouched callers across the repository</td>
-                <td><code>build_codegraph_review_context</code> &amp; <code>format_codegraph_batch_context_markdown</code>: automatic read-only SQLite query against <code>.codegraph/codegraph.db</code> intersecting diff hunk line ranges with AST symbols to inject inbound external callers (flagging callers <code>UNTOUCHED in diff</code> for <code>contract-drift</code>) and outbound callee signatures.</td>
+                <td><strong>7. CodeGraph AST Caller/Callee Body Slicing &amp; Manifest Context</strong></td>
+                <td>Program-analysis call-graph impact &amp; dependency declaration verification</td>
+                <td>Diff-only prompts blind to untouched callers and root package manifests across the repository</td>
+                <td><code>build_codegraph_review_context</code>, <code>slice_external_symbol_body</code> &amp; <code>collect_batch_dependency_manifests</code>: automatic read-only SQLite query against <code>.codegraph/codegraph.db</code> injecting inbound external callers (plus up to 35 lines of source body for untouched callers/callees) and nearest package manifests (<code>pyproject.toml</code>, <code>Cargo.toml</code>, <code>package.json</code>, <code>go.mod</code>, <code>pom.xml</code>).</td>
                 <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
               </tr>
             </tbody>

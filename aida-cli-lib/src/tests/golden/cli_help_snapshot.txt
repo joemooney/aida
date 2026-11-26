@@ -22842,15 +22842,16 @@ Options:
 
       --run-review
           Execute automated batch code review across the prepared batches using the resolved project
-          agent (`claude`, `codex`, `antigravity`/`agy`, or `gemini`) or `AIDA_REVIEW_RUNNER_CMD`,
-          automatically anchoring reported `existing_code` snippets to exact 1-based line numbers
-          and verifying 100% file coverage
+          agent (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`) or
+          `AIDA_REVIEW_RUNNER_CMD`, automatically anchoring reported `existing_code` snippets to
+          exact 1-based line numbers and verifying 100% file coverage
 
       --agent <AGENT>
-          Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`).
-          When omitted, resolves from `.aida/review-rules.toml` (`default_agent`), `[agents] vendor`
-          (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`), or the project's
-          `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo)
+          Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, `gemini`,
+          `opencode`, or `pi`). When omitted, resolves from `.aida/review-rules.toml`
+          (`default_agent`), `[agents] vendor` (`.aida/agents.toml` / `.aida/config.toml` /
+          `~/.aida/agents.toml`), or the project's `aida init` `[agents] enabled` list (e.g. `codex`
+          on a Codex-only repo)
 
       --model <MODEL>
           Model to pass to the review runner CLI (e.g. `o3`, `gpt-5.3-codex`, `claude-opus-4-6`).
@@ -22869,9 +22870,9 @@ Options:
 
       --challenger-agent <AGENT>
           Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`,
-          or `gemini`). When omitted in `--adversarial` mode, automatically selects an opposing
-          enabled vendor from `.aida/config.toml` if multiple agents are enabled, or falls back to
-          the Finder agent
+          `gemini`, `opencode`, or `pi`). When omitted in `--adversarial` mode, automatically
+          selects an opposing enabled vendor from `.aida/config.toml` if multiple agents are
+          enabled, or falls back to the Finder agent
 
       --challenger-model <MODEL>
           Optional model override for Pass 2 of `--adversarial` (enables same-vendor, cross-model
@@ -22879,8 +22880,9 @@ Options:
 
       --challenger-effort <LEVEL>
           Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of
-          `--adversarial` (enables same-model asymmetric-effort adversarial review — e.g. Finder at
-          `medium`, Challenger at `high`)
+          `--adversarial`. When omitted in single-vendor mode (Finder and Challenger share the same
+          agent), AIDA automatically steps up Challenger reasoning effort by one tier (`low` ->
+          `medium` -> `high` -> `xhigh`)
 
       --fail-on <SEVERITY>
           Fail with a non-zero exit code if any confirmed finding has severity at or above this
@@ -56318,7 +56320,7 @@ Working on aida itself
       {
         "name": "agent",
         "takes_value": true,
-        "help": "Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`). When omitted, resolves from `.aida/review-rules.toml` (`default_agent`), `[agents] vendor` (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`), or the project's `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo)"
+        "help": "Agent CLI to use for `--run-review` (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`). When omitted, resolves from `.aida/review-rules.toml` (`default_agent`), `[agents] vendor` (`.aida/agents.toml` / `.aida/config.toml` / `~/.aida/agents.toml`), or the project's `aida init` `[agents] enabled` list (e.g. `codex` on a Codex-only repo)"
       },
       {
         "name": "anchor-findings",
@@ -56333,12 +56335,12 @@ Working on aida itself
       {
         "name": "challenger-agent",
         "takes_value": true,
-        "help": "Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`, or `gemini`). When omitted in `--adversarial` mode, automatically selects an opposing enabled vendor from `.aida/config.toml` if multiple agents are enabled, or falls back to the Finder agent"
+        "help": "Optional agent CLI for Pass 2 of `--adversarial` (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`). When omitted in `--adversarial` mode, automatically selects an opposing enabled vendor from `.aida/config.toml` if multiple agents are enabled, or falls back to the Finder agent"
       },
       {
         "name": "challenger-effort",
         "takes_value": true,
-        "help": "Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of `--adversarial` (enables same-model asymmetric-effort adversarial review — e.g. Finder at `medium`, Challenger at `high`)"
+        "help": "Optional reasoning effort override (`low`, `medium`, `high`, or `xhigh`) for Pass 2 of `--adversarial`. When omitted in single-vendor mode (Finder and Challenger share the same agent), AIDA automatically steps up Challenger reasoning effort by one tier (`low` -> `medium` -> `high` -> `xhigh`)"
       },
       {
         "name": "challenger-model",
@@ -56423,7 +56425,7 @@ Working on aida itself
       {
         "name": "run-review",
         "takes_value": false,
-        "help": "Execute automated batch code review across the prepared batches using the resolved project agent (`claude`, `codex`, `antigravity`/`agy`, or `gemini`) or `AIDA_REVIEW_RUNNER_CMD`, automatically anchoring reported `existing_code` snippets to exact 1-based line numbers and verifying 100% file coverage"
+        "help": "Execute automated batch code review across the prepared batches using the resolved project agent (`claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`) or `AIDA_REVIEW_RUNNER_CMD`, automatically anchoring reported `existing_code` snippets to exact 1-based line numbers and verifying 100% file coverage"
       },
       {
         "name": "sarif",
