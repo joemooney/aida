@@ -673,15 +673,6 @@ repair_check = "cargo check --profile agent --workspace --tests --locked"
 [pr-head]
 protect = true
 
-# trace:STORY-2849 | ai:codex
-[landing_health]
-enabled = true
-landing_gap_minutes = 90
-shared_failure_min_prs = 3
-step_headroom_ratio = 0.8
-# Shared-failure and successful-duration lookback.
-window_minutes = 1440
-
 # Landing-drought watchdog (the defaults, spelled out). action = "report"
 # lists findings without failing the job, so nothing is routed.
 # trace:STORY-3131 | ai:claude
@@ -690,6 +681,15 @@ enabled = true
 drought_minutes = 60
 ready_dwell_minutes = 30
 action = "investigate"
+
+# trace:STORY-2849 | ai:codex
+[landing_health]
+enabled = true
+landing_gap_minutes = 90
+shared_failure_min_prs = 3
+step_headroom_ratio = 0.8
+# Shared-failure and successful-duration lookback.
+window_minutes = 1440
 
 [[schedule.jobs]]
 name = "landing-health-guard"
