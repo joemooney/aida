@@ -12,12 +12,12 @@ description: |
   - AC1: `--run-review` errors print the FULL cause chain (e.g. {:#} / chain()), naming the vendor, pass (finder/challenger), batch, and the concrete cause (deadline exceeded after Ns, output cap, spawn refused: <why>, exit code + stderr tail, parse error).
   - AC2: the "AIDA_REVIEW_RUNNER_CMD runs both passes" note appears ONLY when that variable is actually set; with no --agent, the default vendor resolution is stated ("using <vendor> from [agents] / seat config").
   - AC3: find and fix why a claude runner batch on a ~560-line PR hits the 15-min deadline (e.g. the claude CLI waiting on a prompt or auth in the cleared env, or a missing non-interactive flag); a test with a stub runner for each of the AC1 causes.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T20:59:08.961707239Z
+modified_at: 2026-11-26T21:39:05.333633364Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -303,6 +303,20 @@ history:
   session_id: 01a21945a85f
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a219cc-3dac-7f80-a1e6-bde82372d2eb
+  author: aida-auto-bump
+  timestamp: 2026-11-26T21:39:05.260337270Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a219cc-3df5-7443-84e5-308248525264
+  timestamp: 2026-11-26T21:39:05.333629356Z
+  agent: aida
+  commit_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
+  summary: 'APPROVED at 4c6c4a8a4988 (CI pending at review time). BUG-2775 ACs: AC1 [behavioral-test] verified by review_prepare.rs bug2775_runner_errors_name_runner_pass_batch_and_cause: runner_failure gives one line ''<vendor|AIDA_REVIEW_RUNNER_CMD> <pass> pass, <review|challenge> batch N: {e:#}'' at both finder and challenger sites; stub runners cover deadline, output cap, exit code + one-line stderr tail (stderr_tail, char-boundary safe), parse error, refused relative runner, and a custom exit 4. AC2 [behavioral-test] verified by review_challenger.rs bug2775_runner_cmd_note_only_when_the_variable_is_set (note gated on runner_cmd_set, which treats an empty value as unset, matching run_review_agent) and bug2775_run_review_agent_resolves_and_states_the_default (flag > runner cmd > [agents] vendor > DEFAULT_REVIEW_VENDOR; ''run review: using <vendor> from <source>'' on stderr). AC3 [behavioral-test] verified: root cause (env_clear dropped the proxy route) fixed by the case-insensitive PROXY_ENV allowlist, asserted in s3a_runner_spawn_contract with GH_TOKEN, the seat grant and the other vendor key still stripped; the advisor addendum is verified by bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast (stdin EOF; a /dev/tty prompt fails fast with a tty stderr tail). setsid in pre_exec keeps pgid == pid, so the kill(-group) path is unchanged; spawn returns after exec, so setsid has run before any kill. Strict-tier probe: the only allowlist widening is the proxy route; no refusal test was weakened. Type protocol BUG-2775 (PR touches at least one test file): met (inline test modules in all three source files, plus ratchet-set.json). Two follow-ups are deferred as non-blocking.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
@@ -315,4 +329,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T17:26:33.187817941Z
   implemented_by: dirtlab
+  completed_at: 2026-11-26T21:39:05.260329470Z
+  completion_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
   reopened_at_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
