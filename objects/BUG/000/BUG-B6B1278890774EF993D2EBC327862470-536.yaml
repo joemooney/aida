@@ -12,12 +12,12 @@ description: |
   - AC1: `--run-review` errors print the FULL cause chain (e.g. {:#} / chain()), naming the vendor, pass (finder/challenger), batch, and the concrete cause (deadline exceeded after Ns, output cap, spawn refused: <why>, exit code + stderr tail, parse error).
   - AC2: the "AIDA_REVIEW_RUNNER_CMD runs both passes" note appears ONLY when that variable is actually set; with no --agent, the default vendor resolution is stated ("using <vendor> from [agents] / seat config").
   - AC3: find and fix why a claude runner batch on a ~560-line PR hits the 15-min deadline (e.g. the claude CLI waiting on a prompt or auth in the cleared env, or a missing non-interactive flag); a test with a stub runner for each of the AC1 causes.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T18:22:53.749223998Z
+modified_at: 2026-11-26T19:12:19.601161167Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -189,6 +189,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a21945-e091-7c51-ba9e-69ad66c34ed9
+  author: aida-session-start
+  timestamp: 2026-11-26T19:12:19.601158916Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
