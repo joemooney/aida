@@ -281,8 +281,29 @@ pub(crate) fn scan(
         });
     }
     let now = DateTime::<Utc>::from(exec.clock().wall_now());
-    let findings = evaluate(&ready, &policy, now, last_landing(root)?);
+    let mut findings = evaluate(&ready, &policy, now, last_landing(root)?);
+    findings.extend(retained_findings(
+        crate::review_watch::service::retained_review_blocks(root, now),
+    ));
     Ok((policy, findings))
+}
+
+/// A review the watcher holds behind a kept reviewer checkout starves the
+/// landing pipeline upstream of any approval. trace:BUG-2776 | ai:claude
+pub(crate) fn retained_findings(blocks: Vec<(String, String)>) -> Vec<DoctorFinding> {
+    blocks
+        .into_iter()
+        .map(|(id, line)| {
+            let (summary, action) = line.split_once("; fix: ").unwrap_or((&line, ""));
+            DoctorFinding {
+                category: CATEGORY.into(),
+                id,
+                summary: summary.into(),
+                action: action.into(),
+                safe_heal: false,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

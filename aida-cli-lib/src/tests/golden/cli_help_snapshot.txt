@@ -22866,6 +22866,10 @@ Options:
       --fail-on <SEVERITY>
           Exit with an error when any finding meets or exceeds this severity
 
+      --post-comment
+          Post the Markdown report as a comment on the `--pr` change. Off unless given; agent text
+          in the comment is code-fenced so it renders inert
+
       --json
           Emit machine-readable JSON output
 
@@ -56365,6 +56369,11 @@ Working on aida itself
         "name": "path",
         "takes_value": true,
         "help": "Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable (`--path aida-core/src --path aida-cli-lib/src`)"
+      },
+      {
+        "name": "post-comment",
+        "takes_value": false,
+        "help": "Post the Markdown report as a comment on the `--pr` change. Off unless given; agent text in the comment is code-fenced so it renders inert"
       },
       {
         "name": "pr",
