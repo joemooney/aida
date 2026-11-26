@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T17:26:52.394355668Z
+modified_at: 2026-11-26T17:31:01.559673730Z
 req_type: Story
 tags:
 - integration
@@ -1331,6 +1331,21 @@ comments:
   modified_at: 2026-11-26T17:26:52.394355668Z
   session_id: 01a218c693e2
   harness_version: 2.1.319 (Claude Code)
+- id: 01a218e9-61a2-7811-8e5f-9131f1de8cd1
+  author: joe
+  content: |-
+    Integration pre-check: PR #4673 @b60031ed (STORY-3120 S5b; Refs) — PASS on security; one SHOULD-FIX (title) and two nits
+    - A (binding deadline AC): gh_stdin stages the body in an unlinked tempfile as stdin (no writer thread to block) and runs through bounded_process::command_output_with_timeout_detail. The timeout is remaining_call_budget(GH_POST_TIMEOUT=60s): the scoped forge deadline, capped at 60s; an already-expired deadline refuses before spawn. TimedOut/SpawnFailed are errors. Test: a fake gh sleeping 30s under a 1s forge deadline fails with "timed out" in under 15s. The same test pins argv to `pr comment 9 --body-file - -R acme/widgets` and checks the body arrives on stdin.
+    - B: git_text adds the global `--literal-pathspecs` (before the subcommand) to every call, so repo-controlled names such as `.e*`, `a[b]`, `x?` and a rename old path `o[1]` match only themselves. The test proves each glob's decoy stays out of the prompt.
+    - E: spec title and status, playbook id, title and pattern, batch label and playbook lists, exclusion reasons, head, challenger agent and note are all code spans now; the hostile test covers @batch/@pb/@glob/@status. Still raw: acceptance_markdown and playbook checklists. They are store / trusted-base Markdown that needs to render; accepted.
+    - G: cut_balanced/fence_opener track ~~~ fences, treat an inline ```x``` at a line start as not a fence, and never let a shorter run close a longer fence; tested.
+    SHOULD-FIX (before merge, cosmetic but lands in history): the PR title says "challenger override, ... docs", but the PR ships only A+B+E+G. C (--challenger-agent + fallback), D (rename-path exclusions) and F (docs) are deferred to S5c. Retitle to e.g. "feat(review): S5b posting deadline, literal pathspecs, code-spanned bundle titles (Refs STORY-3120)", which matches the commit subject, so the squash subject doesn't claim work that isn't there.
+    Nit 1: the binding AC also said "no child is left running". The test asserts only the error and elapsed time; asserting the fake gh pid is gone (or that its sleep was killed) would close it.
+    Nit 2: --literal-pathspecs applies to `--scan --path <p>` too, so a glob passed as --path now matches literally. That is probably the safer default; mention it in the S5c docs (F).
+  created_at: 2026-11-26T17:31:01.559673730Z
+  modified_at: 2026-11-26T17:31:01.559673730Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
