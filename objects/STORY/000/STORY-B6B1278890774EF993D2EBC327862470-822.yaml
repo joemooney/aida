@@ -8,12 +8,12 @@ description: |
   ## Acceptance (to decide)
   - AC1: Define the reap policy for clones whose only commits are published on an origin branch with a closed-unmerged PR: keep forever, reap after N days with a recorded salvage pointer (origin branch + PR), or move to ~/salvage automatically. The decision is recorded on this spec.
   - AC2: Hygiene reports these as "parked: published on <branch>, PR #N closed unmerged" (not a failure) until the policy is decided.
-status: InProgress
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T04:57:16.891279294Z
-modified_at: 2026-11-25T22:45:48.698367344Z
+modified_at: 2026-11-26T00:16:16.536166595Z
 req_type: Story
 tags:
 - hygiene
@@ -571,6 +571,11 @@ comments:
   created_at: 2026-11-25T22:45:48.698361900Z
   modified_at: 2026-11-25T22:45:48.698361900Z
   session_id: 01a21493f5a1
+- id: 01a21535-ca98-7b20-a52d-ae8bbee19a26
+  author: lane-recovery
+  content: Reference merge `fa7028b4df8d8ce2aa0e3f270a743cca265b957e` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-26T00:16:16.536154449Z
+  modified_at: 2026-11-26T00:16:16.536154449Z
 history:
 - id: 01a20bf4-ab21-7dc3-a98c-4ded4b7b0978
   author: joe
@@ -829,6 +834,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21535-ca98-7b20-a52d-ae907d3d8a12
+  author: lane-recovery
+  timestamp: 2026-11-26T00:16:16.536166519Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: aaeb386bf51117822caa1d0179ce1f6425ad619f
