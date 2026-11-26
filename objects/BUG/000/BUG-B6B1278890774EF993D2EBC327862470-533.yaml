@@ -9,12 +9,12 @@ description: |
   - AC1: clone creation treats an existing seat pin whose commit is already reachable from the origin base (or any remote branch) as STALE and replaces it, with a log line; a pin protecting a commit that is on NO remote is never replaced (refuse with the salvage hint instead).
   - AC2: session end / seat salvage removes the seat pin together with the clone, so a pin cannot outlive its clone.
   - AC3: tests for the stale-pin replace, the unique-commit refusal, and pin removal on session end.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T17:24:38.632228632Z
+modified_at: 2026-11-26T17:29:20.457258254Z
 req_type: Bug
 tags:
 - lanes
@@ -37,6 +37,13 @@ history:
   author: joe
   timestamp: 2026-11-26T17:22:02.995053869Z
   changes: []
+- id: 01a218e7-9749-7832-8260-608c4d48f02c
+  author: aida-session-start
+  timestamp: 2026-11-26T17:29:20.457257466Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 4d918b28370443f66f32aebc1f6f6074501ad557
