@@ -22852,6 +22852,14 @@ Options:
       --model <MODEL>
           Model for `--run-review`
 
+      --adversarial
+          Have a second agent reproduce or refute each finding. Refuted findings are listed apart
+          and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that
+          did not write the change
+
+      --challenger-effort <LEVEL>
+          Reasoning effort for the `--adversarial` challenger
+
       --sarif <PATH>
           Write a SARIF 2.1.0 report inside the repository
 
@@ -56284,6 +56292,11 @@ Working on aida itself
     "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
     "flags": [
       {
+        "name": "adversarial",
+        "takes_value": false,
+        "help": "Have a second agent reproduce or refute each finding. Refuted findings are listed apart and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that did not write the change"
+      },
+      {
         "name": "agent",
         "takes_value": true,
         "help": "Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)"
@@ -56297,6 +56310,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "challenger-effort",
+        "takes_value": true,
+        "help": "Reasoning effort for the `--adversarial` challenger"
       },
       {
         "name": "commit",
