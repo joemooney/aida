@@ -106,6 +106,10 @@ pub(crate) const DEFAULT_REVIEW_GATED_CHECKS: &[&str] = &[MERGE_HOLD_GATE];
 pub(crate) const DEFAULT_RED_MAIN_FIX_WINDOW: std::time::Duration =
     std::time::Duration::from_secs(2 * 3600);
 
+/// The automatic train's member cap when `max_prs_per_train` is unset.
+// trace:TASK-3912 | ai:claude
+pub(crate) const DEFAULT_AUTO_TRAIN_MAX: usize = 10;
+
 /// The resolved `[landing]` policy.
 // trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +127,11 @@ pub(crate) struct LandingPolicy {
     /// fix before the red-main watch recommends a revert.
     // trace:STORY-2897 | ai:claude
     pub(crate) red_main_fix_window: std::time::Duration,
+    /// `max_prs_per_train`: at most this many PRs per automatic train; the
+    /// rest wait for the next one. `None` (unset) keeps
+    /// [`DEFAULT_AUTO_TRAIN_MAX`].
+    // trace:TASK-3912 | ai:claude
+    pub(crate) max_prs_per_train: Option<usize>,
     /// Values that fell back to their default, each with its reason.
     pub(crate) warnings: Vec<String>,
     /// Keys the config sets validly (`required_checks.<mode>` for lists).
@@ -150,6 +159,7 @@ impl Default for LandingPolicy {
             ci_gated_checks: owned(DEFAULT_CI_GATED_CHECKS),
             review_gated_checks: owned(DEFAULT_REVIEW_GATED_CHECKS),
             red_main_fix_window: DEFAULT_RED_MAIN_FIX_WINDOW,
+            max_prs_per_train: None,
             warnings: Vec::new(),
             explicit: Vec::new(),
             invalid: Vec::new(),
@@ -162,6 +172,12 @@ fn owned(names: &[&str]) -> Vec<String> {
 }
 
 impl LandingPolicy {
+    /// How many PRs the automatic train admits into one train.
+    // trace:TASK-3912 | ai:claude
+    pub(crate) fn auto_train_max(&self) -> usize {
+        self.max_prs_per_train.unwrap_or(DEFAULT_AUTO_TRAIN_MAX)
+    }
+
     pub(crate) fn clean_merge_train(&self) -> bool {
         self.mode == LandingMode::CiGated && self.ci_base_freshness == CiBaseFreshness::CleanMerge
     }
@@ -219,6 +235,22 @@ impl LandingPolicy {
         read!(ci_base_freshness, CiBaseFreshness, "ci_base_freshness");
         read!(merger, Merger, "merger");
         read!(promote_from, PromoteFrom, "promote_live_binary_from");
+        // trace:TASK-3912 | ai:claude
+        if let Some(value) = section.get("max_prs_per_train") {
+            match value.as_integer().filter(|n| *n >= 1) {
+                Some(n) => {
+                    policy.max_prs_per_train = Some(usize::try_from(n).unwrap_or(usize::MAX));
+                    policy.explicit.push("max_prs_per_train");
+                }
+                None => {
+                    policy.invalid.push("max_prs_per_train");
+                    policy.warnings.push(format!(
+                        "`[landing] max_prs_per_train` must be a positive integer; using \
+                         {DEFAULT_AUTO_TRAIN_MAX}"
+                    ));
+                }
+            }
+        }
         // trace:STORY-2897 | ai:claude
         if let Some(red_main) = section.get("red_main") {
             match red_main.get("fix_window").map(fix_window) {
@@ -505,6 +537,24 @@ mod story2897_landing_policy_tests {
 
     fn parse(body: &str) -> LandingPolicy {
         LandingPolicy::from_config(Some(&body.parse::<toml::Value>().unwrap()))
+    }
+
+    // trace:TASK-3912 | ai:claude
+    #[test]
+    fn max_prs_per_train_caps_the_auto_train_and_defaults_to_today() {
+        assert_eq!(
+            parse("[landing]\n").auto_train_max(),
+            DEFAULT_AUTO_TRAIN_MAX
+        );
+        let p = parse("[landing]\nmax_prs_per_train = 3 # #4605\n");
+        assert_eq!(p.auto_train_max(), 3);
+        assert_eq!(p.origin("max_prs_per_train"), Origin::Explicit);
+        for bad in ["0", "-2", "\"3\""] {
+            let p = parse(&format!("[landing]\nmax_prs_per_train = {bad}\n"));
+            assert_eq!(p.auto_train_max(), DEFAULT_AUTO_TRAIN_MAX, "{bad}");
+            assert_eq!(p.origin("max_prs_per_train"), Origin::Invalid, "{bad}");
+            assert!(p.warnings[0].contains("positive integer"), "{bad}");
+        }
     }
 
     #[test]

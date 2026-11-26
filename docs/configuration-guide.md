@@ -58,7 +58,10 @@ The [setup reference](cli/07-project-setup.md), [roles and sessions](cli/06-role
 
 `[landing] red_main.fix_window` (default `"2h"`, from one minute to one week) is how long a confirmed red main may wait for a fix before AIDA recommends a revert. Set it with `aida config menu`, which checks that the value is a duration in range. See [When main goes red](advanced/landing.md#when-main-goes-red).
 
-AIDA reads both from the default branch only, and `aida config show` lists the effective values with their source. A value AIDA does not recognise falls back to `ci-gated`, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for what each mode does, and [Who may do what](advanced/authority-and-seats.md) for who may merge.
+<!-- trace:TASK-3912 | ai:claude -->
+`[landing] max_prs_per_train` (default `10`) caps how many PRs the automatic merge train admits into one train; the rest wait for the next train, in order. A smaller train is cheaper to bisect when one member turns it red. An explicit `aida pr train N...` is not limited by it; pass `--max` there.
+
+AIDA reads these from the default branch only, and `aida config show` lists the effective values with their source. A value AIDA does not recognise falls back to `ci-gated`, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for what each mode does, and [Who may do what](advanced/authority-and-seats.md) for who may merge.
 
 ## Unset execution mode
 
