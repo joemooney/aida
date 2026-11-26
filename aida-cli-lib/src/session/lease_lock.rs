@@ -30,6 +30,15 @@ pub(crate) fn with_lease_write_lock<T>(
     project_root: &Path,
     write: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
+    crate::session::with_lease_write_lock_until(project_root, None, write)
+}
+
+// trace:TASK-3884 | ai:codex
+pub(crate) fn with_lease_write_lock_until<T>(
+    project_root: &Path,
+    deadline: Option<std::time::Instant>,
+    write: impl FnOnce() -> Result<T>,
+) -> Result<T> {
     use fs2::FileExt;
     let dir = project_root.join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -40,6 +49,11 @@ pub(crate) fn with_lease_write_lock<T>(
         .write(true)
         .open(&lock_path)
         .with_context(|| format!("opening {}", lock_path.display()))?;
+    if let Some(end) = deadline {
+        crate::gate::kernel_deps::lock_exclusive_until(&lock, end)
+            .with_context(|| format!("locking {}", lock_path.display()))?;
+        return write();
+    }
     // Polled tightly only until the disk-saturation notice has had its one
     // look, so a long wait can say when the disk, not a stuck holder, is the
     // cause; then a plain blocking wait, so contended stamps hand the lock
