@@ -503,7 +503,7 @@ fn pruned_marker(root: &Path, admin: &str) -> PathBuf {
 
 /// Leftovers whose owner is live are never removed, and a dry run reports
 /// them as live beside the dead owner's candidates it would remove.
-// trace:BUG-2770 | ai:claude
+// trace:BUG-2770 trace:BUG-2770.AC1 trace:BUG-2770.AC3 trace:BUG-2770.AC4 | ai:claude
 #[test]
 fn a_live_owner_keeps_its_leftovers() {
     let dir = repo();
@@ -548,7 +548,7 @@ fn a_live_owner_keeps_its_leftovers() {
 }
 
 /// An owner that cannot be judged is skipped, fail-safe.
-// trace:BUG-2770 | ai:claude
+// trace:BUG-2770 trace:BUG-2770.AC3 trace:BUG-2770.AC4 | ai:claude
 #[test]
 fn an_unknown_owner_is_kept() {
     let dir = repo();
@@ -572,7 +572,7 @@ fn an_unknown_owner_is_kept() {
 
 /// `min_age` scopes every mailbox leftover, era markers included: one
 /// younger than it is not even a candidate.
-// trace:BUG-2770 | ai:claude
+// trace:BUG-2770 trace:BUG-2770.AC2 trace:BUG-2770.AC4 | ai:claude
 #[test]
 fn older_than_scopes_mailbox_leftovers() {
     let dir = repo();

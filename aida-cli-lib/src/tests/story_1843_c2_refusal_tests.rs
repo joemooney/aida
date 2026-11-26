@@ -699,7 +699,7 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
 /// live process inside the checkout, keeps it; an unjudgeable lease, an
 /// unattributed leftover or an incomplete view is unknown and kept; only an
 /// owner with nothing holding it is dead. Each kept line names its verdict.
-// trace:BUG-2770 | ai:claude
+// trace:BUG-2770 trace:BUG-2770.AC1 trace:BUG-2770.AC3 trace:BUG-2770.AC4 | ai:claude
 #[cfg(unix)]
 #[test]
 fn agent_gc_judges_leftover_owners_fail_safe() {
