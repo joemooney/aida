@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T13:26:48.346787782Z
+modified_at: 2026-11-26T13:26:50.728669614Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -534,6 +534,11 @@ comments:
   modified_at: 2026-11-26T13:26:17.105358565Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21809-9468-7d63-8379-9571058a82c2
+  author: joe
+  content: 'SPEC RECONCILED (product-15 2026-11-26 06:45, integration-30 06:40 flag): the done check now names the files the shipped slices a/b/c/d1/d2/e actually delivered (workflow.html field guide, the 10 workflow/authority SVGs, product-workflow.md, operator-setup.md, getting-started.md, the build.py table renderer and guard, the dropdowns and theme toggle) instead of the 11-23 targets field-guide.html, field-guide-act1..5.svg and autonomy.html. The glossary-coverage criterion is kept: every listed term defined in glossary.html or the workflow.html field guide. Reviewer of #4655: please verify that coverage.'
+  created_at: 2026-11-26T13:26:50.728669614Z
+  modified_at: 2026-11-26T13:26:50.728669614Z
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
