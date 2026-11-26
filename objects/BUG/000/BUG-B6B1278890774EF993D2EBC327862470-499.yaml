@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T15:40:03.149312119Z
+modified_at: 2026-11-26T16:22:46.727557116Z
 req_type: Bug
 tags:
 - leases
@@ -186,6 +186,25 @@ comments:
   modified_at: 2026-11-26T15:40:03.149312119Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a218aa-a6c7-7032-a0e1-f5cafd2e36f1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dcd65eee1d (r1 rework on #4663; git diff origin/main...HEAD)
+
+    Round-2 findings:
+    1. AC1/AC2 end to end [behavioral-test]: tests/bug_2738_landed_refusal_tests.rs drives handle_review_record_fixture_at with a fake gh via the GitHub forge. AC1: Completed (PR open) and Done+MERGED: verdict read back from the gate ledger (PR-9738, blocks_done, reviewed_sha), status unchanged, no failure_reason, comment authored by the writer naming writer + 'CHANGES REQUESTED'. AC2: InProgress+OPEN, InProgress+CLOSED, Done+unrecognised state all park in NeedsAttention with failure_reason. Removing the guard call or its early return fails the AC1 tests.
+    2. Forge abstraction: review_commands.rs refused_change_merged uses forge_for(root).change_metadata. Any error (pure-git, no CLI, network) counts as not merged and prints a note; shelve proceeds. forge.rs reverted to main (github_pr_state removed).
+    3. trace:BUG-2738.AC1 / .AC2 markers on each test.
+    4. landed_refusal is re-evaluated inside the update_spec_atomically closure; the comment states the locked copy's status.
+    Brief (d): scope narrowed to Completed or MERGED (CLOSED no longer protects). Test bug_2738_publish_then_request_changes_stays_parked_and_reworkable: publish-done -> CR at same head -> NeedsAttention; a second mark_done_after_push_in returns false and leaves it parked; return_to_flight (queue rework) returns it to InProgress.
+    Incident root cause NOT fixed here: store commit ccd1c48310 kept the shelve's comment + Done->NeedsAttention history entry but dropped status, failure_reason and modified_at. publication-done cannot do NA->Done and merge_spec_three_way would keep NA, so the loss is in the contained-reviewer store write -> host commit path. Filed as finding TASK-73022632d35647cca3858b18ac0723e3-053.
+    Validation: cargo test -p aida-cli-lib --lib bug_2738: 5 passed. make check-ci-fast: exit 0.
+    Residual risks: the stranded sweep and RealPhaseDriver::shelve_on_failure still shelve without a merge check; GitLab is covered by the forge routing but not exercised by a test.
+  created_at: 2026-11-26T16:22:46.727557116Z
+  modified_at: 2026-11-26T16:22:46.727557116Z
+  session_id: 01a218867757
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
