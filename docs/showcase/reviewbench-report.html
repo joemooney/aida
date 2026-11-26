@@ -228,6 +228,30 @@
     .pr-panel { display: none; }
     .pr-panel.active { display: block; }
 
+    #chart-tooltip {
+      position: fixed; pointer-events: none; z-index: 999;
+      background: #191e1b; color: #f4f1e9; border: 1px solid #ff7849;
+      padding: 11px 15px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); opacity: 0; transition: opacity 0.12s ease;
+      max-width: 350px; border-radius: 3px;
+    }
+    .term-tip {
+      border-bottom: 1.5px dashed var(--accent); cursor: help; position: relative;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: color 0.15s, background 0.15s; padding: 0 2px; border-radius: 2px;
+    }
+    .term-tip:hover, .term-tip:focus { color: var(--accent); background: var(--accent-soft); outline: none; }
+    .term-tip::after {
+      content: "?"; display: inline-grid; place-items: center;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+      font-family: var(--mono); font-size: 8.5px; font-weight: 700; line-height: 1; flex-shrink: 0;
+    }
+    .tip-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #ff8658; margin-bottom: 4px; display: block; }
+    .tip-title { font-family: var(--serif); font-size: 15px; color: #fff; margin-bottom: 6px; display: block; border-bottom: 1px solid #353d38; padding-bottom: 5px; }
+    .tip-body { font-family: var(--sans); font-size: 12px; color: #d5d9d2; line-height: 1.55; display: block; margin-bottom: 8px; }
+    .tip-meta { font-family: var(--mono); font-size: 10px; color: #8ce6b8; background: rgba(61, 214, 140, 0.1); padding: 5px 8px; border-left: 2px solid #3dd68c; display: block; }
+
     footer {
       padding: 40px 0 60px; font-family: var(--mono); font-size: 11px;
       color: var(--ink-secondary); display: flex; justify-content: space-between;
@@ -241,6 +265,8 @@
   </style>
 </head>
 <body>
+
+<div id="chart-tooltip" role="tooltip" aria-hidden="true"></div>
 
 <header class="topbar">
   <div class="shell topbar-inner">
@@ -1544,6 +1570,7 @@
       document.getElementById('fbeta-augmented-p2').textContent = `${augP2.toFixed(1)}%`;
       const augDelta = augP2 - augP1;
       document.getElementById('fbeta-augmented-delta').textContent = `${augDelta >= 0 ? '+' : ''}${augDelta.toFixed(1)}%`;
+      bindGlossaryTooltips();
     });
   });
 
@@ -1572,6 +1599,242 @@
       });
     });
   });
+
+  // Interactive ReviewBench Methodology & Metric Glossary Tooltips
+  const tooltip = document.getElementById('chart-tooltip');
+  function showTip(evt, html) {
+    if (!tooltip) return;
+    tooltip.innerHTML = html;
+    tooltip.style.opacity = '1';
+    moveTip(evt);
+  }
+  function moveTip(evt) {
+    if (!tooltip) return;
+    const x = Math.min(window.innerWidth - 365, Math.max(12, evt.clientX + 16));
+    const y = Math.min(window.innerHeight - 160, Math.max(12, evt.clientY + 16));
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+  function hideTip() {
+    if (tooltip) tooltip.style.opacity = '0';
+  }
+
+  const GLOSSARY_TERMS = {
+    "GROUNDED PRECISION": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.1",
+      title: "Grounded Precision: 91.7% (11 / 12 Golden Matches)",
+      body: "Among findings that matched an entry in ReviewBench's pre-labeled Golden Set (M = M_TP ∪ M_FP), what percentage hit a Golden True Positive (M_TP) vs. a known Golden False Positive (M_FP).",
+      meta: "Formula: |M_TP| / (|M_TP| + |M_FP|) · 100% on 3 of 4 PRs"
+    },
+    "AUGMENTED PRECISION": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.2",
+      title: "Augmented Precision: 94.4% (17 / 18 Confirmed)",
+      body: "Evaluates ALL comments emitted by the reviewer (|C|), crediting both Golden True Positives (M_TP) and novel valid defects (U_TP) that pass the 3-condition rubric (True + Relevant + Non-Trivial).",
+      meta: "Formula: (|M_TP| + |U_TP|) / |C| · +36.9 pts vs Pass-1"
+    },
+    "HIGH-SEVERITY RECALL": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3",
+      title: "High-Severity Grounded Recall: 83.3% (5 / 6 High TPs)",
+      body: "Percentage of High-severity Golden True Positives (security, crashes, data corruption, broken core logic) detected by the reviewer. Zero High-severity findings were lost during Pass-2 adversarial filtering.",
+      meta: "Formula: Covered G_TP(high) / |G_TP(high)| · 5 / 6 High TPs"
+    },
+    "Grounded Precision": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.1",
+      title: "Grounded Precision: |M_TP| / |M|",
+      body: "Among all findings that matched an entry in ReviewBench's human-labeled Golden Set (M = M_TP ∪ M_FP), what percentage matched a Golden True Positive (M_TP) rather than a known Golden False Positive (M_FP). Measures resistance to known false-positive traps.",
+      meta: "Formula: |M_TP| / (|M_TP| + |M_FP|) · AIDA Pass-2: 91.7% (11 / 12)"
+    },
+    "Grounded Precision %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.1",
+      title: "Grounded Precision %: |M_TP| / |M|",
+      body: "Percentage of golden-matched comments that hit a verified Golden True Positive (M_TP) instead of a Golden False Positive (M_FP). Ignores unmatched novel comments so every agent is scored strictly on pre-labeled ground truth.",
+      meta: "Formula: |M_TP| / (|M_TP| + |M_FP|) · AIDA Pass-2: 91.7%"
+    },
+    "Augmented Precision": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.2",
+      title: "Augmented Precision: (|M_TP| + |U_TP|) / |C|",
+      body: "Evaluates ALL comments emitted by the reviewer (|C|), crediting both Golden True Positives (M_TP) and novel, valid defects outside the original golden set (U_TP) that satisfy the 3-condition rubric (Technically True + Change-Relevant + Non-Trivial).",
+      meta: "Formula: (|M_TP| + |U_TP|) / |C| · AIDA Pass-2: 94.4% (17 / 18)"
+    },
+    "Augmented Precision %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.2",
+      title: "Augmented Precision %: (|M_TP| + |U_TP|) / |C|",
+      body: "Share of all emitted review comments (|C|) that are valid defects—combining Golden TPs (M_TP) and novel valid defects (U_TP) verified against the 3-condition rubric (True + Relevant + Non-Trivial).",
+      meta: "Formula: (|M_TP| + |U_TP|) / |C| · AIDA Pass-2: 94.4% (17 / 18)"
+    },
+    "Grounded F1 %": {
+      kicker: "REVIEWBENCH LEADERBOARD PRIMARY RANKING METRIC (§7.4)",
+      title: "Grounded F1 % (Default High-Severity View)",
+      body: "Harmonic mean (β = 1.0) of Grounded Precision and High-Severity Grounded Recall: 2·P·R / (P + R). This is the default ranking column on review-bench.ai because it rewards catching critical/high bugs without spamming false positives.",
+      meta: "Formula: 2 · P_grounded · R_high / (P_grounded + R_high) · AIDA: 87.3%"
+    },
+    "H+M Grounded F1 %": {
+      kicker: "REVIEWBENCH SUBSTANTIVE DEFECTS F1 (§7.3–7.4)",
+      title: "High + Medium Grounded F1 %",
+      body: "Harmonic mean (β = 1.0) of Grounded Precision and High+Medium Grounded Recall. Evaluates performance across all substantive bugs (High + Medium) while excluding low-severity style/hygiene nits.",
+      meta: "Formula: 2 · P_grounded · R_hm / (P_grounded + R_hm) · AIDA: 78.4%"
+    },
+    "All-Sev Grounded F1 %": {
+      kicker: "REVIEWBENCH UNFILTERED ALL-SEVERITY F1 (§7.3)",
+      title: "All-Severities Grounded F1 % (High + Medium + Low)",
+      body: "Harmonic mean of Grounded Precision and All-Severity Grounded Recall. Because 52.3% of the ReviewBench corpus consists of Low-severity nits, tools that intentionally suppress minor nits trade lower All-Sev Recall for much higher Precision.",
+      meta: "Formula: 2 · P_grounded · R_all / (P_grounded + R_all) · AIDA: 59.8%"
+    },
+    "High-Severity Recall": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3 (DEFAULT SEVERITY FILTER)",
+      title: "High-Severity Grounded Recall: Covered G_TP(high) / |G_TP(high)|",
+      body: "Percentage of High-severity Golden True Positives (security vulnerabilities, crashes, data corruption, broken core logic) detected by the reviewer. Pass-2 Challenger retained 100% of Pass-1's High-severity detections (5 / 6 = 83.3%).",
+      meta: "Formula: Covered G_TP(high) / |G_TP(high)| · AIDA Pass-2: 83.3% (5 / 6)"
+    },
+    "High-Severity Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3 (DEFAULT SEVERITY FILTER)",
+      title: "High-Severity Grounded Recall %",
+      body: "Percentage of High-severity Golden True Positives detected. ReviewBench defaults its leaderboard to High-severity recall because senior engineers prioritize blocking bugs over minor refactoring suggestions.",
+      meta: "Formula: Covered G_TP(high) / |G_TP(high)| · AIDA Pass-2: 83.3% (5 / 6)"
+    },
+    "High-Severity Grounded Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3",
+      title: "High-Severity Grounded Recall %",
+      body: "Percentage of High-severity Golden True Positives covered by the agent's confirmed findings. Zero High-severity findings were lost during Pass-2 adversarial filtering.",
+      meta: "Formula: Covered G_TP(high) / |G_TP(high)| · AIDA Pass-2: 83.3% (5 / 6)"
+    },
+    "High+Med Recall": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3 (SUBSTANTIVE DEFECTS)",
+      title: "High + Medium Grounded Recall: 68.4% (13 / 19)",
+      body: "Percentage of all substantive Golden True Positives (High + Medium severity combined) detected by the reviewer, excluding Low-severity stylistic/hygiene nits.",
+      meta: "Formula: Covered G_TP(high+med) / |G_TP(high+med)| · AIDA: 68.4% (13 / 19)"
+    },
+    "High+Med Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3 (SUBSTANTIVE DEFECTS)",
+      title: "High + Medium Grounded Recall %",
+      body: "Share of High and Medium severity Golden True Positives covered by the reviewer's confirmed findings.",
+      meta: "Formula: Covered G_TP(high+med) / |G_TP(high+med)| · AIDA: 68.4% (13 / 19)"
+    },
+    "H+M Grounded Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3",
+      title: "High + Medium Grounded Recall %",
+      body: "Percentage of High and Medium severity Golden True Positives detected on the benchmark.",
+      meta: "Formula: Covered G_TP(high+med) / |G_TP(high+med)| · AIDA: 68.4%"
+    },
+    "High + Medium Grounded Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3",
+      title: "High + Medium Grounded Recall %",
+      body: "Percentage of substantive (High + Medium severity) Golden True Positives covered by confirmed findings. Pass-2 retained 92.9% of Pass-1's substantive recall while cutting false positives by 55%.",
+      meta: "Formula: Covered G_TP(high+med) / |G_TP(high+med)| · AIDA: 68.4% (13 / 19)"
+    },
+    "All-Sev Grounded Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3 (INCLUDES LOW NITS)",
+      title: "All-Severities Grounded Recall % (High + Medium + Low)",
+      body: "Percentage of all Golden True Positives (including Low-severity documentation, naming, and minor test hygiene comments) covered by the reviewer.",
+      meta: "Formula: Covered G_TP(all) / |G_TP(all)| · AIDA: 44.4% (16 / 36)"
+    },
+    "All-TP Recall % (Pass-1 → Pass-2)": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.3",
+      title: "All-Severity Golden TP Recall (Pass 1 vs. Pass 2)",
+      body: "Shows Golden TP coverage across all severities (High + Medium + Low) before and after Pass-2 Blue-Team Challenger filtering. Pass-2 intentionally prunes Low-severity nits while preserving 100% of High-severity bugs.",
+      meta: "Pass-1: 55.6% (20/36) → Pass-2: 44.4% (16/36)"
+    },
+    "Augmented Recall %": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.2",
+      title: "Augmented Recall %: (Covered G_TP + |U_TP|) / (|G_TP| + |U_TP|)",
+      body: "Expands the recall denominator and numerator to include novel valid defects (U_TP) discovered by the reviewer that were not in the original static golden set.",
+      meta: "Formula: (Covered G_TP + |U_TP|) / (|G_TP| + |U_TP|) · AIDA: 54.8%"
+    },
+    "Augmented F0.5 (β=0.5)": {
+      kicker: "REVIEWBENCH METHODOLOGY §7.4 (PRECISION-WEIGHTED)",
+      title: "Augmented F0.5 Score (β = 0.5 · Precision Weighted 2×)",
+      body: "Generalized F_β score with β = 0.5: (1.25 · P · R) / (0.25 · P + R). Weights precision twice as heavily as recall—ideal for CI gates where developer trust depends on near-zero false-positive noise.",
+      meta: "Pass-1: 58.6% → Pass-2: 82.5% (+23.9 percentage points)"
+    },
+    "FP Suppression Rate": {
+      kicker: "AIDA TWO-PASS ADVERSARIAL METRIC",
+      title: "Pass-2 False-Positive Suppression Rate (55.0%)",
+      body: "Percentage of Pass-1 Red-Team Finder candidate findings dismissed by the Pass-2 Blue-Team Skeptical Challenger under the 3-condition rubric (True + Change-Relevant + Non-Trivial). Suppressed candidates are archived in SARIF 2.1.0 §3.35 suppressions.",
+      meta: "22 of 40 Pass-1 candidates dismissed → 18 confirmed"
+    },
+    "Pass 1 → Pass 2 (Suppressed %)": {
+      kicker: "TWO-PASS ADVERSARIAL FILTERING",
+      title: "Pass-1 Candidates → Pass-2 Confirmed (Suppression %)",
+      body: "Number of raw candidate findings proposed by Pass-1 Finder versus confirmed findings kept by Pass-2 Blue-Team Challenger, along with the percentage of noisy/speculative candidates suppressed.",
+      meta: "Aggregate: 40 candidates → 18 confirmed (55.0% suppressed)"
+    },
+    "Exact Line Anchor %": {
+      kicker: "AIDA PILLAR 4 DETERMINISTIC LINE POSITIONING",
+      title: "Deterministic 2-Pass Snippet Line-Anchoring Rate",
+      body: "Percentage of confirmed findings whose quoted existing_code snippet was deterministically resolved by Rust (anchor_snippet_lines) to an exact 1-based line range on the target git SHA—eliminating LLM line-number hallucination.",
+      meta: "96.3% overall (17 / 18) · 100.0% on all source code files"
+    },
+    "EXACT LINE ANCHORING": {
+      kicker: "AIDA PILLAR 4 DETERMINISTIC LINE POSITIONING",
+      title: "Deterministic 2-Pass Snippet Line-Anchoring (96.3%)",
+      body: "Instead of trusting LLM-guessed line numbers, AIDA requires a verbatim existing_code quote and resolves its exact 1-based (start_line, end_line) span via 2-pass exact + whitespace-trimmed sliding-window matching.",
+      meta: "100% exact anchoring on Go, Python, Rust, and TypeScript code"
+    },
+    "Avg Duration / PR": {
+      kicker: "REVIEWBENCH LATENCY METRIC",
+      title: "Average End-to-End Review Duration per Pull Request",
+      body: "Mean wall-clock time in seconds to complete a full review of one PR. AIDA's 129.4 s average includes deterministic Rust preparation (<0.12 s), Pass-1 Finder, Pass-2 Adversarial Challenger, and 2-pass snippet anchoring.",
+      meta: "AIDA 2-Pass Avg: 129.4 s (2.1 min) vs. Leaderboard Top-3: 212–337 s"
+    },
+    "Evaluation Scope": {
+      kicker: "BENCHMARK CORPUS COVERAGE",
+      title: "Evaluation Corpus Scope & Reproducibility",
+      body: "Indicates whether the row was evaluated across the full 219-PR ReviewBench dataset (3 rounds on review-bench.ai) or on AIDA's 4-PR multi-language local test slice (Go, Python, TypeScript, Rust; 26 changed files, 66 golden annotations).",
+      meta: "AIDA Slice: 4 PRs / 4 Languages · Published Leaderboard: 219 PRs"
+    },
+    "Severity-Weighted Score": {
+      kicker: "AIDA TELEMETRY DEFECT SIGNAL",
+      title: "Severity-Weighted Defect Score (10·Crit + 5·High + 2·Med + 1·Low)",
+      body: "Composite defect signal recorded in .aida/review-telemetry/reviews.jsonl that weights confirmed findings by severity (Critical = 10, High = 5, Medium = 2, Low = 1) to track substantive bug discovery across A/B arms.",
+      meta: "Computed by aida_core::review_engine::compute_severity_weighted_score"
+    }
+  };
+
+  function bindGlossaryTooltips() {
+    document.querySelectorAll('.kpi-label, th, td strong, .v-pill small').forEach(el => {
+      const rawText = el.textContent.trim();
+      // Normalize dynamic F-beta labels (F0.5 / F1.0 / F2.0)
+      let info = GLOSSARY_TERMS[rawText];
+      if (!info && /^High\+Medium Grounded F(0\.5|1\.0|2\.0) %$/.test(rawText)) {
+        info = {
+          kicker: "REVIEWBENCH METHODOLOGY §7.4 (GENERALIZED F_β)",
+          title: rawText,
+          body: "Generalized harmonic mean (1+β²)·P·R / (β²·P + R) combining Grounded Precision (91.7%) and High+Medium Grounded Recall (68.4%) at the selected β preference (β=0.5 weights precision 2×; β=1.0 is balanced F1; β=2.0 weights recall 2×).",
+          meta: "Click the F0.5 / F1.0 / F2.0 buttons above to switch β live"
+        };
+      } else if (!info && /^Augmented F(0\.5|1\.0|2\.0) % \(All Severities\)$/.test(rawText)) {
+        info = {
+          kicker: "REVIEWBENCH METHODOLOGY §7.2 & §7.4",
+          title: rawText,
+          body: "Generalized F_β score combining Augmented Precision (94.4%, which credits both Golden TPs and valid novel defects) and Augmented All-Severity Recall (54.8%) at the active β preference.",
+          meta: "Pass-2 improves Augmented F0.5 by +23.9 pts and F1.0 by +8.9 pts"
+        };
+      }
+      if (!info) return;
+
+      const html = `
+        <span class="tip-kicker">${info.kicker}</span>
+        <span class="tip-title">${info.title}</span>
+        <span class="tip-body">${info.body}</span>
+        <span class="tip-meta">${info.meta}</span>
+      `;
+      el.dataset.tipHtml = html;
+
+      if (!el.classList.contains('term-tip')) {
+        el.classList.add('term-tip');
+        el.setAttribute('tabindex', '0');
+        el.addEventListener('mousemove', (e) => showTip(e, el.dataset.tipHtml));
+        el.addEventListener('mouseleave', hideTip);
+        el.addEventListener('focus', () => {
+          const rect = el.getBoundingClientRect();
+          showTip({ clientX: rect.left, clientY: rect.bottom }, el.dataset.tipHtml);
+        });
+        el.addEventListener('blur', hideTip);
+      }
+    });
+  }
+
+  bindGlossaryTooltips();
 </script>
 </body>
 </html>
