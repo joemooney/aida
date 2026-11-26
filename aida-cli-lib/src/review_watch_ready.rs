@@ -69,6 +69,8 @@ pub(super) struct Approval {
     /// Who recorded it and when: with the head and CI commit, it keys the
     /// wake, so a new approval of the same head is a new wake.
     pub identity: String,
+    /// Informational CI line for a review-gated readiness wake.
+    pub ci_info: Option<String>,
     /// The TASK-1960 carry-over that extends it to the head, when it moved.
     pub carried: Option<String>,
 }
@@ -105,6 +107,12 @@ pub(super) trait Evidence {
     /// The checks that must be present and green beyond "every check
     /// passed": the project's configured ones. An unreadable setting is `Err`.
     fn required_checks(&self) -> Result<Vec<String>>;
+    fn landing_mode(&self) -> crate::landing_policy::LandingPolicy {
+        Default::default()
+    }
+    fn red_main_episode(&self) -> Option<(String, Vec<String>)> {
+        None
+    }
     /// Commits behind the base, and whether the base's changes overlap the
     /// change's paths.
     fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)>;
@@ -166,7 +174,7 @@ pub(super) fn evaluate(
             change.base, change.base
         ));
     }
-    let approval = match evidence.approval(change) {
+    let mut approval = match evidence.approval(change) {
         Ok(approval) => approval,
         Err(refusal) => return not(bounded_diagnostic(&refusal)),
     };
@@ -180,7 +188,9 @@ pub(super) fn evaluate(
             short(&checks.sha)
         ));
     }
-    if clean_policy {
+    let policy = evidence.landing_mode();
+    let review_gated = policy.mode == crate::landing_policy::LandingMode::ReviewGated;
+    if clean_policy || (behind > 0 && review_gated) {
         let (workflow, run, attempt) = match evidence.latest_ci_run(&change.head) {
             Ok(run) => run,
             Err(error) => return not(format!("latest FULL CI unavailable: {error:#}")),
@@ -210,13 +220,25 @@ pub(super) fn evaluate(
             return not("stale base requires successful full-tier CI on the exact head".into());
         }
     }
-    let required = match evidence.required_checks() {
-        Ok(required) => required,
-        Err(error) => return not(format!("required CI checks unknown: {error:#}")),
+    let judgment = if review_gated && behind == 0 {
+        match review_gated_ci(&checks, &policy, || evidence.red_main_episode()) {
+            Ok(info) => approval.ci_info = Some(info),
+            Err(reason) => return not(reason),
+        }
+        crate::forge::CommitCi::Green
+    } else {
+        let required = match evidence.required_checks() {
+            Ok(required) => required,
+            Err(error) => return not(format!("required CI checks unknown: {error:#}")),
+        };
+        let mut required: Vec<_> = required.iter().map(String::as_str).collect();
+        if review_gated {
+            required.extend(policy.review_gated_checks.iter().map(String::as_str));
+        }
+        crate::forge::judge_commit_checks(&checks, &required)
     };
-    let required: Vec<&str> = required.iter().map(String::as_str).collect();
     let names = |names: &[String]| bounded_diagnostic(&names.join(", "));
-    match crate::forge::judge_commit_checks(&checks, &required) {
+    match judgment {
         crate::forge::CommitCi::Green => {}
         crate::forge::CommitCi::NoChecks => return not("no CI checks on the head".into()),
         crate::forge::CommitCi::MissingRequired(name) => {
@@ -244,6 +266,56 @@ pub(super) fn evaluate(
         Readiness::Ready
     };
     (readiness, Some(approval))
+}
+
+// trace:STORY-2897 | ai:codex
+fn review_gated_ci(
+    checks: &crate::forge::CommitChecks,
+    policy: &crate::landing_policy::LandingPolicy,
+    episode: impl FnOnce() -> Option<(String, Vec<String>)>,
+) -> std::result::Result<String, String> {
+    use crate::forge::CheckOutcome;
+    let rows = crate::forge::latest_per_name(&checks.checks);
+    for name in &policy.review_gated_checks {
+        let mut matching = rows.iter().filter(|r| r.name == *name).peekable();
+        if matching.peek().is_none()
+            || !matching.all(|r| !r.run_in_progress && r.outcome == CheckOutcome::Passed)
+        {
+            return Err(format!(
+                "CI check `{name}` has not reported success on the head"
+            ));
+        }
+    }
+    let mut info = Vec::new();
+    let mut failures = Vec::new();
+    for row in &rows {
+        let status = match row.outcome {
+            CheckOutcome::Failed => {
+                failures.push(&row.name);
+                "failed"
+            }
+            CheckOutcome::Pending => "pending",
+            CheckOutcome::Passed => "green",
+            CheckOutcome::Skipped => "skipped",
+        };
+        info.push(format!("{} {status}", row.name));
+    }
+    if !failures.is_empty() {
+        let covered =
+            episode().filter(|(_, names)| failures.iter().all(|name| names.contains(name)));
+        let (sha, _) = covered
+            .ok_or_else(|| format!("CI failed: {}", bounded_diagnostic(&info.join(", "))))?;
+        info.push(format!("main red since {}, episode open", short(&sha)));
+    }
+    for name in &policy.ci_gated_checks {
+        if !rows.iter().any(|r| &r.name == name) {
+            info.push(format!("{name} absent"));
+        }
+    }
+    Ok(format!(
+        "CI at head: {}",
+        bounded_diagnostic(&info.join(", "))
+    ))
 }
 
 fn short(sha: &str) -> &str {
@@ -298,9 +370,13 @@ pub(super) fn wake_message(
             format!("Run {ship} to merge it."),
         ),
     };
+    let ci_line = approval
+        .ci_info
+        .clone()
+        .unwrap_or_else(|| format!("every CI check on {} passed", change.head));
     let body = format!(
         "{key} at {head} is ready to ship: an authorized approval of {reviewed}{carried} covers the head, \
-         every CI check on {head} passed, it is {state}, and no merge hold or review in progress is \
+         {ci_line}, it is {state}, and no merge hold or review in progress is \
          recorded. {next} The watcher only reports; it did not merge or update the branch.",
         head = change.head,
         reviewed = approval.reviewed,
@@ -457,6 +533,12 @@ impl Evidence for Live<'_> {
     }
     fn ci(&self, sha: &str) -> Result<crate::forge::CommitChecks> {
         self.repo.commit_checks(self.root, sha)
+    }
+    fn landing_mode(&self) -> crate::landing_policy::LandingPolicy {
+        crate::landing_policy::load(self.root)
+    }
+    fn red_main_episode(&self) -> Option<(String, Vec<String>)> {
+        crate::main_watch::open_episode(self.root)
     }
     fn required_checks(&self) -> Result<Vec<String>> {
         required_checks(self.root)
@@ -718,6 +800,7 @@ pub(super) fn approval_of(
             newest.recorded_at.as_deref().unwrap_or("")
         ),
         reviewed,
+        ci_info: None,
         carried: None,
     })
 }

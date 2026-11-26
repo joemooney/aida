@@ -25,6 +25,8 @@ pub(crate) struct ReviewerDraft {
     pub(crate) reviewed_sha: String,
     pub(crate) verdict: String,
     pub(crate) summary: String,
+    #[serde(default)]
+    pub(crate) needs: Vec<rv::ReviewNeed>,
     pub(crate) findings: Vec<String>,
 }
 
@@ -37,6 +39,7 @@ impl ReviewerDraft {
             verdict: &self.verdict,
             reviewed_sha: &self.reviewed_sha,
             findings: &self.findings,
+            needs: &self.needs,
         }
     }
 
@@ -63,6 +66,42 @@ pub(crate) struct LaunchDraft {
     /// copy in `launch.json` is reviewer-writable and only feeds the
     /// reviewer's in-session check. trace:BUG-2707 | ai:claude
     policy: crate::gate::kernel_deps::review_blocking::Effective,
+    /// The launching project's landing policy, which decides whether a
+    /// WAITING draft must name a specific dependency. trace:STORY-2897 | ai:claude
+    landing: crate::landing_policy::LandingPolicy,
+}
+
+/// The landing facts a WAITING draft is validated under, as written into
+/// `launch.json`. trace:STORY-2897 | ai:claude
+fn landing_snapshot(landing: &crate::landing_policy::LandingPolicy) -> serde_json::Value {
+    serde_json::json!({"mode": landing.mode.as_str(), "ci_gated_checks": landing.ci_gated_checks})
+}
+
+/// The inverse of [`landing_snapshot`]. Absent or unrecognised data fails
+/// closed: review-gated, with the default aggregate checks.
+// trace:STORY-2897 | ai:claude
+fn landing_from_snapshot(value: &serde_json::Value) -> crate::landing_policy::LandingPolicy {
+    use crate::landing_policy::{LandingMode, LandingPolicy, DEFAULT_CI_GATED_CHECKS};
+    let mut landing = LandingPolicy {
+        mode: LandingMode::ReviewGated,
+        ci_gated_checks: DEFAULT_CI_GATED_CHECKS
+            .iter()
+            .map(|c| c.to_string())
+            .collect(),
+        ..LandingPolicy::default()
+    };
+    let mode = value
+        .get("mode")
+        .and_then(|m| m.as_str())
+        .map(LandingMode::parse);
+    let checks: Option<Vec<String>> = value
+        .get("ci_gated_checks")
+        .and_then(|c| serde_json::from_value(c.clone()).ok());
+    if let (Some(Ok(mode)), Some(checks)) = (mode, checks) {
+        landing.mode = mode;
+        landing.ci_gated_checks = checks;
+    }
+    landing
 }
 
 impl LaunchDraft {
@@ -75,6 +114,7 @@ impl LaunchDraft {
         pr: u64,
         head: String,
         policy: &crate::gate::kernel_deps::review_blocking::Effective,
+        landing: &crate::landing_policy::LandingPolicy,
     ) -> Result<Self> {
         ensure!(full_sha(&head), "review launch requires a full head SHA");
         let root = worktree.canonicalize()?.join(".aida/review-verdicts");
@@ -91,7 +131,8 @@ impl LaunchDraft {
         );
         let dir = rv::open_verdict_entry(&parent, std::ffi::OsStr::new(&name), libc::O_DIRECTORY)?;
         let record = serde_json::json!({"version": 1, "pr": pr, "head": head,
-            "policy": crate::gate::kernel_deps::review_blocking::to_snapshot(policy)});
+            "policy": crate::gate::kernel_deps::review_blocking::to_snapshot(policy),
+            "landing": landing_snapshot(landing)});
         write_in(&dir, LAUNCH_FILE, record.to_string().as_bytes())
             .context("cannot write the review launch record")?;
         // Use the same filesystem clock as the future draft, rather than
@@ -104,6 +145,7 @@ impl LaunchDraft {
             head,
             since,
             policy: policy.clone(),
+            landing: landing.clone(),
         })
     }
 
@@ -111,7 +153,13 @@ impl LaunchDraft {
     #[cfg(test)]
     pub(crate) fn prepare_local(worktree: &Path, pr: u64, head: String) -> Result<Self> {
         let policy = crate::gate::kernel_deps::review_blocking::effective(worktree);
-        Self::prepare(worktree, pr, head, &policy)
+        Self::prepare(
+            worktree,
+            pr,
+            head,
+            &policy,
+            &crate::landing_policy::load(worktree),
+        )
     }
 
     /// The launch directory: the one argument of `aida review submit-draft`.
@@ -131,7 +179,7 @@ impl LaunchDraft {
     // trace:BUG-2707 | ai:claude
     pub(crate) fn prompt(&self, prompt: &str) -> String {
         format!(
-            "{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording), on fresh and resumed reviews alike: write your verdict as UTF-8 JSON data to the absolute path `{path}`, then validate it by running this command exactly as written: {command}\nIf validation refuses, correct the draft and run the command again. Do not run `aida review record`. If a legacy record attempt was refused, still submit this draft for validation. After you exit, the parent validates the current draft and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{pr},\"reviewed_sha\":\"{head}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the submission refuses any other approved draft. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Exit only after the submission command has accepted the draft; then give a brief final response. Never claim the parent has recorded it.",
+            "{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording), on fresh and resumed reviews alike: write your verdict as UTF-8 JSON data to the absolute path `{path}`, then validate it by running this command exactly as written: {command}\nIf validation refuses, correct the draft and run the command again. Do not run `aida review record`. If a legacy record attempt was refused, still submit this draft for validation. After you exit, the parent validates the current draft and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{pr},\"reviewed_sha\":\"{head}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. For review-gated WAITING include needs, an array of objects with kind (test, artifact, check or actor) and detail. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the submission refuses any other approved draft. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Exit only after the submission command has accepted the draft; then give a brief final response. Never claim the parent has recorded it.",
             path = self.path().display(),
             command = self.submit_command(),
             pr = self.pr,
@@ -153,7 +201,7 @@ impl LaunchDraft {
             meta.modified()? >= self.since,
             "rejected stale launch draft"
         );
-        validate_draft(&body, self.pr, &self.head, &self.policy)
+        validate_draft(&body, self.pr, &self.head, &self.policy, &self.landing)
     }
 
     /// Recheck the current bytes, record the verdict, and mark the draft consumed
@@ -456,6 +504,7 @@ pub(crate) fn submit_draft(launch_dir: &Path) -> Result<ReviewerDraft> {
     };
     // Absent or unrecognised policy data fails closed.
     let effective = rb::from_snapshot(launch.get("policy").unwrap_or(&serde_json::Value::Null));
+    let landing = landing_from_snapshot(launch.get("landing").unwrap_or(&serde_json::Value::Null));
     let draft_path = launch_dir.join(DRAFT_FILE);
     let file = rv::open_verdict_entry(&dir, &name(DRAFT_FILE), 0).with_context(|| {
         format!(
@@ -464,7 +513,7 @@ pub(crate) fn submit_draft(launch_dir: &Path) -> Result<ReviewerDraft> {
         )
     })?;
     let (body, _) = read_bounded(file)?;
-    validate_draft(&body, pr, head, &effective)
+    validate_draft(&body, pr, head, &effective, &landing)
 }
 
 fn validate_draft(
@@ -472,6 +521,7 @@ fn validate_draft(
     pr: u64,
     head: &str,
     effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    landing: &crate::landing_policy::LandingPolicy,
 ) -> Result<ReviewerDraft> {
     let draft = parse_draft(body)?;
     ensure!(
@@ -487,6 +537,13 @@ fn validate_draft(
     if let Some(why) = rv::approval_refusal(effective, &draft.verdict, &draft.record_findings()) {
         anyhow::bail!(why);
     }
+    // The same needs rule the parent's record applies, so a draft it would
+    // refuse is refused while the reviewer still runs. trace:STORY-2897 | ai:claude
+    crate::validate_verdict_needs(
+        || landing.clone(),
+        rv::VerdictKind::parse(&draft.verdict),
+        &draft.needs,
+    )?;
     Ok(draft)
 }
 
@@ -726,7 +783,14 @@ mod standalone_review_verdict_draft_tests {
     /// A launch whose parent project runs under `config`.
     fn launch_under(config: &str) -> (tempfile::TempDir, LaunchDraft) {
         let tmp = tempfile::tempdir().unwrap();
-        let launch = LaunchDraft::prepare(tmp.path(), 59, HEAD.into(), &policy(config)).unwrap();
+        let launch = LaunchDraft::prepare(
+            tmp.path(),
+            59,
+            HEAD.into(),
+            &policy(config),
+            &crate::landing_policy::LandingPolicy::default(),
+        )
+        .unwrap();
         (tmp, launch)
     }
     fn approved(findings: serde_json::Value) -> serde_json::Value {
@@ -1281,6 +1345,57 @@ mod standalone_review_verdict_draft_tests {
         drop(done);
         watchdog.join().unwrap();
     }
+    /// A review-gated WAITING draft is refused at submission, while the
+    /// reviewer still runs, when it names no specific dependency, only an
+    /// aggregate check, or a whitespace-padded detail (serde skips the
+    /// trimming `FromStr` does). Stray needs on a non-waiting draft are
+    /// refused under either mode. trace:STORY-2897 | ai:claude
+    #[test]
+    fn story_2897_submit_draft_validates_needs_under_the_launch_landing_policy() {
+        use crate::landing_policy::{LandingMode, LandingPolicy};
+        let gated = LandingPolicy {
+            mode: LandingMode::ReviewGated,
+            ci_gated_checks: vec!["Build".into()],
+            ..LandingPolicy::default()
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let launch =
+            LaunchDraft::prepare(tmp.path(), 59, HEAD.into(), &policy(""), &gated).unwrap();
+        let waiting = |needs: serde_json::Value| {
+            let mut value = payload();
+            value["verdict"] = "waiting".into();
+            value["findings"] = serde_json::json!([]);
+            value["needs"] = needs;
+            value
+        };
+        for needs in [
+            serde_json::json!([]),
+            serde_json::json!([{"kind": "check", "detail": "Build"}]),
+            serde_json::json!([{"kind": "test", "detail": " foo::bar "}]),
+        ] {
+            assert!(
+                launch.submit(&waiting(needs.clone()).to_string()).is_err(),
+                "{needs} must be refused at submission"
+            );
+            // The parent's own read applies the same rule.
+            assert!(launch.read().is_err(), "{needs}");
+        }
+        let ok = waiting(serde_json::json!([{"kind": "test", "detail": "foo::bar"}]));
+        assert_eq!(launch.submit(&ok.to_string()).unwrap().needs.len(), 1);
+        let mut stray = payload();
+        stray["needs"] = serde_json::json!([{"kind": "test", "detail": "foo::bar"}]);
+        assert!(refusal(&launch, &stray).contains("only to a waiting verdict"));
+        // A launch record with no landing data fails closed to review-gated.
+        let (_t, legacy) = launch_under("");
+        let path = legacy.launch_dir().join(LAUNCH_FILE);
+        let mut record: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        record.as_object_mut().unwrap().remove("landing");
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert!(legacy
+            .submit(&waiting(serde_json::json!([])).to_string())
+            .is_err());
+    }
     /// The prompt's command survives a shell when the review tree's path
     /// holds whitespace and a quote, and every handoff instruction makes
     /// acceptance the condition for exiting.
@@ -1291,7 +1406,14 @@ mod standalone_review_verdict_draft_tests {
         let tmp = tempfile::tempdir().unwrap();
         let tree = tmp.path().join("re view's $(tree) `x`");
         std::fs::create_dir_all(&tree).unwrap();
-        let launch = LaunchDraft::prepare(&tree, 59, HEAD.into(), &policy("")).unwrap();
+        let launch = LaunchDraft::prepare(
+            &tree,
+            59,
+            HEAD.into(),
+            &policy(""),
+            &crate::landing_policy::LandingPolicy::default(),
+        )
+        .unwrap();
         let rendered = launch.prompt("fresh review");
         let command = launch.submit_command();
         assert!(rendered.contains(&command), "{rendered}");
@@ -2051,6 +2173,7 @@ mod standalone_review_verdict_parent_tests {
         let path = dir.join("STORY-77.json");
         let draft = ReviewerDraft {
             version: 1,
+            needs: Vec::new(),
             pr: 59,
             reviewed_sha: f.head.clone(),
             verdict: "approved".into(),
@@ -2135,6 +2258,7 @@ mod standalone_review_verdict_parent_tests {
             .unwrap();
         let draft = ReviewerDraft {
             version: 1,
+            needs: Vec::new(),
             pr: 59,
             reviewed_sha: f.head.clone(),
             verdict: "waiting".into(),
