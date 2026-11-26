@@ -44,6 +44,29 @@ comments:
   content: 'AC3 ADDENDUM (advisor-122 2026-11-26 09:24): the likely cause of the 15-min claude batch is the runner waiting on interactive input or a permission prompt (stdin not closed, or claude without --print or a non-interactive mode). The test must PROVE the runner gets EOF on stdin, and that if the vendor CLI blocks it fails FAST with a clear cause (not after the deadline).'
   created_at: 2026-11-26T16:21:44.655142438Z
   modified_at: 2026-11-26T16:21:44.655142438Z
+- id: 01a218ad-0d8e-79c3-bc8b-5c91af9a3e8a
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    **Reproduced on this host (seat 536):** (1) no `--agent`: `agent=None`, so `pick_challenger` printed the runner-cmd note, then `RunnerCall::program()` bailed with "--run-review needs --agent <claude|codex> or AIDA_REVIEW_RUNNER_CMD". Agent-mode error rendering (`agent_error_block`) keeps only the first line of the anyhow chain, so all the operator saw was "review batch 1". (2) claude: the hardened argv in a cleared env hangs (even bare `claude --print` does, killed at 45s). With only the proxy variables (HTTPS_PROXY/HTTP_PROXY/NO_PROXY/ALL_PROXY + lowercase) passed through, the same argv answers OK in seconds. Root cause: `env_clear()` drops the proxy that a sandboxed/proxied seat needs, so claude retries until the 900s deadline.
+
+    ### Acceptance criteria and evidence
+    - AC1 (unit, review_prepare tests): the batch-site error becomes one line, `<vendor|AIDA_REVIEW_RUNNER_CMD> <pass> pass, review batch N: <cause chain {:#}>`, so agent mode keeps it. The stderr tail is flattened to one line. Stub-runner test covers deadline, output cap, spawn refused, exit code + stderr tail, and parse error.
+    - AC2 (unit): the note fires only when AIDA_REVIEW_RUNNER_CMD is set; with no --agent and no runner cmd, the vendor comes from `[agents] vendor` (built-in default claude) and is stated on stderr.
+    - AC3 (unit, s3a contract test extended): proxy variables are allowlisted; credentials and other sentinel vars stay stripped; empty cwd and no project settings are unchanged.
+
+    ### Expected files
+    - aida-cli-lib/src/launch/review_runner.rs
+    - aida-cli-lib/src/launch/review_challenger.rs
+    - aida-cli-lib/src/review_prepare.rs
+
+    ### Ambiguities / conflicts as questions
+    - With no --agent and no [agents] vendor, default to claude (the repo-wide built-in default) instead of refusing? Taking claude and saying so.
+  created_at: 2026-11-26T16:25:24.110671284Z
+  modified_at: 2026-11-26T16:25:24.110671284Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
