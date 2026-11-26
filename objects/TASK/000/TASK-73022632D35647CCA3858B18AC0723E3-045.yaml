@@ -3,12 +3,12 @@ spec_id: TASK-73022632d35647cca3858b18ac0723e3-045
 agreed_id: TASK-3320
 title: Review engine misses repository-root credential directories
 description: In the S1 reference, review_engine.rs:614 recognizes nested /.aws/ and /.ssh/ only. A repository-relative .aws/credentials or .ssh/config falls through to reviewable. Add path-component matching and root/nested fixtures before the CLI starts presenting source content.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:31:04.331376Z
-modified_at: 2026-11-26T00:21:08.397274081Z
+modified_at: 2026-11-26T06:26:06.524532382Z
 req_type: Task
 tags:
 - from-advisor:STORY-3076
@@ -137,9 +137,27 @@ history:
   author: dirtlab
   timestamp: 2026-11-26T00:21:11.057625504Z
   changes: []
+- id: 01a21688-61f5-7530-a3d8-8b80681015d3
+  author: aida-auto-bump
+  timestamp: 2026-11-26T06:26:06.453683839Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21688-623c-7362-b9b0-f8e38395e839
+  timestamp: 2026-11-26T06:26:06.524528192Z
+  agent: aida
+  commit_sha: 7849926072ab7716e5b4d4911adee3e1826f622c
+  summary: 'Advisor (delegated authority): promotion 42, linear on main 68ecbd82409 + 2 cherry-picks whose patch-ids match the integration squashes: STORY-3120 S3b (independent review + advisor override on a p3/cosmetic) and TASK-3320 (independently approved). Fast CI green.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0d3a0ae22
   vendor: codex
   session: 01a20c74cb2f
   harness_version: codex-cli 0.167.0
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T06:26:06.453675167Z
+  completion_sha: 7849926072ab7716e5b4d4911adee3e1826f622c
