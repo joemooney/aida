@@ -5,6 +5,10 @@
     {
       "at": "2026-11-26T13:20:34.024117484Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-26T13:23:26.746955548Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -19,6 +23,17 @@
       }
     },
     {
+      "ts": "2026-11-26T06:05:57.620822799Z",
+      "spec": "STORY-3143",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4626,
+        "verdict": "APPROVED",
+        "reviewed_sha": "be049fd1ea467bac8287bacecef8c35d1e2aa512"
+      }
+    },
+    {
       "ts": "2026-11-26T08:21:10.733066691Z",
       "spec": "STORY-3143",
       "kind": {
@@ -26,6 +41,39 @@
         "gate": "wip-limit-override",
         "reason": "10 changes are open and the limit is 10; STORY-3143 continues on the branch selected for existing work, which is not limited",
         "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T09:32:36.789538656Z",
+      "spec": "STORY-3143",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4641,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "aeb25528590f62531a8b19593e3fc98c019b71fe"
+      }
+    },
+    {
+      "ts": "2026-11-26T09:32:49.202699405Z",
+      "spec": "STORY-3143",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STORY-3143 S2 (completing). AC2 verified by story_3143_hotness_blends_weighted_signals, story_3143_default_areas_map_code_paths and cr_by_area in story_3143_flow_metrics_from_fixture_ledger. AC3 verified by story_3143_landings_parse_pr_numbers_from_subjects, story_3143_flow_metrics_from_fixture_ledger and story_3143_stale_claims_and_recommendations; it fails closed on an unknown holder set. AC4 verified by story_3143_stale_claims_and_recommendations; the prescribed `aida edit --superseded-by`, `aida defer --until manual:` and `--status approved` flags exist and nothing is executed. AC1 is unmet: the AC requires --format table|json|html and HTML is not implemented, yet the PR claims completion. Blocking: unmet-claimed-ac. The p3/test-gap items are follow-ups. CI pending at review time.",
+        "recovery_hint": "address the review findings, move STORY-3143 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T09:35:03.725559229Z",
+      "spec": "STORY-3143",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4641,
+        "verdict": "APPROVED",
+        "reviewed_sha": "aeb25528590f62531a8b19593e3fc98c019b71fe"
       }
     },
     {
@@ -39,12 +87,42 @@
       }
     },
     {
+      "ts": "2026-11-26T11:55:51.485074359Z",
+      "spec": "STORY-3143",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4649,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d529d3b23b5c867f25514c44633fc8333b2cd11a"
+      }
+    },
+    {
+      "ts": "2026-11-26T13:19:40.189954923Z",
+      "spec": "STORY-3143",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4649
+      }
+    },
+    {
       "ts": "2026-11-26T13:20:33.869040267Z",
       "spec": "STORY-3143",
       "kind": {
         "event": "SpecCompleted",
         "commit": "2d89ef450561e39de69593890f3ab7765146154b",
         "pr": 4641,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-26T13:23:26.491257494Z",
+      "spec": "STORY-3143",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "956182606ddd54e31684fadbd306e34d412bf297",
+        "pr": 4649,
         "closed_by": "auto-bump"
       }
     }
