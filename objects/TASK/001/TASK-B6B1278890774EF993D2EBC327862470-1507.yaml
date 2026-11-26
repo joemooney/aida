@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-26T12:59:40.035664826Z
+modified_at: 2026-11-26T13:01:33.088470057Z
 req_type: Task
 tags:
 - landing
@@ -25,6 +25,18 @@ relationships:
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T12:59:32.538037922Z
   created_by: joe
+comments:
+- id: 01a217f2-aafe-74b1-a440-f043357149f2
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:01):
+    # TASK-3917: one admission predicate + cached pre-scan forge reads (BUG-2769 follow-up; product-15). Lane: CLAUDE. MAIN, NEW branch autotrain-one-predicate. STRICT (train/admission path). <=200 lines. Completing (TASK-3917) trailer.
+    READ: `aida show TASK-3917` and BUG-2769's landed change (#4640, 15bbbc68222). AC1-AC3 as written. Keep the pr_train and admission tests green.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T13:01:33.088470057Z
+  modified_at: 2026-11-26T13:01:33.088470057Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a217f0-9b85-7542-b16e-c93c789c7c07
   author: joe
