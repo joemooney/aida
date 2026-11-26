@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-26T19:35:59.404521609Z
+modified_at: 2026-11-26T20:51:44.051036693Z
 req_type: Bug
 tags:
 - forge
@@ -275,6 +275,19 @@ comments:
   modified_at: 2026-11-26T18:50:31.942401Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a219a0-e333-7c22-babc-f1104980747e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5966f4233c (round 4 rework on #4464).
+    Fixes: (1) a low-budget back-off (all_ready under the advisor loop) now skips journal recovery entirely via recovery_request() (pr_train.rs). Every recovery pass that runs passes Some(candidates), so the BUG-2547 member-set match always applies and a stale retained journal never resumes when the budget is low. (2) watcher_repo uses `gh browse --no-browser` instead of the GH_BROWSER=/bin/echo override. Its comment now says gh's base-repo resolution can issue a GraphQL repo-network query, which does not draw on the core budget.
+    Evidence: bug2735_low_budget_backoff_never_resumes_a_stale_retained_journal (new), bug2547_*, and bug2735_watchers_yield_core_budget_to_train_ci (fake gh updated to match 'browse --no-browser') pass in a lane job: 5 passed, 0 failed. make check-ci-fast exit 0 after fixing a trace-header stranding I introduced. The story_2905 source-order test (claim_all before resume_for) still holds.
+    Probes: with recovery skipped under back-off, report_automatic_idle sees empty candidates and an empty outcome and returns idle, so no forge call is made. Not backed off and an empty candidate set: Entry::matches(&[]) is false, so nothing resumes.
+    Residual risk: the new test covers the predicate and resume_for with a stale journal, not the full handler end to end (that would need forge and budget fakes).
+  created_at: 2026-11-26T20:51:44.051036693Z
+  modified_at: 2026-11-26T20:51:44.051036693Z
+  session_id: 01a2195b4efd
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
