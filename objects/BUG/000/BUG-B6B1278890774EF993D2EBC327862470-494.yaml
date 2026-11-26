@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-26T01:19:33.301653286Z
+modified_at: 2026-11-26T01:19:44.321629794Z
 req_type: Bug
 tags:
 - landing
@@ -136,6 +136,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2733 (completing). AC1: verified by bug_2733_promotion_branch_resolves_only_the_new_commits_spec for the train squash-body path (identity_gate); the ship path filter in pr_service::ship_gate_spec_records has no test. AC2: unverified; no test asserts the refusal text, although it is built from the resolved ids and looks right by construction. The linear-promotion review boundary is verified by bug_2733_linear_promotion_establishes_its_review_boundary. Blocking problem: the new `git log -p` patch read in gate code leaves git''s textconv on (it is on by default for git log), unlike every other patch read in the codebase, and it skips host_git_command hardening in review_git_evidence. That lets repo config written by a seat run a command on the host. There are also binary-diff patch-id collisions and test gaps. CI was pending at review time.. No triage reason was given.'
   created_at: 2026-11-26T01:19:33.301646483Z
   modified_at: 2026-11-26T01:19:33.301646483Z
+- id: 01a2156f-e426-7620-bee1-6465206bfd1a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2733):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bc5438855b63
+    Recorded: 2026-11-26T01:18:48.077719599+00:00
+    Findings:
+    1. base_patch_equivalents::patch_ids (aida-cli-lib/src/base_patch_equivalents.rs:102-115) runs `git log -p` with --no-ext-diff but without --no-textconv. git enables textconv by default for git log, so a diff.<driver>.textconv in repo config plus a matching attribute (for example .git/info/attributes `* diff=x`) runs an arbitrary command whenever the train, ship or auto-queue-review reads patch-ids. Contained seats can write the primary's .git, so this lets a seat run a command on the host from inside gate code. It is a new exec surface: the plain `git log --format` calls it sits next to never run diff drivers. Every other patch read in the codebase passes --no-textconv (review_carryover::patch_id, review_risk, worktree_gc, mandate). Fix: pass --no-textconv (and --no-renames --no-relative --full-index --binary like review_carryover::patch_id), and add a test proving a configured textconv driver is not invoked.
+    2. In review_git_evidence::promotion_merge_subjects (aida-cli-lib/src/review_git_evidence.rs:495), every other git call goes through aida_core::git_ops::host_git_command, which applies the seat-clone refusal, the CONTAINED_TREE_GIT_CONFIG pins and core.fsmonitor=false. The new retain_new call spawns plain `Command::new("git")` (base_patch_equivalents.rs:72, 102, 122), so it skips that hardening, and its output has no size cap or timeout when no train deadline is active, unlike the 3s/1MiB-bounded `log` closure in the same function. Route the patch-id reads through host_git_command (or take a command factory) and bound them.
+    3. Patch-ids are computed from `git log -p` without --binary/--full-index, so a binary-only change hashes as a `Binary files a/X and b/X differ` stanza. Two commits that change the same binary path to different contents (with identical text hunks) share a patch-id, so a genuinely new branch commit is reported as already on base and its specs are dropped from train/ship resolution. textconv-lossy diffs collide the same way. review_carryover::patch_id uses --binary --full-index to avoid this. Add those flags and a collision test.
+    4. Untested gate path: AC1 names `aida pr ship`, but no test exercises the new filter in pr_service::ship_gate_spec_records (aida-cli-lib/src/pr_service.rs:181-185), including its split_once("..") of the completion-adjusted gate range. A regression there (for example, the filter silently not applying) would pass CI. Add a promotion-shaped test asserting ship_gate_spec_records returns only the new commit's spec.
+    5. AC2 (refusal text lists only the specs that drove it, wording unchanged) is listed as untraced and stays untested in this diff. The implementer's self-review labels it [behavioral-test] but cites no test. Add a train-check test on a promotion-shaped branch whose old commits carry supervised specs, asserting the refusal names only the new commit's supervised spec and keeps the `is marked unset (supervised` wording.
+    6. Patch-id equality is not proof that the change is on base. If main landed X' and later reverted it (R), a branch still carrying the original X re-introduces X's change on merge, but already_on_base drops X (its patch-id is in the base window), so X's supervised spec escapes the train's supervised gate. Consider excluding patch-ids whose change was later reverted on base (or requiring the title trailer for such commits), or record an advisor ruling accepting the limit, which the AC's patch-id wording invites.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T01:19:44.166968154Z
+  modified_at: 2026-11-26T01:19:44.166968154Z
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
