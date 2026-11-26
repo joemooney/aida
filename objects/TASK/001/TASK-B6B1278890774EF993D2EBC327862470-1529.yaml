@@ -1,5 +1,6 @@
 id: 01a21922-3270-7912-8d3b-07511e4650d4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1529
+agreed_id: TASK-3514
 title: 'Review follow-up: BUG-2772 AC1''s second clause (a pin protecting a commit on no remote is refused with the s'
 description: |-
   From BUG-2772
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21837-b568-7403-8cd2-306cdf771adb
   created_at: 2026-11-26T18:33:37.544096574Z
+history:
+- id: 01a21925-3315-76c2-8d8b-321eac4b9d89
+  author: joe
+  timestamp: 2026-11-26T18:36:38.037119476Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b9e84bdb3a766f206e375922b64ab031c5f13a5f
   branch: pr-4676

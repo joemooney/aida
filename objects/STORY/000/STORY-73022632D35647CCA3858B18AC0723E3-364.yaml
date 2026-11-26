@@ -1,5 +1,6 @@
 id: 01a2191a-3424-70c2-b4bf-2e965cb9244a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-364
+agreed_id: STORY-3189
 title: 'Review PR-4676: [AI:claude] fix(seat-clone): release a base pin that outlived its clone before a fresh clone at that path (BUG-2772)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a218e7`) for branch `bug-2772-seat-pin-ref`.
@@ -76,6 +77,12 @@ history:
   timestamp: 2026-11-26T18:25:17.369389992Z
   session_id: 01a218e76317
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21925-b702-7cc3-a95e-c750626a31be
+  author: joe
+  timestamp: 2026-11-26T18:37:11.810214255Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: b9e84bdb3a766f206e375922b64ab031c5f13a5f

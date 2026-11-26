@@ -1,5 +1,6 @@
 id: 01a21905-6bc0-7482-b8e2-5117937acfc0
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-363
+agreed_id: STORY-3190
 title: 'Review PR-4673: [AI:claude] feat(review): S5b posting deadline, literal pathspecs, code-spanned bundle titles (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a218c6`) for branch `int-story-3120-s5b`.
@@ -49,6 +50,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21925-f7d0-7fc1-983f-45479b8b14fb
+  author: joe
+  timestamp: 2026-11-26T18:37:28.400266787Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
   branch: main

@@ -1,5 +1,6 @@
 id: 01a2191b-68a5-7a71-9170-9e55124d2f4f
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-055
+agreed_id: TASK-3512
 title: 'BUG-2772: stale seat pin is released on no-clone + no-lease; AC1''s remote-reachability refusal not implemented'
 description: |
   The authoritative brief keyed staleness on no clone directory + no clone lease (aida-cli-lib/src/seat_clone.rs release_stale_pin). AC1's extra rule (refuse with a salvage hint when the pinned commit is on no remote) was not implemented. The pin only names the base commit main resolved at launch, so dropping it with the clone gone loses nothing a seat holds. Should a unique-commit guard be added anyway?
@@ -17,6 +18,13 @@ tags:
 - from-implementer:BUG-2772
 - kind:deviation
 - severity:minor
+history:
+- id: 01a21924-b225-78c3-a5c7-7b5512e9a6fa
+  author: joe
+  timestamp: 2026-11-26T18:36:05.029704713Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b9e84bdb3a766f206e375922b64ab031c5f13a5f
   branch: bug-2772-seat-pin-ref
