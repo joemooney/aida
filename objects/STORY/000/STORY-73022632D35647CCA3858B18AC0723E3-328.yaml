@@ -1,0 +1,47 @@
+id: 01a21557-ff49-7371-844b-04e396edc9ed
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-328
+title: 'Review PR-4606: [AI:claude] fix(review): promote override approvals, ignore label-event runs, skip train PRs (BUG-2766)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21533`) for branch `bug-2764-followup`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4606>
+  - Branch: `bug-2764-followup` → `main`
+
+  ## Covers
+
+  - BUG-2766
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4606` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T00:53:38.249688694Z
+modified_at: 2026-11-26T00:53:42.237515203Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a21509-d29d-75f2-9eb0-fdf1204a9fd0
+  created_at: 2026-11-26T00:53:42.237470085Z
+  created_by: dirtlab
+history:
+- id: 01a21558-1afa-7b50-af69-8912af37b052
+  author: dirtlab
+  timestamp: 2026-11-26T00:53:45.338816905Z
+  session_id: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 58740fb4ce96577f40a2083d55173230f23da94a
+  branch: bug-2764-followup
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa7028b4df
+  vendor: claude
+  session: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)

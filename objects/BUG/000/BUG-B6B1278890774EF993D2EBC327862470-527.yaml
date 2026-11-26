@@ -10,12 +10,12 @@ description: |
   - AC2: label-event check rows ("label event (fast compile not rerun)", status skipping) are ignored when judging whether FAST CI finished; when ci:full is already present with a full run in progress or done, the line says so instead of "FAST CI at this head has not finished".
   - AC3: train PRs (head train/*, "[train]" titles) are skipped entirely, and a busy per-PR full-ci lock is reported as "skipped (busy)", not a failure that makes the job exit non-zero.
   - AC4: tests for AC1-AC3.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T23:28:15.005813754Z
-modified_at: 2026-11-26T00:18:23.056260675Z
+modified_at: 2026-11-26T00:53:48.071525868Z
 req_type: Bug
 tags:
 - ci
@@ -26,6 +26,11 @@ relationships:
   target_id: 01a213e3-ba21-73e1-b295-65d98d31ac5f
   created_at: 2026-11-25T23:29:14.843013069Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21557-ff49-7371-844b-04e396edc9ed
+  created_at: 2026-11-26T00:53:48.071477251Z
+  created_by: dirtlab
 comments:
 - id: 01a2150d-0126-78d2-82a0-f7030581b24f
   author: joe
@@ -61,6 +66,37 @@ comments:
   modified_at: 2026-11-26T00:18:23.056260675Z
   session_id: 01a21533dd09
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21557-5482-7e01-941e-a1bdac028ef1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5f478d73d9a4 (diff origin/main...HEAD: aida-cli-lib/src/review_watch.rs only)
+
+    Acceptance evidence:
+    - AC1: promotion_pass selection. When the PR's own verdict at the head does not approve, a spec-keyed approval at the same exact head recorded later (an override) wins. spec_approvals_by_head keeps the newest approval per head and no longer drops unattested ones, so they print 'skipped (approval carries no recorder attestation…)' instead of the PR being absent. Test: bug2766_override_approval_after_refusal_promotes (an override newer than the refusal is promoted [STORY-1 @ …]; an older one adds no line and no edit).
+    - AC2: reviewed_fast_settled returns HeadCi. Runs whose jobs are named 'label event …' are skipped. A non-cancelled 'ci-tier: full' run gives 'skipped (ci:full already applied: FULL run at this head is in progress|has finished)'. Test: bug2766_label_event_runs_and_full_runs (FULL in progress gives that line and no edit; a running label-event run over a settled fast run is promoted).
+    - AC3: changes with head_branch train/* are filtered out before promotion. A receipt lock busy error becomes 'skipped (busy: PR-N.full-ci.lock is held; retried next tick)' and the pass returns Ok. Test: bug2766_train_prs_skipped_and_busy_lock (considering the train PR would fail the pass because its gh stub fails; asserts Ok, one line, empty stderr).
+    - Lane jobs: 6 passed (3 new tests, both bug2764 tests, the standalone PR-keyed record path). make check-ci-fast rc=0.
+
+    Probe findings and fixes:
+    - Found in self-review and fixed: returning Full for a cancelled FULL run would have bypassed request_full_ci_with's cancelled-run re-apply (TASK-3105). A cancelled FULL run is now not decisive.
+    - Precedence: the PR's own approval at the head always wins. A refusal at the head yields only to a strictly later spec approval, and only when both timestamps parse (RFC 3339, compared as instants). A missing timestamp keeps the old behaviour (own wins).
+
+    Residual risks:
+    - The '[train]' title is not checked. Discovery does not fetch titles, and a fixture pins its field list. Train detection uses the train/ head prefix, the same signal ci.yml uses.
+    - I could not read #4600's live verdict records from this host. The override mechanism (a spec-keyed approval after the reviewer's request-changes at f24ccdbb) is inferred from the fact that the PR was absent rather than listed as skipped.
+    - More forge calls: jobs are now fetched for pending runs too (one call per run until a decisive one).
+  created_at: 2026-11-26T00:52:54.530752425Z
+  modified_at: 2026-11-26T00:52:54.530752425Z
+  session_id: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21557-a188-7262-bf54-3c04c18e927c
+  author: aida-publication-done
+  content: Implementer push 58740fb4ce96 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T00:53:14.248127227Z
+  modified_at: 2026-11-26T00:53:14.248127227Z
+  session_id: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2150a-c5ca-7f63-8878-e8a8add13a31
   author: joe
@@ -80,6 +116,21 @@ history:
 - id: 01a21535-397b-7d73-b9d7-1c9f9a52f21b
   author: dirtlab
   timestamp: 2026-11-26T00:15:39.387546218Z
+  session_id: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21557-a188-7262-bf54-3bf19636cfe4
+  author: aida-publication-done
+  timestamp: 2026-11-26T00:53:14.248122898Z
+  session_id: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21558-3405-72e1-989c-b6499d7aec37
+  author: dirtlab
+  timestamp: 2026-11-26T00:53:51.749213012Z
   session_id: 01a21533dd09
   harness_version: 2.1.319 (Claude Code)
   changes: []
