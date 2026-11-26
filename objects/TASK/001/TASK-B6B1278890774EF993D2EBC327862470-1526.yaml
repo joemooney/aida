@@ -16,12 +16,12 @@ description: |
   - AC1: a SKETCH comment, signed off by the advisor, naming the state file, the functions, and exactly what a concurrent review-watch join or a manual train may do in the gap, with a proof that each is safe.
   - AC2: an implementation of (a)-(d) per the sketch.
   - AC3: tests: a deputy job blocks for longer than the deadline and review-watch admits work meanwhile; main moves during the wait → recompute; a member head moves → recompute; recovery keeps its fairness position.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-26T19:19:50.184855526Z
+modified_at: 2026-11-26T19:24:20.064950840Z
 req_type: Task
 tags:
 - admission
@@ -148,6 +148,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21950-dee0-79f1-bbd2-6a3c7b9652b4
+  author: lane-recovery
+  timestamp: 2026-11-26T19:24:20.064950309Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
