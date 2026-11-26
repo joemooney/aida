@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T02:24:33.178994047Z
+modified_at: 2026-11-26T02:26:17.107588166Z
 req_type: Task
 tags:
 - landing
@@ -38,6 +38,27 @@ comments:
   modified_at: 2026-11-26T02:20:52.546663770Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a215ac-d193-7ed0-bc1b-5f98db5681e8
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** `[landing] max_prs_per_train` parsed by `LandingPolicy::from_config` (positive integer; unset/invalid = None with a warning). The auto-train entry `advisor_train_handler` (the only all-ready automatic caller, max hard-coded 10) resolves its max from the trusted policy via `auto_train_max`, so unset keeps 10. Explicit `aida pr train N...` and dispatch_flow lists keep their own max. Tests in `landing_policy.rs` parse valid/invalid values.
+    - **AC2 (unit):** extract the bounded-train split in `pr_train_handler` into `split_bounded_train`; test that with policy max 3 and 6 ordered ready PRs the first pass admits 3 and leaves 3 waiting, and a second pass over the waiting set admits the next 3 in order.
+    - **AC3:** deferred (follow-up config change; not in this PR per brief).
+
+    ### Expected files
+    - `aida-cli-lib/src/landing_policy.rs`
+    - `aida-cli-lib/src/pr_train.rs`
+    - `aida-cli-lib/src/tests/story_1690_train_tests.rs` (or inline test)
+
+    ### Ambiguities / conflicts as questions
+    - Should an operator `aida pr train --all-ready` without --max also honour the knob? Taking the spec literally: only the automatic train; the operator flag keeps its explicit default.
+  created_at: 2026-11-26T02:26:17.107588166Z
+  modified_at: 2026-11-26T02:26:17.107588166Z
+  session_id: 01a215aaf8ca
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
