@@ -208,3 +208,11 @@
   added_at: 2026-11-26T10:33:15.364573450Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a21721-6dd8-74c2-8c16-38fe6e9df346
+  position: 1442000
+  added_by: dirtlab
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-26T10:37:20.903495653Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
