@@ -11,9 +11,10 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-26T07:16:53.877851877Z
+modified_at: 2026-11-26T07:34:06.367717725Z
 req_type: Story
 tags:
+- batch:shift-20261126-0733
 - docs
 - glossary
 - showcase
@@ -361,6 +362,10 @@ history:
 - id: 01a216b3-a89b-7032-a5fa-10461e27e28f
   author: joe
   timestamp: 2026-11-26T07:13:22.587646912Z
+  changes: []
+- id: 01a216c6-a388-7a32-b9bf-6bf0e4420c69
+  author: joe
+  timestamp: 2026-11-26T07:34:06.472960420Z
   changes: []
 execution_mode: drain
 filed_at:
