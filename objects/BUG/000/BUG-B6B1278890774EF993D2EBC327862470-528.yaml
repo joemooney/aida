@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T01:51:46.906577705Z
-modified_at: 2026-11-26T01:57:53.978208428Z
+modified_at: 2026-11-26T02:04:57.309117964Z
 req_type: Bug
 tags:
 - landing
@@ -37,6 +37,27 @@ comments:
   modified_at: 2026-11-26T01:54:14.212570030Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21599-4a5d-77e1-b1ad-c2fd66da3300
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** new `pr_train_culprit.rs` records (PR, head, train #) when `drive` ejects a member as red alone on main (the definitive bisect culprit; `Outcome.culprits`). The auto/`--all-ready` admission loop in `pr_train_handler` refuses that PR while its head is unchanged (`held: culprit of train #N at <sha>`); a new head drops the record; naming the PR on `aida pr train <PR>` is the operator clearance and is recorded (`cleared_by`). `--check` (`check_one`) reports it as gate `culprit-hold`. Tests: same-head refused, new head re-admitted, clearance recorded, drive records the culprit.
+    - **AC2 (unit, drive-level fake rails):** `Rails::drained()` (ForgeRails: auto-train only, reads `admission_drain::active`, unreadable = drained) checked before each wave in `drive_into`; when drained, the not-yet-started groups are ejected with a re-train reason and no new train is built/tested. In-flight CI is never cancelled (check only sits between waves). Test: a drain set after the first red blocks both bisect sub-trains.
+    - **AC3:** the tests above.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_train_culprit.rs` (new)
+    - `aida-cli-lib/src/pr_train.rs`, `aida-cli-lib/src/pr_train_check.rs`
+    - `aida-cli-lib/src/tests/story_1690_train_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - Culprit attribution: only a member red ALONE on main is recorded (a multi-member red names no single culprit). Operator clearance reuses explicit `aida pr train <PR>` rather than a new flag.
+  created_at: 2026-11-26T02:04:57.309117964Z
+  modified_at: 2026-11-26T02:04:57.309117964Z
+  session_id: 01a215928946
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2158d-6dba-7bd1-8dba-7274f499fa62
   author: joe

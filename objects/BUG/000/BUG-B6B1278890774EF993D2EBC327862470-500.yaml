@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-26T01:41:59.366652759Z
+modified_at: 2026-11-26T02:09:49.972454109Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -210,6 +210,15 @@ comments:
   modified_at: 2026-11-26T01:41:59.366652759Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2159d-c194-7cc2-9363-25f39273602c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cd340a5922. This round changes only scripts/store-writers.toml: one row, schedule_ledger.rs|write_local_bounded|with_store_write_lock_bounded, classified like the existing write_local_bounded|write_cas_opts row (advisor-signed, 18:46), plus one unchanged seat_clone.rs row moved into sorted order. Evidence: check-store-writers.py passes; test_store_writer_inventory.py 59/59 OK; make check-ci-fast exit 0. Review findings 1-4 were addressed in 9887130544, with tests bug2739_targeted_heal_removes_only_the_zombie_creators_worktree and bug2739_targeted_shared_heal_reports_held_store_lock. Residual risk: none new; the full suite runs in CI.
+  created_at: 2026-11-26T02:09:49.972454109Z
+  modified_at: 2026-11-26T02:09:49.972454109Z
+  session_id: 01a21585c0d4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
