@@ -16,12 +16,12 @@ description: |-
     - `parse_runner_findings_json(&str) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String>` parsing structured JSON findings and file coverage emitted by an automated batch review runner.
   - `aida review prepare` in `aida-cli-lib` supports `--sarif <PATH>`, `--post-comment` (requires `--pr <N>`), and `--run-review` (executes per-batch review via `AIDA_REVIEW_RUNNER_CMD` or `claude --print`, anchors findings, and verifies coverage).
   - Unit tests in `aida-core` and `aida-cli-lib` verify SARIF generation, forge markdown rendering, and runner JSON parsing.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T12:04:13.949661986Z
+modified_at: 2026-11-26T12:05:30.644993482Z
 req_type: Story
 tags:
 - integration
@@ -1234,6 +1234,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a217bf-1d94-7ba0-991d-fca043260692
+  author: joe
+  timestamp: 2026-11-26T12:05:30.644988174Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
