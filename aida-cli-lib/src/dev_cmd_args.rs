@@ -162,6 +162,11 @@ pub enum DevCommand {
         /// Why this head runs live before review (recorded in the marker).
         #[clap(long)]
         reason: String,
+
+        /// The full 40-hex SHA you reviewed; refused unless the fetched head
+        /// is exactly it. Required for a PR.
+        #[clap(long)]
+        expect_head: Option<String>,
     },
 
     /// Internal pre-build safety gate used by `make build-fast`.

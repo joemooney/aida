@@ -2916,3 +2916,40 @@ fn story3148_target_parses_a_pr_or_a_safe_branch() {
         assert!(parse_target(bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn story3148_head_moved_since_review_is_refused_and_live_untouched() {
+    use crate::dev_provisional::{expect_head_refusal, promote_expected};
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(provisional_checkout());
+    steps.staged_sha = Some("abc1234567".into());
+    let reviewed = "def1234567890def1234567890abc1234567890d";
+    let mut out = Vec::new();
+    for expect in [Some(reviewed), None, Some(&HEAD[..12])] {
+        let err = promote_expected(
+            &f.layout,
+            &provisional_marker(),
+            expect,
+            &mut steps,
+            &mut out,
+        );
+        assert!(err.unwrap_err().to_string().contains("Nothing was changed"));
+    }
+    assert!(steps.calls.is_empty(), "{:?}", steps.calls);
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    assert!(read_promotion_meta(&f.layout.live_dir).is_none());
+    assert_eq!(expect_head_refusal(false, None, HEAD), None);
+    let upper = HEAD.to_ascii_uppercase();
+    let r = promote_expected(
+        &f.layout,
+        &provisional_marker(),
+        Some(&upper),
+        &mut steps,
+        &mut out,
+    );
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted);
+    assert!(String::from_utf8(out)
+        .unwrap()
+        .contains(&format!("Resolved head: {HEAD}")));
+}

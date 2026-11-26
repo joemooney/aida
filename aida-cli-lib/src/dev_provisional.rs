@@ -74,6 +74,38 @@ pub(crate) fn parse_target(raw: &str) -> Result<Target> {
     Ok(Target::Branch(raw.to_string()))
 }
 
+/// PURE: `None` when `--expect-head` (required for a PR) is exactly the
+/// resolved head, so the head cannot move between review and swap.
+pub(crate) fn expect_head_refusal(pr: bool, expect: Option<&str>, head: &str) -> Option<String> {
+    match expect.map(str::trim) {
+        None if !pr => None,
+        None => Some("a PR target needs --expect-head <full SHA you reviewed>".into()),
+        Some(e) if e.len() == 40 && e.eq_ignore_ascii_case(head.trim()) => None,
+        Some(e) => Some(format!("--expect-head {e} is not the resolved head {head}")),
+    }
+}
+
+/// Checks `--expect-head`, shows the resolved head, then builds and promotes.
+pub(crate) fn promote_expected(
+    layout: &crate::dev_build::DevLayout,
+    marker: &ProvisionalMarker,
+    expect: Option<&str>,
+    steps: &mut dyn crate::dev_build::BuildSteps,
+    out: &mut dyn std::io::Write,
+) -> Result<crate::dev_build::BuildOutcome> {
+    if let Some(why) = expect_head_refusal(marker.pr.is_some(), expect, &marker.head) {
+        bail!("refusing the provisional promote: {why}. Nothing was changed.");
+    }
+    use std::io::Write as _;
+    writeln!(
+        out,
+        "Resolved head: {} (promoting this commit)",
+        marker.head
+    )?;
+    let opts = crate::dev_build::DevBuildOptions::default();
+    crate::dev_build::run_dev_build_with(layout, &opts, Some(marker), steps, out)
+}
+
 /// PURE: the line `aida dev status` shows first while live is provisional.
 pub(crate) fn status_line(m: &ProvisionalMarker) -> String {
     let what = match (m.pr, m.branch.as_deref()) {
@@ -125,7 +157,7 @@ fn operator_label(env: &aida_core::exec_context::Environment) -> String {
     }
 }
 
-pub(crate) fn handle(raw_target: &str, reason: &str) -> Result<()> {
+pub(crate) fn handle(raw_target: &str, reason: &str, expect: Option<&str>) -> Result<()> {
     let env = aida_core::exec_context::Environment::capture();
     if let Some(why) = operator_refusal(
         crate::pr_service::ship_interactive_tty(),
@@ -198,13 +230,8 @@ pub(crate) fn handle(raw_target: &str, reason: &str) -> Result<()> {
         reason: reason.trim().to_string(),
         at: chrono::Utc::now().to_rfc3339(),
     };
-    let result = crate::dev_build::run_dev_build_with(
-        &layout,
-        &crate::dev_build::DevBuildOptions::default(),
-        Some(&marker),
-        &mut crate::dev_build::RealSteps,
-        &mut std::io::stdout(),
-    );
+    let steps = &mut crate::dev_build::RealSteps;
+    let result = promote_expected(&layout, &marker, expect, steps, &mut std::io::stdout());
     let _ = git(&primary, &["worktree", "remove", "--force", &tree_arg]);
     result?;
     println!("{}", status_line(&marker));

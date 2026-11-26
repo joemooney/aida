@@ -12779,6 +12779,10 @@ Options:
       --reason <REASON>
           Why this head runs live before review (recorded in the marker)
 
+      --expect-head <EXPECT_HEAD>
+          The full 40-hex SHA you reviewed; refused unless the fetched head is exactly it. Required
+          for a PR
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -45989,6 +45993,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "expect-head",
+        "takes_value": true,
+        "help": "The full 40-hex SHA you reviewed; refused unless the fetched head is exactly it. Required for a PR"
       },
       {
         "name": "format",
