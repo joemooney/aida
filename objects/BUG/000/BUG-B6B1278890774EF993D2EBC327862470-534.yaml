@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T15:37:57.468453513Z
+modified_at: 2026-11-26T15:40:22.651180756Z
 req_type: Bug
 tags:
 - admission
@@ -111,6 +111,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T15:37:57.311900597Z
   modified_at: 2026-11-26T15:37:57.311900597Z
+- id: 01a21884-14b5-7d83-a137-0ee82b28cc02
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:40):
+    # BUG-2773 r1 on #4666 (advisor-122 ruling 2026-11-26 08:38 at d169b254: a LEGIT p1 in strict lease code, no override; product-15). Lane: CLAUDE. STRICT. MAIN, existing branch bug-2773-unbound-claim-heal / PR #4666. Keep the title "(BUG-2773)".
+    RULING: a dead creator pid is NOT death evidence for an unbound claim (build_claim records the short-lived command's own pid, so it is always dead). Release an unbound claim ONLY when ALL of these hold:
+     (1) no lease or launcher binds it;
+     (2) heartbeat older than a long floor (>=24h, or 3x the claim TTL if that's larger);
+     (3) no live AIDA session or seat references the claim id or its clone path, checked through the SESSION REGISTRY, not /proc;
+     (4) the clone path is ABSENT, or present with no lease marker and NO uncommitted work. When present, salvage first; never release over unsalvaged work.
+    Anything uncertain → NOT eligible, and the refusal hint says WHY. The pid is a supportive signal only.
+    TESTS: an alive-session negative; a fresh-heartbeat negative; the 11-day shape (unbound lease + launcher, old heartbeat) POSITIVE; the other-host hint (the reviewer's p3).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4666. COMMIT your work.
+  created_at: 2026-11-26T15:40:22.651180756Z
+  modified_at: 2026-11-26T15:40:22.651180756Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
