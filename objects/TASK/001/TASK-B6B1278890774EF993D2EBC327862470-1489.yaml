@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: the credential-path screen also covers .npmrc, .cargo/credentials and .cargo/credentials.toml, .vault-token, terraform tokens (.terraformrc, terraform.rc, .terraform.d/credentials.tfrc.json), and similar well-known token files, at the repo root and nested.
   - AC2: a test per new pattern; existing TASK-3320 tests stay green.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:09:19.840024994Z
-modified_at: 2026-11-26T07:16:33.742852049Z
+modified_at: 2026-11-26T07:44:04.379976105Z
 req_type: Task
 tags:
 - review
@@ -44,6 +44,13 @@ history:
   author: joe
   timestamp: 2026-11-26T07:12:58.963693538Z
   changes: []
+- id: 01a216cf-c31b-7b93-a051-9e2d1b880bf7
+  author: aida-session-start
+  timestamp: 2026-11-26T07:44:04.379970171Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: c8c3a3e139acd702925182e8241a52ad1dafae73
