@@ -180,3 +180,9 @@
   added_at: 2026-11-26T13:15:29.996201301Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
+  position: 1451000
+  added_by: dirtlab
+  added_at: 2026-11-26T13:21:00.989311068Z
+  for_role: implementer
