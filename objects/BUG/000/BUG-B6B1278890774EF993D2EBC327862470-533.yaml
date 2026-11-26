@@ -14,11 +14,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T14:17:13.832602291Z
+modified_at: 2026-11-26T17:22:02.865250919Z
 req_type: Bug
 tags:
 - lanes
 - seat-clone
+history:
+- id: 01a218e0-ea73-7a92-9d85-2f50a6c28366
+  author: joe
+  timestamp: 2026-11-26T17:22:02.995053869Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 4d918b28370443f66f32aebc1f6f6074501ad557
   branch: main
