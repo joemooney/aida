@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T04:17:53.715998849Z
+modified_at: 2026-11-26T04:20:47.206472480Z
 req_type: Story
 tags:
 - planning
@@ -27,6 +27,17 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:19:14.999335916Z
   modified_at: 2026-11-25T21:19:14.999335916Z
+- id: 01a21615-f6d9-72f0-b036-e7473bd78918
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:20):
+    # STORY-3143 (approved; product-15 2026-11-25 21:25, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch report-backlog. STANDARD. <=300 changed lines; if it doesn't fit, ship a first slice with (Refs STORY-3143) and say what remains in the PR body, otherwise use the completing (STORY-3143) trailer.
+    READ FIRST: `aida show STORY-3143 --comments` (evidence, ACs, rulings). Slice 1 = AC1+AC2 (classification + hotness) as `aida report backlog` with table/json output; flow metrics (AC3) and recommendations (AC4) in slice 2. The product seat's one-off script logic is described on the spec.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T04:20:47.206472480Z
+  modified_at: 2026-11-26T04:20:47.206472480Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
