@@ -10,12 +10,12 @@ description: |
   - AC2: a manual `aida pr train N` waiting on an idle auto-train is admitted within one auto-train poll interval.
   - AC3: a test: an idle auto-train loop does not hold admission across polls, and a contending manual train is admitted.
   - AC4: a log/status line names the holder and the phase whenever the auto-train holds admission for more than N seconds.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T08:30:56.950190777Z
+modified_at: 2026-11-26T08:34:16.148520635Z
 req_type: Bug
 tags:
 - admission
@@ -53,6 +53,13 @@ history:
   author: joe
   timestamp: 2026-11-26T08:29:20.169136162Z
   changes: []
+- id: 01a216fd-b7d4-7583-927e-16a1a72cfff3
+  author: aida-session-start
+  timestamp: 2026-11-26T08:34:16.148519760Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
