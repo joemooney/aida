@@ -1471,10 +1471,6 @@ pub(crate) fn observe_github_pr_merged_with_binary(
 /// when gh is missing or the read fails or is malformed.
 // trace:BUG-2738 | ai:claude
 pub(crate) fn github_pr_state(root: &Path, number: u64) -> Option<String> {
-    // Unit tests never reach a real forge unless they stub gh.
-    if cfg!(test) && std::env::var_os("AIDA_TEST_GH_BINARY").is_none() {
-        return None;
-    }
     let mut command = Command::new(crate::resolve_gh_binary()?);
     command
         .current_dir(root)
