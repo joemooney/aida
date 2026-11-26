@@ -39,6 +39,34 @@
 <p>Execution requires the documented reviewed private deny policy, trusted baseline and store/hook checks. Dry-run/JSON plans inspect metadata and do not prove content safety. Supported prepared sanitized writes use the scanner; unsupported writers refuse while the profile is enabled. Raw Git, foreign writers, receiving-side enforcement and automatic public forwarding remain outside this client boundary. Read the full <a href="../cli/07-project-setup.md#aida-config-transport">transport contract</a> before enabling it.</p>
 <h2 id="inspect-queues-at-the-right-scope">Inspect queues at the right scope</h2>
 <p>Project queues can live in the store, while role-global queues live under <code>~/.aida/queue/</code>. A store push cannot transfer a different machine&#x27;s role-global queue. Active roles, explicit filters and user identity affect what a queue view selects. Use the <a href="../advanced/multi-node.md">multi-node guide</a> to distinguish identity, routing and unpublished history before attempting repairs.</p>
+<h2 id="enable-scheduled-jobs-deputies-and-mandates">Enable scheduled jobs, deputies and mandates</h2>
+<p><code>aida init</code> seeds the project&#x27;s job registry; <code>aida schedule status</code> lists each job, its seats and its next run. To run the registry without a model polling it, install a driver for <code>aida schedule tick</code> at an interactive terminal:</p>
+<pre><code>aida schedule install-cron      # a 15-minute crontab entry for this repository
+aida schedule install-systemd   # or a systemd user timer on Linux</code></pre>
+<p>For a multi-seat fleet (product, advisor, integration and implementer lanes), an operator at an interactive terminal can grant time-boxed shipping authority with <code>aida mandate start --ship-held --ttl 8h --reason &quot;&lt;why&gt;&quot;</code>. <code>aida mandate start --drive</code> also turns on the 15-minute drive tick that routes stalled lanes. Contained seats that need a host or terminal command submit it to a deputy the operator starts in their own terminal: <code>aida deputy</code> for single allow-listed commands, or <code>aida deputy shell run</code> for whole scripts, submitted with <code>aida deputy shell submit --file &lt;path&gt; --wait</code>.</p>
+<h2 id="size-lane-admission-for-the-host">Size lane admission for the host</h2>
+<p>Lane admission limits are per machine, not per project. They live in the host file <code>/etc/aida/lanes.toml</code>, which root owns, under a <code>[lanes]</code> table. They do not belong in <code>.aida/config.toml</code>, which these knobs ignore. An unknown key or out-of-range value makes the file invalid, and an invalid file refuses every launch and lane job rather than falling back to defaults. A missing file means the defaults below.</p>
+<pre><code>[lanes]
+max_concurrent_cold_starts = 4    # default 2
+min_memory_headroom_gib = 4       # default 4
+max_compile_concurrency = 4       # unset: no cap
+cargo_build_jobs = 4              # unset: cargo&#x27;s default
+min_job_memory_headroom_gib = 8   # unset: no check</code></pre>
+<ul>
+<li><code>max_concurrent_cold_starts</code> caps how many managed headless implementer launches may be starting at once, across every checkout and user on the host. Further launches wait for a slot.</li>
+<li><code>min_memory_headroom_gib</code> is the floor of available RAM plus free swap at launch. A launch below it, or one that cannot read memory, is refused with a diagnostic.</li>
+<li><code>max_compile_concurrency</code> caps how many lane jobs (<code>aida lane job run</code>, including the host&#x27;s fast gate) may run at once. Further jobs wait for a slot.</li>
+<li><code>cargo_build_jobs</code> sets <code>CARGO_BUILD_JOBS</code> for every lane job; a job cannot set it itself.</li>
+<li><code>min_job_memory_headroom_gib</code> makes a lane job wait at start until headroom reaches the floor, releasing its compile slot while it waits. An unreadable memory reading refuses the job.</li>
+</ul>
+<p>The startup limits and their slot release rules are described in the <a href="../cli/07-project-setup.md">setup reference</a>. To exceed the launch limits once, set <code>AIDA_OVER_HOST_LIMIT=&quot;&lt;reason&gt;&quot;</code> in the launching command&#x27;s environment; the reason is recorded. <code>aida doctor --lane-host</code> checks the machine before you run automated lanes.</p>
+<h2 id="setup-that-aida-init-does-not-do-yet">Setup that <code>aida init</code> does not do yet</h2>
+<p><code>aida init</code> scaffolds the roles, the two-seat protocol, advisor and integration standing orders, scheduled guard jobs, merge trains and the mailbox. Three pieces of the reference multi-seat deployment are still configured by the operator.</p>
+<ul>
+<li><strong>A remote build host.</strong> <code>aida queue work</code> and <code>aida agent new</code> start lanes on the machine where you run them; AIDA does not yet dispatch lanes to a separate build server. The reference setup runs headless implementer lanes and heavy Rust builds on a Linux build host over SSH, using small host-side scripts that sync the <code>aida-store</code> ref, run the lane in a remote worktree and publish its branch to the forge. Native remote lane hosts are planned.</li>
+<li><strong>Harness permission for deputy submissions.</strong> In Claude Code, an allow-list entry for the bare <code>aida deputy shell submit</code> prefix does not match calls with <code>--file</code>, <code>--spec</code> or <code>--wait</code>. Add <code>Bash(aida deputy shell submit *)</code> to <code>.claude/settings.json</code> or <code>.claude/settings.local.json</code> so a seat can submit without stalling on a confirmation prompt.</li>
+<li><strong>Product-seat standing orders and fleet sizing.</strong> Record product-seat orders with <code>aida session handoff --seat product --standing-orders add &quot;&lt;text&gt;&quot;</code>. Fleet rules, such as caps on concurrent implementer lanes and reviews or when to re-scope a spec after repeated rework, are kept there as text. First-class configuration for them is planned.</li>
+</ul>
 <p>The <a href="../advanced/admin-guide.md">administrator guide</a>, <a href="../advanced/multi-hub-sync.md">multi-hub guide</a> and <a href="../cli/07-project-setup.md">setup reference</a> provide detail. The <a href="configuration.html">configuration guide</a> explains feature-specific scopes. For source evidence, inspect <a href="../../aida-core/src/allocation_authority.rs">clone allocation</a>, <a href="../../aida-cli-lib/src/transport_profile.rs">transport dispatch</a>, <a href="../../aida-cli-lib/src/transport_pull.rs">recoverable pull</a>, and <a href="../../aida-cli-lib/src/init_cmd.rs">agent scaffolding</a>.</p></main>
 <footer class="guide-footer"><p>Generated from <a href="../operator-setup.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
 </body>

@@ -21,6 +21,19 @@ These are stages in an operating model, not a promise that every project uses on
 
 When several agents work in parallel, status views, logs and handoffs use operational words: lanes, worktrees, leases, seats, grants, merge holds, merge trains, riders, bisect and post-train pulls. This section follows one change through those stages. Exact flags are in `aida <command> --help`; terms are defined in the [product glossary](../aida-core/templates/.aida/discipline/product-glossary.md).
 
+### Choosing how closely to steer a change
+
+You do not manage worktrees, leases or gate ledgers by hand. You describe an idea, the agent captures it as a spec, and the advisor approves it with an [execution mode](configuration-guide.md) that sets how much you stay involved.
+
+![From spark of an idea to main: the human workflow decision flowchart](showcase/assets/workflow-human-journeys.svg)
+
+- **Decide.** The spec still has an unresolved choice. No lane starts until you settle it, for example with `/aida-grill` or `aida decide`, and the criteria are updated.
+- **Guided.** Keystone or high-risk work. You and the agent work through each slice with `/aida-guided-implement`. The pull request carries a [merge hold](../aida-core/templates/.aida/discipline/product-glossary.md#merge-hold) until you clear it.
+- **Drive.** One feature runs unattended in its own lane (`aida do <spec>`) through review and CI, then stops at the held pull request for you to inspect and ship with `aida pr ship`.
+- **Drain.** Ready backlog work runs in parallel lanes (`aida queue work --auto-complete`). Design forks are punted to you, and approved changes ride a merge train to main.
+
+A higher-oversight mode can always be chosen; moving a spec to a less supervised mode needs `--force`.
+
 ### Tracing one idea from a prompt to main
 
 Follow a single feature idea, "add jittered retry backoff to the webhook client", across five swimlanes:
@@ -90,6 +103,40 @@ Landing on the remote main is not the last step. Local checkouts and the require
 - **Auto-bump.** When a commit with a completing trailer `(<spec>)` reaches main, `aida pull` reads it and moves the spec from Done to Completed. A `(Refs <spec>)` trailer leaves the spec open.
 - **Post-train pull.** After a train or promotion lands, every other checkout is behind. `aida pull` fetches and fast-forwards the code branch, then syncs the `aida-store` branch under the store writer lock. It merges the fetched branch rather than relying on the shared `FETCH_HEAD`, which concurrent fetches can overwrite.
 - **Stale or blocked pulls.** If another git process holds the index lock, `aida pull` says so and skips the code update rather than stashing the working tree; wait for that process and pull again.
+
+### Act 5: The inspection gates — review, CI tiers and holds
+
+The landing paths in Act 3 rely on three independent gates. A pushed commit with a [commit trailer](../aida-core/templates/.aida/discipline/product-glossary.md#commit-trailer) marks the spec Done, but the change is not a landing candidate until all three pass.
+
+![Act 5: Inspection gates, independent review, delta review, CI tiers, ratchets, and merge holds](showcase/assets/workflow-gates-review.svg)
+
+- **Gate 1, independent review.** A reviewer in a different seat from the author checks the change against the spec's acceptance criteria. The verdict is pinned to the exact head commit. Changes requested start a [rework round](../aida-core/templates/.aida/discipline/product-glossary.md#rework-round), and the next pass can be a [delta review](../aida-core/templates/.aida/discipline/product-glossary.md#delta-review) of the new commits.
+- **Gate 2, two-tier CI.** Pull requests run the fast tier by default: compile, documentation drift guards, ratchets that refuse new debt, and lock and boundary checks. The full tier ([ci:full](../aida-core/templates/.aida/discipline/product-glossary.md#cifull)) runs every test shard; on a tiered repository a train admits a rider only when its exact head has a green full-tier run.
+- **Gate 3, merge hold.** A [merge hold](../aida-core/templates/.aida/discipline/product-glossary.md#merge-hold) stops landing even when CI is green. A supervised pull request gets one automatically. A person (`aida merge-hold clear`), a mandate in scope, or a current-head approval of a rework round releases it.
+
+A change is ready for `aida pr ship` or a merge train only with an approval at its current head, green required CI and no hold.
+
+### When work takes a detour
+
+Each common failure has an explicit recovery loop, so an agent neither guesses nor discards work.
+
+![When work takes a detour: the four recovery flowcharts](showcase/assets/workflow-exception-paths.svg)
+
+- **An unstated design choice.** The implementer refuses to guess and runs `aida punt` with the `design-fork` category. The spec is parked in Needs Attention and a drain moves on. You answer with `aida decide`, and the work resumes from its recorded session (`aida queue work <spec> --resume`).
+- **The reviewer requests changes.** `aida rework <spec>` hands the findings to an implementer, who pushes a fix to the same pull request. An approval at the new head releases the rework-only hold.
+- **A red merge train.** The train is retired and [bisected](../aida-core/templates/.aida/discipline/product-glossary.md#bisect) until the failing rider is isolated. The healthy riders still land; only the blocker returns for rework.
+- **A crashed session or stale checkout.** `aida session leases` shows a lease whose recorded process is gone as stale. `aida session reap` cleans up finished sessions while keeping uncommitted work, `aida worktree gc` reports clean leftover checkouts (and skips dirty ones), and `aida pull` brings the checkout back in step with main.
+
+### Act 6: The state machines behind the badges
+
+The status badges, refusal messages and mode names in the CLI come from a few enums in the source, so their rules are fixed rather than conventions.
+
+![System state machines and core enums](showcase/assets/workflow-enums-state.svg)
+
+- **Requirement status.** Nine states: Draft, Approved, Planned, In Progress and Needs Attention are open; Done, Completed, Superseded and Rejected are closed. A completing trailer on main moves Done to Completed. Defined in `aida_core::models::RequirementStatus`.
+- **Execution mode.** The ladder runs drain, drive, guided, operator by increasing human involvement; decide sits outside it as a block. Only drain and drive run unattended.
+- **Pickability.** Before any pickup AIDA checks, in order, that the spec is work rather than reference material, is not human-only, is not waiting in Needs Attention, and has no unfinished or rejected blocker.
+- **Locking posture.** The `[locking]` posture defaults to context-aware, which refuses a lock mismatch only during a drain; `off`, `warn` and `enforce` override it.
 
 ## What progress means
 
