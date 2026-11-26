@@ -53,6 +53,20 @@ comments:
   modified_at: 2026-11-26T07:45:03.199083384Z
   session_id: 01a216cf8f0e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a216f2-c126-7733-a883-427b6237dc48
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2912cd16b5 (diff vs origin/integration: aida-core/src/review_engine.rs, scripts/ratchet-set.json).
+    - AC1 [behavioral-test]: is_secret_sensitive_path now matches file names .npmrc, .vault-token, .terraformrc, terraform.rc, .dockercfg and component pairs .cargo/credentials, .cargo/credentials.toml, .terraform.d/credentials.tfrc.json, .gem/credentials, .config/hub. Matching is ASCII case-insensitive and depth-independent.
+    - AC2 [behavioral-test]: 10 per-pattern tests (credential_npmrc ... credential_config_hub). Each checks root, nested/ and a/b/ prefixes, an upper-case variant, backslash separators and classify_path_exclusion == SecretSensitivePath. A negative test, credential_pattern_neighbours_stay_reviewable, covers .cargo/config, .terraform.d/plugins, .gem/specs, .config/hubble.toml and docs/npmrc.md. review_engine module: 36/36 pass, including TASK-3320's tests. All new tests are listed in scripts/ratchet-set.json. make check-ci-fast: exit 0.
+    - Probes: case and separator handling agree between classify_path_exclusion and is_credential_path, which share one helper. Multiplicity is not a concern because the change only adds pure predicates. Fail-open: additive deny-list only; no refusal path was weakened and no existing test was changed.
+    - Fixes during review: replaced a macro-generated test list with explicit fns, because the ratchet parser cannot see macro-generated tests. Removed a 'config.toml' test literal that tripped the BUG-1723 config-trust guard.
+    - Residual risk: a project-level .npmrc that holds no secret is now excluded from review prompts, as the spec intends.
+  created_at: 2026-11-26T08:22:17.637986204Z
+  modified_at: 2026-11-26T08:22:17.637986204Z
+  session_id: 01a216cf8f0e
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a216f5-77ef-7bc2-ac73-65237e8e384a
   author: joe
   content: |-
@@ -81,6 +95,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a216f3-56ae-7993-8a86-e4fe2984e7e2
+  author: dirtlab
+  timestamp: 2026-11-26T08:22:55.918422361Z
+  session_id: 01a216cf8f0e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: c8c3a3e139acd702925182e8241a52ad1dafae73
