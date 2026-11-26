@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:50:49.914099231Z
-modified_at: 2026-11-26T21:25:26.109465101Z
+modified_at: 2026-11-26T21:55:04.633901835Z
 req_type: Task
 tags:
 - review-watch
@@ -82,6 +82,12 @@ comments:
   modified_at: 2026-11-26T21:24:47.457181910Z
   session_id: 01a2198cd2c9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a219da-e139-7502-8268-9ae4b744948f
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3921-rw-reclaim-guard` at head `34653344c1e77b4260ca91a7b493588aae96dd19`.'
+  created_at: 2026-11-26T21:55:04.633895150Z
+  modified_at: 2026-11-26T21:55:04.633895150Z
+  session_id: 01a2198cd2c9
 history:
 - id: 01a21981-6588-7e10-93e8-353bc7d2488d
   author: joe
