@@ -1,0 +1,29 @@
+id: 01a21a12-17a9-7df3-8c1c-56f32be1995c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-541
+agreed_id: BUG-2780
+title: 'Stale-claim heal fails open: git errors read as a clean worktree, and legacy claims skip the lane-record check (BUG-2773 follow-up)'
+description: |
+  Found by the 2026-11-26 adversarial-review trial (finder pass on #4666, BUG-2773, now on main). Advisor-confirmed as worth fixing; not verified by a run.
+
+  1. `worktree_is_dirty_shallow` returns a bool that maps git errors to "clean". If git fails (lock, corrupt index, missing worktree metadata), a stale-claim release can proceed over unsalvaged work. That breaks BUG-2773's condition 4 ("clone absent or clean, salvage first; uncertain → not eligible").
+  2. Legacy claims with no `claim_id` skip the lane-record check, which widens the release path beyond the four-condition rule.
+
+  ## Acceptance criteria
+  1. A dirty-state probe returns tri-state (clean / dirty / unknown). Unknown (any git error) → NOT eligible, and the hint names the cause. A test injects a git failure.
+  2. Legacy claims without `claim_id` go through the same lane-record / session-registry check (or are ineligible, with a hint to salvage by hand). A test.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T22:55:23.049530615Z
+modified_at: 2026-11-26T22:55:23.049530615Z
+req_type: Bug
+filed_at:
+  code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b728c3373d1
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
