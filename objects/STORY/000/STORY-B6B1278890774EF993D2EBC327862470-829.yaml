@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T08:03:52.572873084Z
+modified_at: 2026-11-26T08:05:36.872475958Z
 req_type: Story
 tags:
 - integration
@@ -960,6 +960,21 @@ comments:
   modified_at: 2026-11-26T08:03:52.572873084Z
   session_id: 01a216bad2d9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a216e3-c0ce-7212-bf9e-9cddd76162ac
+  author: joe
+  content: |-
+    Integration pre-check: PR #4635 @5c870e4a (S3 follow-up, Refs STORY-3120) — PASS
+
+    Covers the p43 p3 carry-forwards plus the git_text should-fix:
+    1. review_batches: each finding path must be in its own batch.files (inventory check still runs first). The test makes b.rs an inventory file outside the batch → "finding outside its batch"; c.rs / ../a.rs / /etc/passwd / A.rs still get the inventory refusal.
+    2. RunnerCall::run: after the 5s JOIN_GRACE, scan /proc for other pids holding the runner's pipe inodes (pipe:[ino] from /proc/self/fd, taken at spawn), SIGKILL them, settle again, then bail naming the pids ("(killed)") and "; its pipe threads are leaked" only if the pipes are still open. Still fail-closed; the linux-gated test asserts the setsid descendant is reaped (gone/zombie) and that no leak is reported.
+    3. git_text → host_git_command: seat-clone refusal / contained-seat builder / fsmonitor-off pins kept; the builder's env pins are re-applied after env_clear and win over the kept env; --no-textconv and GIT_NO_REPLACE_OBJECTS stay. The test runs raw git as a control (the fsmonitor hook fires) and shows git_text does not run it. The refusal `sh` still resolves via the kept PATH.
+    Security lens: the kill set is limited to processes holding our own O_CLOEXEC pipe inodes; non-own processes get EPERM. Nit (non-blocking): a pid can be reused between the /proc scan and kill (ms window); pidfd_open + pidfd_send_signal would close it.
+    Ratchet set updated.
+  created_at: 2026-11-26T08:05:36.872475958Z
+  modified_at: 2026-11-26T08:05:36.872475958Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
