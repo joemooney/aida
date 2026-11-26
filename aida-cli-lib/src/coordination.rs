@@ -775,25 +775,44 @@ fn salvage_exited_claim(holder: &Claim) -> Result<()> {
 // trace:BUG-2655 | ai:codex
 pub(crate) fn heal_exited_claim(store_root: &Path, expected: &Claim) -> Result<bool> {
     let branch = aida_core::git_ops::current_branch(store_root)?;
-    let sha = aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
-        if let Err(error) = refresh_store(store_root, &branch)? {
-            anyhow::bail!("cannot refresh shared claim: {error}");
-        }
-        if read_claim(&claim_path(store_root, &expected.scope)).as_ref() != Some(expected)
-            || !exited_holder_is_dead(expected, Utc::now())
-        {
-            return Ok(None);
-        }
-        salvage_exited_claim(expected)?;
-        if !exited_holder_is_dead(expected, Utc::now()) {
-            return Ok(None);
-        }
-        if delete_claim_receipt_locked(store_root, expected)? {
-            Ok(Some(aida_core::git_ops::head_sha(store_root)?))
-        } else {
-            Ok(None)
-        }
-    })?;
+    // trace:BUG-2739 | ai:codex
+    eprintln!(
+        "Healing shared claim {} (store write lock, refresh and salvage)",
+        expected.scope
+    );
+    let sha =
+        aida_core::db::with_store_write_lock_bounded(store_root, || -> Result<Option<String>> {
+            if let Err(error) = refresh_store(store_root, &branch)? {
+                anyhow::bail!("cannot refresh shared claim: {error}");
+            }
+            let Some(generation) = &expected.claim_id else {
+                return Ok(None);
+            };
+            if claim_by_generation(store_root, generation)?.as_ref() != Some(expected)
+                || !exited_holder_is_dead(expected, Utc::now())
+            {
+                return Ok(None);
+            }
+            salvage_exited_claim(expected)?;
+            if !exited_holder_is_dead(expected, Utc::now()) {
+                return Ok(None);
+            }
+            if delete_claim_receipt_locked(store_root, expected)? {
+                Ok(Some(aida_core::git_ops::head_sha(store_root)?))
+            } else {
+                Ok(None)
+            }
+        })
+        .map_err(|e| {
+            if e.to_string() == "Busy" {
+                anyhow::anyhow!(
+                    "timed out waiting for store write lock at {}",
+                    store_root.display()
+                )
+            } else {
+                e
+            }
+        })?;
     if let Some(sha) = sha {
         if !aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch)? {
             anyhow::bail!("shared claim released locally; push rejected; run `aida pull`");
@@ -1571,6 +1590,36 @@ pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
     out
 }
 
+// trace:BUG-2739 | ai:codex
+pub(crate) fn claim_by_generation(store_root: &Path, generation: &str) -> Result<Option<Claim>> {
+    let entries = match std::fs::read_dir(leases_dir(store_root)) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let mut claim = None;
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().is_none_or(|ext| ext != "toml") {
+            continue;
+        }
+        let raw = aida_core::seat_clone_detect::read_regular_file_result(&path)
+            .with_context(|| format!("cannot read shared claim {}", path.display()))?;
+        let receipt: Claim = toml::from_str(&raw)
+            .with_context(|| format!("invalid shared claim {}", path.display()))?;
+        let canonical = claim_path(store_root, &receipt.scope);
+        anyhow::ensure!(path == canonical, "shared claim scope mismatch at {path:?}");
+        if receipt.claim_id.as_deref() == Some(generation) {
+            anyhow::ensure!(
+                claim.is_none(),
+                "ambiguous shared claim ID shared-{generation}"
+            );
+            claim = Some(receipt);
+        }
+    }
+    Ok(claim)
+}
+
 /// List the per-repo process-lock claims (drain + solo) currently recorded on
 /// the store. Returns the live `Claim` records — empty when neither lock is
 /// held. Surfaced alongside the lease claims by the `aida status` cross-clone
@@ -2136,6 +2185,65 @@ mod tests {
         let branch = aida_core::git_ops::current_branch(&store).unwrap();
         assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
         (store, holder)
+    }
+
+    #[test]
+    // trace:BUG-2739 | ai:codex
+    fn bug2739_targeted_shared_heal_reports_held_store_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2655_fixture(dir.path());
+        let id = format!("shared-{}", holder.claim_id.as_deref().unwrap());
+        let finding = crate::doctor_root::targeted_stale_finding(dir.path(), &id)
+            .unwrap()
+            .expect("eligible shared claim without a local lease");
+        assert_eq!(finding.0.id, id);
+        assert!(
+            crate::doctor_root::targeted_stale_finding(dir.path(), "shared-other")
+                .unwrap()
+                .is_none()
+        );
+        std::fs::create_dir_all(store.join(".aida")).unwrap();
+        let lock = std::fs::File::create(aida_core::db::store_write_lock_path(&store)).unwrap();
+        fs2::FileExt::lock_exclusive(&lock).unwrap();
+        let error = heal_exited_claim(&store, &holder).unwrap_err().to_string();
+        assert!(
+            error.contains("timed out waiting for store write lock"),
+            "{error}"
+        );
+        assert_eq!(
+            read_claim(&claim_path(&store, &holder.scope)).as_ref(),
+            Some(&holder)
+        );
+        drop(lock);
+        use aida_core::git_ops as git;
+        let mut duplicate = holder.clone();
+        duplicate.scope = "other-scope".into();
+        std::fs::write(
+            claim_path(&store, &duplicate.scope),
+            toml::to_string(&duplicate).unwrap(),
+        )
+        .unwrap();
+        assert!(crate::doctor_root::targeted_stale_finding(dir.path(), &id)
+            .unwrap_err()
+            .to_string()
+            .contains("ambiguous shared claim ID"));
+        git::add(&store, &[LEASES_SUBDIR]).unwrap();
+        git::commit(&store, "duplicate generation at origin").unwrap();
+        let branch = git::current_branch(&store).unwrap();
+        assert!(git::push(&store, "origin", &branch).unwrap());
+        let tip = git::head_sha(&store).unwrap();
+        assert!(git::rollback_commit_if_head_matches(&store, &tip).unwrap());
+        let generation = holder.claim_id.as_deref().unwrap();
+        let unique = claim_by_generation(&store, generation).unwrap();
+        assert_eq!(unique.as_ref(), Some(&holder));
+        let error = heal_exited_claim(&store, &holder).unwrap_err().to_string();
+        assert!(error.contains("ambiguous shared claim ID"), "{error}");
+        let selected = claim_path(&store, &holder.scope);
+        assert_eq!(read_claim(&selected).as_ref(), Some(&holder));
+        let other = claim_path(&store, &duplicate.scope);
+        assert_eq!(read_claim(&other), Some(duplicate));
+        std::fs::write(other, "invalid toml").unwrap();
+        assert!(claim_by_generation(&store, generation).is_err());
     }
 
     #[test]
