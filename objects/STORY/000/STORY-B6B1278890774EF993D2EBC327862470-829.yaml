@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T00:22:28.323679787Z
+modified_at: 2026-11-26T00:27:45.522120263Z
 req_type: Story
 tags:
 - integration
@@ -569,6 +569,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T00:26:02.405084429Z
   modified_at: 2026-11-26T00:26:02.405084429Z
+- id: 01a21540-8a29-7362-86ac-cd38e3a2df72
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:27):
+    # STORY-3120 S3b r1 micro-round on #4603 (integration-30 pre-check 2026-11-25 17:10: FAIL on B1; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int40-story-3120-s3b / PR #4603. <=40 lines. Keep the "(Refs STORY-3120)" title.
+    (B1, blocking) The reviewer-seat effort and model come from resolve_agent_tuning(project_root), which reads the PR checkout's working-tree .aida/config.toml and .aida/agents.toml, so a PR can set `[agents.codex.seats.reviewer] effort="low"` and downgrade its own review (pre-check item 8). FIX: read those two files from the BASE blobs via resolve_agent_tuning_from, and extend the trusted_review_rules diff guard to REFUSE when either file changes in the PR. TEST: a PR that lowers the reviewer effort in .aida/config.toml → refused, or the base value is used.
+    (should-fix a) Add --no-replace-objects on the base git reads.
+    Nothing else; stay within the scope guard (no spawn path, no --run-review wiring). One targeted cargo test run on this host, make check-ci-fast, then push to #4603. COMMIT your work.
+  created_at: 2026-11-26T00:27:45.522120263Z
+  modified_at: 2026-11-26T00:27:45.522120263Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
