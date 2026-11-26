@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-26T07:54:16.870112167Z
+modified_at: 2026-11-26T08:06:25.888091472Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -262,6 +262,19 @@ comments:
   modified_at: 2026-11-26T07:55:59.318283011Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a216e4-3b60-7291-af9b-84e1ffba0955
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: adb8306883 (slice c, Refs-only, docs only).
+    Evidence [documentation-inspection]: docs/getting-started.md ported from b5826a0f949 (sections 1-6: install options A/B/C, init/join, conversational flow) plus the regenerated docs/showcase/getting-started.html and search-data.js. Checked every command against the current CLI: aida init / node acquire / upgrade / --version all exist. Checked against scripts/install.sh: --version, --prefix, --host gitlab, AIDA_RELEASE_HOST, the aida-linux-{x86_64,arm64}.tar.gz assets, and installation of aida, aida-server, aida-porcelain and aida-flow. Checked the Makefile install-cli/install targets and protox in Cargo.toml. README anchors #install and #cloning-an-existing-aida-project exist.
+    Fix: the reference commit traced to a lane ID (STORY-b6b...-762); replaced with a separate trace:STORY-2839 | ai:claude line.
+    Checks: build.py --check passes; python3 -m unittest tests/test_showcase_build.py: 22 ran, OK (2 skipped). The docs link gate in check-ci-fast passed.
+    Residual risk: the curl install URLs point at GitHub main and cannot be verified offline.
+  created_at: 2026-11-26T08:06:25.888091472Z
+  modified_at: 2026-11-26T08:06:25.888091472Z
+  session_id: 01a216d8e38e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe

@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T07:57:03.425872974Z
+modified_at: 2026-11-26T08:14:41.193719823Z
 req_type: Story
 tags:
 - dev
@@ -90,6 +90,19 @@ comments:
   modified_at: 2026-11-26T07:22:39.548864952Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a216eb-ca29-7880-9b8a-988a9aa94b9c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2af8eb6100 (branch dev-provisional-s1b, port of closed #4629 @ afc55670 onto main 0cb984b75d).
+    Acceptance evidence (S1: AC1 + AC5 + AC2 operator gate): [behavioral-test] cargo test -p aida-cli-lib --lib dev_build_tests: 103 passed incl. story3148_provisional_promote_writes_the_marker_and_keeps_prev, story3148_rollback_clears_the_provisional_marker, story3148_provisional_refuses_a_dirty_or_other_head_and_a_dirty_build, story3148_only_an_operator_with_a_reason_may_promote_provisionally, story3148_target_parses_a_pr_or_a_safe_branch.
+    Port: code applied verbatim from #4629; scripts/store-writers.toml has exactly #4629's 4 row changes (run_dev_build -> run_dev_build_with rename; 3 new dev_cmd/dev_provisional rows). The regenerator also re-sorted 3 pre-existing rows (db_reconcile scan_and_share, review_runner, review_tuning); I kept main's positions so the PR adds no unrelated rows. check-store-writers.py passes.
+    Strict probes: authority = pr_emergency_land::operator_allowed (tty && !headless && !native lane && role not implementer/reviewer) + non-empty --reason; refusal is tested. Missing env reads count as not headless/not lane, but a tty is still required. Promote goes through run_dev_build_with's staged swap, never a hand copy into live/. A provisional promote skips only the CI and landing-branch gates and still requires a clean checkout whose staged build SHA equals the marker's full 40-hex head (refusal tested). Branch targets are checked with git check-ref-format plus a deny list for metacharacters and a leading '-'.
+    Residual risks: advisor note (b) (PROVISIONAL marker blocks a plain dev build promote unless --replace-provisional; auto-revert test) and loop rebind/TTL are not in this slice: S2. The provisional worktree under target/provisional/src is force-removed before and after each run.
+  created_at: 2026-11-26T08:14:41.193719823Z
+  modified_at: 2026-11-26T08:14:41.193719823Z
+  session_id: 01a216d8e50b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
