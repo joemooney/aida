@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida queue rework` / a lane-run resume ADOPTS an existing retained clone + journal entry for the SAME spec/PR (no force-claim, no salvage, no attestation) and continues from its staged merge, verifying the tree matches the journal (original_head, conflict paths) before adopting; any mismatch → refuse with guidance.
   - AC2: A test where a punted conflict lane (staged merge + journal entry + retained lease) is resumed by the next dispatch, which finishes the merge in the same seat.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-26T01:35:37.166038040Z
+modified_at: 2026-11-26T05:10:28.412627924Z
 req_type: Bug
 tags:
 - lanes
@@ -641,6 +641,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-2761-s3-fresh` at head `unavailable`.'
   created_at: 2026-11-26T01:35:37.166034699Z
   modified_at: 2026-11-26T01:35:37.166034699Z
+- id: 01a21643-233c-7f20-99e2-064ee3b177b5
+  author: lane-recovery
+  content: Reference merge `d2f9a3faa8c91b8fcb324bd0303078bddaf09f66` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-26T05:10:28.412621077Z
+  modified_at: 2026-11-26T05:10:28.412621077Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
@@ -866,6 +871,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21643-233c-7f20-99e2-0654cee781ae
+  author: lane-recovery
+  timestamp: 2026-11-26T05:10:28.412627809Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 5d24023de56baef16fe94a5e39d89bc9bccd1dc3
