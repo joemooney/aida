@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T18:25:39.964820896Z
+modified_at: 2026-11-26T18:38:11.233951496Z
 req_type: Bug
 tags:
 - lanes
@@ -79,6 +79,13 @@ comments:
   modified_at: 2026-11-26T18:24:13.555568283Z
   session_id: 01a218e76317
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21926-9f22-7580-b798-94114db211c9
+  author: joe
+  content: |-
+    DEFERRED (#4676 approval @b9e84bdb, 2026-11-26; product-15):
+    - BUG-2772 AC1's second clause (a pin protecting a commit on no remote is refused with the salvage hint) and AC3's matching unique-commit refusal test are not implemented: the advisor's authoritative brief on the spec (comment 0) superseded the remote-reachability rule with a no-clone + no-lease predicate, and the implementer flagged the divergence (comments 1-2). In practice no data is at risk: a s
+  created_at: 2026-11-26T18:38:11.233951496Z
+  modified_at: 2026-11-26T18:38:11.233951496Z
 history:
 - id: 01a218e0-ea73-7a92-9d85-2f50a6c28366
   author: joe
