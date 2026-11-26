@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T12:14:30.322486657Z
+modified_at: 2026-11-26T12:25:17.758821967Z
 req_type: Story
 tags:
 - integration
@@ -1084,6 +1084,12 @@ comments:
   content: 'BINDING S5 AC (advisor-122 2026-11-26 05:17; from #4650 finding 6): before --post-comment can publish anything, render_bundle_markdown must ESCAPE or CODE-FENCE all agent output (the finder message, the challenger reason, every runner-supplied string). TEST: agent text containing Markdown/HTML/@mentions is published inert.'
   created_at: 2026-11-26T12:14:30.322486657Z
   modified_at: 2026-11-26T12:14:30.322486657Z
+- id: 01a217d1-3abe-7551-8924-7fffad5ac052
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int45-story-3120-s4` at head `1579ec8766aa295b6605799065aaf87d35347d02`.'
+  created_at: 2026-11-26T12:25:17.758819037Z
+  modified_at: 2026-11-26T12:25:17.758819037Z
+  session_id: 01a21780d476
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
