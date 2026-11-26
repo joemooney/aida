@@ -13,17 +13,23 @@ description: |
   ## Acceptance
   - AC1: every first-{/last-} (or similar) extraction of untrusted runner/challenger output checks start <= end and otherwise returns a typed parse error (the challenge fails closed; no panic). Tests: "} sorry {", "done} {", "}" alone, empty output, and a fenced block with trailing text.
   - AC2: `review prepare`'s top-level error prints the full cause chain (e.g. "write SARIF /tmp/x.sarif: --write outside repository: paths must be inside the project root"). Test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:51:37.391070Z
-modified_at: 2026-11-26T23:14:14.544865333Z
+modified_at: 2026-11-26T23:49:41.256179260Z
 req_type: Bug
 tags:
 - STORY-3120
 - review
 - security
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21a42-5d96-7433-af44-1f8775508fa6
+  created_at: 2026-11-26T23:48:21.051233932Z
+  created_by: dirtlab
 comments:
 - id: 01a21a15-4b11-74b3-a852-10bae0706cd3
   author: joe
@@ -76,6 +82,13 @@ comments:
   modified_at: 2026-11-26T23:14:14.544865333Z
   session_id: 01a21a180dfa
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a41-ed44-7870-b596-479e3c77e8d7
+  author: aida-publication-done
+  content: Implementer push a963decc8023 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T23:47:37.924758080Z
+  modified_at: 2026-11-26T23:47:37.924758080Z
+  session_id: 01a21a180dfa
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a12-632b-7fd1-8ace-6d3a575c7e9f
   author: joe
@@ -99,6 +112,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21a41-ed44-7870-b596-47814abd8dbd
+  author: aida-publication-done
+  timestamp: 2026-11-26T23:47:37.924754677Z
+  session_id: 01a21a180dfa
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21a42-a325-71f0-b855-d5373aa8f849
+  author: dirtlab
+  timestamp: 2026-11-26T23:48:24.485356278Z
+  session_id: 01a21a180dfa
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21a43-d82e-7340-bd35-a70ce847b1e4
+  author: dirtlab
+  timestamp: 2026-11-26T23:49:43.598359682Z
+  session_id: 01a21a180dfa
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
@@ -107,3 +141,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b728c3373d1
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T23:49:41.256179260Z
+  implemented_by: dirtlab
