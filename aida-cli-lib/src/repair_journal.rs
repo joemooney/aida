@@ -130,6 +130,15 @@ impl From<&RepairEntry> for ReleasedMerge {
         }
     }
 }
+/// What one dispatch attempt reserved: the entry exactly as written, and the
+/// ProvenDead entry it replaced, if any. Only that attempt holds it.
+// trace:BUG-2761 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct AttemptReservation {
+    entry: RepairEntry,
+    replaced: Option<RepairEntry>,
+}
+
 pub(crate) struct RepairGuard {
     _lock: File,
     path: PathBuf,
@@ -375,8 +384,48 @@ impl RepairGuard {
             .context("missing repair reservation")
     }
 
-    pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<()> {
-        if let Some(previous) = self.journal.entries.iter().find(|e| e.key == entry.key) {
+    /// Retire exactly the reservation this attempt wrote, after its pre-agent
+    /// rollback removed the tree. Another attempt's entry, a recorded spawn or
+    /// attestation, or a surviving tree keeps it (`false`). A ProvenDead entry
+    /// the attempt replaced is restored unchanged. No schema change.
+    // trace:BUG-2761 | ai:claude
+    pub fn roll_back_attempt(&mut self, attempt: &AttemptReservation) -> Result<bool> {
+        let ours = &attempt.entry;
+        let Some(i) = self.journal.entries.iter().position(|e| e.key == ours.key) else {
+            return Ok(false);
+        };
+        let current = &self.journal.entries[i];
+        let identity = |e: &RepairEntry| {
+            (
+                reservation_id(e),
+                e.tree_path.clone(),
+                e.reserved_at.clone(),
+            )
+        };
+        if current.spawn != SpawnOutcome::Unknown
+            || identity(current) != identity(ours)
+            || !path_absent(&current.tree_path)?
+        {
+            return Ok(false);
+        }
+        match attempt.replaced.clone() {
+            Some(previous) => self.journal.entries[i] = previous,
+            None => {
+                self.journal.entries.remove(i);
+            }
+        }
+        self.save()?;
+        Ok(true)
+    }
+
+    pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<AttemptReservation> {
+        let replaced = self
+            .journal
+            .entries
+            .iter()
+            .find(|e| e.key == entry.key)
+            .cloned();
+        if let Some(previous) = replaced.as_ref() {
             anyhow::ensure!(previous.spawn == SpawnOutcome::ProvenDead, "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
             // Upgrade releases written before merge inputs were included in the audit.
             for release in self
@@ -395,8 +444,9 @@ impl RepairGuard {
             entry.refusal_notice = previous.refusal_notice.clone();
         }
         self.journal.entries.retain(|e| e.key != entry.key);
-        self.journal.entries.push(entry);
-        self.save()
+        self.journal.entries.push(entry.clone());
+        self.save()?;
+        Ok(AttemptReservation { entry, replaced })
     }
 
     // `command` is the trusted project policy that ran, or empty when none was
@@ -843,6 +893,65 @@ mod tests {
         journal.entry_mut(&key).unwrap().regenerated_tree = Some(tree);
         journal.entry_mut(&key).unwrap().spawn = SpawnOutcome::ProvenDead;
         assert!(check(&journal).is_err());
+    }
+
+    // T2: a failure between reserve and worker start retires exactly that
+    // attempt's entry; a prior ProvenDead entry it replaced is restored, and
+    // another attempt's entry or a surviving tree is never touched.
+    // trace:BUG-2761 | ai:claude
+    #[test]
+    fn bug_2761_attempt_rollback_retires_only_its_own_reservation() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let entry = |pr: u64, lane: &str, tree: &str, spawn: SpawnOutcome| RepairEntry {
+            key: RepairKey {
+                repository: main.into(),
+                pr,
+                original_head: "b".repeat(40),
+            },
+            dispatched_by: "direct-rework".into(),
+            reserved_at: format!("{lane}-at"),
+            lane_id: lane.into(),
+            tree_path: main.join(tree),
+            branch: "pr".into(),
+            base: "c".repeat(40),
+            spawn,
+            original_conflict_paths: vec!["src/lib.rs".into()],
+            regeneration_success: None,
+            regenerated_tree: None,
+            snapshot_deferred: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        };
+        let entries = || RepairGuard::lock(main).unwrap().journal.entries;
+        let reserve = |e| RepairGuard::lock(main).unwrap().reserve(e).unwrap();
+        let roll_back = |a| {
+            RepairGuard::lock(main)
+                .unwrap()
+                .roll_back_attempt(a)
+                .unwrap()
+        };
+        let other = entry(1, "other-lane", "other-seat", SpawnOutcome::Unknown);
+        let dead = entry(2, "old-lane", "old-seat", SpawnOutcome::ProvenDead);
+        reserve(other.clone());
+        reserve(dead.clone());
+        let ours = reserve(entry(2, "new-lane", "gone-seat", SpawnOutcome::Unknown));
+        let fresh = reserve(entry(3, "new-lane", "gone-seat-3", SpawnOutcome::Unknown));
+        // Preparation evidence recorded after reserve does not change identity.
+        let mut guard = RepairGuard::lock(main).unwrap();
+        guard.record_preparation(&ours.entry.key, true).unwrap();
+        drop(guard);
+        assert!(roll_back(&ours) && roll_back(&fresh));
+        assert_eq!(entries(), vec![other, dead]);
+        // Already retired, or replaced by another attempt: nothing changes.
+        assert!(!roll_back(&fresh));
+        let replaced = reserve(entry(2, "third-lane", "gone-seat", SpawnOutcome::Unknown));
+        assert!(!roll_back(&ours));
+        // A tree the rollback did not remove keeps its reservation.
+        std::fs::create_dir(main.join("gone-seat")).unwrap();
+        assert!(!roll_back(&replaced));
+        assert_eq!(entries()[1], replaced.entry);
     }
 
     // trace:TASK-3804 | ai:codex
