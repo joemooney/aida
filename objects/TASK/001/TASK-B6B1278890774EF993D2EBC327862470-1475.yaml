@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T17:49:25.104343427Z
+modified_at: 2026-11-26T17:59:31.537757140Z
 req_type: Task
 tags:
 - landing
@@ -159,6 +159,23 @@ comments:
   created_at: 2026-11-26T16:50:47.832095380Z
   modified_at: 2026-11-26T16:50:47.832095380Z
   session_id: 01a2188c2c68
+- id: 01a21903-39d1-7733-96ef-f82b16f59773
+  author: dirtlab
+  content: |-
+    ## Implementer approach (AC3)
+
+    ### Acceptance criteria and evidence
+    - **AC3 [configuration-validation]:** add `[landing] max_prs_per_train = 3` to tracked `.aida/config.toml` with a comment citing train #4605. `landing_policy::load` reads the default branch's tracked `.aida/config.toml` (`trusted_config::read_trusted_config_toml_local`), so the repo file is the right place (not host-only). Validate with `aida config show`/TOML parse and `make check-ci-fast`.
+
+    ### Expected files
+    - `.aida/config.toml`
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-26T17:59:31.537757140Z
+  modified_at: 2026-11-26T17:59:31.537757140Z
+  session_id: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe

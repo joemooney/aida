@@ -1353,6 +1353,12 @@ comments:
   modified_at: 2026-11-26T17:32:38.763063355Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21902-abcc-7d11-8e2f-b507e3a22159
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int-story-3120-s5b` at head `b60031ede8b5090d8b59b0547b86e28418549310`.'
+  created_at: 2026-11-26T17:58:55.180789140Z
+  modified_at: 2026-11-26T17:58:55.180789140Z
+  session_id: 01a218c693e2
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
@@ -1570,12 +1576,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
-- id: 01a21872-9655-7520-a1d4-bd6b85d29c9e
-  author: joe
-  timestamp: 2026-11-26T15:21:32.501313629Z
-  session_id: 01a20440-982d-7872-93de-fff272d8657c
-  harness_version: 2.1.329 (Claude Code)
-  changes: []
 - id: 01a21872-8cb5-79b1-adce-431f1af9c150
   author: joe
   timestamp: 2026-11-26T15:21:30.037122144Z
@@ -1583,6 +1583,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21872-9655-7520-a1d4-bd6b85d29c9e
+  author: joe
+  timestamp: 2026-11-26T15:21:32.501313629Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 - id: 01a21882-7adf-7e13-b447-a8c4258d3431
   author: aida-session-start
   timestamp: 2026-11-26T15:38:54.047701885Z

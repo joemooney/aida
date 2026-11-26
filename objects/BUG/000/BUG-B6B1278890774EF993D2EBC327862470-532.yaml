@@ -9,12 +9,12 @@ description: |
   - AC1: a manual train waiting on admission is admitted BEFORE the auto-train starts its NEXT train: FIFO across waiters, or the auto-train yields whenever a cooperative manual waiter is recorded.
   - AC2: the waiting manual train is visible in `aida advisor loops train-status` / `aida pr train --check` ("operator train for #N waiting since HH:MM; auto-train yields next").
   - AC3: a test: an auto-train finishing train A with a recorded manual waiter does not start train B until the manual train has run (or released).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T17:46:18.569755215Z
+modified_at: 2026-11-26T18:03:05.845823448Z
 req_type: Bug
 tags:
 - admission
@@ -117,6 +117,24 @@ comments:
   modified_at: 2026-11-26T17:46:18.569755215Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21906-7ef5-7bd3-9dcb-a9a75bffcca3
+  author: dirtlab
+  content: |-
+    ## Implementer approach (fresh slice, replaces #4659)
+
+    ### Acceptance criteria and evidence
+    - **AC1/AC3 (behavioral, unit loop-level):** `advisor_loop_train::bug2769_idle_admission_tests::bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter` drives run_passes: a manual train that gives up during train A is recorded; train B does not start until the manual train is admitted and released.
+    - **AC2 (behavioral, same test + render paths):** `ManualWaiter::describe` line asserted; surfaced in train-status (advisor_loop_service) and `aida pr train --check` (pr_train_check).
+
+    ### Expected files
+    - aida-cli-lib/src/admission_owner.rs, advisor_loop_train.rs, advisor_loop_service.rs, pr_train.rs, pr_train_check.rs, tests/task_1993_review_watch_tests.rs, scripts/store-writers.toml
+
+    ### Ambiguities / conflicts as questions
+    - None: port of approved #4659 (d50327f9), adapted to #4667/#4668.
+  created_at: 2026-11-26T18:03:05.845823448Z
+  modified_at: 2026-11-26T18:03:05.845823448Z
+  session_id: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
@@ -155,6 +173,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a21905-a765-7ff1-9eac-7580ef3b0c26
+  author: aida-session-start
+  timestamp: 2026-11-26T18:02:10.661545362Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94

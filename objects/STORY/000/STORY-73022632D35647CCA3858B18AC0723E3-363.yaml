@@ -1,0 +1,44 @@
+id: 01a21905-6bc0-7482-b8e2-5117937acfc0
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-363
+title: 'Review PR-4673: [AI:claude] feat(review): S5b posting deadline, literal pathspecs, code-spanned bundle titles (Refs STORY-3120)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a218c6`) for branch `int-story-3120-s5b`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4673>
+  - Branch: `int-story-3120-s5b` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4673` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T18:01:55.392471996Z
+modified_at: 2026-11-26T18:02:03.510275789Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-26T18:02:03.510253429Z
+  created_by: dirtlab
+history:
+- id: 01a21905-93b2-7850-92db-a29d501de994
+  author: dirtlab
+  timestamp: 2026-11-26T18:02:05.618973518Z
+  changes: []
+filed_at:
+  code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4af2602e90
