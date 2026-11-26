@@ -429,10 +429,13 @@ claims whose local session record has disappeared. On the holder's host, an
 expired non-process-backed claim is eligible only when its creator is provably
 dead and the exact headless worker record is stamped exited with a dead worker.
 Live processes, foreign PID namespaces and missing or mismatched worker records
-retain the claim. A claim with no lease binding (`lease=unbound`) has no worker
-record to check: once expired, it is eligible when its creator is provably dead
-and its clone is present on that host. An admission refusal names the heal
-command only when the heal would accept the claim.
+retain the claim. A claim with no lease binding (`lease=unbound`) records only
+the short-lived command that wrote it, so its dead creator proves little. It is
+eligible only when its heartbeat is older than 24 hours (or three TTLs, if
+longer), its clone records no session lease, lane record or unended agent
+session for that claim or scope, and the clone is absent or has no uncommitted
+work. An admission refusal names the heal command only when the heal would
+accept the claim; otherwise it says why the claim is retained.
 <!-- trace:BUG-2773 | ai:claude -->
 `aida doctor heal stale-leases --id shared-<claim-id> --yes`
 heals one reported generation; omitting `--id` uses the ordinary category-wide
