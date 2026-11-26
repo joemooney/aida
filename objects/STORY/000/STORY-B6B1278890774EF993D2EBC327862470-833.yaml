@@ -10,12 +10,12 @@ description: |
   - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
   - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
   - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T11:58:15.005594047Z
+modified_at: 2026-11-26T13:20:22.497393023Z
 req_type: Story
 tags:
 - planning
@@ -290,6 +290,19 @@ history:
   session_id: 01a21782f091
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21803-a7b9-7f71-bf48-1dca10e2168c
+  author: aida-auto-bump
+  timestamp: 2026-11-26T13:20:22.457890994Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21803-a7e1-7f22-af1d-278d1a19226e
+  timestamp: 2026-11-26T13:20:22.497389149Z
+  agent: aida
+  commit_sha: 2d89ef450561e39de69593890f3ab7765146154b
+  summary: Completed via merge 2d89ef45
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
@@ -298,3 +311,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ea1b3c35df8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T13:20:22.457881279Z
+  completion_sha: 2d89ef450561e39de69593890f3ab7765146154b
