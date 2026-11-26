@@ -9,12 +9,12 @@ description: |
   - AC1: auto-train RECOVERY releases admission while it waits on any deputy job (or any external job), and re-takes it only for the decision.
   - AC2: a deputy runner on a stale or deleted binary is DETECTED and reported (train-status + aida doctor: the deputy name, pid, binary path and age, and the fix: restart with the binding reset) instead of silently blocking.
   - AC3: tests: recovery waiting on a deputy job does not hold admission; a stale-binary deputy is reported.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T17:38:41.030512867Z
+modified_at: 2026-11-26T17:42:30.834718298Z
 req_type: Bug
 tags:
 - admission
@@ -108,6 +108,11 @@ comments:
   content: 'COMPLETED with AC2/AC3 delivered by #4667 (d38eee408f3: stale or deleted-binary deputy reporting in train-status and doctor). AC1 (release admission while recovery waits on an external job) MOVED to TASK-3920 per advisor-122 10:40 (a resumable recovery step; STRICT; sketch first).'
   created_at: 2026-11-26T17:38:41.030512867Z
   modified_at: 2026-11-26T17:38:41.030512867Z
+- id: 01a218f3-a6b2-7051-b03b-62a317a08578
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: AC1 (release admission while recovery waits on an external job) conflicts with the train run lock: recovery holds .aida/train/run.lock for its whole CI wait, so once the auto-train drops its admission receipt, admission_owner::acquire_mode refuses every contender with ''prior train is not quiescent'' (admission_train_running), INCLUDING review-watch controllers that today join the auto-train''s live receipt (joining_train). A plain release therefore regresses review-watch, a waiting manual train still cannot run (TrainJournalBusy) and its intent still blocks review-watch for wait_secs, and the re-take for the decision yields to that same intent. Needs an admission design call (strict tier). AC2 shipped separately in PR-4667 (Refs).. No triage reason was given.'
+  created_at: 2026-11-26T17:42:30.834714669Z
+  modified_at: 2026-11-26T17:42:30.834714669Z
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe
@@ -133,6 +138,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a218f3-a6b2-7051-b03b-629849fd1424
+  author: joe
+  timestamp: 2026-11-26T17:42:30.834704057Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
@@ -141,9 +153,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: fd10cfd3049
   vendor: claude
-attention_reason:
-  category: design-fork
-  detail: 'AC1 (release admission while recovery waits on an external job) conflicts with the train run lock: recovery holds .aida/train/run.lock for its whole CI wait, so once the auto-train drops its admission receipt, admission_owner::acquire_mode refuses every contender with ''prior train is not quiescent'' (admission_train_running), INCLUDING review-watch controllers that today join the auto-train''s live receipt (joining_train). A plain release therefore regresses review-watch, a waiting manual train still cannot run (TrainJournalBusy) and its intent still blocks review-watch for wait_secs, and the re-take for the decision yields to that same intent. Needs an admission design call (strict tier). AC2 shipped separately in PR-4667 (Refs).'
-  lean: (A) a parked-recovery marker (live pid + phase) that acquire_mode treats as a joinable live train for review controllers, that makes a manual train/land/ship refuse at once naming the parked recovery instead of registering a waiting intent, and a re-take for the decision that does not yield to train intents. Smaller and keeps the run lock semantics; (B) dropping the run lock during the wait is riskier.
-  raised_by: implementer
-  raised_at: 2026-11-26T15:28:59.529388610Z
