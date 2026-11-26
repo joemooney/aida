@@ -1,0 +1,30 @@
+id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-531
+agreed_id: BUG-2770
+title: aida agent gc cannot scope mailbox leftovers by age or by live session (would remove nonce files touched minutes ago while lanes run)
+description: |
+  advisor-122 2026-11-26 01:53 (filed by product-15). `aida agent gc --dry-run` on dell1 lists 460 mail-lifecycle/nonce-era "leftovers" for removal, including files modified minutes earlier, while lanes were running (12 touched within 30 min to 6h, e.g. 01:34, 01:37, 01:39). There is no way to prove they do not belong to live sessions. `--older-than` scopes only agent-registry entries, not mailbox files, so it cannot make the gc safe while lanes run. Meanwhile mail retention refuses at lane exit ("the fresh writer-admission scan could not verify every mail writer"), leaving trees and retained leases behind.
+
+  ## Acceptance
+  - AC1: mailbox leftovers whose owning session/lease is LIVE are never removed.
+  - AC2: `--older-than` also applies to mailbox leftover files.
+  - AC3: the dry run marks each candidate live/dead/unknown, and UNKNOWN is skipped (fail-safe).
+  - AC4: tests for live-skip, age-scoping and unknown-skip.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T08:51:09.419544492Z
+modified_at: 2026-11-26T08:51:09.419544492Z
+req_type: Bug
+tags:
+- agents
+- dell1
+- mail
+filed_at:
+  code_sha: b4c61d1f69f2536883ca2d64aba061031f1463de
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cb984b75d1
+  vendor: claude
