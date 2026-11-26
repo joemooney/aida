@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-26T21:49:53.620897308Z
+modified_at: 2026-11-26T21:50:15.162105011Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -94,6 +94,12 @@ comments:
   content: 'Lane exit evidence: retained branch `int-task-3266-shards-assert` at head `0864840f07c7b1c6abd85964918c6f62a2abd946`.'
   created_at: 2026-11-26T21:49:53.620894088Z
   modified_at: 2026-11-26T21:49:53.620894088Z
+  session_id: 01a2199667fe
+- id: 01a219d6-767a-7630-8570-68f5913a220f
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `int-task-3266-shards-assert` at head `0864840f07c7b1c6abd85964918c6f62a2abd946`.'
+  created_at: 2026-11-26T21:50:15.162102319Z
+  modified_at: 2026-11-26T21:50:15.162102319Z
   session_id: 01a2199667fe
 history:
 - id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
