@@ -188,6 +188,10 @@ fn preserve_seat_clone(main: &Path, clone: &Path, branch: &str) -> Result<String
     );
     let message = format!("[AI:aida] chore(seat): {branch} stopped by an agent usage limit");
     crate::seat_clone::commit_pending(main, clone, branch, &message)?;
+    // Nothing beyond the pinned base: no bundle can be made, nor is needed.
+    if !crate::seat_clone::has_commits_beyond_base(main, clone)? {
+        return Ok("its unchanged base (no work to preserve)".to_string());
+    }
     let bundle = crate::seat_clone::bundle_branch(main, clone, branch)?;
     let staged = crate::ship_from_seat::stage_bundle(main, branch, &bundle, false)?;
     let pushed = push_side(main, &staged.reference, branch);
