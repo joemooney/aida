@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T22:23:54.992930704Z
-modified_at: 2026-11-26T03:20:44.845405109Z
+modified_at: 2026-11-26T04:17:38.442275719Z
 req_type: Story
 relationships:
 - rel_type:
@@ -54,6 +54,11 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 20:22, Joe-requested): APPROVED HIGH, STRICT (it swaps the live binary and rebinds the loops), drive. Binding notes: (a) STRICT because a provisional binary runs every gate; the default refusal of permissiveness diffs is a real check: classify by touched paths (the gate/approval/admission/containment strict paths), not by commit message. (b) The PROVISIONAL marker also blocks  promotes from main unless --replace-provisional, and the auto-revert path is tested. (c) Slice it: S1 build+promote+marker+rollback (≤300); S2 the loop rebind/restart + autobuild interplay + TTL; S3 docs.'
   created_at: 2026-11-26T03:20:37.877134072Z
   modified_at: 2026-11-26T03:20:37.877134072Z
+- id: 01a21612-c48a-72f3-8b61-71dc1fb09bd7
+  author: joe
+  content: 'ADVISOR CORRECTION (21:20): my 20:22 ''ADVISOR DISPOSITION'' comment on this spec was meant for STORY-3148 (the provisional-live story); product''s ID grep pointed me at the wrong ID. Ignore that comment here. This is the auto-filed review story for #4597 and its status is unaffected.'
+  created_at: 2026-11-26T04:17:38.442275719Z
+  modified_at: 2026-11-26T04:17:38.442275719Z
 history:
 - id: 01a214cf-0e3a-7263-907d-f6b2ea9d811d
   author: dirtlab
