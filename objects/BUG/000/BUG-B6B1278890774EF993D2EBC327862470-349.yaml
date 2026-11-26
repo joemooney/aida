@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-26T14:12:39.066116302Z
+modified_at: 2026-11-26T14:14:14.273751279Z
 req_type: Bug
 tags:
 - landing
@@ -131,6 +131,17 @@ comments:
     Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
   created_at: 2026-11-26T14:04:08.321872532Z
   modified_at: 2026-11-26T14:04:08.321872532Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21835-3618-7741-bb73-40089a2732d1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:14):
+    # BUG-2584 (approved; product-15 2026-11-26 07:10, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch bug-2584-train-merge-cpu. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2584) and say what remains. Otherwise use the completing (BUG-2584) trailer.
+    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between 'train PR is green' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T14:14:14.273751279Z
+  modified_at: 2026-11-26T14:14:14.273751279Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
