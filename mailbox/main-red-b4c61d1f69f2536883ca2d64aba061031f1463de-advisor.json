@@ -1,0 +1,18 @@
+{
+  "id": "main-red-b4c61d1f69f2536883ca2d64aba061031f1463de-advisor",
+  "thread_id": "main-red-b4c61d1f69f2536883ca2d64aba061031f1463de",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795684578422,
+  "body": "Main is red at b4c61d1f69f2536883ca2d64aba061031f1463de ([AI:claude] chore(integration): wire --run-review onto the hardened runner [promotion 43] (Refs STORY-3120) (#4628)).\nPR: #4628\nSpecs: STORY-3120\nFailing:\n- Build (ubuntu-latest) (https://github.com/joemooney/aida/actions/runs/45777532647/job/139784672143)\n  failed steps: Require every CI lane\n  | (the job log could not be read yet: `/usr/bin/gh api repos/{owner}/{repo}/actions/jobs/139784672143/logs` failed (exit status: 1))\nThe live binary stays on the last green commit, 0cb984b75d1e.\n\nIf the red survives an independent re-run or 30 minutes it is confirmed. Merging continues meanwhile.",
+  "subject": "main is red at b4c61d1f69f2: Build (ubuntu-latest)",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

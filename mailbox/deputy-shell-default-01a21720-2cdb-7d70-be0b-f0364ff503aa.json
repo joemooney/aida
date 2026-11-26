@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21720-2cdb-7d70-be0b-f0364ff503aa",
+  "thread_id": "deputy-01a21720-2cdb-7d70-be0b-f0364ff503aa",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795684321548,
+  "body": "Script deputy \"default\" finished script job 01a21720-2cdb-7d70-be0b-f0364ff503aa: rc 0 (ok).\nScript: cd ~/ai/aida && aida comment add STORY-3059 \"ADVISOR (02:13): DONE. The recovery story is delivered by the report-only slice (#4570: recoverable seats are reported and preserved) plus BUG-2755 (#4632: an operator-attested move of a dead clone to ~/salvage/reaped, then lease end). Auto-reap stays parked by design (see the 00:52 park note).\" && aida edit STORY-3059 --status done\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21720-2cdb-7d70-be0b-f0364ff503aa/transcript.log\nRead it with `aida deputy shell log 01a21720-2cdb-7d70-be0b-f0364ff503aa --name default`.\n",
+  "subject": "deputy script job 01a21720 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
