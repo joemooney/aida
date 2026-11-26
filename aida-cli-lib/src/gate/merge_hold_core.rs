@@ -2310,6 +2310,31 @@ pub(crate) fn human_recorded_clearance(project_root: &Path, pr: u64) -> Option<H
     .then_some(clearance)
 }
 
+/// BUG-2745: `pr`'s latest release, when the gate ledger records it as a
+/// typed rework hold that a recorded reviewer verdict auto-released, and no
+/// hold is open since. Written primary-side from any checkout (a reviewer
+/// worktree included), so it is read from the shared ledger. The kind is
+/// the released ledger hold's own, not the clearance's claim. A legacy
+/// clearance file, a non-rework or legacy hold, another principal or a
+/// release without its verdict answers `None` (fail closed).
+// trace:BUG-2745 | ai:claude
+pub(crate) fn verdict_auto_release(project_root: &Path, pr: u64) -> Option<HoldClearance> {
+    let state = crate::gate::ledger::hold::state(project_root, pr);
+    if !state.on_ledger || state.open.is_some() {
+        return None;
+    }
+    let released = state.released?;
+    let clearance: HoldClearance =
+        serde_json::from_value(serde_json::Value::Object(state.release?)).ok()?;
+    (clearance.pr == pr
+        && clearance.cleared_by == crate::gate::rework_hold_release::PRINCIPAL
+        && released.reason_kind == HoldReasonKind::Rework
+        && !released.legacy
+        && clearance.reason_kind == released.reason_kind
+        && clearance.released_by_verdict.is_some())
+    .then_some(clearance)
+}
+
 /// BUG-2214 corroboration 2 of 3: does the events ledger say PR `pr`'s most
 /// recent hold change is a release by a Human/Operator principal that carried
 /// the human integrity-floor attestation? Any later placement (including a
