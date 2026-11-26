@@ -1,0 +1,31 @@
+id: 01a219f7-0dee-7a23-946e-b318a141c56a
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-375
+title: 'Review PR-4693: [AI:claude] fix(mailbox): a transient pre-start writer-admission refusal retries and names the unverified writer (BUG-2778)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a219ab`) for branch `bug-2778-retention-retry`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4693>
+  - Branch: `bug-2778-retention-retry` → `main`
+
+  ## Covers
+
+  - BUG-2778
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4693` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T22:25:51.086725827Z
+modified_at: 2026-11-26T22:25:51.086725827Z
+req_type: Story
+filed_at:
+  code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b728c3373d
