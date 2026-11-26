@@ -1,0 +1,55 @@
+id: 01a216b1-f95d-7613-a0df-bffc00480a22
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-338
+title: 'Review PR-4631: [AI:claude] fix(train): drop a member whose head moved from bisect halves instead of re-testing it (TASK-3913)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21688`) for branch `train-bisect-drop-moved`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4631>
+  - Branch: `train-bisect-drop-moved` → `main`
+
+  ## Covers
+
+  - TASK-3913
+  - TASK-3911
+  - BUG-2768
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3143
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4631` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T07:11:32.189755576Z
+modified_at: 2026-11-26T07:11:40.483300965Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a215cd-369e-74e1-9f9b-d98fc2cc144f
+  created_at: 2026-11-26T07:11:40.483234574Z
+  created_by: dirtlab
+history:
+- id: 01a216b2-2940-7c11-bb90-d54fc147f8a1
+  author: dirtlab
+  timestamp: 2026-11-26T07:11:44.448296812Z
+  session_id: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: f581c7122990913411cdfa9104546a6ae698104c
+  branch: train-bisect-drop-moved
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c8c3a3e139
+  vendor: claude
+  session: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)

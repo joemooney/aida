@@ -9,12 +9,12 @@ description: |
   - AC1: when a bisect half (or any follow-up train) is built, a member whose PR head has moved since the parent train was built is DROPPED from the half as superseded, not tested. It re-enters later at its new approved head through normal admission.
   - AC2: the drop is logged and named in `aida pr train --check` / the train body ("superseded: head moved 04aa3b22 → cd340a59").
   - AC3: a test: a member whose head moved is dropped from the bisect half, and the remaining members are still tested.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:01:40.126033678Z
-modified_at: 2026-11-26T06:55:22.345761226Z
+modified_at: 2026-11-26T07:12:19.916746091Z
 req_type: Task
 tags:
 - landing
@@ -75,6 +75,13 @@ comments:
   modified_at: 2026-11-26T06:55:22.345761226Z
   session_id: 01a21688f171
   harness_version: 2.1.319 (Claude Code)
+- id: 01a216b1-8600-7193-b5bb-3c5b56097f07
+  author: aida-publication-done
+  content: Implementer push f581c7122990 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T07:11:02.656689001Z
+  modified_at: 2026-11-26T07:11:02.656689001Z
+  session_id: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a215d1-59b6-70d0-8f00-cbfb6c5757d5
   author: joe
@@ -91,6 +98,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a216b1-8600-7193-b5bb-3c4d4cdcb036
+  author: aida-publication-done
+  timestamp: 2026-11-26T07:11:02.656685165Z
+  session_id: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a216b2-b9f5-7022-ae22-57ab7f074ad7
+  author: dirtlab
+  timestamp: 2026-11-26T07:12:21.493959758Z
+  session_id: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 467f62335cef5f08cb850e95f6562cc81c7995a2
@@ -99,3 +121,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: fa7028b4df8
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T07:12:19.916746091Z
+  implemented_by: dirtlab
