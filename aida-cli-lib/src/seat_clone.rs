@@ -450,6 +450,7 @@ pub(crate) fn create(
             .with_context(|| format!("create {}", parent.display()))
             .map_err(|e| refusal(dest, e))?;
     }
+    release_stale_pin(main, dest, &pin).map_err(|e| refusal(dest, e))?;
 
     // Claim the (empty) directory BEFORE the pin, so a pin never exists
     // without its clone directory: reap releases a pin with no clone lease
@@ -477,6 +478,43 @@ pub(crate) fn create(
         base_sha,
         pin,
     })
+}
+
+/// A pin left behind for `dest` whose clone is gone blocks every later launch
+/// at that path ("reference already exists"). Release it when no clone
+/// directory and no clone lease account for it; `release_orphan_pin`
+/// re-checks both and deletes only while the pin still names the commit read
+/// here. A pin a lease still names (or a clone that appeared meanwhile) is
+/// never touched: the launch refuses instead.
+// trace:BUG-2772 | ai:claude
+fn release_stale_pin(main: &Path, dest: &Path, pin: &str) -> Result<()> {
+    let mut read = git(main);
+    read.args(["rev-parse", "--verify", "--quiet", pin]);
+    let Some(oid) = run(read, &format!("read {pin}"))
+        .ok()
+        .filter(|o| !o.is_empty())
+    else {
+        return Ok(());
+    };
+    let orphan = OrphanPin {
+        pin: pin.to_string(),
+        oid: oid.clone(),
+        clone: dest.to_path_buf(),
+        clone_exists: false,
+    };
+    if !release_orphan_pin(main, &orphan)? {
+        anyhow::bail!(
+            "the base pin {pin} is still held: a session lease names this clone, or its \
+             directory appeared meanwhile; end that session (`aida session end`) first"
+        );
+    }
+    eprintln!(
+        "released the stale base pin {pin} (at {short}): its clone {} is gone and no lease \
+         names it",
+        dest.display(),
+        short = &oid[..oid.len().min(12)]
+    );
+    Ok(())
 }
 
 /// Retire the mail of a clone this process is still creating, before it is
