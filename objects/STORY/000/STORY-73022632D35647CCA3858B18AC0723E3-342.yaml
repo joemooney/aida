@@ -1,0 +1,33 @@
+id: 01a21701-18e1-7da0-9114-61d0632f156e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-342
+title: 'Review PR-4635: [AI:claude] fix(review): bind findings to their batch, reap escaped runner descendants, host git for git_text (Refs STORY-3120)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a216ba`) for branch `int44-story-3120-s3fu`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4635>
+  - Branch: `int44-story-3120-s3fu` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4635` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T08:37:57.601145898Z
+modified_at: 2026-11-26T08:37:57.601145898Z
+req_type: Story
+filed_at:
+  code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cb984b75d
