@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-25T21:57:51.572348737Z
+modified_at: 2026-11-26T04:20:04.103837253Z
 req_type: Task
 tags:
 - dell1
@@ -28,6 +28,17 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 15:00): APPROVED HIGH, standard, drain. Evidence: the dell1 OOM at 14:53 (8 lanes compiling aida_cli_lib, 62G RAM + 7G swap exhausted, 23 processes OOM-killed, including a non-AIDA container). Once landed, set dell1 to max_compile_concurrency=4, cargo_build_jobs=4. At most 300 lines.'
   created_at: 2026-11-25T21:57:47.832403125Z
   modified_at: 2026-11-25T21:57:47.832403125Z
+- id: 01a21615-3bcc-7b52-8fd3-8902126b161e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:20):
+    # TASK-3911 (approved; product-15 2026-11-25 21:25, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch lanes-compile-concurrency. STANDARD. <=300 changed lines; if it doesn't fit, ship a first slice with (Refs TASK-3911) and say what remains in the PR body, otherwise use the completing (TASK-3911) trailer.
+    READ FIRST: `aida show TASK-3911 --comments` (evidence, ACs, rulings). Default unset = today's behaviour (a process-policy knob). Apply it in the lane-job scheduler (lane job admission), not in the product launcher.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T04:20:04.103837253Z
+  modified_at: 2026-11-26T04:20:04.103837253Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a214b7-0985-7a31-bf46-c7f9bea6c072
   author: joe
