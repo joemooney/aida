@@ -332,9 +332,12 @@ impl std::error::Error for TrainJournalBusy {}
 
 // trace:BUG-2622 | ai:codex
 #[derive(Debug)]
-pub(super) struct RunLock(File);
+pub(super) struct RunLock(File, PathBuf, std::time::Instant);
 impl Drop for RunLock {
     fn drop(&mut self) {
+        // Still under the lock, so appends never interleave.
+        // trace:STORY-3131 | ai:claude
+        note_run(&self.1, self.2.elapsed().as_secs());
         // flock belongs to the open file description. Closing our descriptor
         // alone leaves it held when a forked child retains that description.
         let _ = fs2::FileExt::unlock(&self.0);
@@ -359,7 +362,46 @@ pub(super) fn lock(dir: &Path) -> Result<RunLock> {
         return Err(err).context("could not lock train journal");
     }
     record_driver(&lock, record);
-    Ok(RunLock(lock))
+    Ok(RunLock(lock, dir.to_path_buf(), std::time::Instant::now()))
+}
+
+/// How long past train runs held the lock, newest last, for the
+/// landing-drought threshold. Best effort; capped at [`RUN_HISTORY_CAP`].
+// trace:STORY-3131 | ai:claude
+const RUN_HISTORY: &str = "run-history.jsonl";
+const RUN_HISTORY_CAP: usize = 50;
+
+#[derive(Serialize, Deserialize)]
+struct RunRecord {
+    secs: u64,
+}
+
+fn note_run(dir: &Path, secs: u64) {
+    let path = dir.join(RUN_HISTORY);
+    let mut lines: Vec<String> = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    let Ok(line) = serde_json::to_string(&RunRecord { secs }) else {
+        return;
+    };
+    lines.push(line);
+    let keep = &lines[lines.len().saturating_sub(RUN_HISTORY_CAP)..];
+    let temporary = dir.join(format!("{RUN_HISTORY}.{}.tmp", uuid::Uuid::new_v4()));
+    let body = keep.join("\n") + "\n";
+    let _ = std::fs::write(&temporary, body).and_then(|()| std::fs::rename(&temporary, &path));
+    let _ = std::fs::remove_file(temporary);
+}
+
+/// Seconds each recorded train run held the lock, oldest first.
+pub(super) fn run_history(dir: &Path) -> Vec<u64> {
+    std::fs::read_to_string(dir.join(RUN_HISTORY))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| serde_json::from_str::<RunRecord>(l).ok())
+        .map(|r| r.secs)
+        .collect()
 }
 
 impl ForgeRails<'_> {
