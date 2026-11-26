@@ -9,12 +9,12 @@ description: |
   - AC1: the auto-train pre-scan (train_wanted) and the real pass use ONE predicate (typed_gate_member_with + ownership), not the legacy eligible gate, so they cannot disagree.
   - AC2: dedupe or cache the pre-scan forge (gh) reads per poll so an idle loop does not spend the shared ~5000/h GitHub budget.
   - AC3: tests for the running-train and recovery AC4 phases, and reset TEST_HOLD_WARN_MS after the bug2769 tests (a test-isolation leak).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-26T14:04:30.048957708Z
+modified_at: 2026-11-26T15:00:57.895673682Z
 req_type: Task
 tags:
 - landing
@@ -130,6 +130,20 @@ history:
   session_id: 01a217f59d73
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2185f-bf62-7233-a92a-57842ef93be1
+  author: aida-auto-bump
+  timestamp: 2026-11-26T15:00:57.826072605Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2185f-bfa7-7201-829b-6a4eb4b0e34b
+  timestamp: 2026-11-26T15:00:57.895670039Z
+  agent: aida
+  commit_sha: fb8e94a6e0569d2a82fe7dcbad76a6412d4cd85f
+  summary: 'TASK-3917 PASS, with CI pending at review time (fast gates green, fast compile pending). Three-dot diff against main 4d918b2: the branch is 0 commits behind. AC1 [behavioral-test] verified: the real pass loop (pr_train.rs ~5397) and the pre-scan (AutomaticPrescan::admits) both call admit_member, which runs ownership/train-rider refusal, then typed_gate_member_with, then culprit_admission. The pre-scan runs it under ADVISOR_LOOP with a restore guard, read-only, with dry-run ownership. train_wanted no longer calls the legacy eligible gate. Test: task3917_member_predicate_refuses_a_rider_before_any_gate_read. AC2 [behavioral-test] verified: Refusals caches refusals per (PR, head) for 10 minutes, unavailable evidence is never cached, and the prescan loads lazily so an all-cached idle poll does one discovery listing. Test: task3917_idle_polls_rejudge_a_refusal_only_on_a_new_head_or_after_the_window. AC3 [behavioral-test] verified: task3917_a_long_hold_names_the_running_train_phase holds run.lock; task3917_a_long_hold_names_the_recovery_phase writes retained.json, which recovery_needed detects; the ShortHoldWarn drop guard plus a mutex resets TEST_HOLD_WARN_MS to 0. Deep pass: base filtering, train-branch filtering, the abandoned-train shortcut and error-to-Unavailable mapping all match the pass. The pre-scan is read-only and only decides whether a pass runs, and the pass still applies every gate, so I found no authority bypass. Two non-blocking findings are recorded as deferred follow-ups.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
@@ -138,3 +152,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 15bbbc68222
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T15:00:57.826065649Z
+  completion_sha: fb8e94a6e0569d2a82fe7dcbad76a6412d4cd85f
