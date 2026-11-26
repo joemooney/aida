@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T22:06:16.802289772Z
+modified_at: 2026-11-26T22:06:55.675799135Z
 req_type: Story
 tags:
 - integration
@@ -1467,6 +1467,33 @@ comments:
     Evidence (product-15 15:05, worktree build b728c3373d1): all 4 trial runs (#4666, #4663, #4661, #4658) lost the finished claude finder report because the auto-picked codex challenger was usage-limited ("try again at Nov 29th, 2026 10:41 AM").
   created_at: 2026-11-26T22:06:16.802289772Z
   modified_at: 2026-11-26T22:06:16.802289772Z
+- id: 01a219e5-fc7f-7ef1-bd46-7588fe205c95
+  author: joe
+  content: |-
+    S5d SCOPE (advisor ruling 15:13). The first AC is binding: partial output when the challenger is unavailable.
+    Live trial: a failed challenger (codex rate-limited) discards the finder's findings, with rc=1 and no report. In #4690 (S5c), review_batches returns the challenger run error at handle_review_prepare's review_batches call. That happens before --write, SARIF, --post-comment and --fail-on run. S5c merges as it is (it fails closed and names the cause). S5d runs BEFORE S6.
+    AC1 (binding):
+    - (a) In review_batches, a failed challenger run, or verdicts that cannot be parsed, keeps that batch's finder rows and records the cause. No further challenge calls are made after the first failure.
+    - (b) AdversarialSummary gets challenger_unavailable: Option<String>. The bundle renders "challenger: unavailable (<cause>)", with the cause made inert through code_span/fenced (it is agent stderr).
+    - (c) Findings that were never challenged carry an "unchallenged" marker in the report and as a SARIF property.
+    - (d) --fail-on still gates on them.
+    - (e) After write, SARIF and post, the run exits with code 3 ("partial: challenger unavailable"). When both apply, fail-on (rc=1) wins.
+    - (f) Rework the s4_adversarial… assertion. Add a test covering partial output, the fail-on interplay and exit code 3.
+    AC2: F docs:
+    - --run-review, --adversarial, --effort and --challenger-effort, with their resolution order and allowlists;
+    - --challenger-agent;
+    - --fail-on, including that refuted and unchallenged findings still count;
+    - the --post-comment opt-in and the 60k cap;
+    - literal pathspecs for --scan --path;
+    - exit code 3.
+    AC3: S5c nits:
+    - n1: --challenger-agent without --agent: refuse with "--challenger-agent needs --agent", not with a message naming AIDA_REVIEW_RUNNER_CMD.
+    - n2: guard the EACCES assertion when euid == 0.
+    If the total goes over 300 lines, split the docs into S5e. AC1 must not be split.
+  created_at: 2026-11-26T22:06:55.675799135Z
+  modified_at: 2026-11-26T22:06:55.675799135Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
