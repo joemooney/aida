@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T23:24:21.303468137Z
+modified_at: 2026-11-26T23:26:58.891274690Z
 req_type: Story
 tags:
 - integration
@@ -1500,6 +1500,20 @@ comments:
   created_at: 2026-11-26T22:17:36.317384338Z
   modified_at: 2026-11-26T22:17:36.317384338Z
   session_id: 01a21959d98a
+- id: 01a21a2f-4fe8-79b1-b7a8-6add9c8cb834
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:26):
+    # STORY-3120 S5d: challenger-unavailable degradation + docs + S5c nits (product-15 2026-11-26). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch cut from the integration tip AFTER S5c #4690 merged. Title "(Refs STORY-3120)". <=300 lines; if over, split docs (B) into S5e.
+    READ: `aida show STORY-3120 --comments` (the 15:10 BINDING challenger-unavailable ruling; integration-30's S5c nits), brief-STORY-3120-S5c.md item F.
+     (A) BINDING (advisor 15:10; integration-30 is posting the exact spec comment on STORY-3120: follow THAT): finder rows kept, an "unchallenged" marker, the cause code-spanned, --fail-on unchanged, exit 3 = partial, and --fail-on wins over 3. Unless S5c already shipped it: when the challenger cannot run (rate-limited / missing / unauthenticated), still write the finder report + SARIF; mark every finding "unchallenged" and the bundle "challenger: unavailable (<cause>)"; --fail-on applies to the unchallenged findings; exit with a DISTINCT non-zero code (3 = "partial: challenger unavailable"); TEST with a stub challenger that rate-limits.
+     (B) DOCS (S5 item F): --run-review, --adversarial, --effort / --challenger-effort (resolution order flag > AIDA_REVIEW_EFFORT > review-rules default_effort > the [agents] seat effort; the allowlists), --challenger-agent, the exit codes (incl. 3), --fail-on with refuted/unchallenged findings, --post-comment's opt-in rule and 60k cap, literal pathspecs for --scan --path. No nested lists, no *italics*.
+     (C) integration-30's S5c nits: the misleading refusal message when --agent is unset; the EACCES test assumes non-root (skip or adapt it under root).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T23:26:58.891274690Z
+  modified_at: 2026-11-26T23:26:58.891274690Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
