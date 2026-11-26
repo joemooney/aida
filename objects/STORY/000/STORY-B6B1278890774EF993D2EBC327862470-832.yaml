@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T19:00:10.609934880Z
+modified_at: 2026-11-26T19:39:13.175513012Z
 req_type: Story
 tags:
 - agents
@@ -161,6 +161,12 @@ comments:
   modified_at: 2026-11-26T19:00:10.609934880Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2195e-7f97-7a50-8f67-8cef03430257
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `vendor-outage-s1a` at head `50595d1cf3c7773507b71a8f9fbd810ce7822a8f`.'
+  created_at: 2026-11-26T19:39:13.175507518Z
+  modified_at: 2026-11-26T19:39:13.175507518Z
+  session_id: 01a218e69155
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
