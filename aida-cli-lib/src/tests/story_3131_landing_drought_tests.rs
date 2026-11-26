@@ -6,7 +6,7 @@ fn ready(number: u64, age_min: i64, now: DateTime<Utc>) -> Ready {
         number,
         since: now - TimeDelta::minutes(age_min),
         approved: true,
-        review_in_flight: false,
+        review: None,
         conflict: false,
         repairing: false,
         spec: Some("STORY-1".into()),
@@ -26,7 +26,7 @@ fn story_3131_defaults_when_section_absent() {
             enabled: true,
             drought_minutes: 60,
             ready_dwell_minutes: 30,
-            lock_hold_minutes: 20,
+            lock_hold_minutes: 45,
             action: Action::Investigate,
         }
     );
@@ -68,7 +68,7 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
         running_no_full,
     ];
     let recent_landing = Some(now - TimeDelta::minutes(10));
-    let findings = evaluate(&prs, &policy, now, recent_landing, None);
+    let findings = evaluate(&prs, &policy, now, recent_landing, None, "main");
     let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
     assert_eq!(ids, ["PR-7", "PR-8", "PR-9", "PR-12"]);
     assert!(findings[0].summary.contains("supervised"));
@@ -84,7 +84,14 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
     assert!(findings[3].action.starts_with("investigate"));
 
     // Drought: main idle past drought_minutes while ready PRs wait.
-    let dry = evaluate(&prs, &policy, now, Some(now - TimeDelta::minutes(90)), None);
+    let dry = evaluate(
+        &prs,
+        &policy,
+        now,
+        Some(now - TimeDelta::minutes(90)),
+        None,
+        "main",
+    );
     assert_eq!(dry.len(), 5);
     assert!(dry[4]
         .summary
@@ -92,17 +99,17 @@ fn story_3131_old_approval_reported_with_cause_fresh_one_not() {
     // Only unlandable (red) PRs stuck: no drought finding.
     let mut only_red = ready(8, 45, now);
     only_red.ci = Ci::Red("build".into());
-    let red_only = evaluate(&[only_red], &policy, now, None, None);
+    let red_only = evaluate(&[only_red], &policy, now, None, None, "main");
     assert_eq!(red_only.len(), 1);
     assert_eq!(red_only[0].id, "PR-8");
     // No drought finding without a ready PR.
     let fresh = [ready(13, 5, now)];
-    assert!(evaluate(&fresh, &policy, now, None, None).is_empty());
+    assert!(evaluate(&fresh, &policy, now, None, None, "main").is_empty());
     let off = Policy {
         enabled: false,
         ..policy
     };
-    assert!(evaluate(&prs, &off, now, None, None).is_empty());
+    assert!(evaluate(&prs, &off, now, None, None, "main").is_empty());
 }
 
 #[test]
@@ -209,7 +216,14 @@ fn story_3131_s2_conflict_without_repair_lane() {
     let mut no_spec = conflict.clone();
     no_spec.number = 22;
     no_spec.spec = None;
-    let findings = evaluate(&[conflict, repairing, no_spec], &policy, now, None, None);
+    let findings = evaluate(
+        &[conflict, repairing, no_spec],
+        &policy,
+        now,
+        None,
+        None,
+        "main",
+    );
     let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
     // A repair lane owns PR-21: not a conflict cause, and not landable either.
     assert_eq!(ids, ["PR-20", "PR-21", "PR-22"]);
@@ -221,80 +235,115 @@ fn story_3131_s2_conflict_without_repair_lane() {
         "route the conflict repair: `aida rework STORY-1`"
     );
     assert!(!findings[1].summary.contains("conflict"));
-    assert!(findings[2].action.contains("rebase PR 22 onto main"));
+    assert!(findings[2].action.contains("rebase PR 22 onto its base"));
     assert!(!findings.iter().any(|f| f.id == "main"));
 }
 
 #[test]
-fn story_3131_s2_review_verdict_missing_at_head() {
+fn story_3131_s2_held_review_at_head_fails() {
+    use crate::review_watch::ReviewWatch;
     let now = Utc::now();
     let policy = Policy::read(None).unwrap();
     let mut unreviewed = ready(30, 45, now);
     unreviewed.approved = false;
+    unreviewed.review = Some(ReviewWatch::Held);
     unreviewed.full_tier_gap = Some("missing"); // not reported before review
-    let findings = evaluate(&[unreviewed], &policy, now, None, None);
+    let findings = evaluate(&[unreviewed], &policy, now, None, None, "main");
     assert_eq!(
         findings.len(),
         1,
         "an unreviewed PR is not landable: no drought"
     );
+    assert_eq!(findings[0].category, CATEGORY);
     assert!(findings[0].summary.starts_with("PR-30 green 45m"));
     assert!(findings[0]
         .summary
-        .contains("review verdict missing or held"));
+        .contains("review held at the current head"));
     assert!(findings[0]
         .action
         .contains("aida review watch --release PR-30"));
 }
 
+fn holder(held: i64, idle: Option<i64>, ci_live: Option<bool>) -> LockHolder {
+    LockHolder {
+        pid: Some(4242),
+        held_minutes: Some(held),
+        command: Some("aida pr train 4000".into()),
+        idle_minutes: idle,
+        ci_live,
+        threshold_minutes: 45,
+    }
+}
+
 #[test]
-fn story_3131_s2_train_lock_held_past_threshold() {
+fn story_3131_s2_train_lock_advice_follows_progress() {
     let now = Utc::now();
     let policy = Policy::read(None).unwrap();
-    let mut supervised = ready(40, 45, now);
-    supervised.supervised = true;
     let mut red = ready(41, 45, now);
     red.ci = Ci::Red("build".into());
-    let prs = [supervised, red];
-    let holder = |m: i64| LockHolder {
-        pid: Some(4242),
-        held_minutes: Some(m),
-        command: Some("aida pr train 4000".into()),
-    };
-    let held = evaluate(&prs, &policy, now, None, Some(&holder(25)));
-    assert!(held[0]
+    let prs = [ready(40, 45, now), red];
+    let run = |h: &LockHolder| evaluate(&prs, &policy, now, None, Some(h), "main");
+
+    // Stuck: past the threshold, no step change and no CI job.
+    let stuck = run(&holder(90, Some(60), Some(false)));
+    assert_eq!(stuck[0].category, CATEGORY);
+    assert!(stuck[0]
         .summary
-        .contains("train lock held 25m by pid 4242 (aida pr train 4000)"));
-    assert!(held[0].action.contains("stop pid 4242 if it is hung"));
+        .contains("train lock held 90m by pid 4242 (aida pr train 4000)"));
+    assert!(stuck[0].action.contains("stop pid 4242: it is stuck"));
     assert!(
-        held[1].summary.contains("red required check"),
+        stuck[1].summary.contains("red required check"),
         "red outranks the lock"
     );
-    // Within lock_hold_minutes, or of unknown age: the first-pass cause stands.
-    let fresh = evaluate(&prs, &policy, now, None, Some(&holder(20)));
-    assert!(fresh[0].summary.contains("supervised"));
-    let unknown_age = LockHolder {
-        held_minutes: None,
-        ..holder(0)
-    };
-    let unknown = evaluate(&prs, &policy, now, None, Some(&unknown_age));
-    assert!(unknown[0].summary.contains("supervised"));
-    // A dead or unidentified driver still holding the lock is orphaned:
-    // stale at any age, aged from the record when it has one.
-    let orphan = |m: Option<i64>| LockHolder {
+
+    // A long train with live CI, or a recent step change: busy, never "stop".
+    for busy in [
+        holder(120, Some(60), Some(true)),
+        holder(120, Some(5), None),
+        holder(30, None, None),
+        holder(30, Some(40), Some(false)),
+    ] {
+        assert_eq!(busy.state(), LockState::Busy, "{busy:?}");
+        let rows = run(&busy);
+        assert_eq!(rows[0].category, INFO_CATEGORY, "{busy:?}");
+        assert!(rows[0].summary.contains("waiting for the running train"));
+        assert!(!rows.iter().any(|f| f.action.contains("stop")));
+    }
+    // Past the threshold but CI unread or no journal: investigate, not stop.
+    for slow in [holder(90, Some(60), None), holder(90, None, Some(false))] {
+        assert_eq!(slow.state(), LockState::Slow, "{slow:?}");
+        let rows = run(&slow);
+        assert_eq!(rows[0].category, CATEGORY);
+        assert!(rows[0].summary.contains("past the 45m threshold"));
+        assert!(rows[0].action.starts_with("investigate"));
+        assert!(!rows[0].action.contains("stop"));
+    }
+    // A busy train turns main's idleness informational too.
+    let dry = Some(now - TimeDelta::minutes(90));
+    let busy = evaluate(
+        &prs,
+        &policy,
+        now,
+        dry,
+        Some(&holder(70, Some(2), None)),
+        "main",
+    );
+    let main = busy.iter().find(|f| f.id == "main").unwrap();
+    assert_eq!(main.category, INFO_CATEGORY);
+    assert_eq!(failing(&busy), 1, "only the red PR fails");
+
+    // A dead or unidentified driver with no progress is orphaned at any age.
+    let orphan = LockHolder {
         pid: None,
-        held_minutes: m,
         command: None,
+        ..holder(3, None, None)
     };
-    let dead = evaluate(&prs, &policy, now, None, Some(&orphan(Some(3))));
+    assert_eq!(orphan.state(), LockState::Orphaned);
+    let dead = run(&orphan);
     assert!(dead[0]
         .summary
         .contains("train lock held 3m by an unidentified process"));
-    assert!(dead[0].action.contains("stop an unidentified process"));
-    let ageless = evaluate(&prs, &policy, now, None, Some(&orphan(None)));
-    assert!(ageless[0]
-        .summary
-        .contains("train lock held by an unidentified process"));
+    assert!(dead[0].action.starts_with("investigate"));
     assert_eq!(failing(&dead), dead.len(), "an orphaned lock fails the job");
     // The knob is read and validated like the other minutes.
     let cfg: toml::Value = toml::from_str("[landing_watchdog]\nlock_hold_minutes = 5").unwrap();
@@ -304,30 +353,112 @@ fn story_3131_s2_train_lock_held_past_threshold() {
 }
 
 #[test]
-fn story_3131_s2_review_backlog_is_informational() {
+fn story_3131_s2_lock_threshold_from_history() {
+    let policy = Policy::read(None).unwrap();
+    assert_eq!(lock_threshold(&policy, &[]), 45, "no history: the floor");
+    // Short runs never lower the floor.
+    assert_eq!(lock_threshold(&policy, &[600, 900]), 45);
+    // p90 of ten runs (5m..50m) is the 9th smallest: 45m, doubled.
+    let runs: Vec<u64> = (1..=10).map(|m| m * 5 * 60).collect();
+    assert_eq!(lock_threshold(&policy, &runs), 90);
+    assert_eq!(lock_threshold(&policy, &[50 * 60]), 100);
+}
+
+#[test]
+fn story_3131_s2_deep_review_backlog_is_informational() {
+    use crate::review_watch::ReviewWatch;
     let now = Utc::now();
     let policy = Policy::read(None).unwrap();
-    let mut queued = ready(50, 45, now);
-    queued.approved = false;
-    queued.review_in_flight = true;
-    let mut idle = queued.clone();
-    idle.number = 51;
-    idle.review_in_flight = false;
-    let mut fresh = idle.clone();
-    fresh.number = 52;
-    fresh.since = now - TimeDelta::minutes(10);
-    let findings = evaluate(&[queued, idle, fresh], &policy, now, None, None);
-    let rows: Vec<_> = findings
-        .iter()
-        .map(|f| (f.id.as_str(), f.category.as_str()))
+    // Far more green, unreviewed PRs than watcher capacity: some in flight
+    // (reserved, running, remote-held, superseding), most not admitted yet.
+    let prs: Vec<Ready> = (60..80)
+        .map(|n| {
+            let mut r = ready(n, 120, now);
+            r.approved = false;
+            r.review = (n < 63).then_some(ReviewWatch::InFlight);
+            r
+        })
         .collect();
-    // Within the dwell nothing shows; a queued or running review is shown
-    // but does not fail; no review at all past the dwell is a finding.
-    assert_eq!(rows, [("PR-50", INFO_CATEGORY), ("PR-51", CATEGORY)]);
-    assert!(findings[0].summary.contains("review queued or running"));
-    assert!(findings[1]
-        .summary
-        .contains("review verdict missing or held"));
-    assert_eq!(failing(&findings), 1);
-    assert!(policy.fail_reason(failing(&findings[..1])).is_none());
+    let findings = evaluate(&prs, &policy, now, None, None, "main");
+    assert_eq!(findings.len(), 20);
+    assert_eq!(failing(&findings), 0, "a review backlog is not a drought");
+    assert!(policy.fail_reason(failing(&findings)).is_none());
+    assert!(findings[0].summary.contains("review in flight"));
+    assert!(findings[5].summary.contains("waiting for watcher capacity"));
+}
+
+const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+fn listing(number: u64) -> serde_json::Value {
+    serde_json::json!({
+        "number": number,
+        "title": format!("feat: thing (STORY-{number})"),
+        "headRefName": format!("story-{number}"),
+        "headRefOid": HEAD.to_uppercase(),
+        "baseRefName": "trunk",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "statusCheckRollup": [{
+            "name": "build", "status": "COMPLETED", "conclusion": "SUCCESS",
+            "completedAt": "2026-11-26T10:00:00Z"
+        }],
+    })
+}
+
+#[test]
+fn story_3131_s2_ready_of_maps_the_listing_row() {
+    use crate::review_watch::ReviewWatch;
+    let watch = vec![
+        ("PR-1".to_string(), HEAD.to_string(), ReviewWatch::Held),
+        ("PR-10".to_string(), HEAD.to_string(), ReviewWatch::InFlight),
+        ("PR-2".to_string(), "b".repeat(40), ReviewWatch::Held),
+    ];
+    let verdict = |number: u64, head: &str| -> Result<AtHead> {
+        assert_eq!(head, HEAD.to_uppercase());
+        Ok(match number {
+            3 => AtHead::Approved(Utc::now()),
+            4 => AtHead::Settled,
+            _ => AtHead::Missing,
+        })
+    };
+    let lookups = Lookups {
+        base: "trunk",
+        tiered: false,
+        watch: &watch,
+        verdict: &verdict,
+        repairing: &|spec, _| spec == "STORY-3",
+        supervised: &|specs| specs.is_empty(),
+        on_train: &|n| Ok(n == 3),
+    };
+    let of = |row: &serde_json::Value| ready_of(row, &lookups).unwrap();
+
+    // Unreviewed and green: included, with its review state matched by key
+    // and head (case-insensitively), never by a prefix key or another head.
+    let one = of(&listing(1)).unwrap();
+    assert!(!one.approved);
+    assert_eq!(one.review, Some(ReviewWatch::Held));
+    assert_eq!(of(&listing(2)).unwrap().review, None, "other head");
+    assert_eq!(
+        of(&listing(10)).unwrap().review,
+        Some(ReviewWatch::InFlight)
+    );
+    assert!(!one.conflict && !one.repairing && !one.supervised && !one.on_train);
+    assert_eq!(one.spec.as_deref(), Some("STORY-1"));
+
+    let mut conflicted = listing(3);
+    conflicted["mergeable"] = "CONFLICTING".into();
+    let three = of(&conflicted).unwrap();
+    assert!(three.approved && three.conflict && three.repairing && three.on_train);
+
+    // Settled verdicts, drafts, other bases and red unreviewed heads drop out.
+    assert!(of(&listing(4)).is_none());
+    let mut draft = listing(1);
+    draft["isDraft"] = true.into();
+    assert!(of(&draft).is_none());
+    let mut main = listing(1);
+    main["baseRefName"] = "main".into();
+    assert!(of(&main).is_none(), "the resolved base, not a literal main");
+    let mut red = listing(1);
+    red["statusCheckRollup"][0]["conclusion"] = "FAILURE".into();
+    assert!(of(&red).is_none());
 }

@@ -680,7 +680,7 @@ protect = true
 enabled = true
 drought_minutes = 60
 ready_dwell_minutes = 30
-lock_hold_minutes = 20
+lock_hold_minutes = 45
 action = "investigate"
 
 # trace:STORY-2849 | ai:codex

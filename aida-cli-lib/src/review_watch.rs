@@ -2348,19 +2348,40 @@ pub(crate) fn held_slots(root: &Path) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Each (change key, head) whose latest attempt is queued (reserved) or
-/// running, read without changing watcher state (landing-drought).
+/// Where the watcher stands on a change's latest attempt (landing-drought).
 // trace:STORY-3131 | ai:claude
-pub(crate) fn reviewing_heads(root: &Path) -> Vec<(String, String)> {
-    let Some(state) = read_only_state(root) else {
-        return Vec::new();
-    };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReviewWatch {
+    /// Reserved, running, owned by a peer hub, or being superseded by a
+    /// newer head: the review is coming.
+    InFlight,
+    /// Failed, exited or completed without a verdict: the watcher will not
+    /// review this head again until an operator releases it.
+    Held,
+}
+
+/// Each (change key, head, state) by its latest attempt, read without
+/// changing watcher state. A superseded attempt confirmed gone is omitted:
+/// the change's new head is merely waiting for capacity.
+// trace:STORY-3131 | ai:claude
+pub(crate) fn review_heads(root: &Path) -> Vec<(String, String, ReviewWatch)> {
+    read_only_state(root).map_or_else(Vec::new, |state| latest_watch(&state))
+}
+
+fn latest_watch(state: &State) -> Vec<(String, String, ReviewWatch)> {
     state
         .entries
         .iter()
         .filter_map(|(key, entry)| {
             let attempt = entry.attempts.last()?;
-            admitted(attempt).then(|| (key.clone(), attempt.head.clone()))
+            let watch = match attempt.phase {
+                Phase::RemoteHeld | Phase::Reserved | Phase::Running | Phase::Superseding => {
+                    ReviewWatch::InFlight
+                }
+                Phase::Failed | Phase::Exited | Phase::Completed => ReviewWatch::Held,
+                Phase::Superseded => return None,
+            };
+            Some((key.clone(), attempt.head.clone(), watch))
         })
         .collect()
 }

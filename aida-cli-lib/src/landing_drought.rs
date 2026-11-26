@@ -67,7 +67,8 @@ impl Policy {
             enabled,
             drought_minutes: minutes("drought_minutes", 60)?,
             ready_dwell_minutes: minutes("ready_dwell_minutes", 30)?,
-            lock_hold_minutes: minutes("lock_hold_minutes", 20)?,
+            // A healthy train holds the lock through its whole CI wait.
+            lock_hold_minutes: minutes("lock_hold_minutes", 45)?,
             action,
         })
     }
@@ -88,8 +89,9 @@ pub(crate) struct Ready {
     pub since: DateTime<Utc>,
     /// An open approval at the current head; otherwise no verdict there yet.
     pub approved: bool,
-    /// A review of the current head is queued or running.
-    pub review_in_flight: bool,
+    /// The watcher's latest attempt at the current head; `None` when it has
+    /// not admitted this head yet (waiting for capacity: backlog).
+    pub review: Option<crate::review_watch::ReviewWatch>,
     /// The forge reports a merge conflict with the base.
     pub conflict: bool,
     /// A rework lane (queued work or a retained implementer lease) owns it.
@@ -108,41 +110,97 @@ pub(crate) struct LockHolder {
     pub pid: Option<u32>,
     pub held_minutes: Option<i64>,
     pub command: Option<String>,
+    /// Since the train last changed step or checkpointed; `None` with no
+    /// journal.
+    pub idle_minutes: Option<i64>,
+    /// Train CI jobs still pending: `None` when not read or unreadable.
+    pub ci_live: Option<bool>,
+    /// The hold past which the train needs a look: see [`lock_threshold`].
+    pub threshold_minutes: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LockState {
+    /// Within its threshold, or showing progress: PRs wait for it.
+    Busy,
+    /// Past its threshold with no positive sign of being stuck.
+    Slow,
+    /// No step change, checkpoint or CI activity for the threshold.
+    Stuck,
+    /// A dead or unidentified driver that shows no progress (BUG-2757).
+    Orphaned,
 }
 
 impl LockHolder {
-    /// Held past `lock_hold_minutes`, or held at all by a dead or
-    /// unidentified driver: an orphaned lock (BUG-2757's shape) is stale at
-    /// any age.
-    fn stale(&self, policy: &Policy) -> bool {
-        self.pid.is_none()
-            || self
-                .held_minutes
-                .is_some_and(|m| m > policy.lock_hold_minutes)
+    /// "Stop" needs positive evidence; progress or live CI always means busy.
+    pub(crate) fn state(&self) -> LockState {
+        let t = self.threshold_minutes;
+        if self.idle_minutes.is_some_and(|m| m < t) || self.ci_live == Some(true) {
+            return LockState::Busy;
+        }
+        if self.pid.is_none() {
+            return LockState::Orphaned;
+        }
+        if self.held_minutes.is_none_or(|m| m <= t) {
+            return LockState::Busy;
+        }
+        if self.idle_minutes.is_some() && self.ci_live == Some(false) {
+            LockState::Stuck
+        } else {
+            LockState::Slow
+        }
     }
 }
 
-fn cause(ready: &Ready, stale_lock: Option<&LockHolder>) -> Option<(String, String)> {
+/// `max(lock_hold_minutes, 2 x p90)` of past train runs (nearest rank).
+pub(crate) fn lock_threshold(policy: &Policy, history_secs: &[u64]) -> i64 {
+    let mut runs: Vec<u64> = history_secs.to_vec();
+    runs.sort_unstable();
+    let p90 = match runs.len() {
+        0 => 0,
+        n => runs[(n * 9).div_ceil(10) - 1],
+    };
+    let doubled = i64::try_from(p90.saturating_mul(2) / 60).unwrap_or(i64::MAX);
+    policy.lock_hold_minutes.max(doubled)
+}
+
+/// A finding's (category, why, action) for one waiting PR.
+type Cause = (&'static str, String, String);
+
+fn cause(ready: &Ready, lock: Option<&LockHolder>) -> Option<Cause> {
+    use crate::review_watch::ReviewWatch;
     let n = ready.number;
+    let fail = |why: String, action: String| Some((CATEGORY, why, action));
     // A conflict blocks CI and landing alike, so it outranks every CI state.
     if ready.conflict && !ready.repairing {
         let fix = ready.spec.as_ref().map_or_else(
-            || format!("rebase PR {n} onto main"),
+            || format!("rebase PR {n} onto its base"),
             |s| format!("`aida rework {s}`"),
         );
-        return Some((
+        return fail(
             "merge conflict with no repair lane".into(),
             format!("route the conflict repair: {fix}"),
-        ));
+        );
     }
-    Some(match &ready.ci {
-        Ci::Green if !ready.approved => (
-            "review verdict missing or held at the current head".into(),
-            format!(
-                "check `aida review watch status`; clear an exited-attempt hold with `aida review watch --release PR-{n}`"
+    match &ready.ci {
+        // Only a held attempt stops the watcher; anything else is the review
+        // backlog, queued or waiting for capacity. trace:STORY-3131 | ai:claude
+        Ci::Green if !ready.approved => match ready.review {
+            Some(ReviewWatch::Held) => fail(
+                "review held at the current head without a verdict".into(),
+                format!("check `aida review watch status`; release the hold with `aida review watch --release PR-{n}`"),
             ),
-        ),
-        Ci::Red(failed) => (
+            watch => Some((
+                INFO_CATEGORY,
+                if watch.is_some() {
+                    "review in flight at the current head".into()
+                } else {
+                    "review waiting for watcher capacity".into()
+                },
+                "none: wait for the review".into(),
+            )),
+        },
+        Ci::Red(failed) => fail(
             format!("red required check ({failed})"),
             format!("inspect `gh pr checks {n}`; rerun a flake or route rework"),
         ),
@@ -152,31 +210,63 @@ fn cause(ready: &Ready, stale_lock: Option<&LockHolder>) -> Option<(String, Stri
             if ready.full_tier_gap == Some("cancelled")
                 || (ready.ci == Ci::Green && ready.full_tier_gap.is_some()) =>
         {
-            (
+            fail(
                 format!("full CI tier {} at the approved head", ready.full_tier_gap?),
                 format!("add the `ci:full` label to PR {n} to run full-tier CI at its head"),
             )
         }
-        Ci::Green if stale_lock.is_some() => {
-            let lock = stale_lock?;
-            let pid = lock.pid.map_or("an unidentified process".into(), |p| format!("pid {p}"));
-            let command = lock.command.as_ref().map_or(String::new(), |c| format!(" ({c})"));
-            let age = lock.held_minutes.map_or(String::new(), |m| format!(" {m}m"));
-            (
-                format!("train lock held{age} by {pid}{command}"),
-                format!("inspect `aida pr train --status`; stop {pid} if it is hung, then train PR {n}"),
-            )
-        }
-        Ci::Green if ready.supervised => (
+        Ci::Green if lock.is_some() => lock_cause(n, lock?),
+        Ci::Green if ready.supervised => fail(
             "supervised, not drain-eligible".into(),
             format!("needs operator train: `aida pr train {n}`"),
         ),
-        Ci::Green => (
+        Ci::Green => fail(
             "unknown".into(),
             "investigate: `aida land stalls`, train admission and the schedule log".into(),
         ),
         // CI still running at the head: not ready yet.
-        _ => return None,
+        _ => None,
+    }
+}
+
+/// A PR waiting on a held train lock. trace:STORY-3131 | ai:claude
+fn lock_cause(n: u64, lock: &LockHolder) -> Option<Cause> {
+    let pid = lock
+        .pid
+        .map_or("an unidentified process".into(), |p| format!("pid {p}"));
+    let command = lock
+        .command
+        .as_ref()
+        .map_or(String::new(), |c| format!(" ({c})"));
+    let age = lock
+        .held_minutes
+        .map_or(String::new(), |m| format!(" {m}m"));
+    let t = lock.threshold_minutes;
+    let status = "`aida pr train --status`";
+    Some(match lock.state() {
+        LockState::Busy => (
+            INFO_CATEGORY,
+            format!("waiting for the running train (lock held{age} by {pid})"),
+            format!("none: the next train picks up PR {n}"),
+        ),
+        LockState::Slow => (
+            CATEGORY,
+            format!("train lock held{age} by {pid}{command}, past the {t}m threshold"),
+            format!("investigate {status}: no sign yet that it is stuck; then train PR {n}"),
+        ),
+        LockState::Stuck => (
+            CATEGORY,
+            format!(
+                "train lock held{age} by {pid}{command}: no step change, checkpoint or CI job for {}m",
+                lock.idle_minutes.unwrap_or(t)
+            ),
+            format!("confirm with {status}, stop {pid}: it is stuck; then train PR {n}"),
+        ),
+        LockState::Orphaned => (
+            CATEGORY,
+            format!("train lock held{age} by {pid} with no progress"),
+            format!("investigate {status} for an orphaned lock; then train PR {n}"),
+        ),
     })
 }
 
@@ -186,33 +276,21 @@ pub(crate) fn evaluate(
     now: DateTime<Utc>,
     last_landing: Option<DateTime<Utc>>,
     lock: Option<&LockHolder>,
+    base: &str,
 ) -> Vec<DoctorFinding> {
     if !policy.enabled {
         return Vec::new();
     }
-    let stale_lock = lock.filter(|l| l.stale(policy));
     let dwell = TimeDelta::minutes(policy.ready_dwell_minutes);
     let mut findings: Vec<DoctorFinding> = prs
         .iter()
         .filter(|r| !r.on_train && now.signed_duration_since(r.since) > dwell)
         .filter_map(|r| {
-            let (why, action) = cause(r, stale_lock)?;
+            let (category, why, action) = cause(r, lock)?;
             let state = if r.approved {
                 "approved and ready"
             } else {
                 "green"
-            };
-            // A queued or running review is the normal backlog: shown, not
-            // failing. trace:STORY-3131 | ai:claude
-            let backlog = !r.approved && r.ci == Ci::Green && r.review_in_flight;
-            let (category, why, action) = if backlog {
-                (
-                    INFO_CATEGORY,
-                    "review queued or running at the current head".into(),
-                    "none: wait for the review".into(),
-                )
-            } else {
-                (CATEGORY, why, action)
             };
             Some(DoctorFinding {
                 category: category.into(),
@@ -237,13 +315,15 @@ pub(crate) fn evaluate(
         .filter(|r| r.approved && r.ci == Ci::Green && r.full_tier_gap.is_none() && !r.conflict)
         .count();
     if dry && landable > 0 {
+        // A train still working is the landing in progress, not a drought.
+        let busy = lock.is_some_and(|l| l.state() == LockState::Busy);
         let since = last_landing.map_or("ever".into(), |at| {
             format!("{}m", now.signed_duration_since(at).num_minutes())
         });
         findings.push(DoctorFinding {
-            category: CATEGORY.into(),
-            id: "main".into(),
-            summary: format!("no landing on main for {since} while {landable} landable PRs wait"),
+            category: if busy { INFO_CATEGORY } else { CATEGORY }.into(),
+            id: base.into(),
+            summary: format!("no landing on {base} for {since} while {landable} landable PRs wait"),
             action: "investigate the stuck PRs above, or page the operator".into(),
             safe_heal: false,
         });
@@ -270,10 +350,10 @@ fn full_tier_gap(rollup: &serde_json::Value) -> Option<&'static str> {
     }
 }
 
-fn last_landing(root: &Path) -> Result<Option<DateTime<Utc>>> {
-    for rev in ["origin/main", "main"] {
+fn last_landing(root: &Path, base: &str) -> Result<Option<DateTime<Utc>>> {
+    for rev in [format!("origin/{base}"), base.to_owned()] {
         let out = std::process::Command::new("git")
-            .args(["log", "-1", "--format=%cI", rev, "--"])
+            .args(["log", "-1", "--format=%cI", &rev, "--"])
             .current_dir(root)
             .output()
             .context("running git log for the last landing")?;
@@ -284,7 +364,7 @@ fn last_landing(root: &Path) -> Result<Option<DateTime<Utc>>> {
                 .map(|t| t.with_timezone(&Utc)));
         }
     }
-    bail!("cannot read the last landing on main")
+    bail!("cannot read the last landing on {base}")
 }
 
 /// The latest ledger record as seen from `head`.
@@ -345,6 +425,58 @@ fn needs_supervision(
     !any
 }
 
+/// What [`ready_of`] looks up outside the PR listing row, so tests script it.
+// trace:STORY-3131 | ai:claude
+struct Lookups<'a> {
+    base: &'a str,
+    tiered: bool,
+    watch: &'a [(String, String, crate::review_watch::ReviewWatch)],
+    verdict: &'a dyn Fn(u64, &str) -> Result<AtHead>,
+    repairing: &'a dyn Fn(&str, &str) -> bool,
+    supervised: &'a dyn Fn(&[String]) -> bool,
+    on_train: &'a dyn Fn(u64) -> Result<bool>,
+}
+
+/// One open-PR listing row as landing evidence; `None` when it is a draft,
+/// targets another base, has a settled verdict, or is not ready yet.
+fn ready_of(pr: &serde_json::Value, l: &Lookups<'_>) -> Result<Option<Ready>> {
+    if pr["isDraft"] == true || pr["baseRefName"].as_str() != Some(l.base) {
+        return Ok(None);
+    }
+    let number = pr["number"].as_u64().context("PR number missing")?;
+    let head = pr["headRefOid"].as_str().context("invalid PR head")?;
+    let rollup = &pr["statusCheckRollup"];
+    let ci = crate::land::ci_of_rollup(rollup);
+    let green_at = crate::land::green_rollup_at(rollup).map(|t| t.with_timezone(&Utc));
+    // An unreviewed head counts once its CI is green: the review is the wait.
+    let (approved, since) = match ((l.verdict)(number, head)?, green_at) {
+        (AtHead::Approved(at), green) => (true, green.map_or(at, |ci| at.max(ci))),
+        (AtHead::Missing, Some(green)) if ci == Ci::Green => (false, green),
+        _ => return Ok(None),
+    };
+    let branch = pr["headRefName"].as_str().unwrap_or_default();
+    let title = pr["title"].as_str().unwrap_or_default();
+    let spec_ids = crate::pr_ship::extract_pr_spec_ids(branch, title);
+    let key = format!("PR-{number}");
+    Ok(Some(Ready {
+        number,
+        since,
+        approved,
+        review: l
+            .watch
+            .iter()
+            .find(|(k, sha, _)| *k == key && sha.eq_ignore_ascii_case(head))
+            .map(|(_, _, w)| *w),
+        conflict: pr["mergeable"] == "CONFLICTING",
+        repairing: spec_ids.iter().any(|s| (l.repairing)(s, branch)),
+        spec: spec_ids.first().cloned(),
+        ci,
+        full_tier_gap: l.tiered.then(|| full_tier_gap(rollup)).flatten(),
+        supervised: (l.supervised)(&spec_ids),
+        on_train: (l.on_train)(number)?,
+    }))
+}
+
 pub(crate) fn scan(
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<(Policy, Vec<DoctorFinding>)> {
@@ -356,60 +488,71 @@ pub(crate) fn scan(
     use aida_core::DatabaseBackend;
     let storage = aida_core::GitBackend::open_existing(&root.join(".aida-store"))?;
     let store = storage.load_for_read()?;
-    let tiered = crate::full_tier::repo_is_tiered(root)?;
     let lanes = crate::stalled_reviews::ReworkLanes::load(root, &storage, &store)?;
     // One clock for PR ages and the lock's age. trace:STORY-3131 | ai:claude
     let now = DateTime::<Utc>::from(exec.clock().wall_now());
-    let reviewing = crate::review_watch::reviewing_heads(root);
+    // The base the train lands on, resolved as the landing gate does.
+    let base = crate::trusted_config::local_default_branch_name(root)
+        .unwrap_or_else(|| crate::forge::default_branch_of(root));
+    let watch = crate::review_watch::review_heads(root);
+    let lookups = Lookups {
+        base: &base,
+        tiered: crate::full_tier::repo_is_tiered(root)?,
+        watch: &watch,
+        verdict: &|number, head| {
+            let records = project::change_verdicts_checked(root, ChangeKey::pr(number))
+                .map_err(anyhow::Error::msg)?;
+            ledger_at_head(records, head)
+        },
+        repairing: &|spec, branch| lanes.covers(&store, spec, branch),
+        supervised: &|specs| {
+            needs_supervision(specs.iter().map(|s| {
+                store
+                    .get_requirement_by_spec_id(s)
+                    .map(|r| r.execution_mode)
+            }))
+        },
+        on_train: &|number| Ok(!crate::pr_train::pr_head_pins(root, number)?.is_empty()),
+    };
     let mut ready = Vec::new();
     for pr in crate::stalled_reviews::open_prs(root)? {
-        // Drafts and other bases never land on main. trace:STORY-3131 | ai:claude
-        if pr["isDraft"] == true || pr["baseRefName"] != "main" {
-            continue;
-        }
-        let number = pr["number"].as_u64().context("PR number missing")?;
-        let head = pr["headRefOid"].as_str().context("invalid PR head")?;
-        let records = project::change_verdicts_checked(root, ChangeKey::pr(number))
-            .map_err(anyhow::Error::msg)?;
-        let rollup = &pr["statusCheckRollup"];
-        let ci = crate::land::ci_of_rollup(rollup);
-        let green_at = crate::land::green_rollup_at(rollup).map(|t| t.with_timezone(&Utc));
-        // An unreviewed head counts once its CI is green: the review is the wait.
-        let (approved, since) = match (ledger_at_head(records, head)?, green_at) {
-            (AtHead::Approved(at), green) => (true, green.map_or(at, |ci| at.max(ci))),
-            (AtHead::Missing, Some(green)) if ci == Ci::Green => (false, green),
-            _ => continue,
-        };
-        let branch = pr["headRefName"].as_str().unwrap_or_default();
-        let title = pr["title"].as_str().unwrap_or_default();
-        let spec_ids = crate::pr_ship::extract_pr_spec_ids(branch, title);
-        let supervised = needs_supervision(spec_ids.iter().map(|s| {
-            store
-                .get_requirement_by_spec_id(s)
-                .map(|r| r.execution_mode)
-        }));
-        ready.push(Ready {
-            number,
-            since,
-            approved,
-            review_in_flight: reviewing
-                .iter()
-                .any(|(key, sha)| *key == format!("PR-{number}") && sha.eq_ignore_ascii_case(head)),
-            conflict: pr["mergeable"] == "CONFLICTING",
-            repairing: spec_ids.iter().any(|s| lanes.covers(&store, s, branch)),
-            spec: spec_ids.first().cloned(),
-            ci,
-            full_tier_gap: tiered.then(|| full_tier_gap(rollup)).flatten(),
-            supervised,
-            on_train: !crate::pr_train::pr_head_pins(root, number)?.is_empty(),
-        });
+        ready.extend(ready_of(&pr, &lookups)?);
     }
-    let lock = crate::pr_train::lock_driver(root, now)?.map(|(pid, secs)| LockHolder {
-        pid,
-        held_minutes: secs.map(|s| i64::try_from(s / 60).unwrap_or(i64::MAX)),
-        command: pid.and_then(command_line),
+    let lock = crate::pr_train::lock_driver(root, now)?.map(|e| {
+        let minutes = |s: u64| i64::try_from(s / 60).unwrap_or(i64::MAX);
+        let mut holder = LockHolder {
+            pid: e.pid,
+            held_minutes: e.held_secs.map(minutes),
+            command: e.pid.and_then(command_line),
+            idle_minutes: e.idle_secs.map(minutes),
+            ci_live: None,
+            threshold_minutes: lock_threshold(&policy, &e.history_secs),
+        };
+        // The forge CI read only runs when it could change the advice.
+        if holder.state() != LockState::Busy {
+            let live: Vec<_> = e
+                .train_prs
+                .iter()
+                .map(|pr| crate::pr_train::train_ci_live(root, *pr))
+                .collect();
+            holder.ci_live = if live.contains(&Some(true)) {
+                Some(true)
+            } else if !live.is_empty() && live.iter().all(|l| *l == Some(false)) {
+                Some(false)
+            } else {
+                None
+            };
+        }
+        holder
     });
-    let findings = evaluate(&ready, &policy, now, last_landing(root)?, lock.as_ref());
+    let findings = evaluate(
+        &ready,
+        &policy,
+        now,
+        last_landing(root, &base)?,
+        lock.as_ref(),
+        &base,
+    );
     Ok((policy, findings))
 }
 

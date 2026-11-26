@@ -38,7 +38,8 @@ mod overlap;
 #[path = "pr_train_status.rs"]
 mod status;
 pub(crate) use status::{
-    lock_driver, train_status, TrainStatusExit, NO_TRAIN_EXIT_CODE, ORPHANED_EXIT_CODE,
+    lock_driver, train_ci_live, train_status, TrainStatusExit, NO_TRAIN_EXIT_CODE,
+    ORPHANED_EXIT_CODE,
 };
 // trace:BUG-2750 | ai:codex
 #[path = "pr_train_store_refresh.rs"]
