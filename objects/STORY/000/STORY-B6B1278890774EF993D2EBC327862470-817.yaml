@@ -9,12 +9,12 @@ description: |
   - AC1: When land/train merges a change, the specs in the landed commit's trailing parens (skipping a final `(#N)` group, and never Refs-only ones) are completed at merge time by the landing actor, without waiting for a pull.
   - AC2: A later `aida pull` is idempotent for specs already completed this way.
   - AC3: A test covers a train landing whose squash subject ends in `(SPEC-ID) (#N)`.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:54:53.934825801Z
-modified_at: 2026-11-26T02:53:09.307796278Z
+modified_at: 2026-11-26T03:07:13.935203474Z
 req_type: Story
 tags:
 - completion
@@ -122,6 +122,19 @@ history:
   session_id: 01a215928946
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a215d2-4e7b-7293-8072-4469ca3459ab
+  author: aida-auto-bump
+  timestamp: 2026-11-26T03:07:13.915673412Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a215d2-4e8f-7903-bd40-e2aa8e502cb3
+  timestamp: 2026-11-26T03:07:13.935200948Z
+  agent: aida
+  commit_sha: 467f62335cef5f08cb850e95f6562cc81c7995a2
+  summary: Completed via merge 467f6233
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -129,3 +142,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T03:07:13.915666763Z
+  completion_sha: 467f62335cef5f08cb850e95f6562cc81c7995a2
