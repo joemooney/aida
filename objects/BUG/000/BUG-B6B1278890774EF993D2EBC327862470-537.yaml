@@ -1,0 +1,29 @@
+id: 01a218da-0841-7962-b2ba-dc30177303de
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-537
+agreed_id: BUG-2776
+title: review-watch still holds PRs with NEW unreviewed heads behind a clean, exited reviewer worktree (the BUG-2763 retry runs after the worktree-held refusal)
+description: |
+  Found 2026-11-26 10:04 by product-15. Live binary 6192912152a (it includes BUG-2763, completed 2026-11-25). The review-watch pass at 10:04:04Z reported "14 open change(s), 0 dispatched ... 5 held by exited attempts (PR-4638, PR-4634, PR-4627, PR-4616, PR-4606)". Each held PR had a NEW head that had never been reviewed: #4638 head d69af92a vs the leftover reviewer worktree at 2af8eb61; #4634 3caca775 vs 7f8ce287; #4627 4296a44c vs 741bbc73. The leftover worktrees ~/ai/aida-worktrees/aida-pr-N were CLEAN, held no merge holds and had no live process. Their leases were "stale" or "ending-retained". The hint says "branch pr-N is held by worktree ... before pickup setup. Keep this checkout; inspect ...". So the worktree-held refusal fires BEFORE BUG-2763's new-head retry, and these PRs went hours with no review (#4638, #4634 and #4627 since roughly 11-25 late evening) until a seat ran `aida session end <lease> --yes` by hand. This is the 5th instance on 11-26 (the advisor cleared aida-pr-4606 and aida-pr-4652 earlier).
+
+  ## Acceptance
+  - AC1: when a PR's current head differs from the head checked out in a leftover reviewer worktree that is CLEAN, holds no merge-hold marker, has no live process, and whose lease is stale or ending-retained, review-watch reclaims it itself: it copies any merge-hold marker to the primary first (BUG-2176), runs the same path as `aida session end --yes`, and dispatches the new head in the SAME pass. A test drives the exact shape above.
+  - AC2: a dirty, locked, merge-held or process-held leftover is still kept, and the pass line names WHY for each held PR (dirty / live pid N / merge-hold / lock), not just "held by exited attempt".
+  - AC3: a held-PR count above 0 for longer than 30 min surfaces in `aida doctor` and in the landing-drought watchdog (STORY-3131) as "review blocked by a retained reviewer worktree", with the exact fix.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T17:14:31.873888920Z
+modified_at: 2026-11-26T17:14:31.873888920Z
+req_type: Bug
+tags:
+- BUG-2763
+- review-watch
+- throughput
+filed_at:
+  code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d38eee408f3
+  vendor: claude
