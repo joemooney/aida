@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T17:48:52.562109857Z
+modified_at: 2026-11-26T17:50:22.986651685Z
 req_type: Story
 tags:
 - landing
@@ -322,6 +322,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T17:48:52.409718659Z
   modified_at: 2026-11-26T17:48:52.409718659Z
+- id: 01a218fb-19b2-7fa0-8cc1-3f981dc3f564
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:50):
+    # STORY-3131 S2 r1 on #4634 (advisor-122 ruling 2026-11-26 10:52 at 3caca775: a LEGIT request-changes; a watchdog that cries wolf gets ignored; product-15). Lane: CLAUDE. MAIN, existing branch story-3131-s2-causes / PR #4634. Keep the "(Refs STORY-3131)" title. Merge current origin/main into the branch first if it conflicts.
+    BINDING:
+     (a) review-in-flight = ANY open approved-or-under-review PR with a queued, reserved, running, remote-held or superseding watcher attempt. A review backlog deeper than max_concurrent is NOT a drought (a green, unreviewed PR still waiting for watcher capacity is a backlog, not a failure).
+     (b) Lock-hold advice is relative to the train's own phase. NEVER advise "stop pid P" while the holder's train has live CI jobs or the holder is making progress (heartbeat or phase advancing). The threshold defaults to max(45m, 2x the p90 train duration from history) when history exists, else 45m. The advice says "investigate"; it names "stop" only with POSITIVE evidence it's stuck (no phase change AND no CI activity for the threshold).
+     (c) The base branch comes from config or the forge default branch (resolved the way the train/ship code does), not a hardcoded "main".
+     (d) Tests for the scan() wiring: the draft/base filter, CONFLICTING mapping, unreviewed-green inclusion, review_in_flight key/head matching, lock_driver orphaned-lock age, reviewing_heads, and ReworkLanes::covers. Plus negatives for (a) (a deep backlog → no failing finding) and (b) (a long train with live CI → no "stop" advice).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4634. COMMIT your work.
+  created_at: 2026-11-26T17:50:22.986651685Z
+  modified_at: 2026-11-26T17:50:22.986651685Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
