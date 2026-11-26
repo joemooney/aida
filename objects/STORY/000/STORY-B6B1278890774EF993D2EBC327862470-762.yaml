@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T12:46:17.740097825Z
+modified_at: 2026-11-26T12:48:37.011793819Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -487,6 +487,19 @@ comments:
     A reference merge (commit 488beb34f1d7, `(Refs STORY-2839)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T12:44:39.954132990Z
   modified_at: 2026-11-26T12:44:39.954132990Z
+- id: 01a217e6-da58-7083-9e1d-9c7eebaff37e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:48):
+    # STORY-2839 slice (e): terminology field guide + the build.py renderer guard (integration-30 grooming + the slice (e) addendum on STORY-2839; Joe's reference commit b5826a0f949; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int45-story-2839-e (cut from the integration tip after (d2) #4648 merged). This is the FINAL STORY-2839 slice: title with the completing (STORY-2839) trailer. <=300 hand-written lines; if over, ship (e1) with (Refs STORY-2839) and say what remains. Do NOT rebase onto main.
+    READ: `aida show STORY-2839 --comments` (grooming; the slice (e) ADDENDUM).
+    PORT from b5826a0f949: docs/showcase/workflow.html field guide (+321 hand-written), workflow.svg and authority-mandate.svg. Check every term and command against the current CLI.
+    PLUS the renderer guard: docs/showcase/build.py either RENDERS nested "  - " lists and *em*, or (preferred, cheaper and fail-closed) REFUSES to build when a source line has an indented list marker or an unmatched single-asterisk emphasis, naming file:line. One test fixture per case.
+    SVG safety: no <script>, no event handlers, no external hrefs. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T12:48:37.011793819Z
+  modified_at: 2026-11-26T12:48:37.011793819Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
