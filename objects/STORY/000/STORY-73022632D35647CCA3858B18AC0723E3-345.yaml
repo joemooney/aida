@@ -1,5 +1,6 @@
 id: 01a2170c-0023-73e1-b629-cc5e9df5679b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-345
+agreed_id: STORY-3169
 title: 'Review PR-4638: [AI:claude] feat(dev): aida dev provisional promotes an unlanded head with a PROVISIONAL marker (Refs STORY-3148)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a216d8`) for branch `dev-provisional-s1b`.
@@ -35,6 +36,12 @@ history:
 - id: 01a2170c-3b21-79a1-b691-27a834637e60
   author: dirtlab
   timestamp: 2026-11-26T08:50:07.265974026Z
+  changes: []
+- id: 01a2170f-7f54-7882-8fec-3ee64923d387
+  author: joe
+  timestamp: 2026-11-26T08:53:41.332401604Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d

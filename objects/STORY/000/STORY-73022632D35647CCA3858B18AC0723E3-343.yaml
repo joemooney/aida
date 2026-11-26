@@ -1,5 +1,6 @@
 id: 01a21703-a7c9-7152-9d38-7a0713edf2a6
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-343
+agreed_id: STORY-3166
 title: 'Review PR-4636: [AI:claude] feat(review): screen npm, cargo, vault, terraform and gem token files as credentials (TASK-3914)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a216cf`) for branch `int44-cred-paths`.
@@ -33,6 +34,12 @@ history:
 - id: 01a21703-d8a1-74d0-a42f-b54e6c91b288
   author: dirtlab
   timestamp: 2026-11-26T08:40:57.761566740Z
+  changes: []
+- id: 01a2170e-caf1-75a1-83aa-8cbe9f893027
+  author: joe
+  timestamp: 2026-11-26T08:52:55.153185505Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
