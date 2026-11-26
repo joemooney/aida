@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-26T01:35:01.930532669Z
+modified_at: 2026-11-26T01:36:01.392478532Z
 req_type: Bug
 tags:
 - landing
@@ -173,6 +173,12 @@ comments:
   content: Implementer push bc5438855b63 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T01:35:01.930532186Z
   modified_at: 2026-11-26T01:35:01.930532186Z
+  session_id: 01a2153c5f29
+- id: 01a2157e-cd70-7521-992a-ae40101de959
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2733-linear-promotion-specs` at head `bc5438855b63b22bf94baf3687a0ee3b4d1ca1c6`.'
+  created_at: 2026-11-26T01:36:01.392475272Z
+  modified_at: 2026-11-26T01:36:01.392475272Z
   session_id: 01a2153c5f29
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
