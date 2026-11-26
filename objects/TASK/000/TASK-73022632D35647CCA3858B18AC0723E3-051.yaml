@@ -1,5 +1,6 @@
 id: 01a21869-db37-72b2-bc21-d65953e8a74c
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-051
+agreed_id: TASK-3501
 title: Apply the BUG-2738 landed-spec guard to review stranded --fix and the orchestrator shelve
 description: |
   BUG-2738 (PR #4663) guards only the `aida review record` refusal path: before shelving, it checks leases::landed_refusal (Completed, or PR MERGED/CLOSED).
@@ -23,6 +24,13 @@ tags:
 - from-implementer:BUG-2738
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a21876-55c7-7810-9bcf-7d0b56461861
+  author: joe
+  timestamp: 2026-11-26T15:25:38.119974097Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: bug-2738-shelve-completed

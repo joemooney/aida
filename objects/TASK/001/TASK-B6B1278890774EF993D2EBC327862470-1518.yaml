@@ -1,5 +1,6 @@
 id: 01a21873-58bf-7832-aa57-3ea9f9e8e821
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1518
+agreed_id: TASK-3504
 title: 'Review follow-up: Merged/closed detection is GitHub-only and degrades silently: review_commands.rs:3609 call'
 description: |-
   From BUG-2738
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20b16-0a8e-7413-abc1-7f3194759828
   created_at: 2026-11-26T15:22:39.570872204Z
+history:
+- id: 01a21877-115f-7f63-9882-81085c7cd21e
+  author: joe
+  timestamp: 2026-11-26T15:26:26.143363746Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: pr-4663

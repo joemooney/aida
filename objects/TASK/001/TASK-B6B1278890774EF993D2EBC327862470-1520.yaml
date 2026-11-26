@@ -1,5 +1,6 @@
 id: 01a21873-de23-7751-880c-0cfd13a4529a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1520
+agreed_id: TASK-3503
 title: 'Review follow-up: leases.rs record_refusal_on_landed_spec evaluates landed_refusal on the pre-read copy and '
 description: |-
   From BUG-2738
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20b16-0a8e-7413-abc1-7f3194759828
   created_at: 2026-11-26T15:23:12.583108141Z
+history:
+- id: 01a21876-d2d7-7b80-b0d5-2406b953f4f1
+  author: joe
+  timestamp: 2026-11-26T15:26:10.135589213Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: pr-4663
