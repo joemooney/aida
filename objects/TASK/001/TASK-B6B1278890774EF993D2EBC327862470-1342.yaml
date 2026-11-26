@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-26T23:33:08.584539452Z
+modified_at: 2026-11-26T23:35:47.015443071Z
 req_type: Task
 tags:
 - review
@@ -57,6 +57,27 @@ comments:
   modified_at: 2026-11-26T23:29:17.232430424Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a37-1447-7481-a4da-5c315c0a0e22
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + command-level):** `RawDiffEntry` gains a `non_regular` kind (symlink / gitlink / other) checked first in `classify_compiled`, labelled `non_regular:<kind>`. Diff mode reads modes from `git diff --raw` (120000, 160000, other); workspace/scan entries are opened through a no-follow confined walk and classified by fstat. Test `t3869_non_regular_entries_skipped_with_named_reason` covers a symlink, a submodule gitlink, a FIFO and a file behind a symlinked directory in range, workspace and scan modes, and asserts the link target content never enters the bundle.
+    - **AC2 (command-level):** `--specs` IDs resolve only through the loaded store (never the reviewed tree); a store load failure or an unknown ID refuses. Test `t3869_specs_resolve_only_through_store_and_refuse_unknown`.
+    - **AC3 (unit, concurrency):** one `openat`-based no-follow walk shared by `read_workspace_file` and `write_output`. Test `t3869_pinned_root_survives_concurrent_symlink_swap`: a thread swaps a directory and a symlink to an outside dir while reads and writes loop; nothing outside is ever read or written.
+    - **AC4 (unit + command-level):** git path output is read as bytes; paths render with `\\` and `\xHH` escaping and decode back to the exact bytes for git pathspecs and workspace reads. Test `t3869_non_utf8_path_round_trips_losslessly`.
+
+    ### Expected files
+    - `aida-core/src/review_engine.rs`
+    - `aida-cli-lib/src/review_prepare.rs`
+
+    ### Ambiguities / conflicts as questions
+    - If the diff exceeds ~300 lines, AC1+AC2 ship with `(Refs TASK-3869)` per the brief and the rest is listed.
+  created_at: 2026-11-26T23:35:47.015443071Z
+  modified_at: 2026-11-26T23:35:47.015443071Z
+  session_id: 01a21a34695d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
