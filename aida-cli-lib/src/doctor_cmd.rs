@@ -1594,6 +1594,10 @@ mod task_1544_light_doctor_tests;
 mod bug_1675_disk_headroom_light_tests;
 
 #[cfg(test)]
+#[path = "tests/task_3910_ci_cache_tests.rs"]
+mod task_3910_ci_cache_tests;
+
+#[cfg(test)]
 #[path = "tests/task_1534_worktree_gc_batch_landed_tests.rs"]
 mod task_1534_worktree_gc_batch_landed_tests;
 
