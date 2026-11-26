@@ -9,12 +9,12 @@ description: |
   - AC1: when a PR's current head differs from the head checked out in a leftover reviewer worktree that is CLEAN, holds no merge-hold marker, has no live process, and whose lease is stale or ending-retained, review-watch reclaims it itself: it copies any merge-hold marker to the primary first (BUG-2176), runs the same path as `aida session end --yes`, and dispatches the new head in the SAME pass. A test drives the exact shape above.
   - AC2: a dirty, locked, merge-held or process-held leftover is still kept, and the pass line names WHY for each held PR (dirty / live pid N / merge-hold / lock), not just "held by exited attempt".
   - AC3: a held-PR count above 0 for longer than 30 min surfaces in `aida doctor` and in the landing-drought watchdog (STORY-3131) as "review blocked by a retained reviewer worktree", with the exact fix.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T17:29:33.885338287Z
+modified_at: 2026-11-26T18:36:01.146891345Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -58,6 +58,40 @@ comments:
   modified_at: 2026-11-26T17:29:33.885338287Z
   session_id: 01a218e28a8c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21922-8f01-7e81-8eba-86dc1fc7c21a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 128178c722 (git diff origin/main...HEAD)
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: bug_2776_review_watch_reclaims_only_a_clean_exited_leftover_on_a_moved_head (real queue-pickup reviewer lease + default review worktree, PR moved; PR-2457 legacy marker collected onto the ledger before end, end called with that lease, tree gone). bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass (Exited held-tree attempt; reclaim then probe then Dispatch of the new head in one select, pickup_retries=1).
+    - AC2 [behavioral-test]: same reclaim test keeps on live owner (ending-retained but live), at-current-head, dirty, live pid N, lock, merge-hold (residual PR-9999 marker left in place); review-watch test asserts Skip + Admission::Held{why:dirty,retained:true}; pass line now renders 'held by exited attempts (PR-N: why, ...)' for every exited-attempt hold.
+    - AC3 [behavioral-test]: bug2776_retained_checkout_block_surfaces_after_thirty_minutes (since carried across passes by key; <30 min silent; >=30 min degradation line + landing-drought DoctorFinding with fix 'aida session end --branch pr-N --yes' then 'aida review watch --release PR-N'; cleared when no longer held).
+    Validation: targeted lane cargo test 8/8 + 11/11 (incl. bug_2457/bug_2469/bug2757/bug2720 regressions); make check-ci-fast exit 0.
+
+    Probe findings / fixes:
+    - Probe 5: an ending-retained lease with a live owner passed the lease check while the in-tree holder scan misses a process whose cwd left the tree. Fixed: Live always keeps; tested.
+    - Probe 3: classification only ran on due retries, so the 30-min clock reset on backoff and never started after the 3-retry cap. Fixed: classify (and reclaim) on every pass for an Exited held-tree attempt.
+    - Unreadable checkout HEAD now fails closed. Every error path returns Kept, never Free.
+    - Store-writer inventory: added the one row for the new preserve_review_worktree_holds call site (regenerate also emitted unrelated main drift, left out).
+
+    Residual risks:
+    - The end path is a subprocess of 'aida session end <lease> --yes --skip-ci' (no in-process API takes an explicit root); a refusal is reported as the kept reason each pass, so a persistently refusing end respawns every pass for that PR.
+    - Once a kept checkout becomes reclaimable after the pickup retry cap, the tree is ended but dispatch still needs 'aida review watch --release PR-N' (pre-existing cap semantics).
+    - The AC3 surfacing lives in the landing-drought doctor check (aida doctor check landing-drought, scheduled watchdog) and the watcher's degraded status, not the bare 'aida doctor' run.
+    - Production diff is ~300 lines, above the 250 guideline.
+  created_at: 2026-11-26T18:33:44.961805936Z
+  modified_at: 2026-11-26T18:33:44.961805936Z
+  session_id: 01a218e28a8c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21922-d652-72c3-bebf-654d76f5211d
+  author: aida-publication-done
+  content: Implementer push 1eba036e95ff declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T18:34:03.218601320Z
+  modified_at: 2026-11-26T18:34:03.218601320Z
+  session_id: 01a218e28a8c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218dd-3006-7b12-a565-eb8e5e0a12d8
   author: joe
@@ -70,6 +104,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21922-d652-72c3-bebf-653348f2cb4a
+  author: aida-publication-done
+  timestamp: 2026-11-26T18:34:03.218599266Z
+  session_id: 01a218e28a8c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21924-ac7d-7893-817f-7f737b909fc2
+  author: dirtlab
+  timestamp: 2026-11-26T18:36:03.581619919Z
+  session_id: 01a218e28a8c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
@@ -78,3 +127,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: d38eee408f3
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T18:36:01.146891345Z
+  implemented_by: dirtlab
