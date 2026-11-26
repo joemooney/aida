@@ -116,12 +116,7 @@ pub(crate) fn resolve_for_run(
 ) -> Result<ReviewTuning> {
     let rules = &base.rules;
     let env = |key| env_value(parent_env, key);
-    let seat = agent
-        .map(|a| base_seat_tuning(base, a.program))
-        .transpose()?;
-    let (seat, name) = (seat.unwrap_or_default(), agent.map_or("", |a| a.program));
-    let seat_effort = format!("[agents.{name}.seats.reviewer] effort");
-    let seat_model = format!("[agents.{name}.seats.reviewer] model");
+    let (seat, seat_effort, seat_model) = seat_sources(agent, base)?;
     let (rules_effort, rules_model) = (&rules.default_effort, &rules.default_model);
     let effort = [
         ("--effort", flags.0),
@@ -144,16 +139,39 @@ fn env_value<'a>(parent_env: &'a [(OsString, OsString)], key: &str) -> Option<&'
     found.map(|(_, v)| v.to_str().unwrap_or("\u{fffd}"))
 }
 
-/// The `--adversarial` challenger's tuning: `--challenger-effort` >
-/// `AIDA_REVIEW_CHALLENGER_EFFORT` > base `challenger_effort`, each checked
-/// against `agent`'s allowlist, then the usual chain without the finder's
-/// flags. trace:STORY-3120 | ai:claude
+/// `agent`'s base reviewer seat tuning and the source names for its fields.
+fn seat_sources(
+    agent: Option<&ReviewVendor>,
+    base: &TrustedBase,
+) -> Result<(
+    aida_core::agents_config::ResolvedAgentTuning,
+    String,
+    String,
+)> {
+    let seat = agent
+        .map(|a| base_seat_tuning(base, a.program))
+        .transpose()?;
+    let name = agent.map_or("", |a| a.program);
+    Ok((
+        seat.unwrap_or_default(),
+        format!("[agents.{name}.seats.reviewer] effort"),
+        format!("[agents.{name}.seats.reviewer] model"),
+    ))
+}
+
+/// The `--adversarial` challenger's tuning: effort from `--challenger-effort`
+/// > `AIDA_REVIEW_CHALLENGER_EFFORT` > base `challenger_effort` > the
+/// challenger vendor's base reviewer seat; model only from that seat. The
+/// finder's `--effort`/`--model`, `AIDA_REVIEW_EFFORT`/`AIDA_REVIEW_MODEL` and
+/// `default_effort`/`default_model` belong to the finder's vendor and are never
+/// read, so one vendor's model never reaches another. trace:STORY-3120 | ai:claude
 pub(crate) fn resolve_challenger(
     agent: Option<&ReviewVendor>,
     parent_env: &[(OsString, OsString)],
     flag: Option<&str>,
     base: &TrustedBase,
 ) -> Result<ReviewTuning> {
+    let (seat, seat_effort, seat_model) = seat_sources(agent, base)?;
     let effort = [
         ("--challenger-effort", flag),
         (
@@ -164,13 +182,9 @@ pub(crate) fn resolve_challenger(
             "review-rules.toml challenger_effort",
             base.rules.challenger_effort.as_deref(),
         ),
+        (&seat_effort, seat.effort.as_deref()),
     ];
-    let own = resolve(agent, &effort, &[])?;
-    let rest = resolve_for_run(agent, parent_env, (None, None), base)?;
-    Ok(ReviewTuning {
-        model: rest.model,
-        effort: own.effort.or(rest.effort),
-    })
+    resolve(agent, &effort, &[(&seat_model, seat.model.as_deref())])
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {

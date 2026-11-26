@@ -22852,8 +22852,9 @@ Options:
           Model for `--run-review`
 
       --adversarial
-          Have a second agent reproduce or refute each finding; refuted ones are dropped. It prefers
-          a vendor that did not write the change
+          Have a second agent reproduce or refute each finding. Refuted findings are listed apart
+          and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that
+          did not write the change
 
       --challenger-effort <LEVEL>
           Reasoning effort for the `--adversarial` challenger
@@ -56284,7 +56285,7 @@ Working on aida itself
       {
         "name": "adversarial",
         "takes_value": false,
-        "help": "Have a second agent reproduce or refute each finding; refuted ones are dropped. It prefers a vendor that did not write the change"
+        "help": "Have a second agent reproduce or refute each finding. Refuted findings are listed apart and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that did not write the change"
       },
       {
         "name": "agent",

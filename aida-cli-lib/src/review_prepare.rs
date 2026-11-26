@@ -99,8 +99,9 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "MODEL", requires = "run_review")]
     pub model: Option<String>,
 
-    /// Have a second agent reproduce or refute each finding; refuted ones are
-    /// dropped. It prefers a vendor that did not write the change.
+    /// Have a second agent reproduce or refute each finding. Refuted findings
+    /// are listed apart and marked suppressed in SARIF, but still count for
+    /// `--fail-on`. It prefers a vendor that did not write the change.
     // trace:STORY-3120 | ai:claude
     #[clap(long, requires = "run_review")]
     pub adversarial: bool,
@@ -344,12 +345,16 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         };
         let pass = challenge.as_ref().map(|(pass, _)| pass);
         let (found, ledger, refuted) = review_batches(&call, pass, &batches, prompt, &inventory)?;
+        let read = |path: &str| content_cache.get(path).cloned();
+        // Refuted findings are anchored too: they still gate and reach SARIF.
+        let rows: Vec<_> = refuted.iter().map(|r| r.finding.clone()).collect();
+        let refuted = (refuted.into_iter().zip(anchor_findings_with(&rows, read)))
+            .map(|(r, finding)| RefutedFinding { finding, ..r })
+            .collect();
         adversarial = challenge.map(|(_, summary)| AdversarialSummary { refuted, ..summary });
         // A runner that does not report every reviewable file is incomplete.
         coverage_verification = Some(verify_coverage_ledger(&inventory, &ledger));
-        Some(anchor_findings_with(&found, |path| {
-            content_cache.get(path).cloned()
-        }))
+        Some(anchor_findings_with(&found, read))
     } else {
         None
     };
@@ -376,11 +381,25 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
 
     // trace:STORY-3120 | ai:codex
     let findings = bundle.anchored_findings.as_deref().unwrap_or_default();
+    // Fail closed: a challenger's refutation never removes a finding from
+    // `--fail-on`, so a wrong or prompt-injected challenger cannot turn the
+    // gate green; SARIF keeps it as a suppressed result. trace:STORY-3120 | ai:claude
+    let suppressed: Vec<_> = (bundle.adversarial.iter().flat_map(|a| &a.refuted))
+        .map(|r| {
+            (
+                r.finding.clone(),
+                format!("refuted by challenger: {}", r.reason),
+            )
+        })
+        .collect();
+    let gated: Vec<_> = (findings.iter().cloned())
+        .chain(suppressed.iter().map(|(f, _)| f.clone()))
+        .collect();
     let exceeded = args
         .fail_on
         .as_deref()
         .map(|threshold| {
-            aida_core::review_engine::findings_exceeding_threshold(findings, threshold)
+            aida_core::review_engine::findings_exceeding_threshold(&gated, threshold)
                 .map_err(anyhow::Error::msg)
         })
         .transpose()?;
@@ -392,7 +411,8 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     }
 
     if let Some(path) = &args.sarif {
-        let report = aida_core::review_engine::findings_to_sarif_json(findings);
+        let report =
+            aida_core::review_engine::findings_to_sarif_json_with_suppressed(findings, &suppressed);
         write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
             .with_context(|| format!("write SARIF {}", path.display()))?;
     }
@@ -1659,11 +1679,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
     }
 
     /// `--adversarial` end to end: the finder reports two findings, the
-    /// challenger refutes one and reproduces the other; a renamed file's diff
-    /// carries its old path.
+    /// challenger refutes the high one and reproduces the low one. The refuted
+    /// one still fails `--fail-on high` and is a suppressed SARIF result; a
+    /// renamed file's diff carries its old path.
     // trace:STORY-3120 | ai:claude
     #[test]
-    fn s4_adversarial_run_drops_refuted_findings() {
+    fn s4_adversarial_run_suppresses_but_gates_refuted_findings() {
         let temp = tempfile::tempdir().unwrap();
         let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
         std::fs::create_dir_all(&root).unwrap();
@@ -1681,13 +1702,13 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         git_text(&root, &["add", "-A"]).unwrap();
         crate::test_git::commit_fixture(&root);
         let prompt = temp.path().join("finder-prompt");
-        let row = |m: &str| {
-            format!(r#"{{"path":"a.rs","severity":"high","category":"bug","message":"{m}"}}"#)
+        let row = |m: &str, sev: &str| {
+            format!(r#"{{"path":"a.rs","severity":"{sev}","category":"bug","message":"{m}"}}"#)
         };
         let finder = format!(
             r#"{{"findings":[{},{}],"files":[{{"path":"a.rs","status":"reviewed"}}]}}"#,
-            row("real"),
-            row("bogus")
+            row("real", "low"),
+            row("bogus", "high")
         );
         let verdicts = r#"{"verdicts":[{"index":0,"verdict":"reproduced"},{"index":1,"verdict":"refuted","reason":"no"}]}"#;
         let body = format!(
@@ -1708,9 +1729,30 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             adversarial: true,
             json: true,
             write: Some("out.json".into()),
+            sarif: Some("out.sarif".into()),
+            fail_on: Some("high".into()),
             ..Default::default()
         };
-        handle_review_prepare(&args, &store).unwrap();
+        // Fail closed: the only high finding was refuted, and still fails the gate.
+        let err = handle_review_prepare(&args, &store)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("1 findings meet or exceed --fail-on high"),
+            "{err}"
+        );
+        let sarif: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("out.sarif")).unwrap()).unwrap();
+        let results = sarif["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results[0].get("suppressions").is_none());
+        assert_eq!(
+            (&results[1]["message"]["text"], &results[1]["suppressions"]),
+            (
+                &"bogus".into(),
+                &serde_json::json!([{"kind":"external","justification":"refuted by challenger: no"}])
+            )
+        );
         let out: serde_json::Value =
             serde_json::from_slice(&std::fs::read(root.join("out.json")).unwrap()).unwrap();
         let kept = out["anchored_findings"].as_array().unwrap();

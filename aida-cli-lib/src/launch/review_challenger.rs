@@ -285,11 +285,16 @@ mod tests {
             ("PATH", path.as_str()),
             ("GH_TOKEN", "sentinel"),
             ("OPENAI_API_KEY", "k"),
+            // The finder's claude tuning: never the codex challenger's.
+            ("AIDA_REVIEW_EFFORT", "max"),
+            ("AIDA_REVIEW_MODEL", "claude-env-model"),
         ]
         .iter()
         .map(|(k, v)| (k.into(), v.into()))
         .collect();
-        let base = TrustedBase::default();
+        let mut base = TrustedBase::default();
+        base.rules.default_effort = Some("max".into());
+        base.rules.default_model = Some("claude-rules-model".into());
         let pick = |agent: &str, authors: &[&'static str], flag| {
             let call = finder(agent, checkout.path(), &env);
             let authors: BTreeSet<&str> = authors.iter().copied().collect();
@@ -315,6 +320,14 @@ mod tests {
             assert!(out.contains(want), "{want}: {out}");
         }
         assert!(!out.contains("sentinel"), "{out}");
+        for leaked in [
+            "claude-env-model",
+            "claude-rules-model",
+            "arg=-m",
+            "arg=--model",
+        ] {
+            assert!(!out.contains(leaked), "{leaked}: {out}");
+        }
         // No detected author: still the vendor other than the finder's.
         assert_eq!(
             pick("codex", &[], None).1.challenger_agent.as_deref(),
@@ -373,6 +386,21 @@ mod tests {
             };
             assert!(err.to_string().starts_with(source), "{source}: {err}");
         }
+        // The finder's AIDA_REVIEW_EFFORT/MODEL and default_* are not sources.
+        let env = vec![
+            (OsString::from("AIDA_REVIEW_EFFORT"), OsString::from("max")),
+            (
+                OsString::from("AIDA_REVIEW_MODEL"),
+                OsString::from("claude-x"),
+            ),
+        ];
+        let mut finder_tuned = rules("low");
+        finder_tuned.rules.default_effort = Some("max".into());
+        finder_tuned.rules.default_model = Some("claude-y".into());
+        let codex = review_vendor("codex").ok();
+        let tuning = resolve_challenger(codex, &env, Some("high"), &finder_tuned).unwrap();
+        assert_eq!(tuning.effort(), Some("high"));
+        assert!(!matches!(tuning.model(), Some("claude-x" | "claude-y")));
         // `max` is claude-only: a codex challenger refuses it.
         let env = Vec::new();
         let tuning =
