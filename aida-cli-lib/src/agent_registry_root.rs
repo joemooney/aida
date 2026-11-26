@@ -350,14 +350,9 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
     {
         // Only a provably dead owner's leftovers go, and `--older-than`
         // scopes them too. trace:BUG-2770 | ai:claude
-        let owners = LeftoverOwners::probe(&project_root);
-        let judge = |owner: &leftovers::Owner| owners.judge(owner);
-        let scope = leftovers::Scope {
-            min_age: older_than
-                .map(|days| std::time::Duration::from_secs(days.saturating_mul(86_400))),
-            owner: &judge,
-        };
-        let leftovers = leftovers::scan_scoped(&project_root, !dry_run, &scope);
+        let leftovers = with_leftover_scope(&project_root, older_than, |scope| {
+            leftovers::scan_scoped(&project_root, !dry_run, scope)
+        });
         for line in gc_leftover_lines(&leftovers, dry_run) {
             println!("{line}");
         }
@@ -471,6 +466,26 @@ pub(crate) fn gc_leftover_lines(leftovers: &leftovers::Leftovers, dry_run: bool)
 
 #[cfg(unix)]
 use aida_core::mailbox_lifecycle::leftovers;
+
+/// Run `f` with the owner-scoped leftover scope `aida agent gc` uses: only a
+/// provably dead owner's leftovers, at least `older_than_days` old, are
+/// reapable. The retention dry run shares it so both report the same set.
+// trace:BUG-2770 trace:TASK-3918 | ai:claude
+#[cfg(unix)]
+pub(crate) fn with_leftover_scope<T>(
+    project_root: &std::path::Path,
+    older_than_days: Option<u64>,
+    f: impl FnOnce(&leftovers::Scope<'_>) -> T,
+) -> T {
+    let owners = LeftoverOwners::probe(project_root);
+    let judge = |owner: &leftovers::Owner| owners.judge(owner);
+    let scope = leftovers::Scope {
+        min_age: older_than_days
+            .map(|days| std::time::Duration::from_secs(days.saturating_mul(86_400))),
+        owner: &judge,
+    };
+    f(&scope)
+}
 
 /// What `aida agent gc` knows about who holds which checkout: each session
 /// lease's worktree and state, and the working directories of live agent
