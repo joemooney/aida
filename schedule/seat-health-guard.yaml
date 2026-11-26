@@ -1,6 +1,7 @@
 job: seat-health-guard
-last_run: 2026-11-26T01:29:21.378326044Z
+last_run: 2026-11-26T01:39:36.598472978Z
 last_by:
   seat: substrate
+  session: 01a21581b9b0
   vendor: tick
 result: ok
