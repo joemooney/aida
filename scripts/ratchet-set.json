@@ -47,6 +47,7 @@
       "tests": [
         "s2_export_gate_checks_changed_paths",
         "s3a2_run_review_base_and_sanitized_diff",
+        "s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage",
         "s3a2_run_review_refuses_findings_outside_the_inventory",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
