@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T15:50:51.364740563Z
+modified_at: 2026-11-26T15:51:31.432444265Z
 req_type: Bug
 tags:
 - admission
@@ -84,6 +84,11 @@ comments:
   modified_at: 2026-11-26T15:50:51.364740563Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a2188e-0968-7581-a2e5-b9e6073e32a7
+  author: joe
+  content: "DEFERRED (advisor-122 override-approval of #4667 @ a0728ce1, 2026-11-26 08:58): a minor test gap on the stale-deputy REPORTING path (train-status / doctor output); follow-up: a test asserting the report names the deputy, pid, binary and the restart fix.\n- Test gap (reporting path, not gate code): deputy_binary_finding (aida-cli-lib/src/advisor_loop_service.rs) and its doctor wiring/dedup in aida-cli-lib/src/doctor_cmd.rs (two services, same deputy:pid id) have no fixture test; only the pure probe and status_lines are tested. Follow-up: add a test over the finding builder with a fake receipt and the "
+  created_at: 2026-11-26T15:51:31.432444265Z
+  modified_at: 2026-11-26T15:51:31.432444265Z
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe
