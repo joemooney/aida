@@ -8,6 +8,7 @@ use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
 use crate::launch::review_tuning::{resolve_for_run, trusted_review_base};
 use crate::vendors::review_runner::review_vendor;
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
+use aida_core::exec_context::Environment;
 use aida_core::review_engine::{
     anchor_findings_with, bundle_review_batches, classify_with_exclusions, verify_coverage_ledger,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
@@ -276,7 +277,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         }))
     } else if let Some(trusted) = &trusted {
         // trace:STORY-3120 | ai:claude
-        let parent_env: Vec<_> = std::env::vars_os().collect();
+        let parent_env = Environment::capture().to_pairs();
         let agent = args.agent.as_deref().map(review_vendor).transpose()?;
         let mut call = RunnerCall {
             agent,
@@ -713,7 +714,12 @@ fn git_env_kept(key: &std::ffi::OsStr) -> bool {
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     let mut cmd = Command::new("git");
     cmd.env_clear()
-        .envs(std::env::vars_os().filter(|(k, _)| git_env_kept(k)))
+        .envs(
+            Environment::capture()
+                .to_pairs()
+                .into_iter()
+                .filter(|(k, _)| git_env_kept(k)),
+        )
         .env("GIT_NO_REPLACE_OBJECTS", "1")
         .current_dir(root);
     // No textconv driver from the reviewed tree's attributes ever runs.
