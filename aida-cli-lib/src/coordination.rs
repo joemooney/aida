@@ -2506,6 +2506,7 @@ mod tests {
             &aida_core::RequirementsStore::default(),
             Some("leases"),
             Path::new("/proc"),
+            None,
         )
         .unwrap();
         let id = format!("shared-{}", holder.claim_id.as_deref().unwrap());
@@ -2587,6 +2588,7 @@ mod tests {
             &aida_core::RequirementsStore::default(),
             Some("leases"),
             Path::new("/proc"),
+            None,
         )
         .unwrap();
         let id = format!("shared-{}", holder.claim_id.as_deref().unwrap());
