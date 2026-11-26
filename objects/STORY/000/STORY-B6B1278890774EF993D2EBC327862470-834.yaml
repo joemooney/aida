@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T05:22:00.276292025Z
+modified_at: 2026-11-26T06:38:08.093695183Z
 req_type: Story
 tags:
 - dev
@@ -48,6 +48,31 @@ comments:
   modified_at: 2026-11-26T04:28:49.180153937Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21692-c69e-73a0-8009-60f2c03f3d9e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: afc556701f (branch dev-provisional-s1, slice S1, Refs only).
+
+    Acceptance evidence (S1 = AC1 + AC5 + the AC2 operator gate):
+    - AC1 [behavioral-test]: `aida dev provisional <PR|branch> --reason` fetches the head into refs/aida/provisional/head (credentials routed), checks out a fresh detached worktree under target/provisional/src, and runs the ordinary run_dev_build pipeline with a provisional plan (fresh tree clean + HEAD == marker head, full SHA). Promotes through the same locked stage/smoke/commit_staged swap; prev/ is kept. Marker {pr, branch, head, operator, reason, at} lives in the .promoted record. Test: story3148_provisional_promote_writes_the_marker_and_keeps_prev. Refusals: story3148_provisional_refuses_a_dirty_or_other_head_and_a_dirty_build (wrong head, tracked changes, +dirty staged build). `aida dev status` prints the PROVISIONAL line first (red/bold). Marker display in train-status and doctor is deferred to a later slice.
+    - AC5 [behavioral-test]: rollback swaps records with their generation, so live loses the marker; prints 'PROVISIONAL marker cleared'. Test: story3148_rollback_clears_the_provisional_marker. Note: the marker stays with its build in prev/, so a second rollback (roll forward) shows it again. This is deliberate: the build really is provisional.
+    - AC2 (operator part) [behavioral-test]: operator_refusal reuses emergency-land's operator_allowed (integrity-floor TTY/deputy, not headless, not a native lane, not implementer/reviewer) plus a non-empty --reason. A seat clone is refused too. Test: story3148_only_an_operator_with_a_reason_may_promote_provisionally. The permissive-diff refusal and --override are out of scope (S2).
+
+    Probe findings / fixes: the gate's prose-classifier ratchet flagged substring branch checks, so validation now goes through git check-ref-format. The credential ratchet flagged the fetch, which now uses .remote_credentials. I regenerated the store-writer inventory and the help golden and added a format-json audit row.
+    Strict-tier notes: the landing-branch and CI gates are skipped only when run_dev_build_with receives Some(marker), and its only caller is dev_provisional::handle, which runs after the operator gate. The staged binary must still be the clean build of the exact head (check_staged_sha + green_main_staged_refusal), and --allow-dirty is never set. No existing test was weakened.
+    Residual risks: the handle() wiring itself (fetch, worktree add, operator env) is not unit-tested; only the pure gate and pipeline are. The diff is ~340 production lines + ~150 test lines, over the 300 brief cap. The first provisional build uses a cold target dir (target/provisional/target).
+  created_at: 2026-11-26T06:37:27.582284095Z
+  modified_at: 2026-11-26T06:37:27.582284095Z
+  session_id: 01a2164d5923
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21693-64dd-7d81-adf3-d976f4556f77
+  author: dirtlab
+  content: 'S1 published: PR #4629 (branch dev-provisional-s1, Refs STORY-3148). Covers AC1 (build + promote + marker + status), AC5 (rollback clears the marker) and the operator part of AC2. Remaining for S2/S3: AC3, AC4, the permissive-diff refusal and --override, the marker in train-status and doctor, and AC6.'
+  created_at: 2026-11-26T06:38:08.093695183Z
+  modified_at: 2026-11-26T06:38:08.093695183Z
+  session_id: 01a2164d5923
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
