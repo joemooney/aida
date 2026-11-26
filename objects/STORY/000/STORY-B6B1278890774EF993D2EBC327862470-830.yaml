@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T00:12:36.733097266Z
+modified_at: 2026-11-26T00:44:11.039655078Z
 req_type: Story
 tags:
 - landing
@@ -174,6 +174,15 @@ comments:
   modified_at: 2026-11-25T23:48:25.650051722Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2154f-579f-7340-9b3a-beffd369c042
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2189129624. CI red on #4584 (lib-0): the [landing_watchdog] config block sat inside the slice that landing_health_tick_routes_to_live_codex_advisor_or_product takes from the STORY-2849 marker to the next '# trace:' line, which cut off the guard pair. Moved the block above the marker. The test is unchanged. The maintenance_schedule, landing_drought and story_3131 filters passed 89 tests, and make check-ci-fast passed. Round-2 findings 1-5 were already fixed in 0459cd01: needs_supervision fails closed through merge_requires_supervision, the duplicate stalled-reviews row was dropped, the full-tier arm requires Green or cancelled, the drought count counts only landable PRs, and the command_timeout and scan helper tests are in place. Residual risk: the test still depends on where config comments sit, so a later traced block placed inside the pair would break it the same way.
+  created_at: 2026-11-26T00:44:11.039655078Z
+  modified_at: 2026-11-26T00:44:11.039655078Z
+  session_id: 01a2153216f7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
