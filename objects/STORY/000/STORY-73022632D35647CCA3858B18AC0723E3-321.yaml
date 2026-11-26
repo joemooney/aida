@@ -20,12 +20,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4597` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-25T22:23:54.992930704Z
-modified_at: 2026-11-26T03:20:37.877134072Z
+modified_at: 2026-11-26T03:20:42.336083844Z
 req_type: Story
 relationships:
 - rel_type:
@@ -83,6 +83,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:51.186834619Z
   changes: []
+- id: 01a215de-a460-7341-9bcd-d22317615b9a
+  author: joe
+  timestamp: 2026-11-26T03:20:42.336076129Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 5f2421b51c8220f2ba2035bb3bf7140b1e493b03
   branch: fix-review-watch-forge-admission
