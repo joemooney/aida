@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T15:13:04.568995091Z
+modified_at: 2026-11-26T15:18:42.584350895Z
 req_type: Story
 tags:
 - integration
@@ -1170,6 +1170,20 @@ comments:
     - a1777130882: Updated CLI `--help` docstrings (`aida-cli-lib/src/review_prepare.rs` + golden snapshot `cli_help_snapshot.txt`) and Showcase User Manual (`docs/showcase/code-review.html` Slides 01, 05, 07, 08) to document `opencode`, `pi`, single-vendor auto effort step-up, and the v4 capabilities (4-thread parallel batch execution, nearest package-manifest context, CodeGraph 35-line untouched caller/callee body slicing).
   created_at: 2026-11-26T15:13:04.568995091Z
   modified_at: 2026-11-26T15:13:04.568995091Z
+- id: 01a21870-3f9a-77c1-aeff-deb4f3cda8b2
+  author: joe
+  content: |-
+    Integration pre-check: PR #4665 @88005ae4 (STORY-3120 S5a --post-comment; Refs) — PASS on the security lens, with one SHOULD-FIX and one nit
+    - Opt-in: --post-comment is off by default; clap `requires = "pr"` plus a handler check (clap lets --from through) refuse it without --pr before any forge is resolved; no env, rules or seat key enables it. Test covered.
+    - Transport: posts through the origin's forge client (pr_forge, the same one that reads --pr metadata). GitHubForge::comment now adds `-R <pinned repo>` when the client is pinned (for_review sets metadata_repo; the other constructor leaves None, so existing callers are unchanged). No raw gh/curl with ambient tokens.
+    - Inert rendering: every runner-supplied string is either a code span (control chars → spaces; the delimiter outruns any backtick run) or a fenced block (fence = longest run + 1, minimum 3; CR stripped; indented under the list item), so it cannot close its container. This covers finding path, severity, category and message, the challenger reason, inventory and excluded paths, batch file lists, and coverage paths. PR-controlled file names were previously wrapped in single backticks and could break out; that is now fixed. The hostile-input test (@mentions, <img onerror>, **bold**, links, headings, nested ``` and ````) strips code and asserts nothing renders live, with no unclosed fence.
+    - Ordering: posted before the --fail-on/coverage gates, so a failing review still publishes (documented).
+    SHOULD-FIX: the body goes to `gh pr comment --body <body>` as one argv string. GitHub rejects comments over 65,536 characters, and Linux fails a single argument over 128 KiB (E2BIG), so a large review (many findings or many files) fails to post. It fails closed, but the review is lost. Cap the comment, e.g. keep the summary and findings and truncate the inventory with a "(N more files; see the bundle)" note, and/or pass --body-file; test a >65,536-char bundle.
+    Nit: spec titles and playbook titles/checklists are still rendered raw. They come from the store and the trusted base, not the agent, so this is low risk, but an @mention in a spec title would notify on every posted review; code-spanning the titles would be cheap.
+  created_at: 2026-11-26T15:18:42.584350895Z
+  modified_at: 2026-11-26T15:18:42.584350895Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
