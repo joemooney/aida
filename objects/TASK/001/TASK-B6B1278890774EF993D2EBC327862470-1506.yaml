@@ -1,5 +1,6 @@
 id: 01a217b5-ed1f-71e1-9708-c07b6790f748
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1506
+agreed_id: TASK-3486
 title: 'Review follow-up: backlog_report.rs driver_activity/stale_claims: lane logs are named <branch>-<session>.jso'
 description: |-
   From STORY-3143
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2148c-15aa-74a2-90f5-6b603346566c
   created_at: 2026-11-26T11:55:44.533879664Z
+history:
+- id: 01a217ef-61d5-77f2-8558-c381ace83df4
+  author: joe
+  timestamp: 2026-11-26T12:58:13.845084328Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d529d3b23b5c867f25514c44633fc8333b2cd11a
   branch: pr-4649

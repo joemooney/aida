@@ -1,5 +1,6 @@
 id: 01a217a9-ce92-72b0-9571-76b6f07c4a37
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1504
+agreed_id: TASK-3484
 title: 'Review follow-up: AC4 phase coverage: bug2769_a_long_hold_is_reported_while_it_is_held covers only ''phase as'
 description: |-
   From BUG-2769
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T11:42:14.162824951Z
+history:
+- id: 01a217ee-e75e-7671-a86d-f045a6c5b4a8
+  author: joe
+  timestamp: 2026-11-26T12:57:42.494695552Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9b9aa8a69391fe68e5054a0d8d26e45b27800b4b
   branch: pr-4640
