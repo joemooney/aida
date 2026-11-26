@@ -10,12 +10,12 @@ description: |
   - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
   - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
   - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T11:41:33.576087278Z
+modified_at: 2026-11-26T11:42:04.162308823Z
 req_type: Story
 tags:
 - planning
@@ -194,6 +194,13 @@ comments:
   modified_at: 2026-11-26T11:41:33.576087278Z
   session_id: 01a21782f091
   harness_version: 2.1.319 (Claude Code)
+- id: 01a217a9-a782-7a83-90e3-827d60ecc713
+  author: aida-publication-done
+  content: Implementer push d529d3b23b5c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T11:42:04.162308322Z
+  modified_at: 2026-11-26T11:42:04.162308322Z
+  session_id: 01a21782f091
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
@@ -257,6 +264,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a217a9-a782-7a83-90e3-82612539459f
+  author: aida-publication-done
+  timestamp: 2026-11-26T11:42:04.162306646Z
+  session_id: 01a21782f091
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
