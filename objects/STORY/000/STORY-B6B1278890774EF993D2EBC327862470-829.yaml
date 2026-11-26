@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T21:33:23.124953239Z
+modified_at: 2026-11-26T22:06:16.802289772Z
 req_type: Story
 tags:
 - integration
@@ -1455,6 +1455,18 @@ comments:
   modified_at: 2026-11-26T21:33:23.124953239Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a219e5-22e2-78e2-90e4-39a8233e1ef9
+  author: joe
+  content: |-
+    BINDING (advisor-122 2026-11-26 15:10): challenger-unavailable behaviour. In S5c #4690 if it isn't already there, else S5d; it must land BEFORE STORY-3182's shadow lane. "Fail closed" means never REPORT an adversarial pass; it does NOT mean discarding the finder's work. When the challenger cannot run (rate-limited, missing, unauthenticated):
+    (1) still write the finder report + SARIF;
+    (2) mark every finding "unchallenged" and the bundle "challenger: unavailable (<cause>)";
+    (3) --fail-on still applies to the unchallenged findings;
+    (4) exit with a DISTINCT non-zero code (e.g. 3 = "partial: challenger unavailable") so no caller mistakes it for a full adversarial review;
+    (5) a test.
+    Evidence (product-15 15:05, worktree build b728c3373d1): all 4 trial runs (#4666, #4663, #4661, #4658) lost the finished claude finder report because the auto-picked codex challenger was usage-limited ("try again at Nov 29th, 2026 10:41 AM").
+  created_at: 2026-11-26T22:06:16.802289772Z
+  modified_at: 2026-11-26T22:06:16.802289772Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
