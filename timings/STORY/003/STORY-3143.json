@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-3143",
+  "publishes": [
+    {
+      "at": "2026-11-26T13:20:34.024117484Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T04:29:16.954349632Z",
+      "spec": "STORY-3143",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "18 changes are open and the limit is 10; STORY-3143 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T08:21:10.733066691Z",
+      "spec": "STORY-3143",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "10 changes are open and the limit is 10; STORY-3143 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T10:58:59.263345218Z",
+      "spec": "STORY-3143",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "12 changes are open and the limit is 10; STORY-3143 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T13:20:33.869040267Z",
+      "spec": "STORY-3143",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2d89ef450561e39de69593890f3ab7765146154b",
+        "pr": 4641,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
