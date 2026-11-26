@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-26T19:47:02.234922078Z
+modified_at: 2026-11-26T21:09:37.105131299Z
 req_type: Bug
 tags:
 - landing
@@ -159,6 +159,25 @@ comments:
   modified_at: 2026-11-26T18:50:50.500989187Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a219b1-42d1-7c32-bda2-fc6fc05f395e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e76658fcef (branch bug-2584-train-merge-cpu, Refs slice).
+
+    Profile (bug2538 long-history fixture, 110 verdict events x 41 rounds, temporary timers, not shipped): member #11 evidence pass = 3.5-7.9 s, of which ship_approval_policy was called 226x per pass (2.1 s of a 2.4 s verdict loop); the member gate called it once. Hot loop: pr_train_verified.rs collect() per-body approval authority check. Each call re-reads the authorship ledger (twice), every lease and session manifest (twice), solo mode, and the reviewed commit date (git fetch when absent), so on the primary's larger lease/authorship data it scales with history length x 3 passes.
+
+    Fix: AuthorityAnswers keeps one answer per distinct RecordedVerdict per car per pass (the policy's only verdict input), refusal remembered as refusal; next pass asks afresh.
+
+    Evidence: [behavioral-test] bug2584_authority_asked_once_per_distinct_verdict, bug2584_remembered_refusal_still_refuses; bug2538_long_review_history_trains_with_compact_audit and task_3792 train tests green (11 passed, lane job j20261126T204842432-4-0).
+
+    Probes: equality is on the full parsed verdict, so no field the policy reads is ignored; memo scoped inside the per-car loop (ids/branch fixed); no fail-open (policy infallible, refusal sticky); no tests weakened.
+
+    Residual / not done: AC (3-member train green->merge < 30 s) is NOT verified: the gate ledger is hidden from this seat, so no live-data profile. The production member gate phase (150-717 s) is not reproduced by the fixture (1.6 s); suspected repeated parse of large PR/spec ledger files (read_file 17x per gate) but unproven. Next: read the final-gate phase lines from the next primary train.
+  created_at: 2026-11-26T21:09:37.105131299Z
+  modified_at: 2026-11-26T21:09:37.105131299Z
+  session_id: 01a219653ac2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe

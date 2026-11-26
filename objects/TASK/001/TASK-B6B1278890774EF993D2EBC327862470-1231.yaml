@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-26T20:42:00.667728826Z
+modified_at: 2026-11-26T21:13:04.917148166Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -61,6 +61,21 @@ comments:
     - None (the doc carries the instruction twice; deduping is out of scope for a test-only slice).
   created_at: 2026-11-26T20:42:00.667728826Z
   modified_at: 2026-11-26T20:42:00.667728826Z
+  session_id: 01a2199667fe
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a219b4-6e95-78f2-9765-b164c69fc973
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0864840f07
+
+    Acceptance evidence: `tests/test_ci_tiers.py::CiTiers::test_task3266_wait_for_fast_before_retoggling_inherited_full` asserts the TASK-3266-traced paragraph of docs/internal/testing/ci-test-shards.md:35-38 (whitespace-normalised, so a reflow does not break it). It passes locally, and it fails when the doc sentence is mutated (verified by a temporary edit, then reverted). CI runs it through the existing `python3 -m unittest tests/test_ci_tiers.py` step, so no new wiring is needed.
+
+    Probes: (1) both sides are whitespace-normalised and the match is case-sensitive, intentionally. (2) The Markdown backticks are matched literally. (3) N/A, a single assertion. (4) A reflowed paragraph is tolerated; reworded prose fails loudly, which is the purpose.
+    Fixes: none needed.
+    Residual risk: the guide states the instruction twice (lines 35-38 and 45-46; the older sentence is covered by test_bug2723_wait_before_retoggling_full). Deduplicating it would be a separate docs cleanup.
+  created_at: 2026-11-26T21:13:04.917148166Z
+  modified_at: 2026-11-26T21:13:04.917148166Z
   session_id: 01a2199667fe
   harness_version: 2.1.319 (Claude Code)
 history:
