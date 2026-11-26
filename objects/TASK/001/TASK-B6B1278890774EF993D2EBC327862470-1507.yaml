@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-26T13:05:24.022967214Z
+modified_at: 2026-11-26T13:08:29.010329860Z
 req_type: Task
 tags:
 - landing
@@ -37,6 +37,26 @@ comments:
   modified_at: 2026-11-26T13:01:33.088470057Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a217f8-c4d2-7881-930d-b52120f16d27
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, pr_train):** extract `admit_member` (ownership/train-rider refusal, then `typed_gate_member_with`, then the culprit hold) and use it in the real pass's member loop; the pre-scan calls the same function through a read-only `AutomaticPrescan` (LiveChecks read_only, dry_run ownership, ADVISOR_LOOP guard set, so the automatic approval rule applies exactly as in the pass). `train_wanted` no longer calls `train::eligible` directly. Test: the pre-scan refuses a PR that the ownership gate refuses (a PR riding a live train), where the legacy `eligible` alone could not tell.
+    - **AC2 (unit, advisor_loop_train):** a per-worker refusal cache keyed by (PR, head) with a 10-minute re-judge window; an idle poll whose open PRs are all cached refusals does one discovery listing and no per-PR gate reads (live-train listing loaded lazily only when a PR must be judged). Unavailable evidence is never cached. Test: a fake judge counts calls across polls; a head change or window expiry re-judges.
+    - **AC3 (unit, advisor_loop_train):** loop tests for phase `running train` (journal run lock held during the pass) and `recovery` (journal recovery pending at claim); TEST_HOLD_WARN_MS reset via a drop guard in each bug2769 test.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_train.rs`
+    - `aida-cli-lib/src/advisor_loop_train.rs`
+
+    ### Ambiguities / conflicts as questions
+    - Cache window: refusals that change without a head move (CI turning green, approval recorded) wait up to the window. 10 min chosen as the budget/latency trade; is that acceptable?
+  created_at: 2026-11-26T13:08:29.010329860Z
+  modified_at: 2026-11-26T13:08:29.010329860Z
+  session_id: 01a217f59d73
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217f0-9b85-7542-b16e-c93c789c7c07
   author: joe
