@@ -97,14 +97,6 @@
   added_at: 2026-11-25T01:18:56.482449898Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a2123d-4f9d-7621-bc11-1d3b59b31cfb
-  position: 1391000
-  added_by: dirtlab
-  note: auto-queue retry reused canonical review story; covers 0 specs
-  added_at: 2026-11-25T22:11:33.134458060Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
   requirement_id: 01a2149a-75ae-73f2-b8d0-0912e510adbc
   position: 1394000
   added_by: dirtlab
