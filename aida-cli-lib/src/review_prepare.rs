@@ -3177,6 +3177,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             fail_on: Some("high".into()),
             ..Default::default()
         };
+        std::env::set_var("AIDA_REVIEW_RUNNER_CMD", runner.to_str().unwrap());
         let gate_err = handle_review_prepare(&fail_args, &store).unwrap_err();
         assert!(
             gate_err.to_string().contains("--fail-on high"),
