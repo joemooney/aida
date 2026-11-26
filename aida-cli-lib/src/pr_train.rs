@@ -453,7 +453,39 @@ pub(crate) trait Rails {
     fn train_id(&self, _train: &Built) -> Option<u64> {
         None
     }
+    /// `pr`'s live head, when a read confirms it; `None` when unknown.
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, _pr: u64) -> Option<String> {
+        None
+    }
 }
+
+/// Split off the members whose live head moved since the parent train was
+/// built: a follow-up train never re-tests a superseded head. The dropped
+/// member re-enters at its new head through normal admission.
+// trace:TASK-3913 | ai:claude
+fn drop_superseded(rails: &mut dyn Rails, group: Vec<Member>) -> (Vec<Member>, Vec<Ejected>) {
+    let mut kept = Vec::new();
+    let mut superseded = Vec::new();
+    for m in group {
+        match rails.member_head(m.pr) {
+            Some(now) if now != m.head => {
+                let reason = format!(
+                    "{SUPERSEDED} head moved {} → {}; not tested here, it re-enters at its new head through normal admission",
+                    short(&m.head),
+                    short(&now)
+                );
+                eprintln!("  #{} {reason}", m.pr);
+                superseded.push(Ejected { pr: m.pr, reason });
+            }
+            _ => kept.push(m),
+        }
+    }
+    (kept, superseded)
+}
+
+/// Reason prefix of a member dropped from a follow-up train. trace:TASK-3913 | ai:claude
+const SUPERSEDED: &str = "superseded:";
 
 /// The result of a train run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -536,6 +568,9 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
     let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), false)]);
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
+    // The first composition was just admitted at its live heads; every later
+    // train re-reads them. trace:TASK-3913 | ai:claude
+    let mut follow_up = false;
     while !pending.is_empty() {
         // A drain starts no further train, bisect halves included; the
         // waiting members ride a later train. trace:BUG-2767 | ai:claude
@@ -565,7 +600,17 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         let base = rails.main_tip()?;
         let mut built: Vec<(Built, bool)> = Vec::new();
         for (group, infra_rerun_spent) in wave {
-            let b = rails.build(&base, &group)?;
+            let (group, superseded) = if follow_up {
+                drop_superseded(rails, group)
+            } else {
+                (group, Vec::new())
+            };
+            if group.is_empty() {
+                out.ejected.extend(superseded);
+                continue;
+            }
+            let mut b = rails.build(&base, &group)?;
+            b.dropped.extend(superseded);
             out.ejected.extend(b.dropped.iter().cloned());
             if !b.cars.is_empty() {
                 // A build that dropped a member is a new composition.
@@ -573,6 +618,7 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                 built.push((b, spent));
             }
         }
+        follow_up = true;
         if built.is_empty() {
             continue;
         }
@@ -3101,6 +3147,14 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
         ));
     }
     s.push('\n');
+    // trace:TASK-3913 | ai:claude
+    for d in train
+        .dropped
+        .iter()
+        .filter(|d| d.reason.starts_with(SUPERSEDED))
+    {
+        s.push_str(&format!("Not in this train: #{} {}\n\n", d.pr, d.reason));
+    }
     s.push_str(&members_line(&train.cars));
     s.push('\n');
     s
@@ -3226,6 +3280,11 @@ pub(crate) trait TrainForge {
     // trace:STORY-2401 | ai:codex
     fn confirm_member_head(&mut self, _pr: u64, _head: &str) -> bool {
         false
+    }
+    /// `pr`'s live head from a confirmed read; `None` when unknown.
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, _pr: u64) -> Option<String> {
+        None
     }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
@@ -3668,6 +3727,19 @@ impl TrainForge for LiveTrainForge<'_> {
         matches!(crate::forge_confirmation::metadata(
             &self.main_worktree, self.forge, pr, &mut crate::network_retry::NoopSink,
         ), crate::forge_observed::Observed::Known(m) if m.head_sha == head)
+    }
+
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, pr: u64) -> Option<String> {
+        match crate::forge_confirmation::metadata(
+            &self.main_worktree,
+            self.forge,
+            pr,
+            &mut crate::network_retry::NoopSink,
+        ) {
+            crate::forge_observed::Observed::Known(m) => Some(m.head_sha),
+            _ => None,
+        }
     }
 
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
@@ -4528,6 +4600,11 @@ impl Rails for ForgeRails<'_> {
 
     fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
         self.ports.build(base, members)
+    }
+
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, pr: u64) -> Option<String> {
+        self.ports.member_head(pr)
     }
 
     fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
