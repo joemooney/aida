@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3882",
+  "publishes": [
+    {
+      "at": "2026-11-26T03:08:06.228683889Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T03:10:23.553853324Z",
+      "spec": "TASK-3882",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "26 changes are open and the limit is 10; TASK-3882 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-25T17:32:41.586275155Z",
+      "spec": "TASK-3882",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "19 changes are open and the limit is 10; TASK-3882 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T03:08:06.091795701Z",
+      "spec": "TASK-3882",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "127cd79df6f9d6ff504576d03ec7aab87a735e46",
+        "pr": 4599,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
