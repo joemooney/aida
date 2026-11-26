@@ -14,12 +14,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T14:37:03.381302616Z
+modified_at: 2026-11-26T14:38:53.069627957Z
 req_type: Bug
 tags:
 - admission
 - lanes
 - leases
+comments:
+- id: 01a2184b-c575-7333-b91b-471ca6ea0652
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:38):
+    # BUG-2773 (TOP priority; advisor-122 07:39): an unbound shared claim with a dead creator is invisible to the heal path (product-15). Lane: CLAUDE. MAIN, NEW branch bug-2773-unbound-claim-heal. STRICT (leases). <=200 lines. Completing (BUG-2773) trailer.
+    READ: `aida show BUG-2773` (exact error text and claim shape). The claim on dell1: .aida-store/coordination/leases/bug-b6b1278890774ef993d2ebc327862470-349-83a7988a590cf263.toml: lease=unbound, launcher=unbound, invocation 7e3e3d5a-f42d-4ada-bf2a-49674c0b976e, creator pid 1112433 DEAD (pid_start_time linux-starttime:6708816), heartbeat_at 2026-11-15T14:47Z.
+    AC1: `aida doctor check leases` LISTS this shape as an eligible stale lease, and `aida doctor heal stale-leases --id shared-<invocation> --yes` RELEASES it (with positive death evidence: the creator pid plus a start-time mismatch or absence).
+    AC2: ONE shared eligibility predicate for the admission refusal hint and the heal path, so a refusal never prescribes a heal that would refuse. AC3: a test with exactly this claim shape.
+    Do NOT hand-edit any lease or claim file (not even in tests outside fixtures). One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T14:38:53.069627957Z
+  modified_at: 2026-11-26T14:38:53.069627957Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
