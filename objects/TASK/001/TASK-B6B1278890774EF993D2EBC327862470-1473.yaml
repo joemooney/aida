@@ -1,0 +1,31 @@
+id: 01a2156f-235a-79d3-9059-1ccce6fa72b7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1473
+title: 'Review follow-up: Patch-ids are computed from `git log -p` without --binary/--full-index, so a binary-only c'
+description: |-
+  From BUG-2733
+  Reviewed sha: bc5438855b63b22bf94baf3687a0ee3b4d1ca1c6
+
+  Patch-ids are computed from `git log -p` without --binary/--full-index, so a binary-only change hashes as a `Binary files a/X and b/X differ` stanza. Two commits that change the same binary path to different contents (with identical text hunks) share a patch-id, so a genuinely new branch commit is reported as already on base and its specs are dropped from train/ship resolution. textconv-lossy diffs collide the same way. review_carryover::patch_id uses --binary --full-index to avoid this. Add those flags and a collision test.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T01:18:54.810845159Z
+modified_at: 2026-11-26T01:18:54.810845159Z
+req_type: Task
+tags:
+- carried-from:BUG-2733
+- finding-hash:3a446190
+- from-review:BUG-2733
+relationships:
+- rel_type: References
+  target_id: 01a2098c-59f6-7922-a25a-70a7be418e02
+  created_at: 2026-11-26T01:18:54.810902660Z
+filed_at:
+  code_sha: bc5438855b63b22bf94baf3687a0ee3b4d1ca1c6
+  branch: pr-4598
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa7028b4df8
+  vendor: claude
+  session: 01a2156b9f37
