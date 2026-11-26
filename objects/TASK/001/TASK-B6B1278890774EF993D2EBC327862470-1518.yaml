@@ -1,0 +1,31 @@
+id: 01a21873-58bf-7832-aa57-3ea9f9e8e821
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1518
+title: 'Review follow-up: Merged/closed detection is GitHub-only and degrades silently: review_commands.rs:3609 call'
+description: |-
+  From BUG-2738
+  Reviewed sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
+
+  Merged/closed detection is GitHub-only and degrades silently: review_commands.rs:3609 calls forge::github_pr_state (raw `gh pr view`) rather than the forge abstraction (forge::forge_for(root).change_metadata, used by the stranded sweep). On a GitLab-forge clone, or in a contained reviewer seat where gh/network is unavailable, pr_state is None and a Done spec whose PR already merged is still shelved to NeedsAttention -- exactly the BUG-2728 shape. Fail-closed to today's behaviour, so not a regression; follow up by routing through forge_for and/or noting the degraded case in output.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T15:22:22.271678976Z
+modified_at: 2026-11-26T15:22:22.271678976Z
+req_type: Task
+tags:
+- carried-from:BUG-2738
+- finding-hash:4412bedf
+- from-review:BUG-2738
+relationships:
+- rel_type: References
+  target_id: 01a20b16-0a8e-7413-abc1-7f3194759828
+  created_at: 2026-11-26T15:22:39.570872204Z
+filed_at:
+  code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
+  branch: pr-4663
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fd10cfd3049
+  vendor: claude
+  session: 01a2186f32f3
