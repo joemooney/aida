@@ -3097,7 +3097,7 @@ pub(crate) fn gate_member(
 /// when the project allowlists emails), carrying every constituent trailer
 /// for admission and merge policy, or the PR's non-completing marker.
 // trace:BUG-2635 | ai:codex
-fn member_body(
+pub(crate) fn member_body(
     project_root: &Path,
     base: &str,
     head: &str,
