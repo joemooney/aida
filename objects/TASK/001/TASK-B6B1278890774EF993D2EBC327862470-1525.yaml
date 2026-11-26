@@ -15,13 +15,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T17:26:49.537367250Z
+modified_at: 2026-11-26T17:32:20.427908064Z
 req_type: Task
 tags:
 - deputy
 - promotion
 - strict
 - throughput
+comments:
+- id: 01a218ea-937e-73b3-95c9-fa881b1c1225
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:32):
+    # TASK-3919: the deputy shell runner re-execs onto the live binary between jobs (advisor-122 10:27; product-15). Lane: CLAUDE. STRICT (deputy runner: grant/binding). MAIN, NEW branch task-3919-deputy-reexec. <=250 lines. Completing (TASK-3919) trailer.
+    READ: `aida show TASK-3919` (AC1-AC4), the deputy shell runner loop (`aida deputy shell`), how it records its binding and grant, and BUG-2774's stale-binary detection (reuse it; don't duplicate it).
+    AC1: when IDLE, if /proc/self/exe is "(deleted)" or its sha != the live binary's, exec the live binary with the same args, name, binding and grant, and log the old and new sha. AC2: never mid-job; a job submitted during the window is queued, not lost. AC3: tests (deleted, a sha mismatch, a job in flight, the binding survives). AC4: the same for relay/runner loops if they share the code; otherwise list them in the PR body. Never widen the grant or the binding.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T17:32:20.427908064Z
+  modified_at: 2026-11-26T17:32:20.427908064Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
