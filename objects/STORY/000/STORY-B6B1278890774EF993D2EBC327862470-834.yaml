@@ -109,6 +109,18 @@ comments:
   created_at: 2026-11-26T08:47:09.660654533Z
   modified_at: 2026-11-26T08:47:09.660654533Z
   session_id: 01a216d8e50b
+- id: 01a21709-de25-79c2-a078-d03522c33786
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:47):
+    # STORY-3148 S1 micro-round on #4638 (advisor-122 ruling 2026-11-26 01:47 at 2af8eb61; product-15). Lane: CLAUDE. STRICT. MAIN, existing branch dev-provisional-s1b / PR #4638. <=30 lines. Keep the PR title.
+    (p2, real TOCTOU for a tool that swaps the LIVE binary) Add `--expect-head <sha>`: refuse on a mismatch, and show the resolved head BEFORE the swap. REQUIRED when the target is a PR; optional for a local branch.
+    TEST: the head moved between resolve and build → refused, nothing promoted, live pair unchanged.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4638. COMMIT your work.
+  created_at: 2026-11-26T08:47:17.251433687Z
+  modified_at: 2026-11-26T08:47:17.251433687Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
