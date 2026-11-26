@@ -2891,21 +2891,33 @@ pub fn consolidate_cross_batch_findings(
         }
     }
 
-    // Also deduplicate exact same (path, category, start_line) within code_findings
+    // Also deduplicate cross-batch code findings that describe the exact same defect
+    // (either identical `(path, category, start_line)` or sharing >= 3 distinct backticked
+    // code identifiers across batches, such as `handleExecuteCustomRules`, `getFileStats`,
+    // and `path.isAbsolute()` flagged in both `handlers.ts` and `tools.ts`).
     let mut deduped_code: Vec<RawReviewFinding> = Vec::with_capacity(code_findings.len());
     let mut folded_dismissed: Vec<DismissedReviewFinding> = Vec::new();
 
     for f in code_findings {
+        let f_ids = extract_ids(&f.message);
         if let Some(existing) = deduped_code.iter_mut().find(|e| {
-            e.path == f.path
+            let same_loc = e.path == f.path
                 && e.category == f.category
                 && e.start_line.is_some()
-                && e.start_line == f.start_line
+                && e.start_line == f.start_line;
+            if same_loc {
+                return true;
+            }
+            if f_ids.len() >= 3 && e.category == f.category {
+                let e_ids = extract_ids(&e.message);
+                return f_ids.intersection(&e_ids).count() >= 3;
+            }
+            false
         }) {
             folded_dismissed.push(DismissedReviewFinding {
                 finding: f,
                 dismissal_reason: format!(
-                    "Consolidated duplicate finding at `{}:{:?}`",
+                    "Consolidated cross-batch duplicate finding into `{}:{:?}`",
                     existing.path, existing.start_line
                 ),
             });

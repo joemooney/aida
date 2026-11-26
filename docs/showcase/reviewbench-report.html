@@ -1815,6 +1815,23 @@
           </p>
         </div>
       </div>
+      <div style="margin-top:18px;padding:16px 18px;background:var(--emerald-soft);border:1px solid rgba(27,107,76,0.3);border-left:4px solid var(--emerald);">
+        <div style="font-family:var(--mono);font-size:10.5px;color:var(--emerald);text-transform:uppercase;letter-spacing:0.9px;margin-bottom:6px;font-weight:700;">
+          CONTINUOUS LEARNING LOOP · v4 ENGINE REFINEMENTS (COMMIT 41a11958d87) → 100% HIGH-SEVERITY RECALL (7 / 7) &amp; 2.1× PARALLEL SPEEDUP
+        </div>
+        <p style="font-size:13px;color:var(--ink-secondary);margin:0;line-height:1.6;">
+          Studying our single missed High-severity TP and multi-batch latency in the v3 baseline led to six general-purpose engine upgrades in <code>v4</code>:
+          <strong>(1) Nearest Package-Manifest Context</strong> (attaching read-only <code>pyproject.toml</code> / <code>package.json</code> / <code>Cargo.toml</code> / <code>go.mod</code> / <code>pom.xml</code>),
+          <strong>(2) CodeGraph Untouched Caller/Callee Body Slicing</strong> (35-line function body slices for the top 3 untouched AST edges),
+          <strong>(3) Bounded Parallel Batch Execution</strong> (<code>std::thread::scope</code> up to 4 concurrent batches),
+          <strong>(4) Cross-Batch Finding Consolidation</strong>,
+          <strong>(5) Deterministic Omission/Doc Line-Anchor Fallback</strong>, and
+          <strong>(6) Inner-Quote JSON Sanitization</strong>.
+          Re-testing with <code>v4</code> immediately caught <strong><code>G_TP0</code> on <code>AA-Factory#17</code></strong> (undeclared <code>pytest-mock</code> &amp; <code>pytest-asyncio</code> in <code>pyproject.toml</code>, lifting 6-language High-Severity Recall to <strong>100.0% — 7 / 7 High TPs!</strong>),
+          cut multi-batch review time by <strong>56.8% on <code>chronicle#14</code> (205.9 s → 88.9 s, 2.32× faster)</strong> and <strong>45.3% on <code>TechDebtMCP#135</code> (287.1 s → 157.0 s, 1.83× faster)</strong>,
+          and raised exact line anchoring on <code>TechDebtMCP#135</code> from 75% to <strong>100.0% (9 / 9)</strong>.
+        </p>
+      </div>
     </div>
 
     <div class="grid-2" style="margin-top:28px;">
