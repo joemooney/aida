@@ -1,12 +1,13 @@
 // trace:STORY-3120 | ai:claude
 //! Model and reasoning effort for review runners. Every precedence source is
 //! checked against a fixed allowlist before any argv exists, and the project's
-//! `.aida/review-rules.toml` defaults come from the trusted base revision.
+//! `.aida/review-rules.toml` defaults and the `[agents]` reviewer seat come
+//! from the trusted base revision, never from the change under review.
 // Wired into `--run-review` with the runner slice; only the tests call it yet.
 #![cfg_attr(not(test), allow(dead_code))]
 
 use crate::vendors::review_runner::ReviewVendor;
-use aida_core::agents_config::{resolve_agent_tuning, AgentSeat};
+use aida_core::agents_config::{resolve_agent_tuning_from, AgentSeat};
 use aida_core::review_engine::ProjectReviewRulesConfig;
 use anyhow::{bail, ensure, Context, Result};
 use std::ffi::OsString;
@@ -15,6 +16,8 @@ use std::path::Path;
 /// Effort levels for a custom runner command, which names no vendor.
 const BASE_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh"];
 const RULES_PATH: &str = ".aida/review-rules.toml";
+/// Project files that carry `[agents.<vendor>.seats.reviewer]` tuning.
+const SEAT_PATHS: [&str; 2] = [".aida/config.toml", ".aida/agents.toml"];
 const MODEL_MAX: usize = 128;
 
 /// A validated model and effort; only `resolve` builds a non-empty one.
@@ -71,21 +74,57 @@ pub(crate) fn resolve(
     Ok(tuning)
 }
 
+/// Review settings read from the trusted base revision.
+#[derive(Debug, Default)]
+pub(crate) struct TrustedBase {
+    pub(crate) rules: ProjectReviewRulesConfig,
+    /// Base blobs of `SEAT_PATHS`, in order; `None` when absent at the base.
+    seat_files: [Option<Vec<u8>>; 2],
+}
+
+/// The reviewer seat from the base blobs and the operator's global
+/// `~/.aida/agents.toml`; the reviewed checkout's copies are never read.
+fn base_seat_tuning(
+    base: &TrustedBase,
+    vendor: &str,
+) -> Result<aida_core::agents_config::ResolvedAgentTuning> {
+    let dir = tempfile::tempdir()?;
+    let mut paths = [None, None];
+    for (i, body) in base.seat_files.iter().enumerate() {
+        if let Some(body) = body {
+            let path = dir.path().join(format!("{i}.toml"));
+            std::fs::write(&path, body)?;
+            paths[i] = Some(path);
+        }
+    }
+    let global = aida_core::home::home_dir().map(|h| h.join(".aida/agents.toml"));
+    let [config, agents] = paths;
+    Ok(resolve_agent_tuning_from(
+        global.as_deref(),
+        config.as_deref(),
+        agents.as_deref(),
+        vendor,
+        AgentSeat::Reviewer,
+    ))
+}
+
 /// Resolve in the order flag > environment > review-rules.toml > the
-/// `[agents]` reviewer seat. `rules` must come from `trusted_review_rules`.
+/// `[agents]` reviewer seat. `base` must come from `trusted_review_base`.
 pub(crate) fn resolve_for_run(
     agent: Option<&ReviewVendor>,
-    project_root: &Path,
     parent_env: &[(OsString, OsString)],
     flags: (Option<&str>, Option<&str>),
-    rules: &ProjectReviewRulesConfig,
+    base: &TrustedBase,
 ) -> Result<ReviewTuning> {
+    let rules = &base.rules;
     // A non-UTF-8 value is kept as an invalid one, so it refuses, never unsets.
     let env = |key: &str| {
         let found = parent_env.iter().find(|(k, _)| k == key);
         found.map(|(_, v)| v.to_str().unwrap_or("\u{fffd}"))
     };
-    let seat = agent.map(|a| resolve_agent_tuning(project_root, a.program, AgentSeat::Reviewer));
+    let seat = agent
+        .map(|a| base_seat_tuning(base, a.program))
+        .transpose()?;
     let (seat, name) = (seat.unwrap_or_default(), agent.map_or("", |a| a.program));
     let seat_effort = format!("[agents.{name}.seats.reviewer] effort");
     let seat_model = format!("[agents.{name}.seats.reviewer] model");
@@ -106,7 +145,9 @@ pub(crate) fn resolve_for_run(
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    // A refs/replace entry must not substitute the trusted base's objects.
     let out = aida_core::git_ops::host_git_command(root)
+        .arg("--no-replace-objects")
         .args(args)
         .output()
         .with_context(|| format!("git {}", args.join(" ")))?;
@@ -115,35 +156,53 @@ fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
     Ok(out.stdout)
 }
 
-/// `.aida/review-rules.toml` as of `base`. Refused when `head` (or, with no
-/// head, the working tree) changes it, so a change cannot pick its own review.
-pub(crate) fn trusted_review_rules(
+fn base_blob(root: &Path, base_commit: &str, path: &str) -> Result<Option<Vec<u8>>> {
+    let entry = git(root, &["ls-tree", "-z", base_commit, "--", path])?;
+    if entry.is_empty() {
+        return Ok(None);
+    }
+    let entry = String::from_utf8_lossy(&entry);
+    let blob = match entry.split([' ', '\t']).collect::<Vec<_>>()[..] {
+        ["100644" | "100755", "blob", oid, _] => oid.to_owned(),
+        _ => bail!("{path} is not a regular file at the base revision"),
+    };
+    git(root, &["cat-file", "blob", &blob]).map(Some)
+}
+
+/// Review settings (`.aida/review-rules.toml` and the reviewer seat in
+/// `SEAT_PATHS`) as of `base`. Refused when `head` (or, with no head, the
+/// working tree) changes any of them, so a change cannot pick its own review.
+///
+/// The guard diffs `base` and `head` trees directly, so `base` must be the
+/// merge-base of the forge's target branch and the reviewed head SHA, never
+/// the moving target tip (a later target-side edit would refuse a stale PR)
+/// and never a PR-supplied value.
+pub(crate) fn trusted_review_base(
     root: &Path,
     base: &str,
     head: Option<&str>,
-) -> Result<ProjectReviewRulesConfig> {
+) -> Result<TrustedBase> {
     let revs = std::iter::once(base).chain(head);
     for rev in revs.clone() {
         ensure!(!rev.starts_with('-'), "invalid revision {rev:?}");
     }
     let mut diff = vec!["diff", "--name-only", "--no-renames", "--no-ext-diff"];
-    diff.extend(revs.chain(["--", RULES_PATH]));
+    diff.extend(revs.chain(["--", RULES_PATH]).chain(SEAT_PATHS));
+    let changed = git(root, &diff)?;
     ensure!(
-        git(root, &diff)?.is_empty(),
-        "refusing to review: this change modifies {RULES_PATH}; review settings come from the base revision"
+        changed.is_empty(),
+        "refusing to review: this change modifies {}; review settings come from the base revision",
+        String::from_utf8_lossy(&changed).trim().replace('\n', ", ")
     );
     let base_commit = format!("{base}^{{commit}}");
-    let entry = git(root, &["ls-tree", "-z", &base_commit, "--", RULES_PATH])?;
-    if entry.is_empty() {
-        return Ok(ProjectReviewRulesConfig::default());
-    }
-    let entry = String::from_utf8_lossy(&entry);
-    let blob = match entry.split([' ', '\t']).collect::<Vec<_>>()[..] {
-        ["100644" | "100755", "blob", oid, _] => oid.to_owned(),
-        _ => bail!("{RULES_PATH} is not a regular file at the base revision"),
+    let rules = match base_blob(root, &base_commit, RULES_PATH)? {
+        None => ProjectReviewRulesConfig::default(),
+        Some(raw) => toml::from_str(&String::from_utf8(raw)?)
+            .with_context(|| format!("parse {RULES_PATH} at the base revision"))?,
     };
-    let raw = String::from_utf8(git(root, &["cat-file", "blob", &blob])?)?;
-    toml::from_str(&raw).with_context(|| format!("parse {RULES_PATH} at the base revision"))
+    let [config, agents] = SEAT_PATHS.map(|p| base_blob(root, &base_commit, p));
+    let seat_files = [config?, agents?];
+    Ok(TrustedBase { rules, seat_files })
 }
 
 #[cfg(test)]
@@ -201,15 +260,14 @@ mod tests {
         );
         assert_eq!(resolve(None, &[], &[]).unwrap(), ReviewTuning::default());
 
-        // The real chain: env and the project's reviewer seat are sources too.
-        let root = tempfile::tempdir().unwrap();
-        std::fs::create_dir(root.path().join(".aida")).unwrap();
+        // The real chain: env and the base's reviewer seat are sources too.
         let config = "[agents.codex.seats]\nreviewer = { effort = \"high\\\"\\nfoo=1\" }\n";
-        std::fs::write(root.path().join(".aida/config.toml"), config).unwrap();
-        let rules = ProjectReviewRulesConfig::default();
-        let run = |env: &[(OsString, OsString)], flag| {
-            resolve_for_run(codex, root.path(), env, (flag, None), &rules)
+        let base = TrustedBase {
+            seat_files: [Some(config.into()), None],
+            ..Default::default()
         };
+        let run =
+            |env: &[(OsString, OsString)], flag| resolve_for_run(codex, env, (flag, None), &base);
         let err = run(&[], Some("high")).unwrap_err().to_string();
         assert!(
             err.starts_with("[agents.codex.seats.reviewer] effort"),
@@ -252,22 +310,57 @@ mod tests {
         std::fs::create_dir(root.join(".aida")).unwrap();
         write("a.txt", "x");
         commit("empty");
-        let empty = trusted_review_rules(root, "empty", Some("HEAD")).unwrap();
-        assert!(empty.default_effort.is_none());
+        let empty = trusted_review_base(root, "empty", Some("HEAD")).unwrap();
+        assert!(empty.rules.default_effort.is_none());
         write(RULES_PATH, "default_effort = \"medium\"\n");
+        write(
+            SEAT_PATHS[0],
+            "[agents.codex.seats.reviewer]\neffort = \"high\"\n",
+        );
         commit("base");
-        let head = |rev: &str| trusted_review_rules(root, "base", Some(rev));
+        let head = |rev: &str| trusted_review_base(root, "base", Some(rev));
         write("a.txt", "y");
         commit("ok");
         let ok = head("ok").unwrap();
-        assert_eq!(ok.default_effort.as_deref(), Some("medium"));
+        assert_eq!(ok.rules.default_effort.as_deref(), Some("medium"));
+        let codex = review_vendor("codex").ok();
+        let seat = |b: &TrustedBase| {
+            let no_rules = TrustedBase {
+                seat_files: b.seat_files.clone(),
+                ..Default::default()
+            };
+            resolve_for_run(codex, &[], (None, None), &no_rules)
+                .unwrap()
+                .effort()
+        };
+        assert_eq!(seat(&ok), Some("high"));
+        // A change lowering its own reviewer seat refuses, committed or not.
+        let low = "[agents.codex.seats.reviewer]\neffort = \"low\"\n";
+        write(SEAT_PATHS[0], low);
+        let err = trusted_review_base(root, "base", None).unwrap_err();
+        assert!(
+            err.to_string().contains("modifies .aida/config.toml"),
+            "{err}"
+        );
+        commit("seat");
+        let err = head("seat").unwrap_err();
+        assert!(
+            err.to_string().contains("modifies .aida/config.toml"),
+            "{err}"
+        );
+        git(&["reset", "-q", "--hard", "ok"]);
+        // An untracked .aida/agents.toml in the checkout is never read.
+        write(SEAT_PATHS[1], low);
+        assert_eq!(seat(&head("ok").unwrap()), Some("high"));
+        std::fs::remove_file(root.join(SEAT_PATHS[1])).unwrap();
+        git(&["reset", "-q", "--hard", "ok"]);
         // The PR's own copy is never read: an edit refuses, committed or not.
         write(RULES_PATH, "default_effort = \"low\"\n");
-        let err = trusted_review_rules(root, "base", None).unwrap_err();
+        let err = trusted_review_base(root, "base", None).unwrap_err();
         assert!(err.to_string().contains("modifies .aida/review-rules.toml"));
         commit("edited");
         assert!(head("edited").unwrap_err().to_string().contains("modifies"));
-        assert!(trusted_review_rules(root, "--output=x", None).is_err());
+        assert!(trusted_review_base(root, "--output=x", None).is_err());
         std::fs::remove_file(root.join(RULES_PATH)).unwrap();
         commit("deleted");
         let err = head("deleted").unwrap_err();
@@ -277,8 +370,11 @@ mod tests {
             default_effort: Some(INJECTED.into()),
             ..Default::default()
         };
-        let codex = review_vendor("codex").ok();
-        let err = resolve_for_run(codex, root, &[], (None, None), &bad).unwrap_err();
+        let bad = TrustedBase {
+            rules: bad,
+            ..Default::default()
+        };
+        let err = resolve_for_run(codex, &[], (None, None), &bad).unwrap_err();
         assert!(err
             .to_string()
             .starts_with("review-rules.toml default_effort"));
