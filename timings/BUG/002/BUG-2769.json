@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2769",
+  "publishes": [
+    {
+      "at": "2026-11-26T12:46:19.841518470Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T09:24:56.652243327Z",
+      "spec": "BUG-2769",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4640,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0f9abd22eab158ed35fc58e668c10ddc5f5c96c0"
+      }
+    },
+    {
+      "ts": "2026-11-26T09:25:08.414847854Z",
+      "spec": "BUG-2769",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2769 review at 0f9abd22. AC1 verified: run_passes now runs an unclaimed pre-scan (train_wanted: journal recovery_needed, or any discovered change passing the automatic train::eligible gate, Unavailable counted as wanted) and takes the claim only for a wanted pass, dropping it right after the pass (advisor_loop_train.rs run_passes). The pre-scan is a sound superset of the pass's automatic gate: typed_gate_member applies advisor_train_eligible -> train::eligible under ADVISOR_LOOP, and discover() drops draft/closed changes the same way repo.change() refuses them. AC2 verified by bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train (manual_train_admission succeeds in <1s while idle). AC3 verified by the same test plus the adapted bug2703 real-worker-loop test. AC4 unverified: the holder/phase line is emitted only after the claim is released, with a constant phase, and only the formatter is tested. Protocol checklist: BUG-2769 'PR touches at least one test file' = met (advisor_loop_train.rs test module, task_1993_review_watch_tests.rs). CI pending at review time. Request changes for AC4 only.",
+        "recovery_hint": "address the review findings, move BUG-2769 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T11:42:22.624835065Z",
+      "spec": "BUG-2769",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4640,
+        "verdict": "APPROVED",
+        "reviewed_sha": "9b9aa8a69391fe68e5054a0d8d26e45b27800b4b"
+      }
+    },
+    {
+      "ts": "2026-11-26T12:41:05.351552228Z",
+      "spec": "BUG-2769",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4640
+      }
+    },
+    {
+      "ts": "2026-11-26T12:46:18.728468533Z",
+      "spec": "BUG-2769",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cd53118d56302cbd2936a30c898fe93904a99117",
+        "pr": 4640,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
