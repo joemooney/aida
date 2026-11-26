@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T19:59:11.007687884Z
+modified_at: 2026-11-26T20:34:40.716469326Z
 req_type: Story
 tags:
 - integration
@@ -1406,6 +1406,34 @@ comments:
     A reference merge (commit 211b0e8dc71c, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T19:59:11.007680904Z
   modified_at: 2026-11-26T19:59:11.007680904Z
+- id: 01a21991-45cc-7f10-a015-35c93703ddda
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4983511e5a (S5c, Refs-only slice, branch int-story-3120-s5c off integration tip 3d19232f4d).
+
+    Acceptance evidence (behavioral tests):
+    - C: s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing. A forged [AI:codex] tag steers the auto pick to claude; --challenger-agent codex still yields codex. When the override is not installed it is refused, never replaced by the finder's vendor. It is refused under AIDA_REVIEW_RUNNER_CMD. A vendor outside the allowlist is refused. The flag is validated with review_vendor before argv is built. It is a clap flag only and is never read from repo config.
+    - C, signed-out or rate-limited challenger: s4_adversarial_run_suppresses_but_gates_refuted_findings now also covers a challenger that exits 1 with 'rate limit exceeded'. The run is refused, and the error names the challenger, the cause and --challenger-agent. It fails closed; it does not fall back.
+    - D: s5c_rename_old_paths_apply_every_inventory_exclusion. Old paths in the secret, substrate, lockfile and user-pattern categories are all dropped by rename_sources, and inventory classification drops the same ones.
+    - H1: acceptance_markdown and playbook checklists now render fenced. s5_posted_comment_renders_agent_text_inert asserts that @accept and @check are not live.
+    - J1: the same test now also covers head_ref, excluded_files path and reason, and challenger_agent and note.
+    - H2, I, J2: s5b_pinned_post_names_repo_and_hung_gh_times_out. A gh that exits 4 without reading stdin gives 'gh pr comment failed for #9: auth required'. After the timeout kill, the fake gh and its sleep child are gone (checked with ps). EACCES (os error 13) and ENOENT (os error 2) stay in the error chain through the new command_output_with_timeout_io.
+
+    Probe findings fixed during self-review:
+    - The challenger label in the failure message used pass.agent, which would name claude even under a custom runner. It now uses vendor().
+    - The portability ratchet flagged a /proc literal in the orphan check. It now uses ps.
+
+    Residual risks:
+    - The EACCES assertion would not hold if tests ran as root.
+    - Fencing the acceptance and checklist text also changes the local markdown report: it shows as a code block instead of rendered markdown.
+    - F (docs) is split to S5d to stay under 300 lines.
+
+    Validation: lane job review_prepare::tests + launch::review_challenger::tests 26/26 passed; make check-ci-fast is being rerun after the ratchet fix.
+  created_at: 2026-11-26T20:34:40.716469326Z
+  modified_at: 2026-11-26T20:34:40.716469326Z
+  session_id: 01a21959d98a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
