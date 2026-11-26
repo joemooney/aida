@@ -15,12 +15,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T18:38:47.617614770Z
+modified_at: 2026-11-26T18:40:32.691554246Z
 req_type: Bug
 tags:
 - landing
 - throughput
 - train
+comments:
+- id: 01a21929-0689-7b92-9d1e-d3dc5a24ac39
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:40):
+    # BUG-2777: a stacked-diff-drift ejection routes the PR (sync + independent re-review) instead of looping the train (advisor-122 11:37; product-15). Lane: CLAUDE. STRICT (train path). MAIN, NEW branch bug-2777-ejection-routing. <=250 lines; if over, ship AC1+AC2 with (Refs BUG-2777) and list AC3. Otherwise use the completing (BUG-2777) trailer.
+    READ: `aida show BUG-2777` (the #4464 incident, AC1-AC4), the train ejection path (grep "diff changes when stacked"), BUG-2771 #4659/the fresh slice (fairness), and the review-watch queueing path. NEVER carry an approval across a head change.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T18:40:32.691554246Z
+  modified_at: 2026-11-26T18:40:32.691554246Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
