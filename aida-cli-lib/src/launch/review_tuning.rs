@@ -115,11 +115,7 @@ pub(crate) fn resolve_for_run(
     base: &TrustedBase,
 ) -> Result<ReviewTuning> {
     let rules = &base.rules;
-    // A non-UTF-8 value is kept as an invalid one, so it refuses, never unsets.
-    let env = |key: &str| {
-        let found = parent_env.iter().find(|(k, _)| k == key);
-        found.map(|(_, v)| v.to_str().unwrap_or("\u{fffd}"))
-    };
+    let env = |key| env_value(parent_env, key);
     let seat = agent
         .map(|a| base_seat_tuning(base, a.program))
         .transpose()?;
@@ -140,6 +136,41 @@ pub(crate) fn resolve_for_run(
         (&seat_model, seat.model.as_deref()),
     ];
     resolve(agent, &effort, &model)
+}
+
+/// A non-UTF-8 value is kept as an invalid one, so it refuses, never unsets.
+fn env_value<'a>(parent_env: &'a [(OsString, OsString)], key: &str) -> Option<&'a str> {
+    let found = parent_env.iter().find(|(k, _)| k == key);
+    found.map(|(_, v)| v.to_str().unwrap_or("\u{fffd}"))
+}
+
+/// The `--adversarial` challenger's tuning: `--challenger-effort` >
+/// `AIDA_REVIEW_CHALLENGER_EFFORT` > base `challenger_effort`, each checked
+/// against `agent`'s allowlist, then the usual chain without the finder's
+/// flags. trace:STORY-3120 | ai:claude
+pub(crate) fn resolve_challenger(
+    agent: Option<&ReviewVendor>,
+    parent_env: &[(OsString, OsString)],
+    flag: Option<&str>,
+    base: &TrustedBase,
+) -> Result<ReviewTuning> {
+    let effort = [
+        ("--challenger-effort", flag),
+        (
+            "AIDA_REVIEW_CHALLENGER_EFFORT",
+            env_value(parent_env, "AIDA_REVIEW_CHALLENGER_EFFORT"),
+        ),
+        (
+            "review-rules.toml challenger_effort",
+            base.rules.challenger_effort.as_deref(),
+        ),
+    ];
+    let own = resolve(agent, &effort, &[])?;
+    let rest = resolve_for_run(agent, parent_env, (None, None), base)?;
+    Ok(ReviewTuning {
+        model: rest.model,
+        effort: own.effort.or(rest.effort),
+    })
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>> {

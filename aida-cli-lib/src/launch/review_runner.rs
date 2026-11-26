@@ -51,14 +51,20 @@ impl RunnerCall<'_> {
         self.agent.filter(|_| self.var(RUNNER_CMD).is_none())
     }
 
+    /// `agent`'s binary on the operator's PATH, as `run` would resolve it.
+    pub(crate) fn on_path(&self, agent: &ReviewVendor) -> Option<PathBuf> {
+        std::env::split_paths(self.var("PATH").unwrap_or_default())
+            .map(|dir| dir.join(agent.program))
+            .find(|p| p.is_absolute() && p.is_file())
+    }
+
     /// Absolute runner path; refused when relative, missing, not a regular
     /// file, or inside the checkout under review.
     fn program(&self) -> Result<PathBuf> {
         let path = match (self.var(RUNNER_CMD), self.agent) {
             (Some(cmd), _) => PathBuf::from(cmd),
-            (None, Some(agent)) => std::env::split_paths(self.var("PATH").unwrap_or_default())
-                .map(|dir| dir.join(agent.program))
-                .find(|p| p.is_absolute() && p.is_file())
+            (None, Some(agent)) => self
+                .on_path(agent)
                 .with_context(|| format!("{} not found on PATH", agent.program))?,
             (None, None) => bail!("--run-review needs --agent <claude|codex> or {RUNNER_CMD}"),
         };

@@ -133,6 +133,9 @@ pub struct ProjectReviewRulesConfig {
     pub default_effort: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Effort for the `--adversarial` challenger pass, validated the same way.
+    #[serde(default)]
+    pub challenger_effort: Option<String>,
 }
 
 /// A single path-scoped rule entry in `.aida/review-rules.toml`.
