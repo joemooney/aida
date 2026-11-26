@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-26T09:32:02.284508979Z
+modified_at: 2026-11-26T09:34:55.748638780Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -358,6 +358,11 @@ comments:
   modified_at: 2026-11-26T09:32:02.284508979Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21735-4105-7270-b797-f97091338817
+  author: joe
+  content: 'SLICE (e) ADDENDUM (integration-30 2026-11-26 02:37, from the #4642 d1 pre-check; findings-as-comments): docs/showcase/build.py either RENDERS nested "  - " lists and *em*, or (cheaper and fail-closed) REFUSES to build when a source line has an indented list marker or an unmatched single-asterisk emphasis, naming file:line. One test fixture per case. If (e) would go over ~300 lines with this, cut it as (e2).'
+  created_at: 2026-11-26T09:34:55.748638780Z
+  modified_at: 2026-11-26T09:34:55.748638780Z
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
