@@ -1,0 +1,30 @@
+id: 01a21923-0137-7800-b20b-147dfab06724
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-538
+agreed_id: BUG-2777
+title: A train ejection for stacked-diff drift loops the same train forever instead of routing the PR to sync + independent re-review
+description: |
+  advisor-122 2026-11-26 11:37 (filed by product-15). #4464 BUG-2735 (supervised, approved) sat ALL DAY. Every train EJECTED it with "its diff changes when stacked on main … the approval does not cover what would land", and the operator train loop (/tmp/train/N) retried the SAME train silently each time. Nothing surfaced or routed it until the advisor ran update-branch (new head 7d711a72) and launched a fresh independent review by hand.
+
+  ## Acceptance
+  - AC1: when a train ejects a member for "diff changes when stacked on main" (the approval does not cover what would land), the PR is routed in the same pass: (a) the train/auto-train records a typed `stacked-diff-drift` ejection; (b) when the PR is mergeable without conflicts, it runs update-branch (or the sync path) and queues an independent re-review at the new head, never carrying the old approval over; (c) when it conflicts, it routes to conflict repair (or a fresh slice) with a human-inbox item.
+  - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
+  - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
+  - AC4: tests for each AC.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T18:34:14.199561031Z
+modified_at: 2026-11-26T18:34:14.199561031Z
+req_type: Bug
+tags:
+- landing
+- throughput
+- train
+filed_at:
+  code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4af2602e90e
+  vendor: claude
