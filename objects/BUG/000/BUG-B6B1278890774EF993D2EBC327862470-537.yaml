@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T17:24:05.061454845Z
+modified_at: 2026-11-26T17:29:33.885338287Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -33,6 +33,31 @@ comments:
   modified_at: 2026-11-26T17:19:44.587475168Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a218e7-cbbd-7fd0-baf1-6e24dedacc66
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Root cause: the BUG-2720/2763 pickup retry for an Exited attempt whose diagnostic is "branch pr-N is held by worktree" only re-probes with the read-only `preflight_queue_work_branch`, which refuses while ANY checkout holds the branch. Pickup-side retirement (`review_worktree_retirement`) needs `review_lease_ended` (Closed receipt or Dead owner) plus ancestry of the old head, so a stale / ending-retained reviewer lease on a moved head is never retired, and the retry burns its 3 attempts and caps.
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, review_watch selection):** new `queue_cmd::reclaim_retained_review_tree` runs before the retry's worktree capture: one default review checkout on `pr-N`, unlocked, no live holder (`check_worktree_removal`), clean, checkout HEAD == the lease's recorded review head (no reviewer commits) and != the PR head, exactly one reviewer lease for this PR that is stale or ending-retained, no unconsumed draft. It collects the merge-hold marker first (`preserve_review_worktree_holds`, BUG-2176), then ends the lease via `aida session end <id> --yes` (injectable for tests). The same pass then probes and dispatches. Test drives the exact shape with a real git worktree + lease and asserts Dispatch.
+    - **AC2 (unit):** negatives for dirty, live pid (real child process cwd in the tree) and merge-hold (residual marker); each stays Skip and the pass records `PR-N: <why>` under "held by exited attempts" via a new `Admission::Held(why)`.
+    - **AC3 (unit, service + landing_drought):** pass report keeps `retained` entries with a first-seen `since`; >30 min yields a degradation line and a `landing-drought` doctor finding "review blocked by a retained reviewer worktree" with the exact fix command.
+
+    ### Expected files
+    - aida-cli-lib/src/queue_cmd/work.rs (+ mod.rs re-export)
+    - aida-cli-lib/src/review_watch.rs
+    - aida-cli-lib/src/advisor_loop_service.rs
+    - aida-cli-lib/src/landing_drought.rs
+    - aida-cli-lib/src/tests/task_1993_review_watch_tests.rs (+ a small new test file)
+
+    ### Ambiguities / conflicts as questions
+    - AC1 says "holds no merge-hold marker" but also "copy the marker first". Resolved as BUG-2176 does in session reap: collect this PR's legacy marker to the ledger first; any marker that remains keeps the tree as merge-held.
+  created_at: 2026-11-26T17:29:33.885338287Z
+  modified_at: 2026-11-26T17:29:33.885338287Z
+  session_id: 01a218e28a8c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218dd-3006-7b12-a565-eb8e5e0a12d8
   author: joe
