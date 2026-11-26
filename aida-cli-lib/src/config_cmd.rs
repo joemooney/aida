@@ -902,6 +902,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             max_secs: 7 * 24 * 3600,
         },
     },
+    // trace:TASK-3912 | ai:claude
+    KnobSpec {
+        section: "landing",
+        key: "max_prs_per_train",
+        doc: "At most this many PRs ride one automatic merge train; the rest wait for the next train in order. Unset keeps 10. An explicit `aida pr train` keeps its own --max.",
+        default: "10",
+        edit: EditSafety::ReadOnly {
+            reason: "landing policy is read from the default branch only: change it in a reviewed PR to the project config",
+        },
+    },
     // trace:STORY-3038 | ai:codex
     KnobSpec {
         section: "gate.unset_mode",
@@ -3484,6 +3494,8 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     "red_main.fix_window",
                     crate::landing_policy::duration_text(policy.red_main_fix_window),
                 ),
+                // trace:TASK-3912 | ai:claude
+                row("max_prs_per_train", policy.auto_train_max().to_string()),
             ],
         }
     });

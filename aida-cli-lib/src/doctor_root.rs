@@ -760,20 +760,18 @@ fn shared_stale_finding(
     claim: &crate::coordination::Claim,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Option<DoctorFinding> {
-    let id = claim
-        .claim_id
-        .as_deref()
-        .filter(|_| crate::coordination::exited_holder_is_dead(claim, now))?;
+    // trace:BUG-2773 | ai:claude — the predicate the admission hint shares
+    let id = crate::coordination::shared_heal_id(claim, now)?;
     Some(DoctorFinding {
         category: "stale-leases".into(),
-        id: format!("shared-{id}"),
+        action: format!("aida doctor heal stale-leases --id {id} --yes"),
+        id,
         summary: format!(
             // trace:BUG-2697 | ai:claude — also an admission that never spawned
             "expired shared claim for {} (lease {}, no running worker, dead creator)",
             claim.scope,
-            claim.lease_id.as_deref().unwrap_or("unknown")
+            claim.lease_id.as_deref().unwrap_or("unbound")
         ),
-        action: format!("aida doctor heal stale-leases --id shared-{id} --yes"),
         safe_heal: true,
     })
 }
@@ -1954,6 +1952,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:STORY-2630 | ai:codex
     (&["codegraph", "code-graph"], "codegraph"),
+    // trace:BUG-2774 | ai:claude
+    (&["deputy-binary", "stale-deputy"], "deputy-binary"),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
     // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
     (
