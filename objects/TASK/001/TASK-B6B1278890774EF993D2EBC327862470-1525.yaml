@@ -10,12 +10,12 @@ description: |
   - AC2: it NEVER re-execs mid-job. A job in flight finishes first, and a job submitted during the re-exec window is queued, not lost.
   - AC3: tests: deleted exe → re-exec when idle; a sha mismatch → re-exec when idle; a job in flight → no re-exec until it ends; the binding survives (a job after the re-exec still binds and runs).
   - AC4: the same rule for the relay/runner loops that hold the live binary, if they share the runner code.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T22:48:42.070327866Z
+modified_at: 2026-11-26T23:15:48.938079537Z
 req_type: Task
 tags:
 - deputy
@@ -177,6 +177,12 @@ comments:
   modified_at: 2026-11-26T22:48:42.070327866Z
   session_id: 01a219c6b4dc
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a24-cc4a-74f1-97ca-a62b51bae740
+  author: aida-publication-done
+  content: Implementer push 7498cace9411 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T23:15:48.938078618Z
+  modified_at: 2026-11-26T23:15:48.938078618Z
+  session_id: 01a219c6b4dc
 history:
 - id: 01a218ef-06e9-70b1-85a7-aae51066fd02
   author: aida-session-start
@@ -222,6 +228,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21a24-cc4a-74f1-97ca-a612cf17941f
+  author: aida-publication-done
+  timestamp: 2026-11-26T23:15:48.938075812Z
+  session_id: 01a219c6b4dc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
