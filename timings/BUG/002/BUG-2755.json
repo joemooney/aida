@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2755",
+  "publishes": [
+    {
+      "at": "2026-11-26T09:15:42.491380244Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T01:36:03.022985610Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "521e5f2095687a2815de128700c4c6745600769b"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:36:09.992031639Z",
+      "spec": "BUG-2755",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes for BUG-2755. Reviewed the entire pinned landed diff on main dc27cf1f4cb49a050002334062efb59fe7d2b914 and attest head 521e5f2095687a2815de128700c4c6745600769b. The head is seven commits behind. The overlapping base edit adds an unrelated Doctor Heal parser field and none of the findings depends on that edit.\n\nBUG-b6b1278890774ef993d2ebc327862470-516.AC1 — unverified. The positive fixture checks release and the exact diagnostic, but the production absence proof and the integration coverage for mount refusal are incomplete.\nBUG-b6b1278890774ef993d2ebc327862470-516.AC2 — unverified. The submitted fixture can pass without exercising a read failure, and the release path can accept an incomplete Git status scan.\nBUG-2755.AC3 (advisor acceptance addendum) — unverified. The clean recreated clone release and dirty-clone refusal have source and reported launcher evidence. The mailbox fixture does not reach the mail guard, and the release lacks a fence or revalidation for concurrent activity.\n\nHead-matched GitHub FAST compile, gates, aggregate build and merge-hold checks passed. The full test shards were skipped. The implementer reported three focused tests passed in launcher job j20261124T212517112-2-0. This review relied on source and existing evidence and ran no local tests.",
+        "recovery_hint": "address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:24:11.198835244Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a80ae09d4a0842c44224d0792aa59325e99fe332"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:24:15.759854569Z",
+      "spec": "BUG-2755",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes for BUG-2755. Reviewed the complete landed diff against protected main at 5d24023de56baef16fe94a5e39d89bc9bccd1dc3, landed tree dc9f04b094cbba6b98e1695c3a4122786cacd85b, attesting original head a80ae09d4a0842c44224d0792aa59325e99fe332. The head is two commits behind and none of the findings depends on the intervening base changes. AC1 fails on incomplete or unusable production mount evidence. AC2 partially passes for reported Git traversal failures but fails when status omits an unreadable subtree. AC3 partially passes for the clean fixture and cooperating writers but fails on uncertain binding evidence and writers outside the new fence. Exact-head fast gates passed and fast compile was running at review time. Source and existing CI reviewed. No local tests run. The explicit review claim was refused.",
+        "recovery_hint": "address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T06:08:56.659739399Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "eb2e718dbedddf53460aab314d05c520db5e6c2c"
+      }
+    },
+    {
+      "ts": "2026-11-25T06:09:10.738701494Z",
+      "spec": "BUG-2755",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete landed diff against protected main 2d346c274965961d1e187e5d48a6dbe611232393, landed tree daa7804c3df65ef42615d49384d5397bfac9c994. The PR head is one commit behind and no finding depends on that intervening review-watch change. Applied the latest advisor-approved BUG-2755 r3 attestation design, which supersedes the earlier mount-proof approach in the worksheet. AC1 partial: the helper covers release of an absent clone with a typed ID, but does not bind confirmation to the observed path state. AC2 partial: the helper uses nonreplacing atomic rename and exercises mail preservation and EXDEV refusal, but can move a replacement directory. AC3 partial: missing or wrong confirmation refuses in the helper and the CLI has an operator gate, but the stale decision can race lease updates and the CLI authority checks have no regression. Exact-head GitHub fast gates, fast compile and Build (ubuntu-latest) passed. Merge-hold clearance remained pending. No local tests or builds were run. The explicit review claim was refused.",
+        "recovery_hint": "address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T09:13:49.282662116Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "04abb2b5add64b26864bed9e344cf1012e3dab00"
+      }
+    },
+    {
+      "ts": "2026-11-25T09:14:00.267836754Z",
+      "spec": "BUG-2755",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete landed diff against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, landed tree 9d629481b3c4dcc3103e2aab5eb319e66389f5bd, under the advisor's operator-attested redesign and round-four brief. AC1 partial: an absent clone can be released with typed confirmation, but release can succeed with no durable outcome or reason. AC2 and present-clone recovery partial: non-ENOENT path lookup errors refuse and the move is atomic, nonreplacing and performs no repack or alternates mutation. The EXDEV fixture checks device identity, but the required alternates preservation assertion is missing. Round four partial: real CLI tests cover operator gating, directory replacement, absent-to-present changes and a lease stamp change, but stale-finding eligibility can still admit a live stamped worker. Fast source gates passed and fast compile was pending at review time. No local builds or tests run.",
+        "recovery_hint": "address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T22:33:50.469965659Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "696fd8422f05691585f0f2f06339b8f5a0aaa397"
+      }
+    },
+    {
+      "ts": "2026-11-25T22:34:10.504584735Z",
+      "spec": "BUG-2755",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 5 (advisor exception round) review of BUG-2755 at 696fd842, applied to the landed tree f2e911b3 on pinned main f03f5255. The head is 12 commits behind; no finding depends on base changes to seat_clone.rs, session_reap.rs, store-writers.toml or the help snapshot. Under the advisor's r3–r5 operator-attested redesign, all three r4 findings are fixed. F1: current_lease_state must be Stale under the lease write lock, and the CLI regression with a live stamped active_pid refuses ('holder is not stale'). F2: a durable <id>-<uuid>.attestation.json with lease_id, reason and outcome is written and fsynced before the move, independent of ownership mirroring, and is asserted for a legacy lease on both the salvage and absent paths. F3: alternates bytes are asserted identical after the salvage. AC1 is verified by repair_attestation.py case 'absent': the lease ends and the 'tree absent, nothing to salvage' event and stderr are present. The mount-proof clause was superseded by the advisor's attestation ruling. AC2 is unverified: ordinary heal refusing an unverified clone is tested (the --yes case), but no test covers an unreadable-but-present tree, and the ENOENT-versus-EACCES distinction that keeps such a tree from being released as absent is not mutation-killed. That gap blocks. Two non-blocking follow-ups: the write-ahead event can overstate a salvage that failed, and the store-writers inventory lost the read-only classification for the exact-lease reader. CI: fast gates, fast compile and Build pass at the head; full shards not run; merge-hold-gate pending. No local builds or tests were run.",
+        "recovery_hint": "address the review findings, move BUG-2755 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T00:03:57.922846528Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4541,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a27b058adf026bfb5b43f4dc1bfc4e7819751d86"
+      }
+    },
+    {
+      "ts": "2026-11-26T07:29:23.329413229Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4632,
+        "verdict": "APPROVED",
+        "reviewed_sha": "f694d9696a374985b149f9ee6227fe59e0e98c8e"
+      }
+    },
+    {
+      "ts": "2026-11-26T09:11:20.371790705Z",
+      "spec": "BUG-2755",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4632
+      }
+    },
+    {
+      "ts": "2026-11-26T09:15:32.013797595Z",
+      "spec": "BUG-2755",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "dd104fc437274c991e750e1af8ff1a96954da344",
+        "pr": 4632,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
