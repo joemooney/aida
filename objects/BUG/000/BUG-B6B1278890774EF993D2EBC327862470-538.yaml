@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T20:42:17.038385036Z
+modified_at: 2026-11-26T20:42:27.861609522Z
 req_type: Bug
 tags:
 - landing
@@ -107,6 +107,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 adds a typed stacked-diff-drift row to the train-culprit sidecar, routes a drift ejection in the same pass (update-branch pinned to the ejected head plus a review queue, or an advisor conflict-repair request), refuses the drifted head even when the PR is named, and reports drift older than 30 minutes as its own landing-drought cause. The unit pieces are sound and tested: AC1 is verified by bug2777_drift_routes_to_update_and_review_or_conflict_repair, bug2777_drift_row_is_typed_and_naming_does_not_clear_it and the STACKED_DRIFT prefix assertion in build_drops_...; AC2 by bug2777_a_drifted_head_is_refused_even_when_named; AC3 by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC4 is only partly met, because nothing tests the train-handler wiring that ties these together. That wiring is new code on the strict train/landing path: the post-drive loop in pr_train_handler_with_dispatch_ctx filters on the prefix, dedupes per PR, re-checks dispatch authority before the forge branch mutation, and calls record_drift. Under ADR-76 an untested refusal path in authority code blocks. Bug protocol: the PR touches at least one test file (met). CI was pending at review time: fast gates green, fast compile pending. The other findings are p3 follow-ups.. No triage reason was given.'
   created_at: 2026-11-26T20:42:17.038377269Z
   modified_at: 2026-11-26T20:42:17.038377269Z
+- id: 01a21998-65f9-7fc1-acba-3a0b6738b17c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2777):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 36ffea9bc517
+    Recorded: 2026-11-26T20:40:04.747104434+00:00
+    Findings:
+    1. [blocking_tier: untested-path; file: aida-cli-lib/src/pr_train.rs, pr_train_handler_with_dispatch_ctx post-drive drift-routing loop] No test covers the new train-handler wiring. Untested: (a) the train itself writes a typed stacked-diff-drift row for a member that drive() ejected with the STACKED_DRIFT reason (AC1(a) is only tested by calling culprit::record_drift directly); (b) the authority refusal path, where ports.dispatch_check() fails and update_change_branch must NOT be called (the forge branch mutation runs under the train's dispatch authority); (c) the per-PR dedupe across bisect sub-trains; (d) the dispatch_abort short-circuit. A regression that drops the dispatch_check call, or the record_drift call, passes every test in this PR. Add a handler-level or extracted-loop test with a fake forge/ports that asserts the refusal skips the branch update and that a routed drift is recorded at the ejected head.
+    2. [blocking_tier: p3] When dispatch authority is lost (dispatch_abort set, or dispatch_check fails), the loop `continue`s before culprit::record_drift, so no drift hold is written. The hold is a local runtime sidecar and needs no dispatch authority. The next train then re-admits and re-ejects the same head, which is the loop AC2 forbids, though only for one extra round. Record the drift row (with a 'not routed: <reason>' route) even when routing is skipped. Suggested follow-up.
+    3. [blocking_tier: p3] The success route text in route_drift states that 'the approval at <head> does not carry', but nothing enforces it. The TASK-1960 carry-over gate is untouched, and when the update-branch merge leaves the PR's own patch-id unchanged (for example, drift caused by an earlier train member rather than by main), the old approval does carry to the new head. The train's patch-id proof still means only the approved content lands, so this is not a safety hole. But the printed route and the hold message overstate the guarantee, and the advisor brief said never to carry across a head change. Either reword the route, or add the gate-side refusal the implementer asked about. Suggested follow-up.
+    4. [blocking_tier: p3] landing_drought::scan reads the drift row with exec.project_root(), but the train writes it to the main worktree's .aida/train-culprits.json. Run from a seat worktree, `aida doctor` never sees the drift row, so the AC3 cause is missed and a drifted PR still counts as landable. pr_head_pins in the same scan already has this problem, so it is not new. Resolve the main worktree (crate::main_worktree_root_from) for both. Suggested follow-up.
+    5. [blocking_tier: p3] culprit rows are keyed by PR alone. In the same train run, the drift-routing loop writes its rows before the culprit::record loop for red culprits. A PR that one bisect sub-train dropped for drift and another found red alone therefore has its stacked-diff-drift row overwritten by a Red row, which naming can clear. Also, record_drift is called with train=None, so the row loses the train number that red rows carry. Suggested follow-up.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T20:42:27.705647177Z
+  modified_at: 2026-11-26T20:42:27.705647177Z
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
