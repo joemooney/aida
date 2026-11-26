@@ -14,12 +14,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T19:22:14.575863783Z
+modified_at: 2026-11-26T19:22:17.125460607Z
 req_type: Bug
 tags:
 - lanes
 - mailbox
 - throughput
+comments:
+- id: 01a2194f-3dcc-7d73-8676-0d3a0a19f1a6
+  author: joe
+  content: 'ADVISOR DISPOSITION (2026-11-26 12:25): APPROVED (STANDARD). Binding additions: (a) the refusal names the unverified writer (pid, comm, exe path, sha, or ''(deleted)'') AND whether it is a writer on a deleted or stale binary; that is the likely cause after a binary switch (the same class as TASK-3919); (b) the retry is bounded (3 tries over about 5 min, jittered) and never retries past a refusal that names a LIVE unknown writer; that stays fail-closed with the named next step; (c) tests for the transient-then-verified and the persistent cases.'
+  created_at: 2026-11-26T19:22:17.125460607Z
+  modified_at: 2026-11-26T19:22:17.125460607Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
