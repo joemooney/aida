@@ -1,0 +1,47 @@
+id: 01a21827-404e-79f1-afcf-f9cda1b59a60
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-356
+title: 'Review PR-4659: [AI:claude] chore(store-writers): inventory the manual-train waiter record (BUG-2771)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21805`) for branch `train-fair-admission`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4659>
+  - Branch: `train-fair-admission` → `main`
+
+  ## Covers
+
+  - BUG-2771
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4659` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T13:59:15.278508458Z
+modified_at: 2026-11-26T13:59:19.134660220Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
+  created_at: 2026-11-26T13:59:19.134630069Z
+  created_by: dirtlab
+history:
+- id: 01a21827-5787-7f71-91c1-9b6d0db6d671
+  author: dirtlab
+  timestamp: 2026-11-26T13:59:21.223872449Z
+  session_id: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: f70a9b0f6fa8bbeab06c53b6df148d042dd850cc
+  branch: train-fair-admission
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4d918b2837
+  vendor: claude
+  session: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)

@@ -1,0 +1,48 @@
+id: 01a21826-a1b4-7ce2-b0c2-a64b4ae15a41
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-355
+title: 'Review PR-4658: [AI:claude] fix(mailbox): retention dry run uses agent gc''s owner-scoped leftover scan (TASK-3918)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a217f7`) for branch `retention-scoped-scan`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4658>
+  - Branch: `retention-scoped-scan` → `main`
+
+  ## Covers
+
+  - TASK-3918
+  - STORY-3143
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4658` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T13:58:34.676832389Z
+modified_at: 2026-11-26T13:58:39.142457869Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a217ed-5a36-72f1-9a8a-7f053c9b90d9
+  created_at: 2026-11-26T13:58:39.142426657Z
+  created_by: dirtlab
+history:
+- id: 01a21826-bdc4-7ec2-96db-73cbaaf42b6b
+  author: dirtlab
+  timestamp: 2026-11-26T13:58:41.860751338Z
+  session_id: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: c109abb9bb9edc5c08b007a32a37c03331936fff
+  branch: retention-scoped-scan
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4d918b2837
+  vendor: claude
+  session: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)

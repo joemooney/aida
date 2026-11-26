@@ -9,12 +9,12 @@ description: |
   - AC1: a manual train waiting on admission is admitted BEFORE the auto-train starts its NEXT train: FIFO across waiters, or the auto-train yields whenever a cooperative manual waiter is recorded.
   - AC2: the waiting manual train is visible in `aida advisor loops train-status` / `aida pr train --check` ("operator train for #N waiting since HH:MM; auto-train yields next").
   - AC3: a test: an auto-train finishing train A with a recorded manual waiter does not start train B until the manual train has run (or released).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T13:49:14.916527571Z
+modified_at: 2026-11-26T13:59:22.787255181Z
 req_type: Bug
 tags:
 - admission
@@ -25,6 +25,11 @@ relationships:
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T13:15:31.696678933Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21827-404e-79f1-afcf-f9cda1b59a60
+  created_at: 2026-11-26T13:59:22.787225612Z
+  created_by: dirtlab
 comments:
 - id: 01a21801-c7ed-7342-96b4-dca39e386dd9
   author: joe
@@ -88,6 +93,13 @@ comments:
   modified_at: 2026-11-26T13:49:14.916527571Z
   session_id: 01a21805300e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21826-ebf0-7180-8fba-6a761d04a94c
+  author: aida-publication-done
+  content: Implementer push f70a9b0f6fa8 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T13:58:53.680322908Z
+  modified_at: 2026-11-26T13:58:53.680322908Z
+  session_id: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
@@ -104,6 +116,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21826-ebf0-7180-8fba-6a64df8e9165
+  author: aida-publication-done
+  timestamp: 2026-11-26T13:58:53.680320954Z
+  session_id: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21827-6c3e-7d90-ba7c-0647eb87c1af
+  author: dirtlab
+  timestamp: 2026-11-26T13:59:26.526160513Z
+  session_id: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94

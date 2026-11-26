@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: the mail-retention dry run (`aida mailbox retention activate --dry-run`, activation.rs ~:234) uses the SAME scoped scan as agent gc, so it stops reporting a live owner's leftovers as reapable (it reported 460 leftovers while lanes ran on 2026-11-25).
   - AC2: a lane's exit-time mail retention no longer refuses with "the fresh writer-admission scan could not verify every mail writer" because of leftovers that belong to dead owners; a test.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:56:00.822526486Z
-modified_at: 2026-11-26T13:22:27.399985663Z
+modified_at: 2026-11-26T13:59:20.853297001Z
 req_type: Task
 tags:
 - agents
@@ -54,6 +54,29 @@ comments:
   modified_at: 2026-11-26T13:22:27.399985663Z
   session_id: 01a217f774a0
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21825-b9d9-7ab0-8b8f-80e10c73a41a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e9476f5144 (git diff origin/main...HEAD, 6 files, +145/-17).
+
+    Acceptance evidence:
+    - AC1 [behavioral]: dry_run_report/record now take a leftovers::Scope (aida-core/src/mailbox_lifecycle/activation.rs dry_run_report_at -> scan_scoped_at); CLI builds it via the shared agent_registry_root::with_leftover_scope (same LeftoverOwners probe agent gc uses) in mailbox_cmd print_retention_report and record_retention_activation. Tests: leftovers_tests::task3918_retention_dry_run_holds_a_live_owners_leftovers (live owner -> held, not reapable; dead -> reapable, nothing removed) and story_1843_c2_refusal_tests::task3918_retention_report_keeps_held_leftovers_out_of_the_reapable_count. Both pass (aida-core mailbox_lifecycle 190/190; aida-cli-lib story_1843_c2 18/18).
+    - AC2 [behavioral]: message_state_tests::task3918_dead_owner_leftovers_do_not_refuse_retirement: retirement with an empty tomb and creator staging beside the mailbox retires under an admitting fresh scan. Finding: fresh_scan_admits is a /proc writer scan only and never read leftovers, so no code change was needed on the exit path; the observed WriterAdmissionUnknown refusals come from unverified writer processes. The dry run previously blamed leftovers (460) and now reports only dead-owner ones as reapable.
+
+    Probes: 1 consistency - one helper feeds both surfaces, so gc and the dry run agree. 3 multiplicity - 0 held prints no line; N held prints one count. 5 authority - report-only, more conservative (unknown is held); no refusal path weakened, no test removed. make check-ci-fast exit 0.
+    Residual risks: record() now probes leases/processes for leftovers it does not use in the decision (small cost). leftovers::scan (unscoped) remains public for other callers.
+  created_at: 2026-11-26T13:57:35.321664212Z
+  modified_at: 2026-11-26T13:57:35.321664212Z
+  session_id: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21826-17b5-72c0-bbd5-385d252a8e22
+  author: aida-publication-done
+  content: Implementer push c109abb9bb9e declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T13:57:59.349501356Z
+  modified_at: 2026-11-26T13:57:59.349501356Z
+  session_id: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217f0-aaf8-75e3-aea2-15ed1f819cb4
   author: joe
@@ -70,6 +93,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21826-17b5-72c0-bbd5-38491fef1ad2
+  author: aida-publication-done
+  timestamp: 2026-11-26T13:57:59.349498772Z
+  session_id: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21827-5fb4-72d1-b910-3e54e197b34f
+  author: dirtlab
+  timestamp: 2026-11-26T13:59:23.316079170Z
+  session_id: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
@@ -78,3 +116,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 15bbbc68222
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T13:59:20.853297001Z
+  implemented_by: dirtlab
