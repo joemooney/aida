@@ -10,12 +10,12 @@ description: |
   - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
   - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
   - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T10:55:27.603072006Z
+modified_at: 2026-11-26T10:59:59.695172133Z
 req_type: Story
 tags:
 - planning
@@ -208,6 +208,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21783-224f-7930-a1a7-afbce89829e5
+  author: aida-session-start
+  timestamp: 2026-11-26T10:59:59.695170501Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
