@@ -5066,6 +5066,13 @@ pub(crate) fn explicit_over_max_refusal(
     })
 }
 
+/// Keep the first `max` (at least one) of the ordered `members` for this
+/// train and return the rest, in order, to wait for the next one.
+// trace:TASK-3912 | ai:claude
+pub(crate) fn split_bounded_train<T>(members: &mut Vec<T>, max: usize) -> Vec<T> {
+    members.split_off(max.max(1).min(members.len()))
+}
+
 /// `aida pr train`.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
@@ -5313,8 +5320,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     }
     let order = overlap::order(&files);
     members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
-    let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
-    members.truncate(opts.max.max(1));
+    let waiting: Vec<u64> = split_bounded_train(&mut members, opts.max)
+        .iter()
+        .map(|m| m.pr)
+        .collect();
     member_reviews.retain(|(pr, _)| members.iter().any(|m| m.pr == *pr));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
@@ -5509,12 +5518,16 @@ pub(crate) fn advisor_train_handler() -> Result<()> {
     }
     ADVISOR_LOOP.with(|v| v.set(true));
     let _reset = Reset;
+    // `[landing] max_prs_per_train` bounds the automatic train only; an
+    // explicit `aida pr train` keeps its own --max. trace:TASK-3912 | ai:claude
+    let main_worktree = crate::main_worktree_root_from(&crate::find_project_root()?);
+    let max = crate::landing_policy::load_reporting(&main_worktree).auto_train_max();
     pr_train_handler(&TrainOptions {
         prs: &[],
         all_ready: true,
         dry_run: false,
         local_ci: None,
-        max: 10,
+        max,
         no_pull: true,
     })
 }
