@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T08:29:13.653206953Z
+modified_at: 2026-11-26T08:29:15.771234684Z
 req_type: Bug
 tags:
 - admission
@@ -28,6 +28,12 @@ comments:
   content: 'Correction: the first incident date is 2026-11-25 20:00-20:11 (not 2025). The holder pid 293658 is `aida advisor loops train-worker`, started 2026-11-26 01:11:30.'
   created_at: 2026-11-26T08:29:13.653206953Z
   modified_at: 2026-11-26T08:29:13.653206953Z
+history:
+- id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
+  author: joe
+  timestamp: 2026-11-26T08:29:15.899926436Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
   branch: main
