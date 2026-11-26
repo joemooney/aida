@@ -94,7 +94,10 @@ pub(crate) fn handle_report_command(
         ),
         // trace:STORY-3143 | ai:claude
         // The global `--format json` reaches here as `--json` (BUG-1502 gate).
-        Some(ReportCommand::Backlog { json }) => backlog_report::handle_backlog(storage, *json),
+        Some(ReportCommand::Backlog {
+            json,
+            report_format,
+        }) => backlog_report::handle_backlog(storage, *json, report_format),
         Some(ReportCommand::AiIntegration {
             format,
             output,
