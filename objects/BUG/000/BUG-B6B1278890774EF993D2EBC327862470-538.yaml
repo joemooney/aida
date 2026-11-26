@@ -10,12 +10,12 @@ description: |
   - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
   - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
   - AC4: tests for each AC.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T18:40:32.691554246Z
+modified_at: 2026-11-26T19:27:20.088748074Z
 req_type: Bug
 tags:
 - landing
@@ -38,6 +38,13 @@ history:
   author: joe
   timestamp: 2026-11-26T18:38:47.700595512Z
   changes: []
+- id: 01a21953-9e18-7c03-bada-405633a09cae
+  author: aida-session-start
+  timestamp: 2026-11-26T19:27:20.088746364Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
