@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T15:11:49.098293574Z
+modified_at: 2026-11-26T15:36:54.543054879Z
 req_type: Bug
 tags:
 - leases
@@ -149,6 +149,12 @@ comments:
   created_at: 2026-11-26T15:23:27.745043438Z
   modified_at: 2026-11-26T15:23:27.745043438Z
   session_id: 01a2186f32f3
+- id: 01a21880-a80f-7dc0-a607-ebfc439ebfe2
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2738-shelve-completed` at head `5a1122ae5b2334814944b81c225392581cc5ccb4`.'
+  created_at: 2026-11-26T15:36:54.543051637Z
+  modified_at: 2026-11-26T15:36:54.543051637Z
+  session_id: 01a218395b6c
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
