@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-26T19:12:24.885798705Z
+modified_at: 2026-11-26T19:18:07.128013819Z
 req_type: Task
 tags:
 - admission
@@ -33,6 +33,97 @@ relationships:
   target_id: 01a2184f-3bb1-71a3-bc25-7077aac7bbc8
   created_at: 2026-11-26T17:38:37.463025619Z
   created_by: joe
+comments:
+- id: 01a2194b-2e18-7e61-9e29-9be98bc8cbcb
+  author: dirtlab
+  content: |-
+    SKETCH: TASK-3920 resumable auto-train recovery (sketch only; no code, no PR). Reviewed against main 52ac09e8a4. It depends on BUG-2771's waiter record (`.aida/admission-owner/manual-train.waiter`, fresh port in flight, not yet on main), so the code lands after that.
+
+    ## 0. Where the wait is today
+    `run_passes` (advisor_loop_train.rs:303) takes the shared admission claim "legacy auto-train". Then `advisor_train_handler` → `pr_train_handler` → recovery block (pr_train.rs:5332) takes `journal::lock` (.aida/train/run.lock), `review_watch::train_members` and `merge_claim::claim_all`. Then `ForgeRails::resume_for` (pr_train_journal.rs:402), in the Negative/open branch, calls `self.test()` → `LiveTrainForge::wait_ci` → `wait_train_ci`, which polls for up to `ci_absolute_ceiling_secs`. That CI wait is the external (deputy-run) job. Everything above it is held for the whole wait, so once run.lock is held with no live train receipt, `acquire_mode` refuses review-watch with "prior train is not quiescent".
+    The park point is exactly that CI wait, and only in recovery. `land()`'s in-lease waits (hold-gate re-run, confirmation backoffs) are part of the decision and stay inside the locks; they are already bounded.
+
+    ## 1. Persisted recovery state
+    File: `<main>/.aida/train/recovery.parked`, a single slot (run.lock serializes trains, so at most one train is parked). The extension is neither `.json` nor `.step`, so `journal::entries`, `recovery_needed` and `peek` ignore it, and older binaries never read it.
+    Fields (`journal::Parked`, `deny_unknown_fields`, version 1):
+    - `version`, `token` (uuid)
+    - `branch` (journal entry name), `change_id` (train PR #), `step: "Ci"`
+    - `tip` (the train tip under test), `expected_main` (main tip at park time; must equal `entry.train.base`, otherwise we do not park: land would retire it, so we decide now)
+    - `member_heads: [(pr, head)]` from `entry.train.cars`
+    - `owner: ProcIdentity` (pid, start, boot, pidns of the auto-train)
+    - `position` = the `acquired_at` of the admission claim this pass took (the fairness position)
+    - `parked_at`, `deadline`, `expires_at`
+    Atomic write: tempfile `.tmp-<uuid>` in the same dir (no recognised extension), `write_all`, `sync_all`, rename, dir fsync, the same as `journal::save`. The write happens under the admission receipt serializer (`receipts.lock`), so an acquirer's check-then-claim is ordered against park and unpark. Readers: `journal::parked(dir) -> Result<Option<Parked>>`, plus `pr_train::parked_recovery(root)` for admission and status. Removal: `journal::unpark(dir, token)`, a token-checked remove plus fsync, also under the serializer.
+    Liveness and staleness use the intent rules (admission_owner.rs:723 `in_effect`): owner `Dead` → stale, removed by the reader. Past `expires_at` → ignored and removed. Dated further ahead than the max lifetime → ignored. `ForeignUnknown` → kept until expiry. Unparsable → ignored at once, removed after `UNPARSABLE_INTENT_GRACE`. The record never grants anything; it only withholds. So ignoring it can cost wasted CI, never an unsafe merge (see §6).
+
+    ## 2. Release points (in this order)
+    In `resume_for`, Negative + Open branch, before `self.test()`, and only when the port can park (`TrainForge::park_bound() -> Option<Duration>`, `Some` only for `LiveTrainForge` under `ADVISOR_LOOP` + `all_ready`; manual trains keep today's blocking wait):
+    1. Take one read-only CI snapshot (`observe_ci`). If it has already settled, decide now and do not park.
+    2. Still pending: `journal::park(&Parked{..})` under the serializer, while run.lock and the claim are still held.
+    3. Return the typed `RecoveryParked(Parked)` error. `pr_train_handler` propagates it before fresh selection. Unwinding drops `_recovery_claims`, `_recovery_reviews` and then `_recovery_lock` (run.lock released).
+    4. `run_passes` downcasts `RecoveryParked` and sets `admission = None` (claim released). Between 3 and 4 our live auto-train receipt still blocks trains, and after 4 the record does, so there is no window in which neither does.
+    The member-scoped review locks and merge claims are released too. Nothing is held in the gap, and re-validation covers what they protected.
+
+    ## 3. Bounded wait (outside every lock)
+    `advisor_loop_train::wait_parked(root, &Parked) -> ParkEnd { Settled, Deadline, Gone, Stop }`. It polls a read-only `train_ci_snapshot_at` every `TRAIN_CI_POLL_SECS` (10s). It does no journal writes (`ACTIVE` is cleared). Each poll also calls `train_service::check_controller`. Rotation or stop → `unpark` and return `Stop`: the journal stays, and the next controller recovers from forge truth.
+    Exits early when the record has disappeared (operator removed it or abandoned the journal) → `Gone`: the next pass runs without a ticket, as ordinary recovery.
+    `deadline = parked_at + min(ceiling remaining since the entry's Ci StepClock, MAX_WAIT_SECS = 3600s)`. `expires_at = deadline + wait_bound(root) + INTENT_SLACK_SECS`, capped at the intent max lifetime. This is the re-acquire grace: an owner that cannot get back in by then loses the slot.
+
+    ## 4. Re-acquire and re-validate
+    After `Settled` or `Deadline`, the loop keeps a `ResumeTicket{token, position}` and runs a normal iteration: `wanted()` is true (journal exists). Then `hold_admission` takes the ticket, calling `yield_reason_before(root, purpose, position)` and `admission_owner::resume_train(root, &ticket)`. Inside `acquire_mode`, a ticket that matches the live record (token + owner == self):
+    - passes the train-serialization check that the record imposes on others,
+    - ignores intents with `registered_at > position` and the BUG-2771 waiter when `since > position`,
+    - still honours an audited drain (operator wins; the record lapses at `expires_at`) and any intent or waiter dated before `position`. By construction none should exist, because the original Legacy acquire yielded to all of them.
+    The handler then re-takes run.lock (`TrainJournalBusy` here means a record-unaware older binary took it, which is drift), the review locks and the merge claims (a car another hand holds already refuses: "retained train is not resumed"). It then validates, under every lock, in `resume_for` for `entry.branch == parked.branch`:
+    - V1 the journal entry exists, `step == Ci`, `train.tip == parked.tip`, and the car heads equal `parked.member_heads`.
+    - V2 `fetch_main() == parked.expected_main`.
+    - V3 the train PR: `recover_change` is Open at `tip`, and `confirm_not_landed` is Negative.
+    - V4 each member's live head (`member_head`, confirmed) equals `parked.member_heads`.
+    All pass → `unpark`, then the decision: `test()` (returns at once on a settled CI), then `land()`. On `Deadline` with CI still pending → `unpark` and return `TrainCiUnavailable("CI did not settle while recovery waited")`. Members and journal are retained. The next pass parks again under a NEW claim, so a new position: a never-settling CI cannot starve manual trains.
+    Drift (any V fails) → `unpark`, log `recovery step abandoned: <what drifted>`, and RECOMPUTE: fall through to the unmodified forge-truth recovery, ignoring every parked field. Main moved → retire "Main moved while the recovery waited; the train rebuilds" (the `Landing::Stale` path), and this pass's fresh selection rebuilds through `admit_member`. A member head moved → the existing land re-gate ejects it (`journal::rejected` → Retire). PR closed or landed → the existing Closed / `finish_landed` branches. It never resumes blind.
+    Open question Q1 (below): `entry.matches(&candidates)` under `all_ready` needs the exact open-PR set, so a PR opened during the gap makes `resume_for` skip the journal. With a valid ticket I propose to match the parked entry by branch plus `member_heads` instead.
+
+    ## 5. Fairness position (BUG-2771)
+    Position = when this train first took admission. A manual train arriving in the gap is refused and records its intent and waiter record (`since > position`), so it queues behind the parked train. It does not jump ahead, and the parked train does not jump ahead of it either, because the parked train was first. After the decision the pass ends and the claim is dropped. On its next iteration the auto-train yields to the waiter before starting train B (BUG-2771's `hold_admission` → `yield_reason`), so the manual train runs next. A park that times out gives up its position (§4), which bounds the manual train's wait at one parked train's CI ceiling.
+
+    ## 6. Actors in the gap: what each may do, and why it is safe
+    `acquire_mode` gets one predicate, `parked_live = record in effect && owner alive && !ticket_matches`.
+    - **review-watch join** (Legacy, purpose ≠ auto-train): ADMITTED. run.lock is free, and `joining_train` is also true when `parked_live`. Safe: review controllers already coexist with live trains (BUG-2650), and they never merge. Anything they cause (a verdict change, a fixup push) is caught by V4 or by land's in-lease re-gate. They still yield to Exclusive intents as before. Their shared lock does not block our shared re-acquire.
+    - **manual `aida pr train`** (CooperativeTrain): REFUSED, `busy` naming "auto-train recovery of train PR #N parked since HH:MM (position HH:MM, expires HH:MM)". It waits its `wait_secs` with an intent and leaves the BUG-2771 waiter. Safe: no second train starts while the parked train's CI result would be invalidated, and it runs right after the decision (§5).
+    - **another auto-train pass**: the same process is inside `wait_parked`, so no pass runs. A second or rotated worker (Legacy "legacy auto-train") is REFUSED by `parked_live`, the same as by a live auto-train receipt today. If the owner died, the record is stale, and the new worker recovers from forge truth (V-independent).
+    - **land run / `aida pr ship`** (Exclusive): REFUSED (`parked_live` counts as train not quiescent, next to `admission_train_running`). They register an Exclusive intent; our ticket ignores it (it comes after the position), and they get in when the pass ends. Safe: no merge to main under a train being tested.
+    - **operator**: may abandon the journal (`aida pr train --abandon`), giving V1 drift or `Gone`; may delete the record (others are admitted; V2-V4 and land's lease re-gate keep the merge safe); may drain (the re-acquire waits, the record lapses at `expires_at`); may kill the worker (record dead). `train-status` and `pr train --check` show the parked line (holds no lock, the deadline, the position).
+    - **older binaries** do not know the record. Their manual train could run in the gap. It is still safe (V2 and the land re-gate); it only wastes our CI. Mixed-version is a residual risk, not a hazard.
+
+    ## 7. Failure modes
+    - Crash mid-wait: no locks are held. The record's owner is Dead → readers remove it, and the journal is recovered by the next pass from forge truth.
+    - Crash mid-park (before rename): no record, while we still hold run.lock and the claim. The process died, so those drop; the result is the same as a crash today.
+    - Crash after park, before releasing run.lock: the kernel drops the flock, and the record is dead.
+    - Stale record with a live but wedged owner: it lapses at `expires_at`, at most about 1h + `wait_secs` + 30s. Clock skew clamps as for intents.
+    - Malformed record: ignored and removed after grace (it fails open toward admission, which §6 shows is safe).
+    - Re-acquire refused until expiry: the record lapses, and the next pass is ordinary recovery with a new position.
+
+    ## 8. Test plan (aida-cli-lib unit/fixture; AC3 mapping)
+    - T1 (AC3a) `task3920_review_watch_admits_while_recovery_parked`: real `run_passes` with a fake pass that parks, and a CI fake that stays pending past a short deadline. During the wait `acquire(root,"review watch",true)` succeeds. `manual_train_admission(false)` (bound 0) and `land_admission` are refused naming the parked train. After the deadline the loop re-acquires despite a manual intent registered after the position.
+    - T2 (AC3b) main moved: `resume_for` with fake ports where `fetch_main` != expected → no `land`, a retire with the drift reason, record removed.
+    - T3 (AC3c) a member head moved → V4 drift → no merge, the land re-gate ejects it, record removed.
+    - T4 (AC3d) fairness: a manual waiter recorded in the gap does not block the resume, and after the decision the loop does not start train B until the manual train is admitted and released (extends the bug2771 loop test).
+    - T5 stale record: a dead owner, expired, malformed and future-dated record each lets a manual train through; a live record does not.
+    - T6 PR closed during the gap → the existing Closed branch, no land.
+    - T7 timeout: CI still pending at the deadline → TrainCiUnavailable, journal retained, the next park has a new position.
+
+    ## 9. Slice plan (each slice is its own PR, at most 300 lines)
+    - S1 (about 140 lines, Refs): the `Parked` type with park, read and unpark in pr_train_journal.rs; the `parked_live` predicate and ticket in `acquire_mode`, `yield_reason_before`, `resume_train` in admission_owner.rs; the train-status and `--check` line; tests T1 (admission half) and T5.
+    - S2 (about 160 lines, completing): the park point in `resume_for`, the `RecoveryParked` error, `wait_parked`, the ticket in `run_passes` and `hold_admission`, V1-V4 with drift → recompute; tests T1 (loop half), T2, T3, T4, T6, T7. `scripts/store-writers.toml` gets the new writer row.
+
+    ## Questions for the advisor
+    - Q1: Should a ticketed resume match the parked entry by branch plus `member_heads` instead of `entry.matches(all open PRs)`? The current all_ready match skips the journal whenever any PR opens during the gap.
+    - Q2: Scope is recovery only, as directed. A fresh train's first CI wait (pr_train.rs:5518 onward) holds the same locks; is the same mechanism for it a follow-up?
+    - Q3: Is it acceptable that a park that times out gives up its position (§4/§5), rather than keeping it across re-parks?
+  created_at: 2026-11-26T19:18:07.128013819Z
+  modified_at: 2026-11-26T19:18:07.128013819Z
+  session_id: 01a21945be5e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe
