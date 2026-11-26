@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T06:45:18.462751662Z
+modified_at: 2026-11-26T07:24:22.654646472Z
 req_type: Story
 tags:
 - landing
@@ -226,6 +226,23 @@ comments:
     A reference merge (commit 8a02ce6a0c89, `(Refs STORY-3131)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T06:45:18.462743128Z
   modified_at: 2026-11-26T06:45:18.462743128Z
+- id: 01a216bd-bafe-73b0-8bab-f7c73e606d5d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7f8ce28769 (S2, PR #4634, Refs STORY-3131)
+    Round-2 #4584 findings 1-5: already fixed on main via 0459cd01 before this branch. No dispute and no rework needed. This PR keeps them and their tests.
+    Acceptance evidence [behavioral-test]:
+    - (7) conflict without a repair lane → `aida rework SPEC`, or rebase when there is no spec. A repair lane (queued work or a retained implementer lease, via the shared stalled_reviews::ReworkLanes) suppresses the cause. Test: story_3131_s2_conflict_without_repair_lane.
+    - (5) green PR with no ledger verdict at the current head → review watch status / --release PR-N. This arm comes before the full-tier gap. Test: story_3131_s2_review_verdict_missing_at_head. Ledger selection moved to an AtHead enum (Approved/Missing/Settled); the existing latest-wins test was updated to it.
+    - (3) train lock held longer than lock_hold_minutes (default 20, validated) → names the pid and /proc cmdline, with action: inspect `aida pr train --status` and stop the pid if hung. A lock of unknown age or within the threshold leaves the first-pass cause. Red outranks the lock. Test: story_3131_s2_train_lock_held_past_threshold.
+    - Drafts and non-main bases are filtered out (deferred p3). The drought count needs approved+green+no gap+no conflict.
+    Validation: lane cargo test story_3131 + stalled_review: 14 passed. make check-ci-fast: exit 0, after renaming verdict_at_head→ledger_at_head because that name is a reserved dispatch-authority name (story_1888 ratchet).
+    Residual: (6) vendor outage skipped (no STORY-3134 record). AC-D → S3. StaleBase/WaitingForRun are still unreported. The holder role is not named. The shared forge listing now also requests mergeable (extra GraphQL cost). The diff is +311/−61, slightly over budget, mostly the moved ReworkLanes. The targeted test run predates the helper rename; the gate compiled and passed after it.
+  created_at: 2026-11-26T07:24:22.654646472Z
+  modified_at: 2026-11-26T07:24:22.654646472Z
+  session_id: 01a2168e8b00
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
