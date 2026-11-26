@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-26T01:36:55.937851501Z
+modified_at: 2026-11-26T02:10:21.936120712Z
 req_type: Bug
 tags:
 - landing
@@ -195,6 +195,22 @@ comments:
   modified_at: 2026-11-26T01:36:55.937851501Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2159e-3e70-74c3-ab78-d6cbbaa327af
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: efe4274970 (round 2, PR #4598)
+    - F1/F2: every patch-id git call (rev-list, log -p, patch-id) now goes through aida_core::git_ops::host_git_command, using command_output_with_timeout_capped (20s per call, tightened by the train's scoped deadline; 64 MiB cap on log -p, 4 MiB on listings). There is no raw Command::new("git") left in base_patch_equivalents.rs. log -p passes --no-textconv --no-ext-diff --no-renames --no-relative --full-index --binary --no-show-signature --no-prefix. Evidence: [behavioral-test] bug_2733_patch_id_read_never_runs_a_textconv_driver. The test configures diff.x.textconv plus .git/info/attributes, asserts the driver did not run, then proves the probe works by running a plain git log -p, which does run it.
+    - F3: [behavioral-test] bug_2733_distinct_binary_changes_do_not_collide.
+    - F6 (fail-safe): the base window is also hashed reversed (log -p -R, with --no-prefix so reversed diffs hash like forward ones). Any patch-id a base commit reverses is removed from on_base, so the branch commit is kept and stays gated. Evidence: [behavioral-test] bug_2733_a_change_reverted_on_base_is_not_already_on_base (dropped before the revert, kept after it).
+    - F4 (AC1, ship): [behavioral-test] bug_2733_ship_gate_reads_only_the_new_commits_spec runs pr_service::ship_gate_spec_records on a promotion-shaped repo with a seeded store and gets back only BUG-3.
+    - F5 (AC2): [behavioral-test] bug_2733_train_refusal_names_only_the_new_commits_spec goes member_body -> member_spec_ids -> ship_gate_spec_records_for_ids -> member_spec_policy_refusal, with every spec unset. The refusal starts 'BUG-3 is marked unset (supervised): its merge needs a human' and names neither BUG-1 nor STORY-2. member_body was made pub(crate) for this test.
+    - Validation: cargo test bug_2733: 8/8 pass. pr_train + task_3792: 293 pass. make check-ci-fast: exit 0. TASK-3792 code is untouched.
+    - Residual risks: revert detection only catches exact inverse patches from non-merge commits inside the 2000-commit base window. A partial revert, or a revert made as a merge commit, is not detected, so the commit is treated as on base. History over the output cap or timeout fails safe: every commit is kept.
+  created_at: 2026-11-26T02:10:21.936120712Z
+  modified_at: 2026-11-26T02:10:21.936120712Z
+  session_id: 01a21581b9b0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
