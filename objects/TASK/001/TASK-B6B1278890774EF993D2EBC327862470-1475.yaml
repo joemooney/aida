@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T02:26:17.107588166Z
+modified_at: 2026-11-26T02:35:32.852342826Z
 req_type: Task
 tags:
 - landing
@@ -57,6 +57,20 @@ comments:
     - Should an operator `aida pr train --all-ready` without --max also honour the knob? Taking the spec literally: only the automatic train; the operator flag keeps its explicit default.
   created_at: 2026-11-26T02:26:17.107588166Z
   modified_at: 2026-11-26T02:26:17.107588166Z
+  session_id: 01a215aaf8ca
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a215b5-4c74-7d00-a8a3-313de334b41c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ecacc1b8b9
+    - AC1 [behavioral]: `[landing] max_prs_per_train` parsed in landing_policy.rs (positive integer; unset/0/negative/string -> default 10 with a warning, origin Invalid); advisor_train_handler (pr_train.rs, the automatic all-ready train) resolves max from the trusted default-branch policy via auto_train_max(). Explicit `aida pr train N...` and dispatch_flow keep their own max. Registered as a read-only KnobSpec + config show row; documented in docs/configuration-guide.md. Test: landing_policy max_prs_per_train_caps_the_auto_train_and_defaults_to_today.
+    - AC2 [behavioral]: bounded split extracted to split_bounded_train; test pr_train::tests::max_prs_per_train_admits_three_now_and_the_next_three_next_pass (6 ready -> 3 admitted, 3 waiting in order; next pass admits the next 3; unset keeps all 6; max 0 still admits 1). Lane run: 63 passed, 0 failed.
+    - AC3: deferred to follow-up per brief (config value not set here).
+    - Probes: key name consistent across parser/knob/show row; TOML inline comment covered in test; float/string values rejected; 0/1/N members handled by split (split_off clamped). Policy read fails safe to today's cap (10), not to unbounded. No tests weakened.
+    - Residual: the 'wait for the next train (--max N)' line names --max even for the automatic train; cosmetic.
+  created_at: 2026-11-26T02:35:32.852342826Z
+  modified_at: 2026-11-26T02:35:32.852342826Z
   session_id: 01a215aaf8ca
   harness_version: 2.1.319 (Claude Code)
 history:

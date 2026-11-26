@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T01:51:46.906577705Z
-modified_at: 2026-11-26T02:04:57.309117964Z
+modified_at: 2026-11-26T02:39:47.698939694Z
 req_type: Bug
 tags:
 - landing
@@ -56,6 +56,24 @@ comments:
     - Culprit attribution: only a member red ALONE on main is recorded (a multi-member red names no single culprit). Operator clearance reuses explicit `aida pr train <PR>` rather than a new flag.
   created_at: 2026-11-26T02:04:57.309117964Z
   modified_at: 2026-11-26T02:04:57.309117964Z
+  session_id: 01a215928946
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a215b9-2ff2-7ea3-94e4-9777b575bab2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 25b271ac99 (git diff origin/main...HEAD).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: `pr_train_culprit.rs` records (PR, head, train #) for a member red alone on main (`drive_into` → `Outcome.culprits`, recorded in `pr_train_handler` under the train journal lock). `culprit_admission` refuses a swept-in PR at the same head (`held: culprit of train #N at <sha>`), admits a new head, and treats naming the PR on `aida pr train <PR>` as the recorded clearance (`cleared_by`). `--check` reports gate `culprit-hold`. Tests: `pr_train::culprit::tests::bug2767_same_head_is_held_new_head_and_clearance_are_not`, `bug2767_unreadable_record_fails_closed`, `pr_train::tests::bug2767_a_culprit_is_not_readmitted_at_the_same_head`.
+    - AC2 [behavioral-test]: `Rails::drained()` is checked before every wave in `drive_into`; ForgeRails reads `admission_drain::active` for the auto-train only (unreadable = drained, fail closed). Waiting groups are ejected with a re-train reason; nothing in flight is cancelled. Test: `pr_train::tests::bug2767_a_drain_blocks_the_bisect_follow_up_trains`.
+    - Targeted run: `cargo test --profile agent -p aida-cli-lib --lib -- pr_train` 296 passed, 0 failed.
+
+    Probe findings and fixes: a named `--dry-run` would have written a clearance; it now writes nothing. A raw `USER` env read tripped the ExecContext ratchet; switched to `kernel::current_user_id`. Five new store-writer rows were classified as a runtime sidecar.
+
+    Residual risks: `ForgeRails::drained` has no direct test (needs the live forge ports); the drive test covers the wave logic. Only a member red ALONE is recorded as a culprit, so a pass that stops mid-bisect records none. Clearance runs before the journal lock, so a concurrent record can race it (last writer wins). The diff is ~320 lines including tests and inventory, over the 250 budget.
+  created_at: 2026-11-26T02:39:47.698939694Z
+  modified_at: 2026-11-26T02:39:47.698939694Z
   session_id: 01a215928946
   harness_version: 2.1.319 (Claude Code)
 history:
