@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T01:51:46.906577705Z
-modified_at: 2026-11-26T02:52:00.763735485Z
+modified_at: 2026-11-26T03:15:27.307171597Z
 req_type: Bug
 tags:
 - landing
@@ -83,6 +83,12 @@ comments:
   modified_at: 2026-11-26T02:52:00.763734753Z
   session_id: 01a215928946
   harness_version: 2.1.319 (Claude Code)
+- id: 01a215d9-d5cb-74d0-acf9-75271f4ff09f
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `fix-train-culprit-readmit` at head `f7538e24f20a874b18dea010f8fb2bc85be59679`.'
+  created_at: 2026-11-26T03:15:27.307166830Z
+  modified_at: 2026-11-26T03:15:27.307166830Z
+  session_id: 01a215928946
 history:
 - id: 01a2158d-6dba-7bd1-8dba-7274f499fa62
   author: joe
