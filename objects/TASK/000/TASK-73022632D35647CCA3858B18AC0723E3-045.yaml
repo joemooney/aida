@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:31:04.331376844Z
-modified_at: 2026-11-26T00:03:28.347004045Z
+modified_at: 2026-11-26T00:03:59.182955550Z
 req_type: Task
 tags:
 - from-advisor:STORY-3076
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-11-26T00:03:28.347004045Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2152a-cb42-7383-8d5c-c5de5e0b78b4
+  author: joe
+  content: 'FOLLOW-UP (advisor 17:06, not a lane instruction): extend the screened credential set to .npmrc, .cargo/credentials(.toml), .vault-token and terraform credential/token files (credentials.tfrc.json) in one small later slice.'
+  created_at: 2026-11-26T00:03:59.182955550Z
+  modified_at: 2026-11-26T00:03:59.182955550Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20c83-b64f-7602-98cc-554db51f875e
   author: joe
