@@ -1,5 +1,6 @@
 id: 01a219bf-9d01-7c10-ac85-33768eacd81e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-372
+agreed_id: STORY-3197
 title: 'Review PR-4688: [AI:claude] fix(review-watch): a paused or capped watcher never reclaims; a capped PR surfaces with a next step (TASK-3921)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2198c`) for branch `task-3921-rw-reclaim-guard`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-26T21:25:24.114823876Z
   session_id: 01a2198cd2c9
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a219ef-d0b8-74f2-b458-6059f9b3e9ee
+  author: joe
+  timestamp: 2026-11-26T22:17:56.664646249Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 34653344c1e77b4260ca91a7b493588aae96dd19
