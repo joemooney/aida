@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T12:07:35.163162702Z
+modified_at: 2026-11-26T12:14:27.770513697Z
 req_type: Story
 tags:
 - integration
@@ -1074,6 +1074,11 @@ comments:
   modified_at: 2026-11-26T12:07:35.163162702Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a217c7-4fba-7b51-a25c-b10f841a6038
+  author: joe
+  content: 'DEFERRED from the independent review of #4650 S4 @ 1579ec87 (advisor-122 2026-11-26 05:17): (2, minor) the opposing-vendor pick trusts [AI:<tool>] COMMIT TAGS, which the PR controls, so a forged tag can defeat the opposition. With D1 annotation-only this can only weaken WHICH vendor challenges, never turn a gate green. FOLLOW-UP: derive authorship from TRUSTED metadata (lane/seat records, forge PR author) and treat tags as advisory. (4, cosmetic) under AIDA_REVIEW_RUNNER_CMD with --agent, the bundle and markdown name the wrong challenger vendor. (5, cosmetic) AdversarialSummary lacks finder_effort (asked for in comment 16), so asymmetric-effort runs cannot be audited.'
+  created_at: 2026-11-26T12:14:27.770513697Z
+  modified_at: 2026-11-26T12:14:27.770513697Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
