@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T21:35:55.506408051Z
+modified_at: 2026-11-26T22:48:42.070327866Z
 req_type: Task
 tags:
 - deputy
@@ -155,6 +155,26 @@ comments:
     - Local agent-profile timings differ from CI debug/nextest; the entry uses local measurements scaled by CI evidence (30.1s) where needed?
   created_at: 2026-11-26T21:35:55.506408051Z
   modified_at: 2026-11-26T21:35:55.506408051Z
+  session_id: 01a219c6b4dc
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21a0b-f956-7c03-a251-8f083458bdb2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7498cace94 (r1 delta: scripts/test-time-budget.toml only).
+
+    Acceptance evidence: AC1-AC4 are unchanged from the reviewed r0 (deputy_shell runner/tests). r1 addresses only the CI test-timings gate.
+
+    Probe findings:
+    - P1 cross-reference: the key `aida-cli-lib codex_tool_env::tests::bug_2398_final_spawn_boundary_ratchet` matches the gate message byte for byte (binary id + test path).
+    - P2 format: the TOML parses (tomllib reads 40 under [budget]). The entry sits in [budget], not in the trailing per-module tables.
+    - P3/P4: there is one CI sample (30.1s), so it is used as the p90; 40s gives about 33% headroom. Nothing is weakened: no test removed or ignored, and default_limit is untouched.
+
+    Timings, same host, 3 runs each (agent profile): main 7.95/7.57/5.27s, branch 7.76/8.14/7.42s. Noise, so not a regression from this PR.
+    make check-ci-fast: exit 0 via the lane runner.
+    Residual risk: the ratchet stays near the limit for untouched-file runs (30s x3 factor tolerates that). A speedup is requested on BUG-2398.
+  created_at: 2026-11-26T22:48:42.070327866Z
+  modified_at: 2026-11-26T22:48:42.070327866Z
   session_id: 01a219c6b4dc
   harness_version: 2.1.319 (Claude Code)
 history:
