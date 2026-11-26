@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T16:42:17.267226334Z
+modified_at: 2026-11-26T16:43:58.439122132Z
 req_type: Story
 tags:
 - integration
@@ -1274,6 +1274,26 @@ comments:
      (G) From the #4665 review @0a308f7d (fold into A+B+E): a fake-gh argv test that a PINNED client (GitHubForge::for_review with metadata_repo set) adds `-R <repo>` to `gh pr comment`; and cut_balanced also tracks ~~~ tilde fences (and doesn't treat an inline ``` at a line start as a fence opener), with a test.
   created_at: 2026-11-26T16:41:29.724664722Z
   modified_at: 2026-11-26T16:41:29.724664722Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a218be-4ddb-7b51-8ba4-76dcc785d390
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:43):
+    # STORY-3120 S5b: the rest of S5 (product-15 2026-11-26; S5a #4665 merged to integration). Lane: CLAUDE. STRICT (forge-posting + challenger selection). INTEGRATION, NEW branch int-story-3120-s5b (cut from the integration tip AFTER #4665 merged). Title "[AI:claude] feat(review): S5b challenger override, literal pathspecs, posting deadline, docs (Refs STORY-3120)". S6-S10 follow, so this does NOT complete the story. <=300 lines. SPLIT RULE (integration-30 09:31): do A, B and E FIRST (small, security-relevant). If the diff would pass ~300 lines with C, D and F, ship A+B+E as S5b and list C+D+F under "Still to do in S5c" in the PR body. Do NOT rebase onto main.
+    READ: `aida show STORY-3120 --comments` (the slice plan, the BINDING S5 AC, the S3/S4 security ACs, the S5a re-check notes) and .aida/tmp/brief-STORY-3120-S5.md items (4)-(7); #4665's body lists what remains.
+    SCOPE:
+     (A) BINDING (advisor-122 09:25, via integration-30 09:27): gh_stdin runs under gh()'s forge deadline (deadline_output/output_before, with the process group killed), or a fixed post timeout when none is set. A hung gh never blocks --post-comment. TEST with a sleeping fake gh.
+     (B) S5 item (7) BINDING: every git pathspec built from repo-controlled paths (including the rename old path passed to git diff) uses --literal-pathspecs (or :(literal)). TEST: files named `.e*`, `a[b]` and `x?` are matched literally.
+     (C) S5 item (5): a `--challenger-agent <vendor>` operator OVERRIDE (validated against the vendor allowlist, operator flag only, never from repo config). When the picked challenger vendor is UNAUTHENTICATED or RATE-LIMITED, detect it and fall back to another vendor, or refuse with a clear cause. A forged [AI:<tool>] tag must not help. TEST.
+     (D) S5 item (6): rename old-path filtering applies ALL inventory exclusions, not just credentials (defence in depth; classify_compiled already covers it). TEST.
+     (E) Nit from the S5a pre-check: code-span spec IDs and playbook titles in the rendered bundle.
+     (F) S5 item (4) DOCS: showcase slide 07 / review docs cover --run-review, --adversarial, --effort and --challenger-effort (resolution order flag > AIDA_REVIEW_EFFORT > review-rules default_effort > the [agents] seat effort; the allowlists), --challenger-agent, --fail-on with refuted findings still counting, and --post-comment's opt-in rule and 60k cap. No nested lists, no *italics*.
+    NOTE: BUG-2775 (main) fixes --run-review error reporting and the 15-min claude batch. Do not duplicate it here; if you hit it, cite it.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+     (G) From the #4665 review @0a308f7d (fold into A+B+E): a fake-gh argv test that a PINNED client (GitHubForge::for_review with metadata_repo set) adds `-R <repo>` to `gh pr comment`; and cut_balanced also tracks ~~~ tilde fences (and doesn't treat an inline ``` at a line start as a fence opener), with a test.
+  created_at: 2026-11-26T16:43:58.439122132Z
+  modified_at: 2026-11-26T16:43:58.439122132Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
