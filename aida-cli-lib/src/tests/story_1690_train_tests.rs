@@ -340,6 +340,11 @@ struct Script {
     told: Vec<u64>,
     /// A drain is active once this many trains have been tested.
     drain_after: Option<usize>,
+    /// (PR, new head): the PR's live head once any train has been tested.
+    // trace:TASK-3913 | ai:claude
+    moved: Vec<(u64, String)>,
+    /// Every built train, as `test` saw it (train bodies render from it).
+    built: Vec<Built>,
 }
 
 fn prs(ms: &[Member]) -> Vec<u64> {
@@ -371,6 +376,7 @@ impl Rails for Script {
             .map(|t| {
                 let ids = prs(&t.members());
                 self.tested.push(ids.clone());
+                self.built.push(t.clone());
                 if self.infra_runs > 0 {
                     self.infra_runs -= 1;
                     return CiVerdict::InfraRed(
@@ -423,6 +429,54 @@ impl Rails for Script {
     fn train_id(&self, train: &Built) -> Option<u64> {
         Some(9000 + train.cars.len() as u64)
     }
+    fn member_head(&mut self, pr: u64) -> Option<String> {
+        let moved = self.moved.iter().find(|(p, _)| *p == pr);
+        let now = moved
+            .filter(|_| !self.tested.is_empty())
+            .map(|(_, h)| h.clone());
+        now.or_else(|| Some(ms(&[pr])[0].head.clone()))
+    }
+}
+
+/// TASK-3913 AC1-AC3: a member whose head moved after the parent train was
+/// built is dropped from the bisect half as superseded, named in the half's
+/// train body, and never tested; the remaining members are still tested.
+// trace:TASK-3913 | ai:claude
+#[test]
+fn task3913_a_bisect_half_drops_a_member_whose_head_moved() {
+    let new_head = "cd340a59".repeat(5);
+    let mut rails = Script {
+        bad: vec![2],
+        moved: vec![(2, new_head.clone())],
+        ..Script::default()
+    };
+    let out = drive(&mut rails, ms(&[1, 2, 3, 4])).unwrap();
+    assert_eq!(rails.tested[0], vec![1, 2, 3, 4]);
+    assert!(
+        rails.tested[1..].iter().all(|t| !t.contains(&2)),
+        "the superseded head is never re-tested: {:?}",
+        rails.tested
+    );
+    // [1] lands first, so [3, 4] goes stale once and is rebuilt.
+    assert_eq!(rails.tested[1..3], [vec![1], vec![3, 4]]);
+    assert_eq!(rails.landed, vec![vec![1], vec![3, 4]]);
+    assert!(out.culprits.is_empty(), "not a culprit: {:?}", out.culprits);
+    assert_eq!(prs_of(&out.ejected), vec![2]);
+    let old = short(&ms(&[2])[0].head).to_string();
+    let reason = &out.ejected[0].reason;
+    let named = format!("superseded: head moved {old} → {}", short(&new_head));
+    assert!(reason.starts_with(&named), "{reason}");
+    assert!(reason.contains("normal admission"), "{reason}");
+    assert_eq!(rails.told, vec![2]);
+    let half = rails
+        .built
+        .iter()
+        .find(|b| prs(&b.members()) == [1])
+        .unwrap();
+    let body = train_pr_body(half);
+    assert!(body.contains(&format!("#2 {named}")), "{body}");
+    // The members line stays last, naming only the tested member.
+    assert!(body.ends_with(&format!("\n{}\n", members_line(&half.cars))));
 }
 
 /// BUG-2767 AC2: a drain that starts after a red train's CI finished
