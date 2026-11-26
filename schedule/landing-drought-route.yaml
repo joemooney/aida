@@ -2,6 +2,6 @@ job: landing-drought-route
 due_since: 2026-11-26T06:42:42.582579708Z
 due_reason: on CronJobFailed:landing-drought
 due_failure:
-  trip_id: landing-drought@2026-11-26T15:00:03.178476577Z
+  trip_id: landing-drought@2026-11-26T15:18:24.677621467Z
   job: landing-drought
   error: 'exit 1: '
