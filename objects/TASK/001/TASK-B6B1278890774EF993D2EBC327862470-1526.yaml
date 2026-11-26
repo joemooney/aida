@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-26T19:18:07.128013819Z
+modified_at: 2026-11-26T19:19:32.114169543Z
 req_type: Task
 tags:
 - admission
@@ -124,6 +124,12 @@ comments:
   modified_at: 2026-11-26T19:18:07.128013819Z
   session_id: 01a21945be5e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2194c-7a12-7672-a5c0-d1250078536e
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1526` at head `52ac09e8a4dc29914de5e6bde56d88d019c1c7fc`.'
+  created_at: 2026-11-26T19:19:32.114163782Z
+  modified_at: 2026-11-26T19:19:32.114163782Z
+  session_id: 01a21945be5e
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe
