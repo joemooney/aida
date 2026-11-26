@@ -15,13 +15,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T08:25:33.453173985Z
+modified_at: 2026-11-26T08:29:13.653206953Z
 req_type: Bug
 tags:
 - admission
 - landing
 - throughput
 - train
+comments:
+- id: 01a216f9-1a35-7ff2-b62e-26e318cef0da
+  author: joe
+  content: 'Correction: the first incident date is 2026-11-25 20:00-20:11 (not 2025). The holder pid 293658 is `aida advisor loops train-worker`, started 2026-11-26 01:11:30.'
+  created_at: 2026-11-26T08:29:13.653206953Z
+  modified_at: 2026-11-26T08:29:13.653206953Z
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
   branch: main
