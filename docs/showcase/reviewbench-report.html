@@ -224,7 +224,44 @@
     .bar-fill.blue { background: var(--blue); }
 
     .beta-controls { display: flex; gap: 8px; flex-wrap: wrap; }
-    .pr-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .pr-tabs {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      background: var(--bg-panel);
+      border-bottom: 2px solid var(--line);
+      margin: -26px -26px 22px -26px;
+      padding: 12px 20px 0 20px;
+    }
+    .pr-tabs .tab-kicker {
+      font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.9px; color: var(--ink-secondary);
+      display: inline-flex; align-items: center; padding: 0 10px 10px 4px;
+      font-weight: 600;
+    }
+    .pr-tabs .btn-ghost {
+      border: 1px solid transparent;
+      border-bottom: 0;
+      border-radius: 4px 4px 0 0;
+      padding: 10px 16px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-secondary);
+      background: transparent;
+      position: relative;
+      bottom: -2px;
+      transition: all 0.15s ease;
+    }
+    .pr-tabs .btn-ghost:hover {
+      color: var(--ink);
+      background: rgba(196, 69, 28, 0.06);
+    }
+    .pr-tabs .btn-ghost.active {
+      background: var(--bg-elevated);
+      color: var(--accent);
+      border-color: var(--line);
+      border-top: 3px solid var(--accent);
+      border-bottom: 2px solid var(--bg-elevated);
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+    }
     .pr-panel { display: none; }
     .pr-panel.active { display: block; }
 
@@ -721,17 +758,19 @@
         <div class="section-num">03 / PER-PR GOLDEN-SET MAPPING &amp; CHALLENGER AUDIT</div>
         <h2>Every Confirmed Finding &amp; Challenger Dismissal vs. Ground Truth</h2>
       </div>
-      <div class="pr-tabs" role="tablist">
+    </div>
+
+    <div class="card">
+      <div class="pr-tabs" role="tablist" aria-label="Select Pull Request">
+        <span class="tab-kicker">Select Benchmark PR:</span>
         <button class="btn-ghost active" type="button" data-pr="pr9">[9] Go · gh-copilot-review#9</button>
         <button class="btn-ghost" type="button" data-pr="pr4">[4] Python · aafactory#17</button>
         <button class="btn-ghost" type="button" data-pr="pr0">[0] TypeScript · TechDebtMCP#135</button>
         <button class="btn-ghost" type="button" data-pr="pr15">[15] Rust · chronicle#14</button>
       </div>
-    </div>
 
-    <!-- PANEL: PR 9 (GO) -->
-    <div class="pr-panel active" id="panel-pr9">
-      <div class="card">
+      <!-- PANEL: PR 9 (GO) -->
+      <div class="pr-panel active" id="panel-pr9">
         <div class="card-header">
           <div>
             <h3 class="card-title">[9] <code>k1LoW/gh-copilot-review#9</code> (Go) — 100% Grounded Precision, 100% High-TP Recall</h3>
@@ -790,11 +829,9 @@
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- PANEL: PR 4 (PYTHON) -->
-    <div class="pr-panel" id="panel-pr4">
-      <div class="card">
+      <!-- PANEL: PR 4 (PYTHON) -->
+      <div class="pr-panel" id="panel-pr4">
         <div class="card-header">
           <div>
             <h3 class="card-title">[4] <code>AA-Factory/aafactory-prototype#17</code> (Python) — 100% Grounded Precision, 0 Human/LLM Golden FPs Hit</h3>
@@ -841,11 +878,9 @@
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- PANEL: PR 0 (TYPESCRIPT) -->
-    <div class="pr-panel" id="panel-pr0">
-      <div class="card">
+      <!-- PANEL: PR 0 (TYPESCRIPT) -->
+      <div class="pr-panel" id="panel-pr0">
         <div class="card-header">
           <div>
             <h3 class="card-title">[0] <code>PierreJanineh/TechDebtMCP#135</code> (TypeScript) — 100% Grounded &amp; Augmented Precision, 100% High-TP Recall</h3>
@@ -910,11 +945,9 @@
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- PANEL: PR 15 (RUST) -->
-    <div class="pr-panel" id="panel-pr15">
-      <div class="card">
+      <!-- PANEL: PR 15 (RUST) -->
+      <div class="pr-panel" id="panel-pr15">
         <div class="card-header">
           <div>
             <h3 class="card-title">[15] <code>mheuss/chronicle#14</code> (Rust) — Conditional Security Facets &amp; Deep Storage Audit</h3>
@@ -1057,16 +1090,18 @@
         <div class="section-num">05 / LIVE <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">REVIEW-BENCH.AI ↗</a> LEADERBOARD COMPARISON</div>
         <h2>How AIDA Stacks Up Against Published <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> Agents</h2>
       </div>
-      <div class="pr-tabs" role="tablist">
+    </div>
+
+    <div class="card">
+      <div class="pr-tabs" role="tablist" aria-label="Select Severity View">
+        <span class="tab-kicker">Severity Filter View:</span>
         <button class="btn-ghost active" type="button" data-lb="high">High-Severity (Default Leaderboard View)</button>
         <button class="btn-ghost" type="button" data-lb="hm">High + Medium Severity</button>
         <button class="btn-ghost" type="button" data-lb="all">All Severities (Unfiltered)</button>
       </div>
-    </div>
 
-          <!-- LB VIEW 1: HIGH SEVERITY (DEFAULT) -->
-    <div class="pr-panel active" id="lb-panel-high">
-      <div class="card">
+      <!-- LB VIEW 1: HIGH SEVERITY (DEFAULT) -->
+      <div class="pr-panel active" id="lb-panel-high">
         <div class="card-header">
           <div>
             <h3 class="card-title">Default <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>severities=High</code> · Ranked by Grounded F1)</h3>
@@ -1253,11 +1288,9 @@
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- LB VIEW 2: HIGH + MEDIUM SEVERITY -->
-    <div class="pr-panel" id="lb-panel-hm">
-      <div class="card">
+      <!-- LB VIEW 2: HIGH + MEDIUM SEVERITY -->
+      <div class="pr-panel" id="lb-panel-hm">
         <div class="card-header">
           <div>
             <h3 class="card-title">Substantive Defects <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>severities=High,Medium</code> · Ranked by Grounded F1)</h3>
@@ -1409,11 +1442,9 @@
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- LB VIEW 3: ALL SEVERITIES -->
-    <div class="pr-panel" id="lb-panel-all">
-      <div class="card">
+      <!-- LB VIEW 3: ALL SEVERITIES -->
+      <div class="pr-panel" id="lb-panel-all">
         <div class="card-header">
           <div>
             <h3 class="card-title">Unfiltered All-Severities <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>/api/leaderboard</code> · High + Medium + Low)</h3>
