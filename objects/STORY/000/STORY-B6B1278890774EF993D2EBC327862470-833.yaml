@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T05:13:33.685900910Z
+modified_at: 2026-11-26T06:06:22.445951063Z
 req_type: Story
 tags:
 - planning
@@ -55,6 +55,11 @@ comments:
   modified_at: 2026-11-26T05:13:33.685900910Z
   session_id: 01a2161dec9c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21676-50ed-73a3-a845-6995b1b2863d
+  author: joe
+  content: "FOR S2 (advisor-122 override-approval of #4626 S1 @ be049fd1, 2026-11-25 23:09). Especially: give the DEFAULT area map path prefixes for the code areas (not only title keywords). Findings:\n- Test gap: gather_signals (aida-cli-lib/src/backlog_report.rs:326-373) has no test. The change-request 7d window, the ledger spec->area join, PR title/branch matching and the git-log churn parse are all unexercised; only the pure helpers (classify, hotness, spec_ids_in) are covered. Add a fixture-ledger test for the CR count and a stubbed open-chang\n- Default area map gives path prefixes only to docs and ci (backlog_report.rs:59-110), so the 14-day churn signal in AC2 is always 0 for review-gate, lanes, cli, storage and mcp under defaults. Hotness then under-weights the code areas against docs/ci. Add default paths (e.g. aida-cli-lib/src/gate/, aida-mcp/, aida-core/src/storage) or document that \n- Open-PR attribution (backlog_report.rs:351) credits only the first spec ID that resolves in a PR title/branch, so a multi-spec promotion PR counts toward one area only, and area_of_path (backlog_report.rs:152) picks the first area in name order, not the longest matching prefix. Both are small hotness skews; consider counting every distinct area nam"
+  created_at: 2026-11-26T06:06:22.445951063Z
+  modified_at: 2026-11-26T06:06:22.445951063Z
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
