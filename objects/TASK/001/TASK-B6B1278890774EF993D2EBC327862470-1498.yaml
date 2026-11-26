@@ -1,0 +1,31 @@
+id: 01a21787-df8f-77a1-8d84-97a57a452e6d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1498
+title: 'Review follow-up: Test gap (TASK-3912 AC2): the AC2 test (story_1690_train_tests.rs max_prs_per_train_admits'
+description: |-
+  From TASK-3912
+  Reviewed sha: 2a68c0ff5333fe0e907b842538af467d6cb7314b
+
+  Test gap (TASK-3912 AC2): the AC2 test (story_1690_train_tests.rs max_prs_per_train_admits_three_now_and_the_next_three_next_pass) proves the parsed knob plus split_bounded_train selection, but nothing asserts that advisor_train_handler (pr_train.rs) actually passes landing_policy auto_train_max() into TrainOptions.max; a regression back to a hard-coded max would not fail any test. Follow-up: a handler-level test (or a seam returning the auto-train TrainOptions) asserting max=3 under max_prs_per_train=3.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T11:05:10.287282847Z
+modified_at: 2026-11-26T11:05:10.287282847Z
+req_type: Task
+tags:
+- carried-from:TASK-3912
+- finding-hash:9c0c22ba
+- from-review:TASK-3912
+relationships:
+- rel_type: References
+  target_id: 01a215a5-1661-7d81-984f-eca5198e20e1
+  created_at: 2026-11-26T11:05:10.287341424Z
+filed_at:
+  code_sha: 2a68c0ff5333fe0e907b842538af467d6cb7314b
+  branch: pr-4616
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461541dfb1
+  vendor: claude
+  session: 01a217855beb
