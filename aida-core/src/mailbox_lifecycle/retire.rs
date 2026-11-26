@@ -103,8 +103,16 @@ pub(crate) enum RefusalReason {
     /// recorded that every writer host is admitting (QC1).
     MailBearingBeforeActivation,
     /// A fresh scan after fencing could not verify all writer admissions.
+    /// `writers` names each unverified one; `transient` holds when all of them
+    /// run deleted or stale binaries, so a bounded retry may clear it.
     // trace:TASK-3420 | ai:codex
-    WriterAdmissionUnknown,
+    // trace:BUG-2778 | ai:claude
+    WriterAdmissionUnknown {
+        #[serde(default)]
+        writers: Vec<String>,
+        #[serde(default)]
+        transient: bool,
+    },
     /// The source holds mail and the recorded activation names another
     /// source build (`None`: one that named none), so this build must record
     /// its own. `this` is this build's identity, if it has one.
@@ -159,11 +167,25 @@ impl std::fmt::Display for RefusalReason {
                  take a write permit yet; run `{}` to check and record that",
                 super::ACTIVATION_COMMAND
             ),
-            RefusalReason::WriterAdmissionUnknown => write!(
-                f,
-                "the fresh writer-admission scan could not verify every mail writer; run `{}` to inspect writer admission",
-                super::ACTIVATION_COMMAND
-            ),
+            RefusalReason::WriterAdmissionUnknown { writers, transient } => {
+                f.write_str("the fresh writer-admission scan could not verify every mail writer")?;
+                if !writers.is_empty() {
+                    write!(f, " (unverified: {})", writers.join("; "))?;
+                }
+                if *transient {
+                    f.write_str(
+                        "; they run replaced binaries left over from a binary switch and \
+                         should exit on their own",
+                    )?;
+                } else if !writers.is_empty() {
+                    f.write_str("; stop or restart the live writer named above")?;
+                }
+                write!(
+                    f,
+                    "; run `{}` to inspect writer admission",
+                    super::ACTIVATION_COMMAND
+                )
+            }
             RefusalReason::ActivationForOtherBuild { recorded, this } => write!(
                 f,
                 "the mailbox holds mail, and its mail retention activation was recorded by a \
@@ -1052,8 +1074,12 @@ fn final_check(entry: &mut JournalEntry) -> Result<std::result::Result<(), Refus
     // The fresh admission scan is mandatory even with a current activation.
     // Hold Lifecycle so no new permit can appear between the scan and commit.
     // trace:TASK-3420 | ai:codex
-    if !super::activation::fresh_scan_admits() {
-        return Ok(Err(RefusalReason::WriterAdmissionUnknown));
+    // trace:BUG-2778 | ai:claude
+    if let Err(gap) = super::activation::fresh_scan() {
+        return Ok(Err(RefusalReason::WriterAdmissionUnknown {
+            writers: gap.writers,
+            transient: gap.transient,
+        }));
     }
     advance(entry, Phase::Committed)?;
     record.state = SourceState::Retired {

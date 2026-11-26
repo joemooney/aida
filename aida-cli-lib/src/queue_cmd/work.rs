@@ -4417,12 +4417,23 @@ pub(crate) fn reclaim_exited_branch_clone(
     let lease = check_exited_branch_clone(root, branch, path)?;
     // KeepUnshipped re-probes immediately before teardown and checks live
     // holders. Any new dirty or unpushed work retains the clone and lease.
-    match crate::seat_clone::destroy(
-        root,
-        path,
-        crate::seat_clone::DestroyMode::KeepUnshipped,
-        None,
-    )? {
+    // A transient writer-admission refusal retries before the relaunch
+    // gives up. trace:BUG-2778 | ai:claude
+    let destroyed = aida_core::mailbox_lifecycle::guard::retry_transient_admission(
+        || {
+            crate::seat_clone::destroy(
+                root,
+                path,
+                crate::seat_clone::DestroyMode::KeepUnshipped,
+                None,
+            )
+        },
+        |out| {
+            matches!(out, Ok(crate::seat_clone::Destroyed::Kept { retention: Some(r), .. })
+                if r.transient_admission)
+        },
+    )?;
+    match destroyed {
         crate::seat_clone::Destroyed::Removed { .. } => {
             crate::session_reap::release_lease_files(root, &lease.id);
             anyhow::ensure!(

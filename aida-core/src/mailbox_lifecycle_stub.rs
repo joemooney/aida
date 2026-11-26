@@ -58,6 +58,7 @@ pub mod guard {
         pub checkout: std::path::PathBuf,
         pub reason: String,
         pub needs_activation: bool,
+        pub transient_admission: bool,
         pub retained_dir: Option<std::path::PathBuf>,
     }
 
@@ -69,6 +70,13 @@ pub mod guard {
 
     impl std::error::Error for RetentionRefusal {}
     pub type Gate = Result<Option<Retirement>, RetentionRefusal>;
+
+    pub fn retry_transient_admission<T>(
+        mut attempt: impl FnMut() -> T,
+        _transient: impl Fn(&T) -> bool,
+    ) -> T {
+        attempt()
+    }
 
     pub fn retire_checkout(_checkout: &Path, _reason: &str) -> Gate {
         Ok(None)
