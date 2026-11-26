@@ -747,6 +747,12 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
                 | ".git-credentials"
                 | ".pgpass"
                 | ".pypirc"
+                // trace:TASK-3914 | ai:claude
+                | ".npmrc"
+                | ".vault-token"
+                | ".terraformrc"
+                | "terraform.rc"
+                | ".dockercfg"
         )
     {
         return true;
@@ -768,6 +774,12 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
                     | (".config", "gh")
                     | (".docker", "config.json")
                     | (".kube", "config")
+                    // trace:TASK-3914 | ai:claude
+                    | (".config", "hub")
+                    | (".cargo", "credentials")
+                    | (".cargo", "credentials.toml")
+                    | (".terraform.d", "credentials.tfrc.json")
+                    | (".gem", "credentials")
             )
         })
 }
@@ -1876,6 +1888,91 @@ mod tests {
             "gcloud/setup.md",
             "src/netrc.rs",
             ".kube-docs/config",
+        ] {
+            assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
+            assert!(!is_credential_path(path), "{path}");
+        }
+    }
+
+    // trace:TASK-3914 | ai:claude
+    fn assert_credential_at_every_depth(rel: &str) {
+        for prefix in ["", "nested/", "a/b/"] {
+            for path in [
+                format!("{prefix}{rel}"),
+                format!("{prefix}{}", rel.to_ascii_uppercase()),
+            ] {
+                assert_eq!(
+                    classify_path_exclusion(&path, &[]),
+                    Some(ExclusionReason::SecretSensitivePath),
+                    "{path}"
+                );
+                assert!(is_credential_path(&path), "{path}");
+                assert!(is_credential_path(&path.replace('/', "\\")), "{path}");
+            }
+        }
+    }
+
+    #[test]
+    fn credential_npmrc() {
+        assert_credential_at_every_depth(".npmrc");
+    }
+
+    #[test]
+    fn credential_cargo_credentials() {
+        assert_credential_at_every_depth(".cargo/credentials");
+    }
+
+    #[test]
+    fn credential_cargo_credentials_toml() {
+        assert_credential_at_every_depth(".cargo/credentials.toml");
+    }
+
+    #[test]
+    fn credential_vault_token() {
+        assert_credential_at_every_depth(".vault-token");
+    }
+
+    #[test]
+    fn credential_terraformrc() {
+        assert_credential_at_every_depth(".terraformrc");
+    }
+
+    #[test]
+    fn credential_terraform_rc() {
+        assert_credential_at_every_depth("terraform.rc");
+    }
+
+    #[test]
+    fn credential_terraform_d_tfrc() {
+        assert_credential_at_every_depth(".terraform.d/credentials.tfrc.json");
+    }
+
+    #[test]
+    fn credential_gem_credentials() {
+        assert_credential_at_every_depth(".gem/credentials");
+    }
+
+    #[test]
+    fn credential_dockercfg() {
+        assert_credential_at_every_depth(".dockercfg");
+    }
+
+    #[test]
+    fn credential_config_hub() {
+        assert_credential_at_every_depth(".config/hub");
+    }
+
+    #[test]
+    fn credential_pattern_neighbours_stay_reviewable() {
+        for path in [
+            ".cargo/config",
+            "nested/.cargo/env",
+            "docs/npmrc.md",
+            "terraform/main.tf",
+            ".terraform.d/plugins/x",
+            ".gem/specs/x.gemspec",
+            ".config/hubble.toml",
+            "vault-token.rs",
         ] {
             assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
             assert!(!is_credential_path(path), "{path}");
