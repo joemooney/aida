@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T04:04:28.813014009Z
+modified_at: 2026-11-26T04:23:56.128925593Z
 req_type: Story
 tags:
 - integration
@@ -816,6 +816,16 @@ comments:
   created_at: 2026-11-26T04:04:28.813011126Z
   modified_at: 2026-11-26T04:04:28.813011126Z
   session_id: 01a215ddf67d
+- id: 01a21618-87e0-7530-acc2-9cb699d9dcb9
+  author: joe
+  content: |-
+    DEFERRED from #4619 S3a-2 @ a73b2c2f (advisor-122 2026-11-25 21:21): F2 (rename context) and F4 (signal the escaped descendant). Full findings:
+    - STORY-3120: review_batches discards the runner's file-coverage ledger (parse_runner_findings_json(..).1 is ignored), so a runner that returns {"findings":[]} without reviewing anything yields a clean --run-review result. The spec's 'verifies coverage' criterion is still open; the follow-up should verify each batch's reported files against the batch
+    - STORY-3120: batch_prompt runs `git diff <range> -- <path>` per file with only the new path as pathspec, so a renamed file (inventory uses --find-renames) reaches the runner as a whole-file addition with no rename or old-path context (aida-cli-lib/src/review_prepare.rs batch_prompt).
+    - STORY-3120: no test drives handle_review_prepare with --run-review end to end. The wiring that swaps load_review_rules(worktree) for trusted_review_base(merge-base).rules and calls run_review_base before inventory classification is covered only by component tests; a regression back to worktree rules would go unnoticed (aida-cli-lib/src/review_prepa
+    - STORY-3120: when the runner leaves a descendant holding its pipes, RunnerCall::run fails closed but leaves that descendant running and its pipe threads leaked; nothing tries to signal the escaped process (aida-cli-lib/src/launch/review_runner.rs JOIN_GRACE block).
+  created_at: 2026-11-26T04:23:56.128925593Z
+  modified_at: 2026-11-26T04:23:56.128925593Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
