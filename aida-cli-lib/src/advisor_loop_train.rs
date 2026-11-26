@@ -439,6 +439,33 @@ mod bug2769_idle_admission_tests {
     fn bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().to_path_buf();
+        // A local `main` with no config: the ci-gated default, so passes run.
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &[
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=fixture@test",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "initial",
+            ],
+        ] {
+            let status = crate::test_git::git_command()
+                .current_dir(&root)
+                .args(args)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        }
+        assert_eq!(
+            crate::gate::landing_merge::train_stand_down(&root),
+            Ok(None),
+            "the fixture policy lets passes run"
+        );
         let polls = Arc::new(AtomicUsize::new(0));
         let want = Arc::new(AtomicBool::new(false));
         let held_in_pass = Arc::new(AtomicBool::new(false));
