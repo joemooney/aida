@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T04:18:14.171845543Z
+modified_at: 2026-11-26T04:40:32.778704447Z
 req_type: Bug
 tags:
 - ci
@@ -52,6 +52,23 @@ comments:
     - Dell1 (self-hosted) lanes keep their seeded profile; the debuginfo change and memory floor apply only to hosted runners, deadline applies everywhere. OK?
   created_at: 2026-11-26T04:18:14.171845543Z
   modified_at: 2026-11-26T04:18:14.171845543Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21627-bd0a-7792-b607-e9c2f82a5222
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5741ded9a0
+
+    **AC1 [manual-inspection]:** API step metadata only (raw job logs: blob host sandbox-denied from this lane). Job 139667847339 (run 45747748433): exit 143 at 3m44s into Run tests, which for lib-1 is the `cargo test --list` compile of aida-cli-lib's full-DWARF unit binary. #4569 job 139574004800: Run tests stalled 37 min against a healthy 14.5 min, cancelled at 40m. Both hosted (runner_name 'GitHub Actions N', labels ubuntu-latest). Consistent with memory exhaustion/thrash; NOT yet proven. The resource watch now prints `# resource-watch <shard>: Ns, min MemAvailable X MiB, peak swap used Y MiB` every 60s and at lane end, so this PR's lib-0/lib-1 runs record the evidence.
+    **AC2 [behavioral, CI]:** hosted lib lanes build with CARGO_PROFILE_DEV_DEBUG=line-tables-only (Build aida binary + Run tests step env, own rust-cache shared-key `-lib-lines`); dell1 and other lanes pass `full` = dev default (verified Fresh, no rebuild). 3 consecutive green lib-1 runs: pending CI on the PR.
+    **AC3 [behavioral, unit]:** `ResourceWatch`/`run_watched` in scripts/ci-test-shards.py; tests/test_ci_test_shards.py `test_resource_watch_names_shard_and_cause` (floor after 3 strikes, reset on recovery, deadline, disabled when unset) and `test_breach_kills_the_lane_and_main_fails_with_the_cause` (real child killed, `::error::CI (rest): deadline...`, main exits 1). Floor 768 MiB (hosted only), deadline 1980s (all lanes; healthy max ~16.5 min).
+
+    **Probes / fixes:** (1) GitLab upstream adapter rejects $GITHUB_ENV writes and the needs.tier.outputs.dell1 job-env context, so the setting moved to step env keyed on runner.environment. (2) An always-new session would have broken Ctrl+C for local make test; the process group is now separate only when a check is armed, and is TERMed if the planner is interrupted. (3) Kept the listing's stderr captured, since the 'Running' line must not reach the timings log. Run tests body unchanged, so check-ci-gates' derivation and task_1555 pin hold.
+    **Tests:** python unittest test_ci_test_shards/test_ci_tiers/test_gdma_ci: 71 OK. cargo task_1555_ci_gate_tiers: 4 passed. test_self_hosted_runner: 16 errors identical on the unmodified tree (AF_UNIX dell1 controller fixtures, sandbox).
+    **Residual risks:** memory cause unconfirmed until CI; the floor could false-trigger on a sustained <768 MiB that would have recovered; tests relying on full DWARF in lib lanes (none found).
+  created_at: 2026-11-26T04:40:32.778704447Z
+  modified_at: 2026-11-26T04:40:32.778704447Z
   session_id: 01a216104e2c
   harness_version: 2.1.319 (Claude Code)
 history:
