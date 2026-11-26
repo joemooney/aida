@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-24T13:12:41.662083950Z
+modified_at: 2026-11-26T19:45:39.044878100Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -34,6 +34,17 @@ comments:
   content: Folded into the TASK-3282 docs lane, but per the one-spec-per-lane rule (advisor 06:14) that PR's trailer carries only TASK-3282 with Refs TASK-3266; product completes TASK-3266 by hand after it lands.
   created_at: 2026-11-24T13:12:41.662083950Z
   modified_at: 2026-11-24T13:12:41.662083950Z
+- id: 01a21964-a1e9-7cb1-9cb5-4997c5c4470c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:45):
+    # TASK-3266 (integration-30 12:47 suggestion; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int-task-3266-shards-assert (cut from the integration tip). Docs + test only, <=60 lines. Completing (TASK-3266) trailer.
+    READ: `aida show TASK-3266 --full --comments`. docs/internal/testing/ci-test-shards.md:39 already contains the wait-before-retoggle instruction (BUG-2723 AC4). Add the focused assertion the round-two brief asked for: a docs test (find the existing docs-assertion pattern, e.g. a test that greps docs for required phrases) asserting that instruction is present. No production code.
+    make check-ci-fast (plus the one targeted test), then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T19:45:39.044878100Z
+  modified_at: 2026-11-26T19:45:39.044878100Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
   author: joe
