@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T13:15:31.696724529Z
+modified_at: 2026-11-26T13:18:03.909122576Z
 req_type: Bug
 tags:
 - admission
@@ -25,6 +25,18 @@ relationships:
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T13:15:31.696678933Z
   created_by: joe
+comments:
+- id: 01a21801-c7ed-7342-96b4-dca39e386dd9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:18):
+    # BUG-2771: manual trains starve behind back-to-back auto-trains (advisor-122 06:15; product-15). Lane: CLAUDE. MAIN, NEW branch train-fair-admission. STRICT (admission path). <=200 lines. Completing (BUG-2771) trailer.
+    READ: `aida show BUG-2771` (evidence + AC1-AC3), and the landed admission work it builds on: BUG-2769 (#4640, the auto-train releases admission between polls), BUG-2765 (#4597), BUG-2757 (#4576). Record a cooperative manual waiter (the manual `aida pr train` already waits cooperatively) and make the auto-train yield before starting its NEXT train while one is recorded; surface it in train-status and `pr train --check`; AC3 test.
+    Keep the pr_train and admission tests green. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T13:18:03.909122576Z
+  modified_at: 2026-11-26T13:18:03.909122576Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
