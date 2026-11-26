@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-26T05:30:06.537294916Z
+modified_at: 2026-11-26T05:39:26.114582508Z
 req_type: Bug
 tags:
 - lanes
@@ -536,6 +536,11 @@ comments:
   content: "FOLDED REVIEW FINDINGS (backlog cleanup 2026-11-25 14:10, product-15 under Joe's full authorization; advisor-122 pre-read 14:02; findings are not requirements, STORY-3118). These 3 stand-alone finding-specs are recorded here and rejected:\n\n- TASK-3182: BUG-2706 reads 'lane-host state cannot be read' as a present claim whose heartbeat stopped\n  BUG-2706 AC3 asks for a bounded deferral \"when the lane-host state cannot be read\". Main has no separate lane-host record (aida lane relay, TASK-3826, is unmerged), and the cause of the incident was that session claims never refreshed their heartbeat, so other hosts saw every lane expire after 30 minutes. The fix therefore (a) adds a launcher heartbeat on the existing shared claim and (b) treats a foreign implementer claim that is still present past its TTL as \"state unknown\": deferred for `[review] lane_unknown_defer_mins` (default 20) past expiry, then reviewed with a logged reason (aida-cli-lib/src/review_implementer_gate.rs remote_standing). Consequences to confirm: an abandoned foreign \n\n- TASK-3184: Drain-driven implementer lanes do not refresh their shared claim heartbeat\n  BUG-2706 made the standalone implementer launcher (aida-cli-lib/src/standalone_implementer.rs run()) refresh its session claim's heartbeat every 10 minutes, so a review watcher on another host defers for the whole lane. The drain's implementer phase (aida-cli-lib/src/phase_driver_trait.rs, spawn_and_wait_watched around line 579) does not: the child session mints the lease, so the launcher has no lease id to refresh by until the child exits. A drain implementer on a foreign lane host is therefore deferred only for the claim TTL plus `[review] lane_unknown_defer_mins` (50 minutes by default). Suggestion: refresh by claim scope + clone path for the drain phase, or have the phase driver learn th\n\n- TASK-3833: Deferred findings 1, 5, 6 from PR #4382 (BUG-2706) r2 verdict\n  Deferred from the PR #4382 (BUG-2706) r2 counting verdict at 0dd153cd under the advisor-122 ruling (2026-11-22 12:22 MST). #4382 r3 fixes only findings 2-4. ## Findings 1. [high/unmet-claimed-ac] aida-cli-lib/src/standalone_implementer.rs: BUG-2706 AC1/AC2. The guard at line 1571 is reachable from queue pickup only for a fresh standalone headless implementer. is_standalone_implementer excludes guided pickups, and queue_cmd/work.rs requires QueueWorkLaunch::Fresh before calling run_recorded. An interactive foreign implementer can therefore keep working past the 30-minute TTL plus 20-minute grace while its merge-only head becomes eligible. Bind heartbeat ownership to the live implementer lease"
   created_at: 2026-11-25T21:03:04.675914505Z
   modified_at: 2026-11-25T21:03:04.675914505Z
+- id: 01a2165d-a722-75b2-9524-eee5850c936e
+  author: joe
+  content: 'Folded finding from TASK-3837 (rejected as obsolete 2026-11-25): when BUG-2706 resumes, the lane_hosts claim snapshot must not abort on a non-UTF-8 sibling pathname (use OsStr, or skip with a warning) and needs a test.'
+  created_at: 2026-11-26T05:39:26.114582508Z
+  modified_at: 2026-11-26T05:39:26.114582508Z
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
