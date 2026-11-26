@@ -1182,3 +1182,122 @@ esac
     );
     assert!(path.exists());
 }
+
+/// The live BUG-2776 shape: the PR moved past a clean leftover review
+/// checkout whose reviewer lease is ending-retained. Review-watch's reclaim
+/// keeps it while dirty, process-held, merge-held or still owned, and ends
+/// it (after collecting this PR's hold marker) once none of those apply.
+// trace:BUG-2776 | ai:claude
+#[test]
+fn bug_2776_review_watch_reclaims_only_a_clean_exited_leftover_on_a_moved_head() {
+    use crate::queue_cmd::{reclaim_retained_review_tree_with, RetainedReview};
+    use crate::session_start::ReviewForge;
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let store_root = fx.main.join(".aida-store");
+    git_ok(&store_root, &["config", "user.email", "test@example.com"]);
+    git_ok(&store_root, &["config", "user.name", "AIDA Test"]);
+    let (storage, _status) = review_story(&fx.main);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path.clone();
+    let first_head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("README.md"), "moved PR head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "moved PR head"]);
+    let pr_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    let ended = std::cell::RefCell::new(Vec::<String>::new());
+    let reclaim = |head: &str| {
+        reclaim_retained_review_tree_with(&fx.main, ReviewForge::GitHub, 2457, head, |l| {
+            ended.borrow_mut().push(l.id.clone());
+            git_ok(
+                &fx.main,
+                &[
+                    "worktree",
+                    "remove",
+                    "--force",
+                    l.worktree_path.to_str().unwrap(),
+                ],
+            );
+            std::fs::remove_file(crate::lease_path(&fx.main, &l.id))?;
+            Ok(())
+        })
+    };
+    let kept = |head: &str| match reclaim(head) {
+        RetainedReview::Kept(why) => why,
+        RetainedReview::Free => panic!("checkout was reclaimed"),
+    };
+    // A lease neither stale nor ending-retained still owns the checkout.
+    assert!(kept(&pr_head).starts_with(&format!("lease {}", lease.id)));
+    // An ending-retained lease whose owner is still live keeps it too.
+    lease.pr_head_sha = Some(first_head.clone());
+    lease.ending_retained_at = Some(chrono::Utc::now());
+    lease.active_pid = Some(std::process::id());
+    lease.active_pid_start_time = None;
+    lease.holder_record = None;
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    std::fs::write(
+        crate::lease_path(&fx.main, &lease.id),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::ownership::reader::current_lease_state(&lease),
+        crate::LeaseState::Live
+    );
+    assert!(kept(&pr_head).starts_with(&format!("lease {} live", lease.id)));
+    // The reviewer exited.
+    lease.active_pid = Some(u32::MAX);
+    lease.creator_pid = Some(u32::MAX);
+    lease.active_pid_start_time = None;
+    lease.creator_pid_start_time = None;
+    std::fs::write(
+        crate::lease_path(&fx.main, &lease.id),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    // The PR has not moved: nothing to reclaim for.
+    assert_eq!(kept(&first_head), "checkout is at the current head");
+    // Dirty.
+    std::fs::write(tree.join("review-notes"), "keep me").unwrap();
+    assert_eq!(kept(&pr_head), "dirty");
+    std::fs::remove_file(tree.join("review-notes")).unwrap();
+    // A live process in the checkout.
+    let mut holder = std::process::Command::new("sleep")
+        .arg("30")
+        .current_dir(&tree)
+        .spawn()
+        .unwrap();
+    let why = kept(&pr_head);
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+    assert_eq!(why, format!("live pid {}", holder.id()));
+    // Locked.
+    git_ok(&fx.main, &["worktree", "lock", tree.to_str().unwrap()]);
+    assert_eq!(kept(&pr_head), "lock");
+    git_ok(&fx.main, &["worktree", "unlock", tree.to_str().unwrap()]);
+    // A merge-hold marker that cannot be collected keeps the tree.
+    let markers = tree.join(".aida/merge-holds");
+    std::fs::create_dir_all(&markers).unwrap();
+    std::fs::write(markers.join("PR-9999"), "unrelated hold\n").unwrap();
+    assert_eq!(kept(&pr_head), "merge-hold");
+    assert!(markers.join("PR-9999").exists());
+    assert!(ended.borrow().is_empty());
+    std::fs::remove_file(markers.join("PR-9999")).unwrap();
+    // The exact shape: this PR's marker is collected first, then the lease ends.
+    std::fs::write(markers.join("PR-2457"), "needs human review\n").unwrap();
+    assert_eq!(reclaim(&pr_head), RetainedReview::Free);
+    assert_eq!(*ended.borrow(), [lease.id.clone()]);
+    assert!(crate::gate::merge_hold_core::read_hold(&fx.main, 2457).is_some());
+    assert!(!tree.exists());
+    assert_eq!(reclaim(&pr_head), RetainedReview::Free);
+}
