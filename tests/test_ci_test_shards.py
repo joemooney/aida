@@ -21,6 +21,7 @@ spec.loader.exec_module(shards)
 spec = importlib.util.spec_from_file_location('ci_gates', ROOT / 'scripts/check-ci-gates.py')
 gates = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gates)
+WATCHED_OK = (0, (None, None), None)  # run_watched: exit 0, no breach. trace:BUG-2768 | ai:claude
 
 
 def target(name, kind='test'):
@@ -136,14 +137,14 @@ class ShardsTest(unittest.TestCase):
     def test_lib_lane_runs_its_half_as_filters(self):
         names = ['a::one', 'b::two', 'b::three']
         with patch.object(shards, 'lib_test_names', return_value=names), \
-                patch.object(shards.subprocess, 'call', return_value=0) as call:
+                patch.object(shards, 'run_watched', return_value=WATCHED_OK) as call:
             self.assertEqual(shards.main(['--shard', 'lib-1', '--profile', 'agent']), 0)
         command = call.call_args.args[0]
         self.assertEqual(command[command.index('--') + 1:], list(shards.lib_halves(names)[1]))
         self.assertEqual(command[command.index('--') - 2:command.index('--')], ['--profile', 'agent'])
         # trace:TASK-1957 | ai:claude
         with patch.object(shards, 'lib_test_names', return_value=names), \
-                patch.object(shards.subprocess, 'call', return_value=0) as call, \
+                patch.object(shards, 'run_watched', return_value=WATCHED_OK) as call, \
                 patch.object(shards, 'nextest_installed', return_value=True), \
                 patch.object(shards, 'keep_junit') as keep:
             self.assertEqual(shards.main(['--shard', 'lib-1', '--runner', 'nextest', '--profile', 'agent']), 0)
@@ -169,7 +170,7 @@ class ShardsTest(unittest.TestCase):
             ('aida-cli-lib', 'bin', 'tool'), ('aida-cli-lib', 'example', 'ex')])
         self.assertEqual(repeats, [])
         with patch.object(shards, 'union_problems', return_value=([('aida-cli', 'lib', 'cli')], [])), \
-                patch.object(shards.subprocess, 'call', return_value=0) as call:
+                patch.object(shards, 'run_watched', return_value=WATCHED_OK) as call:
             self.assertEqual(shards.main(['--shard', 'rest']), 1)
         call.assert_not_called()
 
@@ -187,7 +188,7 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(gaps, [])
         self.assertEqual(repeats, [('aida-cli', 'test', 'one')])
         with patch.object(shards, 'union_problems', return_value=([], [('aida-cli', 'test', 'one')])), \
-                patch.object(shards.subprocess, 'call', return_value=0) as call:
+                patch.object(shards, 'run_watched', return_value=WATCHED_OK) as call:
             self.assertEqual(shards.main(['--shard', 'cli-0']), 1)
         call.assert_not_called()
 
@@ -209,6 +210,48 @@ class ShardsTest(unittest.TestCase):
         command = shards.commands('rest', packages, {})[0]
         supplied = {f.split('/', 1)[1] for f in command[command.index('--features') + 1].split(',')}
         self.assertLessEqual(required, supplied)
+
+    # trace:BUG-2768 | ai:claude
+    def test_resource_watch_names_shard_and_cause(self):
+        now = [0.0]
+        mem = dict(MemTotal=16000, MemAvailable=4000, SwapTotal=4096, SwapFree=4096)
+        env = {'AIDA_CI_MEM_FLOOR_MIB': '768', 'AIDA_CI_TEST_DEADLINE_SECS': '100'}
+        watch = shards.ResourceWatch('lib-1', env, lambda: now[0], lambda: dict(mem))
+        self.assertIsNone(watch.sample())
+        mem.update(MemAvailable=500, SwapFree=1096)
+        self.assertIsNone(watch.sample())  # One low sample is a spike, not exhaustion.
+        self.assertIsNone(watch.sample())
+        mem['MemAvailable'] = 900  # Recovery resets the strike count.
+        self.assertIsNone(watch.sample())
+        mem['MemAvailable'] = 500
+        self.assertIsNone(watch.sample())
+        self.assertIsNone(watch.sample())
+        self.assertIn('memory exhausted: MemAvailable 500 MiB of 16000 MiB', watch.sample())
+        self.assertIn('min MemAvailable 500 MiB, peak swap used 3000 MiB', watch.summary())
+        mem['MemAvailable'] = 4000
+        now[0] = 100.0
+        self.assertIn('deadline: still running after 100s, past its 100s budget', watch.sample())
+        # Unset or empty disables both checks; an unreadable meminfo never fails a lane.
+        quiet = shards.ResourceWatch('lib-0', {'AIDA_CI_MEM_FLOOR_MIB': ''}, lambda: 1e9, dict)
+        self.assertIsNone(quiet.sample())
+        # Only an armed watch moves the lane out of the terminal's process group.
+        self.assertEqual((watch.armed, quiet.armed), (True, False))
+
+    def test_breach_kills_the_lane_and_main_fails_with_the_cause(self):
+        watch = shards.ResourceWatch('rest', {'AIDA_CI_TEST_DEADLINE_SECS': '1'})
+        with patch('sys.stderr', new_callable=io.StringIO) as err:
+            code, _, cause = shards.run_watched(['sleep', '30'], ROOT, watch, period=0.2)
+        self.assertNotEqual(code, 0)
+        self.assertIn('deadline', cause)
+        self.assertIn('::error::CI (rest): deadline: still running', err.getvalue())
+        names = ['a::one', 'b::two']
+        with patch.object(shards, 'lib_test_names', return_value=names), \
+                patch.object(shards, 'run_watched', return_value=(-15, (None, None), 'deadline: x')), \
+                patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(shards.main(['--shard', 'lib-1']), 1)
+        self.assertIn('# resource-watch lib-1:', out.getvalue())
+        clean = shards.ResourceWatch('rest', {})
+        self.assertEqual(shards.run_watched(['true'], ROOT, clean, period=0.2), (0, (None, None), None))
 
     def test_compile_mode_runs_no_tests_and_preserves_failure(self):
         with patch.object(shards.subprocess, 'call', return_value=19) as call:
@@ -306,7 +349,7 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(shards.totals(log), dict(passed=4006, failed=0, ignored=2))
         names = ['a::one', 'b::two', 'b::three']
         with patch.object(shards, 'lib_test_names', return_value=names), \
-                patch.object(shards.subprocess, 'call', return_value=0), \
+                patch.object(shards, 'run_watched', return_value=WATCHED_OK), \
                 patch('sys.stdout', new_callable=io.StringIO) as out:
             shards.main(['--shard', 'lib-1'])
         marker = next(line for line in out.getvalue().splitlines() if line.startswith('# lib-1'))
@@ -383,7 +426,7 @@ class ShardsTest(unittest.TestCase):
                     patch.object(shards.subprocess, 'check_output', return_value=metadata), \
                     patch.object(shards, 'union_problems', return_value=([], [])), \
                     patch.object(shards, 'nextest_installed', return_value=False), \
-                    patch.object(shards.subprocess, 'call', return_value=0) as call:
+                    patch.object(shards, 'run_watched', return_value=WATCHED_OK) as call:
                 self.assertEqual(shards.main(['--shard', 'cli-0', '--runner', 'nextest']), expected_status)
                 self.assertEqual(call.call_args.args[0][1] if call.called else None, ran)
 

@@ -437,11 +437,13 @@ jobs:
       # dell1 builds only from its host-published local cache: no remote
       # restore or save, and no fallback to a pull request's cache key.
       # trace:STORY-2695 | ai:claude
+      # Hosted lib lanes build with line tables only (see "Build aida binary
+      # for lib unit tests"), so their cache is a separate key. trace:BUG-2768 | ai:claude
       - name: Cache Rust dependencies
         if: runner.environment != 'self-hosted'
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-dev-profile${{ (startsWith(matrix.shard, 'lib-') && '-lib') || (startsWith(matrix.shard, 'cli-') && '-cli') || (matrix.shard == 'rest' && '-rest') || '' }}
+          shared-key: ci-dev-profile${{ (startsWith(matrix.shard, 'lib-') && '-lib-lines') || (startsWith(matrix.shard, 'cli-') && '-cli') || (matrix.shard == 'rest' && '-rest') || '' }}
           save-if: ${{ matrix.shard != 'contracts' }}
 
       # Check the feature-disabled stubs separately: a workspace build can
@@ -474,8 +476,16 @@ jobs:
       # which `cargo test -p aida-cli-lib --lib` does not build. Build only that
       # bin, in the same dev profile and cache as the tests.
       # trace:TASK-1949 | ai:claude
+      # Building aida-cli-lib's unit-test binary with full DWARF exhausted the
+      # 16 GiB hosted VM in lib lanes (a shutdown signal, or a thrashing stall
+      # to the job timeout). Line tables keep file:line in backtraces at a
+      # fraction of rustc/linker memory. "Run tests" sets the same value for
+      # lib lanes. dell1 keeps `full`, the dev default and its seeded target.
+      # trace:BUG-2768 | ai:claude
       - name: Build aida binary for lib unit tests
         if: ${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}
+        env:
+          CARGO_PROFILE_DEV_DEBUG: ${{ runner.environment != 'self-hosted' && 'line-tables-only' || 'full' }}
         run: cargo build -p aida-cli --bin aida
 
       # Cross-binary parity uses the binaries from this checkout.
@@ -531,6 +541,14 @@ jobs:
           # Namespace setup above must support the concurrent PID-1 regression.
           # Refuse a silent skip on CI. trace:TASK-2886 | ai:codex
           AIDA_REQUIRE_USERNS: ${{ runner.os == 'Linux' && '1' || '' }}
+          # The planner's resource watch fails the lane by name and cause
+          # (memory or deadline) instead of a silent VM reclaim or the 40-min
+          # cancel; healthy lanes take <17 min. The memory floor is for the
+          # hosted VM only. trace:BUG-2768 | ai:claude
+          AIDA_CI_MEM_FLOOR_MIB: ${{ runner.environment != 'self-hosted' && '768' || '' }}
+          AIDA_CI_TEST_DEADLINE_SECS: '1980'
+          # `full` is the dev default: other lanes build what they always did.
+          CARGO_PROFILE_DEV_DEBUG: ${{ startsWith(matrix.shard, 'lib-') && runner.environment != 'self-hosted' && 'line-tables-only' || 'full' }}
         # Use job-local state so a cached log cannot stand in for this run.
         # trace:BUG-2671 | ai:codex
         run: |
