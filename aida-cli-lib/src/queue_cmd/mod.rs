@@ -149,6 +149,7 @@ mod work;
 // trace:BUG-2549 | ai:codex
 pub(crate) use work::canonical_resume_branch;
 // trace:STORY-2749 | ai:claude
+pub(crate) use work::conflict_route_admission;
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
