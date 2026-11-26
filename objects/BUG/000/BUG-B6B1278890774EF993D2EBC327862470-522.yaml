@@ -607,6 +607,17 @@ comments:
   modified_at: 2026-11-26T00:13:20.948973362Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21539-6a23-7811-b8a1-6d0aa72d2e77
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:19):
+    # BUG-2761 S3 FRESH SLICE (advisor-122 ruling 2026-11-25 15:22; product-15). Lane: CLAUDE. STRICT. MAIN, NEW branch bug-2761-s3-fresh (cut from the current main tip). Title "[AI:claude] fix(repair): route before reserve and retire only the attempt's own reservation (Refs BUG-2761)". <=300 lines.
+    #4583 (approved in substance; head c5538b6d) now CONFLICTS with main after today's landings in repair / review-watch code (BUG-2763, BUG-2730, BUG-2756). Do NOT merge or rebase #4583. PORT its change onto current main: `git diff origin/main...origin/bug-2761-s3-route-before-reserve` is the reference. Keep the same scope: route before reserve, attempt-scoped rollback, the F1 test (a failed spawn retires that attempt's reservation and removes the tree; a successful spawn retains it; other PRs' and live entries survive) and the F2 accurate error text. Adapt to whatever main changed in those files.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. In the PR body say "Replaces #4583 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T00:19:58.560101403Z
+  modified_at: 2026-11-26T00:19:58.560101403Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
