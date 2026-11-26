@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:55:53.483098720Z
+modified_at: 2026-11-26T10:35:19.871980918Z
 req_type: Bug
 tags:
 - admission
@@ -165,6 +165,12 @@ comments:
   modified_at: 2026-11-26T09:55:53.483098720Z
   session_id: 01a21737c782
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2176c-8dbf-79d1-8a54-3cb28c4049be
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `fix-autotrain-idle-admission` at head `9b9aa8a69391fe68e5054a0d8d26e45b27800b4b`.'
+  created_at: 2026-11-26T10:35:19.871977943Z
+  modified_at: 2026-11-26T10:35:19.871977943Z
+  session_id: 01a21737c782
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
