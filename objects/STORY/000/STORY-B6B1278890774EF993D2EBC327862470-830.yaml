@@ -337,6 +337,21 @@ comments:
   modified_at: 2026-11-26T17:50:22.986651685Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2196c-a0e8-7d72-880e-100f70c7e4a4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1b15206aa0 (PR #4634, round 4). All four review findings addressed in one commit plus an inventory row:
+    1. Review backlog: an unreviewed green PR fails only when the watcher's latest attempt at its head is Held (Failed/Exited/Completed without a verdict). Reserved/Running/RemoteHeld/Superseding, and heads not yet admitted, are informational (review_watch::review_heads, landing_drought::cause). Negative test: story_3131_s2_deep_review_backlog_is_informational (20 PRs, 0 failing).
+    2. Lock: threshold = max(lock_hold_minutes default 45, 2x p90 of .aida/train/run-history.jsonl written in RunLock::drop). Busy (live CI or step/checkpoint within threshold) is info and also makes the main-idle row info. Past the threshold: 'investigate'; 'stop pid P' only with no step change, no checkpoint and train CI read with no pending job. Test: story_3131_s2_train_lock_advice_follows_progress (long train with live CI -> no stop).
+    3. Base branch: trusted_config::local_default_branch_name || forge::default_branch_of, as landing_merge does; last_landing reads origin/<base>.
+    4. Tests: ready_of (draft/base filter, CONFLICTING, unreviewed inclusion, key/head match, case-insensitive head), lock_evidence (orphaned lock aged from record since, run history), review_heads phase table, ReworkLanes::covers direct.
+    Validation: targeted cargo tests story_3131 (15), pr_train status+tests (211), stalled_reviews (4) pass; make check-ci-fast exit 0.
+    Probes: Probe 3 - lock CI read is all-or-nothing (any live -> busy; all read and none pending -> stuck allowed; any unreadable -> never stop). Residual risk: run history only exists after this lands, so the threshold is 45m until runs accumulate; journal mtime as checkpoint may not tick during a CI wait, but live CI covers that case.
+  created_at: 2026-11-26T19:54:39.208790473Z
+  modified_at: 2026-11-26T19:54:39.208790473Z
+  session_id: 01a21906a29e
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a2197e-1454-72c0-80bb-53310e4e71f5
   author: joe
   content: PR-4634 at 1b15206aa059f1179ff7b6207e05348af644d1c2 conflicts with the protected base; resolve the conflict before review
