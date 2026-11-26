@@ -1,0 +1,29 @@
+id: 01a2194b-86c4-7a60-9db9-ad2a0317f943
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-539
+agreed_id: BUG-2778
+title: A transient pre-start mail-retention refusal (writer-admission scan) ends the lane instead of retrying; the error does not name the unverified writer
+description: |
+  Found 2026-11-26 12:13 by product-15. The BUG-2776 r1 lane on dell1 ended BEFORE its agent started with: error: "mail retention refused for <seat clone>: the fresh writer-admission scan could not verify every mail writer; run `aida mailbox retention activate --dry-run` to inspect writer admission; the tree was kept". Two minutes later the prescribed dry run showed every running mail writer taking a write permit (activation recordable), so the refusal was TRANSIENT. It came about 25 min after dell1 switched its live binary (11:46), while old-binary writers were still running. The same shape hit BUG-2674 (01:06) and STORY-3038 (00:17) overnight. Each time the lane slot and the queued rework are lost until a seat notices and relaunches. Related but distinct: BUG-2643 (exit-time retention refusal after a push).
+
+  ## Acceptance
+  - AC1: a PRE-START mail-retention refusal from the writer-admission scan is RETRYABLE: the launch waits with bounded backoff (e.g. 3 tries over about 5 min), re-runs the fresh scan, and proceeds once every writer is verified; it ends the lane only after the retries are spent, with the unverified writer pids/binaries named in the error.
+  - AC2: the error names WHICH writer could not be verified (pid, comm, and binary sha or "(deleted)").
+  - AC3: tests: transient unverified → verified on retry → launch proceeds; persistently unverified → a refusal naming the writer.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T19:18:29.828946179Z
+modified_at: 2026-11-26T19:18:29.828946179Z
+req_type: Bug
+tags:
+- lanes
+- mailbox
+- throughput
+filed_at:
+  code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 52ac09e8a4d
+  vendor: claude
