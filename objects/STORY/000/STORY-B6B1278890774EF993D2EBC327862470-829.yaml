@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T10:51:59.101211623Z
+modified_at: 2026-11-26T10:54:08.064728856Z
 req_type: Story
 tags:
 - integration
@@ -998,6 +998,18 @@ comments:
     TESTS: a challenger refutation drops a finding; a reproduction keeps it; the challenger spawn passes the S3a contract tests; --challenger-effort injection is refused. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
   created_at: 2026-11-26T09:49:44.198619861Z
   modified_at: 2026-11-26T09:49:44.198619861Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a2177e-013d-77f3-816c-4ffb19224f01
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:54):
+    # STORY-3120 S4: `--adversarial` Finder→Challenger review + detect_ai_authors / opposition + --challenger-effort (slice plan on STORY-3120; Joe's reference branch story-3120-ci-review; product-15). Lane: CLAUDE. STRICT (spawns agents). INTEGRATION, NEW branch int45-story-3120-s4 (cut from the integration tip). Title "(Refs STORY-3120)". <=300 lines; split if needed. Do NOT rebase onto main.
+    READ: `aida show STORY-3120 --comments` (slice plan comment 1; S4 notes incl. --challenger-effort; the S3a/S3b security ACs, which ALL apply to the challenger spawn). Reference code ONLY: branch story-3120-ci-review (AdversarialReviewSummary, detect_ai_authors).
+    SCOPE: `aida review prepare --run-review --adversarial`: a Finder pass, then a Challenger pass that must refute or reproduce each finding. The Challenger reuses the SAME hardened spawn helper (empty temp cwd, cleared env + allowlist, stdin prompt, deadline/caps, trusted-base rules, coverage-ledger fail-closed, credential-path screening). `--challenger-effort` is validated against the same allowlist at every source. detect_ai_authors picks an OPPOSING vendor for the challenger where available (e.g. a claude-authored PR → a codex challenger), falling back explicitly with a note when it is unavailable.
+    TESTS: a challenger refutation drops a finding; a reproduction keeps it; the challenger spawn passes the S3a contract tests; --challenger-effort injection is refused. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T10:54:08.064728856Z
+  modified_at: 2026-11-26T10:54:08.064728856Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
