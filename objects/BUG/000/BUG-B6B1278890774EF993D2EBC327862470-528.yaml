@@ -9,12 +9,12 @@ description: |
   - AC1: a PR ejected or bisected as the CULPRIT of a red train is not re-admitted to any train until its head SHA changes or an operator clears it explicitly (a recorded clearance); `aida pr train --check` names it as "held: culprit of train #N at <sha>".
   - AC2: while an advisor or operator DRAIN of the auto-train is active, it starts NO new trains, including follow-up bisect trains. In-flight train CI is left alone (never cancelled).
   - AC3: tests for AC1 (same-head re-admission refused; a new head is re-admitted) and AC2 (a drain blocks a bisect start).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T01:51:46.906577705Z
-modified_at: 2026-11-26T03:15:27.307171597Z
+modified_at: 2026-11-26T06:25:59.703820357Z
 req_type: Bug
 tags:
 - landing
@@ -114,6 +114,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21688-4751-7e91-bd90-7f3cf57ec757
+  author: aida-auto-bump
+  timestamp: 2026-11-26T06:25:59.634001381Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21688-4797-7390-8a97-f338b09f08fc
+  timestamp: 2026-11-26T06:25:59.703815618Z
+  agent: aida
+  commit_sha: b69e20df8975571dff93b856f4a16bbacc74e003
+  summary: 'BUG-2767 PASS. AC1 verified by pr_train_culprit.rs tests bug2767_same_head_is_held_new_head_and_clearance_are_not and bug2767_unreadable_record_fails_closed, and by story_1690 bug2767_a_culprit_is_not_readmitted_at_the_same_head: same head refused, new head admitted, naming the PR records a clearance. The --check row reads ''held: culprit of train #N at <sha>'' (pr_train_check.rs:173). AC2 verified by bug2767_a_drain_blocks_the_bisect_follow_up_trains: the drain is checked between waves only, so in-flight CI is never cancelled, and the auto-train (ADVISOR_LOOP) reads admission_drain::active and fails closed when the record is unreadable. AC3 verified: both tests are present. Bug protocol item ''the PR touches at least one test file'': met (story_1690_train_tests.rs plus in-module tests). The store-writer inventory rows were added. CI pending at review time (fast compile and fast gates running). Three non-blocking follow-ups (p2, test-gap, p3) are recorded as deferred.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: fa7028b4df8d8ce2aa0e3f270a743cca265b957e
@@ -122,3 +136,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: fa7028b4df8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T06:25:59.633993374Z
+  completion_sha: b69e20df8975571dff93b856f4a16bbacc74e003
