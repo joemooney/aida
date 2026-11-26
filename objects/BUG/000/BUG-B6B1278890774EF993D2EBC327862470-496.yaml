@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-26T18:48:20.322362766Z
+modified_at: 2026-11-26T18:50:31.942401Z
 req_type: Bug
 tags:
 - forge
@@ -262,6 +262,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T18:48:20.165411297Z
   modified_at: 2026-11-26T18:48:20.165411297Z
+- id: 01a21932-2bc7-76f0-bf7b-a302848a528b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:50):
+    # BUG-2735 r1 on #4464 (advisor-122 ruling 2026-11-26 11:50 at 7d711a72: a LEGIT request-changes, a train-path regression exactly when the budget is tight; product-15). Lane: CLAUDE. SUPERVISED / train path. MAIN, existing branch bug-b6b1278890774ef993d2ebc327862470-496 / PR #4464 (codex-authored; this is an ordinary rework). Keep the title "(Refs BUG-2735)". <=300 lines total diff.
+    BINDING:
+     (1) The low-budget back-off (all_ready under the advisor loop, budget below 20%, pr_train.rs ~5347/5381) must NEVER widen journal recovery. Keep `requested` = the set the pass would have admitted (or skip the train entirely under back-off). A retained journal resumes ONLY on a member-set match (BUG-2547 preserved). TEST: a low budget + a stale retained journal → not resumed.
+     (2) Nit: use `gh browse --no-browser` in watcher_repo (forge.rs ~2463), or make the comment accurate (gh can issue a GraphQL repo-network query).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4464. COMMIT your work.
+  created_at: 2026-11-26T18:50:31.942401Z
+  modified_at: 2026-11-26T18:50:31.942401Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
