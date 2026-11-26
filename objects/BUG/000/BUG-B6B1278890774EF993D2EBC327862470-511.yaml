@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The train pre-pass refreshes the store ref with a DEADLINE-BOUNDED, FETCH-ONLY operation WITHOUT the store writer lock (no full pull, no schedule filing, no mirror push), then reads the mandate/approval evidence from the fetched ref. On timeout it proceeds with the cached store and logs "store refresh timed out".
   - AC2: Tests: a stalled fetch does not block the train past its deadline, and holds NO store writer lock during the refresh.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-25T12:24:23.747773676Z
+modified_at: 2026-11-26T05:01:06.560985967Z
 req_type: Bug
 tags:
 - store
@@ -359,6 +359,11 @@ comments:
   created_at: 2026-11-25T12:24:23.747769095Z
   modified_at: 2026-11-25T12:24:23.747769095Z
   session_id: 01a212786cd9
+- id: 01a2163a-9080-7663-8e9a-b7a00ce590a5
+  author: lane-recovery
+  content: Reference merge `cd984f6d46b8cfdcf6c4ecc75d67ce3f8a177154` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-26T05:01:06.560976720Z
+  modified_at: 2026-11-26T05:01:06.560976720Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
@@ -592,6 +597,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2163a-9080-7663-8e9a-b7b4b4d58669
+  author: lane-recovery
+  timestamp: 2026-11-26T05:01:06.560985798Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 8dfad228d5897828a20168a919294468baab8452
