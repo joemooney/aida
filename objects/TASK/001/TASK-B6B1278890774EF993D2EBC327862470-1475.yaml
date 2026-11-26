@@ -9,12 +9,12 @@ description: |
   - AC1: a tracked config knob `[landing] max_prs_per_train` (default unset = today's behaviour) caps how many members the AUTO-train admits into one train; the rest wait for the next train in priority order. Explicit operator `aida pr train N...` lists are unaffected unless they pass --max.
   - AC2: a test showing that with max_prs_per_train=3 and 6 ready PRs, the train admits 3 and the next pass admits the next 3.
   - AC3: once landed, set `max_prs_per_train = 3` in .aida/config.toml, with a comment citing #4605 (a follow-up config change).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T18:25:00.547023769Z
+modified_at: 2026-11-26T18:29:59.984039654Z
 req_type: Task
 tags:
 - landing
@@ -181,6 +181,27 @@ comments:
   modified_at: 2026-11-26T17:59:31.537757140Z
   session_id: 01a218f99f51
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2191e-dad8-7b12-9f58-cc9a4dfa10cb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 527a23c0bd
+
+    - AC3 [configuration-validation]: `.aida/config.toml` adds `[landing] max_prs_per_train = 3` with a comment citing the 6-PR train #4605 and its ~2.5h bisect (#4608/#4609) on 2026-11-25. `landing_policy::load` reads the default branch's tracked config (`read_trusted_config_toml_local`), so this takes effect once merged to main. It is not host-only.
+    - Validation: python tomllib parses it as `{max_prs_per_train: 3}`. There is exactly one `[landing]` table (no duplicate-table error). The value line has no inline comment, and the parser test `max_prs_per_train_caps_the_auto_train_and_defaults_to_today` already covers `3 # cmt`. `make check-ci-fast` passed (lane job j20261126T175953055-30-0, exit 0, 0 FAIL).
+    - Probes: no key-name drift vs `landing_policy.rs:239` (`max_prs_per_train`). The value is a positive integer, so no fallback warning. Explicit `aida pr train N...` lists are unaffected (per #4668).
+    - Residual risk: a stalled train now admits at most 3, so the ready queue may drain more slowly at peak times. That trade-off is intended.
+  created_at: 2026-11-26T18:29:42.232177778Z
+  modified_at: 2026-11-26T18:29:42.232177778Z
+  session_id: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2191f-2030-77b3-b672-972dd8b3a965
+  author: aida-publication-done
+  content: Implementer push 2b55db7ed31a declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T18:29:59.984038822Z
+  modified_at: 2026-11-26T18:29:59.984038822Z
+  session_id: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
@@ -265,6 +286,15 @@ history:
   session_id: 01a218e76317
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2191f-2030-77b3-b672-971608d130a9
+  author: aida-publication-done
+  timestamp: 2026-11-26T18:29:59.984036395Z
+  session_id: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: fa7028b4df8d8ce2aa0e3f270a743cca265b957e
