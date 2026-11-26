@@ -1249,6 +1249,56 @@ mod tests {
         assert!(land.borrow().is_some());
     }
 
+    fn zero_wait_train_fixture() -> tempfile::TempDir {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join(".aida")).unwrap();
+        std::fs::write(
+            temp.path().join(".aida/config.toml"),
+            "[admission]\nwait_secs = 0\n",
+        )
+        .unwrap();
+        temp
+    }
+
+    fn stale_legacy_receipts(root: &Path) -> [PathBuf; 2] {
+        let mut reused = ProcIdentity::capture(std::process::id()).unwrap();
+        reused.starttime += 1;
+        ["legacy review-watch", "legacy auto-train"]
+            .map(|purpose| write_test_receipt(root, reused.clone(), purpose))
+    }
+
+    // trace:BUG-2732.AC1 | ai:codex
+    // trace:BUG-2732.AC2 | ai:codex
+    #[test]
+    fn bug2732_manual_train_releases_stale_legacy_receipts() {
+        let temp = zero_wait_train_fixture();
+        let stale = stale_legacy_receipts(temp.path());
+        let _claim = manual_train_admission(temp.path(), false)
+            .unwrap()
+            .expect("first attempt should acquire its own claim");
+        for receipt in stale {
+            assert!(!receipt.try_exists().unwrap());
+        }
+    }
+
+    // trace:BUG-2732.AC2 | ai:codex
+    #[test]
+    fn bug2732_manual_train_preserves_live_auto_train() {
+        let temp = zero_wait_train_fixture();
+        let live = acquire(temp.path(), "legacy auto-train", true).unwrap();
+        let stale = stale_legacy_receipts(temp.path());
+        let error = manual_train_admission(temp.path(), false).err().unwrap();
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error}");
+        assert!(live.receipt.is_file());
+        for receipt in stale {
+            assert!(!receipt.try_exists().unwrap());
+        }
+        drop(live);
+        assert!(manual_train_admission(temp.path(), false)
+            .unwrap()
+            .is_some());
+    }
+
     /// A waiting manual train asks only the auto-train to yield; review
     /// controllers keep their claim and coexist with it.
     // trace:BUG-2703 | ai:claude

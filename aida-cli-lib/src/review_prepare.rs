@@ -6,11 +6,12 @@
 
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::review_engine::{
-    anchor_findings_with, bundle_review_batches, classify_diff_inventory, verify_coverage_ledger,
+    anchor_findings_with, bundle_review_batches, classify_with_exclusions, verify_coverage_ledger,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
     PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
     ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
 };
+use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -73,6 +74,14 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "FINDINGS_JSON")]
     pub anchor_findings: Option<PathBuf>,
 
+    /// Write a SARIF 2.1.0 report inside the repository.
+    #[clap(long, value_name = "PATH", requires = "anchor_findings")]
+    pub sarif: Option<PathBuf>,
+
+    /// Exit with an error when any finding meets or exceeds this severity.
+    #[clap(long, value_name = "SEVERITY", requires = "anchor_findings")]
+    pub fail_on: Option<String>,
+
     /// Emit machine-readable JSON output.
     #[clap(long)]
     pub json: bool,
@@ -121,10 +130,12 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     let project_root = find_project_root()?;
     let rules_cfg = load_review_rules(&project_root)?;
-    let registry = PlaybookRegistry::new(rules_cfg.rules.clone());
+    let registry = PlaybookRegistry::new(rules_cfg.rules.clone())?;
 
     let mut excludes = rules_cfg.exclude.clone();
     excludes.extend(args.exclude.iter().cloned());
+
+    let excludes = compile_exclusions(&excludes)?;
 
     // 1. Resolve comparison mode and git endpoints.
     let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
@@ -146,11 +157,14 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     }
 
     // 3. Classify inventory and cache target revision file contents for trace + facet detection.
+    let token_budget = rules_cfg
+        .batch_token_budget
+        .unwrap_or(DEFAULT_BATCH_TOKEN_BUDGET);
     let target_rev = head_ref.as_deref();
     let mut content_cache: BTreeMap<String, String> = BTreeMap::new();
     let mut read_error = None;
-    let inventory = classify_diff_inventory(&raw_entries, &registry, &excludes, |rel_path| {
-        match read_file_at_revision(&project_root, target_rev, rel_path) {
+    let detect_trace =
+        |rel_path: &str| match read_file_at_revision(&project_root, target_rev, rel_path) {
             Ok(Some(content)) => {
                 let has_trace = content.contains("trace:");
                 content_cache.insert(rel_path.to_owned(), content);
@@ -161,30 +175,34 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
                 false
             }
             Ok(None) => false,
-        }
-    });
+        };
+    let inventory = classify_with_exclusions(
+        &raw_entries,
+        &registry,
+        &excludes,
+        token_budget,
+        detect_trace,
+    );
     if let Some(err) = read_error {
         return Err(err);
     }
 
     // 4. Bundle reviewable files into semantic, token-bounded batches.
-    let token_budget = rules_cfg
-        .batch_token_budget
-        .unwrap_or(DEFAULT_BATCH_TOKEN_BUDGET);
     let max_files = rules_cfg
         .max_files_per_batch
         .unwrap_or(DEFAULT_MAX_FILES_PER_BATCH);
-    let batches = bundle_review_batches(&inventory.reviewable_files, token_budget, max_files);
+    let batches = bundle_review_batches(&inventory.reviewable_files, token_budget, max_files)?;
 
     // 5. Collect distinct resolved playbooks referenced by reviewable files and
     //    enrich each with diff/content-triggered facets (ANSSI / Tokio / Rust API).
-    let mut playbooks_by_id: BTreeMap<String, (ResolvedPlaybook, Vec<&str>)> = BTreeMap::new();
+    let mut playbooks_by_id: BTreeMap<String, (ResolvedPlaybook, Vec<(&str, &str)>)> =
+        BTreeMap::new();
     for rf in &inventory.reviewable_files {
         let entry = playbooks_by_id
             .entry(rf.playbook_id.clone())
             .or_insert_with(|| (registry.resolve(&rf.path), Vec::new()));
         if let Some(body) = content_cache.get(&rf.path) {
-            entry.1.push(body.as_str());
+            entry.1.push((&rf.path, body.as_str()));
         }
     }
     let playbooks: Vec<ResolvedPlaybook> = playbooks_by_id
@@ -216,8 +234,22 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     let anchored_findings = if let Some(findings_path) = &args.anchor_findings {
         let raw_findings = std::fs::read_to_string(findings_path)
             .with_context(|| format!("read findings JSON {}", findings_path.display()))?;
-        let parsed: Vec<RawReviewFinding> = serde_json::from_str(&raw_findings)
+        // trace:STORY-3120 | ai:codex
+        let (parsed, _) = aida_core::review_engine::parse_runner_findings_json(&raw_findings)
+            .map_err(anyhow::Error::msg)
             .with_context(|| format!("parse findings JSON {}", findings_path.display()))?;
+        let allowed: BTreeSet<_> = inventory
+            .reviewable_files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+        for finding in &parsed {
+            anyhow::ensure!(
+                allowed.contains(finding.path.as_str()),
+                "finding path outside reviewable inventory: {:?}",
+                finding.path
+            );
+        }
         Some(anchor_findings_with(&parsed, |path| {
             content_cache.get(path).cloned()
         }))
@@ -244,18 +276,43 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         render_bundle_markdown(&bundle)
     };
 
+    // trace:STORY-3120 | ai:codex
+    let findings = bundle.anchored_findings.as_deref().unwrap_or_default();
+    let exceeded = args
+        .fail_on
+        .as_deref()
+        .map(|threshold| {
+            aida_core::review_engine::findings_exceeding_threshold(findings, threshold)
+                .map_err(anyhow::Error::msg)
+        })
+        .transpose()?;
+
     if let Some(write_path) = &args.write {
         write_output(&project_root, write_path, &rendered)?;
     } else {
         println!("{rendered}");
     }
 
+    if let Some(path) = &args.sarif {
+        let report = aida_core::review_engine::findings_to_sarif_json(findings);
+        write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
+            .with_context(|| format!("write SARIF {}", path.display()))?;
+    }
+    if let (Some(threshold), Some(matches)) = (&args.fail_on, exceeded) {
+        anyhow::ensure!(
+            matches.is_empty(),
+            "{} findings meet or exceed --fail-on {threshold}",
+            matches.len()
+        );
+    }
+
     if let Some(cov) = &bundle.coverage_verification {
         if !cov.passed {
             anyhow::bail!(
-                "file coverage verification failed ({}% accounted; missing: {:?}, skipped without reason: {:?})",
+                "file coverage verification failed ({}% accounted; missing: {:?}, ambiguous: {:?}, skipped without reason: {:?})",
                 cov.coverage_rate_pct,
                 cov.unaccounted_files,
+                cov.ambiguous_files,
                 cov.skipped_without_reason
             );
         }
@@ -431,7 +488,7 @@ fn collect_git_diff_entries(
     mode: &str,
     merge_base: Option<&str>,
     head_ref: Option<&str>,
-    excludes: &[String],
+    excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     let range = match (mode, merge_base, head_ref) {
         ("commit" | "range", Some(base), Some(head)) => format!("{base}..{head}"),
@@ -480,7 +537,7 @@ fn collect_git_diff_entries(
             additions,
             deletions,
             is_binary,
-            patch_bytes: (additions + deletions) * 48,
+            patch_bytes: additions.saturating_add(deletions).saturating_mul(48),
         });
     }
     if mode == "workspace" {
@@ -532,7 +589,7 @@ fn path_matches_any_scope(candidate: &str, scopes: &[String]) -> bool {
 fn collect_git_scan_entries(
     project_root: &Path,
     paths: &[String],
-    excludes: &[String],
+    excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     for p in paths {
         crate::git_arg_guard::reject_option_like("--path", p)?;
@@ -563,7 +620,7 @@ fn worktree_entries(
     root: &Path,
     paths: &str,
     kind: FileChangeKind,
-    excludes: &[String],
+    excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     let mut entries = Vec::new();
     for path in paths.split_terminator('\0').collect::<BTreeSet<_>>() {
@@ -580,7 +637,7 @@ fn worktree_entries(
             is_binary: false,
             patch_bytes: 0,
         };
-        if aida_core::review_engine::classify_exclusion(&entry, excludes).is_none() {
+        if classify_compiled(&entry, excludes).is_none() {
             let Some(bytes) = read_workspace_file(root, path)? else {
                 continue;
             };
@@ -781,6 +838,18 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
             "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
             cov.passed, cov.coverage_rate_pct, cov.total_reviewable
         ));
+        for file in &cov.not_reviewable_by_batch {
+            out.push_str(&format!(
+                "- **Not reviewable by batch**: `{}` ({})\n",
+                file.path, file.reason
+            ));
+        }
+        if !cov.ambiguous_files.is_empty() {
+            out.push_str(&format!(
+                "- **Ambiguous ledger rows**: `{}`\n",
+                cov.ambiguous_files.join(", ")
+            ));
+        }
         if !cov.unaccounted_files.is_empty() {
             out.push_str(&format!(
                 "- **Unaccounted files**: `{}`\n",
@@ -804,6 +873,60 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
 mod tests {
     use super::*;
 
+    // trace:STORY-3120 | ai:codex
+    #[test]
+    fn s2_export_gate_checks_changed_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("unchanged.rs"), "old").unwrap();
+        git_text(root, &["add", "unchanged.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        std::fs::write(root.join("changed.rs"), "new").unwrap();
+        git_text(root, &["add", "changed.rs"]).unwrap();
+        crate::test_git::commit_fixture(root);
+        let input = root.join("findings.json");
+        let output = root.join("report.sarif");
+        let mut args = ReviewPrepareArgs {
+            from: Some(base),
+            anchor_findings: Some(input.clone()),
+            sarif: Some(output.clone()),
+            fail_on: Some("high".into()),
+            ..Default::default()
+        };
+        let finding = |path| {
+            serde_json::json!({"path":path,"severity":"high",
+            "category":"bug","message":"example","existing_code":"new"})
+        };
+        let valid = finding("changed.rs");
+        std::fs::write(
+            &input,
+            serde_json::json!([valid, finding("unchanged.rs")]).to_string(),
+        )
+        .unwrap();
+        let error = handle_review_prepare(&args, &store).unwrap_err();
+        assert!(error.to_string().contains("outside reviewable inventory"));
+        assert!(!output.exists());
+        std::fs::write(
+            &input,
+            serde_json::json!({"findings":[valid],"files":[]}).to_string(),
+        )
+        .unwrap();
+        let error = handle_review_prepare(&args, &store).unwrap_err();
+        assert!(error.to_string().contains("1 findings meet or exceed"));
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap();
+        let result = &report["runs"][0]["results"][0];
+        assert_eq!(
+            result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "changed.rs"
+        );
+        args.fail_on = Some("critical".into());
+        handle_review_prepare(&args, &store).unwrap();
+    }
+
     #[test]
     fn invalid_review_rules_errors() {
         let root = tempfile::tempdir().unwrap();
@@ -814,6 +937,19 @@ mod tests {
         let store = Storage::new(root.path().join("requirements.yaml"));
         let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store).unwrap_err();
         assert_eq!(error.to_string(), "load .aida/review-rules.toml");
+        let pattern = format!("{{{}z}}", "x,".repeat(256));
+        std::fs::write(
+            config_dir.join("review-rules.toml"),
+            format!("[[rules]]\nid = 'custom-check'\npattern = '{pattern}'\nchecklist = 'inspect'"),
+        )
+        .unwrap();
+        let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("custom-check") && error.contains(&pattern),
+            "{error}"
+        );
     }
 
     #[test]

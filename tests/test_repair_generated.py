@@ -113,6 +113,22 @@ class RepairGenerationTests(unittest.TestCase):
             self.assertEqual(golden.read_text(), 'rendered help\n')
             self.assertEqual(ledger.read_text(), 'regenerated\n')
 
+            # trace:BUG-2756 | ai:codex — publication preserves the resolved
+            # snapshot even if cargo partially overwrote it before failing.
+            cargo.write_text(f"#!/bin/sh\necho partial > {path}\nprintf failed >&2\nexit 23\n")
+            git('add', '.')
+            result = self.run_driver(root, base, 'publish', env)
+            self.assertEqual(result.returncode, 75, result.stderr)
+            self.assertTrue(result.stderr.splitlines()[-1].startswith('snapshot regeneration failed: '))
+            self.assertIn('exit status 23', result.stderr)
+            self.assertIn('; CI will verify', result.stderr)
+            self.assertEqual(golden.read_text(), 'rendered help\n')
+            git('commit', '-qm', 'resolved merge')
+            remote = root.parent / 'remote.git'
+            git('init', '--bare', str(remote))
+            git('push', str(remote), 'HEAD:refs/heads/repair')
+            self.assertEqual(git('--git-dir', str(remote), 'rev-parse', 'repair^2').stdout.strip(), base)
+
     def test_restore_and_regenerate_conflicted_ledger_retains_merge(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

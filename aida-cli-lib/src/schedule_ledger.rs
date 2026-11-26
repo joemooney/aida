@@ -333,9 +333,24 @@ pub(crate) fn write_cas(
     write_cas_opts(store_root, job, true, mutate)
 }
 
+// The throughput guard defers its local commit’s publication to store sync.
+// trace:BUG-2730 | ai:codex
+pub(crate) fn write_local_bounded(
+    root: &Path,
+    job: &str,
+    mutate: impl FnMut(&mut JobLedger),
+) -> Result<bool> {
+    let write = || write_cas_opts(root, job, false, mutate);
+    if is_git_checkout(root) {
+        aida_core::db::with_store_write_lock_bounded(root, write)
+    } else {
+        write()
+    }
+}
+
 /// [`write_cas`] with an explicit `push` switch. The per-turn hook tick runs
 /// under a few-second budget, so it commits locally (`push = false`) and lets
-/// the next sync upload; every other writer pushes.
+/// the next sync upload.
 // trace:STORY-1226 | ai:claude
 pub(crate) fn write_cas_opts(
     store_root: &Path,

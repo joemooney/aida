@@ -221,7 +221,7 @@ pub(crate) enum LegacyRule {
 
 pub(crate) struct LeaseReader<'a> {
     root: &'a Path,
-    reqs: std::cell::OnceCell<Option<aida_core::RequirementsStore>>,
+    reqs: std::cell::OnceCell<Option<std::borrow::Cow<'a, aida_core::RequirementsStore>>>,
     live: std::cell::OnceCell<Vec<crate::process_probe::LiveSession>>,
     registry: std::cell::OnceCell<Vec<crate::agent_registry::AgentRegistryEntry>>,
 }
@@ -236,6 +236,14 @@ impl<'a> LeaseReader<'a> {
         }
     }
 
+    // trace:STORY-3095 | ai:codex
+    pub(crate) fn with_store(root: &'a Path, store: &'a aida_core::RequirementsStore) -> Self {
+        Self {
+            reqs: Some(std::borrow::Cow::Borrowed(store)).into(),
+            ..Self::new(root)
+        }
+    }
+
     fn key(&self, lease: &crate::SessionLease) -> Result<Option<WorkKey>> {
         let resolve = |label: &str| {
             uuid::Uuid::parse_str(label.trim())
@@ -243,7 +251,9 @@ impl<'a> LeaseReader<'a> {
                 .map(crate::gate::canon::SpecKey)
                 .or_else(|| {
                     self.reqs
-                        .get_or_init(|| crate::load_store_for_lookup(self.root))
+                        .get_or_init(|| {
+                            crate::load_store_for_lookup(self.root).map(std::borrow::Cow::Owned)
+                        })
                         .as_ref()
                         .and_then(|s| dual::spec_key_in_store(s, label))
                 })
@@ -696,7 +706,9 @@ hostname = "test"
         let reader = LeaseReader::new(root.path());
         reader
             .reqs
-            .set(Some(aida_core::RequirementsStore::default()))
+            .set(Some(std::borrow::Cow::Owned(
+                aida_core::RequirementsStore::default(),
+            )))
             .ok()
             .unwrap();
         assert!(reader.record(&lease).unwrap().is_none());
@@ -772,7 +784,9 @@ hostname = "test"
             let reader = LeaseReader::new(root.path());
             reader
                 .reqs
-                .set(Some(aida_core::RequirementsStore::default()))
+                .set(Some(std::borrow::Cow::Owned(
+                    aida_core::RequirementsStore::default(),
+                )))
                 .ok()
                 .unwrap();
             reader

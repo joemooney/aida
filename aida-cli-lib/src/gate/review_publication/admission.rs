@@ -57,7 +57,7 @@ pub(crate) fn require_pinned(root: &Path, expected: &Option<Hub>) -> Result<()> 
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+// Persisted in review-watch reservations. trace:BUG-2758 | ai:codex
 pub(crate) struct Hub {
     repository: String,
     url: String,
@@ -149,7 +149,9 @@ struct Transition {
 #[serde(deny_unknown_fields)]
 struct Table {
     version: u32,
-    // One causal chain per change; old active heads fence new heads too.
+    // One causal chain per change. A claim fences only its own head: an old
+    // head's claim, Running or not, never blocks a moved head.
+    // trace:BUG-2763 | ai:claude
     changes: BTreeMap<String, Vec<Signed>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     anchor: Option<Signed>,
@@ -206,14 +208,14 @@ const LEGACY_EXIT: &str = "owner observed queue exit ";
 fn retry_allowed(history: &[Transition], head: &str, legacy_waiting: bool) -> bool {
     // A cancelled pre-spawn Retry did not consume a started attempt. Peel only
     // those exact pairs; unrelated heads or reservations cannot borrow authority.
-    let mut authority = history;
+    // Heads interleave in the change chain, so peel within this head's history.
+    // trace:BUG-2763 | ai:claude
+    let same_head: Vec<_> = history.iter().filter(|p| p.head == head).collect();
+    let mut authority = same_head.as_slice();
     while let [rest @ .., retry, cancelled] = authority {
         if cancelled.state != State::Cancelled
             || retry.state != State::Retry
-            || retry.head != head
-            || cancelled.head != head
             || cancelled.token != retry.token
-            || cancelled.predecessor != Some(retry.id)
         {
             break;
         }
@@ -271,9 +273,11 @@ fn chain(hub: &Hub, key: &str, records: &[Signed], roster: &Roster) -> Result<Ve
             "admission requires unpredictable v4 claim/transition IDs"
         );
         verify_signature(&t.node, signed, roster)?;
-        let prior = out.last();
+        // The predecessor orders the whole change; ownership is scoped to its head.
+        // trace:BUG-2763 | ai:codex
+        let prior = out.iter().rev().find(|p| p.head == t.head);
         ensure!(
-            t.predecessor == prior.map(|p| p.id) && !out.iter().any(|p| p.id == t.id),
+            t.predecessor == out.last().map(|p| p.id) && !out.iter().any(|p| p.id == t.id),
             "invalid admission predecessor"
         );
         match &t.state {
@@ -535,7 +539,8 @@ fn update_with_observer(
         table.changes.retain(|change, _| change == key);
         let records = table.changes.entry(key.into()).or_default();
         let history = chain(hub, key, records, &roster)?;
-        let prior = history.last();
+        // trace:BUG-2763 | ai:claude
+        let prior = history.iter().rev().find(|p| p.head == head);
         let state = if state == State::Reserved {
             if prior.is_some_and(|p| active(&p.state)) {
                 return Ok(false);
@@ -583,7 +588,7 @@ fn update_with_observer(
             change: key.into(),
             head: head.into(),
             id: Uuid::new_v4(),
-            predecessor: prior.map(|p| p.id),
+            predecessor: history.last().map(|p| p.id),
             token,
             node: config.node.clone(),
             session: if matches!(state, State::Reserved | State::Retry) {
@@ -779,7 +784,10 @@ pub(crate) fn require_released(root: &Path, key: &str) -> Result<()> {
         table.changes.get(key).map(Vec::as_slice).unwrap_or(&[]),
         &roster,
     )?;
-    ensure!(!history.last().is_some_and(|t| active(&t.state)),
+    // Any head whose latest transition is still active blocks a local release.
+    // trace:BUG-2763 | ai:claude
+    let mut seen = std::collections::BTreeSet::new();
+    ensure!(!history.iter().rev().any(|t| seen.insert(&t.head) && active(&t.state)),
         "distributed admission is active; stop watchers/reviewers and use review nodes admission-reconcile before local --release");
     Ok(())
 }

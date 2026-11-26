@@ -1937,7 +1937,7 @@ pub(crate) fn exit_occupancy(
     let own = own_process_chain();
     let deadline = std::time::Instant::now() + EXIT_OCCUPANCY_GRACE;
     loop {
-        let why = match attempt_occupancy(&r, &own) {
+        let why = match attempt_occupancy(&r, &own, false) {
             receipt::Occupancy::Clear => return None,
             receipt::Occupancy::Occupied(what) => format!("attempt not provably over: {what}"),
             receipt::Occupancy::Unknown(why) => format!("attempt cannot be proven over ({why})"),
@@ -2140,12 +2140,14 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
 pub(crate) fn attempt_occupancy(
     r: &LaunchReceipt,
     own: &std::collections::HashSet<u32>,
+    recovery: bool,
 ) -> receipt::Occupancy {
     let launcher = match &r.owner {
         Owner::Dispatcher(p) => Some(p),
         _ => None,
     };
     let probe = receipt::OccupancyProbe {
+        recovery,
         worktree: Some(&r.worktree),
         group: r.worker.as_ref().map(|w| w.pid),
         session: r.supervisor.as_ref().map(|s| s.pid),
@@ -2224,7 +2226,7 @@ pub(crate) fn recover_launch_at(
             ),
         }
     }
-    match attempt_occupancy(&r, own) {
+    match attempt_occupancy(&r, own, true) {
         receipt::Occupancy::Clear => {}
         receipt::Occupancy::Occupied(what) => anyhow::bail!(
             "attempt {attempt} is not provably over: {what}; nothing was changed"

@@ -1731,6 +1731,48 @@ pub(crate) fn scan_permission_posture_findings(
         .collect()
 }
 
+// trace:BUG-2752 | ai:codex
+pub(crate) fn setup_init_native_policy(root: &std::path::Path, initialized: bool) -> Result<()> {
+    use crate::config_commit::{self, CommitMode};
+    let vendor = crate::vendors::native_setup::KEY;
+    let default = crate::forge::default_branch_of(root);
+    let branch = aida_core::git_ops::current_branch(root)?;
+    anyhow::ensure!(
+        branch == default && branch != "HEAD",
+        "run `aida init --agent {vendor}` on the trusted default branch ({default})"
+    );
+    if crate::agent_config::load_contained_vendor(root, vendor)?.is_none() {
+        if let Some(hint) = crate::vendors::native_setup::unpublished_hint(root, &default) {
+            println!("  {hint}");
+            return Ok(());
+        }
+    }
+    let clean = config_commit::config_is_clean(root);
+    anyhow::ensure!(
+        clean == Some(true),
+        "review and commit .aida/config.toml on {default}, then rerun `aida init --agent {vendor}`"
+    );
+    if offer_init_codex_native(root, true, true, || {
+        anyhow::ensure!(
+            initialized || config_commit::init_refresh_mode() == CommitMode::Auto,
+            "finish committing the scaffold, then rerun `aida init --agent {vendor}` on {default}"
+        );
+        crate::prompt_yes_no(crate::vendors::native_setup::PROMPT, false)
+    })? {
+        config_commit::finish_config_change(
+            root,
+            clean,
+            CommitMode::Auto,
+            "[AI:aida] chore(init): opt into native sandbox",
+        );
+        if aida_core::git_ops::has_remote(root, "origin") {
+            let destination = crate::cast_recording::shell_quote(&format!("refs/heads/{default}"));
+            println!("  After committing, publish the policy with: git push origin {destination}:{destination}");
+        }
+    }
+    Ok(())
+}
+
 // trace:BUG-2513 | ai:codex
 pub(crate) fn offer_init_codex_native(
     project_root: &std::path::Path,
@@ -1766,6 +1808,10 @@ pub(crate) fn offer_init_codex_native(
     if !consent()? {
         return Ok(false);
     }
+    anyhow::ensure!(
+        load_edit_doc(&path)?.to_string() == doc.to_string(),
+        "project config changed during the native sandbox prompt; rerun init"
+    );
     let contained = ensure_root_table(&mut doc, "contained");
     if !contained.contains_key("vendors") {
         contained.insert("vendors", Item::Table(Table::new()));

@@ -36,6 +36,8 @@ use std::process::Command;
 mod commit_ci;
 #[path = "forge_throughput.rs"]
 mod throughput;
+#[path = "forge_tier_runs.rs"]
+pub(crate) mod tier_runs;
 pub(crate) use commit_ci::*;
 
 /// One CI job as [`Forge::run_job_report`] reads it; the log is an error
@@ -1894,6 +1896,15 @@ fn describe_core_budget(body: &[u8]) -> Option<(String, bool)> {
 
 // trace:TASK-3847 | ai:codex
 pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
+    github_core_budget_with_cache(root, true)
+}
+
+// trace:STORY-3095 | ai:codex
+pub(crate) fn github_core_budget_uncached(root: &Path) -> Option<(String, bool)> {
+    github_core_budget_with_cache(root, false)
+}
+
+fn github_core_budget_with_cache(root: &Path, cache: bool) -> Option<(String, bool)> {
     use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
     use crate::review_watch::forge::{main_root, Repository};
     use std::time::Duration;
@@ -1911,8 +1922,11 @@ pub(crate) fn github_core_budget(root: &Path) -> Option<(String, bool)> {
             repo.pin_command(&mut command);
             command
                 .current_dir(&root)
-                .args(["api", "rate_limit", "--cache", "60s"])
+                .args(["api", "rate_limit"])
                 .stdin(std::process::Stdio::null());
+            if cache {
+                command.args(["--cache", "60s"]);
+            }
             let remaining = crate::forge_lookup::forge_lookup_deadline()?
                 .checked_duration_since(std::time::Instant::now())?;
             let BoundedCommandOutput::Completed(out) =
@@ -2416,7 +2430,8 @@ fn landing_github_call(
         .current_dir(root)
         .stdin(std::process::Stdio::null());
     repo.pin_command(&mut command);
-    match command_output_with_timeout_capped(command, std::time::Duration::from_secs(10), CAP) {
+    let timeout = crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(10))?;
+    match command_output_with_timeout_capped(command, timeout, CAP) {
         BoundedCommandOutput::Completed(out)
             if out.stdout.len() as u64 <= CAP && out.stderr.len() as u64 <= CAP =>
         {
@@ -2559,7 +2574,8 @@ pub(crate) fn github_open_changes_detailed(
         .current_dir(root)
         .stdin(std::process::Stdio::null());
     pin(&mut command);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(60))
+    let timeout = crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(60))?;
+    let out = crate::command_output_with_timeout(command, timeout)
         .context("the forge listing of open changes failed to run or timed out")?;
     anyhow::ensure!(
         out.status.success(),
@@ -6914,24 +6930,46 @@ mod fast_gate_tests;
 /// must pin this HEAD. A capped history is unknown, never deletion authority.
 // trace:TASK-1222 | ai:codex
 pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) -> Observed<bool> {
+    observe_terminal_branch(root, branch, head, false).map(|tip| tip.matched)
+}
+
+/// Result of an exact-tip terminal lookup: whether a qualifying row pins the
+/// tip, and the PR/MR number of that row when the forge reported one.
+// trace:STORY-3059 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TerminalTip {
+    pub(crate) matched: bool,
+    pub(crate) number: Option<u64>,
+}
+
+// trace:STORY-3059 | ai:codex
+pub(crate) fn observe_terminal_branch(
+    root: &Path,
+    branch: &str,
+    head: &str,
+    unmerged_only: bool,
+) -> Observed<TerminalTip> {
     let kind = resolve_forge_kind(root);
     let Some(binary) = crate::resolve_forge_cli(kind) else {
         return Observed::Transient("forge CLI unavailable".into());
     };
     let mut cmd = forge_read_command(&binary);
     cmd.current_dir(root).stdin(std::process::Stdio::null());
-    match kind {
-        ForgeKind::GitHub if gc_reviewer_pr_number(branch).is_some() => {
+    let reviewer = (!unmerged_only)
+        .then(|| gc_reviewer_pr_number(branch))
+        .flatten();
+    match (kind, reviewer) {
+        (ForgeKind::GitHub, Some(number)) => {
             // Reviewer checkouts use a local alias, not the forge head ref.
             cmd.args([
                 "pr",
                 "view",
-                &gc_reviewer_pr_number(branch).unwrap().to_string(),
+                &number.to_string(),
                 "--json",
                 "number,state,headRefName,headRefOid,isCrossRepository",
             ]);
         }
-        ForgeKind::GitHub => {
+        (ForgeKind::GitHub, None) => {
             cmd.args([
                 "pr",
                 "list",
@@ -6942,10 +6980,10 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
                 "--limit",
                 "100",
                 "--json",
-                "state,headRefName,headRefOid,isCrossRepository",
+                "number,state,headRefName,headRefOid,isCrossRepository",
             ]);
         }
-        ForgeKind::GitLab => {
+        (ForgeKind::GitLab, _) => {
             cmd.args([
                 "api",
                 "-X",
@@ -6959,7 +6997,12 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
                 "per_page=100",
             ]);
         }
-        ForgeKind::None => return Observed::Known(false),
+        (ForgeKind::None, _) => {
+            return Observed::Known(TerminalTip {
+                matched: false,
+                number: None,
+            })
+        }
     }
     let Some(out) = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))
     else {
@@ -6971,9 +7014,14 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
             String::from_utf8_lossy(&out.stderr)
         ));
     }
-    let closed = match (kind, gc_reviewer_pr_number(branch)) {
-        (ForgeKind::GitHub, Some(number)) => parse_gc_reviewer_pr_closed(&out.stdout, number, head),
-        _ => parse_gc_branch_closed(&out.stdout, kind, branch, head),
+    let closed = match (kind, reviewer) {
+        (ForgeKind::GitHub, Some(number)) => parse_gc_reviewer_pr_closed(&out.stdout, number, head)
+            .map(|matched| TerminalTip {
+                matched,
+                number: Some(number),
+            }),
+        _ if unmerged_only => parse_terminal_branch(&out.stdout, kind, branch, head, true),
+        _ => parse_terminal_branch(&out.stdout, kind, branch, head, false),
     };
     match closed {
         Some(value) => Observed::Known(value),
@@ -7007,11 +7055,23 @@ fn parse_gc_reviewer_pr_closed(body: &[u8], number: u64, head: &str) -> Option<b
 
 // trace:TASK-1222 | ai:codex
 fn parse_gc_branch_closed(body: &[u8], kind: ForgeKind, branch: &str, head: &str) -> Option<bool> {
+    parse_terminal_branch(body, kind, branch, head, false).map(|tip| tip.matched)
+}
+
+// trace:STORY-3059 | ai:codex
+fn parse_terminal_branch(
+    body: &[u8],
+    kind: ForgeKind,
+    branch: &str,
+    head: &str,
+    unmerged_only: bool,
+) -> Option<TerminalTip> {
     let rows: Vec<serde_json::Value> = serde_json::from_slice(body).ok()?;
     if rows.len() >= 100 {
         return None;
     }
     let mut found = false;
+    let mut number = None;
     let mut open = false;
     for row in rows {
         let state = row.get("state")?.as_str()?;
@@ -7033,13 +7093,31 @@ fn parse_gc_branch_closed(body: &[u8], kind: ForgeKind, branch: &str, head: &str
             ),
             ForgeKind::None => return None,
         };
-        if name != branch || (!closed && !is_open) {
+        if name != branch || (!closed && !is_open) || (unmerged_only && !is_full_commit_sha(sha)) {
             return None;
         }
         open |= is_open && same_repo;
-        found |= closed && same_repo && sha == head;
+        let hit = closed
+            && same_repo
+            && sha.eq_ignore_ascii_case(head)
+            && (!unmerged_only || matches!(state, "CLOSED" | "closed"));
+        if hit {
+            found = true;
+            // GitHub reports `number`; GitLab's project-scoped MR id is `iid`.
+            // trace:STORY-3059 | ai:claude
+            let key = if kind == ForgeKind::GitLab {
+                "iid"
+            } else {
+                "number"
+            };
+            number = number.or_else(|| row.get(key).and_then(|v| v.as_u64()));
+        }
     }
-    Some(found && !open)
+    let matched = found && (unmerged_only || !open);
+    Some(TerminalTip {
+        matched,
+        number: number.filter(|_| matched),
+    })
 }
 
 #[cfg(test)]
@@ -7664,6 +7742,7 @@ pub(crate) fn github_stall_read(
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null())
         .args(args);
+    let timeout = crate::forge_lookup::remaining_call_budget(timeout).map_err(|e| e.to_string())?;
     let out = crate::command_output_with_timeout(command, timeout)
         .ok_or_else(|| format!("gh timed out after {}s or did not start", timeout.as_secs()))?;
     if !out.status.success() {

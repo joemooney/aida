@@ -1749,7 +1749,7 @@ fn run_one_timed(
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
 ) -> bool {
-    run_one_authorized(lane, id, job, stop, tally, seed, timeout, false, None)
+    run_one_authorized(lane, id, job, stop, tally, seed, timeout, false, None).1
 }
 
 // Only the host calls this with a trusted command; seat submissions retain validate().
@@ -1765,7 +1765,7 @@ fn run_one_authorized(
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
     host_gate: bool,
     repair_snapshot: Option<&Path>,
-) -> bool {
+) -> (Option<i32>, bool) {
     let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
@@ -1773,7 +1773,7 @@ fn run_one_authorized(
         finish(lane, id, REFUSED_RC);
         tally.incomplete.fetch_add(1, Ordering::Relaxed);
         lane.log(&format!("{id} refused: {why}"));
-        false
+        (None, false)
     };
     let job = match job.and_then(|j| {
         if host_gate && fast_gate_job(&j) && j.env.is_empty() {
@@ -1992,11 +1992,12 @@ fn run_one_authorized(
         started.elapsed().as_secs()
     ));
     // `cargo check` emits no code, so the lane's first test build is still cold.
-    !fast_gate_job(&job)
+    let built = !fast_gate_job(&job)
         && matches!(job.argv.get(1).map(String::as_str), Some("build" | "test"))
         && std::fs::File::open(&out_file)
             .map(|f| cargo_built(std::io::BufReader::new(f)))
-            .unwrap_or(false)
+            .unwrap_or(false);
+    ((how == "exited").then_some(rc), built)
 }
 
 /// Whether a cargo job's output shows its build ran to the end: cargo's
@@ -2275,7 +2276,7 @@ pub(crate) fn run_fast_gate(
         argv: vec!["/bin/sh".into(), "-c".into(), command],
         env: BTreeMap::new(),
     };
-    run_seeded_host_job(&lane, &id, job, None);
+    run_seeded_host_job(&lane, &id, job, None, timeout_for);
     let rc = read_rc(&lane.results, &id).context("host fast gate produced no result")?;
     let output = fast_gate_output_tail(&out_path(&lane.results, &id))?;
     Ok(Some((rc, output)))
@@ -2318,21 +2319,51 @@ pub(crate) fn check_repair_tree(
 }
 
 // trace:TASK-3804 | ai:claude
+#[derive(Debug)]
+pub(crate) struct RepairCompileFailure;
+
+impl std::fmt::Display for RepairCompileFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("repair compile check failed")
+    }
+}
+impl std::error::Error for RepairCompileFailure {}
+
 fn check_repair_tree_on(lane: &LaneJobs, command: &str, snapshot: &Path) -> Result<()> {
+    check_repair_tree_timed(lane, command, snapshot, timeout_for)
+}
+
+fn check_repair_tree_timed(
+    lane: &LaneJobs,
+    command: &str,
+    snapshot: &Path,
+    timeout: impl FnOnce(&JobRequest, bool) -> Duration,
+) -> Result<()> {
     lane.prepare()?;
     check_fast_gate_results(lane)?;
     let id = format!("fast-{}", uuid::Uuid::new_v4());
+    // A wrapper can exit before entering the sandbox. Require the trusted shell's
+    // completion record as well as the runner's observed exit. trace:BUG-2756 | ai:codex
+    let script =
+        format!("(\n{command}\n)\nrc=$?\nprintf '\\n{id} exit %s\\n' \"$rc\"\nexit \"$rc\"");
     let job = JobRequest {
-        argv: vec!["/bin/sh".into(), "-c".into(), command.into()],
+        argv: vec!["/bin/sh".into(), "-c".into(), script],
         env: BTreeMap::new(),
     };
-    run_seeded_host_job(lane, &id, job, Some(snapshot));
+    let exited = run_seeded_host_job(lane, &id, job, Some(snapshot), timeout);
     let rc = read_rc(&lane.results, &id).context("repair compile check produced no result")?;
+    let output = fast_gate_output_tail(&out_path(&lane.results, &id))?;
+    // Shell launch failures and signal statuses refuse.
+    let receipt = format!("{id} exit {rc}");
     anyhow::ensure!(
-        rc == 0,
-        "repair compile check `{command}` failed (exit {rc}); nothing committed or published:\n{}",
-        fast_gate_output_tail(&out_path(&lane.results, &id))?
+        exited == Some(rc) && output.lines().any(|line| line == receipt) && rc < 126,
+        "repair compile check did not complete (status {rc}):\n{output}"
     );
+    if rc != 0 {
+        return Err(anyhow::Error::new(RepairCompileFailure).context(format!(
+            "repair compile check `{command}` failed (exit {rc}):\n{output}"
+        )));
+    }
     Ok(())
 }
 
@@ -2350,7 +2381,13 @@ fn fast_gate_output_tail(path: &Path) -> Result<String> {
 
 // Share the same target selection and overlay transport as cargo lane jobs.
 // trace:STORY-2640 | ai:codex
-fn run_seeded_host_job(lane: &LaneJobs, id: &str, job: JobRequest, repair_snapshot: Option<&Path>) {
+fn run_seeded_host_job(
+    lane: &LaneJobs,
+    id: &str,
+    job: JobRequest,
+    repair_snapshot: Option<&Path>,
+    timeout: impl FnOnce(&JobRequest, bool) -> Duration,
+) -> Option<i32> {
     let seed = seed_lane_target(lane);
     run_one_authorized(
         lane,
@@ -2359,15 +2396,16 @@ fn run_seeded_host_job(lane: &LaneJobs, id: &str, job: JobRequest, repair_snapsh
         &AtomicBool::new(false),
         &Tally::default(),
         &seed,
-        timeout_for,
+        timeout,
         true,
         repair_snapshot,
-    );
+    )
+    .0
 }
 
 #[cfg(test)]
 fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
-    run_seeded_host_job(lane, id, job, None);
+    run_seeded_host_job(lane, id, job, None, timeout_for);
 }
 
 // trace:STORY-2640 | ai:codex
@@ -2628,13 +2666,17 @@ mod fast_gate_job_tests {
             sandbox: Sandbox::TestUnwrapped,
         };
         lane.prepare().unwrap();
-        run_seeded_fast_gate(
+        // trace:BUG-2754 | ai:codex — submit as a seat with ambient Cargo options.
+        let job = crate::lane_cmd::job_from(vec!["make".into(), "check-ci-fast".into()], |_| {
+            Some("1".into())
+        });
+        run_one(
             &lane,
             "seeded",
-            JobRequest {
-                argv: vec!["make".into(), "check-ci-fast".into()],
-                env: BTreeMap::new(),
-            },
+            Ok(job),
+            &AtomicBool::new(false),
+            &Tally::default(),
+            &seed_lane_target(&lane),
         );
         assert_eq!(read_rc(&lane.results, "seeded"), Some(0));
         let out = std::fs::read_to_string(out_path(&lane.results, "seeded")).unwrap();
@@ -2928,6 +2970,28 @@ mod repair_check_tests {
         fn check(&self, own_target: bool, command: &str) -> Result<()> {
             check_repair_tree_on(&self.lane(own_target), command, &self.snapshot)
         }
+    }
+
+    #[test]
+    fn bug_2756_repair_runner_requires_completed_command() {
+        let fx = Fixture::new();
+        let mut lane = fx.lane(false);
+        lane.sandbox = Sandbox::TestUnwrapped;
+        let check = |lane: &LaneJobs, command, limit| {
+            check_repair_tree_timed(lane, command, &fx.snapshot, |_, _| limit).unwrap_err()
+        };
+        assert!(check(&lane, "exit 1", Duration::from_secs(10)).is::<RepairCompileFailure>());
+        let timeout = check(&lane, "sleep 10", Duration::ZERO);
+        assert!(timeout.to_string().contains("timed out") && !timeout.is::<RepairCompileFailure>());
+        lane.build_env.push((
+            "CARGO_TARGET_DIR".into(),
+            fx.snapshot.join("Cargo.toml").display().to_string(),
+        ));
+        let refusal = check(&lane, "exit 1", Duration::from_secs(10));
+        assert!(
+            refusal.to_string().contains("lane job refused")
+                && !refusal.is::<RepairCompileFailure>()
+        );
     }
 
     #[test]

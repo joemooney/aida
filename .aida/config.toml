@@ -42,7 +42,8 @@ mirror_remotes = ["gitlab"]
 # would NOT reach them. Override per-run with the env var, or (once TASK-1116
 # lands) a `--vendor`/`--agent` flag on the drive command.
 [agents]
-vendor = "codex"
+# TEMPORARY: codex usage limit until 2026-11-29 10:41; revert to codex then
+vendor = "claude"
 
 [drain]
 # STORY-975: retry a transient phase failure before parking NeedsAttention.
@@ -247,6 +248,20 @@ name = "red-main-watch-route"
 seats = ["advisor"]
 on = ["CronJobFailed:red-main-watch"]
 prompt = "The red-main-watch job failed. Inspect the routed trip diagnostic for the failed land watch step and consult .aida/schedule.log for its command output."
+enabled = true
+
+# trace:STORY-3095 | ai:codex
+[[schedule.jobs]]
+name = "stalled-reviews"
+command = "doctor check stalled-reviews --fail-on-findings"
+every = "20m"
+enabled = true
+
+[[schedule.jobs]]
+name = "stalled-reviews-route"
+seats = ["advisor"]
+on = ["CronJobFailed:stalled-reviews"]
+prompt = "Inspect the stalled-reviews failure and its PR findings in .aida/schedule.log."
 enabled = true
 
 [[schedule.jobs]]
