@@ -1778,7 +1778,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 "claude",
                 exit3,
                 None,
-                "exit status: 3; stderr: first / auth needed",
+                "exit status: 3); stderr: first / auth needed",
             ),
             ("claude", "echo not json", None, "runner output rejected"),
             (
