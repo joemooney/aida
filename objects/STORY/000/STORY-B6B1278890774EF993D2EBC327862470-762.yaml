@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-26T08:53:40.230472008Z
+modified_at: 2026-11-26T09:24:25.799565325Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -315,6 +315,19 @@ comments:
   modified_at: 2026-11-26T08:51:10.073237866Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2172b-a447-77d3-85ee-a4789e9f6282
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 061293cf07 (slice d1, Refs-only, docs + assets only). Diff vs origin/integration: docs/product-workflow.md (+76 hand-written), 4 SVGs ported from b5826a0f949 (swimlane, lanes-leases, merge-train, post-train-sync; 487 asset lines), regenerated docs/showcase/workflow.html + search-data.js.
+    Evidence [documentation-inspection]: every command shown was checked against the live CLI help. Fixed stale ones: `aida req`/`aida approve --mode drain` (do not exist) -> `aida add` / `aida edit --status approved --mode drain`; `aida session handoff` is a probe, the brief is written by /aida-handoff; direct ship does not require ci:full (train does). Dropped unverifiable pull internals (invocation-private fetch ref, OS-handle pinning, 'pull fix') in favour of what store_push_pull.rs does (fetch+ff merge avoiding FETCH_HEAD, store writer lock, index-lock skip). Dropped watchdog and lane-cap claims; standing-orders path not present, omitted. Gates table, enums, exception paths, human journeys and operator-setup left for d2.
+    Evidence [configuration-validation]: SVG scan shows no <script>, event handlers, or external hrefs (only internal url(#marker)). build.py --check clean; python3 -m unittest tests/test_showcase_build.py (22 OK, 2 skipped) and test_showcase_publish.py (7 OK) — pytest is not installed on this host, CI runs these via unittest. All 17 glossary anchors resolve in glossary.html. make check-ci-fast via lane job: exit 0.
+    Probes: SVG act numbering (1/3/4) matches the doc's Act headings; replaced SVG labels sized to fit their boxes (no renderer on host to visually confirm — residual risk: minor text overflow).
+    Residual: SVG visual rendering not inspected.
+  created_at: 2026-11-26T09:24:25.799565325Z
+  modified_at: 2026-11-26T09:24:25.799565325Z
+  session_id: 01a2170f49db
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
