@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T13:22:16.215423340Z
+modified_at: 2026-11-26T13:24:20.435753808Z
 req_type: Bug
 tags:
 - admission
@@ -37,6 +37,31 @@ comments:
   modified_at: 2026-11-26T13:18:03.909122576Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21807-4953-7920-b9be-2bef1c1b8459
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Root cause: a manual `aida pr train` records a pid-bound wait intent only for its bounded wait (default 180s). An auto-train train outlives that wait, the intent is removed when the waiter gives up, and when train A ends the auto-train sees no waiter and starts train B. The operator retry 5 min later lands mid-train again.
+
+    Fix: a manual train whose wait gives up (busy) leaves a persisted cooperative waiter record (`.aida/admission-owner/manual-train.waiter`: PRs, first-waited time, expiry 15 min after the last attempt). It is cleared when a manual train takes admission. While it is in effect the auto-train yields in `hold_admission` (via `yield_reason` for the auto-train purpose only; review controllers unaffected) before taking the claim for its next train. It grants nothing: a stale one only delays the auto-train until it expires.
+
+    ### Acceptance criteria and evidence
+    - AC1 [behavioral]: unit test in `advisor_loop_train.rs` (hold_admission yields with a recorded waiter; manual admission clears it).
+    - AC2 [behavioral]: unit test of the status line text (`operator train for #N waiting since HH:MM; auto-train yields next`) used by train-status and appended to `pr train --check` output.
+    - AC3 [behavioral]: unit test through the real `run_passes` loop: train A runs, a manual waiter is recorded, the loop does not start train B until the manual train has taken and released admission.
+
+    ### Expected files
+    - `aida-cli-lib/src/admission_owner.rs`
+    - `aida-cli-lib/src/advisor_loop_train.rs`, `advisor_loop_service.rs`, `pr_train.rs`, `pr_train_check.rs`
+    - `scripts/store-writers.toml` (inventory rows)
+
+    ### Ambiguities / conflicts as questions
+    - None (brief picks the yield-on-recorded-waiter option over FIFO).
+  created_at: 2026-11-26T13:24:20.435753808Z
+  modified_at: 2026-11-26T13:24:20.435753808Z
+  session_id: 01a21805300e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
