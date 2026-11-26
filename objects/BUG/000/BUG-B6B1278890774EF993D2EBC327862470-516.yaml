@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the recorded tree is verifiably ABSENT (ENOENT on the path AND no mount), the heal ends the lease and records "tree absent, nothing to salvage". Test.
   - AC2: An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-25T23:52:53.843076952Z
+modified_at: 2026-11-26T00:06:58.167828347Z
 req_type: Bug
 tags:
 - leases
@@ -402,6 +402,12 @@ comments:
   modified_at: 2026-11-25T23:52:53.843076952Z
   session_id: 01a214f723cb
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2152d-4577-7ea1-8441-0ebf9501cc24
+  author: aida-publication-done
+  content: Implementer push a27b058adf02 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T00:06:58.167827446Z
+  modified_at: 2026-11-26T00:06:58.167827446Z
+  session_id: 01a214f723cb
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
@@ -582,6 +588,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2152d-4577-7ea1-8441-0ea255cf8fab
+  author: aida-publication-done
+  timestamp: 2026-11-26T00:06:58.167824746Z
+  session_id: 01a214f723cb
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
