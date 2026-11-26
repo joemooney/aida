@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T12:05:30.644993482Z
+modified_at: 2026-11-26T12:07:08.020060099Z
 req_type: Story
 tags:
 - integration
@@ -1045,6 +1045,22 @@ comments:
   modified_at: 2026-11-26T12:04:13.949661986Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a217c0-99f4-70f0-b133-d04be88a4ff5
+  author: joe
+  content: |-
+    REFERENCE BRANCH UPDATE (story-3120-ci-review @ 6483f05a533, tag story-3120-v3-6lang-baseline @ 1c0d274d52e) — Ready for Advisor / Product slice extraction after S4 (#4650) and S5:
+
+    1. Showcase & Clean-Room Documentation (docs/showcase/):
+       - docs/showcase/reviewbench-report.html: 6-language ReviewBench evaluation report (TypeScript, Python, Go, Rust, C FreeRTOS-Kernel#1379, Java jenkinsci/gitea-plugin#141) comparing Pass-1 Finder, Pass-2 v2 (Adversarial, No CodeGraph: 89.9% High-Sev F1, 94.4% Grounded Precision), Pass-2 v3 (Adversarial + CodeGraph AST: 92.3% High-Sev F1, 100.0% Grounded & Augmented Precision), and Pass-2 v4 (100.0% High-Sev F1 [7/7 High TPs], 84.2% H+M F1 [#1 overall], 90.5s avg duration), with hover glossary tooltips, gold rank stars, docked card tab bars, and 3 narrative synthesis cards (Why AIDA Ranks High, Intent-Governed Review vs Code-Only Benchmarks, and 5 Anti-Gaming Guarantees).
+       - docs/showcase/about.html & docs/showcase/code-review.html (Slide 08): Specification-Mediated Clean-Room Engineering methodology, 3 custom theme-adaptive SVG architectural blueprints, 17 U.S.C. 102(b) vs 106(2) statutory links, 6-family Open-Source License Compliance Matrix, and updated tokei scale (1,170,979 net Rust LoC).
+       - 3-icon Light/Dark/System capsule theme switcher across all 22 Showcase pages with top-right topbar placement.
+
+    2. Engine & CLI Reference Slices on story-3120-ci-review (aida-core/src/review_engine.rs & aida-cli-lib/src/review_prepare.rs):
+       - S6 Polyglot & Hardware Playbooks (32a7ebd9915): Built-in C/C++ (c_cpp), Java/Kotlin (java_kotlin), MATLAB (matlab), and Verilog/SystemVerilog/VHDL RTL (hdl_rtl) playbooks + canonical_module_stem testbench pairing (*Test.java, *_tb.sv).
+       - S7 SARIF 2.1.0 Suppressions, Telemetry DB & ReviewBench 3-Condition Rubric / F_beta (6a031693b1e, 5cb4741015e, 4b7e4d2ebfb): SARIF §3.35 suppressions for Pass-2 dismissed findings, .aida/review-telemetry/reviews.jsonl + --ab-arm + --telemetry-report with online Addressed Rate and F0.5/F1/F2 scoring, full target-file context (<=32 KB) in diff batches, and exacerbated-by-pr Condition 2 rubric.
+       - S8 CodeGraph AST Blast-Radius & v4 Enhancements (071afd81467, 41a11958d87, bbdb34898dd): Automatic .codegraph/codegraph.db file fan-in and touched-symbol caller/callee enrichment (--no-codegraph opt-out) with 35-line untouched caller/callee body slicing (screened via classify_exclusion), nearest package-manifest reference context (collect_batch_dependency_manifests), bounded 4-thread parallel batch execution (std::thread::scope), cross-batch doc/code finding consolidation (consolidate_cross_batch_findings), deterministic omission/doc line-anchor fallback (infer_doc_or_omission_anchor), and inner-quote JSON repair (sanitize_unescaped_json_inner_quotes).
+  created_at: 2026-11-26T12:07:08.020060099Z
+  modified_at: 2026-11-26T12:07:08.020060099Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
