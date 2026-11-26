@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T17:52:57.886568336Z
+modified_at: 2026-11-26T18:12:24.549782660Z
 req_type: Task
 tags:
 - deputy
@@ -55,6 +55,30 @@ comments:
     - None blocking. Design choice: a replaced-but-not-deleted image outside the live dir is not re-exec'd.
   created_at: 2026-11-26T17:52:57.886568336Z
   modified_at: 2026-11-26T17:52:57.886568336Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2190f-0565-7292-81b3-8bb7fac594dc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4a005dc2f6 (git diff origin/main...HEAD).
+
+    Acceptance evidence:
+    - AC1 [behavioral]: `runner::stale_image` (reuses BUG-2774 `deputy_binary`), idle-only probe in `runner::run`, `runner-reexec` audit row + runner.log line with old_sha/new_sha/reason, `reexec_command` keeps argv and sets AIDA_SESSION_GRANT to the held grant. Tests: task3919_stale_image_is_a_deleted_or_older_live_image_only, task3919_reexec_keeps_args_name_and_the_held_grant.
+    - AC2 [behavioral]: the probe runs only on a round where no job ran; exec stand-in asserts the in-flight job (sleep 0.3) is Done first; a job filed during the window stays in accepted/; the client waits on ENOENT/ECONNREFUSED only while a fresh marker exists (task3919_a_submit_waits_out_the_exec_window_only_with_the_marker).
+    - AC3 [behavioral]: task3919_deleted_image_reexecs_when_idle_and_the_binding_survives, task3919_sha_mismatch_reexecs_when_idle_and_the_binding_survives (successor under the handed-over grant claims and runs the window job, grant prefix matches). 7/7 pass (lane job, incl. bug2774 tests).
+    - AC4: the `--loop` supervisor shares no runner-loop code; it respawns via stale_binary::service_program and its child now re-execs in place. Listed in the PR body, not changed.
+
+    Probe findings / fixes:
+    - Fixed: marker was written after the socket was dropped (a submit in that gap failed outright); now written before.
+    - Authority: exec passes only the grant already held; start() re-validates it with the presenter check (fails closed). The marker grants nothing, it only delays a client up to 20s.
+
+    Residual risks:
+    - A hosted review-watch controller that exits after a re-exec stays a zombie until the runner exits (liveness reads zombies as dead, so it does not block).
+    - The exec itself (std exec of the live path) is not exercised end-to-end in tests; the stand-in covers everything around it.
+    - Diff is 384 lines (~175 production, ~210 tests), over the 250-line guide.
+  created_at: 2026-11-26T18:12:24.549782660Z
+  modified_at: 2026-11-26T18:12:24.549782660Z
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
 history:
