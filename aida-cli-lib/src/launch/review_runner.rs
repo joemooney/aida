@@ -382,8 +382,10 @@ mod tests {
     #[test]
     fn s3a2_runner_fails_closed_on_escaped_descendant() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        // The descendant leaves the process group and keeps stdout/stdin open.
-        let body = "#!/bin/sh\nsetsid sleep 12 &\nexit 0\n";
+        // The descendant leaves the process group and keeps stdout/stdin open; the
+        // runner exits only once it is in its own session, so the kill misses it.
+        let body = "#!/bin/sh\nsetsid sh -c 'touch \"$0.in\"; exec sleep 12' \"$0\" &\n\
+            while [ ! -e \"$0.in\" ]; do sleep 0.05; done\nexit 0\n";
         let cmd = script(bin.path(), "runner", body).display().to_string();
         let env = vars(&[("PATH", "/usr/bin:/bin"), (RUNNER_CMD, &cmd)]);
         let started = Instant::now();
