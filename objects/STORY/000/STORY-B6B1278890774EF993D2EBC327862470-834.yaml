@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T07:20:12.345690084Z
+modified_at: 2026-11-26T07:22:39.548864952Z
 req_type: Story
 tags:
 - dev
@@ -79,6 +79,17 @@ comments:
   created_at: 2026-11-26T07:10:35.168167704Z
   modified_at: 2026-11-26T07:10:35.168167704Z
   session_id: 01a2164d5923
+- id: 01a216bc-6576-7721-8805-318c04316bd3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:22):
+    # STORY-3148 S1 FRESH SLICE (replaces closed #4629, unreviewed @ afc55670; product-15 2026-11-26 00:25). Lane: CLAUDE. STRICT. MAIN, NEW branch dev-provisional-s1b (cut from the current main tip). Title "[AI:claude] feat(dev): aida dev provisional promotes an unlanded head with a PROVISIONAL marker (Refs STORY-3148)". <=300 lines.
+    #4629 conflicts with main ONLY in the generated scripts/store-writers.toml. PORT its change onto current main (`git diff origin/main...origin/dev-provisional-s1` is the reference), then REGENERATE the inventory with `python3 scripts/check-store-writers.py --regenerate`: keep exactly the rows #4629 introduced for its own writers, add no others, and delete stale rows. The original S1 brief is .aida/tmp/brief-STORY-3148-S1.md (AC1 + AC5 + the AC2 operator gate).
+    One targeted cargo test run on this host, `python3 scripts/check-store-writers.py`, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4629 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T07:22:39.548864952Z
+  modified_at: 2026-11-26T07:22:39.548864952Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
