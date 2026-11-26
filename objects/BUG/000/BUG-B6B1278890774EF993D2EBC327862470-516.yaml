@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: When the recorded tree is verifiably ABSENT (ENOENT on the path AND no mount), the heal ends the lease and records "tree absent, nothing to salvage". Test.
   - AC2: An unreadable-but-PRESENT tree (EACCES, EIO) still refuses. Test.
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-26T00:08:04.111110502Z
+modified_at: 2026-11-26T06:31:26.901441966Z
 req_type: Bug
 tags:
 - leases
@@ -602,6 +602,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2168d-45b5-7fd3-97a1-d37fc0c6fe5b
+  author: joe
+  timestamp: 2026-11-26T06:31:26.901436201Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
@@ -610,3 +617,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ee2e6d830ff
   vendor: claude
+implementation_info:
+  implemented: false
+  reopened_at_sha: c8c3a3e139acd702925182e8241a52ad1dafae73
