@@ -46,12 +46,14 @@ NAV_GROUPS = {
     'glossary.html': 'Reference',
     'features.html': 'Reference',
     'executive-brief.html': 'Reference',
+    'about.html': 'Reference',
 }
 EXTRA_NAV_PAGES = (
     ('code-review.html', 'Code review'),
     ('engineering-audit.html', 'Engineering audit'),
     ('features.html', 'All features'),
     ('executive-brief.html', 'Executive brief'),
+    ('about.html', 'About & methodology'),
 )
 
 
@@ -111,6 +113,7 @@ def inline(text, base='.'):
             mapped = {source: output for source, output, _ in PAGES}
             mapped["what-is-aida.md"] = "../what-is-aida.html"
             mapped["showcase/code-review.html"] = "code-review.html"
+            mapped["showcase/about.html"] = "about.html"
             target = mapped.get(path, '../' + path) + (marker + anchor if marker else '')
         return f'<a href="{target}">{label}</a>'
     text = re.sub(r'\[([^\]]+)\]\(([^\s)]+)\)', link, text)
