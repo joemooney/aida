@@ -1,0 +1,18 @@
+{
+  "id": "2397a40e-1337-4695-aaf2-169911175918",
+  "thread_id": "2397a40e-1337-4695-aaf2-169911175918",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795652729626,
+  "body": "- [STUCK-MERGE] #4597 is approved at 6657fe56 and has not landed for 27 min (approved at 6657fe56512e)\n  -> land #4597 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4599 is approved at a8592b5a and has not landed for 73 min (approved at a8592b5a3072)\n  -> land #4599 (the reconciler shows STALE-CI-BASE: wait)\n- [STUCK-MERGE] #4602 is approved at 3e675a5c and has not landed for 21 min (approved at 3e675a5c6e9d)\n  -> land #4602 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE-RED] #4584 is approved at 0459cd01 but its CI is red (Build (ubuntu-latest) run 45715471129 attempt 1 tier FULL conclusion failure (selected, not superseded), CI (lib-0) run 45715471129 attempt 1 tier FULL conclusion failure (selected, not superseded); base not fresh: CI run 45688147336 tested base bd150e16c1ee, current base is fa7028b4df8d), for 103 min; failing tests: not named; cause undetermined: the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (lib-0)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway)\n  -> read the failed job on #4584: rerun it once if the failure is unrelated to the change, otherwise route rework\n- [STUCK-MERGE-RED] #4598 is approved at 9e55228e but its CI is red (Build (ubuntu-latest) run 45717438831 attempt 1 tier FULL conclusion failure (selected, not superseded), CI (lib-1) run 45717438831 attempt 1 tier FULL conclusion failure (selected, not superseded); base not fresh: CI run 45714518376 tested base a387b7e87b96, current base is fa7028b4df8d), for 95 min; failing tests: not named; cause undetermined: the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (lib-1)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway)\n  -> read the failed job on #4598: rerun it once if the failure is unrelated to the change, otherwise route rework\n\n10 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 5 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
