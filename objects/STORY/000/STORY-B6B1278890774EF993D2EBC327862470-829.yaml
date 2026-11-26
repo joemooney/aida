@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T15:18:42.584350895Z
+modified_at: 2026-11-26T15:20:05.373269485Z
 req_type: Story
 tags:
 - integration
@@ -1184,6 +1184,18 @@ comments:
   modified_at: 2026-11-26T15:18:42.584350895Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21871-41fd-7e01-8a0b-dc94122e41bf
+  author: joe
+  content: |-
+    SLICE PLAN ADDENDA, S6-S10 (advisor-122 2026-11-26 08:24, at Joe's request; reference branch story-3120-ci-review @ a1777130882; recorded by product-15). Integration slices AFTER S5, each <=300 lines and independently reviewed. Binding notes:
+    - S6 polyglot/HDL playbooks (32a7ebd9915): pure engine logic, STANDARD; self-merge after pre-check is OK.
+    - S7 SARIF suppressions + telemetry + ReviewBench rubric (6a031693b1e, 5cb4741015e, 4b7e4d2ebfb): MUST stay consistent with D1. Pass-2 "dismissed" findings are SARIF suppressions but STILL count for --fail-on. Telemetry (.aida/review-telemetry/reviews.jsonl) contains NO file contents or secrets (IDs, counts, scores only). The <=32 KB full-file context goes through the same credential/inventory screen as the diff.
+    - S8 CodeGraph blast-radius + v4 (071afd81467, 41a11958d87, bbdb34898dd): STRICT. .codegraph/codegraph.db comes from the operator's TRUSTED index, never from the PR checkout (a PR could ship a crafted db). Untouched caller/callee slices go through classify_exclusion + the credential screen. The 4-thread parallelism stays inside the S3a deadline/caps. The JSON "inner-quote repair" must never turn malformed runner output into a pass (fail closed if the repair is ambiguous).
+    - S9 opencode/pi runners + single-vendor effort step-up (ed89b6bd632) + docs (a1777130882): STRICT. The new runners go through the S3a hardened spawn helper (empty cwd, per-vendor env allowlist, stdin prompt, the effort allowlist incl. pi's --thinking values). The step-up is fine but capped at xhigh and shown in the bundle.
+    - S10 ReviewBench report page + about.html: docs, but every claimed number must be reproducible from a committed artifact, or labelled "reference run, not reproduced in CI". No legal citations presented as advice; keep the 17 U.S.C. links factual.
+    NOTE: S5 is the completing slice in its current brief; since S6-S10 now follow, S5 should land as "(Refs STORY-3120)", and the LAST of S6-S10 completes the story.
+  created_at: 2026-11-26T15:20:05.373269485Z
+  modified_at: 2026-11-26T15:20:05.373269485Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
