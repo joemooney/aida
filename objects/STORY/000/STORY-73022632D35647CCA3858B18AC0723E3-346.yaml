@@ -18,12 +18,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4640` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T09:13:16.504943626Z
-modified_at: 2026-11-26T09:13:28.157172298Z
+modified_at: 2026-11-26T12:46:05.423228805Z
 req_type: Story
 relationships:
 - rel_type:
@@ -36,6 +36,12 @@ relationships:
   target_id: 01a215cd-369e-74e1-9f9b-d98fc2cc144f
   created_at: 2026-11-26T09:13:28.157120803Z
   created_by: dirtlab
+comments:
+- id: 01a217e4-446f-7d62-8526-5eec775f6619
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4640 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-11-26T12:46:05.423227488Z
+  modified_at: 2026-11-26T12:46:05.423227488Z
 history:
 - id: 01a21721-8532-7ec3-8b1d-3187b9447692
   author: dirtlab
@@ -49,6 +55,13 @@ history:
   session_id: 01a216fd8162
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a217e4-446f-7d62-8526-5edf52bd0629
+  author: aida-auto-bump
+  timestamp: 2026-11-26T12:46:05.423215298Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
   branch: fix-autotrain-idle-admission
@@ -58,3 +71,7 @@ filed_at:
   vendor: claude
   session: 01a216fd8162
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T12:46:05.423209042Z
+  completion_sha: cd53118d56302cbd2936a30c898fe93904a99117
