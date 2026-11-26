@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-26T00:23:42.419161509Z
+modified_at: 2026-11-26T01:07:22.475402954Z
 req_type: Bug
 tags:
 - landing
@@ -118,6 +118,19 @@ comments:
   modified_at: 2026-11-25T23:44:54.367476983Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21564-92eb-7fc1-9f7b-5218ef901244
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bc5438855b (CI-red fix on #4598).
+    Cause: base_patch_equivalents::patch_ids spawned `git log -p | git patch-id` with raw Command::spawn, outside run_bounded, so a train check's member gate spawned children without the scoped deadline (task_3792_complete_member_gate_spawns_nothing_outside_the_deadline).
+    Fix: both halves go through a new scoped_output helper. Under a deadline it uses command_output_with_timeout_detail with remaining_call_budget, and outside one it uses plain output(). patch-id gets its input over an in-process std::io::pipe fed by a thread. I avoided a tempfile write_all because the store-writer inventory ratchet flagged it.
+    Evidence: task_3792 test unchanged and green, plus the 3 BUG-2733 tests and the other task_3792 deadline tests (9/9 ok). The full pr_train filter was 292/292 ok, run before the pipe swap. make check-ci-fast exit 0 after the swap.
+    Probes: on deadline expiry the bounded run returns an error, and retain_new keeps every item (fail-safe, no spec hidden). A killed patch-id drops the Command's reader, so the feeder ends with EPIPE and the join cannot hang. Residual: git log -p output is held in memory (window 2000 commits), as the old pipe's patch-id output was.
+  created_at: 2026-11-26T01:07:22.475402954Z
+  modified_at: 2026-11-26T01:07:22.475402954Z
+  session_id: 01a2153c5f29
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
