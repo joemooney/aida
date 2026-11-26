@@ -9,7 +9,42 @@ fn ready(number: u64, age_min: i64, now: DateTime<Utc>) -> Ready {
         full_tier_gap: None,
         supervised: false,
         on_train: false,
+        drift: None,
     }
+}
+
+// trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_stacked_diff_drift_over_30m_is_its_own_cause() {
+    let now = Utc::now();
+    let policy = Policy::read(None).unwrap();
+    let route = "the branch does not update cleanly (conflict); conflict repair".to_string();
+    let mut old = ready(4464, 120, now);
+    old.drift = Some((now - TimeDelta::minutes(45), route.clone()));
+    let mut fresh = ready(4465, 120, now);
+    fresh.drift = Some((now - TimeDelta::minutes(10), route.clone()));
+    let mut unrouted = ready(4466, 5, now);
+    unrouted.drift = Some((now - TimeDelta::minutes(31), String::new()));
+    let findings = evaluate(&[old, fresh, unrouted], &policy, now, None);
+    let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
+    assert_eq!(ids, ["PR-4464", "PR-4465", "PR-4466"]);
+    assert!(findings[0]
+        .summary
+        .contains("ejected for stacked-diff drift 45m ago"));
+    assert_eq!(findings[0].action, route);
+    assert!(
+        findings[1].summary.contains("unknown"),
+        "under 30m: the ordinary cause"
+    );
+    assert!(
+        findings[2].summary.contains("stacked-diff drift 31m"),
+        "reported past 30m even inside the ready dwell"
+    );
+    assert!(findings[2].action.contains("update PR 4466's branch"));
+    assert!(
+        !findings.iter().any(|f| f.id == "main"),
+        "a drifted head is not landable"
+    );
 }
 
 #[test]

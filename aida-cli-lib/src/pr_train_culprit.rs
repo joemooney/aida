@@ -1,7 +1,11 @@
 //! Culprits of red trains: a PR red alone on top of main is not re-admitted
 //! to a train at the same head until the head changes or an operator names
 //! it explicitly (`aida pr train <PR>`), which is recorded as a clearance.
-// trace:BUG-2767 | ai:claude
+//! A PR ejected because its diff changes when stacked (BUG-2777) is held at
+//! that head even when named: no rerun can change what would land, so the
+//! hold names the route the train took instead (branch update + re-review, or
+//! conflict repair).
+// trace:BUG-2767 trace:BUG-2777 | ai:claude
 
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
@@ -17,6 +21,23 @@ pub(crate) struct Culprit {
     /// Who cleared the hold at this head, when it was cleared.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cleared_by: Option<String>,
+    /// Why the train ejected the PR. Rows written before BUG-2777 are reds.
+    #[serde(default)]
+    pub kind: Kind,
+    /// The next step the train routed the PR to, for a drift row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<String>,
+}
+
+/// The typed ejection a row records. trace:BUG-2777 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Kind {
+    /// Red alone on top of main.
+    #[default]
+    Red,
+    /// The car's patch-id differs from the approved diff.
+    StackedDiffDrift,
 }
 
 /// Outside `.aida/train`, whose every `*.json` is a train journal.
@@ -51,9 +72,62 @@ pub(crate) fn record(root: &Path, pr: u64, head: &str, train: Option<u64>) -> Re
             train,
             at: chrono::Utc::now(),
             cleared_by: None,
+            kind: Kind::Red,
+            route: None,
         },
     );
     save(root, &rows)
+}
+
+/// Record `pr` ejected at `head` for stacked-diff drift, routed to `route`.
+// trace:BUG-2777 | ai:claude
+pub(crate) fn record_drift(
+    root: &Path,
+    pr: u64,
+    head: &str,
+    train: Option<u64>,
+    route: &str,
+) -> Result<()> {
+    let mut rows = load(root)?;
+    rows.insert(
+        pr,
+        Culprit {
+            head: head.to_string(),
+            train,
+            at: chrono::Utc::now(),
+            cleared_by: None,
+            kind: Kind::StackedDiffDrift,
+            route: Some(route.to_string()),
+        },
+    );
+    save(root, &rows)
+}
+
+/// The drift row on `pr` at `head`, if any: (when it was ejected, the route).
+// trace:BUG-2777 | ai:claude
+pub(crate) fn drift(
+    root: &Path,
+    pr: u64,
+    head: &str,
+) -> Option<(chrono::DateTime<chrono::Utc>, String)> {
+    let row = load(root).ok()?.remove(&pr)?;
+    (row.kind == Kind::StackedDiffDrift && row.head.eq_ignore_ascii_case(head))
+        .then(|| (row.at, row.route.unwrap_or_default()))
+}
+
+/// The hold a named PR cannot clear: a drift ejection at this very head. An
+/// unreadable record holds (fail closed).
+// trace:BUG-2777 | ai:claude
+pub(crate) fn drift_hold(root: &Path, pr: u64, head: &str) -> Option<String> {
+    if let Err(e) = load(root) {
+        return Some(format!("held: {e:#}"));
+    }
+    let (_, route) = drift(root, pr, head)?;
+    Some(format!(
+        "held: ejected for stacked-diff drift at {} (the approval does not cover what \
+         would land, and re-training the same head cannot change that); routed: {route}",
+        crate::pr_train::short(head)
+    ))
 }
 
 /// The hold on `pr` at `head`, worded for a refusal. A row for another head
@@ -66,6 +140,9 @@ pub(crate) fn hold(root: &Path, pr: u64, head: &str) -> Option<String> {
     let row = rows.get(&pr)?;
     if row.cleared_by.is_some() || !row.head.eq_ignore_ascii_case(head) {
         return None;
+    }
+    if row.kind == Kind::StackedDiffDrift {
+        return drift_hold(root, pr, head);
     }
     let train = row
         .train
@@ -80,7 +157,8 @@ pub(crate) fn hold(root: &Path, pr: u64, head: &str) -> Option<String> {
 /// The operator named `pr`: record the clearance of a hold at `head`.
 /// Returns whether a hold was cleared.
 pub(crate) fn clear(root: &Path, pr: u64, head: &str, by: &str) -> Result<bool> {
-    if hold(root, pr, head).is_none() {
+    // A drift hold is cleared only by a new head. trace:BUG-2777 | ai:claude
+    if hold(root, pr, head).is_none() || drift(root, pr, head).is_some() {
         return Ok(false);
     }
     let mut rows = load(root)?;
@@ -113,11 +191,48 @@ mod tests {
         assert!(!root.join(".aida/train").exists(), "never a journal file");
     }
 
+    // trace:BUG-2777 | ai:claude
+    #[test]
+    fn bug2777_drift_row_is_typed_and_naming_does_not_clear_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let route = "branch updated; independent re-review queued at the new head";
+        record_drift(root, 4464, "7d711a72aa", Some(4650), route).unwrap();
+        let raw = std::fs::read_to_string(path(root)).unwrap();
+        assert!(raw.contains("\"kind\": \"stacked-diff-drift\""), "{raw}");
+        let why = hold(root, 4464, "7D711A72AA").expect("same head is held");
+        assert!(
+            why.contains("stacked-diff drift") && why.ends_with(route),
+            "{why}"
+        );
+        assert_eq!(drift_hold(root, 4464, "7D711A72AA"), Some(why));
+        assert!(
+            !clear(root, 4464, "7d711a72aa", "joe").unwrap(),
+            "naming never clears drift"
+        );
+        assert!(
+            drift_hold(root, 4464, "7d711a72aa").is_some(),
+            "still held when named"
+        );
+        assert_eq!(hold(root, 4464, "0123456789"), None, "a new head rides");
+        assert_eq!(drift_hold(root, 4464, "0123456789"), None);
+        record(root, 4482, "abcdef0123", None).unwrap();
+        assert_eq!(
+            drift_hold(root, 4482, "abcdef0123"),
+            None,
+            "a red is not drift"
+        );
+        assert_eq!(load(root).unwrap()[&4482].kind, Kind::Red);
+    }
+
     #[test]
     fn bug2767_unreadable_record_fails_closed() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
         std::fs::write(path(dir.path()), b"{not json").unwrap();
         assert!(hold(dir.path(), 1, "abc").unwrap().starts_with("held: "));
+        assert!(drift_hold(dir.path(), 1, "abc")
+            .unwrap()
+            .starts_with("held: "));
     }
 }

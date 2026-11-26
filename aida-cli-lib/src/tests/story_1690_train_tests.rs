@@ -247,6 +247,95 @@ fn build_drops_a_member_whose_diff_changes_when_stacked_even_without_a_conflict(
         "{:?}",
         built.dropped
     );
+    // The routing keys on this prefix. trace:BUG-2777 | ai:claude
+    assert!(built.dropped[0].reason.starts_with(STACKED_DRIFT));
+}
+
+/// BUG-2777 AC2: a drifted head is refused even when named, with the route;
+/// a new head rides.
+// trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_a_drifted_head_is_refused_even_when_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    culprit::record_drift(root, 4464, "aaaa1111", None, "conflict repair").unwrap();
+    for (prs, all_ready) in [(&[4464u64][..], false), (&[][..], true)] {
+        let opts = TrainOptions {
+            prs,
+            all_ready,
+            dry_run: false,
+            local_ci: None,
+            max: 10,
+            no_pull: true,
+        };
+        let why = culprit_admission(root, &opts, &member(4464, "aaaa1111", "s"))
+            .unwrap()
+            .expect("the drifted head is refused");
+        assert!(
+            why.contains("stacked-diff drift") && why.ends_with("routed: conflict repair"),
+            "{why}"
+        );
+        let moved = culprit_admission(root, &opts, &member(4464, "bbbb2222", "s")).unwrap();
+        assert_eq!(moved, None, "a new head is admitted");
+    }
+    assert!(
+        culprit::drift_hold(root, 4464, "aaaa1111").is_some(),
+        "naming cleared nothing"
+    );
+}
+
+/// BUG-2777 AC1: a mergeable drifted PR is updated and re-queued for review;
+/// a conflicting one is routed to conflict repair through the advisor.
+// trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_drift_routes_to_update_and_review_or_conflict_repair() {
+    let mut queued = false;
+    let route = route_drift(
+        4464,
+        "aaaa1111bbbb",
+        || Ok(()),
+        || {
+            queued = true;
+            "review story filed".into()
+        },
+        |_, _| panic!("a clean update never escalates"),
+    );
+    assert!(queued, "re-review queued in the same pass");
+    assert!(
+        route.contains("review story filed") && route.contains("does not carry"),
+        "{route}"
+    );
+    let mut asked = None;
+    let route = route_drift(
+        4464,
+        "aaaa1111bbbb",
+        || anyhow::bail!("merge conflict"),
+        || panic!("a refused update queues no review"),
+        |subject, body| {
+            asked = Some((subject.to_string(), body.to_string()));
+            Ok(())
+        },
+    );
+    assert!(
+        route.contains("conflict repair") && route.ends_with("the advisor was asked"),
+        "{route}"
+    );
+    let (subject, body) = asked.expect("conflict repair is escalated");
+    assert!(
+        subject.contains("#4464") && body.contains("will not retry this head"),
+        "{body}"
+    );
+    let failed = route_drift(
+        4464,
+        "aaaa1111bbbb",
+        || anyhow::bail!("x"),
+        String::new,
+        |_, _| anyhow::bail!("mailbox down"),
+    );
+    assert!(
+        failed.contains("asking the advisor failed (mailbox down)"),
+        "{failed}"
+    );
 }
 
 #[test]
