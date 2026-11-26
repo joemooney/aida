@@ -1,0 +1,31 @@
+id: 01a216d6-1923-7fd3-acb0-c73e5d3e4836
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-340
+title: 'Review PR-4632: [AI:claude] fix(doctor): release stale leases for absent or clean unbound seat clones (BUG-2755)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21692`) for branch `bug-2755-fresh`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4632>
+  - Branch: `bug-2755-fresh` → `main`
+
+  ## Covers
+
+  - BUG-2755
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4632` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T07:50:59.619176650Z
+modified_at: 2026-11-26T07:50:59.619176650Z
+req_type: Story
+filed_at:
+  code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cb984b75d
