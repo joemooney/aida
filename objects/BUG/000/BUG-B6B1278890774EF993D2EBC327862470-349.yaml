@@ -15,12 +15,12 @@ description: |-
   Wanted: (1) find what the CPU is spent on (a profile or timing log around the final gate) and make the green-to-merge step take seconds; (2) print one line per phase of the final gate so progress is visible.
 
   Acceptance: on a 3-member train, time from 'train PR is green' to the merge call is under 30 seconds, and each final-gate phase logs a line with its duration.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-26T22:19:18.415909059Z
+modified_at: 2026-11-26T22:54:43.884007287Z
 req_type: Bug
 tags:
 - landing
@@ -191,6 +191,11 @@ comments:
   created_at: 2026-11-26T22:19:18.415903006Z
   modified_at: 2026-11-26T22:19:18.415903006Z
   session_id: 01a219653ac2
+- id: 01a21a11-7eab-7b61-89f5-ba8f8cff248e
+  author: lane-recovery
+  content: Reference merge `52825e81d1c3fbab8e5bf382ef81641956f0e559` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-26T22:54:43.883997860Z
+  modified_at: 2026-11-26T22:54:43.883997860Z
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
@@ -272,6 +277,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21a11-7eac-78b0-a86f-98f1a7d07c8c
+  author: lane-recovery
+  timestamp: 2026-11-26T22:54:43.884007142Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 5ea861d7358b33c4422c965a8e2285fd41b2ba6e
