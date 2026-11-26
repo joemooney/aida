@@ -423,6 +423,18 @@ comments:
   modified_at: 2026-11-26T11:18:59.210920294Z
   session_id: 01a2177c5fc8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21798-c408-71d1-9a48-f204e4b1c72b
+  author: joe
+  content: |-
+    Integration pre-check: PR #4648 @2fa3df9e (STORY-2839 slice d2: Acts 5–6, steering modes, detours, four SVGs, operator-setup lane-admission + scheduled jobs; Refs) — PASS
+    - SVG safety: all four new SVGs have no script, on* handlers, href/xlink:href, foreignObject, image, use, @import or javascript:; url() is used only for internal markers; each has a prefers-color-scheme block.
+    - Rendering: workflow.html has no literal "  - " paragraphs and no stray *emphasis* (the d1 lesson held).
+    - Facts checked against source/CLI: /etc/aida/lanes.toml [lanes] keys, defaults (2 / 4 / unset×3), deny_unknown_fields + range checks fail-closed, missing file → defaults (lane_admission.rs); AIDA_OVER_HOST_LIMIT exists; RequirementStatus has exactly the 9 listed states; the locking posture is context-aware by default with off/warn/enforce. Commands exist: schedule status/install-cron/install-systemd/tick, mandate start --ship-held --ttl --reason --drive, doctor --lane-host, session handoff --seat --standing-orders, decide, do, punt (design-fork), queue work --auto-complete/--resume, merge-hold clear, lane job run.
+    - Security-lens note (non-blocking): operator-setup advises adding `Bash(aida deputy shell submit *)` to the Claude Code allow-list. That is accurate about the prefix-match behaviour, but it widens what a seat can run without a prompt; the deputy and its classifier then become the only gate. Suggest one sentence saying so ("the deputy still screens and records each job; only add this where the deputy runner is trusted"). Can ride a later slice.
+  created_at: 2026-11-26T11:23:21.769203799Z
+  modified_at: 2026-11-26T11:23:21.769203799Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
