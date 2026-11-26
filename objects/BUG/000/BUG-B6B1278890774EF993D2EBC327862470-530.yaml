@@ -27,6 +27,11 @@ relationships:
   target_id: 01a21471-4e55-7201-be4e-604408724146
   created_at: 2026-11-26T08:29:18.530168165Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21721-6dd8-74c2-8c16-38fe6e9df346
+  created_at: 2026-11-26T09:13:23.996676042Z
+  created_by: dirtlab
 comments:
 - id: 01a216f9-1a35-7ff2-b62e-26e318cef0da
   author: joe
@@ -66,6 +71,31 @@ comments:
     - None
   created_at: 2026-11-26T08:37:28.745349540Z
   modified_at: 2026-11-26T08:37:28.745349540Z
+  session_id: 01a216fd8162
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21717-2f0f-7053-aeaa-a7432a3bdf43
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 062a56e941 (diff origin/main...HEAD: advisor_loop_train.rs, pr_train.rs, task_1993_review_watch_tests.rs).
+
+    Acceptance evidence:
+    - AC1 [behavioral]: run_passes now calls an unclaimed pre-scan (train_wanted: pending journal recovery, or any discovered change passing the automatic eligible() gate; Unavailable counts as wanted). Claim taken only for a wanted pass, dropped via admission.take() when the pass returns, before idle. Test bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train asserts no claim over 3+ idle polls, and none after a wanted pass. PASS (lane job, exit 0).
+    - AC2 [behavioral]: same test: manual_train_admission succeeds in <1s against the idle loop (poll interval 1s).
+    - AC3: the test above; existing bug2703_real_worker_loops_yield_to_the_real_ship_handler and story2905_admission_tests stay green (adapted: probe param, 'resume claims' now waits for a later pass to run under the claim).
+    - AC4 [behavioral]: long_hold_line, test bug2769_a_long_hold_names_the_holder_and_phase; emitted on release when a hold exceeds 30s.
+
+    Probes: (1) purpose strings reuse ADMISSION_PURPOSE; (3) 0 changes -> no claim; N -> first eligible short-circuits; (5) pre-scan grants nothing; skipping is fail-closed; discovery error -> recorded pass failure, no claim; all gates still re-run under the claim inside the pass. No test weakened.
+    Residual risks: discover() excludes drafts (assumed never auto-trainable); pass housekeeping (store_refresh pre_pass, abandoned-train closure) now runs only when something is eligible or recovery pends; when a PR is eligible the forge reads happen twice; AC4 line is logged on release, not mid-pass (holder still visible via 'aida advisor loops status' claims).
+  created_at: 2026-11-26T09:02:05.071899503Z
+  modified_at: 2026-11-26T09:02:05.071899503Z
+  session_id: 01a216fd8162
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21721-0d9d-77f0-837c-25682c9f235b
+  author: aida-publication-done
+  content: Implementer push 0f9abd22eab1 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T09:12:51.869356061Z
+  modified_at: 2026-11-26T09:12:51.869356061Z
   session_id: 01a216fd8162
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2172c-4586-7141-8458-70b22690b279
@@ -113,6 +143,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21721-0d9d-77f0-837c-2551f6c3aec7
+  author: aida-publication-done
+  timestamp: 2026-11-26T09:12:51.869353183Z
+  session_id: 01a216fd8162
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21721-936f-7b10-b774-6aaf467c816c
+  author: dirtlab
+  timestamp: 2026-11-26T09:13:26.127746331Z
+  session_id: 01a216fd8162
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21722-37c5-7040-be7c-b51180d08bb8
+  author: dirtlab
+  timestamp: 2026-11-26T09:14:08.197440793Z
+  session_id: 01a216fd8162
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 - id: 01a2172c-4586-7141-8458-70abe73fb1b6
   author: aida-orchestrator
   timestamp: 2026-11-26T09:25:07.078279534Z
