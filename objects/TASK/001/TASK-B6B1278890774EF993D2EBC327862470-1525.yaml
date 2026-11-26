@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T17:37:27.785583039Z
+modified_at: 2026-11-26T17:52:57.886568336Z
 req_type: Task
 tags:
 - deputy
@@ -35,6 +35,28 @@ comments:
   modified_at: 2026-11-26T17:32:20.427908064Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a218fd-381e-71c3-9c60-3b736afb8775
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + fixture):** `runner::stale_image` reuses BUG-2774 `deputy_binary` (deleted marker / replaced inode with other sha) and requires the live build to answer `--version`; a non-deleted image outside the live dir (a worktree build) is left alone. The loop probes it only on an idle round (no job claimed this round), throttled; on a hit it audits `runner-reexec` {old_sha,new_sha,reason}, writes runner.log, drops socket/services/lock, and execs the live path with the same argv and `AIDA_SESSION_GRANT` = the grant it currently holds (pid, start time, ppid, sid unchanged => binding unchanged; grant never re-minted or widened). Tests: `task3919_*` in deputy_shell/tests.rs.
+    - **AC2 (fixture):** exec closure asserts the in-flight job finished first; a job filed during the window stays in accepted/ and the next runner claims it. Submit client retries ENOENT/ECONNREFUSED briefly while a fresh `reexec.json` marker is present (removed once the new runner serves).
+    - **AC3:** tests for deleted, sha mismatch, job in flight, binding survives (second runner run under the passed grant claims and runs the window job).
+    - **AC4:** the `--loop` supervisor does not share the runner loop; it already respawns via `stale_binary::service_program`, and with re-exec its runner child keeps pid. Listed in PR body.
+
+    ### Expected files
+    - aida-cli-lib/src/deputy_shell/{runner.rs,mod.rs,socket.rs,tests.rs}
+    - aida-cli-lib/src/deputy_shell_cmd.rs
+    - aida-cli-lib/src/advisor_loop_service.rs (make `deputy_binary` pub(crate))
+
+    ### Ambiguities / conflicts as questions
+    - None blocking. Design choice: a replaced-but-not-deleted image outside the live dir is not re-exec'd.
+  created_at: 2026-11-26T17:52:57.886568336Z
+  modified_at: 2026-11-26T17:52:57.886568336Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218ef-06e9-70b1-85a7-aae51066fd02
   author: aida-session-start
