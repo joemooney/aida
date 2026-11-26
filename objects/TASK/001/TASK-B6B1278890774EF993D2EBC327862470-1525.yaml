@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T18:12:24.549782660Z
+modified_at: 2026-11-26T20:18:20.576641417Z
 req_type: Task
 tags:
 - deputy
@@ -81,6 +81,11 @@ comments:
   modified_at: 2026-11-26T18:12:24.549782660Z
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21982-5121-7e22-836c-65c955902701
+  author: joe
+  content: 'FOLLOW-UP (advisor-122 2026-11-26 13:12, on the #4683 approval; not blocking): Joe''s default deputy runs WITHOUT --loop, so a failed re-exec (which exits rather than continuing stale) leaves NO default deputy. `aida doctor` should flag a "no default deputy" state (no live runner bound for the default name) with the restart command, and train-status should name it when the auto-train is blocked on it.'
+  created_at: 2026-11-26T20:18:20.576641417Z
+  modified_at: 2026-11-26T20:18:20.576641417Z
 history:
 - id: 01a218ef-06e9-70b1-85a7-aae51066fd02
   author: aida-session-start
