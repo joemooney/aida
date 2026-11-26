@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T20:32:12.365189116Z
+modified_at: 2026-11-26T20:34:31.268686247Z
 req_type: Story
 tags:
 - landing
@@ -363,6 +363,17 @@ comments:
   created_at: 2026-11-26T20:23:52.086022458Z
   modified_at: 2026-11-26T20:23:52.086022458Z
   session_id: 01a21906a29e
+- id: 01a21991-5fa0-7d80-bd82-d5db88f12cc9
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:34):
+    # STORY-3131 S2 FRESH (replaces closed #4634, r1 @1b15206a; product-15 2026-11-26 13:35). Lane: CLAUDE. MAIN, NEW branch story-3131-s2-fresh (cut from the current main tip). Keep #4634's title, ending in (Refs STORY-3131).
+    PORT the r1 head onto current main: `git diff origin/main...origin/story-3131-s2-causes` is the reference (it already carries the advisor's 10:52 binding (a)-(d): review-in-flight incl. queued/remote-held/superseding, a backlog is not a drought, phase-relative lock advice with max(45m, 2x p90), the base from config/forge, scan() wiring tests). Resolve against the newly landed BUG-2776 (#4678: review_watch reclaim + its AC3 retained/doctor surface: REUSE its held-PR signal for review-in-flight instead of duplicating it) and BUG-2772 (#4676). Keep every test.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4634 (conflicted; closed)" and lists the binding (a)-(d) with where each lives. COMMIT your work.
+  created_at: 2026-11-26T20:34:31.268686247Z
+  modified_at: 2026-11-26T20:34:31.268686247Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
