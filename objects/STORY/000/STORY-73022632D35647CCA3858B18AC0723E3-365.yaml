@@ -1,0 +1,65 @@
+id: 01a2191f-9213-75a2-9c9a-b4b2692c763f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-365
+title: 'Review PR-4677: [AI:claude] chore(landing): cap the automatic train at 3 PRs (TASK-3912)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a218f9`) for branch `landing-max-prs-3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4677>
+  - Branch: `landing-max-prs-3` → `main`
+
+  ## Covers
+
+  - TASK-3912
+  - BUG-2773
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4677` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T18:30:29.139076547Z
+modified_at: 2026-11-26T18:30:41.564427135Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a215a5-1661-7d81-984f-eca5198e20e1
+  created_at: 2026-11-26T18:30:33.703754799Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a21845-df97-7211-84c2-b64cd9b68d42
+  created_at: 2026-11-26T18:30:41.564390962Z
+  created_by: dirtlab
+history:
+- id: 01a2191f-ac1c-7b71-b39d-1d12e1f44131
+  author: dirtlab
+  timestamp: 2026-11-26T18:30:35.804862238Z
+  session_id: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2191f-cb7c-7d11-8d21-45ef70945639
+  author: dirtlab
+  timestamp: 2026-11-26T18:30:43.836508063Z
+  session_id: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 2b55db7ed31a700d190dc934055bf65bb75943d3
+  branch: landing-max-prs-3
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4af2602e90
+  vendor: claude
+  session: 01a218f99f51
+  harness_version: 2.1.319 (Claude Code)
