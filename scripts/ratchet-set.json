@@ -25,6 +25,7 @@
         "h2a_single_bracket_citations",
         "h2a_token_overflow",
         "rename_excludes_either_path",
+        "root_and_nested_credential_paths_are_excluded",
         "runtime_prefix_requires_exact_components",
         "test_anchor_snippet_lines_exact_and_whitespace_tolerant",
         "test_bundle_review_batches_pairs_tests_and_respects_budget",
@@ -50,6 +51,7 @@
         "invalid_review_rules_errors",
         "option_like_endpoints_refuse_before_git",
         "prepare_excludes_credentials_before_revision_reads",
+        "root_credential_dirs_excluded_reported_and_refused_as_findings",
         "root_commit_preserves_unusual_git_paths",
         "write_confines_new_and_existing_paths"
       ],
