@@ -1715,6 +1715,17 @@ impl WorktreeProbe {
     }
 }
 
+/// The short pass-line reason for a held change: its refusal up to the first
+/// clause break. trace:BUG-2776 | ai:claude
+fn held_why(reason: &str) -> String {
+    reason
+        .split([';', '('])
+        .next()
+        .unwrap_or(reason)
+        .trim()
+        .to_string()
+}
+
 fn held_tree(diagnostic: &str, branch: &str) -> bool {
     diagnostic.contains(&format!("branch `{branch}` is held by worktree "))
         || diagnostic.contains(&format!(
@@ -1900,7 +1911,15 @@ fn select_with_coverage(
     max: u8,
     coverage: impl FnOnce() -> Option<String>,
 ) -> Result<(Action, Admission)> {
-    select_with_probes(store, change, vendor, max, coverage, |branch| {
+    let forge = if change.gitlab {
+        crate::session_start::ReviewForge::GitLab
+    } else {
+        crate::session_start::ReviewForge::GitHub
+    };
+    let reclaim = || {
+        crate::queue_cmd::reclaim_retained_review_tree(&store.root, forge, change.id, &change.head)
+    };
+    select_with_probes(store, change, vendor, max, coverage, reclaim, |branch| {
         crate::queue_cmd::preflight_queue_work_branch(&store.root, Some(branch))
     })
 }
@@ -1912,6 +1931,7 @@ fn select_with_probes(
     vendor: Option<String>,
     max: u8,
     coverage: impl FnOnce() -> Option<String>,
+    reclaim_tree: impl FnOnce() -> crate::queue_cmd::RetainedReview,
     probe_branch: impl FnOnce(&str) -> Result<()>,
 ) -> Result<(Action, Admission)> {
     let key = change.key();
@@ -1932,18 +1952,28 @@ fn select_with_probes(
     };
     let recipient = overlap.then(|| store.notice_recipient(&change.author));
     let branch = key.to_ascii_lowercase();
-    let tree_probe = store
-        .load()?
+    let loaded = store.load()?;
+    let held = loaded
         .entries
         .get(&key)
         .and_then(|entry| entry.attempts.iter().find(|a| a.head == change.head))
         .filter(|a| {
             a.phase == Phase::Exited
-                && a.pickup_retries < 3
-                && a.pickup_retry_at.is_some_and(|at| at <= chrono::Utc::now())
                 && a.diagnostic
                     .as_deref()
                     .is_some_and(|d| held_tree(d, &branch))
+        });
+    // Every pass reclaims a clean leftover of an exited reviewer before the
+    // ownership snapshot, so a due retry dispatches the moved head in this
+    // pass; a kept checkout's reason is classified on every pass, so its
+    // block ages. trace:BUG-2776 | ai:claude
+    let kept = held.and_then(|_| match reclaim_tree() {
+        crate::queue_cmd::RetainedReview::Free => None,
+        crate::queue_cmd::RetainedReview::Kept(why) => Some(why),
+    });
+    let tree_probe = held
+        .filter(|a| {
+            a.pickup_retries < 3 && a.pickup_retry_at.is_some_and(|at| at <= chrono::Utc::now())
         })
         .map(|a| {
             let result = WorktreeProbe::capture(&store.root, &branch).and_then(|probe| {
@@ -2048,8 +2078,11 @@ fn select_with_probes(
             pickup_retries = attempt.pickup_retries;
             if let Some(result) = pickup_retry(store, &key, attempt, history.conclusive(&change.head), tree_probe.as_ref()) {
                 if let Err(reason) = result {
-                    outcome = Admission::Skipped("held by exited attempts");
-                    return Ok(Action::Skip(format!("held by exited attempt: {reason}")));
+                    // Name why the pass keeps this change held. trace:BUG-2776 | ai:claude
+                    let kept = kept.clone();
+                    outcome = Admission::Held { retained: kept.is_some(), why: kept.clone().unwrap_or_else(|| held_why(&reason)) };
+                    let kept = kept.map(|why| format!(" (retained checkout kept: {why})")).unwrap_or_default();
+                    return Ok(Action::Skip(format!("held by exited attempt: {reason}{kept}")));
                 }
                 pickup_retries += 1;
                 no_verdict_ready = true;
@@ -2060,7 +2093,7 @@ fn select_with_probes(
                 no_verdict_attempts = no_verdict_attempts.max(1);
                 attempt.no_verdict_attempts = no_verdict_attempts;
                 if !attempt.descendants_gone() || attempt.recorded().iter().any(|p| p.alive()) {
-                    outcome = Admission::Skipped("held by exited attempts");
+                    outcome = Admission::Held { why: "review processes still running".into(), retained: false };
                     return Ok(Action::Skip(format!("unfinished review processes still hold this head; inspect before `aida review watch --release {key}`")));
                 }
                 // WAITING may depend on evidence other than CI; use a bounded backoff.
@@ -2070,17 +2103,17 @@ fn select_with_probes(
                         if history.contains(&change.head) { review_publication::WAITING_RETRY_SECS }
                         else { 60 * i64::from(no_verdict_attempts) }));
                 if let Some(reason) = no_verdict_blocker(attempt) {
-                    outcome = Admission::Skipped("held by exited attempts");
+                    outcome = Admission::Held { why: "three reviews without a verdict".into(), retained: false };
                     return Ok(Action::Skip(reason));
                 }
                 if chrono::Utc::now() < retry_at {
-                    outcome = Admission::Skipped("held by exited attempts");
+                    outcome = Admission::Held { why: format!("no-verdict backoff until {retry_at}"), retained: false };
                     return Ok(Action::Skip(format!("review ended without a conclusive verdict; retry after {retry_at}")));
                 }
                 no_verdict_attempts += 1;
                 no_verdict_ready = true;
             } else if !attempt.retryable_fetch && (attempt.phase == Phase::Exited || (attempt.phase == Phase::Failed && attempt.setup_retry && attempt.diagnostic.is_some())) {
-                outcome = Admission::Skipped("held by exited attempts");
+                outcome = Admission::Held { why: format!("setup exited: {}", held_why(attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))), retained: false };
                 return Ok(Action::Skip(format!("review setup exited without completing ({}); retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
             }
         }
@@ -3541,6 +3574,21 @@ fn watch_pass(
                 });
                 Ok(())
             }
+            Ok(Admission::Held { why, retained }) => {
+                // trace:BUG-2776 | ai:claude
+                if retained {
+                    pass.retained.push(service::Unadmitted {
+                        key: key.clone(),
+                        head: change.head.clone(),
+                        cause: why.clone(),
+                    });
+                }
+                pass.skipped
+                    .entry("held by exited attempts".into())
+                    .or_default()
+                    .push(format!("{key}: {why}"));
+                Ok(())
+            }
             Ok(outcome) => {
                 let category = match outcome {
                     Admission::Skipped(category) => category,
@@ -3888,6 +3936,13 @@ pub(crate) enum Admission {
     Admitted,
     Unadmitted(String),
     Skipped(&'static str),
+    /// Held by an exited attempt, with why (dirty, live pid N, merge-hold,
+    /// lock, backoff, ...); `retained` when a leftover review checkout was
+    /// found and kept. trace:BUG-2776 | ai:claude
+    Held {
+        why: String,
+        retained: bool,
+    },
 }
 
 /// The skip reason `probe_unneeded` gives a head the admission hub refused
