@@ -124,3 +124,118 @@ fn bug_2733_linear_promotion_establishes_its_review_boundary() {
     .unwrap_err();
     assert!(format!("{err:#}").contains("promotion boundary"), "{err:#}");
 }
+
+/// F1: a repo-configured textconv driver never runs while patch-ids are read.
+#[test]
+fn bug_2733_patch_id_read_never_runs_a_textconv_driver() {
+    let (tmp, head) = promotion_shaped();
+    let repo = tmp.path();
+    let marker = repo.join("textconv-ran");
+    git(
+        repo,
+        &[
+            "config",
+            "diff.x.textconv",
+            &format!("touch '{}'; cat", marker.display()),
+        ],
+    );
+    std::fs::write(repo.join(".git/info/attributes"), "* diff=x\n").unwrap();
+    let landed = already_on_base(repo, "main", &head).unwrap();
+    assert_eq!(landed.len(), 2, "{landed:?}");
+    assert!(!marker.exists(), "the textconv driver ran");
+    // The probe is live: a plain `git log -p` does run it.
+    git(repo, &["log", "-p", "-1", "main"]);
+    assert!(marker.exists(), "the textconv probe is inert");
+}
+
+/// F3: two different changes to one binary file do not share a patch-id.
+#[test]
+fn bug_2733_distinct_binary_changes_do_not_collide() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path();
+    let commit_bin = |bytes: &[u8], message: &str| {
+        std::fs::write(repo.join("blob.bin"), bytes).unwrap();
+        git(repo, &["add", "blob.bin"]);
+        git(repo, &["commit", "-m", message]);
+    };
+    git(repo, &["init", "-b", "main"]);
+    commit_bin(b"base\0", "base");
+    git(repo, &["switch", "-c", "work"]);
+    commit_bin(b"branch\0", "branch binary (BUG-31)");
+    let head = git(repo, &["rev-parse", "HEAD"]);
+    git(repo, &["switch", "main"]);
+    commit_bin(b"main\0", "main binary (BUG-32)");
+    assert!(already_on_base(repo, "main", &head).unwrap().is_empty());
+}
+
+/// F6: a change main landed and then reverted is not on main; the branch's
+/// copy re-introduces it, so its commit (and spec) is kept.
+#[test]
+fn bug_2733_a_change_reverted_on_base_is_not_already_on_base() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path();
+    git(repo, &["init", "-b", "main"]);
+    commit_file(repo, "base", "base");
+    git(repo, &["switch", "-c", "work"]);
+    let x = commit_file(repo, "x", "[AI:claude] fix(x): x (BUG-41) (#51)");
+    git(repo, &["switch", "main"]);
+    commit_file(repo, "unrelated", "unrelated main work (TASK-7)");
+    git(repo, &["cherry-pick", &x]);
+    assert_eq!(already_on_base(repo, "main", &x).unwrap().len(), 1);
+    git(repo, &["revert", "--no-edit", "HEAD"]);
+    assert!(already_on_base(repo, "main", &x).unwrap().is_empty());
+}
+
+/// A legacy store in `repo` holding `ids`, every one with its mode unset.
+fn seed_specs(repo: &Path, ids: &[&str]) {
+    let mut store = aida_core::RequirementsStore::default();
+    for id in ids {
+        let mut r = aida_core::Requirement::new(format!("{id} title"), "desc".into());
+        r.spec_id = Some((*id).to_string());
+        store.requirements.push(r);
+    }
+    aida_core::Storage::new(repo.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+}
+
+/// F4 (AC1): `aida pr ship`'s spec read on a promotion-shaped branch sees
+/// only the new commit's spec.
+#[test]
+fn bug_2733_ship_gate_reads_only_the_new_commits_spec() {
+    let (tmp, _head) = promotion_shaped();
+    let repo = tmp.path();
+    seed_specs(repo, &["BUG-1", "STORY-2", "BUG-3", "TASK-7"]);
+    let ids: Vec<String> = crate::pr_service::ship_gate_spec_records(repo)
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect();
+    assert_eq!(ids, ["BUG-3"]);
+}
+
+/// F5 (AC2): the train's supervised refusal names only the new commit's
+/// spec, in the unchanged wording, though the old commits' specs are
+/// supervised too.
+#[test]
+fn bug_2733_train_refusal_names_only_the_new_commits_spec() {
+    let (tmp, head) = promotion_shaped();
+    let repo = tmp.path();
+    seed_specs(repo, &["BUG-1", "STORY-2", "BUG-3"]);
+    let body = crate::pr_train::member_body(repo, "main", &head, "").unwrap();
+    let ids = crate::pr_train::member_spec_ids(
+        "promote/integration-9",
+        "promotion 9",
+        "promotion 9 (#20)",
+        &body,
+    );
+    let records = crate::pr_service::ship_gate_spec_records_for_ids(repo, ids);
+    let refusal = crate::pr_train::member_spec_policy_refusal(records, false, || Err(None));
+    let Some(crate::pr_train::MemberGateError::Refused(why)) = refusal else {
+        panic!("expected a supervised refusal: {refusal:?}");
+    };
+    assert!(
+        why.starts_with("BUG-3 is marked unset (supervised): its merge needs a human"),
+        "{why}"
+    );
+    assert!(!why.contains("BUG-1") && !why.contains("STORY-2"), "{why}");
+}

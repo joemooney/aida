@@ -5,20 +5,58 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use std::time::Duration;
 
 use anyhow::{ensure, Context, Result};
 
 /// The most base-side commits whose patch-ids are compared.
 const BASE_WINDOW: usize = 2000;
+/// Each git call's ceiling; a train check's scoped deadline tightens it.
+const CALL_TIMEOUT: Duration = Duration::from_secs(20);
+/// `git log -p` output ceiling (binary hunks included); past it the read
+/// fails and every commit is kept.
+const PATCH_CAP: u64 = 64 * 1024 * 1024;
+/// Ceiling for listings (`rev-list`, `patch-id` output).
+const LIST_CAP: u64 = 4 * 1024 * 1024;
+
+/// Diff options for patch-id input: no external diff, textconv, signature
+/// or rename driver runs, and binary content is hashed in full so two
+/// different binary changes never share a patch-id. `--no-prefix` makes a
+/// reversed diff hash like the forward one.
+// trace:BUG-2733 | ai:claude
+const PATCH_FLAGS: &[&str] = &[
+    "--no-merges",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-renames",
+    "--no-relative",
+    "--full-index",
+    "--binary",
+    "--no-prefix",
+    "--no-show-signature",
+    "--diff-algorithm=myers",
+];
 
 /// Full SHAs of the non-merge commits in `base..head` whose patch-id matches a
 /// non-merge commit on `base` made since the branch forked. Empty when the
-/// fork point cannot be told (no evidence ⇒ nothing is dropped).
+/// fork point cannot be told (no evidence ⇒ nothing is dropped). A patch-id
+/// that a later base commit reverses (a revert) is not on base: the branch's
+/// copy would re-introduce it, so its commit is kept.
 // trace:BUG-2733 | ai:claude
 pub(crate) fn already_on_base(repo: &Path, base: &str, head: &str) -> Result<HashSet<String>> {
     let range = format!("{base}..{head}");
-    let listing = git_stdout(repo, &["rev-list", "--parents", &range, "--"])?;
+    let listing = git_stdout(
+        repo,
+        &[
+            "rev-list",
+            "--parents",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            &range,
+            "--",
+        ],
+    )?;
     let rows: Vec<Vec<&str>> = listing
         .lines()
         .map(|l| l.split_whitespace().collect::<Vec<_>>())
@@ -37,10 +75,15 @@ pub(crate) fn already_on_base(repo: &Path, base: &str, head: &str) -> Result<Has
         return Ok(HashSet::new());
     }
     let window = format!("--max-count={BASE_WINDOW}");
-    let mut base_args = vec![window.as_str(), base];
-    base_args.extend(stops.iter().map(String::as_str));
-    let on_base: HashSet<String> = patch_ids(repo, &base_args)?.into_keys().collect();
-    Ok(patch_ids(repo, &[&range])?
+    let mut base_revs = vec![base];
+    base_revs.extend(stops.iter().map(String::as_str));
+    let base_ids = |reverse| patch_ids(repo, Some(&window), &base_revs, reverse);
+    let mut on_base: HashSet<String> = base_ids(false)?.into_keys().collect();
+    // When in doubt, keep the commit: the supervised gate then applies.
+    for reverted in base_ids(true)?.into_keys() {
+        on_base.remove(&reverted);
+    }
+    Ok(patch_ids(repo, None, &[&range], false)?
         .into_iter()
         .filter(|(pid, _)| on_base.contains(pid))
         .flat_map(|(_, shas)| shas)
@@ -67,71 +110,72 @@ pub(crate) fn retain_new<T>(
     });
 }
 
-fn git_stdout(repo: &Path, args: &[&str]) -> Result<String> {
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(repo).args(args);
-    let out = crate::forge_lookup::deadline_output(cmd, Command::output)
-        .with_context(|| format!("running git {}", args.join(" ")))?;
+/// `git <args>` in `repo` through the host git hardening (seat-clone
+/// refusal, contained-tree pins, fsmonitor off), bounded by [`CALL_TIMEOUT`]
+/// and `cap` output bytes.
+// trace:BUG-2733 | ai:claude
+fn bounded_git(repo: &Path, args: &[&str], stdin: Stdio, cap: u64) -> Result<Vec<u8>> {
+    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    cmd.args(args).stdin(stdin);
+    use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
+    let out = match command_output_with_timeout_capped(cmd, CALL_TIMEOUT, cap) {
+        BoundedCommandOutput::Completed(out) => out,
+        BoundedCommandOutput::TimedOut => anyhow::bail!("git {} timed out", args[0]),
+        BoundedCommandOutput::SpawnFailed => anyhow::bail!("could not start git {}", args[0]),
+    };
+    ensure!(
+        out.stdout.len() as u64 <= cap && out.stderr.len() as u64 <= cap,
+        "git {} exceeded the output limit",
+        args[0]
+    );
     ensure!(
         out.status.success(),
         "git {} failed: {}",
-        args.join(" "),
+        args[0],
         String::from_utf8_lossy(&out.stderr).trim()
     );
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    Ok(out.stdout)
 }
 
-/// `cmd`'s output, killed at the scoped read deadline when one is active
-/// (a train check), so neither half of the patch-id pipeline outlives it.
+fn git_stdout(repo: &Path, args: &[&str]) -> Result<String> {
+    let out = bounded_git(repo, args, Stdio::null(), LIST_CAP)?;
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// patch-id → the non-merge commits in `revs` that carry it; `reverse`
+/// hashes each commit's inverse (what a revert of it would carry).
 // trace:BUG-2733 | ai:claude
-fn scoped_output(mut cmd: Command) -> Result<std::process::Output> {
-    if crate::forge_lookup::forge_lookup_deadline().is_none() {
-        return Ok(cmd.output()?);
+fn patch_ids(
+    repo: &Path,
+    window: Option<&str>,
+    revs: &[&str],
+    reverse: bool,
+) -> Result<HashMap<String, Vec<String>>> {
+    let mut args = vec!["log", "-p", "--format=commit %H"];
+    args.extend(window);
+    args.extend_from_slice(PATCH_FLAGS);
+    if reverse {
+        args.push("-R");
     }
-    let budget = crate::forge_lookup::remaining_call_budget(std::time::Duration::MAX)?;
-    use crate::bounded_process::{command_output_with_timeout_detail, BoundedCommandOutput};
-    match command_output_with_timeout_detail(cmd, budget) {
-        BoundedCommandOutput::Completed(out) => Ok(out),
-        BoundedCommandOutput::TimedOut => anyhow::bail!("read deadline expired"),
-        BoundedCommandOutput::SpawnFailed => anyhow::bail!("could not start git"),
-    }
-}
-
-/// patch-id → the non-merge commits in `revs` that carry it.
-fn patch_ids(repo: &Path, revs: &[&str]) -> Result<HashMap<String, Vec<String>>> {
-    let mut log = Command::new("git");
-    log.arg("-C")
-        .arg(repo)
-        .args([
-            "log",
-            "-p",
-            "--no-merges",
-            "--no-color",
-            "--no-ext-diff",
-            "--format=commit %H",
-        ])
-        .args(revs)
-        .arg("--")
-        .stdin(Stdio::null());
-    let log = scoped_output(log).context("running git log -p")?;
-    ensure!(log.status.success(), "git log -p {} failed", revs.join(" "));
+    args.push(crate::git_arg_guard::END_OF_OPTIONS);
+    args.extend_from_slice(revs);
+    args.push("--");
+    let log = bounded_git(repo, &args, Stdio::null(), PATCH_CAP).context("reading git log -p")?;
     // Fed through a pipe so `patch-id` runs as its own bounded child; a
     // killed reader ends the feeder with EPIPE.
     let (reader, mut writer) = std::io::pipe().context("piping git log -p")?;
     let feeder = std::thread::spawn(move || {
-        let _ = std::io::copy(&mut log.stdout.as_slice(), &mut writer);
+        let _ = std::io::copy(&mut log.as_slice(), &mut writer);
     });
-    let mut pid = Command::new("git");
-    pid.arg("-C")
-        .arg(repo)
-        .args(["patch-id", "--stable"])
-        .stdin(Stdio::from(reader));
-    let pid = scoped_output(pid).context("running git patch-id");
+    let pid = bounded_git(
+        repo,
+        &["patch-id", "--stable"],
+        Stdio::from(reader),
+        LIST_CAP,
+    );
     let _ = feeder.join();
-    let pid = pid?;
-    ensure!(pid.status.success(), "git patch-id failed");
     let mut out: HashMap<String, Vec<String>> = HashMap::new();
-    for line in String::from_utf8_lossy(&pid.stdout).lines() {
+    for line in String::from_utf8_lossy(&pid?).lines() {
         if let Some((pid, sha)) = line.split_once(' ') {
             out.entry(pid.to_owned())
                 .or_default()
