@@ -14,11 +14,23 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T19:50:49.914099231Z
-modified_at: 2026-11-26T20:17:20.178109805Z
+modified_at: 2026-11-26T20:19:30.562512975Z
 req_type: Task
 tags:
 - review-watch
 - throughput
+comments:
+- id: 01a21983-a2c1-7533-bff8-18d21cb507d0
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:19):
+    # TASK-3921: the BUG-2776 follow-up (advisor-122 binding, 11:48 + 12:55; product-15). Lane: CLAUDE. STANDARD. MAIN, NEW branch task-3921-rw-reclaim-guard (cut from main AFTER #4678 BUG-2776 landed). <=200 lines. Completing (TASK-3921) trailer.
+    READ: `aida show TASK-3921` (AC1-AC3) and the landed BUG-2776 change (`git log --grep BUG-2776 origin/main`; review_watch.rs ~1970 reclaim_retained_review_tree, queue_cmd/work.rs ~216). Check pause and the cap BEFORE reclaim; surface the capped case on the AC3 doctor surface with a next step; reset the cap after reclaim + pickup; add the real-subprocess test with a fake `aida` on PATH (argv + a non-zero exit).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T20:19:30.562512975Z
+  modified_at: 2026-11-26T20:19:30.562512975Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21981-6588-7e10-93e8-353bc7d2488d
   author: joe
