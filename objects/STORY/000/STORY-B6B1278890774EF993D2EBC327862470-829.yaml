@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T11:59:19.607756318Z
+modified_at: 2026-11-26T12:04:13.949661986Z
 req_type: Story
 tags:
 - integration
@@ -1025,6 +1025,26 @@ comments:
   modified_at: 2026-11-26T11:59:19.607756318Z
   session_id: 01a21780d476
   harness_version: 2.1.319 (Claude Code)
+- id: 01a217be-2e3e-7bd1-bf7a-8f08f23d3159
+  author: joe
+  content: |-
+    Integration pre-check: PR #4650 @1579ec87 (STORY-3120 S4 --adversarial challenger; Refs) — PASS on the security lens, with one SHOULD-FIX and one design note for the advisor
+
+    Requested S3a/S3b contract on the challenger, all met:
+    - It is a RunnerCall built from the finder's call: the same checkout (empty cwd), parent_env (each vendor's allowlist re-applied, so a codex challenger gets OPENAI_API_KEY and a claude one does not), deadline and stdout/stderr caps, and the prompt on stdin (200 KB test). The spawn test proves cwd empty, GH_TOKEN dropped, AIDA_REVIEW_PASS=challenger, and the vendor argv (codex exec --sandbox=read-only).
+    - Effort: --challenger-effort > AIDA_REVIEW_CHALLENGER_EFFORT > base review-rules challenger_effort, each checked against the challenger vendor's allowlist; an injection test covers every source; 'max' is refused for codex. The new env key is in DROPPED_AIDA_KEYS. challenger_effort is read from the TRUSTED base rules (it is a field of the same ProjectReviewRulesConfig that trusted_review_base reads).
+    - Fail-closed verdicts: missing, duplicate, out-of-range or unknown verdicts refuse the run, and so does non-JSON output. Coverage ledger, batch binding and the credential screen are unchanged and run before the challenge. The rename diff pathspec skips credential old paths (defence in depth; classify already excludes a rename where either side is a credential).
+    - detect_ai_authors only chooses which hardened vendor challenges; it never decides whether a challenge runs. Only REVIEW_VENDORS {claude, codex} can be picked. A missing opposing vendor gives an explicit note.
+
+    SHOULD-FIX S1 (fail-closed but breaks common configs): resolve_challenger takes model/effort for the challenger from resolve_for_run with (None, None), i.e. AIDA_REVIEW_MODEL/AIDA_REVIEW_EFFORT and review-rules default_model/default_effort, which are tuned for the FINDER's vendor. Example: AIDA_REVIEW_EFFORT=max (claude) with a codex challenger errors in the rest chain even when --challenger-effort is given (rest is resolved first). AIDA_REVIEW_MODEL=<claude model> is passed to codex as -m and fails at runtime. Fix: when the challenger vendor differs from the finder's, take only the challenger vendor's [agents.<v>.seats.reviewer] tuning plus the challenger-effort chain, and add a test.
+
+    DESIGN NOTE D1 (advisor call, not blocking): refuted findings drop out of anchored_findings, so --fail-on/--sarif no longer see them. Fooling either agent now suppresses a finding, where before only the finder had to be fooled, e.g. by an injected comment in the diff, which both agents read. Refuted findings stay visible in the bundle (adversarial.refuted + markdown). Consider having --fail-on count refuted findings at or above the threshold, or recording them in SARIF as suppressed (with suppressions) rather than omitting them.
+
+    Size: 639 changed lines, over the 300-line small-PR guideline (the 383-line new module is roughly half tests).
+  created_at: 2026-11-26T12:04:13.949661986Z
+  modified_at: 2026-11-26T12:04:13.949661986Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
