@@ -1,7 +1,10 @@
 //! Fixtures for mailbox tombs, creator staging and stale nonce-era markers.
 //! trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 
-use super::leftovers::{reap_stale_staging, scan_at, Leftovers, STALE_AFTER};
+use super::leftovers::{
+    reap_stale_staging, scan_at, scan_scoped_at, HeldLeftover, Leftovers, Owner, OwnerLiveness,
+    Scope, STALE_AFTER,
+};
 use super::tests::{repo, source};
 use super::*;
 use std::time::SystemTime;
@@ -60,6 +63,7 @@ fn empty_tombs_are_reaped_and_tombs_holding_mail_only_reported() {
             stranded_tombs: vec![full.clone()],
             reapable: vec![empty.clone()],
             corrupt: Vec::new(),
+            held: Vec::new(),
         }
     );
     assert!(empty.is_dir(), "a report removes nothing");
@@ -478,4 +482,121 @@ fn post_placement_failures_warn_and_return_ok() {
             std::fs::remove_file(anchor.join(temp)).unwrap();
         }
     }
+}
+
+/// A pruned worktree's era marker, owned by admin name `admin`.
+// trace:BUG-2770 | ai:claude
+fn pruned_marker(root: &Path, admin: &str) -> PathBuf {
+    let era = source(root).anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let path = era.join(admin);
+    let record = EraMarker {
+        admin: admin.into(),
+        admin_dir: root.join(".git").join("worktrees").join(admin),
+        dev: 1,
+        ino: 2,
+    };
+    std::fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+    std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600)).unwrap();
+    path
+}
+
+/// Leftovers whose owner is live are never removed, and a dry run reports
+/// them as live beside the dead owner's candidates it would remove.
+// trace:BUG-2770 | ai:claude
+#[test]
+fn a_live_owner_keeps_its_leftovers() {
+    let dir = repo();
+    let root = dir.path().to_path_buf();
+    let tomb = root.join(".aida").join(".mailbox-tomb-aaaa");
+    tomb_like(&tomb, &[]);
+    let live = pruned_marker(&root, "lane-live");
+    let dead = pruned_marker(&root, "lane-dead");
+    let judge = |owner: &Owner| match owner {
+        Owner::Checkout(c) if *c == root => OwnerLiveness::Live,
+        Owner::Worktree(name) if name == "lane-live" => OwnerLiveness::Live,
+        _ => OwnerLiveness::Dead,
+    };
+    let scope = Scope {
+        min_age: None,
+        owner: &judge,
+    };
+    let dry = scan_scoped_at(&root, false, later(), &scope);
+    assert_eq!(dry.reapable, [dead.clone()]);
+    let mut held = dry.held.clone();
+    held.sort_by(|a, b| a.path.cmp(&b.path));
+    let mut want = vec![
+        HeldLeftover {
+            path: tomb.clone(),
+            owner: OwnerLiveness::Live,
+        },
+        HeldLeftover {
+            path: live.clone(),
+            owner: OwnerLiveness::Live,
+        },
+    ];
+    want.sort_by(|a, b| a.path.cmp(&b.path));
+    assert_eq!(held, want);
+
+    let reaped = scan_scoped_at(&root, true, later(), &scope);
+    assert_eq!(reaped.reapable, [dead.clone()]);
+    assert!(!dead.exists());
+    assert!(
+        tomb.is_dir() && live.is_file(),
+        "a live owner's leftovers stay"
+    );
+}
+
+/// An owner that cannot be judged is skipped, fail-safe.
+// trace:BUG-2770 | ai:claude
+#[test]
+fn an_unknown_owner_is_kept() {
+    let dir = repo();
+    let marker = pruned_marker(dir.path(), "lane-x");
+    let unknown = |_: &Owner| OwnerLiveness::Unknown;
+    let scope = Scope {
+        min_age: None,
+        owner: &unknown,
+    };
+    let report = scan_scoped_at(dir.path(), true, later(), &scope);
+    assert!(report.reapable.is_empty(), "{report:?}");
+    assert_eq!(
+        report.held,
+        [HeldLeftover {
+            path: marker.clone(),
+            owner: OwnerLiveness::Unknown,
+        }]
+    );
+    assert!(marker.is_file());
+}
+
+/// `min_age` scopes every mailbox leftover, era markers included: one
+/// younger than it is not even a candidate.
+// trace:BUG-2770 | ai:claude
+#[test]
+fn older_than_scopes_mailbox_leftovers() {
+    let dir = repo();
+    let marker = pruned_marker(dir.path(), "lane-y");
+    let tomb = dir.path().join(".aida").join(".mailbox-tomb-bbbb");
+    tomb_like(&tomb, &[]);
+    let dead = |_: &Owner| OwnerLiveness::Dead;
+    let day = Duration::from_secs(86_400);
+    let scope = Scope {
+        min_age: Some(day),
+        owner: &dead,
+    };
+    let young = scan_scoped_at(dir.path(), true, later(), &scope);
+    assert!(
+        young.reapable.is_empty() && young.held.is_empty(),
+        "{young:?}"
+    );
+    assert!(marker.is_file() && tomb.is_dir());
+
+    let aged = SystemTime::now() + day + Duration::from_secs(60);
+    let mut reaped = scan_scoped_at(dir.path(), true, aged, &scope).reapable;
+    reaped.sort();
+    let mut want = vec![marker.clone(), tomb.clone()];
+    want.sort();
+    assert_eq!(reaped, want);
+    assert!(!marker.exists() && !tomb.exists());
 }

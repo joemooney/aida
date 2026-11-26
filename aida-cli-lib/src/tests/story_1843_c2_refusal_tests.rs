@@ -665,8 +665,8 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
     assert_eq!(
         gc[..2],
         [
-            "Mailbox leftover: would remove /w/.aida/.mailbox-tomb-b",
-            "Mailbox leftover: would remove /w/.aida/.mailbox.creating.c",
+            "Mailbox leftover: would remove /w/.aida/.mailbox-tomb-b (owner dead)",
+            "Mailbox leftover: would remove /w/.aida/.mailbox.creating.c (owner dead)",
         ]
     );
     assert!(
@@ -691,7 +691,77 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
     let reaped = crate::agent_registry_root::gc_leftover_lines(&leftovers, false);
     assert_eq!(
         reaped[0],
-        "Mailbox leftover: removed /w/.aida/.mailbox-tomb-b"
+        "Mailbox leftover: removed /w/.aida/.mailbox-tomb-b (owner dead)"
+    );
+}
+
+/// `aida agent gc` judges each leftover's owner: a live or dormant lease, or a
+/// live process inside the checkout, keeps it; an unjudgeable lease, an
+/// unattributed leftover or an incomplete view is unknown and kept; only an
+/// owner with nothing holding it is dead. Each kept line names its verdict.
+// trace:BUG-2770 | ai:claude
+#[cfg(unix)]
+#[test]
+fn agent_gc_judges_leftover_owners_fail_safe() {
+    use crate::agent_registry_root::{gc_leftover_lines, LeftoverOwners};
+    use aida_core::liveness::LeaseState;
+    use aida_core::mailbox_lifecycle::leftovers::{HeldLeftover, Leftovers, Owner, OwnerLiveness};
+    let owners = LeftoverOwners {
+        leases: vec![
+            ("/w/live".into(), LeaseState::Live),
+            ("/w/dormant".into(), LeaseState::Dormant),
+            ("/w/foreign".into(), LeaseState::Unknown),
+            ("/w/stale".into(), LeaseState::Stale),
+        ],
+        session_cwds: vec!["/w/busy/sub".into()],
+        complete: true,
+    };
+    let checkout = |p: &str| Owner::Checkout(p.into());
+    assert_eq!(owners.judge(&checkout("/w/live")), OwnerLiveness::Live);
+    assert_eq!(owners.judge(&checkout("/w/dormant")), OwnerLiveness::Live);
+    assert_eq!(owners.judge(&checkout("/w/busy")), OwnerLiveness::Live);
+    assert_eq!(
+        owners.judge(&Owner::Worktree("live".into())),
+        OwnerLiveness::Live
+    );
+    assert_eq!(
+        owners.judge(&checkout("/w/foreign")),
+        OwnerLiveness::Unknown
+    );
+    assert_eq!(owners.judge(&Owner::Unattributed), OwnerLiveness::Unknown);
+    assert_eq!(owners.judge(&checkout("/w/stale")), OwnerLiveness::Dead);
+    assert_eq!(
+        owners.judge(&Owner::Worktree("gone".into())),
+        OwnerLiveness::Dead
+    );
+    let blind = LeftoverOwners {
+        complete: false,
+        ..owners
+    };
+    assert_eq!(blind.judge(&checkout("/w/stale")), OwnerLiveness::Unknown);
+    assert_eq!(blind.judge(&checkout("/w/live")), OwnerLiveness::Live);
+
+    let report = Leftovers {
+        held: vec![
+            HeldLeftover {
+                path: "/w/live/.aida/.mailbox-tomb-a".into(),
+                owner: OwnerLiveness::Live,
+            },
+            HeldLeftover {
+                path: "/a/nonce-era/x".into(),
+                owner: OwnerLiveness::Unknown,
+            },
+        ],
+        ..Default::default()
+    };
+    let lines = gc_leftover_lines(&report, true);
+    assert!(
+        lines[0].contains("kept: /w/live/.aida/.mailbox-tomb-a (owner live"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[1].contains("kept: /a/nonce-era/x (owner unknown"),
+        "{lines:?}"
     );
 }
 
