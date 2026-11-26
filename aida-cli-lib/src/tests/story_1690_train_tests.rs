@@ -6810,3 +6810,27 @@ fn task3917_member_predicate_refuses_a_rider_before_any_gate_read() {
     );
     assert!(checks.calls.is_empty(), "{:?}", checks.calls);
 }
+
+/// TASK-3912 AC2: with `max_prs_per_train = 3` and six ready PRs, the
+/// automatic train admits the first three and the next pass the next three.
+// trace:TASK-3912 | ai:claude
+#[test]
+fn max_prs_per_train_admits_three_now_and_the_next_three_next_pass() {
+    let policy = crate::landing_policy::from_body(Some("[landing]\nmax_prs_per_train = 3\n"));
+    let max = policy.auto_train_max();
+    let mut first: Vec<u64> = vec![11, 12, 13, 14, 15, 16];
+    let waiting = split_bounded_train(&mut first, max);
+    assert_eq!(first, [11, 12, 13]);
+    assert_eq!(waiting, [14, 15, 16]);
+    let mut second = waiting;
+    assert!(split_bounded_train(&mut second, max).is_empty());
+    assert_eq!(second, [14, 15, 16]);
+    // Unset keeps today's cap: all six ride one train.
+    let mut all: Vec<u64> = (1..=6).collect();
+    let default_max = crate::landing_policy::from_body(Some("[landing]\n")).auto_train_max();
+    assert!(split_bounded_train(&mut all, default_max).is_empty());
+    assert_eq!(all.len(), 6);
+    // A zero max still admits one, as `--max` always has.
+    let mut one = vec![1u64, 2];
+    assert_eq!(split_bounded_train(&mut one, 0), [2]);
+}
