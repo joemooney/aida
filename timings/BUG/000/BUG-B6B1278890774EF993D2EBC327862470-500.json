@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-500",
+  "publishes": [
+    {
+      "at": "2026-11-26T06:22:27.068415375Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-24T01:37:58.410177694Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T01:38:00.649283835Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-11-24T02:35:13.834348332Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T02:46:07.625296178Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "before": "drive",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-24T14:06:22.754947712Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-24T19:43:26.605286256Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-26T01:40:46.208488259Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-26T06:22:26.834220294Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-26T06:22:26.871508916Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-500",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
