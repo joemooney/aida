@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T05:42:27.461699889Z
+modified_at: 2026-11-26T06:36:12.855757819Z
 req_type: Story
 tags:
 - integration
@@ -899,6 +899,17 @@ comments:
   created_at: 2026-11-26T05:42:27.461697206Z
   modified_at: 2026-11-26T05:42:27.461697206Z
   session_id: 01a2161e5c70
+- id: 01a21691-e0aa-7522-9d2d-d9c14ddbe4c9
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction) — promotion 43 #4628 @2f644d18 independent review recorded request-changes, but its own summary says "Two p3 follow-ups below, neither blocking"; both dispositions are `deferred` (below-tier). No blocking finding. Deferred to STORY-3120 (later slice), recorded here per findings-not-requirements:
+    1. p3 review_prepare.rs review_batches: finding paths are checked against the whole inventory, not batch.files (coverage rows already are batch-bound). Fix: check finding paths against batch.files too.
+    2. p3 review_runner.rs RunnerCall::run: an escaped descendant (setsid/double fork) fails the run closed but stays running and leaks three pipe threads. Follow-up: report the leak in the error or move the runner into its own cgroup/pid namespace.
+    Plus the carried should-fixes: git_text → host_git_command; S5 docs advise a CI job timeout.
+  created_at: 2026-11-26T06:36:12.855757819Z
+  modified_at: 2026-11-26T06:36:12.855757819Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
