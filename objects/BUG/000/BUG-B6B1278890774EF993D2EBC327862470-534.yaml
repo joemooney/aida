@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T15:47:55.768008790Z
+modified_at: 2026-11-26T15:49:01.265653061Z
 req_type: Bug
 tags:
 - admission
@@ -133,6 +133,12 @@ comments:
   content: Implementer push d169b25498d0 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T15:47:55.768003635Z
   modified_at: 2026-11-26T15:47:55.768003635Z
+  session_id: 01a2184e943e
+- id: 01a2188b-bed1-7680-87d9-5ea8b5506d30
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2773-unbound-claim-heal` at head `d169b25498d0770d01241a37abe8cf81163753ec`.'
+  created_at: 2026-11-26T15:49:01.265649952Z
+  modified_at: 2026-11-26T15:49:01.265649952Z
   session_id: 01a2184e943e
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
