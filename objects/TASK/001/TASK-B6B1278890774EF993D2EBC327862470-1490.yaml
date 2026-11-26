@@ -67,6 +67,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a216d9-7ab4-7180-948a-6c25521e2b4c
+  author: joe
+  timestamp: 2026-11-26T07:54:41.205004090Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
