@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T03:32:39.739285963Z
+modified_at: 2026-11-26T11:07:59.465327931Z
 req_type: Task
 tags:
 - landing
@@ -91,6 +91,14 @@ comments:
   created_at: 2026-11-26T03:32:39.739281703Z
   modified_at: 2026-11-26T03:32:39.739281703Z
   session_id: 01a215aaf8ca
+- id: 01a2178a-7469-7791-8e7f-6b3614c8d5c0
+  author: joe
+  content: |-
+    DEFERRED minors (advisor-122 override-approval of #4616 @ 2a68c0ff, 2026-11-26 04:12):
+    - Test gap (TASK-3912 AC2): the AC2 test (story_1690_train_tests.rs max_prs_per_train_admits_three_now_and_the_next_three_next_pass) proves the parsed knob plus split_bounded_train selection, but nothing asserts that advisor_train_handler (pr_train.rs) actually passes landing_policy auto_train_max() into TrainOptions.max; a regression back to a hard-
+    AC3 (set max_prs_per_train = 3) follows once #4616 lands.
+  created_at: 2026-11-26T11:07:59.465327931Z
+  modified_at: 2026-11-26T11:07:59.465327931Z
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
