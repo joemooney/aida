@@ -9,12 +9,12 @@ description: |
   - AC1: auto-train RECOVERY releases admission while it waits on any deputy job (or any external job), and re-takes it only for the decision.
   - AC2: a deputy runner on a stale or deleted binary is DETECTED and reported (train-status + aida doctor: the deputy name, pid, binary path and age, and the fix: restart with the binding reset) instead of silently blocking.
   - AC3: tests: recovery waiting on a deputy job does not hold admission; a stale-binary deputy is reported.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T14:47:50.263899009Z
+modified_at: 2026-11-26T14:51:44.214590887Z
 req_type: Bug
 tags:
 - admission
@@ -47,6 +47,13 @@ history:
   author: joe
   timestamp: 2026-11-26T14:46:32.523146920Z
   changes: []
+- id: 01a21857-4cd6-7941-8d60-ec864f22a58b
+  author: aida-session-start
+  timestamp: 2026-11-26T14:51:44.214586550Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
