@@ -2637,7 +2637,8 @@ impl Forge for GitHubForge {
             "--limit",
             "1000",
             "--json",
-            "number,url,headRefName,baseRefName",
+            // trace:STORY-3143 | ai:claude
+            "number,url,headRefName,baseRefName,title",
         ])?;
         anyhow::ensure!(out.status.success(), "open PR inventory failed");
         let rows: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
@@ -2660,7 +2661,7 @@ impl Forge for GitHubForge {
                         .as_str()
                         .ok_or_else(|| anyhow::anyhow!("missing PR base"))?
                         .into(),
-                    title: None,
+                    title: v["title"].as_str().map(Into::into),
                 })
             })
             .collect()

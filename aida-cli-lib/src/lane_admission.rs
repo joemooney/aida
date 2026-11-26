@@ -64,6 +64,14 @@ struct HostConfig {
 struct Settings {
     max_concurrent_cold_starts: u16,
     min_memory_headroom_gib: u64,
+    /// How many lane jobs on this host may compile at once; unset is no cap.
+    // trace:TASK-3911 | ai:claude
+    max_compile_concurrency: Option<u16>,
+    /// `CARGO_BUILD_JOBS` for every lane job; unset leaves cargo's default.
+    cargo_build_jobs: Option<u16>,
+    /// The memory headroom a lane job waits for before it starts; unset is
+    /// no check at job start.
+    min_job_memory_headroom_gib: Option<u64>,
 }
 
 impl Default for Settings {
@@ -71,6 +79,9 @@ impl Default for Settings {
         Self {
             max_concurrent_cold_starts: 2,
             min_memory_headroom_gib: 4,
+            max_compile_concurrency: None,
+            cargo_build_jobs: None,
+            min_job_memory_headroom_gib: None,
         }
     }
 }
@@ -94,6 +105,22 @@ impl Settings {
         anyhow::ensure!(
             (1..=u64::MAX / KIB_PER_GIB).contains(&settings.min_memory_headroom_gib),
             "{CONFIG}: lanes.min_memory_headroom_gib is out of range"
+        );
+        // trace:TASK-3911 | ai:claude
+        for (key, value) in [
+            ("max_compile_concurrency", settings.max_compile_concurrency),
+            ("cargo_build_jobs", settings.cargo_build_jobs),
+        ] {
+            anyhow::ensure!(
+                value.is_none_or(|n| (1..=256).contains(&n)),
+                "{CONFIG}: lanes.{key} must be in 1..=256"
+            );
+        }
+        anyhow::ensure!(
+            settings
+                .min_job_memory_headroom_gib
+                .is_none_or(|n| (1..=u64::MAX / KIB_PER_GIB).contains(&n)),
+            "{CONFIG}: lanes.min_job_memory_headroom_gib is out of range"
         );
         Ok(settings)
     }
@@ -175,7 +202,11 @@ fn memory_shortfall(settings: &Settings, memory: &impl Fn() -> Result<u64>) -> O
 }
 
 fn reserve(settings: &Settings, prefix: &str) -> Result<Option<UnixDatagram>> {
-    for index in 0..settings.max_concurrent_cold_starts {
+    reserve_of(settings.max_concurrent_cold_starts, prefix)
+}
+
+fn reserve_of(slots: u16, prefix: &str) -> Result<Option<UnixDatagram>> {
+    for index in 0..slots {
         // Abstract sockets are scoped to the host launchers' network
         // namespace and released by the kernel even after a crash.
         let address = SocketAddr::from_abstract_name(format!("{prefix}.{index}"))?;
@@ -183,7 +214,7 @@ fn reserve(settings: &Settings, prefix: &str) -> Result<Option<UnixDatagram>> {
             Ok(slot) => return Ok(Some(slot)),
             Err(error) if error.kind() == ErrorKind::AddrInUse => {}
             Err(error) => {
-                return Err(error).context("lane launch refused: cannot reserve cold-start slot")
+                return Err(error).context(format!("cannot reserve host slot {prefix}.{index}"))
             }
         }
     }
@@ -304,6 +335,7 @@ impl Startup {
             let settings = Settings {
                 max_concurrent_cold_starts: host.max_concurrent_cold_starts,
                 min_memory_headroom_gib: host.min_memory_headroom_gib,
+                ..Settings::default()
             };
             let memory = host.memory_gib.clone();
             let admitted = admit(
@@ -323,6 +355,7 @@ impl Startup {
             let settings = Settings {
                 max_concurrent_cold_starts: 256,
                 min_memory_headroom_gib: 1,
+                ..Settings::default()
             };
             let prefix = PREFIX.get_or_init(TestHost::prefix);
             let admitted = admit(
@@ -443,9 +476,217 @@ impl Drop for Startup {
     }
 }
 
+#[cfg_attr(test, allow(dead_code))]
+const COMPILE_SLOT_PREFIX: &str = "aida-lane-compile-v1";
+
+/// What job-start admission granted: the host compile slot the job holds
+/// until it is dropped (none without a cap), and the `CARGO_BUILD_JOBS` to
+/// set. trace:TASK-3911 | ai:claude
+pub(crate) struct JobAdmission {
+    _slot: Option<UnixDatagram>,
+    pub(crate) cargo_build_jobs: Option<u16>,
+}
+
+/// Admit one lane job: wait (`on_wait`, with why) while the host's compile
+/// slots are all held or its memory headroom is below the job floor. A held
+/// slot is given back while waiting on memory. `Ok(None)` when `stop` is set
+/// while waiting. Unreadable memory under a floor refuses.
+// trace:TASK-3911 | ai:claude
+fn admit_job(
+    settings: &Settings,
+    prefix: &str,
+    memory: impl Fn() -> Result<u64>,
+    stop: &std::sync::atomic::AtomicBool,
+    mut on_wait: impl FnMut(&str),
+) -> Result<Option<JobAdmission>> {
+    use std::sync::atomic::Ordering;
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
+        let slot = match settings.max_compile_concurrency {
+            None => None,
+            Some(slots) => match reserve_of(slots, prefix)? {
+                Some(slot) => Some(slot),
+                None => {
+                    on_wait(&format!(
+                        "all {slots} host compile slots (lanes.max_compile_concurrency) are in use"
+                    ));
+                    continue;
+                }
+            },
+        };
+        if let Some(floor) = settings.min_job_memory_headroom_gib {
+            let available = memory().context("cannot measure host memory headroom")?;
+            if available < floor * KIB_PER_GIB {
+                drop(slot);
+                on_wait(&format!(
+                    "host memory headroom is {:.2} GiB, below the {floor} GiB job floor (lanes.min_job_memory_headroom_gib)",
+                    available as f64 / KIB_PER_GIB as f64
+                ));
+                continue;
+            }
+        }
+        return Ok(Some(JobAdmission {
+            _slot: slot,
+            cargo_build_jobs: settings.cargo_build_jobs,
+        }));
+    }
+}
+
+/// Admit one lane job under the host's `/etc/aida/lanes.toml`. Unset knobs
+/// admit at once, as before. Tests never contend with the host's lanes.
+// trace:TASK-3911 | ai:claude
+pub(crate) fn admit_lane_job(
+    stop: &std::sync::atomic::AtomicBool,
+    mut on_wait: impl FnMut(&str),
+) -> Result<Option<JobAdmission>> {
+    #[cfg(test)]
+    {
+        let _ = &mut on_wait;
+        admit_job(&Settings::default(), "", || Ok(u64::MAX), stop, |_| {})
+    }
+    #[cfg(not(test))]
+    {
+        let settings = Settings::load()?;
+        admit_job(
+            &settings,
+            COMPILE_SLOT_PREFIX,
+            memory_headroom,
+            stop,
+            |why| {
+                on_wait(why);
+                thread::sleep(Duration::from_secs(1));
+            },
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn compile_cap(slots: u16) -> Settings {
+        Settings {
+            max_compile_concurrency: Some(slots),
+            ..Settings::default()
+        }
+    }
+
+    // AC4: with max_compile_concurrency=2 a third job waits until one ends.
+    // trace:TASK-3911 | ai:claude
+    #[test]
+    fn task_3911_third_compile_job_waits_for_a_slot() {
+        let settings = compile_cap(2);
+        let prefix = TestHost::prefix();
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let memory = || Ok(u64::MAX);
+        let admit = |on_wait: &mut dyn FnMut(&str)| {
+            admit_job(&settings, &prefix, memory, &stop, on_wait)
+                .unwrap()
+                .expect("not stopped")
+        };
+        let first = admit(&mut |_| panic!("first job queued"));
+        let _second = admit(&mut |_| panic!("second job queued"));
+        let mut first = Some(first);
+        let mut waits = Vec::new();
+        let _third = admit(&mut |why| {
+            waits.push(why.to_string());
+            // The first job finishes; a concurrent fork may briefly hold the
+            // released socket, so the wait can take more than one turn.
+            first.take();
+            thread::sleep(Duration::from_millis(1));
+        });
+        assert!(
+            first.is_none(),
+            "the third job started only after one ended"
+        );
+        assert!(waits[0].contains("all 2 host compile slots"), "{waits:?}");
+    }
+
+    // AC1/AC2: unset knobs are today's behaviour; set ones parse and apply.
+    // trace:TASK-3911 | ai:claude
+    #[test]
+    fn task_3911_unset_knobs_admit_at_once_and_set_ones_parse() {
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let unset: HostConfig = toml::from_str("[lanes]\n").unwrap();
+        let admitted = admit_job(
+            &unset.lanes,
+            "",
+            || panic!("memory read"),
+            &stop,
+            |_| panic!("an unconfigured host queued a job"),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(admitted._slot.is_none() && admitted.cargo_build_jobs.is_none());
+        let set: HostConfig = toml::from_str(
+            "[lanes]\nmax_compile_concurrency = 4\ncargo_build_jobs = 4\nmin_job_memory_headroom_gib = 8\n",
+        )
+        .unwrap();
+        assert_eq!(set.lanes.max_compile_concurrency, Some(4));
+        assert_eq!(set.lanes.min_job_memory_headroom_gib, Some(8));
+        let prefix = TestHost::prefix();
+        let admitted = admit_job(
+            &set.lanes,
+            &prefix,
+            || Ok(9 * KIB_PER_GIB),
+            &stop,
+            |_| panic!("queued"),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(admitted.cargo_build_jobs, Some(4));
+    }
+
+    // AC3: a job waits below the job memory floor, without holding a slot,
+    // and refuses when memory cannot be read. trace:TASK-3911 | ai:claude
+    #[test]
+    fn task_3911_job_waits_below_memory_floor() {
+        let settings = Settings {
+            min_job_memory_headroom_gib: Some(8),
+            ..compile_cap(1)
+        };
+        let prefix = TestHost::prefix();
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let gib = std::cell::Cell::new(2);
+        let mut waits = Vec::new();
+        let _job = admit_job(
+            &settings,
+            &prefix,
+            || Ok(gib.get() * KIB_PER_GIB),
+            &stop,
+            |why| {
+                // While waiting on memory the compile slot is free for others.
+                let _other = TestHost::hold(&prefix, 0);
+                waits.push(why.to_string());
+                gib.set(16);
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(waits.len(), 1);
+        assert!(waits[0].contains("below the 8 GiB job floor"), "{waits:?}");
+        let error = admit_job(
+            &Settings {
+                min_job_memory_headroom_gib: Some(8),
+                ..Settings::default()
+            },
+            "",
+            || headroom_from_meminfo("MemAvailable: 1 kB\n"),
+            &stop,
+            |_| panic!("queued"),
+        )
+        .err()
+        .expect("unreadable memory refuses");
+        assert!(error
+            .to_string()
+            .contains("cannot measure host memory headroom"));
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(admit_job(&settings, &prefix, || Ok(0), &stop, |_| {})
+            .unwrap()
+            .is_none());
+    }
 
     #[test]
     fn bug_2682_queues_until_first_build_releases_slot() {
