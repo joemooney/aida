@@ -837,6 +837,7 @@ pub(crate) fn rework_conflict_route(
 
 /// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
 // trace:STORY-2475 | ai:claude
+#[derive(Clone, Copy)]
 pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) vendor: session::HeadlessVendor,
     pub(crate) resume: bool,
@@ -845,6 +846,46 @@ pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) scope: &'a str,
     pub(crate) pr: u64,
     pub(crate) branch: &'a str,
+}
+
+/// The launch route a host-staged conflict repair may take. Host preparation
+/// runs this before it reserves the repair head, so a refused route reserves
+/// nothing. An interactive session has no supervisor to publish the staged
+/// merge, so only a supervised headless launch qualifies.
+// trace:BUG-2761 | ai:claude
+pub(crate) fn conflict_route_admission(launch: &ReworkConflictLaunch<'_>) -> Result<bool> {
+    let (vendor, interactive, contained, pr) = (
+        launch.vendor,
+        launch.interactive,
+        launch.contained,
+        launch.pr,
+    );
+    // Only the host-published route compile-checks the exact merged tree before
+    // it commits and publishes; a lane that commits and ships its own merge
+    // would bypass that check, so refuse it before launch. trace:TASK-3804 | ai:claude
+    let host_publishes = crate::vendors::headless::host_publishes_implementer(vendor, contained);
+    if !host_publishes {
+        return Err(crate::repair_journal::UnvalidatedRepairPublication {
+            pr,
+            route: format!(
+                "self-published {} {} lane",
+                if contained {
+                    "contained"
+                } else {
+                    "uncontained"
+                },
+                vendor.as_str()
+            ),
+        }
+        .into());
+    }
+    anyhow::ensure!(
+        !interactive,
+        "conflict repair for PR #{pr} needs a supervised headless launch; nothing was reserved or merged. Retry the pickup with --no-human"
+    );
+    session::preflight_launch_vendor(vendor, interactive)?;
+    session::require_vendor_containment(vendor, contained, "conflict rework")?;
+    Ok(host_publishes)
 }
 
 /// Append the host-journal conflict paths without changing vendor or model.
@@ -874,28 +915,7 @@ pub(crate) fn apply_rework_conflict_route(
         return Ok(launch.vendor);
     }
     let vendor = route_vendor;
-    // Only the host-published route compile-checks the exact merged tree before
-    // it commits and publishes; a lane that commits and ships its own merge
-    // would bypass that check, so refuse it before launch. trace:TASK-3804 | ai:claude
-    let host_publishes =
-        crate::vendors::headless::host_publishes_implementer(vendor, launch.contained);
-    if !host_publishes {
-        return Err(crate::repair_journal::UnvalidatedRepairPublication {
-            pr: launch.pr,
-            route: format!(
-                "self-published {} {} lane",
-                if launch.contained {
-                    "contained"
-                } else {
-                    "uncontained"
-                },
-                vendor.as_str()
-            ),
-        }
-        .into());
-    }
-    session::preflight_launch_vendor(vendor, launch.interactive)?;
-    session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
+    let host_publishes = conflict_route_admission(&ReworkConflictLaunch { vendor, ..launch })?;
     prompt.push_str(&format!(
         "\n\n{}",
         crate::rework_direction::host_conflict_task(
@@ -6322,6 +6342,19 @@ pub(crate) fn handle_queue_work(
             let mut prompt = prompt.clone();
             if !no_launch && !plan_only && !guided && role == "implementer" {
                 if let Some((pr, branch)) = rework_pr.as_ref() {
+                    // Route first, then reserve; the reservation is recorded on
+                    // this attempt's mark for its pre-agent rollback.
+                    // trace:BUG-2761 | ai:claude
+                    let conflict = ReworkConflictLaunch {
+                        vendor: launch_vendor,
+                        resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        interactive: !no_human,
+                        contained,
+                        scope: &plan.scope,
+                        pr: *pr,
+                        branch,
+                    };
+                    let admit = || conflict_route_admission(&conflict).map(drop);
                     let files = crate::seat_clone::prepare_rework_merge(
                         &project_root,
                         &lease.worktree_path,
@@ -6329,19 +6362,15 @@ pub(crate) fn handle_queue_work(
                         matches!(launch, Some(QueueWorkLaunch::Resume(_))),
                         *pr,
                         &lease.id,
+                        &crate::seat_clone::RepairAttempt {
+                            admit: &admit,
+                            reserved: &agent.repair,
+                        },
                     );
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
                         files,
-                        ReworkConflictLaunch {
-                            vendor: launch_vendor,
-                            resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                            interactive: !no_human,
-                            contained,
-                            scope: &plan.scope,
-                            pr: *pr,
-                            branch,
-                        },
+                        conflict,
                         &mut prompt,
                         &mut resolved_model,
                         |subject, body| {
@@ -7373,6 +7402,8 @@ pub(crate) fn disk_deferral_requirement_ids(
 pub(crate) struct AgentLaunchMark {
     marked: std::cell::Cell<bool>,
     spawns_at_start: u64,
+    /// The repair reservation this attempt wrote, if any. trace:BUG-2761 | ai:claude
+    pub(crate) repair: std::cell::RefCell<Option<crate::repair_journal::AttemptReservation>>,
 }
 
 impl Default for AgentLaunchMark {
@@ -7380,6 +7411,7 @@ impl Default for AgentLaunchMark {
         Self {
             marked: std::cell::Cell::new(false),
             spawns_at_start: crate::review_watch::agent_spawn_count(),
+            repair: Default::default(),
         }
     }
 }
@@ -7430,6 +7462,20 @@ pub(crate) fn run_pickup_launch(
                 ))),
                 false,
             );
+        }
+        // No child was spawned and the tree is gone: retire exactly the
+        // reservation this attempt wrote. trace:BUG-2761 | ai:claude
+        let attempt = mark.repair.take();
+        if let Some(attempt) =
+            attempt.filter(|_| crate::review_watch::agent_spawn_count() == mark.spawns_at_start)
+        {
+            let retired = crate::repair_journal::RepairGuard::lock(project_root)
+                .and_then(|mut journal| journal.roll_back_attempt(&attempt));
+            if !matches!(retired, Ok(true)) {
+                eprintln!(
+                    "note: this pickup's repair reservation was kept ({retired:?}); inspect `aida doctor check repair-reservations`"
+                );
+            }
         }
         return (result, true);
     }

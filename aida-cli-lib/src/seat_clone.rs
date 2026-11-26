@@ -3253,7 +3253,7 @@ pub(crate) fn prepare_rework_merge_fixture(
     pr: u64,
     lane_id: &str,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, None, || {
         rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main"))
     })
 }
@@ -3334,10 +3334,18 @@ pub(crate) fn prepare_rework_merge(
     resume: bool,
     pr: u64,
     lane_id: &str,
+    attempt: &RepairAttempt<'_>,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
-        rework_base_branch(main, pr, branch)
-    })
+    prepare_rework_merge_with_base(
+        main,
+        tree,
+        branch,
+        resume,
+        pr,
+        lane_id,
+        Some(attempt),
+        || rework_base_branch(main, pr, branch),
+    )
 }
 
 // Inject the forge observation at the boundary; all Git and repair preparation
@@ -3350,6 +3358,7 @@ fn prepare_rework_merge_with_base(
     resume: bool,
     pr: u64,
     lane_id: &str,
+    attempt: Option<&RepairAttempt<'_>>,
     discover_base: impl FnOnce() -> Result<String>,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
@@ -3434,7 +3443,7 @@ fn prepare_rework_merge_with_base(
     let pending_resume = resume
         && execute(&["status", "--porcelain", "--untracked-files=all"])
             .is_ok_and(|status| !status.is_empty());
-    prepare_host_repair_with(
+    prepare_host_repair_routed(
         main, tree, pr, lane_id,
         &execute,
         branch,
@@ -3453,6 +3462,7 @@ fn prepare_rework_merge_with_base(
             let base = discover_base()?;
             fetch_rework_heads(main, &base, branch)
         },
+        attempt,
     )
     .map_err(|error| {
         if let Some(key) = repair_key.into_inner() {
@@ -3969,9 +3979,16 @@ fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -
             .is_some_and(|paths| !paths.is_empty())
 }
 
-// Host-staged conflict preparation. The shared reservation precedes the merge;
-// any ambiguous failure keeps it. Only proof of lane death may release it.
-// trace:STORY-2710 | ai:codex
+/// A dispatch attempt's hooks into host repair preparation: `admit` decides
+/// the launch route before any reservation, and `reserved` receives the
+/// reservation this attempt wrote so its pre-agent rollback can retire it.
+// trace:BUG-2761 | ai:claude
+pub(crate) struct RepairAttempt<'a> {
+    pub admit: &'a dyn Fn() -> Result<()>,
+    pub reserved: &'a std::cell::RefCell<Option<crate::repair_journal::AttemptReservation>>,
+}
+
+#[cfg(test)]
 fn prepare_host_repair_with(
     main: &Path,
     tree: &Path,
@@ -3982,6 +3999,36 @@ fn prepare_host_repair_with(
     resume: bool,
     regenerate: impl FnOnce(&str, bool) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Vec<String>> {
+    prepare_host_repair_routed(
+        main,
+        tree,
+        pr,
+        lane_id,
+        execute,
+        branch,
+        resume,
+        regenerate,
+        fetch_heads,
+        None,
+    )
+}
+
+// Host-staged conflict preparation. The shared reservation precedes the merge;
+// any ambiguous failure keeps it. Only proof of lane death, or the reserving
+// attempt's own pre-agent rollback, may release it.
+// trace:STORY-2710 | ai:codex
+fn prepare_host_repair_routed(
+    main: &Path,
+    tree: &Path,
+    pr: u64,
+    lane_id: &str,
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    resume: bool,
+    regenerate: impl FnOnce(&str, bool) -> Result<()>,
+    fetch_heads: impl FnOnce() -> Result<(String, String)>,
+    attempt: Option<&RepairAttempt<'_>>,
 ) -> Result<Vec<String>> {
     use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome};
     anyhow::ensure!(
@@ -4058,8 +4105,13 @@ fn prepare_host_repair_with(
             before == pr_head,
             "repair requires the exact original PR head; local commits preserved"
         );
+        // Choose the launch route before reserving: a refused route leaves
+        // the journal and index untouched. trace:BUG-2761 | ai:claude
+        if let Some(attempt) = attempt {
+            (attempt.admit)()?;
+        }
         let mut journal = RepairGuard::lock(main)?;
-        journal.reserve(RepairEntry {
+        let reserved = journal.reserve(RepairEntry {
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: chrono::Utc::now().to_rfc3339(),
@@ -4077,9 +4129,24 @@ fn prepare_host_repair_with(
             refusal_notice: None,
         })?;
         drop(journal);
+        if let Some(attempt) = attempt {
+            *attempt.reserved.borrow_mut() = Some(reserved);
+        }
         match execute(&["merge", "--no-edit", "--no-verify", &base]) {
             Ok(_) => {
-                anyhow::bail!("conflict observation changed; reservation retained for recovery")
+                // State the journal as it is: the entry stands with an unknown
+                // spawn; only a pickup attempt's pre-agent rollback (which
+                // removes the tree) retires it. trace:BUG-2761 | ai:claude
+                let state = if attempt.is_some() {
+                    "until this pickup's rollback removes the tree and retires it"
+                } else {
+                    "for recovery"
+                };
+                anyhow::bail!(
+                    "conflict observation changed: the merge applied without conflicts; \
+                     the repair reservation for PR #{pr} stays recorded with an unknown \
+                     spawn {state}"
+                )
             }
             Err(why) => {
                 execute(&["rev-parse", "--verify", "MERGE_HEAD"])
@@ -4244,6 +4311,7 @@ mod rework_merge_tests {
             false,
             2603,
             "integration-lane",
+            None,
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -4269,6 +4337,7 @@ mod rework_merge_tests {
             false,
             2603,
             "integration-lane",
+            None,
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -4563,6 +4632,105 @@ mod rework_merge_tests {
         .unwrap();
         assert!(paths.is_empty());
         assert!(!fx.main.join(".aida/repair-journal.json").exists());
+    }
+
+    // T2: an interactive conflict pickup is refused by its route before any
+    // reservation or merge; a headless retry at the same head then reserves
+    // and hands the reservation to its attempt. trace:BUG-2761 | ai:claude
+    #[test]
+    fn bug_2761_refused_route_reserves_nothing_and_headless_retry_reserves() {
+        use crate::session::HeadlessVendor;
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        std::fs::write(fx.main.join("shared"), "base\n").unwrap();
+        g(&["add", "shared"]);
+        g(&["commit", "-qm", "base"]);
+        g(&["checkout", "-qb", "repair"]);
+        std::fs::write(fx.main.join("shared"), "lane\n").unwrap();
+        g(&["commit", "-qam", "lane"]);
+        let head = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "-q", "main"]);
+        std::fs::write(fx.main.join("shared"), "main\n").unwrap();
+        g(&["commit", "-qam", "main"]);
+        let base = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "-q", "repair"]);
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success()
+                    || repair_merge_tree_conflict(args, out.status.code(), &out.stdout),
+                "Git refused"
+            );
+            let text = String::from_utf8(out.stdout)?;
+            Ok(if args.contains(&"-z") {
+                text
+            } else {
+                text.trim().to_owned()
+            })
+        };
+        // Nothing is reserved yet; a refused route must not create the journal.
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/\n").unwrap();
+        let journal_path = fx.main.join(".aida/repair-journal.json");
+        let index = g(&["ls-files", "--stage"]);
+        let run = |interactive: bool, slot: &std::cell::RefCell<_>| {
+            let admit = || -> Result<()> {
+                if interactive {
+                    crate::queue_cmd::conflict_route_admission(
+                        &crate::queue_cmd::ReworkConflictLaunch {
+                            vendor: HeadlessVendor::Codex,
+                            resume: false,
+                            interactive: true,
+                            contained: true,
+                            scope: "BUG-2761",
+                            pr: 2761,
+                            branch: "repair",
+                        },
+                    )?;
+                }
+                Ok(())
+            };
+            prepare_host_repair_routed(
+                &fx.main,
+                &fx.main,
+                2761,
+                "lease-new",
+                &execute,
+                "repair",
+                false,
+                |_, _| Ok(()),
+                || Ok((base.clone(), head.clone())),
+                Some(&RepairAttempt {
+                    admit: &admit,
+                    reserved: slot,
+                }),
+            )
+        };
+        let slot = std::cell::RefCell::new(None);
+        let refused = run(true, &slot).unwrap_err();
+        assert!(
+            format!("{refused:#}").contains("supervised headless launch"),
+            "{refused:#}"
+        );
+        assert!(!journal_path.exists());
+        assert!(slot.borrow().is_none());
+        assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+        assert_eq!(g(&["ls-files", "--stage"]), index);
+        assert_eq!(g(&["rev-parse", "HEAD"]), head);
+        // The headless retry is not blocked by a stranded reservation.
+        let paths = run(false, &slot).unwrap();
+        assert_eq!(paths, ["shared"]);
+        assert!(slot.borrow().is_some());
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        assert_eq!(
+            journal
+                .for_tree(&fx.main, "repair", &head, &base)
+                .unwrap()
+                .lane_id,
+            "lease-new"
+        );
     }
 
     // A real staged merge, with the index left untouched while the lane edits
