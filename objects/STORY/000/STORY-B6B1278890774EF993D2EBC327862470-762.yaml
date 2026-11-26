@@ -14,19 +14,18 @@ description: |
   - (e) #4655: the terminology field guide (docs/showcase/workflow.html), workflow.svg and authority-mandate.svg, and a build.py guard that refuses unrenderable nested lists / single-asterisk emphasis, naming file:line.
 
   Done when (replaces the 11-23 check, which named field-guide.html, field-guide-act1..5.svg and autonomy.html, all superseded by the files above): every page and SVG above is on integration and passes `python3 docs/showcase/build.py --check` and `pytest tests/test_showcase_build.py`; every SVG renders in both themes and contains no script, event handler or external href; every term listed in the first paragraph is defined in docs/showcase/glossary.html or the workflow.html field guide; make check-ci-fast passes. STORY-2852 (tracked verbs) is NOT completed by this story.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T13:53:10.096366808Z
+modified_at: 2026-11-26T14:03:20.872667589Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
 - docs
 - glossary
 - showcase
-- track:integration
 - ux
 comments:
 - id: 01a1e0f9-4779-7690-9688-bb3e04d24f20
@@ -805,6 +804,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2182a-ff62-7e33-ad07-b975d4b45dbc
+  author: aida-auto-bump
+  timestamp: 2026-11-26T14:03:20.802670807Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2182a-ffa8-76a1-9376-e9af9942141c
+  timestamp: 2026-11-26T14:03:20.872663697Z
+  agent: aida
+  commit_sha: db7061570fa33b1ad7dba9fcc833761169cbfe3e
+  summary: 'Advisor (self-approve limits: docs only): promotion 46, linear on main + 1 cherry-pick matching the integration squash of #4648 (pre-checked docs, incl. the deputy allow-list warning). Fast CI green. Refs-only.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
@@ -813,3 +826,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e351be42957
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T14:03:20.802663011Z
+  completion_sha: db7061570fa33b1ad7dba9fcc833761169cbfe3e
