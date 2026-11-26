@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T15:43:13.556187975Z
+modified_at: 2026-11-26T15:45:32.468912039Z
 req_type: Task
 tags:
 - landing
@@ -99,6 +99,17 @@ comments:
     AC3 (set max_prs_per_train = 3) follows once #4616 lands.
   created_at: 2026-11-26T11:07:59.465327931Z
   modified_at: 2026-11-26T11:07:59.465327931Z
+- id: 01a21888-ccd3-79f0-9a88-a2a7346b0525
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:45):
+    # TASK-3912 FRESH SLICE (replaces closed #4616, approved @ 2a68c0ff; product-15 2026-11-26 08:45). Lane: CLAUDE. MAIN, NEW branch landing-max-prs-fresh (cut from the current main tip). Title "[AI:claude] feat(landing): max_prs_per_train caps the automatic train (TASK-3912)". <=200 lines.
+    PORT #4616's approved change onto current main: `git diff origin/main...origin/landing-max-prs-per-train` is the reference. Adapt to tonight's auto-train changes (BUG-2769 #4640, TASK-3917 #4656, BUG-2767 #4615). Keep its tests. Do NOT set the knob's value in config (that's AC3, a follow-up).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4616 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T15:45:32.468912039Z
+  modified_at: 2026-11-26T15:45:32.468912039Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
