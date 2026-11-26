@@ -1,0 +1,31 @@
+id: 01a217a9-cecc-7ff0-b2ac-00a3323e80f5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1505
+title: 'Review follow-up: advisor_loop_train.rs bug2769 tests: TEST_HOLD_WARN_MS is set to 100 and never reset. That'
+description: |-
+  From BUG-2769
+  Reviewed sha: 9b9aa8a69391fe68e5054a0d8d26e45b27800b4b
+
+  advisor_loop_train.rs bug2769 tests: TEST_HOLD_WARN_MS is set to 100 and never reset. That leaks a 100ms threshold into other tests of the same process that run run_passes, such as the task_1993 BUG-2703 fixture. It is harmless today, causing only extra eprintln and hold-file writes in their temp roots, but it is test-order coupling. Use a reset guard.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T11:42:14.220242454Z
+modified_at: 2026-11-26T11:42:14.220242454Z
+req_type: Task
+tags:
+- carried-from:BUG-2769
+- finding-hash:d2c0cb9b
+- from-review:BUG-2769
+relationships:
+- rel_type: References
+  target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
+  created_at: 2026-11-26T11:42:14.220281510Z
+filed_at:
+  code_sha: 9b9aa8a69391fe68e5054a0d8d26e45b27800b4b
+  branch: pr-4640
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461541dfb1
+  vendor: claude
+  session: 01a217a57301
