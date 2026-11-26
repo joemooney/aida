@@ -555,6 +555,20 @@ comments:
   created_at: 2026-11-26T00:22:28.323676837Z
   modified_at: 2026-11-26T00:22:28.323676837Z
   session_id: 01a214f27665
+- id: 01a2153e-bb25-7c30-9664-62f4eb38d13e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4603):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7dd897021efb
+    Recorded: 2026-11-26T00:03:47.416525088+00:00
+    Findings:
+    1. B1 (comment 19 item 8 / advisor 09:33 ruling, binding S3b AC): resolve_for_run (aida-cli-lib/src/launch/review_tuning.rs:88) takes the 4th precedence source from aida_core::agents_config::resolve_agent_tuning(project_root, ...), which reads project_root/.aida/config.toml (tracked) and .aida/agents.toml from the WORKING TREE under review. A PR that adds `[agents.codex.seats.reviewer] effort = "low"` or a weaker valid model downgrades its own review whenever no flag, AIDA_REVIEW_EFFORT or trusted review-rules default is set. The allowlist stops injection, not the downgrade; the PR body acknowledges this as a residual risk, but the ruling requires that the change under review cannot pick its own model/effort. Fix: read project [agents] tuning from the trusted base blobs (as trusted_review_rules does) and/or extend the trusted_review_rules diff guard to refuse when the change modifies .aida/config.toml or .aida/agents.toml. Add a test: a head commit setting a reviewer-seat effort in .aida/config.toml either refuses or does not affect the resolved tuning.
+    2. Hardening: trusted_review_rules' git calls (review_tuning.rs:108-147: diff, ls-tree, cat-file) do not pass --no-replace-objects, so a refs/replace entry in the reviewing repo can substitute the 'trusted base' blob or tree. No PR-reachable vector is shown (forge fetches do not bring refs/replace by default), so this is defence-in-depth: add `git --no-replace-objects` (or GIT_NO_REPLACE_OBJECTS=1) to the git() helper.
+    3. The diff guard in trusted_review_rules (review_tuning.rs:126-132) compares the trees of `base` and `head` directly (two-dot). If the S3a-2 caller passes the moving target tip as `base` and the target branch has changed .aida/review-rules.toml since the PR forked, every review of a stale PR is refused spuriously. This fails closed. Document it in the doc comment and have S3a-2 pass the merge-base, with `head` = the reviewed head SHA and `base` from the forge target, never from PR-supplied input.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T00:26:02.405084429Z
+  modified_at: 2026-11-26T00:26:02.405084429Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
