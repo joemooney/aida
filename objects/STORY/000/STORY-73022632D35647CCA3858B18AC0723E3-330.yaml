@@ -1,0 +1,59 @@
+id: 01a215c4-d886-7572-8c91-68d3334b6534
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-330
+title: 'Review PR-4615: [AI:claude] fix(train): hold a red train''s culprit at its head and start no bisect train under a drain (BUG-2767)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21592`) for branch `fix-train-culprit-readmit`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4615>
+  - Branch: `fix-train-culprit-readmit` → `main`
+
+  ## Covers
+
+  - BUG-2767
+  - STORY-3006
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4615` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T02:52:31.750775686Z
+modified_at: 2026-11-26T02:53:06.014726266Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a2158d-3ada-73e3-b86a-91dc240139ef
+  created_at: 2026-11-26T02:52:39.594053679Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a2050a-58ee-7470-a810-e7b93d9a7867
+  created_at: 2026-11-26T02:53:06.014700311Z
+  created_by: dirtlab
+history:
+- id: 01a215c5-07bc-7b70-83bf-c185e45c5fc5
+  author: dirtlab
+  timestamp: 2026-11-26T02:52:43.836439709Z
+  session_id: 01a215928946
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a215c5-66b4-7073-ba06-94404f8b6f7e
+  author: dirtlab
+  timestamp: 2026-11-26T02:53:08.148684535Z
+  session_id: 01a215928946
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: f7538e24f20a874b18dea010f8fb2bc85be59679
+  branch: fix-train-culprit-readmit
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa7028b4df
+  vendor: claude
+  session: 01a215928946
+  harness_version: 2.1.319 (Claude Code)
