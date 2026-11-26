@@ -16,6 +16,7 @@ use aida_core::review_engine::{
     ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
 };
 use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
+use aida_core::review_engine::{FileCoverageEntry, FileCoverageStatus};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -82,7 +83,7 @@ pub struct ReviewPrepareArgs {
     /// Review every batch with an agent and anchor its findings. Needs `--pr`
     /// or `--from`; review settings come from the merge base.
     // trace:STORY-3120 | ai:claude
-    #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit"])]
+    #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit", "verify_coverage"])]
     pub run_review: bool,
 
     /// Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD).
@@ -253,7 +254,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     )?;
 
     // 7. Optional: verify a coverage ledger file.
-    let coverage_verification = if let Some(ledger_path) = &args.verify_coverage {
+    let mut coverage_verification = if let Some(ledger_path) = &args.verify_coverage {
         let raw_ledger = std::fs::read_to_string(ledger_path)
             .with_context(|| format!("read coverage ledger {}", ledger_path.display()))?;
         let ledger: CoverageLedger = serde_json::from_str(&raw_ledger)
@@ -293,10 +294,12 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         call.tuning = resolve_for_run(call.vendor(), &parent_env, flags, trusted)?;
         let (base, head) = (merge_base.as_deref(), head_ref.as_deref());
         let range = format!("{}..{}", base.unwrap_or_default(), head.unwrap_or_default());
-        let prompts = batches
-            .iter()
-            .map(|batch| batch_prompt(&project_root, &range, batch, &playbooks, &linked_specs));
-        let found = review_batches(&call, prompts, &inventory)?;
+        let prompt = |batch: &ReviewBatch| {
+            batch_prompt(&project_root, &range, batch, &playbooks, &linked_specs)
+        };
+        let (found, ledger) = review_batches(&call, &batches, prompt, &inventory)?;
+        // A runner that does not report every reviewable file is incomplete.
+        coverage_verification = Some(verify_coverage_ledger(&inventory, &ledger));
         Some(anchor_findings_with(&found, |path| {
             content_cache.get(path).cloned()
         }))
@@ -604,26 +607,41 @@ fn batch_prompt(
     Ok(prompt)
 }
 
-/// Run each batch prompt; any runner error, unparsable output or finding
-/// outside the inventory refuses the whole run.
+/// Run each batch prompt; any runner error, unparsable output, finding outside
+/// the inventory or ledger row outside its batch refuses the whole run. The
+/// returned ledger keeps only files the runner reports `reviewed`, so a skip
+/// or silence leaves the file unaccounted when the caller verifies coverage.
 // trace:STORY-3120 | ai:claude
 fn review_batches(
     call: &RunnerCall<'_>,
-    prompts: impl IntoIterator<Item = Result<String>>,
+    batches: &[ReviewBatch],
+    mut prompt: impl FnMut(&ReviewBatch) -> Result<String>,
     inventory: &ClassifiedInventory,
-) -> Result<Vec<RawReviewFinding>> {
-    let mut found = Vec::new();
-    for (i, prompt) in prompts.into_iter().enumerate() {
+) -> Result<(Vec<RawReviewFinding>, CoverageLedger)> {
+    let (mut found, mut ledger) = (Vec::new(), CoverageLedger::default());
+    for (i, batch) in batches.iter().enumerate() {
         let out = call
-            .run(&prompt?)
+            .run(&prompt(batch)?)
             .with_context(|| format!("review batch {}", i + 1))?;
-        let (batch, _) = aida_core::review_engine::parse_runner_findings_json(&out)
+        let (rows, files) = aida_core::review_engine::parse_runner_findings_json(&out)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("review batch {} output", i + 1))?;
-        ensure_in_inventory(inventory, &batch)?;
-        found.extend(batch);
+        ensure_in_inventory(inventory, &rows)?;
+        for entry in &files.files {
+            anyhow::ensure!(
+                batch.files.contains(&entry.path),
+                "review batch {} reports coverage for a file outside it: {:?}",
+                i + 1,
+                entry.path
+            );
+        }
+        found.extend(rows);
+        let reviewed = |e: &FileCoverageEntry| e.status == FileCoverageStatus::Reviewed;
+        ledger
+            .files
+            .extend(files.files.into_iter().filter(reviewed));
     }
-    Ok(found)
+    Ok((found, ledger))
 }
 
 // trace:TASK-3862 | ai:codex
@@ -1467,10 +1485,26 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 stderr_cap: STDERR_CAP,
                 tuning: Default::default(),
             };
-            let prompts = [Ok("p".to_owned()), Ok("p".to_owned())];
-            review_batches(&call, prompts, &inventory)
+            let batch = ReviewBatch {
+                batch_index: 1,
+                label: "b".into(),
+                playbook_ids: Vec::new(),
+                files: vec!["a.rs".into()],
+                estimated_tokens: 1,
+            };
+            let batches = [batch.clone(), batch];
+            review_batches(&call, &batches, |_| Ok("p".to_owned()), &inventory)
         };
-        assert_eq!(run(finding("a.rs")).unwrap().len(), 2);
+        assert_eq!(run(finding("a.rs")).unwrap().0.len(), 2);
+        // Coverage rows: only `reviewed` counts, and only for the batch's own files.
+        let files = |path: &str, status: &str| {
+            let row = serde_json::json!({"path":path,"status":status,"reason":"r"});
+            serde_json::json!({ "findings": [], "files": [row] }).to_string()
+        };
+        assert_eq!(run(files("a.rs", "reviewed")).unwrap().1.files.len(), 2);
+        assert!(run(files("a.rs", "skipped")).unwrap().1.files.is_empty());
+        let err = run(files("b.rs", "reviewed")).unwrap_err().to_string();
+        assert!(err.contains("coverage for a file outside it"), "{err}");
         for outside in ["b.rs", "../a.rs", "/etc/passwd", "A.rs"] {
             let err = run(finding(outside)).unwrap_err().to_string();
             assert!(
@@ -1484,6 +1518,69 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             assert!(err.contains("credential path"), "{cited}: {err}");
         }
         assert!(run("not json".into()).is_err());
+    }
+
+    /// End to end: `--run-review` takes its rules from the merge base (the
+    /// worktree's uncommitted rules would exclude every file) and a runner that
+    /// reports no coverage fails the run instead of passing clean.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::create_dir(&bin).unwrap();
+        let runner = bin.join("runner");
+        let runner_str = runner.to_str().unwrap();
+        let extra = [("AIDA_REVIEW_RUNNER_CMD", Some(runner_str))];
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &extra);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "old\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        std::fs::write(root.join("a.rs"), "new\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        crate::test_git::commit_fixture(&root);
+        // Uncommitted worktree rules: if read, nothing is reviewable and it passes.
+        let rules = root.join(".aida/review-rules.toml");
+        std::fs::write(rules, "exclude = [\"*.rs\"]\n").unwrap();
+        let marker = temp.path().join("ran");
+        let install = |out: &str| {
+            let src = temp.path().join("src");
+            let body = format!(
+                "#!/bin/sh\ncat >/dev/null\ntouch {}\necho '{out}'\n",
+                marker.display()
+            );
+            std::fs::write(&src, body).unwrap();
+            let mut cmd = Command::new("install");
+            let status = cmd.arg("-m755").args([&src, &runner]).status();
+            assert!(status.unwrap().success());
+        };
+        let args = ReviewPrepareArgs {
+            from: Some(base),
+            run_review: true,
+            fail_on: Some("high".into()),
+            json: true,
+            write: Some("out.json".into()),
+            ..Default::default()
+        };
+        install(r#"{"findings":[]}"#);
+        let err = handle_review_prepare(&args, &store)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("coverage verification failed"), "{err}");
+        assert!(err.contains("a.rs"), "{err}");
+        assert!(
+            marker.exists(),
+            "runner never ran: worktree rules were used"
+        );
+        let out: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("out.json")).unwrap()).unwrap();
+        assert_eq!(out["inventory"]["reviewable_files"][0]["path"], "a.rs");
+        assert_eq!(out["coverage_verification"]["passed"], false);
+        install(r#"{"findings":[],"files":[{"path":"a.rs","status":"reviewed"}]}"#);
+        handle_review_prepare(&args, &store).unwrap();
     }
 
     // trace:STORY-3120 | ai:claude
