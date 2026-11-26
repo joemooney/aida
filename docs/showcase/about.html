@@ -607,7 +607,7 @@
 
           <rect x="478" y="290" width="284" height="60" rx="3" fill="var(--emerald-soft)" stroke="var(--emerald)" />
           <text x="490" y="310" font-family="var(--mono)" font-size="10.5" font-weight="700" fill="var(--emerald)">CHINESE WALL GUARANTEE</text>
-          <text x="490" y="327" font-size="11" fill="var(--ink)">Contains 0 lines of Go/Python code and</text>
+          <text x="490" y="327" font-size="11" fill="var(--ink)">Contains 0 lines of source code and</text>
           <text x="490" y="342" font-size="11" fill="var(--ink)">0 verbatim sentences from external prompts.</text>
 
           <text x="480" y="378" font-family="var(--mono)" font-size="10" fill="var(--ink-secondary)">LEGAL BOUNDARY: 17 U.S.C. § 102(b)</text>
@@ -930,11 +930,11 @@ aida review prepare --telemetry-report</code></pre>
               </td>
               <td>
                 <span class="badge badge-crit">Silent Attribution Stripping</span><br />
-                An engineer asks an LLM to <em>"Port this Go file from an Apache-2.0 repo into Rust."</em> The LLM translates the functions and structs line-by-line (creating a derivative work under <a href="https://www.law.cornell.edu/uscode/text/17/101" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 101</a>) but drops the upstream SPDX header and <code>NOTICE</code> file—violating Apache-2.0 § 4.
+                An engineer asks an LLM to <em>"Port this source file from an Apache-2.0 repo into our codebase."</em> The LLM translates the functions and structs line-by-line (creating a derivative work under <a href="https://www.law.cornell.edu/uscode/text/17/101" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 101</a>) but drops the upstream SPDX header and <code>NOTICE</code> file—violating Apache-2.0 § 4.
               </td>
               <td>
                 <span class="badge badge-elite">Non-Derivative by Construction</span><br />
-                During <code>/aida-ecosystem-scan</code>, the Advisor extracts only unprotectable functional requirements (<a href="https://www.law.cornell.edu/uscode/text/17/102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 102(b)</a>) into <code>.aida-store</code>. No Go source code, struct definitions, or prompt markdown is copied or translated, so no derivative work is created.
+                During <code>/aida-ecosystem-scan</code>, the Advisor extracts only unprotectable functional requirements (<a href="https://www.law.cornell.edu/uscode/text/17/102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 102(b)</a>) into <code>.aida-store</code>. No external source code, struct definitions, or prompt markdown is copied or translated, so no derivative work is created.
               </td>
             </tr>
             <tr>

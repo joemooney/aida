@@ -1241,7 +1241,7 @@ aida review prepare --telemetry-report</code></pre>
               The Advisor writes an AIDA requirement spec (<code>STORY-3076</code>, <code>STORY-3120</code>) containing <strong>only functional acceptance criteria and mathematical invariants</strong> — never foreign source code, data structures, or prompt strings:
             </p>
             <ul style="font-size:12.5px;padding-left:16px;margin:0;color:var(--ink);">
-              <li><strong>Strips Protected Expression</strong>: No Go structs, no regexes, no prompt markdown, and no AST translations ever cross into the AIDA spec.</li>
+              <li><strong>Strips Protected Expression</strong>: No external source code, no struct definitions, no prompt markdown, and no AST translations ever cross into the AIDA spec.</li>
               <li><strong>Adds AIDA-Native Invariants</strong>: Injects requirements unique to AIDA (<code>.aida-store</code> <code>## Acceptance</code> lifting, <code>// trace:</code> verification, multi-vendor seat opposition).</li>
               <li><strong>Auditable Contract</strong>: The spec is permanently versioned in <code>.aida-store</code> before a single line of Rust is written.</li>
             </ul>
@@ -1278,7 +1278,7 @@ aida review prepare --telemetry-report</code></pre>
             <span class="badge badge-elite">100% Original Expression</span>
           </div>
           <p style="font-size:13.5px;color:var(--ink-secondary);margin-top:0;">
-            Asking an LLM to <em>"translate this Go/Python file into Rust"</em> creates a <strong>derivative work</strong> that inherits the upstream license (Apache-2.0 NOTICE obligations, GPL copyleft, or proprietary contamination) along with the upstream tool's architectural blind spots. AIDA’s clean-room process avoids both:
+            Asking an LLM to <em>"translate this source file into our language"</em> creates a <strong>derivative work</strong> that inherits the upstream license (Apache-2.0 NOTICE obligations, GPL copyleft, or proprietary contamination) along with the upstream tool's architectural blind spots. AIDA’s clean-room process avoids both:
           </p>
           <ul style="font-size:13px;line-height:1.65;padding-left:18px;margin-bottom:0;">
             <li><strong>Independent Algorithms, Not Line-by-Line Translations:</strong> Where external tools ask an LLM to group files or only batch in API mode, AIDA implements deterministic greedy token-budget bin-packing (<code>bytes/4 + lines*2</code>) and crate-qualified stem pairing (<code>canonical_module_stem</code>) in pure Rust.</li>
