@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T08:51:56.917498182Z
+modified_at: 2026-11-26T09:37:36.783742844Z
 req_type: Story
 tags:
 - dev
@@ -121,6 +121,19 @@ comments:
   modified_at: 2026-11-26T08:47:17.251433687Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21737-b60f-7030-975f-8f69e043e79a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d69af92a88 (PR #4638, S1 micro-round: --expect-head).
+    Acceptance evidence: [evidence: behavioral-test] dev_build_tests::story3148_head_moved_since_review_is_refused_and_live_untouched: expect != resolved head, PR without --expect-head, and a 12-char prefix are all refused before any build step (steps.calls empty), live stays OLD and no .promoted record is written. An exact match (case-insensitive) promotes and prints 'Resolved head: <sha>' before the build/swap. 7/7 story3148 + help golden tests pass on a lane job; make check-ci-fast green.
+    Probes: case/whitespace trimmed on both sides; a full 40-hex SHA is required (no prefix match, so a short-prefix collision can't be substituted); a branch target without the flag is allowed (optional per brief); an empty value is refused. After the check, the build runs from a detached worktree at that SHA, and provisional_plan plus the staged-SHA check pin it to marker.head through the swap, so it is closed end to end.
+    Fixes during review: store-writers.toml row moved handle->promote_expected; ci-structural exclusion added for the new test.
+    Residual: for a PR without the flag, the refusal fires after the fetch into the private ref and the temp worktree add (both are cleaned up; live is untouched). Diff is ~40 non-test lines, over the 30-line target, mostly from rustfmt wrapping and the testable wrapper.
+  created_at: 2026-11-26T09:37:36.783742844Z
+  modified_at: 2026-11-26T09:37:36.783742844Z
+  session_id: 01a2170dab18
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
