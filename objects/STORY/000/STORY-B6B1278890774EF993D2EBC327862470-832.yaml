@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T22:04:00.941901049Z
+modified_at: 2026-11-26T22:47:27.177446973Z
 req_type: Story
 tags:
 - agents
@@ -167,6 +167,27 @@ comments:
   created_at: 2026-11-26T19:39:13.175507518Z
   modified_at: 2026-11-26T19:39:13.175507518Z
   session_id: 01a218e69155
+- id: 01a21a0a-d4c9-7641-81ad-1746df793b00
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9e1ce186da (S1a r1 on #4680)
+
+    Acceptance evidence (binding r1 notes):
+    - (1) [evidence: behavioral-test] codex_reset_time (vendors/usage_limit.rs) accepts the real 'try again at Nov 29th 10:41 AM', the year form 'Nov 29, 2026 10:41 AM', ordinal+comma+year, and a stated UTC/GMT zone; it resolves to the next occurrence (incl. a Dec 30 -> Jan 2 year rollover). Garbage, past ('Nov 29, 2025'), and >14 days away ('Dec 31st', 'Nov 26th 8:00 AM' with now 09:41) return None (the 1h default hold) and log the raw string to stderr. Test: ac1_codex_reset_time_resolves_the_next_occurrence_within_two_weeks.
+    - (2) [evidence: behavioral-test] note_failed_run now carries the lane gate (success, outcome) that run() used inline, and returns the 'agent usage limit:' prefixed note run() puts before its failure message. ac2_a_lane_that_fails_on_a_usage_limit_records_it_and_says_so covers the failed NoPr path (outage recorded, launch refused) and the negatives: a successful run, a hold and a punt record no outage.
+    - Detection tests now generate the reset two days from now, so they don't depend on the wall clock.
+
+    Validation: aida lane job cargo test -p aida-cli-lib --lib story_3134: 6 passed. make check-ci-fast: exit 0. The store-writer inventory is unchanged (row run->note_failed_run still applies).
+
+    Probe findings / residual risks:
+    - Only UTC/GMT is recognized as a stated zone. Named zones like PST fall back to local time, which is wrong by the offset if codex ever names one (it doesn't today).
+    - Only %b month abbreviations parse ('Sept' would not), so those fall back to the 1h hold.
+    - Size: the binding <=300-line cap is NOT met. The slice is 361 insertions vs origin/main (it was 298 before r1). About 140 are tests; I compacted the code and tests but could not fit the new parser plus the required tests under 300 without dropping coverage.
+  created_at: 2026-11-26T22:47:27.177446973Z
+  modified_at: 2026-11-26T22:47:27.177446973Z
+  session_id: 01a219e0aa68
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
