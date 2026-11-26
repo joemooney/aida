@@ -6776,3 +6776,37 @@ fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
     .unwrap_err();
     assert!(err.to_string().contains("checkpoint failure"));
 }
+
+/// TASK-3917 AC1: the one member predicate the pass and the auto-train
+/// pre-scan share refuses a PR already riding a live train before any gate
+/// read; the legacy automatic eligibility gate alone could not see that.
+// trace:TASK-3917 | ai:claude
+#[test]
+fn task3917_member_predicate_refuses_a_rider_before_any_gate_read() {
+    let root = repo();
+    let mut checks = FakeChecks::new();
+    let opts = TrainOptions {
+        prs: &[],
+        all_ready: true,
+        dry_run: true,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    };
+    let open = vec![(12, Some(vec![(9, "abc1234".to_string())]))];
+    let verdict = admit_member(
+        &mut checks,
+        root.path(),
+        "main",
+        9,
+        &opts,
+        (&open, &[]),
+        |_| false,
+    )
+    .unwrap();
+    assert!(
+        matches!(&verdict, Err(MemberGateError::Refused(why)) if why.contains("riding live train PR #12")),
+        "{verdict:?}"
+    );
+    assert!(checks.calls.is_empty(), "{:?}", checks.calls);
+}

@@ -2705,7 +2705,15 @@ fn ownership_rider_refusal(
     dry_run: bool,
     forge: &dyn crate::forge::Forge,
 ) -> Result<Option<String>> {
-    ownership_rider_refusal_with(root, pr, dry_run, |train| {
+    ownership_rider_refusal_with(root, pr, dry_run, train_closed(root, forge))
+}
+
+/// Whether the forge confirms a train PR closed or merged.
+fn train_closed<'a>(
+    root: &'a Path,
+    forge: &'a dyn crate::forge::Forge,
+) -> impl FnOnce(u64) -> bool + 'a {
+    move |train| {
         let terminal = |m: &crate::forge::ChangeMetadata| {
             matches!(
                 m.state,
@@ -2715,6 +2723,38 @@ fn ownership_rider_refusal(
         matches!(crate::forge_confirmation::metadata_for(root, forge, train,
             &mut crate::network_retry::NoopSink, terminal),
             crate::forge_observed::Observed::Known(m) if terminal(&m))
+    }
+}
+
+type Riders = [(u64, Option<Vec<(u64, String)>>)];
+
+/// The member predicate a train pass applies, and the auto-train pre-scan
+/// with it (read-only), so the two cannot disagree: a PR already riding a
+/// train refuses, then the member gate (under the advisor loop it also
+/// applies the automatic approval rule), then a culprit hold.
+// trace:TASK-3917 | ai:claude
+fn admit_member(
+    checks: &mut dyn MemberChecks,
+    main_worktree: &Path,
+    base: &str,
+    pr: u64,
+    opts: &TrainOptions<'_>,
+    (open, leased): (&Riders, &Riders),
+    closed: impl FnOnce(u64) -> bool,
+) -> Result<std::result::Result<Member, MemberGateError>> {
+    let rider = ownership_rider_refusal_with(main_worktree, pr, opts.dry_run, closed)?
+        .or_else(|| train_rider_refusal(pr, open, leased));
+    if let Some(reason) = rider {
+        return Ok(Err(MemberGateError::Refused(reason)));
+    }
+    let member = match typed_gate_member_with(checks, base, pr) {
+        Ok(member) => member,
+        Err(error) => return Ok(Err(error)),
+    };
+    // trace:BUG-2767 | ai:claude
+    Ok(match culprit_admission(main_worktree, opts, &member)? {
+        Some(reason) => Err(MemberGateError::Refused(reason)),
+        None => Ok(member),
     })
 }
 
@@ -5354,37 +5394,28 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let mut refused = Vec::new();
     for pr in candidates {
         crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
-        let ownership_refusal =
-            ownership_rider_refusal(&main_worktree, pr, opts.dry_run, forge.as_ref())?;
-        if let Some(reason) =
-            ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
-        {
-            println!("  ✗ #{pr} not eligible: {reason}");
-            refused.push(Ejected { pr, reason });
-            continue;
-        }
-        match typed_gate_member_with(
-            &mut LiveChecks {
-                project_root: &project_root,
-                main_worktree: &main_worktree,
-                forge: forge.as_ref(),
-                base: &base,
-                named: prs_named_on_command_line(opts),
-                read_only: false,
-                actor_probe: None,
-                request_full: !opts.dry_run,
-                released_member: None,
-            },
+        let mut checks = LiveChecks {
+            project_root: &project_root,
+            main_worktree: &main_worktree,
+            forge: forge.as_ref(),
+            base: &base,
+            named: prs_named_on_command_line(opts),
+            read_only: false,
+            actor_probe: None,
+            request_full: !opts.dry_run,
+            released_member: None,
+        };
+        // trace:TASK-3917 | ai:claude
+        match admit_member(
+            &mut checks,
+            &main_worktree,
             &base,
             pr,
-        ) {
+            opts,
+            (&open_trains, &leased_trains),
+            train_closed(&main_worktree, forge.as_ref()),
+        )? {
             Ok(m) => {
-                // trace:BUG-2767 | ai:claude
-                if let Some(reason) = culprit_admission(&main_worktree, opts, &m)? {
-                    println!("  ✗ #{pr} not eligible: {reason}");
-                    refused.push(Ejected { pr, reason });
-                    continue;
-                }
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
             }
@@ -5744,6 +5775,87 @@ pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
 /// pre-scan must then run its pass. trace:BUG-2769 | ai:claude
 pub(crate) fn automatic_recovery_needed(root: &Path) -> Result<bool> {
     journal::recovery_needed(&root.join(".aida/train"))
+}
+
+/// The auto-train pre-scan's judge: [`admit_member`] exactly as the
+/// automatic pass applies it, read-only (no ledger answer, no ownership
+/// write, no culprit clearance). Loading it reads the live trains once.
+// trace:TASK-3917 | ai:claude
+pub(crate) struct AutomaticPrescan {
+    project_root: PathBuf,
+    main_worktree: PathBuf,
+    base: String,
+    forge: Box<dyn crate::forge::Forge>,
+    open: Vec<(u64, Option<Vec<(u64, String)>>)>,
+    leased: Vec<(u64, Option<Vec<(u64, String)>>)>,
+    /// Abandoned trains the pass would close, freeing their riders.
+    pub abandoned: bool,
+}
+impl AutomaticPrescan {
+    /// `None` where no automatic train runs: the forge is not supported.
+    pub(crate) fn load(project_root: &Path) -> Result<Option<Self>> {
+        if forge_refusal(crate::forge::resolve_forge_kind(project_root)).is_some() {
+            return Ok(None);
+        }
+        let main_worktree = crate::main_worktree_root_from(project_root);
+        let base = crate::gate::review_carryover::protected_base(&main_worktree).map_err(|e| {
+            anyhow::anyhow!("could not read origin's default branch: {}", e.reason())
+        })?;
+        let (open, leased, abandoned) = live_trains(&main_worktree)?;
+        Ok(Some(Self {
+            forge: crate::forge::forge_for(project_root),
+            project_root: project_root.to_path_buf(),
+            main_worktree,
+            base,
+            open,
+            leased,
+            abandoned: !abandoned.is_empty(),
+        }))
+    }
+
+    pub(crate) fn base(&self) -> &str {
+        &self.base
+    }
+
+    pub(crate) fn admits(&self, pr: u64) -> std::result::Result<(), MemberGateError> {
+        struct Restore(bool);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                ADVISOR_LOOP.with(|v| v.set(self.0));
+            }
+        }
+        let _restore = Restore(ADVISOR_LOOP.with(|v| v.replace(true)));
+        let opts = TrainOptions {
+            prs: &[],
+            all_ready: true,
+            dry_run: true,
+            local_ci: None,
+            max: 10,
+            no_pull: true,
+        };
+        let mut checks = LiveChecks {
+            project_root: &self.project_root,
+            main_worktree: &self.main_worktree,
+            forge: self.forge.as_ref(),
+            base: &self.base,
+            named: false,
+            read_only: true,
+            actor_probe: None,
+            request_full: false,
+            released_member: None,
+        };
+        admit_member(
+            &mut checks,
+            &self.main_worktree,
+            &self.base,
+            pr,
+            &opts,
+            (&self.open, &self.leased),
+            train_closed(&self.main_worktree, self.forge.as_ref()),
+        )
+        .map_err(|e| MemberGateError::Unavailable(format!("{e:#}")))?
+        .map(|_| ())
+    }
 }
 
 // trace:STORY-2905 | ai:claude
