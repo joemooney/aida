@@ -9,12 +9,12 @@ description: |
   - AC1: when a bisect half (or any follow-up train) is built, a member whose PR head has moved since the parent train was built is DROPPED from the half as superseded, not tested. It re-enters later at its new approved head through normal admission.
   - AC2: the drop is logged and named in `aida pr train --check` / the train body ("superseded: head moved 04aa3b22 → cd340a59").
   - AC3: a test: a member whose head moved is dropped from the bisect half, and the remaining members are still tested.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:01:40.126033678Z
-modified_at: 2026-11-26T06:24:07.121584413Z
+modified_at: 2026-11-26T06:26:56.120375178Z
 req_type: Task
 tags:
 - landing
@@ -46,6 +46,13 @@ history:
   author: joe
   timestamp: 2026-11-26T03:06:14.312554240Z
   changes: []
+- id: 01a21689-23f8-73c3-927e-a3735e7459d2
+  author: aida-session-start
+  timestamp: 2026-11-26T06:26:56.120374108Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 467f62335cef5f08cb850e95f6562cc81c7995a2
