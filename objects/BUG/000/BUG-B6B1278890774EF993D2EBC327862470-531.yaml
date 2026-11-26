@@ -10,17 +10,23 @@ description: |
   - AC2: `--older-than` also applies to mailbox leftover files.
   - AC3: the dry run marks each candidate live/dead/unknown, and UNKNOWN is skipped (fail-safe).
   - AC4: tests for live-skip, age-scoping and unknown-skip.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-26T09:53:27.320709239Z
+modified_at: 2026-11-26T10:33:12.247665319Z
 req_type: Bug
 tags:
 - agents
 - dell1
 - mail
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2176a-7ef1-7423-9ace-0e2fd17c9ca9
+  created_at: 2026-11-26T10:33:12.247634830Z
+  created_by: dirtlab
 comments:
 - id: 01a21741-6431-7fa3-8ac4-388b73689d40
   author: joe
@@ -55,6 +61,38 @@ comments:
   modified_at: 2026-11-26T09:53:27.320709239Z
   session_id: 01a21744104a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21769-db7e-7a11-b314-ba86a3a2c2db
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 355e184e18 (git diff origin/main...HEAD, 4 files).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: leftovers_tests::a_live_owner_keeps_its_leftovers (aida-core/src/mailbox_lifecycle/leftovers_tests.rs) — the live owner's tomb and era marker stay and are reported Live; only the dead owner's marker is reaped. CLI: story_1843_c2_refusal_tests::agent_gc_judges_leftover_owners_fail_safe — a Live/Dormant lease or a live agent process under the checkout gives Live.
+    - AC2 [behavioral-test]: leftovers_tests::older_than_scopes_mailbox_leftovers — with min_age = 1 day, a dead owner's tomb and era marker are not candidates; once older, both go. agent_gc passes --older-than DAYS as min_age (agent_registry_root.rs agent_gc).
+    - AC3 [behavioral-test]: leftovers_tests::an_unknown_owner_is_kept + the CLI judge test (Unknown lease, Unattributed owner, incomplete view all give Unknown and are kept); gc_leftover_lines prints '(owner dead)' / '(owner live: ...)' / '(owner unknown: ...)' for each candidate.
+    - AC4: tests above. aida-core leftovers: 18 passed; aida-cli-lib 'leftover': 13 passed; make check-ci-fast exit 0.
+
+    Probe findings / fixes:
+    - Gate caught the ownership-liveness ratchet (direct lease_state_for). Fixed: leases now come from leases::list_leases_strict_all (any unreadable lease means the view is incomplete, so Unknown) and are judged through ownership::reader::doctor_lease_liveness.
+    - Fail-open check: an unreadable lease dir or lease, or a sandboxed PID observer, leaves complete=false, so nothing without a live holder is reaped. Unattributed is always Unknown.
+    - Lease matching is exact on the canonical worktree root, so a lane under target/worktrees does not make the main checkout's leftovers Live through its lease. Process cwds use a prefix match, which can only make a candidate Live (fail-safe).
+
+    Residual risks:
+    - Anchor-level write_source_id temps have no attributable owner, so gc now keeps them (Unknown) instead of reaping them. The fail-safe rule chose that.
+    - A pruned linked worktree's marker is matched to leases by the admin name equal to the worktree basename. Git's collision suffix (name1) would not match and would judge it Dead; git has already pruned that admin entry.
+    - --older-than help text unchanged (still accurate); golden untouched.
+  created_at: 2026-11-26T10:32:23.166902106Z
+  modified_at: 2026-11-26T10:32:23.166902106Z
+  session_id: 01a21744104a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2176a-2fd1-7d30-b66d-e7e3e196084d
+  author: aida-publication-done
+  content: Implementer push 355e184e18e5 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T10:32:44.753757661Z
+  modified_at: 2026-11-26T10:32:44.753757661Z
+  session_id: 01a21744104a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2173e-e582-7153-b482-a9c2c1f63d41
   author: joe
@@ -67,6 +105,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2176a-2fd1-7d30-b66d-e7da4d09ce59
+  author: aida-publication-done
+  timestamp: 2026-11-26T10:32:44.753756075Z
+  session_id: 01a21744104a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a2176a-a351-7bd2-8060-39a2a3ef90b0
+  author: dirtlab
+  timestamp: 2026-11-26T10:33:14.321743035Z
+  session_id: 01a21744104a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: b4c61d1f69f2536883ca2d64aba061031f1463de

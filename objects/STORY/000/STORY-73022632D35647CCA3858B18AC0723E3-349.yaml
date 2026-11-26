@@ -1,0 +1,47 @@
+id: 01a2176a-7ef1-7423-9ace-0e2fd17c9ca9
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-349
+title: 'Review PR-4645: [AI:claude] fix(agent): scope agent gc mailbox leftovers by owner liveness and --older-than (BUG-2770)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21744`) for branch `bug-2770-gc-scope`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4645>
+  - Branch: `bug-2770-gc-scope` → `main`
+
+  ## Covers
+
+  - BUG-2770
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4645` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T10:33:05.009440004Z
+modified_at: 2026-11-26T10:33:08.776533192Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
+  created_at: 2026-11-26T10:33:08.776508854Z
+  created_by: dirtlab
+history:
+- id: 01a2176a-9587-75e0-b74d-8f0092a2d6e8
+  author: dirtlab
+  timestamp: 2026-11-26T10:33:10.791199435Z
+  session_id: 01a21744104a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 355e184e18e5648e05cf3ca39b881a33ba118b81
+  branch: bug-2770-gc-scope
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461541dfb
+  vendor: claude
+  session: 01a21744104a
+  harness_version: 2.1.319 (Claude Code)
