@@ -46,6 +46,8 @@
       "source": "aida-cli-lib/src/review_prepare.rs",
       "tests": [
         "s2_export_gate_checks_changed_paths",
+        "s3a2_run_review_base_and_sanitized_diff",
+        "s3a2_run_review_refuses_findings_outside_the_inventory",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
@@ -68,6 +70,7 @@
         "s3a_runner_deadline_and_output_caps_fail_closed",
         "s3a_runner_spawn_contract",
         "s3a_runner_survives_default_sigpipe",
+        "s3a2_runner_fails_closed_on_escaped_descendant",
         "s3b_runner_argv_carries_only_validated_tuning"
       ],
       "scope": "module"

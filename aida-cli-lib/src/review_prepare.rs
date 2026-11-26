@@ -4,7 +4,11 @@
 //! path-scoped playbook grouping, semantic file batching, file-coverage verification,
 //! and snippet-anchored line positioning.
 
+use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
+use crate::launch::review_tuning::{resolve_for_run, trusted_review_base};
+use crate::vendors::review_runner::review_vendor;
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
+use aida_core::exec_context::Environment;
 use aida_core::review_engine::{
     anchor_findings_with, bundle_review_batches, classify_with_exclusions, verify_coverage_ledger,
     ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
@@ -21,6 +25,7 @@ use std::process::Command;
 /// Clap arguments for `aida review prepare`.
 // trace:STORY-3076 | ai:antigravity
 #[derive(clap::Args, Debug, Clone, Default)]
+#[clap(group(clap::ArgGroup::new("findings_source").args(["anchor_findings", "run_review"])))]
 pub struct ReviewPrepareArgs {
     /// Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria
     /// should be injected into the review preparation bundle.
@@ -74,12 +79,30 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "FINDINGS_JSON")]
     pub anchor_findings: Option<PathBuf>,
 
+    /// Review every batch with an agent and anchor its findings. Needs `--pr`
+    /// or `--from`; review settings come from the merge base.
+    // trace:STORY-3120 | ai:claude
+    #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit"])]
+    pub run_review: bool,
+
+    /// Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD).
+    #[clap(long, value_name = "AGENT", requires = "run_review")]
+    pub agent: Option<String>,
+
+    /// Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max).
+    #[clap(long, value_name = "LEVEL", requires = "run_review")]
+    pub effort: Option<String>,
+
+    /// Model for `--run-review`.
+    #[clap(long, value_name = "MODEL", requires = "run_review")]
+    pub model: Option<String>,
+
     /// Write a SARIF 2.1.0 report inside the repository.
-    #[clap(long, value_name = "PATH", requires = "anchor_findings")]
+    #[clap(long, value_name = "PATH", requires = "findings_source")]
     pub sarif: Option<PathBuf>,
 
     /// Exit with an error when any finding meets or exceeds this severity.
-    #[clap(long, value_name = "SEVERITY", requires = "anchor_findings")]
+    #[clap(long, value_name = "SEVERITY", requires = "findings_source")]
     pub fail_on: Option<String>,
 
     /// Emit machine-readable JSON output.
@@ -129,16 +152,26 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
 // trace:STORY-3076 | ai:antigravity
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     let project_root = find_project_root()?;
-    let rules_cfg = load_review_rules(&project_root)?;
+    // 1. Resolve comparison mode and git endpoints.
+    let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
+    // trace:STORY-3120 | ai:claude
+    let trusted = if args.run_review {
+        let base = run_review_base(&mode, merge_base.as_deref())?;
+        let head = head_ref.as_deref();
+        Some(trusted_review_base(&project_root, base, head)?)
+    } else {
+        None
+    };
+    let rules_cfg = match &trusted {
+        Some(trusted) => trusted.rules.clone(),
+        None => load_review_rules(&project_root)?,
+    };
     let registry = PlaybookRegistry::new(rules_cfg.rules.clone())?;
 
     let mut excludes = rules_cfg.exclude.clone();
     excludes.extend(args.exclude.iter().cloned());
 
     let excludes = compile_exclusions(&excludes)?;
-
-    // 1. Resolve comparison mode and git endpoints.
-    let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
 
     // 2. Collect raw diff or full-file scan entries from git.
     let mut raw_entries = if mode == "scan" {
@@ -238,25 +271,33 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         let (parsed, _) = aida_core::review_engine::parse_runner_findings_json(&raw_findings)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("parse findings JSON {}", findings_path.display()))?;
-        let allowed: BTreeSet<_> = inventory
-            .reviewable_files
-            .iter()
-            .map(|file| file.path.as_str())
-            .collect();
-        for finding in &parsed {
-            // trace:TASK-3320 | ai:claude
-            anyhow::ensure!(
-                !aida_core::review_engine::is_credential_path(&finding.path),
-                "finding cites a credential path, which review never reads: {:?}",
-                finding.path
-            );
-            anyhow::ensure!(
-                allowed.contains(finding.path.as_str()),
-                "finding path outside reviewable inventory: {:?}",
-                finding.path
-            );
-        }
+        ensure_in_inventory(&inventory, &parsed)?;
         Some(anchor_findings_with(&parsed, |path| {
+            content_cache.get(path).cloned()
+        }))
+    } else if let Some(trusted) = &trusted {
+        // trace:STORY-3120 | ai:claude
+        let parent_env = Environment::capture().to_pairs();
+        let agent = args.agent.as_deref().map(review_vendor).transpose()?;
+        let mut call = RunnerCall {
+            agent,
+            checkout: &project_root,
+            parent_env: &parent_env,
+            pass: "finder",
+            deadline: RUN_DEADLINE,
+            stdout_cap: STDOUT_CAP,
+            stderr_cap: STDERR_CAP,
+            tuning: Default::default(),
+        };
+        let flags = (args.effort.as_deref(), args.model.as_deref());
+        call.tuning = resolve_for_run(call.vendor(), &parent_env, flags, trusted)?;
+        let (base, head) = (merge_base.as_deref(), head_ref.as_deref());
+        let range = format!("{}..{}", base.unwrap_or_default(), head.unwrap_or_default());
+        let prompts = batches
+            .iter()
+            .map(|batch| batch_prompt(&project_root, &range, batch, &playbooks, &linked_specs));
+        let found = review_batches(&call, prompts, &inventory)?;
+        Some(anchor_findings_with(&found, |path| {
             content_cache.get(path).cloned()
         }))
     } else {
@@ -477,6 +518,114 @@ fn pr_comparison(root: &Path, base: &str, head: &str) -> Result<(String, String)
     Ok((resolved, mb))
 }
 
+/// Per-batch runner deadline for `--run-review`.
+const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// The trusted base for `--run-review`: the merge base of the target (the
+/// forge's with `--pr`, `--from` otherwise) and the reviewed head. Workspace,
+/// scan and commit modes have no base the change cannot choose, so they refuse.
+// trace:STORY-3120 | ai:claude
+fn run_review_base<'a>(mode: &str, merge_base: Option<&'a str>) -> Result<&'a str> {
+    match (mode, merge_base) {
+        ("range", Some(base)) => Ok(base),
+        _ => anyhow::bail!("--run-review needs --pr or --from"),
+    }
+}
+
+fn ensure_in_inventory(inventory: &ClassifiedInventory, found: &[RawReviewFinding]) -> Result<()> {
+    let allowed: BTreeSet<_> = inventory
+        .reviewable_files
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect();
+    for finding in found {
+        // trace:TASK-3320 STORY-3120 | ai:claude
+        anyhow::ensure!(
+            !aida_core::review_engine::is_credential_path(&finding.path),
+            "finding cites a credential path, which review never reads: {:?}",
+            finding.path
+        );
+        anyhow::ensure!(
+            allowed.contains(finding.path.as_str()),
+            "finding path outside reviewable inventory: {:?}",
+            finding.path
+        );
+    }
+    Ok(())
+}
+
+const PROMPT_HEAD: &str = "Review this batch of a code change for defects. Report only \
+files listed below. Reply with JSON only: {\"findings\":[{\"path\":\"<listed file>\",\
+\"severity\":\"critical|high|medium|low\",\"category\":\"bug|security|race|perf|untested-path\",\
+\"message\":\"...\",\"existing_code\":\"verbatim lines from the new file\"}],\
+\"files\":[{\"path\":\"<listed file>\",\"status\":\"reviewed\"}]}\n\n";
+
+/// One batch's prompt: acceptance criteria, playbooks and each file's diff. A
+/// failed diff is an error, never replaced by the whole file.
+// trace:STORY-3120 | ai:claude
+fn batch_prompt(
+    root: &Path,
+    range: &str,
+    batch: &ReviewBatch,
+    playbooks: &[ResolvedPlaybook],
+    specs: &[LinkedSpecAcceptance],
+) -> Result<String> {
+    let mut prompt = String::from(PROMPT_HEAD);
+    for spec in specs {
+        let id = aida_core::node_alias::display_spec_id(&spec.spec_id);
+        let (title, acceptance) = (&spec.title, &spec.acceptance_markdown);
+        prompt.push_str(&format!("## {id} — {title}\n{acceptance}\n\n"));
+    }
+    for pb in playbooks
+        .iter()
+        .filter(|pb| batch.playbook_ids.contains(&pb.id))
+    {
+        let (title, id, checklist) = (&pb.title, &pb.id, &pb.checklist);
+        prompt.push_str(&format!("## Playbook {title} (`{id}`)\n{checklist}\n\n"));
+    }
+    for path in &batch.files {
+        let args = [
+            "diff",
+            "--no-ext-diff",
+            "--no-color",
+            "--end-of-options",
+            range,
+            "--",
+            path,
+        ];
+        let patch = git_text(root, &args)?;
+        let patch = if patch.trim().is_empty() {
+            "(no textual change)\n"
+        } else {
+            patch.as_str()
+        };
+        prompt.push_str(&format!("### File: `{path}`\n````diff\n{patch}````\n\n"));
+    }
+    Ok(prompt)
+}
+
+/// Run each batch prompt; any runner error, unparsable output or finding
+/// outside the inventory refuses the whole run.
+// trace:STORY-3120 | ai:claude
+fn review_batches(
+    call: &RunnerCall<'_>,
+    prompts: impl IntoIterator<Item = Result<String>>,
+    inventory: &ClassifiedInventory,
+) -> Result<Vec<RawReviewFinding>> {
+    let mut found = Vec::new();
+    for (i, prompt) in prompts.into_iter().enumerate() {
+        let out = call
+            .run(&prompt?)
+            .with_context(|| format!("review batch {}", i + 1))?;
+        let (batch, _) = aida_core::review_engine::parse_runner_findings_json(&out)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("review batch {} output", i + 1))?;
+        ensure_in_inventory(inventory, &batch)?;
+        found.extend(batch);
+    }
+    Ok(found)
+}
+
 // trace:TASK-3862 | ai:codex
 fn git_rev_parse(root: &Path, rev: &str) -> Result<String> {
     let value = git_text(root, &["rev-parse", "--verify", "--end-of-options", rev])?;
@@ -561,11 +710,32 @@ fn collect_git_diff_entries(
     Ok(entries)
 }
 
+/// Variables `git_text` keeps; GIT_DIR, GIT_CONFIG*, GIT_INDEX_FILE and the
+/// rest of the caller's environment never reach git. trace:STORY-3120 | ai:claude
+fn git_env_kept(key: &std::ffi::OsStr) -> bool {
+    let key = key.to_string_lossy();
+    ["PATH", "HOME", "LANG", "XDG_CONFIG_HOME"].contains(&&*key) || key.starts_with("LC_")
+}
+
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
-    let out = Command::new("git")
+    let mut cmd = Command::new("git");
+    cmd.env_clear()
+        .envs(
+            Environment::capture()
+                .to_pairs()
+                .into_iter()
+                .filter(|(k, _)| git_env_kept(k)),
+        )
         .env("GIT_NO_REPLACE_OBJECTS", "1")
-        .current_dir(root)
-        .args(args)
+        .current_dir(root);
+    // No textconv driver from the reviewed tree's attributes ever runs.
+    match args.split_first() {
+        Some((sub @ (&"diff" | &"show" | &"log"), rest)) => {
+            cmd.arg(sub).arg("--no-textconv").args(rest)
+        }
+        _ => cmd.args(args),
+    };
+    let out = cmd
         .output()
         .with_context(|| format!("run git {}", args[0]))?;
     anyhow::ensure!(
@@ -1249,6 +1419,136 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             .unwrap_err()
             .to_string()
             .contains("parent unavailable"));
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3a2_run_review_refuses_findings_outside_the_inventory() {
+        let temp = tempfile::tempdir().unwrap();
+        let entry = |path: &str| RawDiffEntry {
+            path: path.into(),
+            old_path: None,
+            kind: FileChangeKind::Modified,
+            additions: 1,
+            deletions: 0,
+            is_binary: false,
+            patch_bytes: 48,
+        };
+        let registry = PlaybookRegistry::new(Vec::new()).unwrap();
+        let budget = DEFAULT_BATCH_TOKEN_BUDGET;
+        let inventory =
+            classify_with_exclusions(&[entry("a.rs")], &registry, &[], budget, |_| false);
+        let finding = |path: &str| {
+            let row =
+                serde_json::json!({"path":path,"severity":"high","category":"bug","message":"m"});
+            serde_json::json!({ "findings": [row] }).to_string()
+        };
+        let run = |out: String| {
+            let (src, cmd) = (temp.path().join("src"), temp.path().join("runner"));
+            std::fs::write(&src, format!("#!/bin/sh\ncat >/dev/null\necho '{out}'\n")).unwrap();
+            // install(1): no write fd on the executable for a parallel fork to inherit.
+            let installed = Command::new("install")
+                .arg("-m755")
+                .args([&src, &cmd])
+                .status();
+            assert!(installed.unwrap().success());
+            let env: [(std::ffi::OsString, _); 2] = [
+                ("PATH".into(), "/usr/bin:/bin".into()),
+                ("AIDA_REVIEW_RUNNER_CMD".into(), cmd.into()),
+            ];
+            let checkout = tempfile::tempdir().unwrap();
+            let call = RunnerCall {
+                agent: None,
+                checkout: checkout.path(),
+                parent_env: &env,
+                pass: "finder",
+                deadline: std::time::Duration::from_secs(20),
+                stdout_cap: STDOUT_CAP,
+                stderr_cap: STDERR_CAP,
+                tuning: Default::default(),
+            };
+            let prompts = [Ok("p".to_owned()), Ok("p".to_owned())];
+            review_batches(&call, prompts, &inventory)
+        };
+        assert_eq!(run(finding("a.rs")).unwrap().len(), 2);
+        for outside in ["b.rs", "../a.rs", "/etc/passwd", "A.rs"] {
+            let err = run(finding(outside)).unwrap_err().to_string();
+            assert!(
+                err.contains("outside reviewable inventory"),
+                "{outside}: {err}"
+            );
+        }
+        // trace:TASK-3320 STORY-3120 | ai:claude
+        for cited in [".netrc", ".aws/credentials", "nested/.docker/config.json"] {
+            let err = run(finding(cited)).unwrap_err().to_string();
+            assert!(err.contains("credential path"), "{cited}: {err}");
+        }
+        assert!(run("not json".into()).is_err());
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3a2_run_review_base_and_sanitized_diff() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let marker = root.join("textconv-ran");
+        let write = |path: &str, body: &str| std::fs::write(root.join(path), body).unwrap();
+        git_text(root, &["init", "-q"]).unwrap();
+        let textconv = format!("touch {}; cat", marker.display());
+        git_text(root, &["config", "diff.evil.textconv", &textconv]).unwrap();
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        write(".aida/review-rules.toml", "default_effort = \"medium\"\n");
+        write(".gitattributes", "*.rs diff=evil\n");
+        write("a.rs", "old\n");
+        git_text(root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        git_text(root, &["branch", "topic"]).unwrap();
+        // The target advances with its own rules after the PR branched.
+        write(".aida/review-rules.toml", "default_effort = \"low\"\n");
+        git_text(root, &["add", "-A"]).unwrap();
+        let tip = crate::test_git::commit_fixture(root);
+        git_text(root, &["update-ref", "refs/remotes/origin/target", &tip]).unwrap();
+        git_text(root, &["checkout", "-q", "topic"]).unwrap();
+        write("a.rs", "new\n");
+        git_text(root, &["add", "-A"]).unwrap();
+        let head = crate::test_git::commit_fixture(root);
+        let (reviewed, mb) = pr_comparison(root, "target", &head).unwrap();
+        assert_eq!(mb, base);
+        let trusted = trusted_review_base(
+            root,
+            run_review_base("range", Some(&mb)).unwrap(),
+            Some(&reviewed),
+        );
+        assert_eq!(
+            trusted.unwrap().rules.default_effort.as_deref(),
+            Some("medium")
+        );
+        // The target tip is not the base: it would read the wrong rules and refuse.
+        assert!(trusted_review_base(root, &tip, Some(&reviewed)).is_err());
+        // The checkout's HEAD (PR-supplied) never becomes the base.
+        for (mode, supplied) in [
+            ("workspace", None),
+            ("scan", None),
+            ("commit", Some(head.as_str())),
+        ] {
+            assert!(run_review_base(mode, supplied).is_err(), "{mode}");
+        }
+        let batch = ReviewBatch {
+            batch_index: 1,
+            label: "b".into(),
+            playbook_ids: Vec::new(),
+            files: vec!["a.rs".into()],
+            estimated_tokens: 1,
+        };
+        let prompt = batch_prompt(root, &format!("{mb}..{head}"), &batch, &[], &[]).unwrap();
+        assert!(prompt.contains("-old\n+new\n"), "{prompt}");
+        assert!(!marker.exists(), "textconv driver ran");
+        let missing = format!("{mb}..{}", "f".repeat(40));
+        assert!(batch_prompt(root, &missing, &batch, &[], &[]).is_err());
+        for key in ["GIT_DIR", "GIT_CONFIG_GLOBAL", "GIT_INDEX_FILE", "GH_TOKEN"] {
+            assert!(!git_env_kept(key.as_ref()), "{key}");
+        }
+        assert!(git_env_kept("PATH".as_ref()) && git_env_kept("LC_ALL".as_ref()));
     }
 
     #[test]
