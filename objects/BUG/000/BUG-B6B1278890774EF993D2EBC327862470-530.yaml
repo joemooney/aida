@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T08:29:18.530213409Z
+modified_at: 2026-11-26T08:30:56.950190777Z
 req_type: Bug
 tags:
 - admission
@@ -33,6 +33,17 @@ comments:
   content: 'Correction: the first incident date is 2026-11-25 20:00-20:11 (not 2025). The holder pid 293658 is `aida advisor loops train-worker`, started 2026-11-26 01:11:30.'
   created_at: 2026-11-26T08:29:13.653206953Z
   modified_at: 2026-11-26T08:29:13.653206953Z
+- id: 01a216fa-e971-7ec2-83b0-0e838c487370
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:30):
+    # BUG-2769: auto-train holds admission while idle (advisor-122 01:27; product-15). Lane: CLAUDE. MAIN, NEW branch fix-autotrain-idle-admission. STRICT (train/admission path). <=200 lines. Completing (BUG-2769) trailer.
+    READ: `aida show BUG-2769` (evidence: pid 293658 = `aida advisor loops train-worker`, started 01:11, held admission 10+ min with no train PR). Find the advisor-loops train-worker's admission handling (advisor loops / admission_owner / auto-train poll). AC1: hold admission only while assembling or running a train, and release it between polls. AC2: a waiting manual train is admitted within one poll. AC3: a test. AC4: a holder+phase log line past N seconds. Follow BUG-2757/BUG-2765's pattern (do reads outside the lock; lock only for the decision).
+    Keep the pr_train and admission tests green. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T08:30:56.950190777Z
+  modified_at: 2026-11-26T08:30:56.950190777Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
