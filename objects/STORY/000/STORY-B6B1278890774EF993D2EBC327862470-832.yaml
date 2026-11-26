@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T17:21:46.377187685Z
+modified_at: 2026-11-26T17:24:20.646275645Z
 req_type: Story
 tags:
 - agents
@@ -121,6 +121,18 @@ comments:
   created_at: 2026-11-26T07:38:22.869146492Z
   modified_at: 2026-11-26T07:38:22.869146492Z
   session_id: 01a216870960
+- id: 01a218e3-413a-7ac0-b963-cba357b174cf
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:24):
+    # STORY-3134 S1a FRESH (replaces closed #4627: conflicting, +766; product-15 2026-11-26 10:25). Lane: CLAUDE. MAIN, NEW branch vendor-outage-s1a (cut from the current main tip). Title "[AI:claude] feat(lanes): treat an agent usage limit as a typed outage [slice 1a] (Refs STORY-3134)". HARD CAP <=300 changed lines.
+    READ: `aida show STORY-3134 --comments` and the reference `git diff origin/main...origin/vendor-outage-typed` (the closed #4627).
+    PORT ONLY THE CORE: classify a vendor CLI's usage-limit / rate-limit exit as a TYPED outage (vendor + reset time if printed) at the lane launch boundary, record it, and refuse further launches on that vendor until the reset, with a clear message; plus its tests. Everything else in the reference (doctor or watchdog surfacing, fallback-vendor routing, docs, etc.) goes under "Still to do in S1b" in the PR body, with a file list. Adapt to tonight's main (the STORY-3131 watchdog, BUG-2769, TASK-3917).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4627 (conflicted, oversized; closed)". COMMIT your work.
+  created_at: 2026-11-26T17:24:20.646275645Z
+  modified_at: 2026-11-26T17:24:20.646275645Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
