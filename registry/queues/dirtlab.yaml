@@ -165,14 +165,6 @@
   added_at: 2026-11-26T15:52:15.277605347Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a218c6-513f-7a31-b1d3-0e92b629a9e3
-  position: 1467000
-  added_by: dirtlab
-  note: auto-queued by `session end` (01a2188c); covers 1 spec
-  added_at: 2026-11-26T16:53:15.449085942Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
   requirement_id: 01a21867-dc9f-7831-a80e-4c1dd1999093
   position: 1468000
   added_by: dirtlab
