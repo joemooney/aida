@@ -264,7 +264,7 @@
   requirement_id: 01a2157b-8b5b-7d32-a35f-7ed587864ed8
   position: 1410000
   added_by: dirtlab
-  note: auto-queued by `session end` (01a2153d); covers 0 specs
-  added_at: 2026-11-26T01:32:38.384633141Z
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-26T01:35:46.750630092Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
