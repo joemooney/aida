@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-26T09:34:55.748638780Z
+modified_at: 2026-11-26T09:39:18.196301624Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -363,6 +363,12 @@ comments:
   content: 'SLICE (e) ADDENDUM (integration-30 2026-11-26 02:37, from the #4642 d1 pre-check; findings-as-comments): docs/showcase/build.py either RENDERS nested "  - " lists and *em*, or (cheaper and fail-closed) REFUSES to build when a source line has an indented list marker or an unmatched single-asterisk emphasis, naming file:line. One test fixture per case. If (e) would go over ~300 lines with this, cut it as (e2).'
   created_at: 2026-11-26T09:34:55.748638780Z
   modified_at: 2026-11-26T09:34:55.748638780Z
+- id: 01a21739-4234-7180-a7b9-d80c2468e51b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int44-story-2839-d1` at head `061293cf07a66ff3332fe3eeba01a9b94e086109`.'
+  created_at: 2026-11-26T09:39:18.196298182Z
+  modified_at: 2026-11-26T09:39:18.196298182Z
+  session_id: 01a2170f49db
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
