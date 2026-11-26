@@ -15,13 +15,124 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-26T15:53:18.003461277Z
+modified_at: 2026-11-26T16:04:22.070472354Z
 req_type: Story
 tags:
 - landing
 - mandate
 - process-policy
 - throughput
+comments:
+- id: 01a21899-cbb6-7d61-951a-04cf853143e8
+  author: dirtlab
+  content: |-
+    SKETCH: STORY-3181 — the auto-train lands supervised PRs under an active mandate (default-off knob)
+
+    Read at main 6192912152. Sketch only: no code was changed and no PR is open. Implementation waits for advisor signoff.
+
+    ## 0. What exists today (the gap)
+    - The manual train already admits supervised members under a mandate. `pr_train::typed_gate_member_with` → `member_spec_policy_refusal` → `LiveChecks::mandate_cover` → `gate::mandate_ship::mandate_ship_cover_for_ship` → `gate::mandate::ship_decision`. Held members are released under the merge lease (`release_hold_under_mandate`, the `TrainMandateCoverage` ledger event and `recheck_train_release`). `pr_train_verified::collect` re-checks the cover before the merge (`mandate_cover_still_active`).
+    - The automatic pass (`advisor_train_handler`, ADVISOR_LOOP=true) does not reach that cover for a supervised PR. `advisor_loop_train::eligible` (called again inside the typed gate through `review_watch::advisor_train_eligible`) refuses any hold with "merge hold present", and a BUG-727 supervised PR carries a Supervision marker. The handler's comment says so: "no mandate hold release".
+    - The automatic path is also looser than this story allows in two ways. `eligible` accepts an approval carried over to a moved head (`approval.carried`), and `mandate_ship_cover_for_ship` proves carry-over (`prove_carry_over=true`). Binding point (3) forbids both.
+
+    ## 1. Knob — `[landing] auto_train_supervised_under_mandate` (bool, default false)
+    - `landing_policy.rs`: new field `LandingPolicy.auto_train_supervised_under_mandate: bool`, parsed in `from_config` with a bool reader (the existing `read!` handles strings only). A non-bool value records `invalid` plus a warning and stays false. It shows up in `origin()` and the policy display.
+    - Read only through `landing_policy::load`, which takes the committed `origin/main:.aida/config.toml`. A lane branch cannot turn it on, and the home layer is never consulted for it. `.aida/config.toml` is in the protected floor, so AC4's flip needs a human merge (or a mandate with protected paths).
+    - `policy_change_refusal` also compares the knob, so a flip between admission and merge refuses.
+    - Knob OFF: in the automatic pass, `LiveChecks::mandate_cover` (and the `AutomaticPrescan` read-only branch) returns a settled refusal without reading the mandate: "the auto-train does not land supervised specs (`[landing] auto_train_supervised_under_mandate` is off)". The manual train and `aida pr ship` are unchanged. QUESTION FOR ADVISOR: an unheld supervised-by-mode PR (no marker) could today reach the cover through the auto pass. Knob-off makes that path closed explicitly, a small tightening. I recommend it; say if you want today's exact behaviour kept instead.
+
+    ## 2. Mandate checked at admission and again immediately before the merge
+    - Admission (the pre-scan and the pass): new `gate::mandate_ship::mandate_ship_cover_for_auto_train(..)` and its read-only twin `preview_auto_train_cover(..)` are bound to a new decision `gate::mandate::auto_train_decision`. Both read `current_state_reporting` from disk each call (never cached). `AutomaticPrescan::admits` uses the preview twin, keeping TASK-3917's parity between the pre-scan and the pass predicate.
+    - Admission refuses when the mandate has less than `AUTO_TRAIN_MANDATE_MIN_REMAINING` (30m) left, so CI is not spent on a train that cannot land. This is a design choice; the bound is a const, not a knob.
+    - Pre-land re-gate under the lease (`LiveTrainForge::land`): the fresh `typed_gate_member_with` already re-runs the cover. Holds are released only after that, as today.
+    - Immediately before the merge: `pr_train_verified::collect` runs for both "proof" and the `refresh` closure the forge calls just before `merge_train_change` issues the merge. It gains `gate::mandate_ship::auto_train_merge_recheck(member)`, which calls `gate::mandate::recheck(dir, id, principal, now)` (re-reads stop tombstones; Expired vs Stopped) plus `cover_active_in` (catches a renewal that narrows include_supervised or include_gate_paths). Each supervised-under-mandate member's `{mandate_id, verdict_key}` goes into the TrainCoverage proof `sources` JSON, so the recheck evidence must match the proof digest.
+    - An expired, stopped, narrowed or changed mandate means no merge. `rearm_released` re-arms every hold already released, the train retires, and each mandate-carried member is ejected with "mandate <id> expired|was stopped before the merge; a human ships it". Other members ride the rebuild. Accepted residual risk: a stop in the milliseconds between the last recheck and the forge merge call. This is the same window as `mandate_still_active` on the ship path.
+
+    ## 3. Approval: an independent verdict at the exact head
+    `gate::mandate::auto_train_decision(c)` returns `ship_decision(c)` plus these extra refusals:
+    - `carry_over` must be `None`. The auto cover passes `prove_carry_over=false`, so any head move gives `StaleApproval` through `approval_head_refusal`.
+    - New `MandateRefusal::AdvisorApproval`: the newest open approval's `attestation.seat` must not canonicalise to `advisor`, for ANY advisor session, not only this shipper. `approver_is_not_shipper` (two-person rule, `SoloSelfApproval`) still runs.
+    - `eligible()` for a supervised member requires `approval.reviewed == change.head`; `approval.carried` does not count.
+    - The verdict used is the one `merge_gate_verdict_candidates` selects at `head`. Its `VerdictRef` (`key`, `reviewed_sha`, `recorded_by`) goes on the cover as a new `MandateCover.approval: Option<VerdictRef>`, which joins the `fresh != cover` comparisons.
+
+    ## 4. Full CI green at that head
+    - In `eligible()`, a supervised member skips the `checks.retain(required)` narrowing: EVERY check on the head must be green (`judge_commit_checks` with all names), along with the configured required set.
+    - The typed gate's `full_tier_gate` must find the full tier green. No `--skip-full-check`, which is manual only anyway.
+    - The train tip's own CI (`wait_exact_tip_ci`) runs as today.
+
+    ## 5. Protected paths and operator-only specs
+    - Protected paths: `gate_checks` → `touches_gates` already refuses unless `include_gate_paths`. The `Aida-Mandate-Gate-Path` audit is kept, and `cover_active_in` ends a cover when a renewal drops the flag.
+    - Operator-only and decide-mode specs are never covered: `judge_exclusion_spec` → `always_human_class` is unconditional on every stored version. `review:draft-only` still refuses first.
+    - The automatic pass releases only `HoldReasonKind::Supervision` markers (non-legacy) and `SupervisedByMode`. Decision, Rework and any other kind stay with the manual train or a human, and `eligible` keeps refusing them.
+
+    ## 6. Recording the mandate id and verdict id on the landing
+    - Car commit (baked into the tested commit, like `gate_audit`): trailers `Aida-Mandate: <id>` and `Aida-Mandate-Approval: <verdict key>@<reviewed_sha>`. They are composed at admission. A pre-land cover with a different id or key ejects the member ("re-train with fresh coverage").
+    - Train record: `Member.mandate_landing: Option<MandateLanding{mandate_id, verdict_key, reviewed_sha, recorded_by}>`, journaled for audit only and never granting cover. It is added to the TrainCoverage proof `sources` and to the `train_member_landed` activity line (`record_member_landed`), and shown by `aida pr train-status`.
+    - `aida mandate status`: `record_member_landed` calls `mandate_drive::emit_session_ship` for every mandate-carried member, not only `supervised_by_mode`, with actor `auto-train` and the verdict key in `why`.
+    - Spec history: after `complete_landed_specs`, `record_mandate_landing_comments(main_worktree, landed)` adds one store comment per landed spec: "Landed by the auto-train (train PR #T, member #P at <sha>) under mandate <id>; approval <key> at <sha>". A failure is a warning only; the commit trailer on main stays the canonical audit. This is a new store writer, so it needs a `scripts/store-writers.toml` entry and the inventory test.
+
+    ## 7. Failure modes (all fail closed)
+    - Mandate dir unreadable, a record invalid, or no mandate → `NoMandate` → human-only. The knob-off refusal comes before any mandate read.
+    - Mandate expires or is stopped mid-train:
+      - during CI → ejected at the pre-land re-gate, hold never released;
+      - after release → `rearm_released`, no merge.
+    - Renewal narrows the flags → `cover_active_in` false → eject.
+    - Knob turned off on main mid-train → `policy_change_refusal` → eject.
+    - Head moved, a newer request-changes verdict, or an approval from an advisor seat → refusal at the next gate.
+    - Unreadable evidence (labels, ledger, history) → `Unavailable` → the pass bails with members retained (existing BUG-2214/2401 split).
+    - Refusal cache (`advisor_loop_train::Refusals`, 10-minute REJUDGE): keyed additionally on the active mandate id, so starting or stopping a mandate re-judges at the next poll (AC3: fallback on the next poll). Admissions are never cached.
+
+    ## 8. Test plan
+    Unit tests in a new `gate/tests/story_3181_auto_train_mandate_tests.rs`:
+    - `auto_train_decision`: refuses carry-over, refuses an advisor-seat approval, refuses solo self-approval, refuses ApproverIsShipper.
+    - Accepts a reviewer verdict at the exact head; refuses a moved head.
+    - Protected path with and without include_gate_paths.
+    - Operator-only and decide-mode always refuse.
+    - Decision and Rework holds refuse; Supervision is released.
+
+    `landing_policy` tests:
+    - Default false, bool parse, a non-bool value is invalid and stays false.
+    - `policy_change_refusal` names a knob flip.
+
+    Command and fixture tests (`story_1690_train_tests`, `advisor_loop_train` tests) using the existing MemberChecks/Rails fakes:
+    - (a) Knob off plus an active mandate → supervised refused, unsupervised admitted (today's behaviour pinned).
+    - (b) Knob on plus a covering mandate → admitted, landed, trailers present, activity line and `emit_session_ship` carry the mandate id and verdict key.
+    - (c) Knob on and include_supervised=false → refused.
+    - (d) MID-TRAIN EXPIRY: TEST_MAX_TTL and a fake clock let the mandate expire after build and before the pre-land re-gate → member ejected, hold intact, no merge.
+    - (e) Expiry or stop between hold release and the `refresh` recheck → no merge, holds re-armed.
+    - (f) Stop tombstone written mid-train → `Stopped` wording.
+    - (g) Renewal drops include_supervised mid-train → ejected.
+    - (h) Pre-scan/pass parity for both knob states (TASK-3917).
+    - (i) Refusal cache re-judges when the mandate id changes (AC3 "next poll").
+    - (j) Less than 30m remaining → refused at admission.
+
+    ## 9. Files to touch
+    - `landing_policy.rs`
+    - `gate/mandate.rs`
+    - `gate/mandate_ship.rs`
+    - `advisor_loop_train.rs`
+    - `pr_train.rs` (LiveChecks::mandate_cover, AutomaticPrescan, Member, record_member_landed, complete_landed_specs caller)
+    - `pr_train_verified.rs` (collect)
+    - `pr_train_status.rs`
+    - `scripts/store-writers.toml`
+    - new test files
+    - `docs/cli` config reference for the knob
+
+    NOTE: `aida-cli-lib/src/gate/` and `admission_owner.rs` are in the protected floor, so slices S2, S4 and S5 need a human merge.
+
+    ## 10. Slice plan (each 300 lines or fewer)
+    - **S1** — knob parse, display and `policy_change_refusal`, plus tests and docs. About 120 lines; not protected.
+    - **S2** — the gate decision: `auto_train_decision`, `AdvisorApproval`, `mandate_ship_cover_for_auto_train` and `preview_auto_train_cover`, `MandateCover.approval`, Supervision-only release, plus unit tests. About 280 lines; protected.
+    - **S3** — automatic admission wiring: `eligible()` (Supervision marker under knob plus mandate, exact head, all-checks CI), LiveChecks and pre-scan branching on knob and ADVISOR_LOOP, the 30m floor, the Refusals mandate key, plus tests (a)(b)(c)(h)(i)(j). About 280 lines.
+    - **S4** — the immediate pre-merge recheck in `collect` and `refresh`, the eject and re-arm path, plus tests (d)(e)(f)(g). About 220 lines.
+    - **S5** — the landing audit: trailers, `Member.mandate_landing`, proof sources, activity line, `emit_session_ship`, spec-history comments and the store-writers entry, plus tests. About 250 lines.
+    - **S6 (AC4 follow-up)** — set `auto_train_supervised_under_mandate = true` in `.aida/config.toml` after S1–S5 land. A one-line change to a protected file, so a human merges it.
+
+    Ordering: S1 → S2 → S3 → S4 → S5. S3 must not land before S4: without the pre-merge recheck the knob could admit, so S3 keeps the knob inert until S4 lands, or S3 and S4 ship as one train.
+  created_at: 2026-11-26T16:04:22.070472354Z
+  modified_at: 2026-11-26T16:04:22.070472354Z
+  session_id: 01a2188f70c0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
