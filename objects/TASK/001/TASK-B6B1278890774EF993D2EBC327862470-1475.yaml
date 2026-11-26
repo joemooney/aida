@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T18:30:37.772459596Z
+modified_at: 2026-11-26T19:21:41.752988044Z
 req_type: Task
 tags:
 - landing
@@ -207,6 +207,12 @@ comments:
   modified_at: 2026-11-26T18:29:59.984038822Z
   session_id: 01a218f99f51
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2194e-7478-7493-b19d-5d35da3e7020
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `landing-max-prs-3` at head `2b55db7ed31a700d190dc934055bf65bb75943d3`.'
+  created_at: 2026-11-26T19:21:41.752982950Z
+  modified_at: 2026-11-26T19:21:41.752982950Z
+  session_id: 01a218f99f51
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
