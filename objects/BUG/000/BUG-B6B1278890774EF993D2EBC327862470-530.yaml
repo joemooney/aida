@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:33:59.197984958Z
+modified_at: 2026-11-26T09:55:53.483098720Z
 req_type: Bug
 tags:
 - admission
@@ -152,6 +152,19 @@ comments:
   created_at: 2026-11-26T09:33:59.197981523Z
   modified_at: 2026-11-26T09:33:59.197981523Z
   session_id: 01a216fd8162
+- id: 01a21748-720b-7a71-a5cf-9b5dd394b605
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9b9aa8a693 (round 2, F1 = AC4).
+    AC4 [evidence: behavioral-test]: run_passes now spawns a scoped watchdog (watch_hold) beside each claimed pass. Every hold_warn() (30s) once the hold is long it logs 'auto-train: held admission Ns (holder pid P, phase X)' to the service log and writes .aida/auto-train-hold. X is 'recovery' when the pass began with a journaled train to recover; otherwise 'running train' while the train journal run lock is held, else 'assembly'. train-status (status_value/status_lines, TRAIN only) shows the line via live_hold_line, which shows it only while a live 'legacy auto-train' claim with that pid exists, so a killed holder's stale file is never shown. The watchdog removes the file before the claim drops. Test bug2769_a_long_hold_is_reported_while_it_is_held drives run_passes with a blocking pass and a 100ms threshold. It asserts the line appears while the claim is held (holder pid, phase assembly) and goes when the pass returns. Targeted run: 2 passed.
+    Probes: multiplicity (one claim per pass; the file is keyed by the pid check), stale file after SIGKILL (hidden by the live-claim check, removed at the next pass), test threshold global (cfg(test) only; other tests only see extra log lines).
+    F2 (pre-scan forge reads): deferred per brief, not done.
+    Residual: a holder that is hung inside the kernel still logs, because the watchdog is a separate thread. A SIGKILLed holder stops logging, but status still shows its claim age (BUG-2703).
+  created_at: 2026-11-26T09:55:53.483098720Z
+  modified_at: 2026-11-26T09:55:53.483098720Z
+  session_id: 01a21737c782
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
