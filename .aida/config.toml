@@ -673,6 +673,12 @@ repair_check = "cargo check --profile agent --workspace --tests --locked"
 [pr-head]
 protect = true
 
+# Cap the automatic train at 3 PRs; the rest wait for the next train. The
+# 6-PR train #4605 went red on one culprit and its bisect (#4608/#4609) cost
+# ~2.5h of landing time on 2026-11-25. trace:TASK-3912 | ai:claude
+[landing]
+max_prs_per_train = 3
+
 # Landing-drought watchdog (the defaults, spelled out). action = "report"
 # lists findings without failing the job, so nothing is routed.
 # trace:STORY-3131 | ai:claude
