@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T04:55:24.274530307Z
+modified_at: 2026-11-26T05:19:07.125681109Z
 req_type: Bug
 tags:
 - ci
@@ -84,6 +84,12 @@ comments:
   modified_at: 2026-11-26T04:54:55.626309980Z
   session_id: 01a216104e2c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2164b-0d75-78c1-9906-13dc1f900570
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `ci-lib1-hosted-memory` at head `e430c0baf88df0c260070b7093e640e9838d6a29`.'
+  created_at: 2026-11-26T05:19:07.125676681Z
+  modified_at: 2026-11-26T05:19:07.125676681Z
+  session_id: 01a216104e2c
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
