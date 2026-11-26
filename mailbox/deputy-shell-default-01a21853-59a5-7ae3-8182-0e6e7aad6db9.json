@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21853-59a5-7ae3-8182-0e6e7aad6db9",
+  "thread_id": "deputy-01a21853-59a5-7ae3-8182-0e6e7aad6db9",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795704451459,
+  "body": "Script deputy \"default\" finished script job 01a21853-59a5-7ae3-8182-0e6e7aad6db9: rc 0 (ok).\nScript: cd ~/ai/aida && aida merge-hold clear 4661\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21853-59a5-7ae3-8182-0e6e7aad6db9/transcript.log\nRead it with `aida deputy shell log 01a21853-59a5-7ae3-8182-0e6e7aad6db9 --name default`.\n",
+  "subject": "deputy script job 01a21853 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
