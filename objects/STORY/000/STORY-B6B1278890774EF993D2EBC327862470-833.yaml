@@ -10,12 +10,12 @@ description: |
   - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
   - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
   - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T06:11:05.782264724Z
+modified_at: 2026-11-26T07:13:15.211453084Z
 req_type: Story
 tags:
 - planning
@@ -66,6 +66,11 @@ comments:
   created_at: 2026-11-26T06:11:05.782259189Z
   modified_at: 2026-11-26T06:11:05.782259189Z
   session_id: 01a2161dec9c
+- id: 01a216b3-8bcb-72c1-9218-d5f4cfafdcda
+  author: lane-recovery
+  content: Reference merge `a5b813754e98506ab73869dc8a3e9885d914a04d` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-26T07:13:15.211445331Z
+  modified_at: 2026-11-26T07:13:15.211445331Z
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
@@ -85,6 +90,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a216b3-8bcb-72c1-9218-d60b394512fe
+  author: lane-recovery
+  timestamp: 2026-11-26T07:13:15.211452955Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
