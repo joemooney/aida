@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-817",
+  "publishes": [
+    {
+      "at": "2026-11-26T03:08:09.401860743Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T21:29:53.951354981Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-817",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-26T03:08:09.266876671Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-817",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "467f62335cef5f08cb850e95f6562cc81c7995a2",
+        "pr": 4600,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
