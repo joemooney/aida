@@ -204,8 +204,22 @@ pub fn classify(
 }
 
 /// Scan this machine's processes and report, read-only. `project_root`
-/// selects the anchor whose recorded activation is shown.
-pub fn dry_run_report(project_root: &Path) -> ActivationReport {
+/// selects the anchor whose recorded activation is shown. Mailbox leftovers
+/// are judged by `leftovers`, the same owner-scoped scan `aida agent gc`
+/// runs, so a live owner's leftovers are held, never reported as reapable.
+// trace:TASK-3918 | ai:claude
+pub fn dry_run_report(
+    project_root: &Path,
+    leftovers: &super::leftovers::Scope<'_>,
+) -> ActivationReport {
+    dry_run_report_at(project_root, leftovers, std::time::SystemTime::now())
+}
+
+pub(crate) fn dry_run_report_at(
+    project_root: &Path,
+    leftovers: &super::leftovers::Scope<'_>,
+    now: std::time::SystemTime,
+) -> ActivationReport {
     let me = std::fs::metadata("/proc/self/exe")
         .ok()
         .map(|m| BuildIdentity {
@@ -231,7 +245,8 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     if let Some(super::ActivationState::OtherBuild { recorded, .. }) = state {
         report.recorded_by_other_build = Some(recorded.unwrap_or_else(|| "unnamed".into()));
     }
-    report.leftovers = super::leftovers::scan(project_root, false); // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-052 trace:TASK-3918 | ai:claude
+    report.leftovers = super::leftovers::scan_scoped_at(project_root, false, now, leftovers);
     report
 }
 
@@ -318,8 +333,11 @@ pub fn test_writer_scan(admitting: bool) -> TestWriterScan {
 /// with a complete scan; the returned report says which (`recorded`). The
 /// caller has established that a human operator asked for this.
 // trace:STORY-1843 | ai:claude
-pub fn record(project_root: &Path) -> super::Result<ActivationReport> {
-    let report = dry_run_report(project_root);
+pub fn record(
+    project_root: &Path,
+    leftovers: &super::leftovers::Scope<'_>,
+) -> super::Result<ActivationReport> {
+    let report = dry_run_report(project_root, leftovers);
     let source = super::resolve_source(project_root)?.ok_or_else(|| {
         super::LifecycleError::Io(std::io::Error::other(
             "this checkout has no mail anchor, so no activation can be recorded",
