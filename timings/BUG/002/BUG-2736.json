@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2736",
+  "publishes": [
+    {
+      "at": "2026-11-26T03:08:07.495024180Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T23:17:54.208952236Z",
+      "spec": "BUG-2736",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "32 changes are open and the limit is 10; BUG-2736 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-24T01:05:44.567764802Z",
+      "spec": "BUG-2736",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "30 changes are open and the limit is 10; BUG-2736 is started anyway (--over-wip)",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T03:08:07.357577279Z",
+      "spec": "BUG-2736",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e5e3711c9f9fdd4617a00cefb897e8b493269c47",
+        "pr": 4473,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
