@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T01:43:26.799721079Z
+modified_at: 2026-11-26T01:43:40.437841110Z
 req_type: Story
 tags:
 - integration
@@ -643,6 +643,19 @@ comments:
   created_at: 2026-11-26T01:40:48.427649676Z
   modified_at: 2026-11-26T01:40:48.427649676Z
   session_id: 01a21542873b
+- id: 01a21585-cdf7-73f0-886a-6de0c4c54711
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4603):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7eaafda4b3a7
+    Recorded: 2026-11-26T01:39:56.911446818+00:00
+    Findings:
+    1. RunnerCall::run (aida-cli-lib/src/launch/review_runner.rs, the new efforts check) re-validates the resolved effort only when `agent` is a known vendor. A ReviewTuning resolved for claude (which allows `max`) and then used with a custom runner (agent None) exports AIDA_REVIEW_RESOLVED_EFFORT=max, outside the custom-runner allowlist BASE_EFFORTS (low|medium|high|xhigh). The value is still a static allowlisted string, so nothing can be injected, but the vendor the tuning was resolved for is not bound to the vendor that runs. Fix: store the resolving vendor in ReviewTuning and refuse a mismatch, or check against BASE_EFFORTS when agent is None. Add a test for the custom-runner case; the existing test covers only claude->codex.
+    2. The PR #4603 body is stale after the r1 micro-round. It still says 'The seat source still reads .aida/config.toml from the checkout' and names `trusted_review_rules()`, but the code now reads the seat from base blobs through `trusted_review_base()`. Update the body before the squash so the landed commit message does not misdescribe the trust boundary.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T01:43:40.279175277Z
+  modified_at: 2026-11-26T01:43:40.279175277Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
