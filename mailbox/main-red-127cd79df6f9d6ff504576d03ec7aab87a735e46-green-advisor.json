@@ -1,0 +1,18 @@
+{
+  "id": "main-red-127cd79df6f9d6ff504576d03ec7aab87a735e46-green-advisor",
+  "thread_id": "main-red-127cd79df6f9d6ff504576d03ec7aab87a735e46-green",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795665669175,
+  "body": "Main is green again at 467f62335cef after 0 min red (first red: 127cd79df6f9). Outcome: cleared.",
+  "subject": "main is green again at 467f62335cef",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

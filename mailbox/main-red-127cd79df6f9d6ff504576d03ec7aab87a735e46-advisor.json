@@ -1,0 +1,18 @@
+{
+  "id": "main-red-127cd79df6f9d6ff504576d03ec7aab87a735e46-advisor",
+  "thread_id": "main-red-127cd79df6f9d6ff504576d03ec7aab87a735e46",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795665669113,
+  "body": "Main is red at 127cd79df6f9d6ff504576d03ec7aab87a735e46 ([AI:claude] chore(integration): refusal-path quoting, showcase dropdowns/theme, review-runner spawn helper [promotion 41] (TASK-3882) (#4599)).\nPR: #4599\nSpecs: TASK-3882\nFailing:\n- Build (ubuntu-latest) (https://github.com/joemooney/aida/actions/runs/45738290644/job/139653254747)\n  failed steps: Require every CI lane\n  | (the job log could not be read yet: `/usr/bin/gh api repos/{owner}/{repo}/actions/jobs/139653254747/logs` failed (exit status: 1))\nThe live binary stays on the last green commit, fa7028b4df8d.\n\nIf the red survives an independent re-run or 30 minutes it is confirmed. Merging continues meanwhile.",
+  "subject": "main is red at 127cd79df6f9: Build (ubuntu-latest)",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
