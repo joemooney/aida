@@ -3845,3 +3845,23 @@ fn bug_2762_stalled_reviews_is_a_scheduler_only_gate() {
     );
     assert!(!command.hook_allowed);
 }
+
+// The landing-drought guard runs under its own 60s hard ceiling and is
+// registered exactly once. trace:STORY-3131 | ai:claude
+#[test]
+fn story_3131_landing_drought_has_own_timeout() {
+    let cmd = parse_scheduled_command("doctor check landing-drought --fail-on-findings").unwrap();
+    assert!(!cmd.hook_allowed);
+    assert_eq!(command_timeout(&cmd), LANDING_DROUGHT_TIMEOUT);
+    assert_eq!(LANDING_DROUGHT_TIMEOUT, std::time::Duration::from_secs(60));
+    for display in [
+        "doctor check landing-drought --fail-on-findings",
+        "doctor check stalled-reviews --fail-on-findings",
+    ] {
+        let rows = command_table()
+            .iter()
+            .filter(|(_, c)| c.display == display)
+            .count();
+        assert_eq!(rows, 1, "{display} must be registered once");
+    }
+}
