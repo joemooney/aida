@@ -8,7 +8,50 @@
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 
-use std::io::IsTerminal;
+use std::io::{ErrorKind, IsTerminal};
+use std::time::{Duration, Instant};
+
+/// Acquire an exclusive lock before the caller's absolute deadline.
+// trace:TASK-3884 | ai:codex
+pub(crate) fn lock_exclusive_until(file: &std::fs::File, deadline: Instant) -> std::io::Result<()> {
+    lock_before(file, deadline, Instant::now)
+}
+
+fn lock_before(
+    file: &std::fs::File,
+    deadline: Instant,
+    now: impl Fn() -> Instant,
+) -> std::io::Result<()> {
+    use fs2::FileExt;
+    loop {
+        if now() >= deadline {
+            return Err(ErrorKind::TimedOut.into());
+        }
+        match file.try_lock_exclusive() {
+            Ok(()) if now() >= deadline => {
+                FileExt::unlock(file)?;
+                return Err(ErrorKind::TimedOut.into());
+            }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                std::thread::sleep(remaining.min(Duration::from_millis(2)));
+            }
+            result => return result,
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn task_3884_releases_lock_acquired_at_expiry() {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    let start = Instant::now();
+    let end = start + Duration::from_secs(1);
+    let sample = std::cell::Cell::new(start);
+    let error = lock_before(file.as_file(), end, || sample.replace(end)).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::TimedOut);
+    fs2::FileExt::try_lock_exclusive(&file.reopen().unwrap()).unwrap();
+}
 
 // ── Identity and home ───────────────────────────────────────────────────────
 
