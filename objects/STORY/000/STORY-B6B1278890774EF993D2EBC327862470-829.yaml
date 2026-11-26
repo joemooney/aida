@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T15:38:54.047707986Z
+modified_at: 2026-11-26T15:51:56.770397479Z
 req_type: Story
 tags:
 - integration
@@ -1221,6 +1221,13 @@ comments:
   created_at: 2026-11-26T15:32:42.806414951Z
   modified_at: 2026-11-26T15:32:42.806414951Z
   session_id: 01a2184399d3
+- id: 01a2188e-6c62-7dc2-b2a3-453636da6b2b
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 32313c1d43b7
+    A reference merge (commit 32313c1d43b7, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T15:51:56.770381430Z
+  modified_at: 2026-11-26T15:51:56.770381430Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
