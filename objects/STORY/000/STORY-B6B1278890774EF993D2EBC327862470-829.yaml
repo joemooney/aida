@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T16:53:32.867882605Z
+modified_at: 2026-11-26T17:26:52.394355668Z
 req_type: Story
 tags:
 - integration
@@ -1308,6 +1308,29 @@ comments:
   created_at: 2026-11-26T16:48:37.871489058Z
   modified_at: 2026-11-26T16:48:37.871489058Z
   session_id: 01a2188212ab
+- id: 01a218e5-54ea-7a31-bc03-7e274916e84d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b60031ede8 (S5b, branch int-story-3120-s5b, base integration 9136f8be13)
+
+    Scope shipped: A (posting deadline), B (literal pathspecs), E (code-spanned bundle text), G (pinned -R argv test; tilde and inline fence handling in cut_balanced). C (--challenger-agent override and unauthenticated or rate-limited fallback), D (rename old-path filtering applies all exclusions) and F (docs) are deferred to S5c because of the 300-line split rule.
+
+    Acceptance evidence:
+    - A [behavioral-test]: s5b_pinned_post_names_repo_and_hung_gh_times_out. A fake gh that sleeps 30s is killed by the 1s scoped forge deadline and the post fails with 'timed out'. Without a scope, GH_POST_TIMEOUT (60s) bounds it. command_output_with_timeout_detail kills the process group. Stdin comes from an unlinked temp file, so no writer thread can block.
+    - B [behavioral-test]: s5b_batch_diff_pathspecs_are_literal. Files .e*, a[b] and x?, plus a rename from o[1], appear in the prompt. Their glob decoys .eX, ab, xy and o1 do not. git_text adds --literal-pathspecs globally, so every reviewed-repo git call is covered.
+    - E [behavioral-test]: s5_posted_comment_renders_agent_text_inert now carries hostile spec titles and status, playbook ids, titles and patterns, and batch labels. None of them render outside code.
+    - G [behavioral-test]: the pinned argv is 'pr comment 9 --body-file - -R acme/widgets', built through GitHubForge::for_review. s5b_cut_balanced_tracks_tilde_fences_and_inline_spans covers the fence handling.
+
+    Probes: strict tier. The timeout fails closed: the post errors and is never reported as success. An expired scoped deadline refuses before spawning. No test was weakened. The prose_outside_code test helper now uses the production fence_opener and fence_closes helpers. That ties the inert-render check to the same fence rules, which is a residual risk.
+
+    PR #4619 round-5 findings 1-4 were re-checked on this tip and are already fixed: the coverage ledger is checked against each batch, the rename old path goes into batch_prompt, s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage covers the end-to-end wiring, and pipe_holders SIGKILLs escaped descendants.
+
+    Validation: 20/20 review_prepare::tests passed (lane job). make check-ci-fast: the first run failed only the ratchet listing, which is now fixed; the re-run result is in the PR body.
+  created_at: 2026-11-26T17:26:52.394355668Z
+  modified_at: 2026-11-26T17:26:52.394355668Z
+  session_id: 01a218c693e2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
