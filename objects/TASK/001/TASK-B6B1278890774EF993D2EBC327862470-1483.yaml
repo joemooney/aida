@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:01:40.126033678Z
-modified_at: 2026-11-26T06:28:34.331386378Z
+modified_at: 2026-11-26T06:55:22.345761226Z
 req_type: Task
 tags:
 - landing
@@ -55,6 +55,24 @@ comments:
     - An unreadable head (transient forge read) keeps the member in the half at its admitted head (the land-time re-gate still refuses a moved head). OK?
   created_at: 2026-11-26T06:28:34.331386378Z
   modified_at: 2026-11-26T06:28:34.331386378Z
+  session_id: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a216a3-2ce9-7932-9c42-109242165ddb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9fd70f5f19 (git diff origin/main...HEAD, 2 files, +131/-1)
+
+    Acceptance evidence:
+    - AC1 [behavioral]: `drive_into` re-reads live heads via `Rails::member_head` before every follow-up build (`drop_superseded`, pr_train.rs); a moved member is never built or tested. Live port: `forge_confirmation::metadata` (Known only). Test `task3913_a_bisect_half_drops_a_member_whose_head_moved`: halves are [1] and [3,4]; #2 is never re-tested and is not recorded as a culprit.
+    - AC2: the ejection reason begins `superseded: head moved <old> → <new>`, is printed when dropped, commented on the member PR (ForgeRails::ejected), and rendered in the half's train PR body as `Not in this train: #N superseded: ...` before the members line. The test asserts the body line and that the members line stays last. `--check` needs no change: the PR at its new head goes through normal admission.
+    - AC3: the same test. The pr_train lib filter ran 306 passed, 0 failed (includes task_3792 and the BUG-2767 tests).
+
+    Probes: (1) head compare is exact full-SHA equality on both forge-sourced sides. (2) Body: the new line cannot match the `aida-train-members:` prefix parser and does not end in an `(ID)` group. (3) 0/1/N: an all-superseded group is ejected and not built; a build drop combined with a superseded drop makes a new composition, so the infra-rerun flag resets. (4) Transient head read: fail-safe to the status quo (tested at the old head), and the land-time re-gate still refuses a moved head. (5) Authority: nothing is granted; this only removes members.
+    Fixes during review: dropped a redundant test scenario (BUG-2767 already covers it).
+    Residual risk: one extra forge metadata read per member per follow-up wave.
+  created_at: 2026-11-26T06:55:22.345761226Z
+  modified_at: 2026-11-26T06:55:22.345761226Z
   session_id: 01a21688f171
   harness_version: 2.1.319 (Claude Code)
 history:
