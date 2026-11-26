@@ -14,11 +14,24 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T17:22:02.865250919Z
+modified_at: 2026-11-26T17:24:38.632228632Z
 req_type: Bug
 tags:
 - lanes
 - seat-clone
+comments:
+- id: 01a218e3-8880-7632-9b58-b85041962ab7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:24):
+    # BUG-2772 (product-15 2026-11-26). Lane: CLAUDE. MAIN, NEW branch bug-2772-seat-pin-ref. <=150 lines. Completing (BUG-2772) trailer.
+    READ: `aida show BUG-2772` (the exact 07:10 launch failure: a seat pin ref outlives its clone, so a fresh clone at that path fails with "reference already exists").
+    FIX: when creating a seat clone at a path whose clone is ABSENT, a leftover pin ref for that same path and seat (no clone, no live lease) is removed or reused instead of failing; a pin ref whose clone still EXISTS or has a live lease still refuses. Never touch refs of a live seat. Tests: the stale-ref positive, plus live-clone and live-lease negatives.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T17:24:38.632228632Z
+  modified_at: 2026-11-26T17:24:38.632228632Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a218e0-ea73-7a92-9d85-2f50a6c28366
   author: joe
