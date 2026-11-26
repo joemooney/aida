@@ -62,9 +62,18 @@ fn save(root: &Path, rows: &BTreeMap<u64, Culprit>) -> Result<()> {
     std::fs::rename(&temporary, &target).with_context(|| format!("writing {}", target.display()))
 }
 
-/// Record `pr` at `head` as the culprit of `train`.
+/// Record `pr` at `head` as the culprit of `train`. A drift row at the same
+/// head takes precedence and is kept: naming clears a red, never a drift, so
+/// a red written over it would let a rerun retry the drifted head.
+// trace:BUG-2777 | ai:claude
 pub(crate) fn record(root: &Path, pr: u64, head: &str, train: Option<u64>) -> Result<()> {
     let mut rows = load(root)?;
+    if rows
+        .get(&pr)
+        .is_some_and(|r| r.kind == Kind::StackedDiffDrift && r.head.eq_ignore_ascii_case(head))
+    {
+        return Ok(());
+    }
     rows.insert(
         pr,
         Culprit {
@@ -223,6 +232,13 @@ mod tests {
             "a red is not drift"
         );
         assert_eq!(load(root).unwrap()[&4482].kind, Kind::Red);
+        // A red at the drifted head keeps the drift row; a red at a new head
+        // replaces it.
+        record(root, 4464, "7d711a72aa", Some(4700)).unwrap();
+        assert_eq!(load(root).unwrap()[&4464].kind, Kind::StackedDiffDrift);
+        assert!(!clear(root, 4464, "7d711a72aa", "joe").unwrap());
+        record(root, 4464, "0123456789", Some(4700)).unwrap();
+        assert_eq!(load(root).unwrap()[&4464].kind, Kind::Red);
     }
 
     #[test]

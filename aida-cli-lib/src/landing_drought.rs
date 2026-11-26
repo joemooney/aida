@@ -270,6 +270,20 @@ fn needs_supervision(
     !any
 }
 
+/// Whether a train pins `head`, and its drift row, read from the main
+/// worktree's `.aida` where the train writes them (`train_root`, resolved by
+/// the caller with [`crate::main_worktree_root_from`]). trace:BUG-2777 | ai:claude
+pub(crate) fn train_state(
+    train_root: &std::path::Path,
+    number: u64,
+    head: &str,
+) -> Result<(bool, Option<(DateTime<Utc>, String)>)> {
+    Ok((
+        !crate::pr_train::pr_head_pins(train_root, number)?.is_empty(),
+        crate::pr_train::culprit::drift(train_root, number, head),
+    ))
+}
+
 pub(crate) fn scan(
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<(Policy, Vec<DoctorFinding>)> {
@@ -283,6 +297,8 @@ pub(crate) fn scan(
     let store = storage.load_for_read()?;
     let tiered = crate::full_tier::repo_is_tiered(root)?;
     let mut ready = Vec::new();
+    // trace:BUG-2777 | ai:claude
+    let train_root = crate::main_worktree_root_from(root);
     for pr in crate::stalled_reviews::open_prs(root)? {
         let number = pr["number"].as_u64().context("PR number missing")?;
         let head = pr["headRefOid"].as_str().context("invalid PR head")?;
@@ -301,14 +317,15 @@ pub(crate) fn scan(
                 .get_requirement_by_spec_id(s)
                 .map(|r| r.execution_mode)
         }));
+        let (on_train, drift) = train_state(&train_root, number, head)?;
         ready.push(Ready {
             number,
             since: green_at.map_or(at, |ci| at.max(ci)),
             ci: crate::land::ci_of_rollup(rollup),
             full_tier_gap: tiered.then(|| full_tier_gap(rollup)).flatten(),
             supervised,
-            on_train: !crate::pr_train::pr_head_pins(root, number)?.is_empty(),
-            drift: crate::pr_train::culprit::drift(root, number, head),
+            on_train,
+            drift,
         });
     }
     let now = DateTime::<Utc>::from(exec.clock().wall_now());

@@ -47,6 +47,44 @@ fn bug2777_stacked_diff_drift_over_30m_is_its_own_cause() {
     );
 }
 
+/// The scan reads the drift row from the main worktree, where the train
+/// writes it, even when `aida doctor` runs in a seat worktree.
+// trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_scan_reads_train_state_from_the_main_worktree() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path().join("main");
+    let seat = tmp.path().join("seat");
+    std::fs::create_dir_all(&main).unwrap();
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&main, &["init", "-q", "-b", "main"]);
+    git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    git(
+        &main,
+        &["worktree", "add", "-q", "--detach", seat.to_str().unwrap()],
+    );
+    crate::pr_train::culprit::record_drift(&main, 4464, "aaaa1111", None, "conflict repair")
+        .unwrap();
+    let resolved = crate::main_worktree_root_from(&seat);
+    let (on_train, drift) = train_state(&resolved, 4464, "aaaa1111").unwrap();
+    assert!(!on_train);
+    assert_eq!(drift.map(|(_, r)| r).as_deref(), Some("conflict repair"));
+    let (_, local) = train_state(&seat, 4464, "aaaa1111").unwrap();
+    assert_eq!(local, None, "the seat's own .aida has no train state");
+}
+
 #[test]
 fn story_3131_defaults_when_section_absent() {
     let policy = Policy::read(None).unwrap();

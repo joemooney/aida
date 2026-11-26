@@ -251,6 +251,99 @@ fn build_drops_a_member_whose_diff_changes_when_stacked_even_without_a_conflict(
     assert!(built.dropped[0].reason.starts_with(STACKED_DRIFT));
 }
 
+/// A scripted [`DriftRouter`]: authority holds for the first `grants` checks.
+// trace:BUG-2777 | ai:claude
+#[derive(Default)]
+struct FakeRouter {
+    grants: usize,
+    checks: usize,
+    updates: Vec<(u64, String)>,
+    requeued: Vec<u64>,
+}
+
+impl DriftRouter for FakeRouter {
+    fn authority(&mut self) -> std::result::Result<(), String> {
+        self.checks += 1;
+        if self.checks > self.grants {
+            return Err("the dispatch lease expired".into());
+        }
+        Ok(())
+    }
+    fn update_branch(&mut self, pr: u64, head: &str) -> Result<()> {
+        self.updates.push((pr, head.to_string()));
+        Ok(())
+    }
+    fn requeue_review(&mut self, pr: u64) -> String {
+        self.requeued.push(pr);
+        "review story filed".into()
+    }
+    fn escalate(&mut self, _: u64, _: &str, _: &str, _: &str) -> Result<()> {
+        panic!("a clean update never escalates")
+    }
+}
+
+/// BUG-2777 AC1(a): the train's drift ejection, as `build` reports it, is
+/// routed under authority and recorded as a typed row at the ejected head;
+/// each PR once across sub-trains; without authority the forge is never
+/// touched but the hold is still written.
+// trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_train_routes_and_records_a_drift_ejection_only_under_authority() {
+    let tmp = repo();
+    let r = tmp.path();
+    let a = pr_branch(r, "a", |r| set_line(r, "f.txt", 5, "a's line 5"));
+    let b = pr_branch(r, "b", |r| set_line(r, "f.txt", 7, "b's line 7"));
+    let members = [member(1, &a, "a"), member(2, &b, "b")];
+    let built = build(r, "main", &members).unwrap();
+    let heads: Vec<(u64, String)> = members.iter().map(|m| (m.pr, m.head.clone())).collect();
+    // Two sub-trains both ejected #2, and one ejection is not drift.
+    let mut ejected = built.dropped.clone();
+    ejected.extend(built.dropped.clone());
+    ejected.push(Ejected {
+        pr: 1,
+        reason: "CI is red with this PR alone on top of main (x)".into(),
+    });
+    let state = tempfile::tempdir().unwrap();
+    let mut router = FakeRouter {
+        grants: 1,
+        ..FakeRouter::default()
+    };
+    let mut warnings = Vec::new();
+    route_drift_ejections(state.path(), &ejected, &heads, &mut router, &mut warnings);
+    assert_eq!(
+        router.updates,
+        vec![(2, b.clone())],
+        "routed once, at the ejected head"
+    );
+    assert_eq!(router.requeued, vec![2]);
+    assert_eq!(router.checks, 1, "deduped before the authority check");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let why = culprit::drift_hold(state.path(), 2, &b).expect("typed drift row at the head");
+    assert!(why.contains("routed: branch update"), "{why}");
+    assert_eq!(
+        culprit::drift(state.path(), 1, &a),
+        None,
+        "a red is not routed"
+    );
+
+    // Authority lost: the branch update is refused, the hold still written.
+    let state = tempfile::tempdir().unwrap();
+    let mut router = FakeRouter::default();
+    let mut warnings = Vec::new();
+    route_drift_ejections(state.path(), &ejected, &heads, &mut router, &mut warnings);
+    assert!(
+        router.updates.is_empty(),
+        "no forge mutation without authority"
+    );
+    assert!(router.requeued.is_empty());
+    assert_eq!(warnings, ["#2 not routed: the dispatch lease expired"]);
+    let why = culprit::drift_hold(state.path(), 2, &b).expect("held without authority");
+    assert!(
+        why.contains("routed: not routed: the dispatch lease expired"),
+        "{why}"
+    );
+}
+
 /// BUG-2777 AC2: a drifted head is refused even when named, with the route;
 /// a new head rides.
 // trace:BUG-2777 | ai:claude
@@ -302,7 +395,8 @@ fn bug2777_drift_routes_to_update_and_review_or_conflict_repair() {
     );
     assert!(queued, "re-review queued in the same pass");
     assert!(
-        route.contains("review story filed") && route.contains("does not carry"),
+        route.contains("review story filed")
+            && route.contains("patch-id-identical approval carries"),
         "{route}"
     );
     let mut asked = None;

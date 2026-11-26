@@ -405,9 +405,9 @@ pub(crate) const STACKED_DRIFT: &str = "its diff changes when stacked";
 /// BUG-2777: route a member ejected for stacked-diff drift in the same pass,
 /// so the next train does not retry the same head. `update` asks the forge to
 /// merge main into the branch, pinned to the ejected head; on success
-/// `requeue` queues a review of the new head (its own review: the drifted
-/// approval never covers it). On refusal `escalate` files the conflict-repair
-/// request. Returns the route, recorded on the hold and printed.
+/// `requeue` queues a review of the new head (the review-carryover gate
+/// decides whether the old approval carries). On refusal `escalate` files the
+/// conflict-repair request. Returns the route, recorded on the hold and printed.
 // trace:BUG-2777 | ai:claude
 pub(crate) fn route_drift(
     pr: u64,
@@ -418,11 +418,10 @@ pub(crate) fn route_drift(
 ) -> String {
     match update() {
         Ok(()) => format!(
-            "branch update from {} requested; {}; the new head lands only after its own \
-             independent review (the approval at {} does not carry)",
+            "branch update from {} requested; {}; a re-review is needed if the patch \
+             changed; a patch-id-identical approval carries",
             short(head),
             requeue(),
-            short(head)
         ),
         Err(e) => {
             let why = format!("{e:#}");
@@ -443,6 +442,125 @@ pub(crate) fn route_drift(
                 Err(e) => format!("{route}; asking the advisor failed ({e:#})"),
             }
         }
+    }
+}
+
+/// What routing a drift ejection touches: the train's dispatch authority, the
+/// forge branch update, the review queue and the advisor. trace:BUG-2777 | ai:claude
+pub(crate) trait DriftRouter {
+    /// `Err(why)` once the train no longer holds its dispatch authority.
+    fn authority(&mut self) -> std::result::Result<(), String>;
+    fn update_branch(&mut self, pr: u64, head: &str) -> Result<()>;
+    fn requeue_review(&mut self, pr: u64) -> String;
+    fn escalate(&mut self, pr: u64, head: &str, subject: &str, body: &str) -> Result<()>;
+}
+
+/// Route and record every stacked-diff-drift ejection, each PR once however
+/// many sub-trains ejected it. The forge is touched only under dispatch
+/// authority; the hold is a local record and is written either way, so the
+/// next train never re-admits the same head. trace:BUG-2777 | ai:claude
+pub(crate) fn route_drift_ejections(
+    root: &Path,
+    ejected: &[Ejected],
+    heads: &[(u64, String)],
+    router: &mut impl DriftRouter,
+    warnings: &mut Vec<String>,
+) {
+    let mut routed = std::collections::BTreeSet::new();
+    for e in ejected
+        .iter()
+        .filter(|e| e.reason.starts_with(STACKED_DRIFT))
+    {
+        let Some((_, head)) = heads.iter().find(|(pr, _)| *pr == e.pr) else {
+            continue;
+        };
+        if !routed.insert(e.pr) {
+            continue;
+        }
+        let route = match router.authority() {
+            Err(why) => {
+                warnings.push(format!("#{} not routed: {why}", e.pr));
+                format!(
+                    "not routed: {why}; merge main into PR #{} and review the new head",
+                    e.pr
+                )
+            }
+            Ok(()) => {
+                let cell = std::cell::RefCell::new(&mut *router);
+                route_drift(
+                    e.pr,
+                    head,
+                    || cell.borrow_mut().update_branch(e.pr, head),
+                    || cell.borrow_mut().requeue_review(e.pr),
+                    |subject, body| cell.borrow_mut().escalate(e.pr, head, subject, body),
+                )
+            }
+        };
+        println!("  routed #{}: {route}", e.pr);
+        if let Err(err) = culprit::record_drift(root, e.pr, head, None, &route) {
+            warnings.push(format!(
+                "could not record #{}'s stacked-diff drift: {err:#}",
+                e.pr
+            ));
+        }
+    }
+}
+
+/// The live train's [`DriftRouter`]. trace:BUG-2777 | ai:claude
+struct LiveDriftRouter<'p, 'a> {
+    ports: &'p mut LiveTrainForge<'a>,
+    abort: &'p mut Option<String>,
+}
+
+impl DriftRouter for LiveDriftRouter<'_, '_> {
+    fn authority(&mut self) -> std::result::Result<(), String> {
+        if let Some(why) = self.abort.as_ref() {
+            return Err(why.clone());
+        }
+        self.ports.dispatch_check().map_err(|e| {
+            let why = self
+                .ports
+                .dispatch_abort
+                .take()
+                .unwrap_or_else(|| format!("{e:#}"));
+            *self.abort = Some(why.clone());
+            why
+        })
+    }
+
+    fn update_branch(&mut self, pr: u64, head: &str) -> Result<()> {
+        self.ports.forge.update_change_branch(pr, head)
+    }
+
+    fn requeue_review(&mut self, pr: u64) -> String {
+        match self
+            .ports
+            .forge
+            .change_metadata(pr, &mut crate::network_retry::NoopSink)
+        {
+            Ok(meta) => {
+                crate::try_auto_queue_pr_review(
+                    &self.ports.main_worktree,
+                    &meta.head_ref,
+                    "(train)",
+                    crate::AutoQueueOrigin::PrSkill,
+                )
+                .summary
+            }
+            Err(e) => {
+                format!("review not queued ({e:#}); the review watcher picks the new head up")
+            }
+        }
+    }
+
+    fn escalate(&mut self, pr: u64, head: &str, subject: &str, body: &str) -> Result<()> {
+        let thread = format!("train-drift-{pr}-{}", short(head));
+        crate::ship_from_seat::advisor_request_on_thread(
+            &self.ports.main_worktree,
+            subject,
+            body,
+            Some(&thread),
+        )
     }
 }
 
@@ -5623,66 +5741,18 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         drop(car_claims);
         warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
-        // trace:BUG-2777 | ai:claude
-        // Routed after the rails release the forge ports, under the same
-        // dispatch authority as the train; each PR once, however many
-        // sub-trains ejected it.
-        let mut routed = std::collections::BTreeSet::new();
-        for e in outcome
-            .ejected
-            .iter()
-            .filter(|e| e.reason.starts_with(STACKED_DRIFT))
-        {
-            let Some((_, head)) = heads.iter().find(|(pr, _)| *pr == e.pr) else {
-                continue;
-            };
-            if dispatch_abort.is_some() || !routed.insert(e.pr) {
-                continue;
-            }
-            if let Err(err) = ports.dispatch_check() {
-                warnings.push(format!("#{} not routed: {err:#}", e.pr));
-                dispatch_abort = ports.dispatch_abort.take();
-                continue;
-            }
-            let route = route_drift(
-                e.pr,
-                head,
-                || forge.update_change_branch(e.pr, head),
-                || {
-                    let meta = forge.change_metadata(e.pr, &mut crate::network_retry::NoopSink);
-                    match meta {
-                        Ok(meta) => {
-                            crate::try_auto_queue_pr_review(
-                                &main_worktree,
-                                &meta.head_ref,
-                                "(train)",
-                                crate::AutoQueueOrigin::PrSkill,
-                            )
-                            .summary
-                        }
-                        Err(e) => format!(
-                            "review not queued ({e:#}); the review watcher picks the new head up"
-                        ),
-                    }
-                },
-                |subject, body| {
-                    let thread = format!("train-drift-{}-{}", e.pr, short(head));
-                    crate::ship_from_seat::advisor_request_on_thread(
-                        &main_worktree,
-                        subject,
-                        body,
-                        Some(&thread),
-                    )
-                },
-            );
-            println!("  routed #{}: {route}", e.pr);
-            if let Err(err) = culprit::record_drift(&main_worktree, e.pr, head, None, &route) {
-                warnings.push(format!(
-                    "could not record #{}'s stacked-diff drift: {err:#}",
-                    e.pr
-                ));
-            }
-        }
+        // Routed after the rails release the forge ports. trace:BUG-2777 | ai:claude
+        let mut router = LiveDriftRouter {
+            ports: &mut ports,
+            abort: &mut dispatch_abort,
+        };
+        route_drift_ejections(
+            &main_worktree,
+            &outcome.ejected,
+            &heads,
+            &mut router,
+            &mut warnings,
+        );
         outcome
     };
     // trace:BUG-2767 | ai:claude
