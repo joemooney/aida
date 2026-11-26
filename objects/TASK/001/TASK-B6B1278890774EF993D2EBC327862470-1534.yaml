@@ -1,5 +1,6 @@
 id: 01a21990-3073-7b70-afa1-7564ea4cf025
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1534
+agreed_id: TASK-3519
 title: 'Review follow-up: Style: run_review_agent (review_prepare.rs) matches the literal "AIDA_REVIEW_RUNNER_CMD" r'
 description: |-
   From BUG-2775
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a218a1-7f9e-7fd0-b7e4-e96e3921122f
   created_at: 2026-11-26T20:33:46.213896843Z
+history:
+- id: 01a219cc-0a8d-7543-b7c2-038d6e338ea5
+  author: joe
+  timestamp: 2026-11-26T21:38:52.173334540Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4c6c4a8a4988f0da8b06ebf06f57066c638aa589
   branch: pr-4684
