@@ -10,12 +10,12 @@ description: |
   - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
   - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
   - AC4: tests for each AC.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T20:40:14.458758847Z
+modified_at: 2026-11-26T20:42:17.038385036Z
 req_type: Bug
 tags:
 - landing
@@ -102,6 +102,11 @@ comments:
   created_at: 2026-11-26T20:40:14.625082207Z
   modified_at: 2026-11-26T20:40:14.625082207Z
   session_id: 01a219933890
+- id: 01a21998-3c4e-73e3-a911-a7b90d11b3ef
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 adds a typed stacked-diff-drift row to the train-culprit sidecar, routes a drift ejection in the same pass (update-branch pinned to the ejected head plus a review queue, or an advisor conflict-repair request), refuses the drifted head even when the PR is named, and reports drift older than 30 minutes as its own landing-drought cause. The unit pieces are sound and tested: AC1 is verified by bug2777_drift_routes_to_update_and_review_or_conflict_repair, bug2777_drift_row_is_typed_and_naming_does_not_clear_it and the STACKED_DRIFT prefix assertion in build_drops_...; AC2 by bug2777_a_drifted_head_is_refused_even_when_named; AC3 by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC4 is only partly met, because nothing tests the train-handler wiring that ties these together. That wiring is new code on the strict train/landing path: the post-drive loop in pr_train_handler_with_dispatch_ctx filters on the prefix, dedupes per PR, re-checks dispatch authority before the forge branch mutation, and calls record_drift. Under ADR-76 an untested refusal path in authority code blocks. Bug protocol: the PR touches at least one test file (met). CI was pending at review time: fast gates green, fast compile pending. The other findings are p3 follow-ups.. No triage reason was given.'
+  created_at: 2026-11-26T20:42:17.038377269Z
+  modified_at: 2026-11-26T20:42:17.038377269Z
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
@@ -143,6 +148,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21998-3c4e-73e3-a911-a7a1cdb5b415
+  author: joe
+  timestamp: 2026-11-26T20:42:17.038367120Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
@@ -155,11 +167,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T20:27:55.536518317Z
   implemented_by: dirtlab
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2777 adds a typed stacked-diff-drift row to the train-culprit sidecar, routes a drift ejection in the same pass (update-branch pinned to the ejected head plus a review queue, or an advisor conflict-repair request), refuses the drifted head even when the PR is named, and reports drift older than 30 minutes as its own landing-drought cause. The unit pieces are sound and tested: AC1 is verified by bug2777_drift_routes_to_update_and_review_or_conflict_repair, bug2777_drift_row_is_typed_and_naming_does_not_clear_it and the STACKED_DRIFT prefix assertion in build_drops_...; AC2 by bug2777_a_drifted_head_is_refused_even_when_named; AC3 by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC4 is only partly met, because nothing tests the train-handler wiring that ties these together. That wiring is new code on the strict train/landing path: the post-drive loop in pr_train_handler_with_dispatch_ctx filters on the prefix, dedupes per PR, re-checks dispatch authority before the forge branch mutation, and calls record_drift. Under ADR-76 an untested refusal path in authority code blocks. Bug protocol: the PR touches at least one test file (met). CI was pending at review time: fast gates green, fast compile pending. The other findings are p3 follow-ups.'
-  recovery_hint: address the review findings, move BUG-2777 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-26T20:40:14.458758847Z
