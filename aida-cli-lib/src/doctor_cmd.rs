@@ -122,7 +122,9 @@ pub(crate) fn handle_doctor_command(
             fail_on_findings,
         } => {
             // trace:STORY-3095 | ai:codex
-            if normalize_doctor_category(category).as_deref().ok() == Some("stalled-reviews") {
+            // trace:STORY-3131 | ai:claude
+            let lone = normalize_doctor_category(category).ok();
+            if matches!(lone.as_deref(), Some("stalled-reviews" | "landing-drought")) {
                 let root = main_worktree_root_from(&find_project_root()?);
                 use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
                 let exec = ExecContext::new(
@@ -133,9 +135,18 @@ pub(crate) fn handle_doctor_command(
                     ToolPaths::default(),
                     std::sync::Arc::new(SystemClock::default()),
                 );
-                let report = DoctorReport::from_findings(crate::stalled_reviews::scan(&exec)?);
-                let reason = (*fail_on_findings && !report.findings.is_empty())
-                    .then(|| format!("{} stalled reviews", report.findings.len()));
+                let (report, reason) = if lone.as_deref() == Some("landing-drought") {
+                    let (policy, findings) = crate::landing_drought::scan(&exec)?;
+                    let reason = fail_on_findings
+                        .then(|| policy.fail_reason(findings.len()))
+                        .flatten();
+                    (DoctorReport::from_findings(findings), reason)
+                } else {
+                    let report = DoctorReport::from_findings(crate::stalled_reviews::scan(&exec)?);
+                    let reason = (*fail_on_findings && !report.findings.is_empty())
+                        .then(|| format!("{} stalled reviews", report.findings.len()));
+                    (report, reason)
+                };
                 return emit_doctor_report(
                     report,
                     reason,
@@ -388,17 +399,14 @@ pub(crate) fn handle_doctor_command(
                     category == "stale-leases",
                     "--id currently requires stale-leases"
                 );
-                let storage = Storage::new(root.join(".aida-store"));
-                let store = storage.load()?;
-                let findings = collect_doctor_findings(&root, &store, Some(&category))?;
-                let finding = findings
-                    .iter()
-                    .find(|f| &f.id == id)
+                // trace:BUG-2739 | ai:codex
+                eprintln!("Checking stale lease {id} for heal eligibility");
+                let (finding, selected) = crate::doctor_root::targeted_stale_finding(&root, id)?
                     .ok_or_else(|| anyhow::anyhow!("no eligible stale lease finding `{id}`"))?;
                 if !yes && !confirm_doctor_category(&category, 1)? {
                     return Ok(());
                 }
-                let result = heal_doctor_lease(&root, finding)?;
+                let result = apply_doctor_lease(&root, &finding, Some(selected))?;
                 println!("{}", serde_json::to_string(&result)?);
                 return Ok(());
             }

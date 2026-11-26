@@ -3752,6 +3752,22 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // Approved PRs that sit ready without landing. A non-zero exit routes
+        // the advisor to investigate. trace:STORY-3131 | ai:claude
+        (
+            &["doctor check landing-drought --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check landing-drought --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "landing-drought",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // STORY-1699: relay stall guard — store-free, silent unless a relay
         // run is blocked/exited without a `.done` acknowledgement.
         // trace:STORY-1699 | ai:claude
@@ -3949,10 +3965,17 @@ fn command_timeout(command: &ScheduledCommand) -> std::time::Duration {
         "session hygiene" | "worktree gc --fail-on-findings" | "doctor check throughput-guard"
     ) {
         HYGIENE_COMMAND_TIMEOUT
+    } else if command.display == "doctor check landing-drought --fail-on-findings" {
+        // The guard's own hard ceiling; a timeout routes as a failure, never
+        // silently. trace:STORY-3131 | ai:claude
+        LANDING_DROUGHT_TIMEOUT
     } else {
         SCHEDULED_COMMAND_TIMEOUT
     }
 }
+
+/// Hard ceiling on one landing-drought run. trace:STORY-3131 | ai:claude
+pub(crate) const LANDING_DROUGHT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
     let mut cmd = ProcessCommand::new(crate::aida_exe_path());

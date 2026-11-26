@@ -173,6 +173,8 @@ mod drain_gate;
 mod findings_gate;
 // trace:STORY-3095 | ai:codex
 mod stalled_reviews;
+// trace:STORY-3131 | ai:claude
+mod landing_drought;
 // trace:STORY-1889 | ai:claude — gate authority, all on the mandate floor.
 pub mod gate;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude

@@ -6,6 +6,7 @@
 // Wired into `--run-review` by the next slice; only the tests call it yet.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use super::review_tuning::ReviewTuning;
 use crate::vendors::review_runner::ReviewVendor;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::ffi::{OsStr, OsString};
@@ -31,6 +32,8 @@ pub(crate) struct RunnerCall<'a> {
     pub deadline: Duration,
     pub stdout_cap: usize,
     pub stderr_cap: usize,
+    /// Model and effort, already validated by `review_tuning::resolve`.
+    pub tuning: ReviewTuning,
 }
 
 impl RunnerCall<'_> {
@@ -85,7 +88,21 @@ impl RunnerCall<'_> {
         if let Some(agent) = self.agent {
             cmd.env("AIDA_REVIEW_RESOLVED_AGENT", agent.program);
         }
-        cmd.args(vendor.map_or(&[][..], |agent| agent.argv));
+        let (model, effort) = (self.tuning.model(), self.tuning.effort());
+        if let (Some(agent), Some(level)) = (vendor, effort) {
+            ensure!(
+                agent.efforts.contains(&level),
+                "{} has no {level} effort",
+                agent.program
+            );
+        }
+        if let Some(model) = model {
+            cmd.env("AIDA_REVIEW_RESOLVED_MODEL", model);
+        }
+        if let Some(level) = effort {
+            cmd.env("AIDA_REVIEW_RESOLVED_EFFORT", level);
+        }
+        cmd.args(vendor.map_or_else(Vec::new, |agent| agent.argv_with(model, effort)));
         let mut child = cmd
             .spawn()
             .with_context(|| format!("spawn {}", program.display()))?;
@@ -189,6 +206,7 @@ mod tests {
             deadline,
             stdout_cap,
             stderr_cap,
+            tuning: ReviewTuning::default(),
         }
     }
 
@@ -294,6 +312,41 @@ mod tests {
             assert!(review_vendor(unknown).is_err(), "{unknown} accepted");
         }
         assert_eq!(review_vendor(" Codex ").unwrap(), vendor("codex").unwrap());
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3b_runner_argv_carries_only_validated_tuning() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        script(bin.path(), "codex", DUMP);
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let env = vars(&[("PATH", &path)]);
+        let tuned = |agent: &str, effort| {
+            let sources = [("--effort", Some(effort))];
+            let tuning = super::super::review_tuning::resolve(
+                vendor(agent),
+                &sources,
+                &[("--model", Some("o3"))],
+            );
+            RunnerCall {
+                agent: vendor("codex"),
+                tuning: tuning.unwrap(),
+                ..call(checkout.path(), &env)
+            }
+        };
+        let out = tuned("codex", "high").run("p").unwrap();
+        let argv: Vec<_> = out.lines().filter_map(|l| l.strip_prefix("arg=")).collect();
+        assert_eq!(
+            argv,
+            vendor("codex").unwrap().argv_with(Some("o3"), Some("high"))
+        );
+        assert!(
+            out.contains("env=AIDA_REVIEW_RESOLVED_EFFORT=high"),
+            "{out}"
+        );
+        // Tuning resolved for claude cannot carry its max level to codex.
+        let err = tuned("claude", "max").run("p").unwrap_err().to_string();
+        assert!(err.contains("no max effort"), "{err}");
     }
 
     #[test]

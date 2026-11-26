@@ -40,7 +40,7 @@ pub(crate) fn scan(exec: &aida_core::exec_context::ExecContext) -> Result<Vec<Do
     scan_open(exec, threshold, open_prs)
 }
 
-fn open_prs(root: &Path) -> Result<Vec<serde_json::Value>> {
+pub(crate) fn open_prs(root: &Path) -> Result<Vec<serde_json::Value>> {
     let repo = crate::review_watch::forge::Repository::load(root)?;
     let slug = repo
         .github_slug()

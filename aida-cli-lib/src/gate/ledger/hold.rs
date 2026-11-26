@@ -42,6 +42,10 @@ pub(crate) struct HoldState {
     /// The clearance of the release that closed the latest hold; `None`
     /// while a hold is open or when none was ever released.
     pub release: Option<JsonObj>,
+    /// The ledger hold that release closed, as placed (BUG-2745): what a
+    /// clearance claims to have released is checked against it.
+    // trace:BUG-2745 | ai:claude
+    pub released: Option<MergeHoldRecord>,
     /// An automatic release authorized for the open hold and not withdrawn.
     pub authorized: Option<JsonObj>,
     /// Whether the ledger holds any placement or release for the PR.
@@ -69,6 +73,7 @@ pub(crate) fn fold(events: &[GateEvent]) -> HoldState {
                 st.open = Some(hold.clone());
                 st.open_source = Some(OpenSource::Ledger);
                 st.release = None;
+                st.released = None;
                 // A pending authorization survives a bare `hold` event: the
                 // release path's second pass refuses a changed hold and
                 // withdraws it on the PR (TASK-1757). A placement through
@@ -78,7 +83,7 @@ pub(crate) fn fold(events: &[GateEvent]) -> HoldState {
                 st.on_ledger = true;
             }
             EventBody::HoldRelease { clearance } => {
-                st.open = None;
+                st.released = st.open.take();
                 st.open_source = None;
                 st.placed_at = None;
                 st.written_at = None;
@@ -138,6 +143,7 @@ pub(crate) fn state_at(root: &Path, pr: u64) -> HoldState {
             st.placed_at = mtime;
             st.written_at = mtime;
             st.release = None;
+            st.released = None;
             st.authorized = None;
         }
     } else if !st.on_ledger {
