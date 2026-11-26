@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:25:43.280804266Z
+modified_at: 2026-11-26T09:25:54.334832387Z
 req_type: Bug
 tags:
 - admission
@@ -84,6 +84,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2769 review at 0f9abd22. AC1 verified: run_passes now runs an unclaimed pre-scan (train_wanted: journal recovery_needed, or any discovered change passing the automatic train::eligible gate, Unavailable counted as wanted) and takes the claim only for a wanted pass, dropping it right after the pass (advisor_loop_train.rs run_passes). The pre-scan is a sound superset of the pass''s automatic gate: typed_gate_member applies advisor_train_eligible -> train::eligible under ADVISOR_LOOP, and discover() drops draft/closed changes the same way repo.change() refuses them. AC2 verified by bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train (manual_train_admission succeeds in <1s while idle). AC3 verified by the same test plus the adapted bug2703 real-worker-loop test. AC4 unverified: the holder/phase line is emitted only after the claim is released, with a constant phase, and only the formatter is tested. Protocol checklist: BUG-2769 ''PR touches at least one test file'' = met (advisor_loop_train.rs test module, task_1993_review_watch_tests.rs). CI pending at review time. Request changes for AC4 only.. No triage reason was given.'
   created_at: 2026-11-26T09:25:43.280801315Z
   modified_at: 2026-11-26T09:25:43.280801315Z
+- id: 01a2172c-fd85-7f83-a308-fad8ea4d8ef9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2769):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0f9abd22eab1
+    Recorded: 2026-11-26T09:24:30.930031141+00:00
+    Findings:
+    1. AC4 not met: 'a log/status line names the holder and the phase whenever the auto-train holds admission for more than N seconds'. long_hold_line is only printed after admission.take() once the pass has returned (advisor_loop_train.rs, end of run_passes). A hold still in progress produces no line, so an operator looking at a hold that has run for minutes (the incident shape in the spec: 10-11 minute holds, one ended by killing the pid) sees nothing; a killed or hung holder never logs at all. The phase is also always the literal "train pass", so it never distinguishes recovery, assembly and a running train. The loop's emission is untested; only the pure formatter is (bug2769_a_long_hold_names_the_holder_and_phase). Fix: report while the hold is live past N seconds, for example a watchdog/heartbeat line or a status field on the admission claim that `aida` status surfaces, with the real phase, and add a test that drives run_passes with a pass that outlives HOLD_WARN (a short test threshold) and asserts that the line or status appears while the claim is still held.
+    2. Efficiency follow-up: on a wanted poll, train_wanted repeats the forge reads (discover plus per-change CI, required checks and head reads up to the first eligible change) that the pass then makes again under the claim. All seats share one gh rate budget. Consider passing the pre-scan's discovery or eligible set into the pass, or keeping the pre-scan to local evidence first. This is not a correctness defect: idle polls make the same reads as before, without the claim.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T09:25:54.181237364Z
+  modified_at: 2026-11-26T09:25:54.181237364Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
