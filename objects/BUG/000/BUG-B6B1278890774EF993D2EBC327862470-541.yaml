@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T22:55:23.049530615Z
-modified_at: 2026-11-26T22:58:55.153776918Z
+modified_at: 2026-11-26T23:02:20.894431110Z
 req_type: Bug
 comments:
 - id: 01a21a15-9400-74a3-87c6-bf99b4c09def
@@ -31,6 +31,13 @@ comments:
   modified_at: 2026-11-26T22:58:55.153776918Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a18-b957-7e60-86a0-0358ec5c68a4
+  author: joe
+  content: 'ADVISOR SCOPE NOTE (2026-11-26 16:05, from the same-vendor adversarial trial): (a) ADD as AC3: clone_path must be absolute and canonicalized (inside the expected lane root) before any probe or release; a relative path resolves against the healer''s cwd. Test it. (b) AC2 (legacy claims without claim_id) was REFUTED by the challenger: the legacy path returns early when the clone is absent. The lane must VERIFY which is right: if the early return makes it safe, replace AC2 with a test proving it; if not, fix it. AC1 (the tri-state dirty probe) stands; both passes kept it.'
+  created_at: 2026-11-26T23:02:20.894431110Z
+  modified_at: 2026-11-26T23:02:20.894431110Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a21a12-6c3f-7730-9c6f-499787b1b8e0
   author: joe
