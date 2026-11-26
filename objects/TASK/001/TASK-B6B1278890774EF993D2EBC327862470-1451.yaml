@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: a bounded prune for the CI target cache: incremental session dirs older than N days (or LRU above a size cap) are removed when no CI job is running, with a configurable cap and age (defaults e.g. 60G per slot, 7 days).
   - AC2: the existing disk-headroom-guard (or doctor) reports /var/cache/aida-ci size and alerts above the cap, so this never reaches 90% silently again.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-25T22:55:04.959861301Z
+modified_at: 2026-11-26T03:07:37.706829692Z
 req_type: Task
 tags:
 - ci
@@ -107,6 +107,19 @@ history:
   author: dirtlab
   timestamp: 2026-11-25T22:55:08.689394488Z
   changes: []
+- id: 01a215d2-ab58-7620-8f87-0fd957d9842b
+  author: aida-auto-bump
+  timestamp: 2026-11-26T03:07:37.688804229Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a215d2-ab6a-74d1-a525-b07cecf0654e
+  timestamp: 2026-11-26T03:07:37.706827986Z
+  agent: aida
+  commit_sha: 804149ce5ca42575aac1db67ab52658394ac3572
+  summary: Completed via merge 804149ce
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
@@ -115,3 +128,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ea1b3c35df8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T03:07:37.688797666Z
+  completion_sha: 804149ce5ca42575aac1db67ab52658394ac3572
