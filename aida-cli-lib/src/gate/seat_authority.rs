@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use uuid::Uuid;
 
 pub(crate) const GRANT_ENV: &str = "AIDA_SESSION_GRANT";
@@ -168,6 +169,18 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
 // trace:BUG-1934 | ai:claude
 fn update_grant(
     id: &str,
+    change: impl FnMut(&mut SeatGrant) -> bool,
+    applied: impl Fn(&SeatGrant) -> bool,
+) -> Result<bool> {
+    update_grant_until(id, None, read_grant, Instant::now, change, applied)
+}
+
+// trace:TASK-3884 | ai:codex
+fn update_grant_until(
+    id: &str,
+    deadline: Option<std::time::Instant>,
+    read: impl Fn(&str) -> Result<SeatGrant>,
+    now: impl Fn() -> Instant,
     mut change: impl FnMut(&mut SeatGrant) -> bool,
     applied: impl Fn(&SeatGrant) -> bool,
 ) -> Result<bool> {
@@ -186,9 +199,15 @@ fn update_grant(
             .write(true)
             .open(locks.join(format!("{id}.lock")))
             .context("cannot open the session grant lock")?;
-        lock.lock_exclusive()
-            .context("cannot lock the session grant record")?;
-        let mut grant = read_grant(id)?;
+        match deadline {
+            Some(end) => crate::gate::kernel_deps::lock_exclusive_until(&lock, end),
+            None => lock.lock_exclusive(),
+        }
+        .context("cannot lock the session grant record")?;
+        let mut grant = read(id)?;
+        if deadline.is_some_and(|end| now() >= end) {
+            return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+        }
         let changed = change(&mut grant);
         if changed {
             write_grant(&grant)?;
@@ -3371,10 +3390,14 @@ pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
 /// then stays unbound and is refused, never silently trusted.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
+    bind_pid_until(id, pid, None)
+}
+
+fn bind_pid_until(id: &str, pid: u32, deadline: Option<std::time::Instant>) -> Result<()> {
     let token = pid_binding_token(pid).with_context(|| {
         format!("cannot bind session grant to process {pid}: its start identity could not be read")
     })?;
-    bind_grant_token(id, &token)
+    bind_token_until(id, &token, deadline)
 }
 
 /// TASK-2708: bind a launch child's grant (minted by [`issue_child_for`])
@@ -3391,6 +3414,15 @@ pub(crate) fn bind_contained_launch_worker(
     grant_id: &str,
     receipt: &crate::gate::kernel_deps::ContainmentReceipt,
 ) -> Result<()> {
+    bind_contained_launch_worker_until(grant_id, receipt, None)
+}
+
+/// Apply the caller's absolute lock deadline on every grant update attempt.
+pub fn bind_contained_launch_worker_until(
+    grant_id: &str,
+    receipt: &crate::gate::kernel_deps::ContainmentReceipt,
+    deadline: Option<std::time::Instant>,
+) -> Result<()> {
     anyhow::ensure!(
         receipt.is_accepted(),
         "refusing to bind a session grant to a contained worker: its containment receipt was not accepted"
@@ -3403,14 +3435,22 @@ pub(crate) fn bind_contained_launch_worker(
     if grant_id.is_empty() {
         return Ok(());
     }
-    bind_grant_to_pid(grant_id, receipt.worker_pid())
+    bind_pid_until(grant_id, receipt.worker_pid(), deadline)
 }
 
 /// Token-level core of [`bind_grant_to_pid`].
 // trace:BUG-1934 | ai:claude
+#[cfg(test)]
 pub(crate) fn bind_grant_token(id: &str, token: &str) -> Result<()> {
-    update_grant(
+    bind_token_until(id, token, None)
+}
+
+fn bind_token_until(id: &str, token: &str, deadline: Option<std::time::Instant>) -> Result<()> {
+    update_grant_until(
         id,
+        deadline,
+        read_grant,
+        Instant::now,
         |grant| {
             if grant.binding.iter().any(|b| b == token) {
                 return false;

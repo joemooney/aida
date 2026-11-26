@@ -2,6 +2,16 @@
 mod tests {
     use super::*;
 
+    // trace:TASK-3884 | ai:codex
+    #[test]
+    fn task_3884_contended_lease_times_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".aida/sessions").join(LEASE_WRITE_LOCK);
+        crate::test_env_base::assert_lock_timeout(&path, |end| {
+            with_lease_write_lock_until(tmp.path(), Some(end), || Ok(false))
+        });
+    }
+
     // BUG-581: every test that reads or mutates os_wrap touches the
     // process-global `AIDA_OS_WRAP` env var (via `os_wrap_env_override`). cargo
     // runs tests in parallel threads sharing ONE process environment, so a

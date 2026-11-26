@@ -235,12 +235,11 @@ fn main_worktree_candidate(current: &Path, rel_store: &str) -> Option<PathBuf> {
     // trace:TASK-1952 | trace:BUG-1992 | ai:claude
     // raw-git-ok(BUG-1929): a read-only rev-parse in the code checkout; the
     // hardened builder's own store lookup reaches here, so routing it recurses.
-    let out = std::process::Command::new("git")
-        .arg("-C")
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
         .arg(current)
-        .args(["rev-parse", "--git-common-dir"])
-        .output()
-        .ok()?;
+        .args(["rev-parse", "--git-common-dir"]);
+    let out = crate::store_hooks::probe_output(cmd).ok()?;
     if !out.status.success() {
         return None;
     }

@@ -1787,7 +1787,7 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
 
     let mut req = Requirement::new("uses reviewer feedback".to_string(), String::new());
     req.spec_id = Some("STORY-1391".to_string());
-    req.status = RequirementStatus::InProgress;
+    req.status = RequirementStatus::NeedsAttention;
     let mut store = RequirementsStore::default();
     store.requirements.push(req);
     crate::test_env::home_fixture_backend(&work.join(".aida-store"))
@@ -1802,6 +1802,16 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
         FailureKind::VerdictRequestChanges,
         "reviewer requested changes",
     );
+    // trace:BUG-2736 | ai:codex — triage reopens the spec after shelving's lookup.
+    crate::inject_status_write_race(|root| {
+        let backend = crate::test_env::home_fixture_backend(root).unwrap();
+        let mut req = backend
+            .get_requirement_unambiguous("STORY-1391")
+            .unwrap()
+            .unwrap();
+        req.status = RequirementStatus::InProgress;
+        backend.update_requirement(&req).unwrap();
+    });
     let fr = phase_driver
         .shelve_on_failure(
             "STORY-1391",
@@ -1832,6 +1842,12 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
         RequirementStatus::NeedsAttention,
         "the shelve must always land on the LEASE spec, never silently skip it"
     );
+    // trace:BUG-2736 | ai:codex
+    assert!(lease_req.comments.iter().any(|comment| {
+        comment.author == aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR
+            && comment.content
+                == "Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes"
+    }));
     assert!(lease_req
         .failure_reason
         .as_ref()

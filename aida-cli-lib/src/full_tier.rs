@@ -14,7 +14,7 @@ use std::path::Path;
 /// The PR label that selects the full tier in the CI workflow.
 pub(crate) const FULL_LABEL: &str = "ci:full";
 const TIER_PREFIX: &str = "ci-tier: ";
-const FULL_MARKER: &str = "ci-tier: full";
+pub(crate) const FULL_MARKER: &str = "ci-tier: full";
 const AGGREGATE: &str = "Build (ubuntu-latest)";
 
 /// Where full-tier CI stands on one commit.

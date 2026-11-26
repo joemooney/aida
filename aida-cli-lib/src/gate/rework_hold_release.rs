@@ -20,7 +20,7 @@ use chrono::{DateTime, FixedOffset};
 use serde_json::{Map, Value};
 use std::path::Path;
 
-const PRINCIPAL: &str = "auto-released:verdict";
+pub(crate) const PRINCIPAL: &str = "auto-released:verdict";
 
 /// The same implementer exclusion used by review record on current main.
 pub(crate) fn record_seat_allowed(seat: Option<&str>) -> bool {
