@@ -10,12 +10,12 @@ description: |
   - AC2: a knob `[lanes] cargo_build_jobs` (default unset) sets CARGO_BUILD_JOBS for lane jobs, so each lane's peak memory stays bounded.
   - AC3: lane-job admission also checks available memory at JOB start (not only at lane launch) and waits when below a configurable floor.
   - AC4: a test showing that with max_compile_concurrency=2, a third compile job waits until one finishes.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-26T05:19:01.467413849Z
+modified_at: 2026-11-26T07:14:05.970763657Z
 req_type: Task
 tags:
 - dell1
@@ -102,6 +102,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-26T05:19:03.548695897Z
   changes: []
+- id: 01a216b4-51cd-7942-9398-1897f3117442
+  author: aida-auto-bump
+  timestamp: 2026-11-26T07:14:05.901511681Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a216b4-5212-7cb3-bb19-f866be738321
+  timestamp: 2026-11-26T07:14:05.970760274Z
+  agent: aida
+  commit_sha: 9db04def2dc477a9b8ff042577e449a728828386
+  summary: 'TASK-3911 completing. AC1 verified by task_3911_unset_knobs_admit_at_once_and_set_ones_parse plus source: max_compile_concurrency lives in the host [lanes] table (/etc/aida/lanes.toml, where the existing lane admission knobs already live). Unset admits at once. When set, abstract-socket host slots are held in run_one_authorized from job start to job end, so extra jobs wait in the runner. Range is validated at 1..=256. AC2 verified by the same test plus source at lane_job.rs:1904: CARGO_BUILD_JOBS is inserted into the job env before cmd.envs, and the lane bwrap wrapper does not clear the environment. AC3 verified by task_3911_job_waits_below_memory_floor: the job waits below min_job_memory_headroom_gib, gives its slot back while waiting, is refused when memory cannot be read, and stops cleanly when the lane ends. AC4 verified by task_3911_third_compile_job_waits_for_a_slot. The job timeout starts after admission, so time spent queued does not count against it. The host fast gate goes through the same path. A missing config file means defaults. Two non-blocking follow-ups: an integration test gap and a rollout ordering note. The 4-commit stale base does not touch these files. CI was pending at review time; merge-hold-gate is green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f03f5255aae977b47ceb09666ba5e0dc2024de6d
@@ -110,3 +124,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 34c86b75a25
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T07:14:05.901504321Z
+  completion_sha: 9db04def2dc477a9b8ff042577e449a728828386
