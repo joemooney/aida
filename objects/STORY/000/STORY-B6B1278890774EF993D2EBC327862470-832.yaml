@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T05:17:41.376659110Z
+modified_at: 2026-11-26T06:06:25.311888006Z
 req_type: Story
 tags:
 - agents
@@ -57,6 +57,18 @@ comments:
   modified_at: 2026-11-26T05:17:41.376659110Z
   session_id: 01a2161aa788
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21676-5c1f-7782-9dc2-9bfd658964ab
+  author: joe
+  content: |-
+    DEFERRED p3s (advisor-122 2026-11-25 23:09 on #4627 S1 @ 741bbc73): run the fast-fix child BEFORE the outage check; interpret the codex reset time in the right timezone. Full findings for reference:
+    - Security: vendor_outage::preserve_seat (aida-cli-lib/src/vendor_outage.rs:588-644) builds `std::process::Command::new("git")` and runs `read-tree`, `add -A`, `write-tree`, `commit-tree` and `push origin` from the host launcher (standalone_implementer::run -> vendor_unavailable_exit) with cwd set to the lane's worktree. Contained lanes run in seat c
+    - The side-branch push in preserve_seat (vendor_outage.rs:637-642) pushes to the seat's `origin` without the BUG-2181/TASK-2001 remote_credentials routing. Its verb is passed through a local helper's slice argument, so the unrouted-remote ratchet probably does not see it. Failure scenario: in a real seat clone, origin is either a host-local path (the
+    - Detection is broader than its doc comment claims. vendor_outage::detect_log takes the last event in the 256 KiB tail that classify accepts (`text.lines().rev().find_map`), not an event the run ends with. For codex, any `error` event whose message contains 'usage limit' counts, including one codex retried past. Failure scenario: a codex run logs a t
+    - Nothing tests the launch-refusal wiring. ac2_an_active_outage_refuses_launches_until_its_reset calls vendor_outage::refuse_launch directly. No test shows that lane_host::preflight (lane_host.rs:309-312), or `queue work --no-human` for the implementer and reviewer roles, refuses while an outage is recorded and passes once it expires. Removing the pr
+    - On host-published lanes, lane_fast_gate::native runs a fast-fix child on the same vendor (standalone_implementer.rs, about line 1818) before the outage check. That child also overwrites finished.status. A lane stopped by a usage limit therefore starts one more child on the exhausted vendor before it is classed an outage. Run the usage-limit check o
+    - codex_reset_time (vendors/usage_limit.rs:725-749) reads codex's 'try again at <date> <time>' as a wall-clock time in the parsing host's local timezone. When the launcher host and the codex host differ in timezone (lane host versus primary), the recorded reset is off by the difference. Launches then resume early (and fail again) or stay refused afte
+  created_at: 2026-11-26T06:06:25.311888006Z
+  modified_at: 2026-11-26T06:06:25.311888006Z
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
