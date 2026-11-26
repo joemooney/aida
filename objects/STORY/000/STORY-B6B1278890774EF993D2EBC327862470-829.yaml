@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T16:17:39.013039797Z
+modified_at: 2026-11-26T16:18:16.442504290Z
 req_type: Story
 tags:
 - integration
@@ -1235,6 +1235,29 @@ comments:
     A reference merge (commit 0bfc81d60446, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T16:17:39.013034839Z
   modified_at: 2026-11-26T16:17:39.013034839Z
+- id: 01a218a6-86fa-7d22-8e13-b825a0b7781c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0a308f7dda (PR #4665, S5a r1)
+
+    Acceptance evidence:
+    - (1) stdin body [evidence: behavioral-test]: GitHubForge::comment uses `gh pr comment N --body-file -` (+ pinned -R) via gh_stdin with a writer thread (aida-cli-lib/src/forge.rs). Test s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced asserts argv is exactly `pr comment 7 --body-file -` and reads the body from the fake gh's stdin.
+    - (2) cap [evidence: behavioral-test]: comment_markdown/cut_balanced in review_prepare.rs. COMMENT_CAP = 60,000 bytes (so at most 60,000 chars). Order: summary+coverage, findings, adversarial, then specs/inventory/batches/playbooks/excluded (inventory trimmed first). The cut falls on a line boundary (so on a UTF-8 boundary, and code spans stay whole), any open fence is closed, then the note 'truncated: N findings omitted; full report at <--write|--sarif path>'.
+    - (3) test: a >70,000-char report (150 multibyte/backtick findings + 1500 inventory files) produces a body of <=60,000 bytes that is valid UTF-8, fence-balanced and ends with the note; a single 150 KB finding is cut inside its fence and the fence is closed.
+    - Nit done: spec IDs and playbook titles are code spans.
+
+    Validation: 3 s5 tests + all 17 review_prepare tests pass (lane job); make check-ci-fast exit 0 (store-writer inventory regenerated for the new gh_stdin write_all row; new test listed in ratchet-set.json).
+
+    Probe findings / residual risks:
+    - The --write report's section order changed to match (coverage and findings before the inventory).
+    - cut_balanced tracks backtick fences only. A '~~~' fence in a linked spec's acceptance markdown that is cut mid-block would stay open. Spec text is trusted and comes after the findings; left for S5b.
+    - gh_stdin waits without a bound, like the existing gh() when no forge deadline is set.
+    - The round-5 #4619 findings (coverage ledger, rename context, end-to-end --run-review test, escaped-descendant kill) were already fixed on main: review_batches verifies coverage, batch_prompt passes --find-renames, s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage exists, and review_runner kills the pipe holders. No change was needed this round.
+  created_at: 2026-11-26T16:18:16.442504290Z
+  modified_at: 2026-11-26T16:18:16.442504290Z
+  session_id: 01a2188212ab
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
