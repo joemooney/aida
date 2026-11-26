@@ -803,6 +803,9 @@ mod bug2769_idle_admission_tests {
     /// does not start train B until that manual train has run and released,
     /// and train-status/`--check`'s line names it.
     // trace:BUG-2771 | ai:claude
+    // trace:BUG-2771.AC1 | ai:claude
+    // trace:BUG-2771.AC2 | ai:claude
+    // trace:BUG-2771.AC3 | ai:claude
     #[test]
     fn bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter() {
         let (_temp, root) = ci_gated_repo();
