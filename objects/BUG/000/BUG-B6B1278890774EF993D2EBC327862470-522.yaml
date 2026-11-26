@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-26T05:10:37.552747992Z
+modified_at: 2026-11-26T05:14:23.809738397Z
 req_type: Bug
 tags:
 - lanes
@@ -653,6 +653,13 @@ comments:
     A reference merge (commit d2f9a3faa8c9, `(Refs BUG-2761)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T05:10:37.552736516Z
   modified_at: 2026-11-26T05:10:37.552736516Z
+- id: 01a21646-bac1-7d73-b0fa-7ec0c40b4f04
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] db12a82c7473
+    A reference merge (commit db12a82c7473, `(Refs BUG-2761)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T05:14:23.809732153Z
+  modified_at: 2026-11-26T05:14:23.809732153Z
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
