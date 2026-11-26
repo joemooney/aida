@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T08:00:06.331750776Z
+modified_at: 2026-11-26T08:00:18.203767648Z
 req_type: Story
 tags:
 - landing
@@ -254,6 +254,22 @@ comments:
   content: 'DEFERRED to S3 (advisor-122 2026-11-26 01:04, ruling on #4634 S2 @ 7f8ce287): a scan() wiring test, an end-to-end test that the scheduled landing-drought job wires every cause through scan(). AC-D (event-driven approval→train handoff) also remains for S3.'
   created_at: 2026-11-26T08:00:03.557480871Z
   modified_at: 2026-11-26T08:00:03.557480871Z
+- id: 01a216de-9e7c-7ad1-978e-a5bdf5a49c07
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4634):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7f8ce2876987
+    Recorded: 2026-11-26T07:33:55.631790335+00:00
+    Findings:
+    1. landing_drought.rs scan()/LockHolder::stale: the train-lock cause never fires when the lock is held but the driver record's process is dead or unidentified. live_driver then returns pid None and running_secs None, so held_minutes is None and stale() is false; the test story_3131_s2_train_lock_held_past_threshold pins that. This is the orphaned or hung lock shape (BUG-2757) that cause (3) targets, and the record's `since` is still readable. Consider deriving the age from the driver record even when the holder is not alive, and naming it 'an unidentified process'.
+    2. Each green PR that has had no verdict at its current head for more than ready_dwell_minutes is now a finding. The landing-drought job runs every 10m with --fail-on-findings under action=investigate, so a normal review backlog raises a CronJobFailed advisor route every tick. Consider a longer dwell for unreviewed heads, or skipping PRs whose review is actively claimed.
+    3. Test gap (reporting code, not gate code): the scan() wiring is untested. That covers the draft/non-main base filter, the mergeable == "CONFLICTING" mapping, the AtHead -> (approved, since) mapping (including Missing being admitted only when CI is green), and ReworkLanes::covers feeding `repairing`. Only evaluate() and ledger_at_head() have tests.
+    4. PR #4634's body describes a different change: a port of #4541 for BUG-2755, stale-lease attest healing. It does not describe this STORY-3131 S2 slice. The brief asked for the AC-D (event-driven approval->train) deferral to be stated in the PR body. Only the commit message says it, along with the vendor-outage skip. Replace the body with this slice's summary.
+    5. pr_train_status.rs lock_driver(): it uses chrono::Utc::now() for the lock's held age, while landing_drought::scan takes `now` from exec.clock(). The two clocks can disagree under an injected clock. Pass the scan's now in.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T08:00:18.044453073Z
+  modified_at: 2026-11-26T08:00:18.044453073Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
