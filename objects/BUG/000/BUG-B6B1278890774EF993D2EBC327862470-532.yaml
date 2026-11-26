@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T17:44:09.172430606Z
+modified_at: 2026-11-26T17:46:18.569755215Z
 req_type: Bug
 tags:
 - admission
@@ -106,6 +106,17 @@ comments:
   created_at: 2026-11-26T14:23:14.927935108Z
   modified_at: 2026-11-26T14:23:14.927935108Z
   session_id: 01a21805300e
+- id: 01a218f7-5dc5-7483-b8b5-0c256964de5f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:46):
+    # BUG-2771 FRESH SLICE (replaces closed #4659, approved @ d50327f9; product-15 2026-11-26 10:50). Lane: CLAUDE. MAIN, NEW branch train-fair-admission-fresh (cut from the current main tip). Keep #4659's title, ending in (BUG-2771). <=260 lines.
+    PORT #4659's approved change onto current main: `git diff origin/main...origin/train-fair-admission` is the reference. Adapt to the newly landed BUG-2774 #4667 (stale-deputy reporting) and TASK-3912 #4668 (max_prs_per_train). Keep its tests.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4659 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T17:46:18.569755215Z
+  modified_at: 2026-11-26T17:46:18.569755215Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
