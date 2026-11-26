@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T01:43:40.437841110Z
+modified_at: 2026-11-26T01:45:52.970952697Z
 req_type: Story
 tags:
 - integration
@@ -656,6 +656,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T01:43:40.279175277Z
   modified_at: 2026-11-26T01:43:40.279175277Z
+- id: 01a21588-10fa-7fd1-ae4b-8d7e18c35096
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:45):
+    # STORY-3120 S3a-2: wire --run-review onto launch::review_runner::RunnerCall, plus the S3a hardening carry-overs (advisor ruling 11:18; STORY-3120 comment 26; integration-30 16:08; product-15). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch int40-story-3120-s3a2 (cut from the integration tip). Title "(Refs STORY-3120)". <=300 lines.
+    READ: `aida show STORY-3120 --comments`, comments 19, 20, 26 and 32. The S3a helper (launch::review_runner) is already on integration.
+    ACs, all binding:
+     (1) BOUNDED JOINS: after kill(-pgid), wait for the stdout/stderr reader threads and the stdin writer thread with a short grace (poll JoinHandle::is_finished, ~5s). If any thread is still running, FAIL CLOSED with 'review runner left descendants holding its pipes' and leak that thread. TEST: a runner that starts a setsid'd/double-forked descendant inheriting stdout/stdin and then exits → run() returns an error within deadline + grace.
+     (2) Item 11: a runner finding whose path is outside the PR inventory REFUSES the whole --run-review run. TEST.
+     (3) git_text: route through a sanitized git builder (env allowlist; see the BUG-2760 note and the TASK-3874 sketch), add --no-textconv, and make a diff failure an ERROR (no silent full-file fallback).
+     (4) The caller passes std::env::vars_os() unchanged as parent_env.
+     (5) BINDING (integration-30 18:40, from trusted_review_base's doc): `base` = merge-base(forge target, reviewed head SHA), NEVER the target tip and NEVER a PR-supplied value; head = the reviewed SHA in CI. TEST that a PR-supplied base is ignored.
+     Then wire `--run-review` onto RunnerCall.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T01:45:52.970952697Z
+  modified_at: 2026-11-26T01:45:52.970952697Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
