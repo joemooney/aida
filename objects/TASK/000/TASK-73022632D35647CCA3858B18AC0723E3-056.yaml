@@ -1,0 +1,28 @@
+id: 01a2198a-d825-7531-9efc-0f6523fb8991
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-056
+title: auto-queue-review over-links a PR's review story to specs that landed on main (PR-4685 got BUG-2776/BUG-2772/TASK-3912/STORY-3120)
+description: |
+  `aida pr auto-queue-review` for PR #4685 (branch bug-2777-ejection-routing, 2 commits, both BUG-2777) reused review story STORY-73022632d35647cca3858b18ac0723e3-371 and linked it as implementing BUG-2776, BUG-2772 and TASK-3912 and covering STORY-3120. Those trailers belong to commits already on main (#4678, #4666/#4668, #4670). `aida ship --no-merge` had just rebased the branch onto a newer origin/main, so the covers scan probably used a stale base ref in the seat clone. The risk is that a reviewer or merge-time completion credits the wrong specs.
+
+  Raised by the implementer while working BUG-2777.
+  Branch: bug-2777-ejection-routing  ·  Commit: 36ffea9bc5  ·  PR #4685
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T20:27:39.429848017Z
+modified_at: 2026-11-26T20:27:39.429848017Z
+req_type: Task
+tags:
+- from-implementer:BUG-2777
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
+  branch: bug-2777-ejection-routing
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5a74f31ac
+  vendor: claude
+  session: 01a219535435
+  harness_version: 2.1.319 (Claude Code)

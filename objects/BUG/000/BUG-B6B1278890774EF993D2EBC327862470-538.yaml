@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T20:26:18.147144256Z
+modified_at: 2026-11-26T20:27:55.536518317Z
 req_type: Bug
 tags:
 - landing
@@ -123,6 +123,12 @@ history:
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2198b-1ee3-7743-8248-7a8d78da751f
+  author: dirtlab
+  timestamp: 2026-11-26T20:27:57.539986341Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
@@ -131,3 +137,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4af2602e90e
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T20:27:55.536518317Z
+  implemented_by: dirtlab
