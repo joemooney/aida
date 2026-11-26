@@ -10,12 +10,12 @@ description: |
   - AC2: a manual `aida pr train N` waiting on an idle auto-train is admitted within one auto-train poll interval.
   - AC3: a test: an idle auto-train loop does not hold admission across polls, and a contending manual train is admitted.
   - AC4: a log/status line names the holder and the phase whenever the auto-train holds admission for more than N seconds.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T11:47:48.704116205Z
+modified_at: 2026-11-26T12:45:16.582123240Z
 req_type: Bug
 tags:
 - admission
@@ -236,6 +236,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a217e3-8426-75b3-be33-6e8346e40679
+  author: aida-auto-bump
+  timestamp: 2026-11-26T12:45:16.198725146Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a217e3-85a6-7f03-80a1-1670da732df0
+  timestamp: 2026-11-26T12:45:16.582118353Z
+  agent: aida
+  commit_sha: cd53118d56302cbd2936a30c898fe93904a99117
+  summary: 'BUG-2769 (completing). Head 9b9aa8a6939 reviewed as landing on main 2d89ef45056 (1 commit behind; the base commit is an unrelated report-backlog change, no finding depends on it). AC1 verified by bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train: idle polls hold no claim, and a wanted pass''s claim is dropped after the pass (`admission = None` before idle, advisor_loop_train.rs run_passes). AC2 verified by the same test: manual_train_admission succeeds in under 1s while idle. AC3 verified: that test runs the real worker loop. AC4 verified by bug2769_a_long_hold_is_reported_while_it_is_held: watch_hold logs ''held admission Ns (holder pid P, phase X)'' every 30s during a long hold, and train-status shows it through live_hold_line, which only shows the line while that pid holds the claim. task_1993 was adapted to per-pass claims without weakening it. Deep pass: acquire has a zero deadline, so held_since does not include wait time. The flock-based run.lock probe works within the same process. The watcher exits on panic because the channel sender drops. Three non-blocking follow-ups are listed below. CI pending at review time.'
+  punted:
+  - 'punted: BUG-2769 review at 0f9abd22. AC1 verified: run_passes now runs an unclaimed pre-scan (train_wanted: journal recovery_needed, or any discovered change passing the automatic train::eligible gate, Unavailable counted as wanted) and takes the claim only for a wanted pass, dropping it right after the pass (advisor_loop_train.rs run_passes). The pre-scan is a sound superset of the pass''s automatic gate: typed_gate_member applies advisor_train_eligible -> train::eligible under ADVISOR_LOOP, and discover() drops draft/closed changes the same way repo.change() refuses them. AC2 verified by bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train (manual_train_admission succeeds in <1s while idle). AC3 verified by the same test plus the adapted bug2703 real-worker-loop test. AC4 unverified: the holder/phase line is emitted only after the claim is released, with a constant phase, and only the formatter is tested. Protocol checklist: BUG-2769 ''PR touches at least one test file'' = met (advisor_loop_train.rs test module, task_1993_review_watch_tests.rs). CI pending at review time. Request changes for AC4 only.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
@@ -244,3 +260,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0cb984b75d1
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T12:45:16.198715454Z
+  completion_sha: cd53118d56302cbd2936a30c898fe93904a99117
