@@ -1,0 +1,31 @@
+id: 01a2182f-793f-7562-9e6c-882ce6aafc34
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1513
+title: 'Review follow-up: Follow-up (TASK-3918 AC2): the regression test task3918_dead_owner_leftovers_do_not_refuse'
+description: |-
+  From TASK-3918
+  Reviewed sha: c109abb9bb9edc5c08b007a32a37c03331936fff
+
+  Follow-up (TASK-3918 AC2): the regression test task3918_dead_owner_leftovers_do_not_refuse_retirement (message_state_tests.rs) pins that exit-time retention's WriterAdmissionUnknown refusal never depended on leftovers (fresh_scan_admits in activation.rs is a /proc writer scan only; retire.rs ~:1055). The real cause of the lane-exit refusals seen on 2026-11-25, writer processes the fresh scan cannot verify, is still open and needs its own investigation and spec.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T14:08:14.143129519Z
+modified_at: 2026-11-26T14:08:14.143129519Z
+req_type: Task
+tags:
+- carried-from:TASK-3918
+- finding-hash:66359894
+- from-review:TASK-3918
+relationships:
+- rel_type: References
+  target_id: 01a217ed-5a36-72f1-9a8a-7f053c9b90d9
+  created_at: 2026-11-26T14:08:30.574142738Z
+filed_at:
+  code_sha: c109abb9bb9edc5c08b007a32a37c03331936fff
+  branch: pr-4658
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 15bbbc68222
+  vendor: claude
+  session: 01a2182ce626
