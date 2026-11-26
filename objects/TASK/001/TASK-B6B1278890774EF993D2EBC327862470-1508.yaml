@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T12:56:00.822526486Z
-modified_at: 2026-11-26T12:59:41.926382205Z
+modified_at: 2026-11-26T13:01:51.256125655Z
 req_type: Task
 tags:
 - agents
@@ -23,6 +23,18 @@ relationships:
   target_id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
   created_at: 2026-11-26T12:59:36.452379768Z
   created_by: joe
+comments:
+- id: 01a217f2-ef74-7f83-94a0-1fcab9b7e54e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:01):
+    # TASK-3918: the mail-retention dry run and lane-exit retention use the scoped leftover scan (BUG-2770 follow-up; product-15). Lane: CLAUDE. MAIN, NEW branch retention-scoped-scan. STANDARD. <=150 lines. Completing (TASK-3918) trailer.
+    READ: `aida show TASK-3918` and BUG-2770's landed change (#4645, 53f97f695c1, the owner-liveness scoped scan). Reuse that scan in activation.rs (~:234) and in the lane-exit retention path. AC1-AC2 with tests.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T13:01:51.256125655Z
+  modified_at: 2026-11-26T13:01:51.256125655Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a217f0-aaf8-75e3-aea2-15ed1f819cb4
   author: joe
