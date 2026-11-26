@@ -1,0 +1,47 @@
+id: 01a219bf-9d01-7c10-ac85-33768eacd81e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-372
+title: 'Review PR-4688: [AI:claude] fix(review-watch): a paused or capped watcher never reclaims; a capped PR surfaces with a next step (TASK-3921)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2198c`) for branch `task-3921-rw-reclaim-guard`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4688>
+  - Branch: `task-3921-rw-reclaim-guard` → `main`
+
+  ## Covers
+
+  - TASK-3921
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4688` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T21:25:17.697573700Z
+modified_at: 2026-11-26T21:25:21.957092882Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a21969-213a-70f3-8fb4-861980bfdfb9
+  created_at: 2026-11-26T21:25:21.957057095Z
+  created_by: dirtlab
+history:
+- id: 01a219bf-b612-7d52-ab56-1e1db63474ef
+  author: dirtlab
+  timestamp: 2026-11-26T21:25:24.114823876Z
+  session_id: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 34653344c1e77b4260ca91a7b493588aae96dd19
+  branch: task-3921-rw-reclaim-guard
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aab3a10d79
+  vendor: claude
+  session: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)

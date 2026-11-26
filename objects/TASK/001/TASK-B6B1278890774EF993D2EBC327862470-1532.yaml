@@ -9,16 +9,22 @@ description: |
   - AC1: check pause AND the pickup retry cap BEFORE any reclaim; a paused or capped watcher NEVER ends a checkout.
   - AC2: when the cap is hit, the PR goes to the BUG-2776 AC3 doctor surface with a named next step, never a silent hold; a successful reclaim followed by a successful pickup RESETS the cap.
   - AC3: ONE test of the REAL reclaim path with a fake `aida` on PATH: assert the argv `session end <lease> --yes --skip-ci`, and handle a NON-ZERO exit (no dispatch, the hold kept, a named cause). No network. Plus tests: paused → no reclaim; capped → no reclaim + surfaced; reclaim + pickup → cap reset.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:50:49.914099231Z
-modified_at: 2026-11-26T20:32:06.955296520Z
+modified_at: 2026-11-26T21:25:26.109465101Z
 req_type: Task
 tags:
 - review-watch
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a219bf-9d01-7c10-ac85-33768eacd81e
+  created_at: 2026-11-26T21:25:26.109414245Z
+  created_by: dirtlab
 comments:
 - id: 01a21983-a2c1-7533-bff8-18d21cb507d0
   author: joe
@@ -51,6 +57,31 @@ comments:
   modified_at: 2026-11-26T20:32:06.955296520Z
   session_id: 01a2198cd2c9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a219be-e28b-7092-94a4-ece7d8277ae3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 34653344c1 (git diff origin/main...HEAD, 5 files, +173/-27).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: review_watch.rs select_with_probes reads pause::current and the cap (pickup_retries >= 3) before reclaim_tree and skips it when either holds. Test bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass: paused and capped passes use a reclaim closure that panics if called; both pass.
+    - AC2 [behavioral-test]: a capped held tree becomes Admission::Held{retained:true, why:'pickup retry cap reached'}, so watch_pass adds it to the retained list. retained_blocks surfaces a PICKUP_RETRY_CAP cause at once with the fix line, which feeds landing_drought::retained_findings (doctor). Unit test bug2776_retained_checkout_block_surfaces_after_thirty_minutes covers it. Reset: the new RetainedReview::Reclaimed makes the retry due in that pass, the dispatched attempt gets pickup_retries == 0, and setup_retry stays true. Covered by the same select test.
+    - AC3 [behavioral-test]: task_3921_real_reclaim_runs_session_end_and_keeps_the_tree_on_refusal runs the real reclaim_retained_review_tree with a recording fake aida that exits 3. It checks argv 'session end <lease> --yes --skip-ci', the result Kept('reclaim check failed: session end refused: seat busy: lease in use'), and that the tree and lease file are still there. A fake gh means no network. The fake is injected through the aida_exe_path seam (kernel::test_aida_exe) because aida_exe_path does not consult PATH.
+    - Lane job: 6 targeted tests passed (bug2776/bug_2776/task_3921/bug2720_exited). make check-ci-fast exit 0.
+
+    Probes: P1: the cap string is now a single const shared by the refusal and the surfacing filter, so the two cannot drift. P3: a reclaim during a backoff pass would otherwise not reset, so a reclaim now makes the retry due. P5: the refusal paths (paused, capped, non-zero session end) are each tested. No existing test was weakened. The BUG-2776 test's post-end assertion moved from Free to Reclaimed, and a second call still asserts Free.
+    Residual risks: the no-dispatch-on-refusal check is made at the reclaim-function level (Kept). The select-level Kept leads to a held skip, which is covered by the existing dirty case and not driven through the subprocess. A pause set between the snapshot and the reclaim is the same race the launch check already had.
+  created_at: 2026-11-26T21:24:29.963075822Z
+  modified_at: 2026-11-26T21:24:29.963075822Z
+  session_id: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a219bf-26e1-7842-9721-d69797a41246
+  author: aida-publication-done
+  content: Implementer push 34653344c1e7 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T21:24:47.457181910Z
+  modified_at: 2026-11-26T21:24:47.457181910Z
+  session_id: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21981-6588-7e10-93e8-353bc7d2488d
   author: joe
@@ -63,6 +94,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a219bf-26e1-7842-9721-d68ea5f412ce
+  author: aida-publication-done
+  timestamp: 2026-11-26T21:24:47.457180308Z
+  session_id: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a219bf-c636-7931-aef1-890e6ad707bb
+  author: dirtlab
+  timestamp: 2026-11-26T21:25:28.246011130Z
+  session_id: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
