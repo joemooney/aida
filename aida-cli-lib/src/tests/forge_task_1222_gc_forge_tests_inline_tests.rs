@@ -69,3 +69,63 @@ fn task_1222_gc_gitlab_requires_same_project_and_head() {
     fork["source_project_id"] = 2.into();
     assert_eq!(parse(serde_json::json!([fork])), Some(false));
 }
+
+/// The seat-clone reap veto on GitLab: only a closed (not merged) same-project
+/// MR pinned at the exact full tip vetoes, and malformed shas are unknown.
+// trace:STORY-3059 | ai:claude
+#[test]
+fn story_3059_gitlab_closed_unmerged_exact_tip_veto() {
+    let tip = "0123456789abcdef0123456789abcdef01234567";
+    let other = "fedcba9876543210fedcba9876543210fedcba98";
+    let row = serde_json::json!({"iid":17,"state":"closed","source_branch":"task-1","sha":tip,"source_project_id":1,"target_project_id":1});
+    let parse = |rows: serde_json::Value| {
+        parse_terminal_branch(
+            &serde_json::to_vec(&rows).unwrap(),
+            ForgeKind::GitLab,
+            "task-1",
+            tip,
+            true,
+        )
+    };
+    let hit = |number| {
+        Some(TerminalTip {
+            matched: true,
+            number,
+        })
+    };
+    let miss = Some(TerminalTip {
+        matched: false,
+        number: None,
+    });
+    assert_eq!(parse(serde_json::json!([row.clone()])), hit(Some(17)));
+    // An open MR does not cancel the closed-at-tip veto in unmerged mode.
+    let mut open = row.clone();
+    open["state"] = "opened".into();
+    open["iid"] = 18.into();
+    assert_eq!(
+        parse(serde_json::json!([open.clone(), row.clone()])),
+        hit(Some(17))
+    );
+    let mut merged = row.clone();
+    merged["state"] = "merged".into();
+    assert_eq!(parse(serde_json::json!([merged.clone()])), miss);
+    assert_eq!(parse(serde_json::json!([open])), miss);
+    let mut moved = row.clone();
+    moved["sha"] = other.into();
+    assert_eq!(parse(serde_json::json!([moved, merged])), miss);
+    let mut fork = row.clone();
+    fork["source_project_id"] = 2.into();
+    assert_eq!(parse(serde_json::json!([fork])), miss);
+    let mut unnumbered = row.clone();
+    unnumbered.as_object_mut().unwrap().remove("iid");
+    assert_eq!(parse(serde_json::json!([unnumbered])), hit(None));
+    for sha in ["", "0123456", &tip[..39]] {
+        let mut short = row.clone();
+        short["sha"] = sha.into();
+        assert_eq!(parse(serde_json::json!([short])), None, "{sha:?}");
+    }
+    // GitHub-cased states are not GitLab states: an unknown state is unknown.
+    let mut upper = row.clone();
+    upper["state"] = "CLOSED".into();
+    assert_eq!(parse(serde_json::json!([upper])), None);
+}

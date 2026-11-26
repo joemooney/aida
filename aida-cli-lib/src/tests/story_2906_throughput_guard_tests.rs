@@ -1608,3 +1608,183 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
         render(&report).contains("Host other: 1 lane(s); memory unknown (no remote memory source)")
     );
 }
+
+// trace:BUG-2730 | ai:codex
+#[test]
+fn bug_2730_slow_approval_forge_reports_partial_before_ceiling() {
+    use std::time::{Duration as StdDuration, Instant};
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1], skipped PRs [2, 3]"));
+        assert!(stderr.contains("throughput-guard: PARTIAL: covered PRs [1, 3], skipped PRs [2]"));
+        assert!(stderr.contains("throughput-guard: routing deferred (deadline)"));
+        assert!(stderr.contains("throughput-guard timings: setup="));
+        assert!(stderr.contains(" observations="));
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .env("GIT_COMMITTER_DATE", "2020-01-01T00:00:00Z")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    };
+    git(&["init", "-b", "main"]);
+    let commit = |contents: &str| {
+        std::fs::write(root.join("file"), contents).unwrap();
+        git(&["add", "file"]);
+        git(&["commit", "-m", contents]);
+        git(&["rev-parse", "HEAD"])
+    };
+    commit("common");
+    git(&["checkout", "-b", "topic"]);
+    let conflict = commit("topic");
+    git(&["checkout", "main"]);
+    let main = commit("main");
+    git(&["init", "-b", "aida-store", ".aida-store"]);
+    git(&["-C", ".aida-store", "remote", "add", "origin", ".."]);
+    let origin = "https://github.com/example/fixture";
+    git(&["remote", "add", "origin", origin]);
+    let main_ref = "refs/remotes/origin/main";
+    git(&["symbolic-ref", "refs/remotes/origin/HEAD", main_ref]);
+    git(&["update-ref", main_ref, &main]);
+    let mut rows = Vec::new();
+    for (id, head) in [(1, &conflict), (2, &main), (3, &main)] {
+        git(&["update-ref", &format!("refs/pull/{id}/head"), head]);
+        rows.push(serde_json::json!({"number":id, "title":"fixture", "headRefOid":head,
+            "headRefName":if id == 3 {"train/example"} else {"topic"}, "baseRefName":"main","statusCheckRollup":[]}));
+    }
+    std::fs::write(root.join("rows"), serde_json::to_vec(&rows).unwrap()).unwrap();
+    std::fs::create_dir(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider='github'\n[throughput_guard]\nenabled=true\n",
+    )
+    .unwrap();
+    crate::test_exec::write_executable(
+        &root.join("gh"),
+        // Capability and Actions reads answer at once; only PR 2's approval
+        // metadata (`pr view 2`) is slow. trace:BUG-2730 | ai:claude
+        r#"#!/bin/sh
+case "$1 $2" in
+  "pr list") cat rows ;;
+  "--version " ) echo 'gh version 2' ;;
+  "api --help") echo 'Usage: gh api <endpoint> [flags]' ;;
+  "pr view") [ "$3" = 2 ] || exit 1; touch reading; exec sleep 20 ;;
+  api\ *actions/runs*) echo '{"total_count":0,"workflow_runs":[]}' ;;
+  *) exit 1 ;;
+esac
+"#,
+    );
+    crate::test_exec::write_executable(
+        &root.join("git"),
+        r#"#!/bin/sh
+if [ "$1" = fetch ]; then
+    exec /usr/bin/git -c "url.file://$PWD.insteadOf=https://github.com/example/fixture" "$@"
+fi
+exec /usr/bin/git "$@"
+"#,
+    );
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    let _transport = crate::review_pr_transport_fixture();
+    let signer = root.join("slow-signer");
+    crate::test_exec::write_executable(&signer, "#!/bin/sh\nexec sleep 12\n");
+    git(&[
+        "-C",
+        ".aida-store",
+        "config",
+        "gpg.program",
+        signer.to_str().unwrap(),
+    ]);
+    git(&["-C", ".aida-store", "config", "commit.gpgSign", "true"]);
+    for (run, per_pr, covered, skipped) in [(3, 8, "[1]", "[2, 3]"), (12, 3, "[1, 3]", "[2]")] {
+        let start = Instant::now();
+        let findings = scan_with_budgets(
+            root,
+            true,
+            StdDuration::from_secs(run),
+            StdDuration::from_secs(per_pr),
+        )
+        .unwrap();
+        assert!(start.elapsed() < StdDuration::from_secs(10));
+        std::fs::remove_file(root.join("reading")).expect("slow forge read ran");
+        let memory = load_memory(root);
+        let coverage = format!("PARTIAL: covered PRs {covered}, skipped PRs {skipped} (deadline)");
+        assert_eq!(
+            memory.runs.last().unwrap().partial.as_ref(),
+            Some(&coverage)
+        );
+        assert_eq!(findings.len(), 1);
+        if run == 3 {
+            assert!(start.elapsed() < StdDuration::from_secs(5));
+        }
+        // The partial pass routes nothing, so the slow signer is never invoked.
+        assert!(memory.routed.is_empty());
+        assert!(git(&["branch", "--list", "aida-store"]).is_empty());
+    }
+}
+
+// A GitLab listing whose second page outlives the deadline keeps page one.
+// trace:BUG-2730 | ai:claude
+#[test]
+fn bug_2730_discovery_deadline_keeps_listed_pages() {
+    use std::time::Duration as StdDuration;
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = crate::test_git::git_command()
+        .current_dir(root)
+        .args(["init", "-q", "-b", "main"])
+        .status()
+        .unwrap();
+    assert!(git.success());
+    let origin = [
+        "remote",
+        "add",
+        "origin",
+        "https://gitlab.example.test/g/repo.git",
+    ];
+    assert!(crate::test_git::git_command()
+        .current_dir(root)
+        .args(origin)
+        .status()
+        .unwrap()
+        .success());
+    let rows: Vec<_> = (1..=100)
+        .map(|iid| {
+            serde_json::json!({"iid":iid,"state":"opened","draft":false,"sha":"a".repeat(40),
+            "source_branch":"topic","target_branch":"main","author":{"username":"w"}})
+        })
+        .collect();
+    std::fs::write(root.join("page1"), serde_json::to_vec(&rows).unwrap()).unwrap();
+    crate::test_exec::write_executable(
+        &root.join("glab"),
+        "#!/bin/sh\ncase \"$*\" in *page=1) cat page1 ;; *) exec sleep 20 ;; esac\n",
+    );
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    let repo = crate::review_watch::forge::Repository::load(root).unwrap();
+    let started = std::time::Instant::now();
+    let (changes, cut) =
+        crate::forge_lookup::with_forge_lookup_deadline(StdDuration::from_secs(3), || {
+            repo.discover_with(root, |change, _| Ok(change.id))
+        })
+        .unwrap();
+    assert!(cut, "the deadline cut must be reported");
+    assert_eq!(changes, (1..=100).collect::<Vec<u64>>());
+    assert!(started.elapsed() < StdDuration::from_secs(10));
+    // The unscoped reader still refuses an incomplete inventory.
+    let refused =
+        crate::forge_lookup::with_forge_lookup_deadline(StdDuration::from_secs(3), || {
+            repo.discover(root)
+        });
+    assert!(refused.is_err());
+}
