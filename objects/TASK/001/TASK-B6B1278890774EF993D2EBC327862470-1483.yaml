@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:01:40.126033678Z
-modified_at: 2026-11-26T06:26:56.120375178Z
+modified_at: 2026-11-26T06:28:34.331386378Z
 req_type: Task
 tags:
 - landing
@@ -37,6 +37,26 @@ comments:
   modified_at: 2026-11-26T06:24:07.121584413Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2168a-a39b-7013-8026-fc9ae52df8a8
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 (unit, `drive_into`): before building any follow-up train (bisect half, stale requeue, infra rerun) the driver reads each member's live forge head through a new `Rails::member_head` hook (live impl: `forge_confirmation::metadata`, Known reads only). A moved member is dropped as superseded, never built or tested; it re-enters via normal admission. The first composition is not re-read (it was just admitted).
+    - AC2: the drop is an `Ejected` with reason `superseded: head moved <old> → <new>; ...` (logged in the run summary and commented on the member PR), carried in `Built.dropped`, and rendered as a `Superseded:` line in the train PR body.
+    - AC3 (unit, story_1690_train_tests): red 3-member train, one member's head moves; the bisect halves exclude it, the other members are still built/tested, it is ejected with the superseded reason.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_train.rs`
+    - `aida-cli-lib/src/tests/story_1690_train_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - An unreadable head (transient forge read) keeps the member in the half at its admitted head (the land-time re-gate still refuses a moved head). OK?
+  created_at: 2026-11-26T06:28:34.331386378Z
+  modified_at: 2026-11-26T06:28:34.331386378Z
+  session_id: 01a21688f171
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a215d1-59b6-70d0-8f00-cbfb6c5757d5
   author: joe
