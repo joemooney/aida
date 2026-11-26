@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T03:02:29.224596095Z
+modified_at: 2026-11-26T03:08:32.879842817Z
 req_type: Story
 tags:
 - integration
@@ -744,6 +744,20 @@ comments:
   created_at: 2026-11-26T02:58:16.504772Z
   modified_at: 2026-11-26T02:58:16.504772Z
   session_id: 01a2158b02e7
+- id: 01a215d3-d486-7862-8e78-c7aa4d074a51
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:08):
+    # STORY-3120 S3a-2 merge round on #4614 (integration-30 19:58; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int40-story-3120-s3a2 / PR #4614. Keep the "(Refs STORY-3120)" title. <=60 lines of net change beyond the merge itself.
+    #4604 (TASK-3320, credential-path screening) has MERGED into integration and conflicts with #4614 in aida-cli-lib/src/review_prepare.rs.
+    1. Merge origin/integration into the branch (a normal merge in this lane, not a host conflict-repair).
+    2. Resolve review_prepare.rs so BOTH features hold: MOVE the is_credential_path check into ensure_in_inventory, so --run-review findings also get the credential check (a finding citing a credential path is refused or flagged, and its contents never reach a prompt).
+    3. Keep BOTH test sets (TASK-3320's credential tests and S3a-2's inventory/bounded-join tests) and add one test that a --run-review finding on a root credential path is refused.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4614. COMMIT your work.
+  created_at: 2026-11-26T03:08:32.879842817Z
+  modified_at: 2026-11-26T03:08:32.879842817Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
