@@ -23,7 +23,7 @@ When several agents work in parallel, status views, logs and handoffs use operat
 
 ### Tracing one idea from a prompt to main
 
-Follow a single feature idea, *"add jittered retry backoff to the webhook client"*, across five swimlanes:
+Follow a single feature idea, "add jittered retry backoff to the webhook client", across five swimlanes:
 
 ![End-to-end swimlane: how one idea travels from a human prompt to main](showcase/assets/workflow-idea-to-main-swimlane.svg)
 
@@ -76,9 +76,9 @@ An approved pull request reaches main by one of three paths. Each checks the sam
 
 - **Path A — direct ship (`aida pr ship <n>`).** One pull request is squash-merged as one commit. A refusal names its gate in the exit code, for example a stale CI definition or a merge hold.
 - **Path B — merge train (`aida pr train <n>…` or `--all-ready`).** Two pull requests that are each green can still break main together. A train stacks main plus one squash commit per rider, checks each carries exactly its approved diff, and opens a `train/*` pull request so CI runs on exactly what main will receive. On a tiered repository a rider must already have a green full-tier run at its head. `aida pr train --check --all-open` says which pull requests would ride and why not; `--dry-run` previews the plan.
-  - **Green:** when the train is green and main has not moved, it is rebase-merged pinned to its tested head, and each rider's pull request is closed with a pointer to its commit.
-  - **Red:** a failing test is never simply rerun. The train is split in halves ([bisect](../aida-core/templates/.aida/discipline/product-glossary.md#bisect)) until each bad rider is isolated and left out with a comment. Only a run cancelled before it produced a test result is retried, once.
-  - **Autoland:** `aida land run` drives this loop: it launches reviewers and rework lanes, releases holds whose condition is met, and sends every ready change to one train. `aida land status` shows each open change's state.
+- **Path B, green train:** when the train is green and main has not moved, it is rebase-merged pinned to its tested head, and each rider's pull request is closed with a pointer to its commit.
+- **Path B, red train:** a failing test is never simply rerun. The train is split in halves ([bisect](../aida-core/templates/.aida/discipline/product-glossary.md#bisect)) until each bad rider is isolated and left out with a comment. Only a run cancelled before it produced a test result is retried, once.
+- **Autoland:** `aida land run` drives this loop: it launches reviewers and rework lanes, releases holds whose condition is met, and sends every ready change to one train. `aida land status` shows each open change's state.
 - **Path C — integration branch and promotion.** Coupled work lands first on a shared integration branch (`aida integration merge`), is checked together, and reaches main in one promotion. `aida integration promotion-check` refuses a promotion that contains a change without an approval at the head that was merged. A `(Refs <spec>)` trailer marks a partial slice; only a completing trailer moves the spec to Completed.
 
 ### Act 4: After landing — post-train pull and recovery
