@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T20:13:43.023510828Z
+modified_at: 2026-11-26T20:23:52.086025746Z
 req_type: Story
 tags:
 - landing
@@ -357,6 +357,12 @@ comments:
   content: PR-4634 at 1b15206aa059f1179ff7b6207e05348af644d1c2 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-26T20:13:42.868860785Z
   modified_at: 2026-11-26T20:13:42.868860785Z
+- id: 01a21987-6016-78f1-abac-51adde2fb00b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-3131-s2-causes` at head `1b15206aa059f1179ff7b6207e05348af644d1c2`.'
+  created_at: 2026-11-26T20:23:52.086022458Z
+  modified_at: 2026-11-26T20:23:52.086022458Z
+  session_id: 01a21906a29e
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
