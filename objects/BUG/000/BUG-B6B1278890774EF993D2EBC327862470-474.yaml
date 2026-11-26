@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-25T11:41:15.203827138Z
+modified_at: 2026-11-26T01:50:09.634849318Z
 req_type: Bug
 tags:
 - hygiene
@@ -283,6 +283,11 @@ comments:
   modified_at: 2026-11-25T11:41:15.203827138Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2158b-bee3-7dc3-813b-4ad1fc4328ad
+  author: joe
+  content: 'DONE: delivered by TASK-3882 (#4585, merged into integration 2236418e4d4) and landed on main in: 127cd79df6f [AI:claude] chore(integration): refusal-path quoting, showcase dropdowns/theme, review-runner spawn helper [promotion 41] (TASK-3882) (#4599) (advisor-122 ruling 2026-11-25 13:42). #4416 was closed in its favour.'
+  created_at: 2026-11-26T01:50:09.634849318Z
+  modified_at: 2026-11-26T01:50:09.634849318Z
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
