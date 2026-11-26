@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T11:52:11.981201426Z
+modified_at: 2026-11-26T12:19:31.695582252Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -452,6 +452,13 @@ comments:
   created_at: 2026-11-26T11:44:56.952630449Z
   modified_at: 2026-11-26T11:44:56.952630449Z
   session_id: 01a2177c5fc8
+- id: 01a217cc-30ee-77b0-a15f-d840c04d3c63
+  author: joe
+  content: 'Integration re-check: PR #4648 @6b05209c (d2 r1) — PASS. The delta is the deputy allow-list warning in operator-setup.md, setup.html and search-data.js: allow-listing Bash(aida deputy shell submit *) lets any agent in that session run arbitrary scripts at the operator''s terminal with operator authority; the deputy runner and the operator''s review of each script become the only gate; add it only for a supervised advisor seat with a trusted runner, preferably settings.local.json, never implementer or reviewer lanes. It matches the advisor''s MUST. b90b3ac701c merges integration 04fb4458ed7; diff vs integration is still only the 9 d2 docs/SVG files, and the SVGs are unchanged and clean.'
+  created_at: 2026-11-26T12:19:31.695582252Z
+  modified_at: 2026-11-26T12:19:31.695582252Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
