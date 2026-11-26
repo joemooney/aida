@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T05:21:23.728253483Z
+modified_at: 2026-11-26T05:34:37.427594839Z
 req_type: Bug
 tags:
 - ci
@@ -107,6 +107,15 @@ comments:
     - When the planner's listing breaches (main: `except ValueError` then `return 1`), the script returns without printing watch.summary(). The '# resource-watch' peak line is therefore missing in exactly the cargo test --list build phase where #4617 died, and for a deadline breach there no MemAvailable/s
   created_at: 2026-11-26T05:21:23.728253483Z
   modified_at: 2026-11-26T05:21:23.728253483Z
+- id: 01a21659-3f73-7d30-9b89-d16d5cfef7f3
+  author: joe
+  content: |-
+    AC1 EVIDENCE (product-15, automated, 22:34): #4623 @ e430c0ba full CI run 45760225097.
+    - lib-0: conclusion=success, 2026-11-26T05:14:05Z → 2026-11-26T05:32:31Z; resource watch: <no summary line found>
+    - lib-1: conclusion=success, 2026-11-26T05:14:05Z → 2026-11-26T05:30:55Z; resource watch: <no summary line found>
+    Verdict: see the numbers. MemAvailable staying well above zero with no swap means memory is REFUTED as the cause; a near-zero MemAvailable or a memory-exhausted line CONFIRMS it. AC2 count: this run is #1 of 3 consecutive green lib-1 runs if lib-1 passed.
+  created_at: 2026-11-26T05:34:37.427594839Z
+  modified_at: 2026-11-26T05:34:37.427594839Z
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
