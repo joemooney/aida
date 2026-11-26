@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2733",
+  "publishes": [
+    {
+      "at": "2026-11-26T11:53:26.940450031Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T22:50:01.403738009Z",
+      "spec": "BUG-2733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4598,
+        "verdict": "APPROVED",
+        "reviewed_sha": "9e55228e4279bc1eb9672b40ae1065f6e0c93179"
+      }
+    },
+    {
+      "ts": "2026-11-26T01:18:59.402170264Z",
+      "spec": "BUG-2733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4598,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bc5438855b63b22bf94baf3687a0ee3b4d1ca1c6"
+      }
+    },
+    {
+      "ts": "2026-11-26T01:19:11.365217325Z",
+      "spec": "BUG-2733",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2733 (completing). AC1: verified by bug_2733_promotion_branch_resolves_only_the_new_commits_spec for the train squash-body path (identity_gate); the ship path filter in pr_service::ship_gate_spec_records has no test. AC2: unverified; no test asserts the refusal text, although it is built from the resolved ids and looks right by construction. The linear-promotion review boundary is verified by bug_2733_linear_promotion_establishes_its_review_boundary. Blocking problem: the new `git log -p` patch read in gate code leaves git's textconv on (it is on by default for git log), unlike every other patch read in the codebase, and it skips host_git_command hardening in review_git_evidence. That lets repo config written by a seat run a command on the host. There are also binary-diff patch-id collisions and test gaps. CI was pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2733 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T02:24:40.646637601Z",
+      "spec": "BUG-2733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4598,
+        "verdict": "APPROVED",
+        "reviewed_sha": "efe42749706c6242f8d43f7d112fd8b05003df13"
+      }
+    },
+    {
+      "ts": "2026-11-26T11:49:38.601274826Z",
+      "spec": "BUG-2733",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4598
+      }
+    },
+    {
+      "ts": "2026-11-26T11:53:26.608889930Z",
+      "spec": "BUG-2733",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c693d7897a06b66a1764fa12095a5fcf253f7271",
+        "pr": 4598,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
