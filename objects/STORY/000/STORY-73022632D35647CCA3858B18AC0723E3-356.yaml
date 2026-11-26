@@ -1,5 +1,6 @@
 id: 01a21827-404e-79f1-afcf-f9cda1b59a60
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-356
+agreed_id: STORY-3178
 title: 'Review PR-4659: [AI:claude] chore(store-writers): inventory the manual-train waiter record (BUG-2771)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21805`) for branch `train-fair-admission`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-26T13:59:21.223872449Z
   session_id: 01a21805300e
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21848-6dd1-7510-8ef9-57159cecba40
+  author: joe
+  timestamp: 2026-11-26T14:35:29.617830269Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: f70a9b0f6fa8bbeab06c53b6df148d042dd850cc

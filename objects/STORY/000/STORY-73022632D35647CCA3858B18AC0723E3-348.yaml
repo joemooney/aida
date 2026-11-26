@@ -1,5 +1,6 @@
 id: 01a2173b-62d8-7be3-8fa7-fa279f268649
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-348
+agreed_id: STORY-3180
 title: 'Review PR-4641: [AI:claude] feat(report): aida report backlog adds landing flow, stale claims and prescribed cleanup (Refs STORY-3143)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a216f2`) for branch `report-backlog-s2`.
@@ -47,6 +48,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21848-e839-78d0-9851-657ae3de8bec
+  author: joe
+  timestamp: 2026-11-26T14:36:00.953069544Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
   branch: main

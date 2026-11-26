@@ -1,5 +1,6 @@
 id: 01a217aa-1b2f-7632-8d0f-4b23f99007ed
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-350
+agreed_id: STORY-3175
 title: 'Review PR-4649: [AI:claude] feat(report): aida report backlog adds HTML output, driver-activity stale claims and per-spec change requests (STORY-3143)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21782`) for branch `report-backlog-s3`.
@@ -61,6 +62,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21847-b672-7eb0-b383-3743fc6fa941
+  author: joe
+  timestamp: 2026-11-26T14:34:42.674271722Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d529d3b23b5c867f25514c44633fc8333b2cd11a
   branch: report-backlog-s3

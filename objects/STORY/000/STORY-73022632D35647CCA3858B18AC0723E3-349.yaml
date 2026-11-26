@@ -1,5 +1,6 @@
 id: 01a2176a-7ef1-7423-9ace-0e2fd17c9ca9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-349
+agreed_id: STORY-3177
 title: 'Review PR-4645: [AI:claude] fix(agent): scope agent gc mailbox leftovers by owner liveness and --older-than (BUG-2770)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21744`) for branch `bug-2770-gc-scope`.
@@ -49,6 +50,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21848-30ae-73f2-a85f-6b1e59353729
+  author: joe
+  timestamp: 2026-11-26T14:35:13.966881036Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 355e184e18e5648e05cf3ca39b881a33ba118b81
   branch: bug-2770-gc-scope
