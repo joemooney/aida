@@ -10,12 +10,12 @@ description: |
   Starvation is silent: the skip is not counted as a failure, so neither loop status nor train-status shows it. #4212 (BUG-2650, cooperative manual-train admission) may be the fix, but it cannot land through this contention.
 
   Acceptance: (1) auto-train cannot be starved indefinitely by review-watch: bounded wait or fair handoff, so a train admits within N ticks while review-watch is busy. (2) Repeated contention skips are counted, and after a threshold they surface in train-status and raise an alert. (3) An operator or advisor manual train can preempt or queue behind the loops instead of being refused.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-26T14:06:56.295144002Z
+modified_at: 2026-11-26T14:06:59.166067489Z
 req_type: Bug
 tags:
 - landing
@@ -167,6 +167,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a2182e-545e-71a1-80f4-9b7373ec5f1d
+  author: joe
+  timestamp: 2026-11-26T14:06:59.166065519Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: e603027b08b876264cf80b35d4d8ebd50a4b8bfc
   branch: main
@@ -176,3 +183,6 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T14:06:59.166003678Z
