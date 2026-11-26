@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T04:26:28.285808313Z
+modified_at: 2026-11-26T05:17:41.376659110Z
 req_type: Story
 tags:
 - agents
@@ -43,6 +43,20 @@ comments:
   modified_at: 2026-11-26T04:20:23.848456750Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21649-be80-7062-9849-2589a19d2003
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c61aeb912f (slice 1, Refs STORY-3134)
+
+    AC1: [evidence: behavioral-test] Codex usage limit detected only from structured turn.failed/error events (real host log line used as fixture), Claude from rate_limit_event status=rejected with resetsAt. Free-text agent messages and other turn failures are not outages (story_3134_vendor_outage_tests ac1_*). A stopped standalone lane is snapshotted (commits + staged + unstaged + untracked, via a private index, so the seat's HEAD and index are untouched) to aida-outage/<branch> on origin. Only after that push succeeds does the lease end (session end --force --discard-unpushed). A failed push keeps the lease and the tree (tested). The lane exits 37 with a vendor-unavailable result line, not 'implementer exited'.
+    AC2: [evidence: behavioral-test] VendorUnavailable{vendor, until} is recorded at .aida/vendor-outages/<vendor>.json on the main checkout and shown as an aida doctor finding (category vendor-outage). lane_host::preflight refuses before any lease is minted, and that covers headless queue work, including review-watch's reviewer launches.
+    Probes: same vendor key (as_str) on write and compare. Atomic tmp+rename write. An unreadable record is skipped (it only withholds launches). With N events the last wins. An expired record is ignored, so availability returns at the reset with no manual revert.
+    Residual / slice 2: AC3 fallback_vendor + the single operator notification. AC4 recovery event (expiry already restores launches, but no event is written). Detection in reviewer output and in drain phase-1 implementers (run_vendor_headless_to_exit) is not wired yet; only standalone lanes end via the outage path. Production diff is ~362 lines plus 246 test lines, over the 300 budget.
+  created_at: 2026-11-26T05:17:41.376659110Z
+  modified_at: 2026-11-26T05:17:41.376659110Z
+  session_id: 01a2161aa788
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
