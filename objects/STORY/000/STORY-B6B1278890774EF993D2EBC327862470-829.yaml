@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T07:47:38.729471138Z
+modified_at: 2026-11-26T07:55:40.697944815Z
 req_type: Story
 tags:
 - integration
@@ -931,6 +931,21 @@ comments:
     A reference merge (commit b94dbcad240c, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T07:47:38.729458952Z
   modified_at: 2026-11-26T07:47:38.729458952Z
+- id: 01a216da-9fbd-7661-96cb-8a9a16862193
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:55):
+    # STORY-3120 S3 follow-up (integration-30 00:10; deferred p3s from #4619/#4628 recorded on STORY-3120; product-15). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch int44-story-3120-s3fu. Title "(Refs STORY-3120)". <=200 lines.
+    READ: `aida show STORY-3120 --comments` (the latest deferred-finding comments). Do exactly these:
+     (1) Bind runner finding paths to the batch's own file list (batch.files), not only the whole PR inventory: a finding citing a file outside ITS batch is refused.
+     (2) Reap or report an ESCAPED runner descendant (a setsid'd child that survives kill(-pgid)): SIGKILL what can be found, and report "escaped descendant pid N" in the run error.
+     (3) Route git_text through aida_core::git_ops::host_git_command (sanitized env, the seat-clone pins), not a raw Command::new("git").
+    TESTS for each. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+    Do NOT rebase onto main or merge main into this branch (integration-30 00:19): the int44 branch targets integration; any post-p43 re-sync is handled on the integration side.
+  created_at: 2026-11-26T07:55:40.697944815Z
+  modified_at: 2026-11-26T07:55:40.697944815Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
