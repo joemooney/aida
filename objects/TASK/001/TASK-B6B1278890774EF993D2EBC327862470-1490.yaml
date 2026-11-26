@@ -1,0 +1,28 @@
+id: 01a216bd-f65b-78d3-99a3-29de306eb420
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1490
+agreed_id: TASK-3915
+title: Set [lanes] max_compile_concurrency = 4 and cargo_build_jobs = 4 for dell1 (TASK-3911 follow-up config)
+description: |
+  advisor-122 2026-11-26 00:27 (filed by product-15). TASK-3911 landed 00:09 with the knobs `[lanes] max_compile_concurrency` and `cargo_build_jobs` (default unset). dell1 has 62G RAM and one aida_cli_lib rustc peaks at 5-14G, so 4 concurrent compiles leaves headroom.
+
+  ## Acceptance
+  - AC1: .aida/config.toml sets `[lanes] max_compile_concurrency = 4` and `cargo_build_jobs = 4`, with a comment citing the 2026-11-25 dell1 OOM and TASK-3911. One tiny PR to main.
+  - AC2 (operational, product seat): after it lands AND dell1's live binary includes TASK-3911, raise the product launcher's lane cap from 5 to 7, watch dell1 MemAvailable for the first hour, and drop back to 5 if it goes under ~8G.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T07:24:37.851118978Z
+modified_at: 2026-11-26T07:24:37.851118978Z
+req_type: Task
+tags:
+- config
+- dell1
+- lanes
+filed_at:
+  code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c8c3a3e139a
+  vendor: claude
