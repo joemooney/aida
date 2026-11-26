@@ -833,6 +833,42 @@ pub(crate) fn exited_claim_seat(claim: &crate::coordination::Claim) -> Option<Pa
     record.seat_path.filter(|path| path.is_absolute())
 }
 
+/// Whether any headless lane record in `project_root` captured the claim
+/// generation `claim_id`. A record that cannot be read or parsed is an error,
+/// so the caller retains the claim rather than guess.
+// trace:BUG-2773 | ai:claude
+pub(crate) fn lane_record_names_claim(
+    project_root: &Path,
+    claim_id: Option<&str>,
+) -> Result<bool, String> {
+    let dir = lanes_dir(project_root);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(format!("{}: {error}", dir.display())),
+    };
+    for entry in entries {
+        let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
+        let is_record = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("headless-") && n.ends_with(".json"));
+        if !is_record {
+            continue;
+        }
+        let record: HeadlessLaneRecord = std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|raw| serde_json::from_str(&raw).map_err(|e| e.to_string()))
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        if record.claim.as_ref().is_some_and(|captured| {
+            captured.claim_id.is_some() && captured.claim_id.as_deref() == claim_id
+        }) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn lanes_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("lanes")
 }
