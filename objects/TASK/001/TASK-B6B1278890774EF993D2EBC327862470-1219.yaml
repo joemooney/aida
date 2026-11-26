@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1219
 agreed_id: TASK-3837
 title: 'BUG-2706 follow-up: lane_hosts claim snapshot aborts on a non-UTF-8 sibling pathname'
 description: 'From the #4382 r3 final review at 20d746c9 (lane_hosts.rs:173). git ls-tree -z returns raw pathname bytes, and from_utf8(row)? aborts the whole claim snapshot before the per-blob size check, so one oversized sibling with a non-UTF-8 filename empties the claim list, and review-watch can review a live lane''s merge-only head after the unreadable grace. Fix: split the header and pathname as bytes, check the .toml suffix on bytes, decode only the ASCII header, and extend the bare-origin oversized-sibling regression with a non-UTF-8 name. Deferred by the advisor because AIDA''s claim writers only produce ASCII spec-ID filenames, and the worst case is an early non-counting review (today''s status quo, also addressed by BUG-2714), not an unsafe merge. Also from that review: TASK-3833 holds r2''s deferred findings 1, 5 and 6.'
-status: NeedsAttention
+status: Rejected
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:55:19.345403417Z
-modified_at: 2026-11-26T05:39:24.232395856Z
+modified_at: 2026-11-26T05:39:27.918564545Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -54,6 +54,11 @@ comments:
   content: 'REJECTED as obsolete (product-15 2026-11-25 22:50, per the implementer punt): the code this task fixes (aida-cli-lib/src/lane_hosts.rs, the git ls-tree -z claim snapshot with from_utf8(row)?, observed_claims) never reached main. It existed only on PR #4382 (bug-b6b1...-468), which closed unmerged, and the parent BUG-2706 is deferred until 2026-12-15 (advisor ruling 2026-11-22). If BUG-2706 resumes, fold this finding into its rework as a comment there.'
   created_at: 2026-11-26T05:39:24.232395856Z
   modified_at: 2026-11-26T05:39:24.232395856Z
+- id: 01a2165d-ae2e-7e91-9ead-a0fcd0999e48
+  author: joe
+  content: 'Returned from NeedsAttention to Rejected via `aida edit --status`. It was punted on: blocked-dependency: The code this task fixes is not on main. aida-cli-lib/src/lane_hosts.rs (the git ls-tree -z claim snapshot with from_utf8(row)? at :173, and observed_claims) only existed on PR #4382''s branch bug-b6b1278890774ef993d2ebc327862470-468. That PR is CLOSED unmerged, and BUG-2706 is deferred until 2026-12-15 (advisor ruling 2026-11-22: review-time deferral did not converge in 8 rounds; the source fix was BUG-2726, now completed). origin/main has no lane_hosts.rs, no observed_claims and no equivalent claim-snapshot reader (checked with rg and git ls-tree). There is nothing to patch on main without reviving the parked BUG-2706 design, which is out of scope for a <=300-line follow-up.. No triage reason was given.'
+  created_at: 2026-11-26T05:39:27.918559441Z
+  modified_at: 2026-11-26T05:39:27.918559441Z
 history:
 - id: 01a21493-ae4d-74b1-82ba-a2bb2bee369b
   author: joe
@@ -88,6 +93,13 @@ history:
   session_id: 01a21651638d
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2165d-ae2e-7e91-9ead-a0e3fbcac4ab
+  author: joe
+  timestamp: 2026-11-26T05:39:27.918548707Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Rejected
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
@@ -98,9 +110,3 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'The code this task fixes is not on main. aida-cli-lib/src/lane_hosts.rs (the git ls-tree -z claim snapshot with from_utf8(row)? at :173, and observed_claims) only existed on PR #4382''s branch bug-b6b1278890774ef993d2ebc327862470-468. That PR is CLOSED unmerged, and BUG-2706 is deferred until 2026-12-15 (advisor ruling 2026-11-22: review-time deferral did not converge in 8 rounds; the source fix was BUG-2726, now completed). origin/main has no lane_hosts.rs, no observed_claims and no equivalent claim-snapshot reader (checked with rg and git ls-tree). There is nothing to patch on main without reviving the parked BUG-2706 design, which is out of scope for a <=300-line follow-up.'
-  lean: Fold TASK-3837 (and comment[0]'s AC3 store-missing finding) into BUG-2706 as acceptance criteria for whenever it resumes, or close it as moot if BUG-2706 is dropped. Do not land a standalone fix.
-  raised_by: implementer
-  raised_at: 2026-11-26T05:29:50.423431388Z
