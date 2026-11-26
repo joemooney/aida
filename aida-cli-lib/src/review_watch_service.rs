@@ -49,6 +49,17 @@ impl HostAuthority {
 const TRAIN: bool = false;
 include!("advisor_loop_service.rs");
 
+/// Changes the review watcher's last pass held behind a retained reviewer
+/// checkout for over 30 minutes, as `(key, finding with its fix)`. A missing
+/// or unreadable report yields none: its own degradation covers that.
+// trace:BUG-2776 | ai:claude
+pub(crate) fn retained_review_blocks(root: &Path, now: DateTime<Utc>) -> Vec<(String, String)> {
+    match directory(root, false).map(|dir| dir.map(|dir| pass_report(&dir))) {
+        Ok(Some(Ok(Some(report)))) => retained_blocks(&report, now),
+        _ => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 #[cfg(target_os = "linux")]
 mod tests {

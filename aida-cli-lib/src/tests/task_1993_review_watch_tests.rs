@@ -5798,7 +5798,11 @@ fn bug2757_bug2720_exited_pickup_retries_after_worktree_release() {
             panic!("unexpected dispatch")
         };
         assert!(reason.contains(message), "{reason}");
-        assert_eq!(outcome, Admission::Skipped("held by exited attempts"));
+        // The pass line names why each change is held. trace:BUG-2776 | ai:claude
+        assert!(
+            matches!(&outcome, Admission::Held { why, .. } if !why.is_empty()),
+            "{outcome:?}"
+        );
     };
     skip("process exit unconfirmed");
     receipt(&dead, false, 0);
@@ -5817,7 +5821,8 @@ fn bug2757_bug2720_exited_pickup_retries_after_worktree_release() {
         git(&["worktree", "add", "-q", "raced", branch]);
         Ok(())
     };
-    let (action, _) = select_with_probes(&store, &c, None, 1, || None, occupy).unwrap();
+    let free = || crate::queue_cmd::RetainedReview::Free;
+    let (action, _) = select_with_probes(&store, &c, None, 1, || None, free, occupy).unwrap();
     assert!(
         matches!(action, Action::Skip(reason) if reason.contains("worktree ownership changed"))
     );
@@ -5830,6 +5835,105 @@ fn bug2757_bug2720_exited_pickup_retries_after_worktree_release() {
     let retry = dispatch(select(&store, &c, None, 1).unwrap());
     assert_eq!(retry.pickup_retries, 1);
     assert_eq!(retry.head, c.head);
+}
+
+/// A moved head held by an exited reviewer's leftover checkout: a kept
+/// checkout names why in the pass outcome; a reclaimed one dispatches the new
+/// head in the same pass. trace:BUG-2776 | ai:claude
+#[test]
+fn bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass() {
+    use crate::queue_cmd::RetainedReview;
+    let (temp, store) = fixture();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(temp.path())
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.org",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "base",
+    ]);
+    git(&["worktree", "add", "-qb", "pr-1", "aida-pr-1"]);
+    let c = change(1, 2, false);
+    // The first refusal is a setup failure; the retry's refusal leaves the
+    // Exited receipt review-watch retries.
+    let preflight =
+        |_: &Attempt| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some("pr-1"));
+    for _ in 0..2 {
+        let a = dispatch(select(&store, &c, None, 1).unwrap());
+        execute_reservation(&store, "PR-1", &a.token, |_| Ok(()), preflight).unwrap_err();
+    }
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dead = Identity::child(&child).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let due = || {
+        store
+            .transaction("PR-1", |state| {
+                let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                assert_eq!(a.phase, Phase::Exited);
+                a.identity = Some(dead.clone());
+                a.pickup_retry_at = Some(chrono::Utc::now());
+                Ok(())
+            })
+            .unwrap()
+    };
+    due();
+    let dirty = || RetainedReview::Kept("dirty".into());
+    let (action, outcome) = select_with_probes(
+        &store,
+        &c,
+        None,
+        1,
+        || None,
+        dirty,
+        |b| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some(b)),
+    )
+    .unwrap();
+    assert!(
+        matches!(&action, Action::Skip(r) if r.contains("is held by worktree") && r.contains("retained checkout kept: dirty")),
+        "{action:?}"
+    );
+    assert_eq!(
+        outcome,
+        Admission::Held {
+            why: "dirty".into(),
+            retained: true
+        }
+    );
+    due();
+    let reclaimed = || {
+        git(&["worktree", "remove", "aida-pr-1"]);
+        RetainedReview::Free
+    };
+    let (action, outcome) = select_with_probes(
+        &store,
+        &c,
+        None,
+        1,
+        || None,
+        reclaimed,
+        |b| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some(b)),
+    )
+    .unwrap();
+    let retry = dispatch(action);
+    assert_eq!(retry.head, c.head);
+    assert_eq!(retry.pickup_retries, 1);
+    assert_eq!(outcome, Admission::Settled);
 }
 
 // trace:BUG-2720 | ai:codex
