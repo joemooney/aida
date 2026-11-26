@@ -10,12 +10,12 @@ description: |
   - AC2: `--older-than` also applies to mailbox leftover files.
   - AC3: the dry run marks each candidate live/dead/unknown, and UNKNOWN is skipped (fail-safe).
   - AC4: tests for live-skip, age-scoping and unknown-skip.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-26T09:47:56.156300404Z
+modified_at: 2026-11-26T09:51:19.304724877Z
 req_type: Bug
 tags:
 - agents
@@ -38,6 +38,13 @@ history:
   author: joe
   timestamp: 2026-11-26T09:45:27.682362407Z
   changes: []
+- id: 01a21744-4308-7d51-8a8e-6fc6499bcf0e
+  author: aida-session-start
+  timestamp: 2026-11-26T09:51:19.304722519Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: b4c61d1f69f2536883ca2d64aba061031f1463de
