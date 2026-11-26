@@ -84,6 +84,7 @@
       "source": "aida-cli-lib/src/launch/review_challenger.rs",
       "tests": [
         "s4_challenger_effort_injection_refused_at_every_source",
+        "bug2775_runner_cmd_note_only_when_the_variable_is_set",
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags"
