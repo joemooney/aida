@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-26T01:40:45.085498442Z
+modified_at: 2026-11-26T01:41:59.366652759Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -196,6 +196,20 @@ comments:
     - Targeted local heal runs local_stale_finding twice (once in doctor_cmd selection, again in apply_doctor_lease revalidation), so detect_merged_pr_for_branch_via_forge does two forge round-trips per --id heal; consider revalidating without the forge call or caching the lookup, since this bug was about slow/silent heals.
   created_at: 2026-11-25T22:41:51.142520718Z
   modified_at: 2026-11-25T22:41:51.142520718Z
+- id: 01a21584-7f18-7dd1-83ce-88c520eb6c10
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:41):
+    # BUG-2739 store-writer inventory fix on #4482 (product-15, 2026-11-25 18:50; bisect train #4609 went red on it). Lane: CLAUDE. MAIN, existing branch / PR #4482. <=20 lines. Keep the PR title.
+    CI gates (run 45733481261) on train #4609 refused: "store-writer inventory refused: unclassified writer/caller sink site (addition): aida-cli-lib/src/schedule_ledger.rs|write_local_bounded|with_store_write_lock_bounded. After merging current main, run python3 scripts/check-store-writers.py --regenerate; review additions and delete stale rows in the inventory diff."
+    1. Merge current origin/main into the branch.
+    2. Run `python3 scripts/check-store-writers.py --regenerate` and review the diff: CLASSIFY the new schedule_ledger.rs row the same way as the existing bounded schedule-ledger writers (it is this PR's own intended writer), and delete stale rows. Do NOT add any other new site.
+    3. `python3 scripts/check-store-writers.py` must pass, then make check-ci-fast. Say in the PR body which row was classified and why.
+    Push to #4482. COMMIT your work.
+  created_at: 2026-11-26T01:41:59.366652759Z
+  modified_at: 2026-11-26T01:41:59.366652759Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
