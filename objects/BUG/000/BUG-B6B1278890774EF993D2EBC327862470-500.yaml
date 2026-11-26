@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:37:25.650871063Z
-modified_at: 2026-11-26T02:24:26.855702004Z
+modified_at: 2026-11-26T06:22:19.455467589Z
 req_type: Bug
 comments:
 - id: 01a20b33-eb2c-7a00-8f95-3cc615ab32da
@@ -225,6 +225,11 @@ comments:
   created_at: 2026-11-26T02:24:26.855698458Z
   modified_at: 2026-11-26T02:24:26.855698458Z
   session_id: 01a21585c0d4
+- id: 01a21684-eb40-7020-bbb5-928d05fd5cac
+  author: joe
+  content: 'COMPLETED (advisor-122 ruling 2026-11-25 23:26; applied by product-15): the stale-lease heal is bounded with a named cause (#4482, landed 23:20 via train #4625); the throughput guard is covered by BUG-2730 (#4457). The session-hygiene silent run in the original report: if it recurs, reopen with output (today''s session-hygiene runs reported normally).'
+  created_at: 2026-11-26T06:22:19.455467589Z
+  modified_at: 2026-11-26T06:22:19.455467589Z
 history:
 - id: 01a20b33-da32-7701-ac0a-09be99935eac
   author: joe
