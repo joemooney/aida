@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T15:51:31.432444265Z
+modified_at: 2026-11-26T16:58:37.376763065Z
 req_type: Bug
 tags:
 - admission
@@ -89,6 +89,13 @@ comments:
   content: "DEFERRED (advisor-122 override-approval of #4667 @ a0728ce1, 2026-11-26 08:58): a minor test gap on the stale-deputy REPORTING path (train-status / doctor output); follow-up: a test asserting the report names the deputy, pid, binary and the restart fix.\n- Test gap (reporting path, not gate code): deputy_binary_finding (aida-cli-lib/src/advisor_loop_service.rs) and its doctor wiring/dedup in aida-cli-lib/src/doctor_cmd.rs (two services, same deputy:pid id) have no fixture test; only the pure probe and status_lines are tested. Follow-up: add a test over the finding builder with a fake receipt and the "
   created_at: 2026-11-26T15:51:31.432444265Z
   modified_at: 2026-11-26T15:51:31.432444265Z
+- id: 01a218cb-77c0-7fd1-86dd-02fe49c59b22
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 89b71c13f40e
+    A reference merge (commit 89b71c13f40e, `(Refs BUG-2774)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T16:58:37.376757025Z
+  modified_at: 2026-11-26T16:58:37.376757025Z
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe
