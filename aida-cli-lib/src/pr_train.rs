@@ -5740,6 +5740,12 @@ pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
     journal::lock_held(&root.join(".aida/train"))
 }
 
+/// Whether a journaled train awaits recovery: the auto-train's unclaimed
+/// pre-scan must then run its pass. trace:BUG-2769 | ai:claude
+pub(crate) fn automatic_recovery_needed(root: &Path) -> Result<bool> {
+    journal::recovery_needed(&root.join(".aida/train"))
+}
+
 // trace:STORY-2905 | ai:claude
 #[cfg(test)]
 #[path = "tests/story_2905_train_pin_claim_tests.rs"]

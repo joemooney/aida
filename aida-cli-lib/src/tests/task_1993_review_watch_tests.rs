@@ -5380,26 +5380,41 @@ sys.exit(1)
     let train_release = Arc::new(AtomicBool::new(false));
     let train_finished: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
     let train_passes = Arc::new(AtomicUsize::new(0));
+    // The auto-train takes its claim per pass only (BUG-2769), so a later
+    // pass records whether it ran under the claim again.
+    let train_retook = Arc::new(AtomicBool::new(false));
     let train = {
         let root = root.clone();
-        let (started, release, finished, passes) = (
+        let (started, release, finished, passes, retook) = (
             train_started.clone(),
             train_release.clone(),
             train_finished.clone(),
             train_passes.clone(),
+            train_retook.clone(),
         );
         std::thread::spawn(move || {
-            super::train::run_passes(&root, 1, move || {
-                // The first pass is a train stack in progress until released.
-                if passes.fetch_add(1, Ordering::SeqCst) == 0 {
-                    started.store(true, Ordering::SeqCst);
-                    while !release.load(Ordering::SeqCst) {
-                        std::thread::sleep(Duration::from_millis(20));
+            let pass_root = root.clone();
+            super::train::run_passes(
+                &root,
+                1,
+                || Ok(true),
+                move || {
+                    // The first pass is a train stack in progress until released.
+                    if passes.fetch_add(1, Ordering::SeqCst) == 0 {
+                        started.store(true, Ordering::SeqCst);
+                        while !release.load(Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(20));
+                        }
+                        *finished.lock().unwrap() = Some(Instant::now());
+                    } else if bug2703_loop_claims(&pass_root)
+                        .iter()
+                        .any(|p| p == "legacy auto-train")
+                    {
+                        retook.store(true, Ordering::SeqCst);
                     }
-                    *finished.lock().unwrap() = Some(Instant::now());
-                }
-                Ok(())
-            })
+                    Ok(())
+                },
+            )
         })
     };
     let both_hold = || {
@@ -5543,8 +5558,14 @@ sys.exit(1)
         .values()
         .flat_map(|e| &e.attempts)
         .all(|a| !active(a)));
-    // With nobody waiting, both workers take their claims again.
-    bug2703_wait_for("both workers resume their claims", both_hold);
+    // With nobody waiting, both workers take their claims again: the
+    // auto-train for each pass it runs (BUG-2769). trace:BUG-2769 | ai:claude
+    bug2703_wait_for("both workers resume their claims", || {
+        bug2703_loop_claims(&root)
+            .iter()
+            .any(|p| p == "legacy review-watch")
+            && train_retook.load(Ordering::SeqCst)
+    });
     crate::review_watch::stop_test_loops(&root);
     for (name, worker) in [("review-watch", review), ("auto-train", train)] {
         let error = worker.join().unwrap().expect_err("stopped by the fixture");
