@@ -3,15 +3,23 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-762
 agreed_id: STORY-2839
 title: Demystify AIDA delivery, train, authority, and lane terminology in docs/showcase with visual field guide and SVGs
 description: |
-  Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
+  Update docs/showcase and the product docs to demystify AIDA's operational, Git, train, authority and lane concepts for both non-experts and operators: a visual field guide (dual-theme SVGs), the multi-seat workflow, getting started, and showcase navigation, refreshed for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
 
-  Targets and done check (advisor 13:58, product seat batch): edit docs/showcase/glossary.html (the canonical product glossary), docs/showcase/authority.html and docs/showcase/autonomy.html (workflow/authority guides), and add a new docs/showcase/field-guide.html (the 5-act field guide) registered in docs/showcase/build.py's page list. New SVGs go under docs/showcase/assets/ named field-guide-act1.svg to field-guide-act5.svg, each with light and dark variants following the existing assets' convention. Done when: every term listed in the description has a glossary entry; the five SVGs render in both themes; make check-ci-fast (docs gates) passes.
+  RECONCILED 2026-11-26 (product-15; integration-30 06:40 flagged that the original 11-23 done check named files the shipped slices replaced). Delivered as slices a, b, c, d1, d2 and e, ported from Joe's reference commit b5826a0f949 (originally a/b/c/d/e per integration-30's grooming):
+  - (a) #4588: Markdown pipe tables with HTML-escaped cells in docs/showcase/build.py, plus tests.
+  - (b) #4591: topbar dropdown menus (How it works / Governance / Operations / Reference) and the persisted Light/Dark theme toggle (localStorage aida-theme, whitelisted to light/dark).
+  - (c) #4637: docs/getting-started.md + getting-started.html.
+  - (d1) #4642: docs/product-workflow.md + the swimlane, lanes-leases, merge-train and post-train-sync SVGs.
+  - (d2) #4648: the enums-state, exception-paths, gates-review and human-journeys SVGs + docs/operator-setup.md (lane-admission host config in /etc/aida/lanes.toml; the deputy allow-list warning).
+  - (e) #4655: the terminology field guide (docs/showcase/workflow.html), workflow.svg and authority-mandate.svg, and a build.py guard that refuses unrenderable nested lists / single-asterisk emphasis, naming file:line.
+
+  Done when (replaces the 11-23 check, which named field-guide.html, field-guide-act1..5.svg and autonomy.html, all superseded by the files above): every page and SVG above is on integration and passes `python3 docs/showcase/build.py --check` and `pytest tests/test_showcase_build.py`; every SVG renders in both themes and contains no script, event handler or external href; every term listed in the first paragraph is defined in docs/showcase/glossary.html or the workflow.html field guide; make check-ci-fast passes. STORY-2852 (tracked verbs) is NOT completed by this story.
 status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T13:26:17.105358565Z
+modified_at: 2026-11-26T13:26:48.346787782Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -731,6 +739,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21809-8b1a-7f01-8280-bf84ceafdbc2
+  author: joe
+  timestamp: 2026-11-26T13:26:48.346784577Z
+  changes:
+  - field_name: description
+    old_value: |
+      Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
+
+      Targets and done check (advisor 13:58, product seat batch): edit docs/showcase/glossary.html (the canonical product glossary), docs/showcase/authority.html and docs/showcase/autonomy.html (workflow/authority guides), and add a new docs/showcase/field-guide.html (the 5-act field guide) registered in docs/showcase/build.py's page list. New SVGs go under docs/showcase/assets/ named field-guide-act1.svg to field-guide-act5.svg, each with light and dark variants following the existing assets' convention. Done when: every term listed in the description has a glossary entry; the five SVGs render in both themes; make check-ci-fast (docs gates) passes.
+    new_value: |
+      Update docs/showcase and the product docs to demystify AIDA's operational, Git, train, authority and lane concepts for both non-experts and operators: a visual field guide (dual-theme SVGs), the multi-seat workflow, getting started, and showcase navigation, refreshed for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
+
+      RECONCILED 2026-11-26 (product-15; integration-30 06:40 flagged that the original 11-23 done check named files the shipped slices replaced). Delivered as slices a, b, c, d1, d2 and e, ported from Joe's reference commit b5826a0f949 (originally a/b/c/d/e per integration-30's grooming):
+      - (a) #4588: Markdown pipe tables with HTML-escaped cells in docs/showcase/build.py, plus tests.
+      - (b) #4591: topbar dropdown menus (How it works / Governance / Operations / Reference) and the persisted Light/Dark theme toggle (localStorage aida-theme, whitelisted to light/dark).
+      - (c) #4637: docs/getting-started.md + getting-started.html.
+      - (d1) #4642: docs/product-workflow.md + the swimlane, lanes-leases, merge-train and post-train-sync SVGs.
+      - (d2) #4648: the enums-state, exception-paths, gates-review and human-journeys SVGs + docs/operator-setup.md (lane-admission host config in /etc/aida/lanes.toml; the deputy allow-list warning).
+      - (e) #4655: the terminology field guide (docs/showcase/workflow.html), workflow.svg and authority-mandate.svg, and a build.py guard that refuses unrenderable nested lists / single-asterisk emphasis, naming file:line.
+
+      Done when (replaces the 11-23 check, which named field-guide.html, field-guide-act1..5.svg and autonomy.html, all superseded by the files above): every page and SVG above is on integration and passes `python3 docs/showcase/build.py --check` and `pytest tests/test_showcase_build.py`; every SVG renders in both themes and contains no script, event handler or external href; every term listed in the first paragraph is defined in docs/showcase/glossary.html or the workflow.html field guide; make check-ci-fast passes. STORY-2852 (tracked verbs) is NOT completed by this story.
 execution_mode: drain
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
