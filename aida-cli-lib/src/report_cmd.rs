@@ -11,6 +11,10 @@ use std::path::{Path, PathBuf};
 pub(crate) mod report_cmd_args;
 pub(crate) use report_cmd_args::*;
 
+// trace:STORY-3143 | ai:claude
+#[path = "backlog_report.rs"]
+pub(crate) mod backlog_report;
+
 use aida_core::{
     models::{Requirement, RequirementStatus, RequirementType},
     ReportFormat, ReportGenerator, Storage,
@@ -88,6 +92,9 @@ pub(crate) fn handle_report_command(
             *copy,
             *no_file,
         ),
+        // trace:STORY-3143 | ai:claude
+        // The global `--format json` reaches here as `--json` (BUG-1502 gate).
+        Some(ReportCommand::Backlog { json }) => backlog_report::handle_backlog(storage, *json),
         Some(ReportCommand::AiIntegration {
             format,
             output,
