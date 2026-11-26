@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T07:55:40.697944815Z
+modified_at: 2026-11-26T08:03:52.572873084Z
 req_type: Story
 tags:
 - integration
@@ -946,6 +946,20 @@ comments:
   modified_at: 2026-11-26T07:55:40.697944815Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a216e1-e47c-7211-8f3c-c367b7b6b100
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5c870e4aaf (branch int44-story-3120-s3fu, S3 follow-up)
+    (1) [evidence: behavioral-test] review_batches refuses a finding citing a file in the inventory but outside its own batch (aida-cli-lib/src/review_prepare.rs review_batches; test s3a2_run_review_refuses_findings_outside_the_inventory, b.rs case).
+    (2) [evidence: behavioral-test] RunnerCall::run records the /proc/self/fd pipe inodes at spawn. If the pipe threads are still open after JOIN_GRACE, it SIGKILLs every other process holding one of those pipes, waits again, and fails with 'escaped descendant pid N (killed)'. It reports 'no escaped descendant found' or 'pipe threads are leaked' when they apply. Test s3a2_runner_fails_closed_on_escaped_descendant (Linux only) asserts the setsid'd sleep 30 is dead or a zombie and that no threads leaked.
+    (3) [evidence: behavioral-test] git_text is built on aida_core::git_ops::host_git_command and keeps the builder's env pins across env_clear. Test s3fu_git_text_uses_host_git_hardening: a control raw git runs the repo's core.fsmonitor hook and git_text does not.
+    Probes: fail-closed is kept (an escape is always an error even after a successful kill); without /proc nothing is found and the run still fails. Residual risks: PID reuse between the /proc scan and kill (narrow window); an escaped process that closed its pipes is not found (it cannot block the run).
+    Checks: 4 targeted tests passed (lane job); make check-ci-fast exit 0. Classifier-inventory noise in the first gate run came from the lane environment (the check passes on the host before and after).
+  created_at: 2026-11-26T08:03:52.572873084Z
+  modified_at: 2026-11-26T08:03:52.572873084Z
+  session_id: 01a216bad2d9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
