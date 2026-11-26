@@ -11,6 +11,16 @@ use chrono::{DateTime, TimeDelta, Utc};
 use std::path::Path;
 
 pub(crate) const CATEGORY: &str = "landing-drought";
+/// Shown with the findings but never fails `--fail-on-findings`.
+pub(crate) const INFO_CATEGORY: &str = "landing-drought-info";
+
+/// The findings that fail the job: everything but the informational rows.
+pub(crate) fn failing(findings: &[DoctorFinding]) -> usize {
+    findings
+        .iter()
+        .filter(|f| f.category != INFO_CATEGORY)
+        .count()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Action {
@@ -78,6 +88,8 @@ pub(crate) struct Ready {
     pub since: DateTime<Utc>,
     /// An open approval at the current head; otherwise no verdict there yet.
     pub approved: bool,
+    /// A review of the current head is queued or running.
+    pub review_in_flight: bool,
     /// The forge reports a merge conflict with the base.
     pub conflict: bool,
     /// A rework lane (queued work or a retained implementer lease) owns it.
@@ -99,9 +111,14 @@ pub(crate) struct LockHolder {
 }
 
 impl LockHolder {
+    /// Held past `lock_hold_minutes`, or held at all by a dead or
+    /// unidentified driver: an orphaned lock (BUG-2757's shape) is stale at
+    /// any age.
     fn stale(&self, policy: &Policy) -> bool {
-        self.held_minutes
-            .is_some_and(|m| m > policy.lock_hold_minutes)
+        self.pid.is_none()
+            || self
+                .held_minutes
+                .is_some_and(|m| m > policy.lock_hold_minutes)
     }
 }
 
@@ -144,11 +161,9 @@ fn cause(ready: &Ready, stale_lock: Option<&LockHolder>) -> Option<(String, Stri
             let lock = stale_lock?;
             let pid = lock.pid.map_or("an unidentified process".into(), |p| format!("pid {p}"));
             let command = lock.command.as_ref().map_or(String::new(), |c| format!(" ({c})"));
+            let age = lock.held_minutes.map_or(String::new(), |m| format!(" {m}m"));
             (
-                format!(
-                    "train lock held {}m by {pid}{command}",
-                    lock.held_minutes.unwrap_or_default()
-                ),
+                format!("train lock held{age} by {pid}{command}"),
                 format!("inspect `aida pr train --status`; stop {pid} if it is hung, then train PR {n}"),
             )
         }
@@ -187,8 +202,20 @@ pub(crate) fn evaluate(
             } else {
                 "green"
             };
+            // A queued or running review is the normal backlog: shown, not
+            // failing. trace:STORY-3131 | ai:claude
+            let backlog = !r.approved && r.ci == Ci::Green && r.review_in_flight;
+            let (category, why, action) = if backlog {
+                (
+                    INFO_CATEGORY,
+                    "review queued or running at the current head".into(),
+                    "none: wait for the review".into(),
+                )
+            } else {
+                (CATEGORY, why, action)
+            };
             Some(DoctorFinding {
-                category: CATEGORY.into(),
+                category: category.into(),
                 id: format!("PR-{}", r.number),
                 summary: format!(
                     "PR-{} {state} {}m, not on a train: {why}",
@@ -331,6 +358,9 @@ pub(crate) fn scan(
     let store = storage.load_for_read()?;
     let tiered = crate::full_tier::repo_is_tiered(root)?;
     let lanes = crate::stalled_reviews::ReworkLanes::load(root, &storage, &store)?;
+    // One clock for PR ages and the lock's age. trace:STORY-3131 | ai:claude
+    let now = DateTime::<Utc>::from(exec.clock().wall_now());
+    let reviewing = crate::review_watch::reviewing_heads(root);
     let mut ready = Vec::new();
     for pr in crate::stalled_reviews::open_prs(root)? {
         // Drafts and other bases never land on main. trace:STORY-3131 | ai:claude
@@ -362,6 +392,9 @@ pub(crate) fn scan(
             number,
             since,
             approved,
+            review_in_flight: reviewing
+                .iter()
+                .any(|(key, sha)| *key == format!("PR-{number}") && sha.eq_ignore_ascii_case(head)),
             conflict: pr["mergeable"] == "CONFLICTING",
             repairing: spec_ids.iter().any(|s| lanes.covers(&store, s, branch)),
             spec: spec_ids.first().cloned(),
@@ -371,8 +404,7 @@ pub(crate) fn scan(
             on_train: !crate::pr_train::pr_head_pins(root, number)?.is_empty(),
         });
     }
-    let now = DateTime::<Utc>::from(exec.clock().wall_now());
-    let lock = crate::pr_train::lock_driver(root)?.map(|(pid, secs)| LockHolder {
+    let lock = crate::pr_train::lock_driver(root, now)?.map(|(pid, secs)| LockHolder {
         pid,
         held_minutes: secs.map(|s| i64::try_from(s / 60).unwrap_or(i64::MAX)),
         command: pid.and_then(command_line),

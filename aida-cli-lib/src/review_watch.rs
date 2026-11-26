@@ -2348,6 +2348,23 @@ pub(crate) fn held_slots(root: &Path) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Each (change key, head) whose latest attempt is queued (reserved) or
+/// running, read without changing watcher state (landing-drought).
+// trace:STORY-3131 | ai:claude
+pub(crate) fn reviewing_heads(root: &Path) -> Vec<(String, String)> {
+    let Some(state) = read_only_state(root) else {
+        return Vec::new();
+    };
+    state
+        .entries
+        .iter()
+        .filter_map(|(key, entry)| {
+            let attempt = entry.attempts.last()?;
+            admitted(attempt).then(|| (key.clone(), attempt.head.clone()))
+        })
+        .collect()
+}
+
 /// The watcher state of the project `root` belongs to, read without creating
 /// or changing anything; `None` when there is none or it is unreadable.
 // trace:TASK-1945 | ai:claude

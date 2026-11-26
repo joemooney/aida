@@ -152,16 +152,27 @@ fn live_driver(dir: &Path, probes: &Probes<'_>) -> Result<Option<DriverView>> {
     }))
 }
 
-/// The live train-lock driver as (pid, seconds held); `None` when no
-/// process holds the lock. For the landing-drought watchdog.
+/// The train-lock driver as (pid, seconds held) at `now`; `None` when no
+/// process holds the lock. The pid is `None` when the recorded driver is
+/// dead or unidentified; its age still comes from the record's `since`, so
+/// an orphaned lock is measurable. For the landing-drought watchdog.
 // trace:STORY-3131 | ai:claude
-pub(crate) fn lock_driver(root: &Path) -> Result<Option<(Option<u32>, Option<u64>)>> {
+pub(crate) fn lock_driver(
+    root: &Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Option<(Option<u32>, Option<u64>)>> {
+    let dir = root.join(".aida/train");
     let probes = Probes {
-        now: chrono::Utc::now(),
+        now,
         observe: &|holder| holder.observe().ok(),
         ci: &|_| Ok(Vec::new()),
     };
-    Ok(live_driver(&root.join(".aida/train"), &probes)?.map(|d| (d.pid, d.running_secs)))
+    Ok(live_driver(&dir, &probes)?.map(|d| {
+        let secs = d
+            .running_secs
+            .or_else(|| journal::driver_record(&dir).and_then(|r| secs_since(now, &r.since)));
+        (d.pid, secs)
+    }))
 }
 
 fn ci_view(rows: &[crate::ci_gate::CheckRow]) -> CiView {

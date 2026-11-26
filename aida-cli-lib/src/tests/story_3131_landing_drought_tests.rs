@@ -6,6 +6,7 @@ fn ready(number: u64, age_min: i64, now: DateTime<Utc>) -> Ready {
         number,
         since: now - TimeDelta::minutes(age_min),
         approved: true,
+        review_in_flight: false,
         conflict: false,
         repairing: false,
         spec: Some("STORY-1".into()),
@@ -278,9 +279,55 @@ fn story_3131_s2_train_lock_held_past_threshold() {
     };
     let unknown = evaluate(&prs, &policy, now, None, Some(&unknown_age));
     assert!(unknown[0].summary.contains("supervised"));
+    // A dead or unidentified driver still holding the lock is orphaned:
+    // stale at any age, aged from the record when it has one.
+    let orphan = |m: Option<i64>| LockHolder {
+        pid: None,
+        held_minutes: m,
+        command: None,
+    };
+    let dead = evaluate(&prs, &policy, now, None, Some(&orphan(Some(3))));
+    assert!(dead[0]
+        .summary
+        .contains("train lock held 3m by an unidentified process"));
+    assert!(dead[0].action.contains("stop an unidentified process"));
+    let ageless = evaluate(&prs, &policy, now, None, Some(&orphan(None)));
+    assert!(ageless[0]
+        .summary
+        .contains("train lock held by an unidentified process"));
+    assert_eq!(failing(&dead), dead.len(), "an orphaned lock fails the job");
     // The knob is read and validated like the other minutes.
     let cfg: toml::Value = toml::from_str("[landing_watchdog]\nlock_hold_minutes = 5").unwrap();
     assert_eq!(Policy::read(Some(&cfg)).unwrap().lock_hold_minutes, 5);
     let zero: toml::Value = toml::from_str("[landing_watchdog]\nlock_hold_minutes = 0").unwrap();
     assert!(Policy::read(Some(&zero)).is_err());
+}
+
+#[test]
+fn story_3131_s2_review_backlog_is_informational() {
+    let now = Utc::now();
+    let policy = Policy::read(None).unwrap();
+    let mut queued = ready(50, 45, now);
+    queued.approved = false;
+    queued.review_in_flight = true;
+    let mut idle = queued.clone();
+    idle.number = 51;
+    idle.review_in_flight = false;
+    let mut fresh = idle.clone();
+    fresh.number = 52;
+    fresh.since = now - TimeDelta::minutes(10);
+    let findings = evaluate(&[queued, idle, fresh], &policy, now, None, None);
+    let rows: Vec<_> = findings
+        .iter()
+        .map(|f| (f.id.as_str(), f.category.as_str()))
+        .collect();
+    // Within the dwell nothing shows; a queued or running review is shown
+    // but does not fail; no review at all past the dwell is a finding.
+    assert_eq!(rows, [("PR-50", INFO_CATEGORY), ("PR-51", CATEGORY)]);
+    assert!(findings[0].summary.contains("review queued or running"));
+    assert!(findings[1]
+        .summary
+        .contains("review verdict missing or held"));
+    assert_eq!(failing(&findings), 1);
+    assert!(policy.fail_reason(failing(&findings[..1])).is_none());
 }
