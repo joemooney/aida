@@ -3,8 +3,6 @@
 //! checked against a fixed allowlist before any argv exists, and the project's
 //! `.aida/review-rules.toml` defaults and the `[agents]` reviewer seat come
 //! from the trusted base revision, never from the change under review.
-// Wired into `--run-review` with the runner slice; only the tests call it yet.
-#![cfg_attr(not(test), allow(dead_code))]
 
 use crate::vendors::review_runner::ReviewVendor;
 use aida_core::agents_config::{resolve_agent_tuning_from, AgentSeat};
@@ -14,7 +12,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 /// Effort levels for a custom runner command, which names no vendor.
-const BASE_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh"];
+pub(crate) const BASE_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh"];
 const RULES_PATH: &str = ".aida/review-rules.toml";
 /// Project files that carry `[agents.<vendor>.seats.reviewer]` tuning.
 const SEAT_PATHS: [&str; 2] = [".aida/config.toml", ".aida/agents.toml"];

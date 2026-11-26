@@ -3,10 +3,8 @@
 //! Every runner (claude, codex, `AIDA_REVIEW_RUNNER_CMD`) starts in a fresh empty
 //! directory with a cleared environment, reads the prompt on stdin, and is killed
 //! with its process group at the deadline or when its output exceeds the caps.
-// Wired into `--run-review` by the next slice; only the tests call it yet.
-#![cfg_attr(not(test), allow(dead_code))]
 
-use super::review_tuning::ReviewTuning;
+use super::review_tuning::{ReviewTuning, BASE_EFFORTS};
 use crate::vendors::review_runner::ReviewVendor;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::ffi::{OsStr, OsString};
@@ -22,6 +20,8 @@ pub(crate) const STDOUT_CAP: usize = 4 << 20;
 pub(crate) const STDERR_CAP: usize = 64 << 10;
 const RUNNER_CMD: &str = "AIDA_REVIEW_RUNNER_CMD";
 const BASE_ENV: [&str; 4] = ["PATH", "HOME", "LANG", "TERM"];
+/// How long the pipe threads may outlive the killed group before the run fails.
+const JOIN_GRACE: Duration = Duration::from_secs(5);
 /// One runner invocation. `parent_env` is the operator's environment: the only
 /// source of `AIDA_REVIEW_RUNNER_CMD` and of every variable the runner sees.
 pub(crate) struct RunnerCall<'a> {
@@ -43,6 +43,11 @@ impl RunnerCall<'_> {
             .iter()
             .find(|(k, v)| k == key && !v.is_empty());
         found.map(|(_, v)| v.as_os_str())
+    }
+
+    /// The vendor whose argv and auth apply: none for `AIDA_REVIEW_RUNNER_CMD`.
+    pub(crate) fn vendor(&self) -> Option<&'static ReviewVendor> {
+        self.agent.filter(|_| self.var(RUNNER_CMD).is_none())
     }
 
     /// Absolute runner path; refused when relative, missing, not a regular
@@ -70,7 +75,7 @@ impl RunnerCall<'_> {
     /// reading a smaller prompt fails only on its own exit status or output.
     pub(crate) fn run(&self, prompt: &str) -> Result<String> {
         let program = self.program()?;
-        let vendor = self.agent.filter(|_| self.var(RUNNER_CMD).is_none());
+        let vendor = self.vendor();
         let workdir = tempfile::tempdir()?;
         let mut cmd = Command::new(&program);
         cmd.env_clear().current_dir(workdir.path()).process_group(0);
@@ -89,12 +94,11 @@ impl RunnerCall<'_> {
             cmd.env("AIDA_REVIEW_RESOLVED_AGENT", agent.program);
         }
         let (model, effort) = (self.tuning.model(), self.tuning.effort());
-        if let (Some(agent), Some(level)) = (vendor, effort) {
-            ensure!(
-                agent.efforts.contains(&level),
-                "{} has no {level} effort",
-                agent.program
-            );
+        // Re-check against the vendor that runs; a custom runner gets the base set.
+        if let Some(level) = effort {
+            let allowed = vendor.map_or(BASE_EFFORTS, |agent| agent.efforts);
+            let name = vendor.map_or(RUNNER_CMD, |agent| agent.program);
+            ensure!(allowed.contains(&level), "{name} has no {level} effort");
         }
         if let Some(model) = model {
             cmd.env("AIDA_REVIEW_RESOLVED_MODEL", model);
@@ -161,6 +165,14 @@ impl RunnerCall<'_> {
         // SAFETY: kill(2) on the runner's own, still unreaped, process group.
         unsafe { libc::kill(-group, libc::SIGKILL) };
         let status = child.wait()?;
+        // A descendant that left the group (setsid, double fork) can hold the
+        // pipes open forever: wait briefly, then fail and leak the threads.
+        let grace = Instant::now() + JOIN_GRACE;
+        let open = || !(writer.is_finished() && out.is_finished() && err.is_finished());
+        while open() && Instant::now() < grace {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        ensure!(!open(), "review runner left descendants holding its pipes");
         let wrote = writer
             .join()
             .map_err(|_| anyhow!("stdin writer panicked"))?;
@@ -347,6 +359,45 @@ mod tests {
         // Tuning resolved for claude cannot carry its max level to codex.
         let err = tuned("claude", "max").run("p").unwrap_err().to_string();
         assert!(err.contains("no max effort"), "{err}");
+        // Nor to a custom runner, which gets only the base levels.
+        let custom = script(bin.path(), "custom", DUMP).display().to_string();
+        let env = vars(&[("PATH", &path), (RUNNER_CMD, &custom)]);
+        let runner = |effort| RunnerCall {
+            parent_env: &env,
+            ..tuned("claude", effort)
+        };
+        let err = runner("max").run("p").unwrap_err().to_string();
+        assert!(
+            err.contains("AIDA_REVIEW_RUNNER_CMD has no max effort"),
+            "{err}"
+        );
+        let out = runner("xhigh").run("p").unwrap();
+        assert!(
+            out.contains("env=AIDA_REVIEW_RESOLVED_EFFORT=xhigh"),
+            "{out}"
+        );
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3a2_runner_fails_closed_on_escaped_descendant() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        // The descendant leaves the process group and keeps stdout/stdin open; the
+        // runner exits only once it is in its own session, so the kill misses it.
+        let body = "#!/bin/sh\nsetsid sh -c 'touch \"$0.in\"; exec sleep 12' \"$0\" &\n\
+            while [ ! -e \"$0.in\" ]; do sleep 0.05; done\nexit 0\n";
+        let cmd = script(bin.path(), "runner", body).display().to_string();
+        let env = vars(&[("PATH", "/usr/bin:/bin"), (RUNNER_CMD, &cmd)]);
+        let started = Instant::now();
+        let err = call(checkout.path(), &env)
+            .run("p")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("left descendants holding its pipes"), "{err}");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "joined the descendant"
+        );
     }
 
     #[test]
