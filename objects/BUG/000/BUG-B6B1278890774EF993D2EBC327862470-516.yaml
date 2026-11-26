@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-26T07:48:53.481551165Z
+modified_at: 2026-11-26T07:51:18.405911310Z
 req_type: Bug
 tags:
 - leases
@@ -23,6 +23,11 @@ relationships:
     custom: implemented-by
   target_id: 01a20fad-ee7d-7a60-b4d9-4cd6ffc39327
   created_at: 2026-11-24T22:30:04.596187048Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a216d6-1923-7fd3-acb0-c73e5d3e4836
+  created_at: 2026-11-26T07:51:18.405897786Z
   created_by: dirtlab
 comments:
 - id: 01a20f28-53cd-7710-b50e-f5227d2b3b15
@@ -661,6 +666,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a216d6-6ab9-7b03-85a6-3ea3ec58bb02
+  author: dirtlab
+  timestamp: 2026-11-26T07:51:20.505874748Z
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: ee2e6d830ffe68bc8ba63d389e3c1ae2f9421358
