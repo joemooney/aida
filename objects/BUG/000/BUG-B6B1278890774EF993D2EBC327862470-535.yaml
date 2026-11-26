@@ -14,13 +14,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T14:42:55.537871310Z
+modified_at: 2026-11-26T14:46:28.225006451Z
 req_type: Bug
 tags:
 - admission
 - deputy
 - landing
 - train
+history:
+- id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
+  author: joe
+  timestamp: 2026-11-26T14:46:28.308532226Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
   branch: main
