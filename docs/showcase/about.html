@@ -1067,63 +1067,81 @@ aida review prepare --telemetry-report</code></pre>
           <rect x="16" y="24" width="176" height="28" rx="4" fill="var(--blue)" />
           <text x="26" y="42" font-family="var(--mono)" font-size="10" font-weight="700" fill="#fff">01 · ECOSYSTEM SCAN</text>
           <text x="26" y="70" font-family="var(--mono)" font-size="9.5" fill="var(--blue)" font-weight="700">Seat: Advisor</text>
-          <text x="26" y="90" font-size="11.5" fill="var(--ink)">Studies papers (ReviewBench) &amp; tools (ocr).</text>
-          <text x="26" y="122" font-size="11" fill="var(--ink-secondary)">Extracts unprotectable functional concepts &amp; math only.</text>
+          <text x="26" y="90" font-size="10.5" fill="var(--ink)" font-weight="600">Studies papers &amp; tools</text>
+          <text x="26" y="106" font-size="10.5" fill="var(--ink)" font-weight="600">(ReviewBench, ocr).</text>
+          <text x="26" y="130" font-size="10" fill="var(--ink-secondary)">Extracts unprotectable</text>
+          <text x="26" y="145" font-size="10" fill="var(--ink-secondary)">functional concepts</text>
+          <text x="26" y="160" font-size="10" fill="var(--ink-secondary)">&amp; math formulas only.</text>
           <text x="26" y="204" font-family="var(--mono)" font-size="9" fill="var(--ink-muted)">/aida-ecosystem-scan</text>
 
-          <text x="197" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
+          <text x="196" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
 
           <!-- STEP 2 -->
           <rect x="212" y="24" width="176" height="196" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" stroke-width="2" />
           <rect x="212" y="24" width="176" height="28" rx="4" fill="var(--accent)" />
           <text x="222" y="42" font-family="var(--mono)" font-size="10" font-weight="700" fill="#fff">02 · SPEC FIREWALL</text>
           <text x="222" y="70" font-family="var(--mono)" font-size="9.5" fill="var(--accent)" font-weight="700">Store: .aida-store</text>
-          <text x="222" y="90" font-size="11.5" fill="var(--ink)">Authors STORY-3076 &amp; STORY-3120.</text>
-          <text x="222" y="122" font-size="11" fill="var(--ink-secondary)">Records pure ## Acceptance invariants. Zero foreign code.</text>
+          <text x="222" y="90" font-size="10.5" fill="var(--ink)" font-weight="600">Authors STORY-3076</text>
+          <text x="222" y="106" font-size="10.5" fill="var(--ink)" font-weight="600">&amp; STORY-3120 specs.</text>
+          <text x="222" y="130" font-size="10" fill="var(--ink-secondary)">Records pure behavioral</text>
+          <text x="222" y="145" font-size="10" fill="var(--ink-secondary)">## Acceptance criteria.</text>
+          <text x="222" y="160" font-size="10" fill="var(--ink-secondary)">Zero foreign source code.</text>
           <text x="222" y="204" font-family="var(--mono)" font-size="9" fill="var(--ink-muted)">aida add --type story</text>
 
-          <text x="393" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
+          <text x="392" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
 
           <!-- STEP 3 -->
           <rect x="408" y="24" width="176" height="196" rx="4" fill="var(--bg-elevated)" stroke="var(--emerald)" stroke-width="2" />
           <rect x="408" y="24" width="176" height="28" rx="4" fill="var(--emerald)" />
           <text x="418" y="42" font-family="var(--mono)" font-size="10" font-weight="700" fill="#fff">03 · RUST BUILD</text>
           <text x="418" y="70" font-family="var(--mono)" font-size="9.5" fill="var(--emerald)" font-weight="700">Seat: Implementer</text>
-          <text x="418" y="90" font-size="11.5" fill="var(--ink)">Builds review_engine.rs in isolated worktree.</text>
-          <text x="418" y="122" font-size="11" fill="var(--ink-secondary)">100% original Rust, 0 new crates, inline // trace: tags.</text>
+          <text x="418" y="90" font-size="10.5" fill="var(--ink)" font-weight="600">Builds review_engine.rs</text>
+          <text x="418" y="106" font-size="10.5" fill="var(--ink)" font-weight="600">in isolated worktree.</text>
+          <text x="418" y="130" font-size="10" fill="var(--ink-secondary)">100% original Rust,</text>
+          <text x="418" y="145" font-size="10" fill="var(--ink-secondary)">0 added crates, inline</text>
+          <text x="418" y="160" font-size="10" fill="var(--ink-secondary)">// trace: provenance.</text>
           <text x="418" y="204" font-family="var(--mono)" font-size="9" fill="var(--ink-muted)">aida session start</text>
 
-          <text x="589" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
+          <text x="588" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
 
           <!-- STEP 4 -->
           <rect x="604" y="24" width="176" height="196" rx="4" fill="var(--bg-elevated)" stroke="var(--amber)" stroke-width="2" />
           <rect x="604" y="24" width="176" height="28" rx="4" fill="var(--amber)" />
           <text x="614" y="42" font-family="var(--mono)" font-size="10" font-weight="700" fill="#fff">04 · SELF-DOGFOOD</text>
           <text x="614" y="70" font-family="var(--mono)" font-size="9.5" fill="var(--amber)" font-weight="700">Seat: Opposing Reviewer</text>
-          <text x="614" y="90" font-size="11.5" fill="var(--ink)">Engine reviews its own implementation.</text>
-          <text x="614" y="122" font-size="11" fill="var(--ink-secondary)">Caught &amp; fixed 6 real defects (100% exact line anchoring).</text>
+          <text x="614" y="90" font-size="10.5" fill="var(--ink)" font-weight="600">Engine reviews its</text>
+          <text x="614" y="106" font-size="10.5" fill="var(--ink)" font-weight="600">own implementation.</text>
+          <text x="614" y="130" font-size="10" fill="var(--ink-secondary)">Caught &amp; fixed 6 real</text>
+          <text x="614" y="145" font-size="10" fill="var(--ink-secondary)">defects with 100%</text>
+          <text x="614" y="160" font-size="10" fill="var(--ink-secondary)">exact line anchoring.</text>
           <text x="614" y="204" font-family="var(--mono)" font-size="9" fill="var(--ink-muted)">--run-review --adversarial</text>
 
-          <text x="785" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
+          <text x="784" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
 
           <!-- STEP 5 -->
           <rect x="800" y="24" width="176" height="196" rx="4" fill="var(--bg-elevated)" stroke="var(--blue)" stroke-width="2" />
           <rect x="800" y="24" width="176" height="28" rx="4" fill="var(--blue)" />
           <text x="810" y="42" font-family="var(--mono)" font-size="10" font-weight="700" fill="#fff">05 · BENCHMARK</text>
           <text x="810" y="70" font-family="var(--mono)" font-size="9.5" fill="var(--blue)" font-weight="700">Corpus: ReviewBench</text>
-          <text x="810" y="90" font-size="11.5" fill="var(--ink)">Evaluated across TS, Python, Go &amp; Rust PRs.</text>
-          <text x="810" y="122" font-size="11" fill="var(--ink-secondary)">94.4% Augmented Precision &amp; 83.3% High-Severity Recall.</text>
+          <text x="810" y="90" font-size="10.5" fill="var(--ink)" font-weight="600">Evaluated across TS,</text>
+          <text x="810" y="106" font-size="10.5" fill="var(--ink)" font-weight="600">Python, Go &amp; Rust PRs.</text>
+          <text x="810" y="130" font-size="10" fill="var(--ink-secondary)">94.4% Augmented Prec.</text>
+          <text x="810" y="145" font-size="10" fill="var(--ink-secondary)">&amp; 83.3% High-Severity</text>
+          <text x="810" y="160" font-size="10" fill="var(--ink-secondary)">Golden TP Recall.</text>
           <text x="810" y="204" font-family="var(--mono)" font-size="9" fill="var(--ink-muted)">--record-telemetry</text>
 
-          <text x="981" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
+          <text x="980" y="122" font-family="var(--mono)" font-size="16" fill="var(--accent)" font-weight="700">→</text>
 
           <!-- STEP 6 -->
           <rect x="996" y="24" width="188" height="196" rx="4" fill="var(--bg-elevated)" stroke="var(--emerald)" stroke-width="2" />
           <rect x="996" y="24" width="188" height="28" rx="4" fill="var(--emerald)" />
           <text x="1006" y="42" font-family="var(--mono)" font-size="10" font-weight="700" fill="#fff">06 · GATED MERGE</text>
           <text x="1006" y="70" font-family="var(--mono)" font-size="9.5" fill="var(--emerald)" font-weight="700">Seat: Integrator</text>
-          <text x="1006" y="90" font-size="11.5" fill="var(--ink)">Ratchet tests + commit-pinned review verdict.</text>
-          <text x="1006" y="122" font-size="11" fill="var(--ink-secondary)">Now powers AIDA’s own /aida-review &amp; review gates.</text>
+          <text x="1006" y="90" font-size="10.5" fill="var(--ink)" font-weight="600">Ratchet tests + commit-</text>
+          <text x="1006" y="106" font-size="10.5" fill="var(--ink)" font-weight="600">pinned review verdict.</text>
+          <text x="1006" y="130" font-size="10" fill="var(--ink-secondary)">Now powers AIDA’s own</text>
+          <text x="1006" y="145" font-size="10" fill="var(--ink-secondary)">/aida-review skill &amp;</text>
+          <text x="1006" y="160" font-size="10" fill="var(--ink-secondary)">autonomous merge gates.</text>
           <text x="1006" y="204" font-family="var(--mono)" font-size="9" fill="var(--ink-muted)">aida pr ship</text>
         </svg>
         <div class="blueprint-caption">
