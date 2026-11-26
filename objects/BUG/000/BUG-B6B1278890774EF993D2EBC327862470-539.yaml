@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T19:22:53.562640693Z
+modified_at: 2026-11-26T19:25:12.061197557Z
 req_type: Bug
 tags:
 - lanes
@@ -28,6 +28,18 @@ comments:
   modified_at: 2026-11-26T19:22:17.125460607Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21951-e822-73a2-b0d9-4d91203fc761
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:25):
+    # BUG-2778: a transient pre-start writer-admission refusal retries, and names the unverified writer (advisor-122 approved 12:26, STANDARD; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2778-retention-retry. <=200 lines. Completing (BUG-2778) trailer.
+    READ: `aida show BUG-2778 --comments` (AC1-AC3 + the advisor's binding notes) and BUG-2643's change (exit-time retention), TASK-3918 (the scoped leftover scan), TASK-3919 (stale/deleted binaries; it may be in flight, so don't duplicate it).
+    BINDING: the error NAMES the unverified writer (pid, comm, and whether it runs a DELETED or STALE binary); a bounded, JITTERED retry; NEVER retry past a LIVE unknown writer (fail closed with a named next step). Tests: transient → verified on retry → the launch proceeds; a deleted-binary writer is named; a live unknown writer → fail closed.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T19:25:12.061197557Z
+  modified_at: 2026-11-26T19:25:12.061197557Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
