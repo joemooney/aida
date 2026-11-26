@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T15:09:49.599692200Z
-modified_at: 2026-11-26T16:21:47.636202869Z
+modified_at: 2026-11-26T23:02:21.766205529Z
 req_type: Story
 relationships:
 - rel_type:
@@ -40,6 +40,17 @@ relationships:
   target_id: 01a218a1-7f9e-7fd0-b7e4-e96e3921122f
   created_at: 2026-11-26T16:21:47.636150089Z
   created_by: joe
+comments:
+- id: 01a21a18-7b46-7ae2-919d-82a2622c7e35
+  author: joe
+  content: |-
+    TRIAL DATA (product-15 2026-11-26, at Joe's request; local only, no posts or verdicts). PRs #4666, #4663, #4661, #4658, compared with their real final review verdicts.
+    FINDER-ONLY (main b728c3373d1, claude, --run-review): coverage passed 4/4; walls 920s/849s/895s/22s. Caught both known real findings (#4666 load_active_entries fail-open; #4658 AC2 test gap), missed none, plus credible extras: BUG-2779 (a challenger panic on main, confirmed) and BUG-2780 (a tri-state dirty probe).
+    ADVERSARIAL (S5c e5db545, --agent claude --challenger-agent claude): walls 89s/419s/fail/41s; 7 of 17 findings refuted with code-grounded reasons; every known-real finding KEPT. #4661 failed on a finder-output parse error ("review batch 1 output"; the branch predates BUG-2775's cause chain).
+    Blockers found: the opposite-vendor pick chose codex (usage-limited until Nov 29), and a failed challenger discarded the finder report, now the S5d binding (partial exit 3). Without --agent, --challenger-agent is refused with a misleading message (S5d C/n1). --sarif outside the repo is refused (by design) but the cause is hidden (BUG-2779 AC2).
+    RECOMMENDATION: shadow claude/claude now (after S5d + BUG-2779), then compare opposite-vendor once codex returns.
+  created_at: 2026-11-26T23:02:21.766205529Z
+  modified_at: 2026-11-26T23:02:21.766205529Z
 history:
 - id: 01a21869-37e3-7e72-a909-63aee48d0ebf
   author: dirtlab
