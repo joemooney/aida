@@ -1,5 +1,6 @@
 id: 01a21857-97b6-7ff0-907a-cde9621008f1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1517
+agreed_id: TASK-3499
 title: 'Review follow-up: AC3 names ''[train]'' titles as a train signal; only the head_branch train/ prefix is checke'
 description: |-
   From BUG-2766
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21509-d29d-75f2-9eb0-fdf1204a9fd0
   created_at: 2026-11-26T14:52:03.383029911Z
+history:
+- id: 01a2186f-e133-7e23-b4f6-202476fa6372
+  author: joe
+  timestamp: 2026-11-26T15:18:35.059067876Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 58740fb4ce96577f40a2083d55173230f23da94a
   branch: pr-4606

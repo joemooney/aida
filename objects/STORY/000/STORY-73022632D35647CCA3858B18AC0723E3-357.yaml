@@ -1,5 +1,6 @@
 id: 01a21867-dc9f-7831-a80e-4c1dd1999093
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-357
+agreed_id: STORY-3182
 title: 'Review PR-4663: [AI:claude] refactor(forge): share one PR-state read between the merged probe and the refusal guard (BUG-2738)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21839`) for branch `bug-2738-shelve-completed`.
@@ -24,6 +25,13 @@ feature: Uncategorized
 created_at: 2026-11-26T15:09:49.599692200Z
 modified_at: 2026-11-26T15:09:49.599692200Z
 req_type: Story
+history:
+- id: 01a21870-6566-76f2-b523-ea49a1776832
+  author: joe
+  timestamp: 2026-11-26T15:19:08.902896504Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: bug-2738-shelve-completed

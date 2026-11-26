@@ -1,5 +1,6 @@
 id: 01a21857-9554-7c40-bbc3-781576d6c854
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1514
+agreed_id: TASK-3500
 title: 'Review follow-up: spec_approvals_by_head now keeps the NEWEST approval per head and no longer filters on att'
 description: |-
   From BUG-2766
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21509-d29d-75f2-9eb0-fdf1204a9fd0
   created_at: 2026-11-26T14:52:02.772593214Z
+history:
+- id: 01a21870-2195-7cd0-9f6b-f11e95ce7021
+  author: joe
+  timestamp: 2026-11-26T15:18:51.541420575Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 58740fb4ce96577f40a2083d55173230f23da94a
   branch: pr-4606
