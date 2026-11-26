@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T14:40:39.652311743Z
+modified_at: 2026-11-26T14:47:45.471546383Z
 req_type: Bug
 tags:
 - leases
@@ -97,6 +97,13 @@ comments:
   content: Commit 4f8ad2f09d references this requirement
   created_at: 2026-11-26T14:40:39.652311743Z
   modified_at: 2026-11-26T14:40:39.652311743Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21853-a83f-7b12-b36b-4d37a4872fa3
+  author: dirtlab
+  content: Commit f970be07c5 references this requirement
+  created_at: 2026-11-26T14:47:45.471546383Z
+  modified_at: 2026-11-26T14:47:45.471546383Z
   session_id: 01a218395b6c
   harness_version: 2.1.319 (Claude Code)
 history:
