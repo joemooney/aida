@@ -13,10 +13,11 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:55:07.495815470Z
-modified_at: 2026-11-25T21:01:06.591597253Z
+modified_at: 2026-11-26T07:34:13.603007914Z
 req_type: Task
 tags:
 - admission
+- batch:shift-20261126-0733
 - linked:BUG-2703
 relationships:
 - rel_type: Supersedes
@@ -111,6 +112,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a216c6-bff6-76c3-aa66-2514a04ee020
+  author: joe
+  timestamp: 2026-11-26T07:34:13.750724684Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
