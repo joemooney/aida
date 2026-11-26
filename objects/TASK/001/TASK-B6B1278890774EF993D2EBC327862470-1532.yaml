@@ -1,0 +1,28 @@
+id: 01a21969-213a-70f3-8fb4-861980bfdfb9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1532
+agreed_id: TASK-3921
+title: 'review-watch reclaim: check pause and the retry cap before reclaiming; a capped PR surfaces with a next step; a real-subprocess reclaim test (BUG-2776 follow-up)'
+description: |
+  BINDING follow-up to BUG-2776 (advisor-122 2026-11-26 11:48 + 12:55; filed by product-15). #4678 landed on the reviewer's final approval with these deferred. The residual defect: a paused or capped review-watch can still end a CLEAN reviewer checkout, and a capped PR stays silently held.
+
+  ## Acceptance
+  - AC1: check pause AND the pickup retry cap BEFORE any reclaim; a paused or capped watcher NEVER ends a checkout.
+  - AC2: when the cap is hit, the PR goes to the BUG-2776 AC3 doctor surface with a named next step, never a silent hold; a successful reclaim followed by a successful pickup RESETS the cap.
+  - AC3: ONE test of the REAL reclaim path with a fake `aida` on PATH: assert the argv `session end <lease> --yes --skip-ci`, and handle a NON-ZERO exit (no dispatch, the hold kept, a named cause). No network. Plus tests: paused → no reclaim; capped → no reclaim + surfaced; reclaim + pickup → cap reset.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T19:50:49.914099231Z
+modified_at: 2026-11-26T19:50:49.914099231Z
+req_type: Task
+tags:
+- review-watch
+- throughput
+filed_at:
+  code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 52ac09e8a4d
+  vendor: claude
