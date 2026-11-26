@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: the mail-retention dry run (`aida mailbox retention activate --dry-run`, activation.rs ~:234) uses the SAME scoped scan as agent gc, so it stops reporting a live owner's leftovers as reapable (it reported 460 leftovers while lanes ran on 2026-11-25).
   - AC2: a lane's exit-time mail retention no longer refuses with "the fresh writer-admission scan could not verify every mail writer" because of leftovers that belong to dead owners; a test.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:56:00.822526486Z
-modified_at: 2026-11-26T14:22:00.779019528Z
+modified_at: 2026-11-26T15:52:15.676965986Z
 req_type: Task
 tags:
 - agents
@@ -114,6 +114,20 @@ history:
   session_id: 01a217f774a0
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2188e-b5f6-72e0-82bd-71f0a696a242
+  author: aida-auto-bump
+  timestamp: 2026-11-26T15:52:15.606578398Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2188e-b63c-72d2-8d58-586f72cd5f74
+  timestamp: 2026-11-26T15:52:15.676961574Z
+  agent: aida
+  commit_sha: 0cc379c56bdf5a3060e254779a6eb5b41843999e
+  summary: 'TASK-3918 AC1 verified by leftovers_tests::task3918_retention_dry_run_holds_a_live_owners_leftovers (live owner held, dead owner reapable, nothing removed) and story_1843_c2_refusal_tests::task3918_retention_report_keeps_held_leftovers_out_of_the_reapable_count. The CLI dry run and record both build their scope with with_leftover_scope (agent_registry_root.rs), the same LeftoverOwners probe agent gc uses, and agent gc was refactored onto that helper with no change in behaviour. AC2 verified by message_state_tests::task3918_dead_owner_leftovers_do_not_refuse_retirement (seed sets FRESH_SCAN true; the empty tomb and creator staging do not refuse retirement). The admission scan never read leftovers, so the exit path needed no code change. The report is read-only and more conservative: unknown owners are held, and record''s would_record decision does not depend on leftovers. No refusal path was weakened and no test was removed. Every call site was updated. 0 commits behind the pinned base. CI fast gates and merge-hold-gate green; fast compile pending at review time. One p3 follow-up, deferred.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
@@ -126,3 +140,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T13:59:20.853297001Z
   implemented_by: dirtlab
+  completed_at: 2026-11-26T15:52:15.606569911Z
+  completion_sha: 0cc379c56bdf5a3060e254779a6eb5b41843999e
