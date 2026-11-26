@@ -10,12 +10,12 @@ description: |
   - AC2: a knob `[lanes] cargo_build_jobs` (default unset) sets CARGO_BUILD_JOBS for lane jobs, so each lane's peak memory stays bounded.
   - AC3: lane-job admission also checks available memory at JOB start (not only at lane launch) and waits when below a configurable floor.
   - AC4: a test showing that with max_compile_concurrency=2, a third compile job waits until one finishes.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-26T04:20:04.103837253Z
+modified_at: 2026-11-26T04:25:13.843830534Z
 req_type: Task
 tags:
 - dell1
@@ -51,6 +51,13 @@ history:
   author: joe
   timestamp: 2026-11-25T21:57:51.702167334Z
   changes: []
+- id: 01a21619-b773-7482-b51c-597735727a1d
+  author: aida-session-start
+  timestamp: 2026-11-26T04:25:13.843829257Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f03f5255aae977b47ceb09666ba5e0dc2024de6d
