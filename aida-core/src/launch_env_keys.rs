@@ -170,6 +170,11 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_REVIEW_RUNNER_CMD",
     "AIDA_REVIEW_PASS",
     "AIDA_REVIEW_RESOLVED_AGENT",
+    // The operator's review model/effort inputs and their validated values.
+    "AIDA_REVIEW_EFFORT",
+    "AIDA_REVIEW_MODEL",
+    "AIDA_REVIEW_RESOLVED_MODEL",
+    "AIDA_REVIEW_RESOLVED_EFFORT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",

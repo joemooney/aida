@@ -127,6 +127,12 @@ pub struct ProjectReviewRulesConfig {
     pub max_files_per_batch: Option<usize>,
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
+    /// Review-runner defaults; the CLI validates both against its allowlists
+    /// and reads them only from the trusted base. trace:STORY-3120 | ai:claude
+    #[serde(default)]
+    pub default_effort: Option<String>,
+    #[serde(default)]
+    pub default_model: Option<String>,
 }
 
 /// A single path-scoped rule entry in `.aida/review-rules.toml`.
