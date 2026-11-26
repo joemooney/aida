@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-26T21:34:02.794633109Z
+modified_at: 2026-11-26T21:49:53.620897308Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -89,6 +89,12 @@ comments:
   modified_at: 2026-11-26T21:34:02.794633109Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a219d6-2254-7293-87f1-b74d4fda4479
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int-task-3266-shards-assert` at head `0864840f07c7b1c6abd85964918c6f62a2abd946`.'
+  created_at: 2026-11-26T21:49:53.620894088Z
+  modified_at: 2026-11-26T21:49:53.620894088Z
+  session_id: 01a2199667fe
 history:
 - id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
   author: joe
