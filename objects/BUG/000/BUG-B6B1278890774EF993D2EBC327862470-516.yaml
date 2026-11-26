@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-26T06:31:26.901441966Z
+modified_at: 2026-11-26T06:33:21.797869424Z
 req_type: Bug
 tags:
 - leases
@@ -414,6 +414,17 @@ comments:
   created_at: 2026-11-26T00:08:04.111106427Z
   modified_at: 2026-11-26T00:08:04.111106427Z
   session_id: 01a214f723cb
+- id: 01a2168f-4365-73c2-aa78-11daccd23122
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:33):
+    # BUG-2755 FRESH SLICE (replaces closed #4541, which was approved @ a27b058a; product-15 2026-11-25 23:35). Lane: CLAUDE. MAIN, NEW branch bug-2755-fresh (cut from the current main tip). Title "[AI:claude] fix(doctor): release stale leases for absent or clean unbound seat clones (BUG-2755)". <=300 lines.
+    #4541 conflicts with main after tonight's landings. Do NOT merge or rebase it. PORT its approved change onto current main: `git diff origin/main...origin/bug-b6b1278890774ef993d2ebc327862470-516` is the reference (in particular the r6 F1 test: a mode-000/EACCES present tree → refuse, lease kept; the F2 pending→final attestation outcome; the F3 store-writers row). Adapt only to what main changed. If porting needs a store-writers inventory row, keep exactly the rows #4541 had (advisor-approved); add no new sites.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4541 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T06:33:21.797869424Z
+  modified_at: 2026-11-26T06:33:21.797869424Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
