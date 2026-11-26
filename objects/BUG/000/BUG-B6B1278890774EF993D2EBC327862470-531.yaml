@@ -10,12 +10,12 @@ description: |
   - AC2: `--older-than` also applies to mailbox leftover files.
   - AC3: the dry run marks each candidate live/dead/unknown, and UNKNOWN is skipped (fail-safe).
   - AC4: tests for live-skip, age-scoping and unknown-skip.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-26T11:08:28.117322581Z
+modified_at: 2026-11-26T12:45:23.235530295Z
 req_type: Bug
 tags:
 - agents
@@ -131,6 +131,20 @@ history:
   session_id: 01a21744104a
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a217e3-9f5c-7f80-ae65-b1ce617f4208
+  author: aida-auto-bump
+  timestamp: 2026-11-26T12:45:23.164285146Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a217e3-9fa3-7583-88fb-5081734edbea
+  timestamp: 2026-11-26T12:45:23.235525627Z
+  agent: aida
+  commit_sha: 2e9ecaa7e927b2776d27b17777008a826f083b3c
+  summary: 'BUG-2770 AC1-AC4 met. AC1 verified by leftovers_tests::a_live_owner_keeps_its_leftovers (the live owner''s tomb and era marker stay and are reported Live) and story_1843_c2_refusal_tests::agent_gc_judges_leftover_owners_fail_safe (a Live/Dormant lease or a live process cwd gives Live). AC2 verified by older_than_scopes_mailbox_leftovers: min_age gates tombs and era markers, and agent_gc maps --older-than days to min_age. AC3 verified by an_unknown_owner_is_kept, the judge test (an Unknown lease, an Unattributed owner and an incomplete view all give Unknown), and gc_leftover_lines printing owner dead/live/unknown for each candidate. AC4: the tests above. Deep pass: admit() runs only after the stranded-tomb and era_marker_stale checks, so earlier fail-closed behaviour is preserved; the unscoped scan() keeps its old semantics; no fail-open path found, because a lease read error or an isolated PID observer forces Unknown. Three non-blocking follow-ups (p3/test-gap, outside gate/sandbox code). CI pending at review time (fast gates green, fast compile pending). The head is 1 commit behind main; no finding depends on base changes.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: b4c61d1f69f2536883ca2d64aba061031f1463de
@@ -139,3 +153,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0cb984b75d1
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T12:45:23.164277532Z
+  completion_sha: 2e9ecaa7e927b2776d27b17777008a826f083b3c
