@@ -65,7 +65,21 @@
       "tests": [
         "s3a_runner_deadline_and_output_caps_fail_closed",
         "s3a_runner_spawn_contract",
-        "s3a_runner_survives_default_sigpipe"
+        "s3a_runner_survives_default_sigpipe",
+        "s3b_runner_argv_carries_only_validated_tuning"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "launch::review_tuning::tests::",
+      "source": "aida-cli-lib/src/launch/review_tuning.rs",
+      "tests": [
+        "s3b_review_rules_come_from_the_trusted_base",
+        "s3b_tuning_refuses_injected_values_from_every_source"
       ],
       "scope": "module"
     },

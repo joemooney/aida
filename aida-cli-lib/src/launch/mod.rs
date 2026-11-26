@@ -29,6 +29,7 @@ pub(crate) mod parent;
 #[allow(dead_code)]
 pub(crate) mod resources;
 pub(crate) mod review_runner;
+pub(crate) mod review_tuning;
 pub(crate) mod spawn;
 
 pub(crate) use context::{LaunchContext, LaunchRefusal, LaunchRequest};
