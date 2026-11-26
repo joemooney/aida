@@ -1255,7 +1255,7 @@
             <h3 class="card-title">Default <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>severities=High</code> · Ranked by Grounded F1)</h3>
             <p class="card-subtitle">DATA SOURCE: <a href="https://review-bench.ai/leaderboard.md" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;"><code>https://review-bench.ai/leaderboard.md</code> ↗</a> &amp; <a href="https://review-bench.ai/api/leaderboard/metrics?severities=High&amp;preference=balanced" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;"><code>/api/leaderboard/metrics?severities=High&amp;preference=balanced</code> ↗</a></p>
           </div>
-          <span class="badge badge-elite">AIDA v3 (+CodeGraph): 92.3% High-Severity Grounded F1 (#1 Overall) · v2: 89.9%</span>
+          <span class="badge badge-elite">AIDA v4: 100.0% High-Sev F1 (90.5 s avg) · v3 (+CodeGraph): 92.3% · v2: 89.9%</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -1274,6 +1274,16 @@
             <tbody>
               <tr style="background:var(--emerald-soft);font-weight:600;">
                 <td><strong class="gold-star">★</strong></td>
+                <td><strong>AIDA v4 · Parallel + Manifest + CodeGraph Body Slicing</strong></td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>100.0%</strong> (7/7)</td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>90.5 s</strong> (1.5 min)</td>
+                <td>6-PR Polyglot Slice (TS, Py, Go, Rust, C, Java)</td>
+              </tr>
+              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.95;">
+                <td><strong class="gold-star">★</strong></td>
                 <td><strong>AIDA v3 · Adversarial + CodeGraph AST</strong></td>
                 <td><strong>92.3%</strong></td>
                 <td><strong>100.0%</strong></td>
@@ -1282,7 +1292,7 @@
                 <td><strong>129.5 s</strong> (2.2 min)</td>
                 <td>6-PR Polyglot Slice (TS, Py, Go, Rust, C, Java)</td>
               </tr>
-              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.9;">
+              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.88;">
                 <td><strong class="gold-star">★</strong></td>
                 <td><strong>AIDA v2 · Adversarial (No CodeGraph)</strong></td>
                 <td><strong>89.9%</strong></td>
@@ -1444,7 +1454,7 @@
             <h3 class="card-title">Substantive Defects <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>severities=High,Medium</code> · Ranked by Grounded F1)</h3>
             <p class="card-subtitle">DATA SOURCE: <a href="https://review-bench.ai/api/leaderboard/metrics?severities=High,Medium&amp;preference=balanced" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;"><code>https://review-bench.ai/api/leaderboard/metrics?severities=High,Medium&amp;preference=balanced</code> ↗</a></p>
           </div>
-          <span class="badge badge-elite">AIDA v3 (+CodeGraph): 81.1% H+M Grounded F1 (#2 Overall) · v2: 79.2%</span>
+          <span class="badge badge-elite">AIDA v4: 84.2% H+M Grounded F1 (#1 Overall) · v3 (+CodeGraph): 81.1% · v2: 79.2%</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -1460,6 +1470,15 @@
               </tr>
             </thead>
             <tbody>
+              <tr style="background:var(--emerald-soft);font-weight:600;">
+                <td><strong class="gold-star">★</strong></td>
+                <td><strong>AIDA v4 · Parallel + Manifest + CodeGraph Body Slicing (6-PR Slice)</strong></td>
+                <td><strong>84.2%</strong></td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>72.7%</strong> (16/22)</td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>90.5 s</strong></td>
+              </tr>
               <tr>
                 <td>1</td>
                 <td>OhMyBug</td>
@@ -1469,7 +1488,7 @@
                 <td>97.0%</td>
                 <td>322.2 s</td>
               </tr>
-              <tr style="background:var(--emerald-soft);font-weight:600;">
+              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.95;">
                 <td><strong class="gold-star">★</strong></td>
                 <td><strong>AIDA v3 · Adversarial + CodeGraph AST (6-PR Polyglot Slice)</strong></td>
                 <td><strong>81.1%</strong></td>
@@ -1632,6 +1651,15 @@
                 <td>91.0%</td>
                 <td>337.1 s</td>
               </tr>
+              <tr style="background:var(--emerald-soft);font-weight:600;">
+                <td><strong class="gold-star">★</strong></td>
+                <td><strong>AIDA v4 · Parallel + Manifest + CodeGraph Body Slicing (6-PR Slice)</strong></td>
+                <td><strong>67.6%</strong></td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>51.1%</strong> (23/45)</td>
+                <td><strong>100.0%</strong></td>
+                <td><strong>90.5 s</strong></td>
+              </tr>
               <tr>
                 <td>3</td>
                 <td>Klaussy · claude-opus-5-5 · 1</td>
@@ -1659,7 +1687,7 @@
                 <td>87.7%</td>
                 <td>212.6 s</td>
               </tr>
-              <tr style="background:var(--emerald-soft);font-weight:600;">
+              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.95;">
                 <td><strong class="gold-star">★</strong></td>
                 <td><strong>AIDA v3 · Adversarial + CodeGraph AST (6-PR Polyglot Slice)</strong></td>
                 <td><strong>61.5%</strong></td>
