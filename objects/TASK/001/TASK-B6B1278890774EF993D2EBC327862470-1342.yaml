@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-26T23:27:51.918759935Z
+modified_at: 2026-11-26T23:29:17.232430424Z
 req_type: Task
 tags:
 - review
@@ -45,6 +45,18 @@ comments:
     PROPOSAL for the advisor: narrow TASK-3869 to (10) + (12), plus tests proving (2)(6) and (13). Mark the rest covered by STORY-3120 S3a/S5a/S5b/S5c. Lane it after S5c merges (same files), ≤300 lines.
   created_at: 2026-11-26T21:35:10.423109059Z
   modified_at: 2026-11-26T21:35:10.423109059Z
+- id: 01a21a31-64f6-7450-9d82-88ad1f9758a5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:29):
+    # TASK-3869: review prepare hardening II, NARROWED (advisor-122 14:44; product-15). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch int-task-3869-hardening (cut from the integration tip AFTER S5c #4690 merged). <=300 lines; if over, ship AC1+AC2 with (Refs TASK-3869) and list the rest. Otherwise use the completing (TASK-3869) trailer.
+    READ: `aida show TASK-3869` (AC1-AC4; items 14/9/11/8 already delivered by STORY-3120) and the review inventory code (classify_exclusion, the git ls-files / diff paths in review_prepare.rs, --specs resolution).
+    AC1: skip gitlinks/submodules/symlinks/non-regular entries with a named reason, never follow or read through them. AC2: --specs resolves only via the trusted store and refuses unknown IDs. AC3: PROOF tests for pinned-root confinement on reads+writes, incl. a concurrent re-parent/symlink swap. AC4: a lossless non-UTF-8 path round trip with escaping.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T23:29:17.232430424Z
+  modified_at: 2026-11-26T23:29:17.232430424Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
