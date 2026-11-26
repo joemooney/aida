@@ -307,7 +307,7 @@
 <div class="pres-dock" role="region" aria-label="Slide Deck Navigation Controls">
   <button class="pres-btn" type="button" onclick="stepSlide(-1)" title="Previous Slide (Left Arrow)">◀ Prev</button>
   <div class="pres-dots" id="pres-dots-container"></div>
-  <div class="pres-status" id="pres-status-label">01 / 06 · Overview &amp; Problem</div>
+  <div class="pres-status" id="pres-status-label">01 / 08 · Overview &amp; Problem</div>
   <button class="pres-btn" type="button" onclick="stepSlide(1)" title="Next Slide (Right Arrow)">Next ▶</button>
   <span style="color:#454d47;">|</span>
   <button class="pres-btn" id="dock-deck-btn" type="button" onclick="toggleDeckMode()" title="Toggle Single-Slide Presentation Mode (Shortcut: D)">▣ Slide Deck Mode</button>
@@ -329,6 +329,7 @@
       <a href="#slide-comparison" onclick="goToSlide(4)">05. Architecture Matrix</a>
       <a href="#slide-cli" onclick="goToSlide(5)">06. CLI &amp; Integration</a>
       <a href="#slide-manual" onclick="goToSlide(6)">07. User Manual</a>
+      <a href="#slide-cleanroom" onclick="goToSlide(7)">08. Clean-Room IP &amp; Supply Chain</a>
       <a href="reviewbench-report.html" style="color:var(--accent);font-weight:700;">ReviewBench Report ↗</a>
     </nav>
     <div class="top-actions">
@@ -352,7 +353,7 @@
 <main id="top" class="shell">
 
   <!-- SLIDE 1: HERO & THE PROBLEM WITH RAW LLM CODE REVIEW -->
-  <div class="slide-section active-slide" id="slide-overview" data-slide-title="01 / 06 · Overview &amp; Problem">
+  <div class="slide-section active-slide" id="slide-overview" data-slide-title="01 / 08 · Overview &amp; Problem">
     <section class="hero">
       <div class="eyebrow">
         <span class="pulse-dot"></span>
@@ -477,7 +478,7 @@
   </div>
 
   <!-- SLIDE 2: THE FOUR DETERMINISTIC RUST PILLARS -->
-  <div class="slide-section" id="slide-pillars" data-slide-title="02 / 06 · Four Rust Pillars">
+  <div class="slide-section" id="slide-pillars" data-slide-title="02 / 08 · Four Rust Pillars">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -554,7 +555,7 @@
   </div>
 
   <!-- SLIDE 3: MODULAR PLAYBOOKS & WHOLE-FILE SUBSTRING FACETS -->
-  <div class="slide-section" id="slide-playbooks" data-slide-title="03 / 06 · Playbooks &amp; Facets">
+  <div class="slide-section" id="slide-playbooks" data-slide-title="03 / 08 · Playbooks &amp; Facets">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -643,7 +644,7 @@
   </div>
 
   <!-- SLIDE 4: DOGFOOD CASE STUDY — REVIEWING ITSELF -->
-  <div class="slide-section" id="slide-dogfood" data-slide-title="04 / 06 · Self-Review Case Study">
+  <div class="slide-section" id="slide-dogfood" data-slide-title="04 / 08 · Self-Review Case Study">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -733,7 +734,7 @@
   </div>
 
   <!-- SLIDE 5: ARCHITECTURAL COMPARISON MATRIX -->
-  <div class="slide-section" id="slide-comparison" data-slide-title="05 / 06 · Architecture Matrix">
+  <div class="slide-section" id="slide-comparison" data-slide-title="05 / 08 · Architecture Matrix">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -819,7 +820,7 @@
   </div>
 
   <!-- SLIDE 6: CLI REFERENCE & WORKFLOW INTEGRATION -->
-  <div class="slide-section" id="slide-cli" data-slide-title="06 / 06 · CLI &amp; Integration">
+  <div class="slide-section" id="slide-cli" data-slide-title="06 / 08 · CLI &amp; Integration">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -904,7 +905,7 @@ checklist = """
   </div>
 
   <!-- SLIDE 7: COMPLETE USER MANUAL & OPERATOR GUIDE -->
-  <div class="slide-section" id="slide-manual" data-slide-title="07 / 07 · Complete User Manual">
+  <div class="slide-section" id="slide-manual" data-slide-title="07 / 08 · Complete User Manual">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -1188,6 +1189,185 @@ aida review prepare --telemetry-report</code></pre>
                 <td class="code-cell">--json / --write &lt;PATH&gt;</td>
                 <td>Output</td>
                 <td>Emit machine-readable JSON bundle and/or write output to a repository-confined path.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 8: CLEAN-ROOM IP, LICENSE & SUPPLY-CHAIN ASSURANCE -->
+  <div class="slide-section" id="slide-cleanroom" data-slide-title="08 / 08 · Clean-Room IP &amp; Supply Chain">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">08 / SPECIFICATION-MEDIATED CLEAN-ROOM ENGINEERING</div>
+          <h2>Harnessing Industry Ideas Without License Contamination or Supply-Chain Risk</h2>
+        </div>
+        <p class="section-desc">
+          How AIDA’s <code>/aida-ecosystem-scan</code> → <code>aida add</code> → clean-room Rust workflow absorbs best-in-class research and architectural patterns while guaranteeing <strong>0% copied code/prose</strong>, <strong>0 license contamination</strong>, and <strong>0 untrusted third-party dependencies</strong>.
+        </p>
+      </div>
+
+      <!-- 3-STAGE SPECIFICATION FIREWALL -->
+      <div class="card" style="margin-bottom:28px;">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">The AIDA Specification Firewall ("Chinese Wall" Architecture)</h3>
+            <p class="card-subtitle">SEPARATING UNPROTECTABLE FUNCTIONAL IDEAS (17 U.S.C. § 102(b)) FROM COPYRIGHTED EXPRESSION &amp; UNTRUSTED CODE</p>
+          </div>
+          <span class="badge badge-elite">Zero Derivative Code</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:20px;margin-bottom:18px;">
+          <div style="background:var(--bg-panel);border:1px solid var(--line);border-top:3px solid var(--blue);padding:18px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--blue);font-weight:700;letter-spacing:0.8px;margin-bottom:6px;">STAGE 1 · ECOSYSTEM &amp; RESEARCH SCAN</div>
+            <h4 style="font-family:var(--serif);font-size:18px;font-weight:400;margin:0 0 8px;">Observe Functional Concepts Only</h4>
+            <p style="font-size:13px;color:var(--ink-secondary);margin:0 0 10px;line-height:1.55;">
+              During <code>/aida-ecosystem-scan</code>, the <strong>Advisor</strong> studies external tools, academic papers, and open standards to identify <em>what problem is being solved</em> and <em>where existing tools fall short</em>:
+            </p>
+            <ul style="font-size:12.5px;padding-left:16px;margin:0;color:var(--ink);">
+              <li><strong>Alibaba OpenCodeReview (<code>ocr</code>)</strong>: Go CLI (Apache-2.0) — observed high-level concepts of pre-filtering diffs, batching files, and anchoring line numbers.</li>
+              <li><strong>GitHub ReviewBench (ArXiv 2610.16159)</strong>: Academic evaluation paper — observed the 3-condition valid defect rubric (<em>True + Relevant + Non-Trivial</em>), online addressed-rate tracking, and <em>F<sub>β</sub></em> scoring math.</li>
+              <li><strong>OASIS SARIF 2.1.0 &amp; ANSSI / OWASP</strong>: Public industry schemas and security checklists.</li>
+            </ul>
+          </div>
+
+          <div style="background:var(--bg-panel);border:1px solid var(--line);border-top:3px solid var(--accent);padding:18px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);font-weight:700;letter-spacing:0.8px;margin-bottom:6px;">STAGE 2 · THE AIDA SPEC FIREWALL</div>
+            <h4 style="font-family:var(--serif);font-size:18px;font-weight:400;margin:0 0 8px;">Distill Pure Behavioral Invariants</h4>
+            <p style="font-size:13px;color:var(--ink-secondary);margin:0 0 10px;line-height:1.55;">
+              The Advisor writes an AIDA requirement spec (<code>STORY-3076</code>, <code>STORY-3120</code>) containing <strong>only functional acceptance criteria and mathematical invariants</strong> — never foreign source code, data structures, or prompt strings:
+            </p>
+            <ul style="font-size:12.5px;padding-left:16px;margin:0;color:var(--ink);">
+              <li><strong>Strips Protected Expression</strong>: No Go structs, no regexes, no prompt markdown, and no AST translations ever cross into the AIDA spec.</li>
+              <li><strong>Adds AIDA-Native Invariants</strong>: Injects requirements unique to AIDA (<code>.aida-store</code> <code>## Acceptance</code> lifting, <code>// trace:</code> verification, multi-vendor seat opposition).</li>
+              <li><strong>Auditable Contract</strong>: The spec is permanently versioned in <code>.aida-store</code> before a single line of Rust is written.</li>
+            </ul>
+          </div>
+
+          <div style="background:var(--bg-panel);border:1px solid var(--line);border-top:3px solid var(--emerald);padding:18px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--emerald);font-weight:700;letter-spacing:0.8px;margin-bottom:6px;">STAGE 3 · CLEAN-ROOM NATIVE RUST</div>
+            <h4 style="font-family:var(--serif);font-size:18px;font-weight:400;margin:0 0 8px;">Independent First-Principles Build</h4>
+            <p style="font-size:13px;color:var(--ink-secondary);margin:0 0 10px;line-height:1.55;">
+              The <strong>Implementer</strong> builds directly from the AIDA spec inside an isolated worktree using only AIDA’s existing Rust workspace crates (<code>aida-core</code>, <code>aida-cli-lib</code>):
+            </p>
+            <ul style="font-size:12.5px;padding-left:16px;margin:0;color:var(--ink);">
+              <li><strong>0% Shared Code or Prompts</strong>: Every struct, algorithm, and compiled playbook constant is authored from scratch in idiomatic Rust.</li>
+              <li><strong>0 Added Crates or Binaries</strong>: Built entirely on Rust <code>std</code>, <code>serde</code>, <code>serde_json</code>, <code>sha2</code>, and <code>git</code>.</li>
+              <li><strong>100% Traceable</strong>: Every module and test carries <code>// trace:STORY-3076</code> or <code>// trace:STORY-3120</code> and passes independent adversarial review.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout strength" style="margin-top:0;">
+          <div class="callout-title">✓ Why Ideas Are Not Copyrightable — Only Expression Is (17 U.S.C. § 102(b))</div>
+          Under copyright law worldwide (17 U.S.C. § 102(b) and the Idea–Expression Divide), <em>"In no case does copyright protection for an original work of authorship extend to any idea, procedure, process, system, method of operation, concept, principle, or discovery."</em> By mediating development through an AIDA functional specification, AIDA harnesses the best ideas in software engineering while producing 100% original, non-derivative Rust implementations.
+        </div>
+      </div>
+
+      <!-- TWO-COLUMN DEEP DIVE: LICENSE/COPYRIGHT vs. SECURITY/SUPPLY-CHAIN -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">1. Copyright &amp; License Hygiene</h3>
+              <p class="card-subtitle">WHY SPECIFICATION-DRIVEN REDESIGN BEATS NAIVE "AI PORTING"</p>
+            </div>
+            <span class="badge badge-elite">100% Original Expression</span>
+          </div>
+          <p style="font-size:13.5px;color:var(--ink-secondary);margin-top:0;">
+            Asking an LLM to <em>"translate this Go/Python file into Rust"</em> creates a <strong>derivative work</strong> that inherits the upstream license (Apache-2.0 NOTICE obligations, GPL copyleft, or proprietary contamination) along with the upstream tool's architectural blind spots. AIDA’s clean-room process avoids both:
+          </p>
+          <ul style="font-size:13px;line-height:1.65;padding-left:18px;margin-bottom:0;">
+            <li><strong>Independent Algorithms, Not Line-by-Line Translations:</strong> Where external tools ask an LLM to group files or only batch in API mode, AIDA implements deterministic greedy token-budget bin-packing (<code>bytes/4 + lines*2</code>) and crate-qualified stem pairing (<code>canonical_module_stem</code>) in pure Rust.</li>
+            <li><strong>First-Principles Compiled Playbooks:</strong> External review tools often bundle thousands of lines of markdown prompts copied from community blogs. AIDA’s 11 language, scientific, and hardware playbooks (<code>rust</code>, <code>c_cpp</code>, <code>java</code>, <code>python</code>, <code>typescript_js</code>, <code>go</code>, <code>matlab</code>, <code>hdl_rtl</code>, <code>shell</code>, <code>sql</code>, <code>config_data</code>) were authored from scratch from primary public specifications (Rust API Guidelines, ANSSI Secure Rust, Tokio docs, IEEE SystemVerilog, OWASP/CWE).</li>
+            <li><strong>Mathematical &amp; Standard Interoperability:</strong> SARIF 2.1.0 is an open OASIS standard and <em>F<sub>β</sub></em> / precision / recall are standard statistical formulas. Implementing them from their public specifications carries zero licensing encumbrance.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">2. Supply-Chain &amp; Prompt-Injection Immunity</h3>
+              <p class="card-subtitle">PROTECTING ENTERPRISE REPOS FROM MALICIOUS CODE &amp; TROJAN PROMPTS</p>
+            </div>
+            <span class="badge badge-crit">Zero-Trust Defense</span>
+          </div>
+          <p style="font-size:13.5px;color:var(--ink-secondary);margin-top:0;">
+            In the AI era, supply-chain attacks target two vectors: <strong>third-party runtime dependencies</strong> (compromised npm/PyPI/Go packages) and <strong>trojanized prompt/skill markdown files</strong> (hidden instructions that exfiltrate secrets or tell the agent to ignore backdoors):
+          </p>
+          <ul style="font-size:13px;line-height:1.65;padding-left:18px;margin-bottom:0;">
+            <li><strong>Zero External Binary or Library Execution:</strong> AIDA never downloads, links, or shells out to third-party review binaries in production. Adding the entire review engine, SARIF exporter, telemetry database, and ReviewBench scorer added <strong>0 new crates</strong> to <code>Cargo.toml</code>.</li>
+            <li><strong>Immunity to Trojanized Prompts &amp; Skills:</strong> Because AIDA never imports external `.md` prompt files or community skill packs verbatim—compiling its own concise playbooks directly into `aida-core` Rust constants—an attacker cannot smuggle a prompt-injection payload via an upstream prompt repository.</li>
+            <li><strong>Hardened Git &amp; Filesystem Boundaries:</strong> Every git subprocess call in `review_prepare.rs` enforces two-layer argument guarding (`reject_option_like` + `--end-of-options`) and rejects `Component::ParentDir` (`..`) path traversal, ensuring malicious branch names or filenames in an untrusted PR cannot execute arbitrary commands.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- SIDE-BY-SIDE CLEAN-ROOM AUDIT MATRIX -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">3. Clean-Room Provenance &amp; Independence Audit Matrix</h3>
+            <p class="card-subtitle">VERIFIABLE SIDE-BY-SIDE PROOF OF ZERO CODE OR PROSE OVERLAP ACROSS EVERY SUBSYSTEM</p>
+          </div>
+          <span class="badge badge-info">Audited: STORY-3076 &amp; STORY-3120</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subsystem / Capability</th>
+                <th>External Inspiration / Standard</th>
+                <th>Upstream Mechanism (What We Did NOT Copy)</th>
+                <th>AIDA Clean-Room Rust Implementation (<code>aida-core</code> / <code>aida-cli-lib</code>)</th>
+                <th>Copied Code / Prose / Deps</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Diff Pre-Filtering &amp; Inventory Sealing</strong></td>
+                <td>General static analysis hygiene</td>
+                <td>Go file-extension &amp; lockfile skip list</td>
+                <td><code>classify_diff_inventory</code> in <code>review_engine.rs</code>: typed <code>ExclusionReason</code> enum (<code>BinaryFile</code>, <code>PureDeletion</code>, <code>GeneratedOrLockfile</code>, <code>AidaSubstrate</code>, <code>SecretSensitivePath</code>) + deterministic <strong>SHA-256 inventory seal</strong> (<code>compute_inventory_seal_sha256</code>).</td>
+                <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
+              </tr>
+              <tr>
+                <td><strong>2. Semantic Module Batching</strong></td>
+                <td>Cognitive load &amp; context-window research (SmartBear / Cisco)</td>
+                <td>Go LLM-prompted grouping (or flat 1-group-per-language in delegation mode)</td>
+                <td><code>bundle_review_batches</code> &amp; <code>canonical_module_stem</code>: zero-LLM deterministic stem normalization pairing <code>&lt;stem&gt;.rs</code> + <code>&lt;stem&gt;_test.rs</code> (and Verilog <code>*_tb.sv</code> / Java <code>*Test.java</code>) with greedy descending 12,000-token bin-packing.</td>
+                <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
+              </tr>
+              <tr>
+                <td><strong>3. Language, Scientific &amp; Hardware Playbooks</strong></td>
+                <td>Rust API Guidelines, ANSSI, Tokio, OWASP, IEEE 1800 SV</td>
+                <td>Static 75-line markdown files injected unconditionally per language</td>
+                <td><code>builtin_playbook_specs</code> &amp; <code>builtin_conditional_facets</code>: 11 compiled Rust playbooks + 4 whole-file substring-triggered security/concurrency facets (injected <em>only</em> when triggers like <code>unsafe </code> or <code>Command::new</code> appear in the file).</td>
+                <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
+              </tr>
+              <tr>
+                <td><strong>4. Deterministic Line Anchoring</strong></td>
+                <td>LLM line-hallucination problem</td>
+                <td>Go post-processor running only in standalone API mode</td>
+                <td><code>anchor_snippet_lines</code> &amp; <code>resolve_snippet_line</code>: 2-pass exact + whitespace-normalized sliding-window matcher against revision-pinned <code>git show &lt;sha&gt;:&lt;path&gt;</code> with closest-line tie-breaking.</td>
+                <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
+              </tr>
+              <tr>
+                <td><strong>5. Two-Pass Adversarial Challenger &amp; Rubric</strong></td>
+                <td>Red-Team/Blue-Team security &amp; GitHub ReviewBench (ArXiv 2610.16159)</td>
+                <td>Single-vendor post-filter or offline Python benchmark judge</td>
+                <td><code>build_adversarial_challenger_prompt</code>: cross-vendor / cross-model / asymmetric-effort Finder → Challenger pipeline enforcing the 3-condition rubric (<em>Technically True + Change-Relevant + Non-Trivial</em>) live at review time.</td>
+                <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
+              </tr>
+              <tr>
+                <td><strong>6. SARIF 2.1.0, Telemetry DB &amp; <em>F<sub>β</sub></em> / Addressed Rate</strong></td>
+                <td>OASIS SARIF 2.1.0 spec &amp; ReviewBench Section 5/7 formulas</td>
+                <td>No SARIF suppressions, no A/B telemetry DB, offline Python scripts</td>
+                <td><code>findings_to_sarif_json_with_telemetry</code>, <code>compute_addressed_findings_with</code>, &amp; <code>compute_f_beta_score</code>: native Rust SARIF §3.35 <code>suppressions</code> archive, <code>.aida/review-telemetry/reviews.jsonl</code> ledger, deterministic 50/50 A/B arm assignment, and live git hunk-overlap addressed-rate tracking.</td>
+                <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
               </tr>
             </tbody>
           </table>

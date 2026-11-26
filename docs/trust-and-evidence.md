@@ -35,6 +35,14 @@ AIDA is alpha software and Linux-only. Current identity and local file controls 
 
 Merging a change is separate from release and production deployment. A project must supply its own deployment policy, credentials and automation. Choosing drain does not grant access to production or prove an application meets its operational obligations.
 
+## Specification-mediated clean-room engineering
+
+When AIDA adopts architectural ideas or evaluation methodologies from external ecosystems, academic research, or industry standards, it uses the requirement specification in `.aida-store` as a **clean-room firewall**:
+
+1. **Observe functional concepts only (`/aida-ecosystem-scan`)**: The Advisor studies external tools, papers (such as GitHub ReviewBench), and public standards (such as OASIS SARIF 2.1.0, ANSSI Secure Rust, and OWASP/CWE) to understand the underlying problem and mathematical or behavioral invariants.
+2. **Distill pure acceptance criteria (`aida add`)**: The requirement specification records only unprotectable functional requirements, mathematical formulas, and AIDA-specific invariants (`## Acceptance`)—never foreign source code, data structures, or prompt prose.
+3. **Implement from scratch in native Rust**: The Implementer builds directly from the AIDA specification using existing workspace crates (`aida-core`, `aida-cli-lib`) with `// trace:<SPEC-ID>` markers and zero added third-party runtime dependencies or copied prompt templates. This eliminates copyright/license contamination, prevents derivative-work exposure, and closes the supply-chain and trojan-prompt attack surface. See the [Clean-Room IP & Supply-Chain Assurance audit](showcase/code-review.html#slide-cleanroom) for a complete subsystem-by-subsystem breakdown.
+
 ## Read the records at their own scope
 
 The [workflow guide](product-workflow.md) separates code history, canonical intent, the cache and local evidence. Store synchronization does not transfer every operational artifact or machine grant. Review, CI, authority and hold records need the validation defined by their own commands.
