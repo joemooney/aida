@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T18:20:27.789610829Z
+modified_at: 2026-11-26T18:22:53.749223998Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -133,6 +133,18 @@ comments:
   created_at: 2026-11-26T17:57:45.402659474Z
   modified_at: 2026-11-26T17:57:45.402659474Z
   session_id: 01a218a9014e
+- id: 01a21918-dec7-70e0-a1bf-29cab715832b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:22):
+    # BUG-2775 FRESH SLICE (replaces closed #4672; product-15 2026-11-26 11:25). Lane: CLAUDE. STRICT (review runner). MAIN, NEW branch bug-2775-fresh (cut from the current main tip, which now has p49 = S5a --post-comment). Keep #4672's title, ending in (BUG-2775). <=260 lines.
+    PORT #4672's change onto current main: `git diff origin/main...origin/bug-2775-run-review-errors` is the reference. Resolve against p49's review_prepare.rs changes. Keep every AC (`aida show BUG-2775 --comments`, including the advisor's AC3 addendum: prove the runner gets EOF on stdin, and that a blocking vendor CLI fails FAST with a clear cause). Keep its tests.
+    ALSO: re-run the live reproduction on this host once built (`aida review prepare --pr 4666 --run-review --adversarial`, with and without --agent claude) and put the before/after error output and wall time in the PR body.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4672 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-26T18:22:53.749223998Z
+  modified_at: 2026-11-26T18:22:53.749223998Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
