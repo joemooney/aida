@@ -152,6 +152,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3143 S2 (completing). AC2 verified by story_3143_hotness_blends_weighted_signals, story_3143_default_areas_map_code_paths and cr_by_area in story_3143_flow_metrics_from_fixture_ledger. AC3 verified by story_3143_landings_parse_pr_numbers_from_subjects, story_3143_flow_metrics_from_fixture_ledger and story_3143_stale_claims_and_recommendations; it fails closed on an unknown holder set. AC4 verified by story_3143_stale_claims_and_recommendations; the prescribed `aida edit --superseded-by`, `aida defer --until manual:` and `--status approved` flags exist and nothing is executed. AC1 is unmet: the AC requires --format table|json|html and HTML is not implemented, yet the PR claims completion. Blocking: unmet-claimed-ac. The p3/test-gap items are follow-ups. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-26T10:55:27.603063802Z
   modified_at: 2026-11-26T10:55:27.603063802Z
+- id: 01a21780-f57b-7f12-a0ce-80c3fa6d9923
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:57):
+    # STORY-3143 S3: `aida report backlog` HTML output + the deferred p3s (S2 landed 2026-11-26 03:45; advisor-122 02:35 S3 scope comment; product-15). Lane: CLAUDE. MAIN, NEW branch report-backlog-s3. Completing (STORY-3143) trailer: this completes the story. <=300 lines.
+    READ: `aida show STORY-3143 --comments` (the S3 SCOPE comment). Do exactly:
+     (1) AC1 HTML output: `--format html` writes a self-contained page (no external assets) with the area table, flow metrics, rework sinks, stale claims and recommendations. Escape every cell.
+     (2) Stale claims judged by DRIVER ACTIVITY (last driver heartbeat or lane log), not only status age.
+     (3) A landing_opened_since window option for the flow metrics.
+     (4) CR rounds grouped BY SPEC (not only by PR).
+     (5) The gather_signals test gap.
+    TESTS for each. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T10:57:18.441859418Z
+  modified_at: 2026-11-26T10:57:18.441859418Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
