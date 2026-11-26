@@ -1,0 +1,76 @@
+id: 01a21635-3a7a-71b2-865f-7d50d6e86f88
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-334
+title: 'Review PR-4623: [AI:claude] fix(ci): bound hosted lib-lane memory and fail lanes early by cause (BUG-2768)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21610`) for branch `ci-lib1-hosted-memory`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4623>
+  - Branch: `ci-lib1-hosted-memory` → `main`
+
+  ## Covers
+
+  - BUG-2768
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2750
+  - TASK-3884
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4623` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T04:55:16.858052542Z
+modified_at: 2026-11-26T04:55:31.800719965Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a21609-e1b7-7091-8146-ab61403671d1
+  created_at: 2026-11-26T04:55:20.686273481Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a20e00-053c-7331-bf72-64eb1042f7f3
+  created_at: 2026-11-26T04:55:27.811756843Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a20f30-8076-72d1-93a3-09d5d45452b7
+  created_at: 2026-11-26T04:55:31.800681690Z
+  created_by: dirtlab
+history:
+- id: 01a21635-51a9-7472-871e-2c7bed2a3dc8
+  author: dirtlab
+  timestamp: 2026-11-26T04:55:22.793311330Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21635-6d81-7e10-a33f-ddec17864dcc
+  author: dirtlab
+  timestamp: 2026-11-26T04:55:29.921835965Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21635-7ced-7a41-8d30-7d0f10d8f1be
+  author: dirtlab
+  timestamp: 2026-11-26T04:55:33.869299726Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: e430c0baf88df0c260070b7093e640e9838d6a29
+  branch: ci-lib1-hosted-memory
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 68ecbd8240
+  vendor: claude
+  session: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)

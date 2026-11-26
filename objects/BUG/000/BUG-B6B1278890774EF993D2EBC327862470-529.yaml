@@ -9,17 +9,23 @@ description: |
   - AC1: confirm or refute the memory cause from the evidence (e.g. a lib-1 run with `/usr/bin/time -v` or memory sampling around the build, or the hosted runner diagnostics), recorded on the spec.
   - AC2: if memory: bound lib-1's peak (e.g. CARGO_BUILD_JOBS for that shard, codegen-units/debuginfo trimming for the test profile, or split lib-1 further by module) so lib-1 completes under the hosted limits in 3 consecutive runs.
   - AC3: a clear, early failure in place of the silent shutdown: if the shard approaches its memory budget or the deadline, fail with a message naming the shard and the cause.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T04:40:32.778704447Z
+modified_at: 2026-11-26T04:55:24.274530307Z
 req_type: Bug
 tags:
 - ci
 - landing
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21635-3a7a-71b2-865f-7d50d6e86f88
+  created_at: 2026-11-26T04:55:24.274499336Z
+  created_by: dirtlab
 comments:
 - id: 01a2160d-eeef-7062-893e-275166cdaa6d
   author: joe
@@ -71,6 +77,13 @@ comments:
   modified_at: 2026-11-26T04:40:32.778704447Z
   session_id: 01a216104e2c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21634-e78a-7190-b899-6ec63a83cf24
+  author: aida-publication-done
+  content: Implementer push e430c0baf88d declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T04:54:55.626309980Z
+  modified_at: 2026-11-26T04:54:55.626309980Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
@@ -83,6 +96,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21634-e78a-7190-b899-6eb8d02d5cf9
+  author: aida-publication-done
+  timestamp: 2026-11-26T04:54:55.626306608Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21635-5f98-7cc1-9978-ec2d06c1439e
+  author: dirtlab
+  timestamp: 2026-11-26T04:55:26.360230866Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
