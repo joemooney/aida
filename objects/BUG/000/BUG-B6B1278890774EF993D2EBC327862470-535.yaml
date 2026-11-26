@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T17:17:45.773450754Z
+modified_at: 2026-11-26T17:38:41.030512867Z
 req_type: Bug
 tags:
 - admission
@@ -103,6 +103,11 @@ comments:
     A reference merge (commit d38eee408f37, `(Refs BUG-2774)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T17:17:45.773444063Z
   modified_at: 2026-11-26T17:17:45.773444063Z
+- id: 01a218f0-2506-7ab2-83fe-ba077c34ffdd
+  author: joe
+  content: 'COMPLETED with AC2/AC3 delivered by #4667 (d38eee408f3: stale or deleted-binary deputy reporting in train-status and doctor). AC1 (release admission while recovery waits on an external job) MOVED to TASK-3920 per advisor-122 10:40 (a resumable recovery step; STRICT; sketch first).'
+  created_at: 2026-11-26T17:38:41.030512867Z
+  modified_at: 2026-11-26T17:38:41.030512867Z
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe
