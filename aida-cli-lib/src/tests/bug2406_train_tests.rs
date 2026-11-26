@@ -2679,3 +2679,51 @@ exec '@B@/@T@' "$@"
         "spawned without the check's deadline:\n{unbounded}"
     );
 }
+
+/// BUG-2584: a long history expands into many bodies with one verdict; the
+/// evidence pass asks the approval policy once per distinct verdict.
+// trace:BUG-2584 | ai:claude
+#[test]
+fn bug2584_authority_asked_once_per_distinct_verdict() {
+    let approve = rv::RecordedVerdict {
+        reviewed_sha: Some("a".repeat(40)),
+        recorded_by: Some("reviewer".into()),
+        ..Default::default()
+    };
+    let other = rv::RecordedVerdict {
+        recorded_by: Some("second reviewer".into()),
+        ..approve.clone()
+    };
+    let asked = std::cell::Cell::new(0);
+    let mut answers = AuthorityAnswers::default();
+    for _ in 0..226 {
+        assert!(!answers.refused(&approve, || {
+            asked.set(asked.get() + 1);
+            false
+        }));
+    }
+    assert_eq!(asked.get(), 1, "equal verdicts share one policy read");
+    assert!(answers.refused(&other, || {
+        asked.set(asked.get() + 1);
+        true
+    }));
+    assert_eq!(asked.get(), 2, "a different verdict is asked afresh");
+}
+
+/// BUG-2584: a refusal is remembered as a refusal for every equal body, so
+/// the reuse can never turn a refused verdict into an admitted one.
+// trace:BUG-2584 | ai:claude
+#[test]
+fn bug2584_remembered_refusal_still_refuses() {
+    let verdict = rv::RecordedVerdict {
+        reviewed_sha: Some("b".repeat(40)),
+        ..Default::default()
+    };
+    let mut answers = AuthorityAnswers::default();
+    assert!(answers.refused(&verdict, || true));
+    assert!(answers.refused(&verdict, || panic!("must not be asked again")));
+    assert!(
+        AuthorityAnswers::default().refused(&verdict, || true),
+        "a fresh pass asks again and keeps refusing"
+    );
+}
