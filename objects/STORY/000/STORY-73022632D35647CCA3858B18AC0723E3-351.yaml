@@ -1,5 +1,6 @@
 id: 01a217af-0496-7b32-9c41-1be63a746f27
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-351
+agreed_id: STORY-3170
 title: 'Review PR-4648: [AI:claude] docs(workflow): gates, detours, state-machine and steering SVGs; lane-admission host knobs (Refs STORY-2839)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2177c`) for branch `int45-story-2839-d2`.
@@ -39,6 +40,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a217fe-45ad-7fd0-9c16-905b78daaa63
+  author: joe
+  timestamp: 2026-11-26T13:14:29.677199641Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2d89ef450561e39de69593890f3ab7765146154b
   branch: main

@@ -1,5 +1,6 @@
 id: 01a217d3-7e08-7ea0-abc9-15e7c9648b4e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-352
+agreed_id: STORY-3173
 title: 'Review PR-4650: [AI:claude] feat(review): --adversarial challenger pass with opposing-vendor pick and --challenger-effort (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21780`) for branch `int45-story-3120-s4`.
@@ -35,6 +36,12 @@ history:
 - id: 01a217d3-9ec1-7c50-9ef8-0744242b6b99
   author: dirtlab
   timestamp: 2026-11-26T12:27:54.433503357Z
+  changes: []
+- id: 01a217fe-fe25-75b1-9ff2-e7e268d8a381
+  author: joe
+  timestamp: 2026-11-26T13:15:16.901796284Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6fe237a9c4e0068674b197e187db46d9a588d493

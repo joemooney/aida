@@ -1,5 +1,6 @@
 id: 01a21721-6dd8-74c2-8c16-38fe6e9df346
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-346
+agreed_id: STORY-3172
 title: 'Review PR-4640: [AI:claude] test(auto-train): run the idle-loop fixture on a ci-gated repo (BUG-2769)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a216fd`) for branch `fix-autotrain-idle-admission`.
@@ -62,6 +63,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a217fe-c0bd-7961-aff4-302b8ff78323
+  author: joe
+  timestamp: 2026-11-26T13:15:01.181942275Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
   branch: fix-autotrain-idle-admission
