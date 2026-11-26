@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T16:18:05.599841083Z
+modified_at: 2026-11-26T16:21:44.655142438Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -39,6 +39,11 @@ comments:
   modified_at: 2026-11-26T16:18:05.599841083Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a218a9-b44f-7820-adca-96b855379703
+  author: joe
+  content: 'AC3 ADDENDUM (advisor-122 2026-11-26 09:24): the likely cause of the 15-min claude batch is the runner waiting on interactive input or a permission prompt (stdin not closed, or claude without --print or a non-interactive mode). The test must PROVE the runner gets EOF on stdin, and that if the vendor CLI blocks it fails FAST with a clear cause (not after the deadline).'
+  created_at: 2026-11-26T16:21:44.655142438Z
+  modified_at: 2026-11-26T16:21:44.655142438Z
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
