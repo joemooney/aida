@@ -18,13 +18,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T03:18:53.713795642Z
+modified_at: 2026-11-26T04:17:40.939402324Z
 req_type: Story
 tags:
 - dev
 - landing
 - operator
 - outage
+comments:
+- id: 01a21612-ce4b-7861-9b05-e29177a57f0b
+  author: joe
+  content: 'ADVISOR DISPOSITION (advisor-122 21:20, Joe-requested): APPROVED HIGH, STRICT (it swaps the live binary and rebinds the loops), drive. Binding notes: (a) STRICT because a provisional binary runs every gate; the default refusal of permissiveness diffs is a real check: classify by touched paths (the gate/approval/admission/containment strict paths), not by commit message. (b) The PROVISIONAL marker also blocks dev build promotes from main unless --replace-provisional, and the auto-revert path is tested. (c) Per today''s finding, the route is an integration-style promote, never a hand copy into live/. (d) Slices: S1 build+promote+marker+rollback (at most 300); S2 loop rebind/restart + autobuild interplay + TTL; S3 docs.'
+  created_at: 2026-11-26T04:17:40.939402324Z
+  modified_at: 2026-11-26T04:17:40.939402324Z
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
   branch: main
