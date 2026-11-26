@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T08:06:00.077565186Z
+modified_at: 2026-11-26T08:43:27.675665173Z
 req_type: Story
 tags:
 - landing
@@ -285,6 +285,22 @@ comments:
   modified_at: 2026-11-26T08:02:51.708474234Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21706-223b-7161-93a9-5ec996998dd7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3caca775d97a (PR #4634, round 3)
+    - F1 fixed: LockHolder::stale treats pid None (dead or unidentified driver) as stale at any age. lock_driver falls back to the driver record's since for age. Tested in story_3131_s2_train_lock_held_past_threshold.
+    - F2 fixed: an unreviewed green head with a Reserved/Running review-watch attempt at that head (review_watch::reviewing_heads) is emitted under landing-drought-info and excluded from failing(). Tested in story_3131_s2_review_backlog_is_informational: in flight = info, none past dwell = finding, within dwell = hidden.
+    - F5 fixed: lock_driver(root, now) takes the scan's clock.
+    - F4 fixed: PR body replaced with this slice's summary, including the AC-D and vendor-outage deferrals.
+    - F3 deferred to S3 per the advisor ruling.
+    Residual risks: a lock acquired before its driver record is written briefly reads as an orphan, but a PR only reports it past dwell with green CI. RemoteHeld (peer) review attempts are not counted as in flight.
+    Checks: story_3131 tests 11/11 pass, make check-ci-fast green.
+  created_at: 2026-11-26T08:43:27.675665173Z
+  modified_at: 2026-11-26T08:43:27.675665173Z
+  session_id: 01a216e39ca1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
