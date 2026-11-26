@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: the mail-retention dry run (`aida mailbox retention activate --dry-run`, activation.rs ~:234) uses the SAME scoped scan as agent gc, so it stops reporting a live owner's leftovers as reapable (it reported 460 leftovers while lanes ran on 2026-11-25).
   - AC2: a lane's exit-time mail retention no longer refuses with "the fresh writer-admission scan could not verify every mail writer" because of leftovers that belong to dead owners; a test.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:56:00.822526486Z
-modified_at: 2026-11-26T13:01:51.256125655Z
+modified_at: 2026-11-26T13:07:16.958744300Z
 req_type: Task
 tags:
 - agents
@@ -44,6 +44,13 @@ history:
   author: joe
   timestamp: 2026-11-26T12:59:42.056359629Z
   changes: []
+- id: 01a217f7-ab5e-7fd1-8ca5-718a9313bf9d
+  author: aida-session-start
+  timestamp: 2026-11-26T13:07:16.958743492Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
