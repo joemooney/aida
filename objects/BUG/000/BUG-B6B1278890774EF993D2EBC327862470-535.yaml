@@ -1,0 +1,30 @@
+id: 01a2184f-3bb1-71a3-bc25-7077aac7bbc8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-535
+agreed_id: BUG-2774
+title: Auto-train recovery holds the admission lock while blocked on a deputy job, and a deputy on a stale or deleted binary blocks it silently
+description: |
+  advisor-122 2026-11-26 07:46 (filed by product-15 from `aida advisor loops train-status` at 07:44). "auto-train: blocked-deputy; deputy default; controller 3038030; last exit 1 ... auto-train held by pid 3038030 for 20m11s; waiting PID 3141958 (cooperative manual train) since 14:39:02Z ... held admission 1200s (holder pid 3038030, phase recovery)". The train-worker ran an old binary (worker 15bbbc68222 vs live fd10cfd3049, stale true). Deputy "default" (pid 1342755) had run for 37h on an OLD binary (the BUG-2654 deleted-binary class), so the recovery job it waited on could not run. Meanwhile review-watch reported "watcher admission is busy" for #4627, #4634 and #4638, and a manual train starved. BUG-2769's AC4 hold line is what made it visible.
+
+  ## Acceptance
+  - AC1: auto-train RECOVERY releases admission while it waits on any deputy job (or any external job), and re-takes it only for the decision.
+  - AC2: a deputy runner on a stale or deleted binary is DETECTED and reported (train-status + aida doctor: the deputy name, pid, binary path and age, and the fix: restart with the binding reset) instead of silently blocking.
+  - AC3: tests: recovery waiting on a deputy job does not hold admission; a stale-binary deputy is reported.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T14:42:55.537871310Z
+modified_at: 2026-11-26T14:42:55.537871310Z
+req_type: Bug
+tags:
+- admission
+- deputy
+- landing
+- train
+filed_at:
+  code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fd10cfd3049
+  vendor: claude
