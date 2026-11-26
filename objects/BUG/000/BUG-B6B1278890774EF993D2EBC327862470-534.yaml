@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T14:42:28.350016841Z
+modified_at: 2026-11-26T14:45:14.898182228Z
 req_type: Bug
 tags:
 - admission
@@ -34,6 +34,28 @@ comments:
   modified_at: 2026-11-26T14:38:53.069627957Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21851-5c12-7560-84ae-c46f44637113
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Root cause: `coordination::exited_holder_is_dead` returns false whenever `lease_id` is None, so an unbound claim is never a shared stale finding (check + targeted heal both use it), while `implementer_refusal` prescribes the heal unconditionally.
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, coordination tests):** `bug2773_unbound_claim_with_dead_creator_is_listed_and_healed` — unbound lease, unbound launcher, dead creator, heartbeat 2026-11-15, clone present: `collect_doctor_findings_at` lists `shared-<invocation>` with safe_heal, `targeted_stale_finding` selects it, `heal_exited_claim` deletes it. Unbound eligibility still requires same host, dead creator, expired heartbeat, non-process-backed, non-review and the clone present here (no lane record or lease can bind a worker to an unbound claim: lanes register only with a lease).
+    - **AC2 (unit):** new `coordination::shared_heal_id(claim, now)` is the single predicate used by `doctor_root::shared_stale_finding` and `implementer_refusal`; the refusal names the heal only when it returns Some. Test: refusal for a fresh/live holder omits the heal command (existing BUG-2655 assertion flipped, since it pinned the AC2 defect), and the AC3 shape refusal names the exact heal id.
+    - **AC3:** the test above uses exactly the reported shape.
+
+    ### Expected files
+    - `aida-cli-lib/src/coordination.rs`
+    - `aida-cli-lib/src/doctor_root.rs`
+
+    ### Ambiguities / conflicts as questions
+    - BUG-2697 test pinned `lease_id = None` as refused; this brief reverses that. Keeping the clone-present guard for unbound claims. A reused PID with a legacy `linux-starttime:` identity stays not-dead (unchanged proc identity rules).
+  created_at: 2026-11-26T14:45:14.898182228Z
+  modified_at: 2026-11-26T14:45:14.898182228Z
+  session_id: 01a2184e943e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
