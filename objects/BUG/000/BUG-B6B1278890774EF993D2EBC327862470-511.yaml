@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T14:40:12.092419324Z
-modified_at: 2026-11-26T05:01:21.195739504Z
+modified_at: 2026-11-26T05:10:36.094624713Z
 req_type: Bug
 tags:
 - store
@@ -371,6 +371,13 @@ comments:
     A reference merge (commit cd984f6d46b8, `(Refs BUG-2750)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T05:01:21.195728917Z
   modified_at: 2026-11-26T05:01:21.195728917Z
+- id: 01a21643-413e-7831-972b-c90204d653c0
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 506c22c9f16e
+    A reference merge (commit 506c22c9f16e, `(Refs BUG-2750)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T05:10:36.094613266Z
+  modified_at: 2026-11-26T05:10:36.094613266Z
 history:
 - id: 01a20e00-88b0-7401-a517-93670366e9e6
   author: joe
