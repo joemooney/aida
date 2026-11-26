@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T17:28:26.065184015Z
+modified_at: 2026-11-26T18:46:54.619619814Z
 req_type: Story
 tags:
 - agents
@@ -133,6 +133,21 @@ comments:
   modified_at: 2026-11-26T17:24:20.646275645Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2192e-9b9b-7502-8e14-c434595b9c61
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 50595d1cf3 (PR #4680, S1a, Refs STORY-3134; replaces #4627). 298 changed lines.
+    AC1 (core): [evidence: behavioral-test] vendors/usage_limit.rs classifies only the terminal JSON event in the 256 KiB log tail. Codex: turn.failed/error 'usage limit', reset parsed from 'try again at <date>'. Claude: rate_limit_event rejected+resetsAt; a terminal error result counts only when the newest rate_limit_event before it rejected. Tests ac1_codex_*, ac1_claude_*, ac1_free_text_earlier_matches_* (free text, an earlier match followed by another failure, non-JSON, another vendor's shape: none are outages).
+    AC2 (core): [evidence: behavioral-test] vendor_outage::record writes .aida/vendor-outages/<vendor>.json atomically (aida_core::write_atomic). lane_host::preflight refuses an unexpired record before any lease exists (test calls preflight directly); expired/unreadable records never refuse; another vendor still launches. The standalone NoPr failure path records via note_failed_run and prefixes the failure message (ac2_a_failed_run_records_its_outage).
+    Probes: vendor key is HeadlessVendor::as_str on both write (detect) and read (work.rs launch_vendor/lane_vendor are HeadlessVendor), so no case/spelling mismatch; tail seek can split UTF-8, so bytes are decoded lossily; fail-open on unreadable record is deliberate (outage only withholds launches); N records: one file per vendor, last write wins.
+    Fixes during self-review: vendor-literal ratchet (story_2539) flagged HeadlessVendor in vendor_outage.rs, so note_failed_run moved into vendors/usage_limit.rs and the agy/antigravity normalization was dropped (unneeded); store-writer rows added; rustfmt.
+    Evidence: lane job cargo test -p aida-cli-lib --lib story_3134: 5 passed; aida-ci-guards story_2539: 3 passed; make check-ci-fast: exit 0.
+    Residual / S1b (listed in PR body with files): side-branch preservation + clean lease end + exit 37; doctor and watchdog surfacing; reviewer and drain phase-1 detection (review-watch launches go through queue work --no-human, so likely covered by preflight, unverified by test); deferred fast-fix-child ordering and codex reset timezone; AC3 fallback_vendor, AC4 recovery event.
+  created_at: 2026-11-26T18:46:54.619619814Z
+  modified_at: 2026-11-26T18:46:54.619619814Z
+  session_id: 01a218e69155
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
