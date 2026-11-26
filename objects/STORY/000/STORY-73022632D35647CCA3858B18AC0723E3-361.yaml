@@ -1,5 +1,6 @@
 id: 01a218c6-513f-7a31-b1d3-0e92b629a9e3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-361
+agreed_id: STORY-3187
 title: 'Review PR-4668: [AI:claude] feat(landing): max_prs_per_train caps the automatic train (TASK-3912)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2188c`) for branch `landing-max-prs-fresh`.
@@ -33,6 +34,12 @@ history:
 - id: 01a218c6-7629-7b40-b4cc-8cbc6f72f3f6
   author: dirtlab
   timestamp: 2026-11-26T16:53:09.289888634Z
+  changes: []
+- id: 01a218cb-70f6-7142-ada2-c560f0b5ada7
+  author: joe
+  timestamp: 2026-11-26T16:58:35.638268445Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
