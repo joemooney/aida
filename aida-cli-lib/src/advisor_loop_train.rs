@@ -135,15 +135,66 @@ pub(super) fn not_held_line(error: &anyhow::Error) -> String {
 }
 
 pub(super) fn run(root: &Path) -> Result<()> {
-    run_passes(root, 180, crate::pr_train::advisor_train_handler)
+    run_passes(
+        root,
+        180,
+        || train_wanted(root),
+        crate::pr_train::advisor_train_handler,
+    )
 }
 
-/// The worker loop, with its pass (the train) and idle length as parameters
-/// so a regression can run this exact loop around a controlled train.
+/// Whether an automatic pass has a train to assemble: a journaled train to
+/// recover, or an open change the automatic gate admits. Read without
+/// admission, so a poll with nothing to train never holds it. Evidence that
+/// cannot be read counts as wanted: the full pass then judges (and reports)
+/// that change exactly as before.
+// trace:BUG-2769 | ai:claude
+fn train_wanted(root: &Path) -> Result<bool> {
+    let main = crate::main_worktree_root_from(root);
+    if crate::pr_train::automatic_recovery_needed(&main)? {
+        return Ok(true);
+    }
+    let repo = forge::Repository::load(&main)?;
+    let evidence = ready::Live {
+        root: &main,
+        repo: &repo,
+    };
+    for change in repo.discover(&main)? {
+        match eligible(&change, &evidence) {
+            Ok(()) | Err(crate::pr_train::MemberGateError::Unavailable(_)) => return Ok(true),
+            Err(_) => {}
+        }
+    }
+    Ok(false)
+}
+
+/// A claim held longer than this is logged on release with its phase.
+// trace:BUG-2769 | ai:claude
+const HOLD_WARN: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The release line for a hold of `held` in `phase`, when it is long.
+// trace:BUG-2769 | ai:claude
+fn long_hold_line(held: std::time::Duration, phase: &str) -> Option<String> {
+    (held > HOLD_WARN).then(|| {
+        format!(
+            "auto-train: held admission {}s (holder pid {}, phase {phase})",
+            held.as_secs(),
+            std::process::id()
+        )
+    })
+}
+
+/// The worker loop, with its pre-scan, its pass (the train) and idle length
+/// as parameters so a regression can run this exact loop around a
+/// controlled train.
 // trace:BUG-2703 | ai:claude
+// The claim is taken only for a pass the unclaimed pre-scan wants, and given
+// up when that pass returns: idle polls hold nothing, so a waiting manual
+// train, land or ship is admitted at once. trace:BUG-2769 | ai:claude
 pub(super) fn run_passes(
     root: &Path,
     idle_seconds: u64,
+    mut wanted: impl FnMut() -> Result<bool>,
     mut pass: impl FnMut() -> Result<()>,
 ) -> Result<()> {
     let mut admission: Option<crate::admission_owner::Claim> = None;
@@ -154,8 +205,26 @@ pub(super) fn run_passes(
             eprintln!("auto-train: startup monitor unavailable: {error:#}");
         }
         let stand_down = crate::gate::landing_merge::train_stand_down(root);
+        // Nothing to assemble: no claim, no pass. A stand-down still reaches
+        // auto_train_pass below, which reports it. trace:BUG-2769 | ai:claude
+        if matches!(stand_down, Ok(None)) {
+            match wanted() {
+                Ok(true) => {}
+                Ok(false) => {
+                    train_service::record_failure(root, None)?;
+                    idle(root, idle_seconds, &mut admission)?;
+                    continue;
+                }
+                Err(error) => {
+                    record_pass_failure(root, error)?;
+                    idle(root, idle_seconds, &mut admission)?;
+                    continue;
+                }
+            }
+        }
         // A pass without admission does not run, and says why in its own
         // words: it is not a landing-policy fault. trace:BUG-2703 | ai:claude
+        let held_since = std::time::Instant::now();
         if let Err(error) = hold_admission(root, &stand_down, &mut admission) {
             eprintln!("auto-train: {}", not_held_line(&error));
             train_service::record_failure(root, None)?;
@@ -184,6 +253,12 @@ pub(super) fn run_passes(
                 eprintln!("auto-train: existing train owns the journal; leaving it alone");
             }
             Ok(Err(error)) => record_pass_failure(root, error)?,
+        }
+        // trace:BUG-2769 | ai:claude
+        if admission.take().is_some() {
+            if let Some(line) = long_hold_line(held_since.elapsed(), "train pass") {
+                eprintln!("{line}");
+            }
         }
         idle(root, idle_seconds, &mut admission)?;
     }
@@ -328,5 +403,112 @@ mod story2905_admission_tests {
         );
         assert!(line.contains("purpose land run"), "{line}");
         assert!(!line.contains("landing policy"), "{line}");
+    }
+}
+
+// trace:BUG-2769 | ai:claude
+#[cfg(test)]
+mod bug2769_idle_admission_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    fn claims(root: &Path) -> Vec<String> {
+        crate::admission_owner::holders(root)
+            .unwrap()
+            .into_iter()
+            .filter(|h| h.state == "claim")
+            .map(|h| h.purpose)
+            .collect()
+    }
+
+    fn wait_for(what: &str, mut ready: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !ready() {
+            assert!(Instant::now() < deadline, "timed out: {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// AC1-AC3 through the real worker loop: while the unclaimed pre-scan
+    /// finds nothing to train, no admission is held across polls and a
+    /// contending manual train is admitted at once (well inside one poll).
+    /// A wanted pass takes the claim and gives it up when it returns.
+    #[test]
+    fn bug2769_idle_auto_train_holds_no_admission_and_admits_a_manual_train() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_path_buf();
+        let polls = Arc::new(AtomicUsize::new(0));
+        let want = Arc::new(AtomicBool::new(false));
+        let held_in_pass = Arc::new(AtomicBool::new(false));
+        let worker = {
+            let (root, polls, want, held) = (
+                root.clone(),
+                polls.clone(),
+                want.clone(),
+                held_in_pass.clone(),
+            );
+            std::thread::spawn(move || {
+                let pass_root = root.clone();
+                let pass_want = want.clone();
+                run_passes(
+                    &root,
+                    1,
+                    move || {
+                        polls.fetch_add(1, Ordering::SeqCst);
+                        Ok(want.load(Ordering::SeqCst))
+                    },
+                    move || {
+                        let mine = claims(&pass_root).iter().any(|p| p == ADMISSION_PURPOSE);
+                        held.store(mine, Ordering::SeqCst);
+                        pass_want.store(false, Ordering::SeqCst);
+                        Ok(())
+                    },
+                )
+            })
+        };
+        wait_for("three idle polls with no claim held", || {
+            assert!(claims(&root).is_empty(), "idle auto-train holds admission");
+            polls.load(Ordering::SeqCst) >= 3
+        });
+        let started = Instant::now();
+        let manual = crate::admission_owner::manual_train_admission(&root, false)
+            .unwrap()
+            .expect("the manual train takes its own claim");
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            started.elapsed()
+        );
+        drop(manual);
+
+        want.store(true, Ordering::SeqCst);
+        wait_for("a wanted pass ran under the claim", || {
+            held_in_pass.load(Ordering::SeqCst)
+        });
+        let after = polls.load(Ordering::SeqCst);
+        wait_for("the next poll", || polls.load(Ordering::SeqCst) > after);
+        assert!(
+            claims(&root).is_empty(),
+            "the claim was released after the pass"
+        );
+
+        crate::review_watch::stop_test_loops(&root);
+        let error = worker.join().unwrap().expect_err("stopped by the fixture");
+        assert!(format!("{error:#}").contains("test fixture stopped the loop"));
+    }
+
+    /// AC4: a hold past the threshold names the holder and the phase.
+    #[test]
+    fn bug2769_a_long_hold_names_the_holder_and_phase() {
+        assert_eq!(long_hold_line(Duration::from_secs(5), "train pass"), None);
+        let line = long_hold_line(Duration::from_secs(45), "train pass").unwrap();
+        assert!(line.contains("held admission 45s"), "{line}");
+        assert!(
+            line.contains(&format!("holder pid {}", std::process::id())),
+            "{line}"
+        );
+        assert!(line.contains("phase train pass"), "{line}");
     }
 }
