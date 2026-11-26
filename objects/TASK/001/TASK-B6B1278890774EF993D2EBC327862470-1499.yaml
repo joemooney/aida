@@ -1,0 +1,31 @@
+id: 01a21788-5844-7983-b20d-094815b58438
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1499
+title: 'Review follow-up: aida-core/src/mailbox_lifecycle/leftovers.rs scan_scoped_at: anchor-level write_source_id '
+description: |-
+  From BUG-2770
+  Reviewed sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
+
+  aida-core/src/mailbox_lifecycle/leftovers.rs scan_scoped_at: anchor-level write_source_id temps are scanned with Owner::Unattributed, so under aida agent gc they are always Unknown and kept forever, while the unscoped retention report (activation.rs:234 via scan()) still lists them as reapable. They have no reap path now and will accumulate. Follow-up: attribute them (e.g. by writer pid/lease recorded in the temp name) or reap them after a long age floor.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T11:05:41.188750900Z
+modified_at: 2026-11-26T11:05:41.188750900Z
+req_type: Task
+tags:
+- carried-from:BUG-2770
+- finding-hash:88db40d7
+- from-review:BUG-2770
+relationships:
+- rel_type: References
+  target_id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
+  created_at: 2026-11-26T11:06:15.882357149Z
+filed_at:
+  code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
+  branch: pr-4645
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461541dfb1
+  vendor: claude
+  session: 01a2178560df

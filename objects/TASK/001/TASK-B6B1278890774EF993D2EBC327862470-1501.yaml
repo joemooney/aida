@@ -1,0 +1,31 @@
+id: 01a21789-b133-79d3-80c3-d6fa6b5756d0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1501
+title: 'Review follow-up: aida-core/src/mailbox_lifecycle/activation.rs:234: the retention dry run still calls the u'
+description: |-
+  From BUG-2770
+  Reviewed sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
+
+  aida-core/src/mailbox_lifecycle/activation.rs:234: the retention dry run still calls the unscoped scan() (every owner Dead, no age floor), so it reports a live owner's leftovers as reapable. That is inconsistent with the new gc output; AC3 covers only the gc dry run, so this is informational. Follow-up: share the owner judge or label the report as unscoped.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T11:07:09.491041568Z
+modified_at: 2026-11-26T11:07:09.491041568Z
+req_type: Task
+tags:
+- carried-from:BUG-2770
+- finding-hash:9fb11a0d
+- from-review:BUG-2770
+relationships:
+- rel_type: References
+  target_id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
+  created_at: 2026-11-26T11:07:51.482512560Z
+filed_at:
+  code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
+  branch: pr-4645
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461541dfb1
+  vendor: claude
+  session: 01a2178560df
