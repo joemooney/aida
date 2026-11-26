@@ -1,66 +1,45 @@
-{
-  "schema_version": 1,
-  "spec": "STORY-2839",
-  "publishes": [
-    {
-      "at": "2026-11-26T14:03:25.308386121Z",
-      "closed_by": "auto-bump"
-    }
-  ],
-  "events": [
-    {
-      "ts": "2026-11-24T00:38:02.436427609Z",
-      "spec": "STORY-2839",
-      "seat": "advisor",
-      "kind": {
-        "event": "ReviewVerdictRecorded",
-        "pr": 4467,
-        "verdict": "APPROVED",
-        "reviewed_sha": "dd0f71497a9bdad4293606519d27af18abb31562"
-      }
-    },
-    {
-      "ts": "2026-11-25T19:53:39.089762541Z",
-      "spec": "STORY-2839",
-      "seat": "advisor",
-      "kind": {
-        "event": "ReviewVerdictRecorded",
-        "pr": 4590,
-        "verdict": "APPROVED",
-        "reviewed_sha": "0ae548eb0879af7d4f1d813133c20496233ef0bb"
-      }
-    },
-    {
-      "ts": "2026-11-26T11:38:26.205148835Z",
-      "spec": "STORY-2839",
-      "seat": "advisor",
-      "kind": {
-        "event": "ReviewVerdictRecorded",
-        "pr": 4643,
-        "verdict": "APPROVED",
-        "reviewed_sha": "ea9eaa85c402c3adaaf89f1c0ab1e6cc8e350d41"
-      }
-    },
-    {
-      "ts": "2026-11-26T13:07:11.745927604Z",
-      "spec": "STORY-2839",
-      "seat": "advisor",
-      "kind": {
-        "event": "ReviewVerdictRecorded",
-        "pr": 4653,
-        "verdict": "APPROVED",
-        "reviewed_sha": "7436221ce6febf69c3de43d67af2fe3ddd5c650f"
-      }
-    },
-    {
-      "ts": "2026-11-26T14:03:25.040136466Z",
-      "spec": "STORY-2839",
-      "kind": {
-        "event": "SpecCompleted",
-        "commit": "db7061570fa33b1ad7dba9fcc833761169cbfe3e",
-        "pr": 4643,
-        "closed_by": "auto-bump"
-      }
-    }
-  ]
-}
+schema_version: 1
+spec: STORY-2839
+publishes:
+- at: '2026-11-26T14:03:25.308386121Z'
+  closed_by: auto-bump
+events:
+- ts: '2026-11-24T00:38:02.436427609Z'
+  spec: STORY-2839
+  seat: advisor
+  kind:
+    event: ReviewVerdictRecorded
+    pr: 4467
+    verdict: APPROVED
+    reviewed_sha: dd0f71497a9bdad4293606519d27af18abb31562
+- ts: '2026-11-25T19:53:39.089762541Z'
+  spec: STORY-2839
+  seat: advisor
+  kind:
+    event: ReviewVerdictRecorded
+    pr: 4590
+    verdict: APPROVED
+    reviewed_sha: 0ae548eb0879af7d4f1d813133c20496233ef0bb
+- ts: '2026-11-26T11:38:26.205148835Z'
+  spec: STORY-2839
+  seat: advisor
+  kind:
+    event: ReviewVerdictRecorded
+    pr: 4643
+    verdict: APPROVED
+    reviewed_sha: ea9eaa85c402c3adaaf89f1c0ab1e6cc8e350d41
+- ts: '2026-11-26T13:07:11.745927604Z'
+  spec: STORY-2839
+  seat: advisor
+  kind:
+    event: ReviewVerdictRecorded
+    pr: 4653
+    verdict: APPROVED
+    reviewed_sha: 7436221ce6febf69c3de43d67af2fe3ddd5c650f
+- ts: '2026-11-26T14:03:25.040136466Z'
+  spec: STORY-2839
+  kind:
+    event: SpecCompleted
+    commit: db7061570fa33b1ad7dba9fcc833761169cbfe3e
+    pr: 4643
+    closed_by: auto-bump
