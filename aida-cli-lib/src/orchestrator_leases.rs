@@ -946,6 +946,11 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         crate::standalone_implementer::CAP_EXIT_CODE,
         "standalone implementer: concurrency cap",
     ),
+    // trace:STORY-3134 | ai:claude
+    (
+        crate::standalone_implementer::VENDOR_UNAVAILABLE_EXIT_CODE,
+        "standalone implementer: agent usage limit",
+    ),
     (
         crate::standalone_implementer::EMPTY_REWORK_EXIT_CODE,
         "standalone implementer: empty rework",

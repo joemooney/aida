@@ -70,6 +70,9 @@ pub(crate) const HELD_EXIT_CODE: i32 = 33;
 /// Exit code: the launch was refused because the standalone-implementer
 /// concurrency cap is reached. Nothing was set up.
 pub(crate) const CAP_EXIT_CODE: i32 = 34;
+/// Exit code: the vendor hit its usage limit; the lane's work is on a side
+/// branch and its lease is ended. trace:STORY-3134 | ai:claude
+pub(crate) const VENDOR_UNAVAILABLE_EXIT_CODE: i32 = 37;
 /// Unchanged blocked rework, queued for its one automatic retry.
 pub(crate) const EMPTY_REWORK_EXIT_CODE: i32 = empty_rework::EXIT_CODE;
 
@@ -396,12 +399,18 @@ pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
 /// lease and is reported as a warning, and the run's result stands.
 // trace:BUG-2436 | ai:claude
 pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<()> {
+    end_lease_with(project_root, lease_id, &[])
+}
+
+/// [`end_finished_lease`] with extra `session end` flags.
+fn end_lease_with(project_root: &Path, lease_id: &str, extra: &[&str]) -> Result<()> {
     // Capture the refusal so the host receipt retains its cause for later GC.
     // trace:BUG-2643 | ai:codex
     let main = crate::main_worktree_root_from(project_root);
     let mut cmd = std::process::Command::new(crate::kernel::aida_exe_path());
     cmd.current_dir(&main)
         .args(["session", "end", lease_id, "--yes", "--skip-ci"])
+        .args(extra)
         .stdin(std::process::Stdio::null());
     match crate::bounded_process::command_output_with_timeout_capped(
         cmd,
@@ -425,6 +434,38 @@ pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<
         }
     }
     Ok(())
+}
+
+/// STORY-3134: record `outage`, push the seat to its side branch, and only
+/// then end the lease (discarding what the side branch now holds). Each step
+/// that fails is named in the returned detail; a failed push keeps the lease.
+// trace:STORY-3134 | ai:claude
+pub(crate) fn vendor_unavailable_exit(
+    (project_root, lease_id, branch): (&Path, &str, &str),
+    main: &Path,
+    worktree: &Path,
+    outage: &crate::vendor_outage::Outage,
+) -> String {
+    let mut detail = outage.describe();
+    if let Err(e) = crate::vendor_outage::record(main, outage) {
+        detail.push_str(&format!("; could not record the outage: {e:#}"));
+    }
+    let side = crate::vendor_outage::side_branch(branch);
+    match crate::vendor_outage::preserve_seat(worktree, branch) {
+        Ok(commit) => {
+            detail.push_str(&format!("; work preserved on `{side}` at {commit}"));
+            let discard = ["--force", "--discard-unpushed"];
+            match end_lease_with(project_root, lease_id, &discard) {
+                Ok(()) => detail.push_str(&format!("; lease {lease_id} ended")),
+                Err(e) => detail.push_str(&format!("; lease {lease_id} kept: {e:#}")),
+            }
+        }
+        Err(e) => detail.push_str(&format!(
+            "; could not push `{side}`, so lease {lease_id} and its tree {} are kept: {e:#}",
+            worktree.display()
+        )),
+    }
+    detail
 }
 
 /// The lease's worktree, or `project_root` when the lease cannot be read.
@@ -1835,6 +1876,38 @@ fn run(
     } = finished;
     reconcile_signals(&main_root, &worktree, launch.spec)?;
     store_commit.commit();
+    // A usage limit is an outage, not an implementer failure: record it,
+    // preserve the seat on a side branch, and end the lease cleanly.
+    // trace:STORY-3134 | ai:claude
+    if !status.success() && matches!(outcome, Outcome::NoPr) {
+        let detected =
+            crate::vendors::usage_limit::detect_log(launch.vendor, &run_log, chrono::Utc::now());
+        if let Some(outage) = detected {
+            let detail = vendor_unavailable_exit(
+                (launch.project_root, launch.lease_id, launch.branch),
+                &main_root,
+                &worktree,
+                &outage,
+            );
+            attempt.finish(
+                crate::lane_result::Kind::FailedAfterStart,
+                "vendor-unavailable",
+                &detail,
+                launch_seat.pr.map(|(pr, _)| *pr),
+                launch_seat.head,
+                untested,
+            )?;
+            crate::lane_result::emit_line(&format!(
+                "{} vendor-unavailable: {detail}",
+                attempt.line()?
+            ));
+            return Err(anyhow::Error::new(StandaloneImplementerExit {
+                code: VENDOR_UNAVAILABLE_EXIT_CODE,
+                message: detail,
+                vendor_exit: false,
+            }));
+        }
+    }
 
     // Publish before reading the final seat state or ending its lease. A punt
     // or manual hold is an explicit instruction to leave publication alone.
@@ -2252,6 +2325,10 @@ mod bug_2436_finished_lane_lease_tests;
 #[cfg(test)]
 #[path = "tests/bug_2580_publish_unpushed_tests.rs"]
 mod bug_2580_publish_unpushed_tests;
+// trace:STORY-3134 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_3134_vendor_outage_tests.rs"]
+mod story_3134_vendor_outage_tests;
 
 // trace:STORY-2660 | ai:codex
 #[cfg(test)]

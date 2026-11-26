@@ -800,6 +800,10 @@ pub(crate) fn collect_doctor_findings_at(
             push(finding);
         }
     }
+    // trace:STORY-3134 | ai:claude
+    for finding in crate::vendor_outage::scan(&crate::main_worktree_root_from(project_root)) {
+        push(finding);
+    }
 
     // A parent edge is canonical; parent:* tags are a denormalized query aid.
     // Surface either direction of drift without touching the graph.
@@ -1899,6 +1903,11 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:STORY-2630 | ai:codex
     (&["codegraph", "code-graph"], "codegraph"),
+    // trace:STORY-3134 | ai:claude
+    (
+        &[crate::vendor_outage::CATEGORY, "usage-limit"],
+        crate::vendor_outage::CATEGORY,
+    ),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
     // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
     (
