@@ -1,0 +1,31 @@
+id: 01a2172b-d353-7780-8b34-d407a0b3828e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1493
+title: 'Review follow-up: Efficiency follow-up: on a wanted poll, train_wanted repeats the forge reads (discover plu'
+description: |-
+  From BUG-2769
+  Reviewed sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
+
+  Efficiency follow-up: on a wanted poll, train_wanted repeats the forge reads (discover plus per-change CI, required checks and head reads up to the first eligible change) that the pass then makes again under the claim. All seats share one gh rate budget. Consider passing the pre-scan's discovery or eligible set into the pass, or keeping the pre-scan to local evidence first. This is not a correctness defect: idle polls make the same reads as before, without the claim.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T09:24:37.843959609Z
+modified_at: 2026-11-26T09:24:37.843959609Z
+req_type: Task
+tags:
+- carried-from:BUG-2769
+- finding-hash:c618e362
+- from-review:BUG-2769
+relationships:
+- rel_type: References
+  target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
+  created_at: 2026-11-26T09:24:53.567372159Z
+filed_at:
+  code_sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
+  branch: pr-4640
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cb984b75d1
+  vendor: claude
+  session: 01a21728d7ee
