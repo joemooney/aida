@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T14:24:25.617683375Z
+modified_at: 2026-11-26T14:26:43.468124717Z
 req_type: Story
 tags:
 - integration
@@ -1125,6 +1125,24 @@ comments:
   content: 'S5 SCOPE ADDITIONS (advisor-122 2026-11-26 07:24, override-approval of #4650 S4 r1 @ a1fc54eb): (a) a --challenger-agent operator override, plus fallback (or a clear refusal) when the picked challenger vendor is unauthenticated or rate-limited; a forged [AI:] tag must not help. (b) rename old-path filtering applies ALL inventory exclusions, not just credentials. Together with the BINDING escape/code-fence AC, these are S5 items.'
   created_at: 2026-11-26T14:21:44.619032558Z
   modified_at: 2026-11-26T14:21:44.619032558Z
+- id: 01a21840-a318-7e70-acd6-d3b2334c2629
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:26):
+    # STORY-3120 S5 (FINAL): `--post-comment` + docs (slice plan comment 1; binding S5 AC from 2026-11-26 05:17; Joe's --effort/--challenger-effort doc addendum; product-15). Lane: CLAUDE. STRICT (outward-facing). INTEGRATION, NEW branch int46-story-3120-s5 (cut from the integration tip after S4 #4650 merged). Title with the completing (STORY-3120) trailer. <=300 lines; if over, ship S5a (Refs) with items (1)-(3) first and say what remains. Do NOT rebase onto main.
+    READ: `aida show STORY-3120 --comments` (slice plan; the BINDING S5 AC; the S3/S4 security ACs, which all still apply).
+    SCOPE:
+     (1) `aida review prepare --post-comment`: OUTWARD-FACING, so an OPT-IN flag only. It REQUIRES --pr, and no seat, CI or default config ever enables it. TEST: the default posts nothing; without --pr it is refused.
+     (2) BINDING: before anything is posted, render_bundle_markdown ESCAPES or CODE-FENCES all agent output (the finder message, the challenger reason, every runner-supplied string). TEST: agent text with Markdown/HTML/@mentions is published inert.
+     (3) Posting goes through the routed forge client (remote_credentials routing), never a raw gh/curl with ambient tokens.
+     (4) Docs: the showcase slide 07 / review docs document --run-review, --adversarial, --effort and --challenger-effort (the resolution order flag > AIDA_REVIEW_EFFORT > review-rules default_effort > the [agents] seat effort, the allowlists), --fail-on with refuted findings still counting, and --post-comment's opt-in rule. Avoid nested lists and *italics*.
+     (5) Folded from #4650 S4 r1 (advisor-122 07:24): a `--challenger-agent <vendor>` operator OVERRIDE (validated against the vendor allowlist, operator flag only, never from repo config), and when the picked challenger vendor is UNAUTHENTICATED or RATE-LIMITED, detect it and fall back to another vendor, or refuse with a clear cause. A forged [AI:<tool>] tag must not help. TEST.
+     (6) Folded from #4650 S4 r1: rename old-path filtering applies ALL inventory exclusions (credential paths AND every other exclusion), not just credentials. TEST.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T14:26:43.468124717Z
+  modified_at: 2026-11-26T14:26:43.468124717Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
