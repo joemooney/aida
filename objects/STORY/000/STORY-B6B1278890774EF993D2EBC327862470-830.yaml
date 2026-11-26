@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T06:27:15.923026128Z
+modified_at: 2026-11-26T06:29:09.128982644Z
 req_type: Story
 tags:
 - landing
@@ -201,6 +201,24 @@ comments:
     A reference merge (commit f499b7d6b4aa, `(Refs STORY-3131)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T06:25:21.078757528Z
   modified_at: 2026-11-26T06:25:21.078757528Z
+- id: 01a2168b-728a-7992-b4ef-bfa4c789f9ff
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:29):
+    # STORY-3131 S2: the landing-drought watchdog's deeper causes + approval→train handoff (S1 landed 2026-11-25 23:20 via train #4625; product-15). Lane: CLAUDE. MAIN, NEW branch story-3131-s2-causes. Completing (STORY-3131) trailer if this finishes the ACs, else (Refs STORY-3131). <=300 lines.
+    READ: `aida show STORY-3131 --comments` (AC-A..D from 09:33, S1's design, and the deferred p3s for S2). Build ON S1's landing-drought check (now on main).
+    S2 SCOPE, classifier causes S1 left as "unknown → investigate":
+     (3) the train/admission lock held more than lock_hold_minutes: name the holder pid/command (read the admission lock owner record);
+     (5) review verdict missing or held (exited-attempt hold / no verdict at the current head);
+     (6) agent vendor unavailable (STORY-3134's outage record, if present; otherwise skip that cause);
+     (7) a merge conflict with no repair lane.
+     Each cause gets ONE prescribed next action. Add the `lock_hold_minutes` knob (default 20).
+     AC-D (event-driven approval→train handoff): if it doesn't fit in this slice, say so in the PR body; it can be S3.
+    TESTS for each new cause. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T06:29:09.128982644Z
+  modified_at: 2026-11-26T06:29:09.128982644Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
