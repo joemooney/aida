@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-26T21:09:37.105131299Z
+modified_at: 2026-11-26T21:46:11.289302380Z
 req_type: Bug
 tags:
 - landing
@@ -176,6 +176,13 @@ comments:
     Residual / not done: AC (3-member train green->merge < 30 s) is NOT verified: the gate ledger is hidden from this seat, so no live-data profile. The production member gate phase (150-717 s) is not reproduced by the fixture (1.6 s); suspected repeated parse of large PR/spec ledger files (read_file 17x per gate) but unproven. Next: read the final-gate phase lines from the next primary train.
   created_at: 2026-11-26T21:09:37.105131299Z
   modified_at: 2026-11-26T21:09:37.105131299Z
+  session_id: 01a219653ac2
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a219d2-bdd9-7b13-9b8b-7338708d5e3f
+  author: dirtlab
+  content: 'PR #4691 (Refs BUG-2584) opened to main: final-gate evidence asks the approval policy once per distinct verdict (226 -> 1 per member per pass on the long-history fixture). Remaining: production member-gate phase (150-717 s) unreproduced here; read the final-gate phase lines from the next primary train.'
+  created_at: 2026-11-26T21:46:11.289302380Z
+  modified_at: 2026-11-26T21:46:11.289302380Z
   session_id: 01a219653ac2
   harness_version: 2.1.319 (Claude Code)
 history:
