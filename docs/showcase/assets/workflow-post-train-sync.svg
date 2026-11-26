@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 360" role="img" aria-labelledby="title desc">
+  <title id="title">Act 4: Post-train pull, auto-bump to Completed, and stale-pull recovery</title>
+  <desc id="desc">When a change or merge train lands on main, AIDA auto-bumps referenced specs from Done to Completed. Local clones and lanes become behind and run a post-train pull via aida pull, which fast-forwards the checkout, updates the store under its writer lock, and names any lock or dirty state that blocks it.</desc>
+  <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-762 | ai:antigravity -->
+  <style>
+    .bg { fill: #f4f1e9; }
+    .panel { fill: #e9e5da; stroke: #7b826f; stroke-width: 1.5; }
+    .box { fill: #faf8f3; stroke: #7b826f; stroke-width: 1.5; }
+    .hl { fill: #f7dccd; stroke: #ba3916; stroke-width: 1.8; }
+    .green { fill: #dff0d8; stroke: #2f855a; stroke-width: 1.6; }
+    .ink { fill: #172116; }
+    .muted { fill: #4a5446; }
+    .accent { fill: #913b17; font-weight: 600; }
+    .ok-text { fill: #22543d; font-weight: 700; }
+    .edge { stroke: #5e635a; stroke-width: 2; fill: none; }
+    text { font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+    .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #141c13; }
+      .panel { fill: #1e2a1c; stroke: #687360; }
+      .box { fill: #263423; stroke: #75806b; }
+      .hl { fill: #42261a; stroke: #ffb485; }
+      .green { fill: #1c3829; stroke: #68d391; }
+      .ink { fill: #f4f1e9; }
+      .muted { fill: #c4cabe; }
+      .accent { fill: #ffb485; }
+      .ok-text { fill: #9ae6b4; }
+      .edge { stroke: #a8b0a0; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="muted"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="860" height="360" rx="6"/>
+  <text class="ink" x="28" y="36" font-size="20" font-weight="700">After Landing: Post-Train Pull, Auto-Bump &amp; Stale Pull Recovery</text>
+
+  <!-- Step 1: Main Advances -->
+  <rect class="green" x="28" y="64" width="236" height="150" rx="6"/>
+  <text class="ok-text" x="146" y="92" font-size="15" text-anchor="middle">1. Remote main Advances</text>
+  <text class="muted" x="146" y="116" font-size="12" text-anchor="middle">Train or PR merges to origin/main</text>
+  <rect class="box" x="46" y="130" width="200" height="66" rx="4"/>
+  <text class="ink" x="146" y="152" font-size="12.5" font-weight="700" text-anchor="middle">Auto-Bump Reconciliation</text>
+  <text class="muted" x="146" y="170" font-size="11.5" text-anchor="middle">Commit trailer (SPEC-ID) flips</text>
+  <text class="mono accent" x="146" y="186" font-size="11.5" text-anchor="middle">Done → Completed</text>
+
+  <path class="edge" d="M264 138L298 138" marker-end="url(#arrow)"/>
+
+  <!-- Step 2: Post-Train Pull -->
+  <rect class="hl" x="302" y="64" width="256" height="150" rx="6"/>
+  <text class="ink" x="430" y="92" font-size="15" font-weight="700" text-anchor="middle">2. Post-Train Pull (aida pull)</text>
+  <text class="muted" x="430" y="114" font-size="12" text-anchor="middle">Updates local checkout + .aida-store</text>
+  <text class="muted" x="430" y="136" font-size="11.5" text-anchor="middle">• Fetches, then fast-forwards only</text>
+  <text class="muted" x="430" y="154" font-size="11.5" text-anchor="middle">• Store update holds the writer lock</text>
+  <text class="muted" x="430" y="172" font-size="11.5" text-anchor="middle">• Reads completion trailers</text>
+  <text class="muted" x="430" y="190" font-size="11.5" text-anchor="middle">• Bumps the matching specs</text>
+
+  <path class="edge" d="M558 138L592 138" marker-end="url(#arrow)"/>
+
+  <!-- Step 3: Stale Pull & Pull Fix -->
+  <rect class="panel" x="596" y="64" width="236" height="150" rx="6"/>
+  <text class="ink" x="714" y="92" font-size="15" font-weight="700" text-anchor="middle">3. Stale Pull &amp; Pull Fix</text>
+  <text class="muted" x="714" y="116" font-size="12" text-anchor="middle">When a checkout lags or collides:</text>
+  <text class="muted" x="714" y="138" font-size="11.5" text-anchor="middle">• Stale pull: local main or store</text>
+  <text class="muted" x="714" y="154" font-size="11.5" text-anchor="middle">  is behind origin after a train</text>
+  <text class="muted" x="714" y="174" font-size="11.5" text-anchor="middle">• Blocked pull: reports a held git</text>
+  <text class="muted" x="714" y="190" font-size="11.5" text-anchor="middle">  index lock and skips, never stashes</text>
+
+  <!-- Bottom Banner -->
+  <rect class="box" x="28" y="238" width="804" height="94" rx="6"/>
+  <text class="ink" x="48" y="266" font-size="15" font-weight="700">Why the pull avoids FETCH_HEAD and locks the store</text>
+  <text class="muted" x="48" y="290" font-size="12.5">Multiple agent sessions and background hooks read the repository at the same time. Merging the fetched origin branch rather than</text>
+  <text class="muted" x="48" y="310" font-size="12.5">the shared FETCH_HEAD avoids a race between concurrent fetches, and the store writer lock keeps two pulls from interleaving.</text>
+</svg>
