@@ -61,6 +61,7 @@
         "s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage",
         "s3a2_run_review_refuses_findings_outside_the_inventory",
         "s3fu_git_text_uses_host_git_hardening",
+        "s4_adversarial_run_suppresses_but_gates_refuted_findings",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
@@ -69,6 +70,21 @@
         "root_credential_dirs_excluded_reported_and_refused_as_findings",
         "root_commit_preserves_unusual_git_paths",
         "write_confines_new_and_existing_paths"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "launch::review_challenger::tests::",
+      "source": "aida-cli-lib/src/launch/review_challenger.rs",
+      "tests": [
+        "s4_challenger_effort_injection_refused_at_every_source",
+        "s4_challenger_refutation_drops_and_reproduction_keeps",
+        "s4_challenger_spawn_contract_and_opposition",
+        "s4_detect_ai_authors_from_commit_tags"
       ],
       "scope": "module"
     },

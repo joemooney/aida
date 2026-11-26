@@ -84,6 +84,9 @@ const CODEX: ReviewVendor = ReviewVendor {
     effort_as_config: true,
 };
 
+/// Every vendor with a hardened review contract. trace:STORY-3120 | ai:claude
+pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 2] = [&CLAUDE, &CODEX];
+
 /// The review contract for `raw`. Unknown names, and vendors without a
 /// hardened review contract, are refused, never defaulted.
 pub(crate) fn review_vendor(raw: &str) -> Result<&'static ReviewVendor> {
