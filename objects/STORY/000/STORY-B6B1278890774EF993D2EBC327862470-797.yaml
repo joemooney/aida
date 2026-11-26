@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-26T00:06:46.099208298Z
+modified_at: 2026-11-26T00:08:42.972420917Z
 req_type: Story
 tags:
 - landing
@@ -1491,6 +1491,20 @@ comments:
     - main_watch::open_episode (main_watch.rs open_episode_at) returns any episode still open in the state file. It does not check how old the state is, or whether the episode's red_sha is an ancestor of the PR's base. If the red-main watch stops running after main has recovered, a leftover open episode k
   created_at: 2026-11-25T22:16:13.230001529Z
   modified_at: 2026-11-25T22:16:13.230001529Z
+- id: 01a2152f-1abe-7611-b212-306204bef8c1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:08):
+    # STORY-2897 lib-1 HANG hunt on #4569 (advisor-122 2026-11-25 17:12; product-15). Lane: CLAUDE. MAIN, existing branch story-2897-fresh / PR #4569. <=40 lines. Keep the "(Refs STORY-2897)" title.
+    #4569 (approved @ a6f5aba4) hit the 45-min CI job timeout on lib-1 TWICE (job 139574004800, 23:20→00:05Z, cancelled; the log blob is gone). Every other shard passes. That points to a HANGING test introduced by this PR; the new code is main_watch open_episode and the waiting-needs paths.
+    1. Run the lib-1 partition's tests touched by this PR (review_commands, main_watch, review_draft, gate) with a PER-TEST timeout, e.g. `cargo nextest run -p aida-cli-lib -E 'test(/main_watch|review_draft|review_commands|gate/)' --slow-timeout 30s --leak-timeout 2s` or a `timeout 120` per filtered `cargo test`.
+    2. Find the test that hangs (or doesn't finish), and FIX the hang (e.g. an unbounded wait, a blocked pipe or lock, a missing deadline), <=40 lines.
+    3. If NOTHING hangs locally, change no code: PUNT with the evidence (per-test durations for those modules) so the advisor treats it as runner trouble.
+    make check-ci-fast, then push to #4569. COMMIT your work.
+  created_at: 2026-11-26T00:08:42.972420917Z
+  modified_at: 2026-11-26T00:08:42.972420917Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
