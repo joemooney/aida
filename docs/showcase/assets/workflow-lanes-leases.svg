@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" role="img" aria-labelledby="title desc">
+  <title id="title">Act 1: Lanes, worktrees, sessions, leases, rotation, and stale-worktree sweeps</title>
+  <desc id="desc">Picking up a spec from the queue with aida queue work launches an isolated lane with its own Git worktree, session record, claim, and lease. Before context fills up, the session writes a handoff note and rotates to a fresh session. If a process crashes, its lease becomes orphaned and its worktree stale until a sweep reclaims them.</desc>
+  <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-762 | ai:antigravity -->
+  <style>
+    .bg { fill: #f4f1e9; }
+    .panel { fill: #e9e5da; stroke: #7b826f; stroke-width: 1.5; }
+    .box { fill: #faf8f3; stroke: #7b826f; stroke-width: 1.5; }
+    .hl { fill: #f7dccd; stroke: #ba3916; stroke-width: 1.8; }
+    .warn { fill: #fff3cd; stroke: #b7791f; stroke-width: 1.5; stroke-dasharray: 5 3; }
+    .ink { fill: #172116; }
+    .muted { fill: #4a5446; }
+    .accent { fill: #913b17; font-weight: 600; }
+    .edge { stroke: #5e635a; stroke-width: 2; fill: none; }
+    .edge-warn { stroke: #ba3916; stroke-width: 2; fill: none; stroke-dasharray: 5 4; }
+    .zone { fill: none; stroke: #7b826f; stroke-width: 1.5; stroke-dasharray: 4 4; }
+    text { font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+    .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #141c13; }
+      .panel { fill: #1e2a1c; stroke: #687360; }
+      .box { fill: #263423; stroke: #75806b; }
+      .hl { fill: #42261a; stroke: #ffb485; }
+      .warn { fill: #3b2e14; stroke: #f6ad55; }
+      .ink { fill: #f4f1e9; }
+      .muted { fill: #c4cabe; }
+      .accent { fill: #ffb485; }
+      .edge { stroke: #a8b0a0; }
+      .edge-warn { stroke: #ffb485; }
+      .zone { stroke: #687360; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="muted"/>
+    </marker>
+    <marker id="warrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="accent"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="860" height="470" rx="6"/>
+  <text class="ink" x="28" y="36" font-size="20" font-weight="700">The Workshop: Why parallel agents never overwrite each other's files</text>
+
+  <!-- Left: Queue & Launch -->
+  <rect class="panel" x="28" y="60" width="185" height="175" rx="6"/>
+  <text class="ink" x="120" y="88" font-size="16" font-weight="700" text-anchor="middle">1. Role Queue</text>
+  <text class="muted" x="120" y="110" font-size="12.5" text-anchor="middle">Approved specs waiting</text>
+  <rect class="box" x="44" y="124" width="153" height="36" rx="4"/>
+  <text class="mono ink" x="120" y="147" font-size="12" text-anchor="middle">aida queue work</text>
+  <text class="muted" x="120" y="182" font-size="12" text-anchor="middle">Checks the item,</text>
+  <text class="muted" x="120" y="200" font-size="12" text-anchor="middle">then triggers launch</text>
+  <text class="accent" x="120" y="220" font-size="11.5" text-anchor="middle">Claim + Lease recorded</text>
+
+  <path class="edge" d="M213 145L248 145" marker-end="url(#arrow)"/>
+
+  <!-- Middle: Isolated Lane -->
+  <rect class="zone" x="252" y="54" width="346" height="222" rx="8"/>
+  <text class="accent" x="268" y="76" font-size="14">2. Isolated Lane (one per active spec or review)</text>
+
+  <rect class="box" x="268" y="90" width="150" height="80" rx="5"/>
+  <text class="ink" x="343" y="114" font-size="14" font-weight="700" text-anchor="middle">Git Worktree</text>
+  <text class="muted" x="343" y="134" font-size="11.5" text-anchor="middle">Private folder checkout</text>
+  <text class="mono muted" x="343" y="154" font-size="11" text-anchor="middle">../aida-worktrees/*</text>
+
+  <rect class="hl" x="432" y="90" width="150" height="80" rx="5"/>
+  <text class="ink" x="507" y="114" font-size="14" font-weight="700" text-anchor="middle">Lease &amp; Claim</text>
+  <text class="muted" x="507" y="134" font-size="11.5" text-anchor="middle">"Occupied" lock on</text>
+  <text class="muted" x="507" y="154" font-size="11.5" text-anchor="middle">spec + branch + PID</text>
+
+  <rect class="panel" x="268" y="182" width="314" height="80" rx="5"/>
+  <text class="ink" x="425" y="206" font-size="14" font-weight="700" text-anchor="middle">Agent Session (Process + Model)</text>
+  <text class="muted" x="425" y="226" font-size="12" text-anchor="middle">Implementer or Reviewer seat · Auto mode or guided</text>
+  <text class="muted" x="425" y="246" font-size="12" text-anchor="middle">Commits code &amp; opens PR/MR without touching main checkout</text>
+
+  <path class="edge" d="M598 145L632 145" marker-end="url(#arrow)"/>
+
+  <!-- Right: Healthy Rotate & Handoff -->
+  <rect class="panel" x="636" y="60" width="196" height="175" rx="6"/>
+  <text class="ink" x="734" y="88" font-size="16" font-weight="700" text-anchor="middle">3. Rotate &amp; Handoff</text>
+  <text class="muted" x="734" y="110" font-size="12" text-anchor="middle">When context window fills</text>
+  <text class="muted" x="734" y="128" font-size="12" text-anchor="middle">or session finishes:</text>
+  <rect class="box" x="652" y="140" width="164" height="36" rx="4"/>
+  <text class="mono ink" x="734" y="163" font-size="11.5" text-anchor="middle">/aida-handoff</text>
+  <text class="muted" x="734" y="198" font-size="12" text-anchor="middle">Writes a durable brief, then</text>
+  <text class="muted" x="734" y="216" font-size="12" text-anchor="middle">a fresh session picks it up</text>
+
+  <!-- Bottom: Crash / Orphaned Lease / Stale Worktree / Sweep -->
+  <path class="edge-warn" d="M425 276L425 314" marker-end="url(#warrow)"/>
+  <text class="accent" x="436" y="300" font-size="12">If process crashes or disconnects</text>
+
+  <rect class="warn" x="60" y="320" width="340" height="118" rx="6"/>
+  <text class="ink" x="230" y="348" font-size="15" font-weight="700" text-anchor="middle">4a. Dead Process Artifacts</text>
+  <text class="muted" x="230" y="372" font-size="12.5" text-anchor="middle">• Orphaned lease: lock file names a dead PID</text>
+  <text class="muted" x="230" y="392" font-size="12.5" text-anchor="middle">• Stale worktree: leftover checkout blocking branch</text>
+  <text class="muted" x="230" y="412" font-size="12.5" text-anchor="middle">New pickups refuse rather than silently clobber work</text>
+
+  <path class="edge" d="M400 378L456 378" marker-end="url(#arrow)"/>
+
+  <rect class="hl" x="460" y="320" width="350" height="118" rx="6"/>
+  <text class="ink" x="635" y="348" font-size="15" font-weight="700" text-anchor="middle">4b. Stale Lease &amp; Sweep Recovery</text>
+  <text class="muted" x="635" y="372" font-size="12.5" text-anchor="middle">• Lease listing marks dead sessions stale</text>
+  <text class="muted" x="635" y="392" font-size="12.5" text-anchor="middle">• Sweep (session reap / hygiene) keeps any</text>
+  <text class="muted" x="635" y="412" font-size="12.5" text-anchor="middle">  uncommitted work and releases the lease</text>
+</svg>
