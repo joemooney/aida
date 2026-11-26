@@ -1,0 +1,31 @@
+id: 01a2164a-c7c6-7312-ade3-0e8f013521be
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-335
+title: 'Review PR-4624: [AI:claude] feat(lanes): cap concurrent lane compiles and bound job memory at job start (TASK-3911)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21619`) for branch `lanes-compile-concurrency`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4624>
+  - Branch: `lanes-compile-concurrency` → `main`
+
+  ## Covers
+
+  - TASK-3911
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4624` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T05:18:49.286383104Z
+modified_at: 2026-11-26T05:18:49.286383104Z
+req_type: Story
+filed_at:
+  code_sha: cd984f6d46b8cfdcf6c4ecc75d67ce3f8a177154
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cd984f6d46
