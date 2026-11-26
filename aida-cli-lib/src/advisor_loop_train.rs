@@ -135,34 +135,86 @@ pub(super) fn not_held_line(error: &anyhow::Error) -> String {
 }
 
 pub(super) fn run(root: &Path) -> Result<()> {
+    let mut refused = Refusals::default();
     run_passes(
         root,
         180,
-        || train_wanted(root),
+        || train_wanted(root, &mut refused),
         crate::pr_train::advisor_train_handler,
     )
 }
 
 /// Whether an automatic pass has a train to assemble: a journaled train to
-/// recover, or an open change the automatic gate admits. Read without
-/// admission, so a poll with nothing to train never holds it. Evidence that
-/// cannot be read counts as wanted: the full pass then judges (and reports)
-/// that change exactly as before.
-// trace:BUG-2769 | ai:claude
-fn train_wanted(root: &Path) -> Result<bool> {
+/// recover, or an open change the pass's own member predicate admits
+/// (judged read-only). Read without admission, so a poll with nothing to
+/// train never holds it. Evidence that cannot be read counts as wanted: the
+/// full pass then judges (and reports) that change exactly as before.
+// trace:BUG-2769 trace:TASK-3917 | ai:claude
+fn train_wanted(root: &Path, refused: &mut Refusals) -> Result<bool> {
+    use crate::pr_train::{AutomaticPrescan, MemberGateError::Refused};
     let main = crate::main_worktree_root_from(root);
     if crate::pr_train::automatic_recovery_needed(&main)? {
         return Ok(true);
     }
     let repo = forge::Repository::load(&main)?;
-    let evidence = ready::Live {
-        root: &main,
-        repo: &repo,
-    };
-    for change in repo.discover(&main)? {
-        match eligible(&change, &evidence) {
+    let changes: Vec<forge::Change> = repo
+        .discover(&main)?
+        .into_iter()
+        .filter(|c| {
+            !c.head_branch
+                .as_deref()
+                .is_some_and(|b| b.starts_with(crate::pr_train::BRANCH_PREFIX))
+        })
+        .collect();
+    // Loaded only when a change must be judged: it lists the live trains.
+    let mut prescan: Option<Option<AutomaticPrescan>> = None;
+    wanted_among(&changes, refused, REJUDGE, |change| {
+        if prescan.is_none() {
+            prescan = Some(AutomaticPrescan::load(root)?);
+        }
+        Ok(match prescan.as_ref().and_then(Option::as_ref) {
+            None => Err(Refused("automatic trains require GitHub".into())),
+            Some(p) if p.abandoned => Ok(()),
+            Some(p) if p.base() != change.base => Err(Refused("another base".into())),
+            Some(p) => p.admits(change.id),
+        })
+    })
+}
+
+/// A refused change is judged again after this, or when its head moves.
+const REJUDGE: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// The worker's pre-scan refusals: change id to the head refused and when.
+/// An idle poll whose open changes are all refused at their heads spends one
+/// discovery listing on the shared forge budget, not a member gate per change.
+/// Unreadable evidence is never kept. trace:TASK-3917 | ai:claude
+#[derive(Default)]
+pub(super) struct Refusals(std::collections::HashMap<u64, (String, std::time::Instant)>);
+
+/// Whether `judge` admits any change (or cannot read its evidence), asking
+/// only about changes with no refusal at their head within `window`.
+// trace:TASK-3917 | ai:claude
+fn wanted_among(
+    changes: &[forge::Change],
+    refused: &mut Refusals,
+    window: std::time::Duration,
+    mut judge: impl FnMut(
+        &forge::Change,
+    ) -> Result<std::result::Result<(), crate::pr_train::MemberGateError>>,
+) -> Result<bool> {
+    let now = std::time::Instant::now();
+    refused.0.retain(|id, (head, at)| {
+        now.duration_since(*at) < window && changes.iter().any(|c| c.id == *id && c.head == *head)
+    });
+    for change in changes {
+        if refused.0.contains_key(&change.id) {
+            continue;
+        }
+        match judge(change)? {
+            Err(crate::pr_train::MemberGateError::Refused(_)) => {
+                refused.0.insert(change.id, (change.head.clone(), now));
+            }
             Ok(()) | Err(crate::pr_train::MemberGateError::Unavailable(_)) => return Ok(true),
-            Err(_) => {}
         }
     }
     Ok(false)
@@ -602,16 +654,41 @@ mod bug2769_idle_admission_tests {
     #[test]
     fn bug2769_a_long_hold_is_reported_while_it_is_held() {
         let (_temp, root) = ci_gated_repo();
+        let line = line_while_held(&root, || ());
+        assert!(line.contains("phase assembly"), "{line}");
+    }
+
+    /// Serializes the tests that shorten the hold threshold and restores it
+    /// when one ends, pass or fail. trace:TASK-3917 | ai:claude
+    struct ShortHoldWarn {
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+    impl Drop for ShortHoldWarn {
+        fn drop(&mut self) {
+            TEST_HOLD_WARN_MS.store(0, Ordering::SeqCst);
+        }
+    }
+    fn short_hold_warn() -> ShortHoldWarn {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         TEST_HOLD_WARN_MS.store(100, Ordering::SeqCst);
+        ShortHoldWarn { _lock: lock }
+    }
+
+    /// The live hold line of a pass that keeps the claim until the line
+    /// shows; `during` runs as the pass starts and its value lives with it.
+    fn line_while_held<T>(root: &Path, mut during: impl FnMut() -> T + Send + 'static) -> String {
+        let _short = short_hold_warn();
         let release = Arc::new(AtomicBool::new(false));
         let worker = {
-            let (root, release) = (root.clone(), release.clone());
+            let (root, release) = (root.to_path_buf(), release.clone());
             std::thread::spawn(move || {
                 run_passes(
                     &root,
                     1,
                     || Ok(true),
                     move || {
+                        let _kept = during();
                         while !release.load(Ordering::SeqCst) {
                             std::thread::sleep(Duration::from_millis(20));
                         }
@@ -622,22 +699,102 @@ mod bug2769_idle_admission_tests {
         };
         let mut line = None;
         wait_for("the live hold line", || {
-            line = live_hold_line(&root);
+            line = live_hold_line(root);
             line.is_some()
         });
         let line = line.unwrap();
         assert!(
-            claims(&root).iter().any(|p| p == ADMISSION_PURPOSE),
+            claims(root).iter().any(|p| p == ADMISSION_PURPOSE),
             "still held"
         );
         assert!(
             line.contains(&format!("holder pid {},", std::process::id())),
             "{line}"
         );
-        assert!(line.contains("phase assembly"), "{line}");
         release.store(true, Ordering::SeqCst);
-        wait_for("the hold ends", || live_hold_line(&root).is_none());
-        crate::review_watch::stop_test_loops(&root);
+        wait_for("the hold ends", || live_hold_line(root).is_none());
+        crate::review_watch::stop_test_loops(root);
         assert!(worker.join().unwrap().is_err(), "stopped by the fixture");
+        line
+    }
+
+    /// AC4's running-train phase: the train journal's run lock is held.
+    // trace:TASK-3917 | ai:claude
+    #[test]
+    fn task3917_a_long_hold_names_the_running_train_phase() {
+        let (_temp, root) = ci_gated_repo();
+        let lock = root.join(".aida/train/run.lock");
+        let line = line_while_held(&root, move || {
+            std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+            let file = std::fs::File::create(&lock).unwrap();
+            fs2::FileExt::lock_exclusive(&file).unwrap();
+            file
+        });
+        assert!(line.contains("phase running train"), "{line}");
+    }
+
+    /// AC4's recovery phase: a journaled train awaits recovery at the claim.
+    // trace:TASK-3917 | ai:claude
+    #[test]
+    fn task3917_a_long_hold_names_the_recovery_phase() {
+        let (_temp, root) = ci_gated_repo();
+        std::fs::create_dir_all(root.join(".aida/train")).unwrap();
+        std::fs::write(root.join(".aida/train/retained.json"), "{}").unwrap();
+        let line = line_while_held(&root, || ());
+        assert!(line.contains("phase recovery"), "{line}");
+    }
+
+    fn change(id: u64, head: &str) -> forge::Change {
+        forge::Change {
+            id,
+            head: head.into(),
+            base: "main".into(),
+            author: "fixture".into(),
+            gitlab: false,
+            overlap: None,
+            behind: None,
+            conflict: None,
+            head_branch: Some(format!("feature-{id}")),
+        }
+    }
+
+    /// AC2: idle polls judge a refused change again only when its head moves
+    /// or the window passes; unreadable evidence is wanted and never kept.
+    // trace:TASK-3917 | ai:claude
+    #[test]
+    fn task3917_idle_polls_rejudge_a_refusal_only_on_a_new_head_or_after_the_window() {
+        use crate::pr_train::MemberGateError::{Refused, Unavailable};
+        type Verdict = Result<std::result::Result<(), crate::pr_train::MemberGateError>>;
+        let asked = std::cell::RefCell::new(Vec::new());
+        let mut refuse = |c: &forge::Change| -> Verdict {
+            asked.borrow_mut().push(c.id);
+            Ok(Err(Refused("not ready".into())))
+        };
+        let mut refused = Refusals::default();
+        let changes = [change(1, "a"), change(2, "b")];
+        for _ in 0..3 {
+            assert!(!wanted_among(&changes, &mut refused, REJUDGE, &mut refuse).unwrap());
+        }
+        assert_eq!(*asked.borrow(), [1, 2], "cached across idle polls");
+        let moved = [change(1, "a2"), change(2, "b")];
+        assert!(!wanted_among(&moved, &mut refused, REJUDGE, &mut refuse).unwrap());
+        assert_eq!(*asked.borrow(), [1, 2, 1], "a new head is judged");
+        assert!(!wanted_among(&moved, &mut refused, Duration::ZERO, &mut refuse).unwrap());
+        assert_eq!(
+            *asked.borrow(),
+            [1, 2, 1, 1, 2],
+            "an expired refusal is judged"
+        );
+
+        let mut refused = Refusals::default();
+        let mut unreadable = |c: &forge::Change| -> Verdict {
+            asked.borrow_mut().push(c.id);
+            Ok(Err(Unavailable("forge down".into())))
+        };
+        asked.borrow_mut().clear();
+        for _ in 0..2 {
+            assert!(wanted_among(&changes, &mut refused, REJUDGE, &mut unreadable).unwrap());
+        }
+        assert_eq!(*asked.borrow(), [1, 1], "unreadable evidence is not kept");
     }
 }
