@@ -1,0 +1,31 @@
+id: 01a215ab-3c23-7aa2-bcb0-4c4069c2edb7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1477
+title: 'Review follow-up: already_on_base excludes every fork point (`main ^stop1 ^stop2 ...`), so the base window s'
+description: |-
+  From BUG-2733
+  Reviewed sha: efe42749706c6242f8d43f7d112fd8b05003df13
+
+  already_on_base excludes every fork point (`main ^stop1 ^stop2 ...`), so the base window starts at the NEWEST fork point. A branch commit that forked from an older stop and was copied to main between the older and newer stops is not detected, and is kept. This fails safe (the spec stays gated) but narrows the fix. On the real origin/integration there are 13 stops; the all-stops window is 194 commits against 308+ from the oldest. Excluding only `git merge-base --octopus <stops>` would cover the full span. File: aida-cli-lib/src/base_patch_equivalents.rs:75-86.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T02:24:33.315826220Z
+modified_at: 2026-11-26T02:24:33.315826220Z
+req_type: Task
+tags:
+- carried-from:BUG-2733
+- finding-hash:15f2af52
+- from-review:BUG-2733
+relationships:
+- rel_type: References
+  target_id: 01a2098c-59f6-7922-a25a-70a7be418e02
+  created_at: 2026-11-26T02:24:33.315871685Z
+filed_at:
+  code_sha: efe42749706c6242f8d43f7d112fd8b05003df13
+  branch: pr-4598
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa7028b4df8
+  vendor: claude
+  session: 01a215a52228
