@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:31:04.331376844Z
-modified_at: 2026-11-25T23:27:44.880767464Z
+modified_at: 2026-11-26T00:03:28.347004045Z
 req_type: Task
 tags:
 - from-advisor:STORY-3076
@@ -32,6 +32,32 @@ comments:
   created_at: 2026-11-25T22:40:59.922465700Z
   modified_at: 2026-11-25T22:40:59.922465700Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a2152a-4e83-72b2-9c90-308d4804d4e5
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4604 @ 6812830d0d (TASK-3320; completes it; +164/-5, of which about 120 are tests).
+
+    Result: PASS.
+
+    AC (root and nested credential paths, component matching, fixtures):
+    - The base already matched `.aws`/`.ssh` as path components. This PR adds `.gnupg` and `.azure` components; `.config/gcloud`, `.config/gh`, `.docker/config.json` and `.kube/config` as adjacent-component pairs; and the file names .netrc, _netrc, .git-credentials, .pgpass, .pypirc, id_dsa, id_ecdsa and *.pfx.
+    - Matching is ASCII case-insensitive, which is right for case-insensitive checkouts.
+    - The unit test covers each path at the root, under nested/ and under a/b/, with both / and \ separators. Negative cases: .docker/Dockerfile, .config/nvim, gcloud/setup.md, src/netrc.rs and .kube-docs/config.
+    - The end-to-end test commits sentinel-bearing credential files at the root and nested. It asserts they land in excluded_files with secret_sensitive_path, that only ordinary.rs is reviewable, and that the sentinel never appears in the bundle.
+
+    New: --anchor-findings refuses a runner finding that cites a credential path ("review never reads"), before the inventory check. That only tightens fail-closed behaviour, and it's tested for .netrc and a nested .docker/config.json.
+
+    Security: no new I/O, process or network. It only adds exclusions, so nothing that was excluded before becomes reviewable.
+
+    Should-fix (non-blocking, later): other common token files are not yet screened: .npmrc, .cargo/credentials(.toml), .vault-token, .terraform.d/credentials.tfrc.json, .config/hub. File these as a TASK-3320 follow-up comment, not a new spec, per the "findings are not requirements" rule.
+
+    Self-approve limits: this is credential-screening safety code, so I recommend an INDEPENDENT review rather than advisor self-merge.
+
+    Merge-tree: CLEAN against origin/integration and against #4603 (S3b).
+  created_at: 2026-11-26T00:03:28.347004045Z
+  modified_at: 2026-11-26T00:03:28.347004045Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20c83-b64f-7602-98cc-554db51f875e
