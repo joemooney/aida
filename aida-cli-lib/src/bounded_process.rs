@@ -61,6 +61,16 @@ pub(crate) fn command_output_with_timeout_capped(
         .map_or(BoundedCommandOutput::SpawnFailed, |(out, _, _)| out)
 }
 
+/// [`command_output_with_timeout_detail`] with the spawn error kept: `Err`
+/// carries its errno (ENOENT, EACCES); `Ok` never holds
+/// [`BoundedCommandOutput::SpawnFailed`]. trace:STORY-3120 | ai:claude
+pub(crate) fn command_output_with_timeout_io(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> std::io::Result<BoundedCommandOutput> {
+    run_bounded(cmd, timeout, u64::MAX, false, false).map(|(out, _, _)| out)
+}
+
 /// Retain stderr collected after killing a scheduled child for phase diagnostics.
 // trace:BUG-2667 | ai:codex
 pub(crate) fn command_output_with_timeout_stderr(

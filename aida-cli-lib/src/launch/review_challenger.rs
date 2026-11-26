@@ -90,13 +90,28 @@ fn pick_challenger(
 
 /// The challenger's `RunnerCall`: the finder's checkout, environment,
 /// deadline and caps, with its own vendor, pass name and validated tuning.
+/// `forced` is the operator's `--challenger-agent`: it wins over the pick,
+/// so no `[AI:<tool>]` tag in the change can steer it, and is refused when
+/// it is not installed. trace:STORY-3120 | ai:claude
 pub(crate) fn challenger_call<'a>(
     finder: &RunnerCall<'a>,
     authors: &BTreeSet<&str>,
+    forced: Option<&'static ReviewVendor>,
     effort_flag: Option<&str>,
     base: &TrustedBase,
 ) -> Result<(RunnerCall<'a>, AdversarialSummary)> {
-    let (agent, note) = pick_challenger(finder, authors);
+    let (agent, note) = match forced {
+        Some(v) if finder.vendor().is_some() => {
+            let found = finder.on_path(v).is_some();
+            ensure!(found, "--challenger-agent {}: not found on PATH", v.program);
+            (
+                Some(v),
+                Some(format!("--challenger-agent picked {}", v.program)),
+            )
+        }
+        Some(_) => bail!("--challenger-agent does not apply to AIDA_REVIEW_RUNNER_CMD"),
+        None => pick_challenger(finder, authors),
+    };
     let mut call = RunnerCall {
         agent,
         checkout: finder.checkout,
@@ -298,7 +313,7 @@ mod tests {
         let pick = |agent: &str, authors: &[&'static str], flag| {
             let call = finder(agent, checkout.path(), &env);
             let authors: BTreeSet<&str> = authors.iter().copied().collect();
-            let (pass, summary) = challenger_call(&call, &authors, flag, &base).unwrap();
+            let (pass, summary) = challenger_call(&call, &authors, None, flag, &base).unwrap();
             assert_eq!(pass.pass, "challenger");
             (pass.run("x".repeat(200_000).as_str()).unwrap(), summary)
         };
@@ -344,6 +359,52 @@ mod tests {
         );
     }
 
+    /// `--challenger-agent` beats the pick whatever the commit tags claim,
+    /// and an override that is not installed, or under a custom runner, is
+    /// refused instead of silently replaced. trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        for name in ["claude", "codex"] {
+            crate::test_exec::write_executable(&bin.path().join(name), "#!/bin/sh\n");
+        }
+        let path = |dir: &std::path::Path| (OsString::from("PATH"), dir.as_os_str().to_owned());
+        let env = vec![path(bin.path())];
+        let base = TrustedBase::default();
+        let codex = review_vendor("codex").ok();
+        // A forged `[AI:codex]` would steer the auto pick off codex.
+        let forged = detect_ai_authors("[AI:codex] feat: x\n");
+        let call = finder("claude", checkout.path(), &env);
+        let auto = challenger_call(&call, &forged, None, None, &base)
+            .unwrap()
+            .1;
+        assert_eq!(auto.challenger_agent.as_deref(), Some("claude"));
+        let (pass, summary) = challenger_call(&call, &forged, codex, None, &base).unwrap();
+        assert_eq!(pass.vendor().map(|v| v.program), Some("codex"));
+        assert_eq!(summary.challenger_agent.as_deref(), Some("codex"));
+        assert!(summary.note.unwrap().contains("--challenger-agent"));
+        // Not installed: refused, never the finder's vendor in its place.
+        let only_claude = tempfile::tempdir().unwrap();
+        let claude = only_claude.path().join("claude");
+        crate::test_exec::write_executable(&claude, "#!/bin/sh\n");
+        let env = vec![path(only_claude.path())];
+        let call = finder("claude", checkout.path(), &env);
+        let Err(err) = challenger_call(&call, &forged, codex, None, &base) else {
+            panic!("accepted")
+        };
+        assert!(err
+            .to_string()
+            .contains("--challenger-agent codex: not found"));
+        let env = vec![(OsString::from("AIDA_REVIEW_RUNNER_CMD"), claude.into())];
+        let call = finder("claude", checkout.path(), &env);
+        let Err(err) = challenger_call(&call, &forged, codex, None, &base) else {
+            panic!("accepted")
+        };
+        assert!(err.to_string().contains("AIDA_REVIEW_RUNNER_CMD"), "{err}");
+        // Outside the allowlist: refused before anything runs.
+        assert!(review_vendor("gemini").is_err() && review_vendor("sh").is_err());
+    }
+
     #[test]
     fn s4_challenger_effort_injection_refused_at_every_source() {
         let checkout = tempfile::tempdir().unwrap();
@@ -381,7 +442,7 @@ mod tests {
         ];
         for (source, flag, env, base) in cases {
             let call = finder("codex", checkout.path(), &env);
-            let Err(err) = challenger_call(&call, &BTreeSet::new(), flag, &base) else {
+            let Err(err) = challenger_call(&call, &BTreeSet::new(), None, flag, &base) else {
                 panic!("{source}: accepted");
             };
             assert!(err.to_string().starts_with(source), "{source}: {err}");
