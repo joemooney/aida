@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-26T09:24:25.799565325Z
+modified_at: 2026-11-26T09:29:07.086374255Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -328,6 +328,24 @@ comments:
   modified_at: 2026-11-26T09:24:25.799565325Z
   session_id: 01a2170f49db
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21730-2df4-78f0-93cf-0a5fb0bdbe84
+  author: joe
+  content: |-
+    Integration pre-check: PR #4642 @061293cf (STORY-2839 slice d1, product-workflow.md + workflow.html + 4 SVGs; Refs) — PASS with one SHOULD-FIX before merge (rendering)
+
+    Verified:
+    - SVG safety: all four SVGs carry no <script>, no on*= handlers, no href/xlink:href, no <foreignObject>/<image>/<use>, and no external url(); the only url() uses are internal marker refs (#arr, #arrow, …). Each has role=img + title/desc and a prefers-color-scheme block (dual theme). The HTML embeds them via <img>, so no script context applies.
+    - Commands: every command shown exists in the current CLI (mailbox send/inbox, session leases/reap/hygiene/end/handoff, worktree gc, land run/status, integration merge/promotion-check, pr ship/train, rework, review record, role enter, queue work/list, pull). Flags verified: mailbox send --to seat:<name> / --intent fyi|request / --in-reply-to; pr train --check --all-open --all-ready --dry-run.
+    - All 17 glossary anchors exist in both product-glossary.md and glossary.html.
+
+    SHOULD-FIX (visible on the showcase page): docs/showcase/build.py supports neither nested lists nor *italics*. In workflow.html:
+    1. The Path B sub-bullets (Green / Red / Autoland) collapse into one <p> with literal "  - " text. Flatten them into top-level bullets (e.g. "- **Path B, green:** …") and regenerate.
+    2. *"add jittered retry backoff…"* renders with literal asterisks; drop the asterisks (or use plain quotes).
+    Then rerun the showcase build so search-data.js stays in sync.
+  created_at: 2026-11-26T09:29:07.086374255Z
+  modified_at: 2026-11-26T09:29:07.086374255Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
