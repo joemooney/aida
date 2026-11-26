@@ -10,12 +10,12 @@ description: |
   - AC2: it NEVER re-execs mid-job. A job in flight finishes first, and a job submitted during the re-exec window is queued, not lost.
   - AC3: tests: deleted exe → re-exec when idle; a sha mismatch → re-exec when idle; a job in flight → no re-exec until it ends; the binding survives (a job after the re-exec still binds and runs).
   - AC4: the same rule for the relay/runner loops that hold the live binary, if they share the runner code.
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T20:33:25.964401424Z
+modified_at: 2026-11-26T21:03:37.518541580Z
 req_type: Task
 tags:
 - deputy
@@ -158,6 +158,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a219ab-c62e-7f23-9014-2080a129ead0
+  author: joe
+  timestamp: 2026-11-26T21:03:37.518530826Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
@@ -165,3 +172,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: d38eee408f3
   vendor: claude
+implementation_info:
+  implemented: false
+  reopened_at_sha: aab3a10d798ca22e48470cc7a3f1e5e1d02e99ae
