@@ -307,11 +307,12 @@
     </a>
     <nav class="nav-links" aria-label="Methodology Sections">
       <a href="index.html">← Showcase</a>
-      <a href="#narrative">01. The Clean-Room Narrative</a>
+      <a href="#narrative">01. Narrative</a>
       <a href="#firewall">02. Spec Firewall</a>
       <a href="#four-pillars">03. Four Pillars</a>
-      <a href="#dogfood-loop">04. Self-Hosted Loop</a>
-      <a href="#audit-matrix">05. Provenance Matrix</a>
+      <a href="#licenses">04. License Matrix</a>
+      <a href="#dogfood-loop">05. Self-Hosted Loop</a>
+      <a href="#audit-matrix">06. Provenance Matrix</a>
       <a href="code-review.html">Code Review Engine ↗</a>
       <a href="reviewbench-report.html">ReviewBench Report ↗</a>
     </nav>
@@ -648,6 +649,11 @@
           <span>17 U.S.C. § 102(b) IDEA–EXPRESSION ISOLATION · ZERO FOREIGN CODE OR PROMPT INGESTION</span>
         </div>
       </div>
+
+      <div class="callout strength" style="margin-top:16px;">
+        <div class="callout-title">✓ Why Ideas Are Not Copyrightable — Only Expression Is (17 U.S.C. § 102(b))</div>
+        Under U.S. and international copyright law (<a href="https://www.law.cornell.edu/uscode/text/17/102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">17 U.S.C. § 102(b)</a>, <a href="https://www.copyright.gov/title17/92chap1.html#102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">U.S. Copyright Act § 102(b)</a>, <a href="https://www.wto.org/english/docs_e/legal_e/27-trips_04_e.htm" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">WTO TRIPS Article 9(2)</a>, and the <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0024" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">EU Computer Programs Directive 2009/24/EC Art. 1(2)</a>), <em>"In no case does copyright protection for an original work of authorship extend to any idea, procedure, process, system, method of operation, concept, principle, or discovery, regardless of the form in which it is described, explained, illustrated, or embodied in such work."</em> By contrast, <a href="https://www.law.cornell.edu/uscode/text/17/101" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">17 U.S.C. § 101</a> and <a href="https://www.law.cornell.edu/uscode/text/17/106" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">17 U.S.C. § 106(2)</a> define a <strong>derivative work</strong> (including a <em>"translation"</em> from one programming language to another) as the exclusive right of the copyright owner. By mediating development through an AIDA functional specification in <code>.aida-store</code>—never translating foreign files—AIDA harnesses the best ideas in software engineering while producing 100% original, non-derivative Rust implementations.
+      </div>
     </div>
 
     <!-- BLUEPRINT SVG 2: THREAT-VECTOR COMPARISON -->
@@ -756,7 +762,7 @@
           <div>
             <h4 style="font-family:var(--serif);font-size:22px;font-weight:400;margin:0 0 10px;">The Idea–Expression Divide as an Engineering Protocol</h4>
             <p style="font-size:13.5px;color:var(--ink-secondary);line-height:1.65;">
-              Under <strong>17 U.S.C. § 102(b)</strong> and international copyright doctrine (TRIPS Art. 9(2), EU Software Directive Art. 1(2)), copyright protects only the <em>specific creative expression</em> of a program (its literal source lines, specific struct layouts, and verbatim prose). It explicitly <strong>does not protect</strong>:
+              Under <a href="https://www.law.cornell.edu/uscode/text/17/102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;font-weight:600;">17 U.S.C. § 102(b)</a> and international copyright doctrine (<a href="https://www.wto.org/english/docs_e/legal_e/27-trips_04_e.htm" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">TRIPS Art. 9(2)</a>, <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0024" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">EU Software Directive Art. 1(2)</a>), copyright protects only the <em>specific creative expression</em> of a program (its literal source lines, specific struct layouts, and verbatim prose)—and under <a href="https://www.law.cornell.edu/uscode/text/17/106" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 106(2)</a> &amp; <a href="https://www.law.cornell.edu/uscode/text/17/101" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">§ 101</a>, direct translations are derivative works. However, copyright explicitly <strong>does not protect</strong>:
             </p>
             <ul style="font-size:13px;line-height:1.65;padding-left:18px;">
               <li><strong>Functional ideas, procedures, and methods of operation</strong> (e.g., "filter out lockfiles before reviewing", "group source files with their unit tests", "run a skeptical second pass to filter false positives").</li>
@@ -882,11 +888,160 @@ aida review prepare --telemetry-report</code></pre>
     </div>
   </section>
 
-  <!-- SECTION 04: THE SELF-HOSTED DOGFOODING LOOP (BLUEPRINT SVG 3) -->
+  <!-- SECTION 04: OPEN-SOURCE LICENSE SPECTRUM & HOW AIDA PROTECTS AGAINST VIOLATIONS -->
+  <section class="report-section" id="licenses">
+    <div class="section-head">
+      <div>
+        <div class="section-num">04 / OPEN-SOURCE LICENSE SPECTRUM &amp; AI COMPLIANCE DEFENSE</div>
+        <h2>How AI Coding Agents Accidentally Violate Open-Source Licenses — and How AIDA Prevents It</h2>
+      </div>
+      <p class="section-desc">
+        Every open-source and source-available license attaches legal obligations to <strong>copied or translated expression</strong> (<a href="https://www.law.cornell.edu/uscode/text/17/106" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 106(2)</a> derivative works). Here is how conventional AI workflows violate each license family and how AIDA’s Specification Firewall eliminates the exposure.
+      </p>
+    </div>
+
+    <div class="card" style="margin-bottom:28px;">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">The 6 License Families: Violation Vectors vs. AIDA’s Clean-Room Protection</h3>
+          <p class="card-subtitle">STATUTORY ANCHORS: <a href="https://www.law.cornell.edu/uscode/text/17/102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 102(b)</a> (UNPROTECTABLE IDEAS) VS. <a href="https://www.law.cornell.edu/uscode/text/17/101" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 101</a> &amp; <a href="https://www.law.cornell.edu/uscode/text/17/106" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">§ 106(2)</a> (DERIVATIVE TRANSLATIONS)</p>
+        </div>
+        <span class="badge badge-elite">Zero License Contamination</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>License Family &amp; Official Text</th>
+              <th>Core Legal Obligations on Derivative / Copied Code</th>
+              <th>How Conventional "AI Porting" Violates the License</th>
+              <th>How AIDA’s Specification Firewall Protects the Codebase</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>1. Permissive + Notice &amp; Patent Clause</strong><br />
+                <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">Apache-2.0 ↗</a>
+              </td>
+              <td>
+                <strong>Section 4 (Redistribution):</strong> Any redistribution of the Work or <em>Derivative Works</em> must retain all copyright/patent/attribution notices, include a copy of the Apache-2.0 License, state prominent change notices on modified files, and preserve the upstream <code>NOTICE</code> text.
+              </td>
+              <td>
+                <span class="badge badge-crit">Silent Attribution Stripping</span><br />
+                An engineer asks an LLM to <em>"Port this Go file from an Apache-2.0 repo into Rust."</em> The LLM translates the functions and structs line-by-line (creating a derivative work under <a href="https://www.law.cornell.edu/uscode/text/17/101" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 101</a>) but drops the upstream SPDX header and <code>NOTICE</code> file—violating Apache-2.0 § 4.
+              </td>
+              <td>
+                <span class="badge badge-elite">Non-Derivative by Construction</span><br />
+                During <code>/aida-ecosystem-scan</code>, the Advisor extracts only unprotectable functional requirements (<a href="https://www.law.cornell.edu/uscode/text/17/102" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 102(b)</a>) into <code>.aida-store</code>. No Go source code, struct definitions, or prompt markdown is copied or translated, so no derivative work is created.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>2. Minimal Permissive</strong><br />
+                <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">MIT ↗</a> ·
+                <a href="https://opensource.org/license/bsd-3-clause" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">BSD-2/3-Clause ↗</a> ·
+                <a href="https://opensource.org/license/isc-license-txt" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">ISC ↗</a>
+              </td>
+              <td>
+                <em>"The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software."</em> BSD-3 also prohibits endorsement without written permission.
+              </td>
+              <td>
+                <span class="badge badge-warn">Unattributed Substantial Copying</span><br />
+                AI agents copy or translate "substantial portions" of an MIT/BSD library or `.md` prompt collection into an internal module under the company’s own copyright header, breaching the sole condition of the MIT/BSD grant.
+              </td>
+              <td>
+                <span class="badge badge-elite">Zero Copied Expression</span><br />
+                The Implementer writes 100% original Rust algorithms and compiled playbook constants from the AIDA spec’s <code>## Acceptance</code> section, verified by commit-pinned adversarial review and <code>// trace:&lt;SPEC-ID&gt;</code> provenance.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>3. Weak / File-Level Copyleft</strong><br />
+                <a href="https://www.mozilla.org/en-US/MPL/2.0/" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">MPL-2.0 ↗</a> ·
+                <a href="https://www.gnu.org/licenses/lgpl-3.0.en.html" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">LGPL-2.1/3.0 ↗</a> ·
+                <a href="https://www.eclipse.org/legal/epl-2.0/" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">EPL-2.0 ↗</a>
+              </td>
+              <td>
+                Modifications to covered files (MPL-2.0 § 1.10 / § 3.1) or statically linked LGPL libraries must remain under the copyleft license with complete corresponding source code made available (and relinkable for LGPL).
+              </td>
+              <td>
+                <span class="badge badge-crit">Inlining Copyleft into Monoliths</span><br />
+                An AI agent extracts a parser or matcher function from an MPL-2.0 or LGPL file and pastes/translates it directly into a proprietary or differently licensed Rust crate, infecting that file with file-level or relinking copyleft obligations.
+              </td>
+              <td>
+                <span class="badge badge-elite">Zero Code Inlining + Zero New Crates</span><br />
+                AIDA neither inlines code from external repositories nor adds unnecessary third-party crates to <code>Cargo.toml</code> (the entire review engine &amp; SARIF/telemetry stack added <strong>0 crates</strong>).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>4. Strong &amp; Network Copyleft</strong><br />
+                <a href="https://www.gnu.org/licenses/gpl-3.0.en.html" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">GPL-2.0 / GPL-3.0 ↗</a> ·
+                <a href="https://www.gnu.org/licenses/agpl-3.0.en.html" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">AGPL-3.0 ↗</a>
+              </td>
+              <td>
+                <strong>Viral Reciprocity (GPLv3 § 5 / AGPLv3 § 13):</strong> Any work that contains or is derived from GPL/AGPL code must be licensed <em>as a whole</em> under GPL/AGPL when distributed (or when interacted with over a network for AGPL-3.0).
+              </td>
+              <td>
+                <span class="badge badge-crit">Catastrophic Repository Contamination</span><br />
+                Translating a GPL/AGPL algorithm or prompt engine into a commercial or non-GPL codebase via an LLM creates a derivative work (<a href="https://www.law.cornell.edu/uscode/text/17/106" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">17 U.S.C. § 106(2)</a>), triggering copyleft disclosure requirements across the entire linked binary or SaaS service.
+              </td>
+              <td>
+                <span class="badge badge-elite">Strict Chinese Wall Isolation</span><br />
+                Because the Implementer only ever sees the AIDA functional specification in <code>.aida-store</code>—and never accesses or translates GPL/AGPL source code—copyleft reciprocity can never attach to the resulting Rust implementation.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>5. Source-Available &amp; Non-Compete</strong><br />
+                <a href="https://mariadb.com/bsl11/" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">BUSL-1.1 ↗</a> ·
+                <a href="https://www.mongodb.com/legal/licensing/server-side-public-license" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">SSPL-1.0 ↗</a> ·
+                <a href="https://fsl.software/" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">FSL-1.1 ↗</a> ·
+                <a href="https://www.elastic.co/pricing/elastic-license" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">ELv2 ↗</a>
+              </td>
+              <td>
+                Code is publicly visible on GitHub, but production or commercial/competing use is restricted or requires open-sourcing the entire management stack (SSPL § 13).
+              </td>
+              <td>
+                <span class="badge badge-crit">"Public Repo" Trap</span><br />
+                Developers and AI agents assume "public on GitHub = open source" and port code from a BUSL-1.1, FSL, or Elastic-licensed repository into a product, committing direct copyright infringement and commercial-use breach.
+              </td>
+              <td>
+                <span class="badge badge-elite">Spec-First Sovereign Implementation</span><br />
+                Even when studying how commercial/source-available tools approach a problem, AIDA captures only the high-level problem statement in a spec and builds its own native Rust solution from first principles.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>6. Academic Benchmarks &amp; Documentation</strong><br />
+                <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:underline;font-family:var(--mono);font-size:11px;">CC-BY-4.0 / CC-BY-NC ↗</a> ·
+                Custom Evaluation Repos
+              </td>
+              <td>
+                Research papers, benchmark datasets, and community prompt packs often carry Creative Commons (sometimes Non-Commercial <code>CC-BY-NC</code>) or custom evaluation licenses.
+              </td>
+              <td>
+                <span class="badge badge-warn">Verbatim Prompt &amp; Rubric Copying</span><br />
+                Copying an academic repo’s Python judge scripts or verbatim prompt templates into a production binary violates <code>CC-BY-NC</code> or attribution terms.
+              </td>
+              <td>
+                <span class="badge badge-elite">Mathematical &amp; Conceptual Adoption Only</span><br />
+                From GitHub’s <a href="https://arxiv.org/abs/2610.16159" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">ReviewBench paper (ArXiv 2610.16159)</a>, AIDA adopted the <em>mathematical formulas</em> (<em>F<sub>β</sub></em>, precision/recall) and the <em>3-condition conceptual rubric</em> (True + Relevant + Non-Trivial), authoring 100% original Rust scoring and challenger code.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 05: THE SELF-HOSTED DOGFOODING LOOP (BLUEPRINT SVG 3) -->
   <section class="report-section" id="dogfood-loop">
     <div class="section-head">
       <div>
-        <div class="section-num">04 / SELF-HOSTED DOGFOODING LOOP · AIDA BUILDING AIDA</div>
+        <div class="section-num">05 / SELF-HOSTED DOGFOODING LOOP · AIDA BUILDING AIDA</div>
         <h2>The 6-Stage Closed Loop: From Ecosystem Scan to Empirical Benchmark</h2>
       </div>
       <p class="section-desc">
@@ -979,11 +1134,11 @@ aida review prepare --telemetry-report</code></pre>
     </div>
   </section>
 
-  <!-- SECTION 05: SIDE-BY-SIDE CLEAN-ROOM PROVENANCE MATRIX -->
+  <!-- SECTION 06: SIDE-BY-SIDE CLEAN-ROOM PROVENANCE MATRIX -->
   <section class="report-section" id="audit-matrix">
     <div class="section-head">
       <div>
-        <div class="section-num">05 / SUBSYSTEM-BY-SUBSYSTEM CLEAN-ROOM PROVENANCE AUDIT</div>
+        <div class="section-num">06 / SUBSYSTEM-BY-SUBSYSTEM CLEAN-ROOM PROVENANCE AUDIT</div>
         <h2>Verifiable Independence Matrix Across Every Review Engine Subsystem</h2>
       </div>
       <p class="section-desc">
