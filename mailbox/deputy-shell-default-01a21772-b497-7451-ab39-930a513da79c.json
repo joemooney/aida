@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21772-b497-7451-ab39-930a513da79c",
+  "thread_id": "deputy-01a21772-b497-7451-ab39-930a513da79c",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795689726680,
+  "body": "Script deputy \"default\" finished script job 01a21772-b497-7451-ab39-930a513da79c: rc 0 (ok).\nScript: cd ~/ai/aida && aida review watch --release PR-3793\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21772-b497-7451-ab39-930a513da79c/transcript.log\nRead it with `aida deputy shell log 01a21772-b497-7451-ab39-930a513da79c --name default`.\n",
+  "subject": "deputy script job 01a21772 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
