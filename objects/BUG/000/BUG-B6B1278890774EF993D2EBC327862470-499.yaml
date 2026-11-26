@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T14:21:02.362455482Z
+modified_at: 2026-11-26T14:40:39.652311743Z
 req_type: Bug
 tags:
 - leases
@@ -90,6 +90,13 @@ comments:
     - When gh cannot answer the PR state, the guard falls back to today's shelve (status check only). Acceptable? Proceeding with that lean.
   created_at: 2026-11-26T14:21:02.362455482Z
   modified_at: 2026-11-26T14:21:02.362455482Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2184d-28e4-7bb3-8157-2642073d20af
+  author: dirtlab
+  content: Commit 4f8ad2f09d references this requirement
+  created_at: 2026-11-26T14:40:39.652311743Z
+  modified_at: 2026-11-26T14:40:39.652311743Z
   session_id: 01a218395b6c
   harness_version: 2.1.319 (Claude Code)
 history:
