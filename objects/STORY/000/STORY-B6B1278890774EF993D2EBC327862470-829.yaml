@@ -1258,6 +1258,20 @@ comments:
   modified_at: 2026-11-26T16:18:16.442504290Z
   session_id: 01a2188212ab
   harness_version: 2.1.319 (Claude Code)
+- id: 01a218a8-eebe-7eb1-a6d0-8bedd3da4ac6
+  author: joe
+  content: |-
+    Integration re-check: PR #4665 @0a308f7d (S5a r1) — PASS; the advisor's 08:21 MUSTs are met
+    1. stdin: GitHubForge::comment runs `gh pr comment <id> --body-file -` (plus -R when pinned) through the new gh_stdin. It uses the same before_train_forge_call guard and resolve_forge_cli as gh(), and a writer thread so a child that fills its pipes cannot deadlock. A write error is surfaced only when gh succeeded; on failure the status speaks. The test posts through the real GitHub client to a fake gh and asserts argv == "pr comment 7 --body-file -" and that the body arrives on stdin, so E2BIG is gone.
+    2. Cap: COMMENT_CAP = 60,000 bytes, which is stricter than the 65,536-char limit. report_pieces orders summary/coverage, then findings, then refuted findings, then linked specs, inventory, batches, playbooks and excluded files, so the inventory is trimmed first. Each piece is fence-balanced. comment_markdown keeps whole pieces, then cut_balanced cuts the first misfit on a LINE boundary (hence a valid UTF-8 boundary, and code spans stay whole) and closes any open fence with the same indented fence. The note "truncated: N findings omitted; full report at <--write / --sarif path or a rerun hint>" follows. The fence-length invariant means a body line can never be mistaken for the closer.
+    3. Test: a >70,000-char report, posted body ≤ COMMENT_CAP, fences balanced, the note present; a second case also cuts inside a finding's fence.
+    - Nit (also done): the spec id is code-spanned. Spec titles and acceptance markdown still render raw; they are store-authored. Fine for S5b.
+    - store-writers.toml: the gh_stdin write_all is inventoried, and two review rows are moved into sorted order (no semantic change).
+    Nit (parity, non-blocking): gh() wraps the call in forge_lookup::deadline_output (kills the process group at the forge deadline when one is set); gh_stdin has no deadline, so a hung `gh` would block --post-comment. Consider applying the same deadline, or a fixed post timeout, in S5b.
+  created_at: 2026-11-26T16:20:35.954921673Z
+  modified_at: 2026-11-26T16:20:35.954921673Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
@@ -1475,12 +1489,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
-- id: 01a21872-9655-7520-a1d4-bd6b85d29c9e
-  author: joe
-  timestamp: 2026-11-26T15:21:32.501313629Z
-  session_id: 01a20440-982d-7872-93de-fff272d8657c
-  harness_version: 2.1.329 (Claude Code)
-  changes: []
 - id: 01a21872-8cb5-79b1-adce-431f1af9c150
   author: joe
   timestamp: 2026-11-26T15:21:30.037122144Z
@@ -1488,6 +1496,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21872-9655-7520-a1d4-bd6b85d29c9e
+  author: joe
+  timestamp: 2026-11-26T15:21:32.501313629Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 - id: 01a21882-7adf-7e13-b447-a8c4258d3431
   author: aida-session-start
   timestamp: 2026-11-26T15:38:54.047701885Z
