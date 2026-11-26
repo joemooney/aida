@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-3059",
+  "publishes": [
+    {
+      "at": "2026-11-26T09:19:35.583103425Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T01:26:51.241900018Z",
+      "spec": "STORY-3059",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4552,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "1deb5e4d92f5160624c66dc67dcf15035af2ae08"
+      }
+    },
+    {
+      "ts": "2026-11-25T01:27:10.249815999Z",
+      "spec": "STORY-3059",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the full five-file landing diff for original head 1deb5e4d92f5160624c66dc67dcf15035af2ae08 against protected main dc27cf1f4cb49a050002334062efb59fe7d2b914, landed tree 163f7c1c1ef88e0abf43140b82458e2db2acc09b. The PR head is two commits behind main. None of the findings depends on the intervening base changes. Exact-head FAST gates, FAST compile, Build (ubuntu-latest), and merge-hold-gate passed. The full test shards were skipped. No local tests or builds were run. The implementer reported a targeted run before publication.\n\nGenerated worksheet for completing STORY-3059\n- Original AC1, policy decision recorded on the story — verified by Joe's authoritative brief on STORY-3059, which specifies a clean tree, no stash, fresh bounded origin proof, and a recovery comment before removal.\n- Original AC2, report parked until a decision — not-applicable-because the authoritative brief records the final policy and supersedes the interim parked behavior.\n\nAuthoritative implementation acceptance criteria from STORY-3059\n- AC1, a published seat for a closed-unmerged PR reaps and leaves a recovery comment on the owning spec — unverified. The closed-PR fixture stops at scan eligibility and the removal/comment fixture has no closed-PR setup. The destruction path also has the evidence gaps described below.\n- AC2, one unpushed current-branch commit is refused — verified by source inspection of reap_publication and the current.txt refusal before push in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.\n- AC3, origin fetch failure refuses with publication unknown — verified by source inspection of the run_bounded error path and the offline-origin case in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.\n- AC4, a stash-only clone is refused — verified by the explicit refs/stash refusal before fetch and the stash-only case in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.\n- AC5, a unique noncurrent local branch commit is refused until freshly published — verified by source inspection of the all-ref inventory and the side-branch before/after publication case in cargo test -p aida-cli-lib task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal.",
+        "recovery_hint": "address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:02:42.635042034Z",
+      "spec": "STORY-3059",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4552,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "1604a50aaf1eed6895115058c1030a1c3d8b40ac"
+      }
+    },
+    {
+      "ts": "2026-11-25T03:02:50.088905584Z",
+      "spec": "STORY-3059",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the full six-file landing diff for STORY-3059 against protected main 5d24023de56baef16fe94a5e39d89bc9bccd1dc3 (landed tree 651b8f77b9207ca58905f07669f61fb456224e2d). The PR head is two commits behind the pinned base. The findings apply to the landed tree and do not depend on either intervening base commit. AC1 is partial: the fixture verifies successful removal and the owning-spec comment for a directly advertised head, but published ancestors can be refused when the new remote tip is absent from the primary checkout. AC2–AC5 have corresponding source and fixture evidence for an unpublished current commit, unavailable origin, stash and an unpublished side branch. The final removal still has gaps in preserving late local and remote changes and commit recovery roots. The branch-only ruling is reflected in code and documentation. Exact-head FAST gates passed, FAST compile was pending at review time, full shards were skipped, and merge-hold clearance was pending. No local tests or builds were run.",
+        "recovery_hint": "address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T04:51:21.375210851Z",
+      "spec": "STORY-3059",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4552,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "8e61bbfdfcb8e4ca9d3bd7307b609e3b99bef088"
+      }
+    },
+    {
+      "ts": "2026-11-25T04:51:42.785066791Z",
+      "spec": "STORY-3059",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the entire pinned landing diff for STORY-3059 against main 45206d90a1df483c1caff91dee5abf345df4a8d2, landed tree f659856f265cc8429db8b4b810e36c80aae52934. The PR is one commit behind main. The intervening commit changes remote reconciliation diagnostics and none of the findings depends on it. AC1 is partial under the latest advisor decision: the change uses same-filesystem rename and the fixtures cover a closed-unmerged PR, the successful comment and lease release, EXDEV, a live holder on entry and hygiene dry-run. Saved histories can still depend on unpinned objects, the owning-spec note and lease release have an interruption gap, and the idle/ref evidence can go stale before the move. AC2's interim parked state ended with the recorded policy decision. Exact-head FAST gates, FAST compile and Build (ubuntu-latest) passed. Full shards were skipped and the merge-hold gate was pending clearance. The implementer reported five focused tests passing. No local tests or builds were run during review.",
+        "recovery_hint": "address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T11:45:18.606541041Z",
+      "spec": "STORY-3059",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4570,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "9959be29516640b22f8da733f61c467ff9bb27ec"
+      }
+    },
+    {
+      "ts": "2026-11-25T11:45:26.161056236Z",
+      "spec": "STORY-3059",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "CHANGES REQUESTED for STORY-3059 (STORY-b6b1278890774ef993d2ebc327862470-822). Reviewed the entire three-file landing diff for original head 9959be29516640b22f8da733f61c467ff9bb27ec against protected main 33a7b137a89cf1fb813b2e7313cfe1de28da7594, using landed tree 27fa751f4aba14b9d03e95af28425c149dc3b579. The generated worksheet carries the original acceptance text. The latest advisor brief on the spec (comments 25, 27 and 30) parks automatic removal and explicitly makes the reporting slice completing.\n\nWorksheet AC1 (policy decision recorded) — verified by the advisor’s disposition on STORY-3059, comments 25, 27 and 30, selecting report-only hygiene and operator-attested recovery.\nWorksheet AC2 (interim “parked” label before policy decision) — not-applicable-because the advisor decided the policy and replaced the interim label with “recoverable” and an attestation hint.\n\nSuperseded automatic-reap AC1 (closed and published clone reaped with owning-spec record) — not-applicable-because the advisor parked automatic removal and closed PR #4552.\nSuperseded automatic-reap AC2 (unpushed tip refuses) — not-applicable-because the old automatic-removal contract was parked.\nSuperseded automatic-reap AC3 (fetch failure refuses) — not-applicable-because the old automatic-removal contract was parked.\nSuperseded automatic-reap AC4 (stash-only clone refuses) — not-applicable-because the old automatic-removal contract was parked.\nSuperseded automatic-reap AC5 (unpublished off-branch work refuses) — not-applicable-because the old automatic-removal contract was parked.\n\nCurrent report-only AC1 (identify a published closed-unmerged seat as recoverable and emit a usable operator-attestation hint) — unverified. The report substitutes the old local commit count for current publication and emits a command that pinned main rejects.\nCurrent report-only AC2 (hygiene preserves the clone, tree, refs and alternates) — unverified. The stable no-merge fixture compares whole-clone tar archives and checks lease retention, but the destructive path does not recheck closed status and the fixture never makes the historical-merge predicate true alongside a valid close.\nCurrent report-only AC3 (identical recovery line in dry and real hygiene) — verified by the matching scan/reap summary wiring and the stable closed-PR fixture in `cargo test -p aida-cli-lib bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates`, reported passed in implementer lane job j20261125T100740665-2-0. The fixture exercises the dry scan, the real quiet reap collector and summary rendering.\n\nExact-head FAST source gates, FAST compilation, required Ubuntu Build and merge-hold-gate passed. Full test shards were skipped by FAST CI. No local tests or builds were run.",
+        "recovery_hint": "address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:30:56.755008962Z",
+      "spec": "STORY-3059",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4570,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a9b2089aaaa9386cc3a859b5277bff50b5058548"
+      }
+    },
+    {
+      "ts": "2026-11-25T18:31:09.693275976Z",
+      "spec": "STORY-3059",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "CHANGES REQUESTED for STORY-3059 (round 2 of report-only slice). I reviewed the whole five-file landing diff of original head a9b2089aaaa9 against pinned main d738e6c6 (landed tree 84827a5e). The head is 2 commits behind main, and neither finding depends on the intervening base commits. AC1 [documentation-inspection]: verified. The policy is recorded on the spec in comments 0, 15, 25 and 27 and the r2 brief: auto-reap is parked, hygiene reports only, and manual recovery goes through BUG-2755. AC2 [behavioral-test]: verified by bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates, which checks the hint text '(published)', the BUG-2755 / `aida session show <id>` pointer, and 'publication unverified' when the origin branch is rewound or deleted while a stale origin/feat exists. Skipped rows render as report lines, and keep_items does not count them as failures. All four prior findings are addressed. F1: the hint now points at the real path. F2: a live, bounded ls-remote through origin_branch_at decides 'published'. F3: reap_one_clone re-runs the veto before mail retirement and teardown, and is tested with an OPEN-to-CLOSED change at the same SHA. Hygiene's cache reclaim now spares the caches of clone-leased seats. F4: the scan and the real reap see a historical merged row and an exact-tip closed row together, and the negative cases (HEAD^, fork, merged-only, empty sha, invalid JSON) are covered. CI: fast gates, fast compile and Build pass at the head, and merge-hold-gate is pending clearance. One blocking ADR-76 finding remains: the GitLab arm of the new unmerged-only veto in the seat-destruction path has no test. One p3 follow-up: the hint omits the PR number.",
+        "recovery_hint": "address the review findings, move STORY-3059 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-25T20:23:06.922507479Z",
+      "spec": "STORY-3059",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4570,
+        "verdict": "APPROVED",
+        "reviewed_sha": "8d24c593efe8bc9de8c99a3f85c3305bdaf665ba"
+      }
+    },
+    {
+      "ts": "2026-11-26T09:19:35.370540346Z",
+      "spec": "STORY-3059",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fa7028b4df8d8ce2aa0e3f270a743cca265b957e",
+        "pr": 4570,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
