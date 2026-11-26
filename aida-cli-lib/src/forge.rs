@@ -2192,6 +2192,10 @@ pub(crate) fn required_checks_from_output(
     Ok(rows.into_iter().map(|r| r.name).collect())
 }
 
+/// Ceiling on one `gh` write fed on stdin (a review comment), when no tighter
+/// forge deadline is in scope. trace:STORY-3120 | ai:claude
+const GH_POST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub struct GitHubForge {
     metadata_repo: Option<String>,
     project_root: PathBuf,
@@ -2389,35 +2393,35 @@ impl GitHubForge {
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 
-    /// [`Self::gh`] with `input` written to its stdin from a writer thread,
-    /// so a child that fills its output pipes before reading cannot deadlock.
+    /// [`Self::gh`] with `input` as its stdin, read from an unlinked temp
+    /// file so no writer can block. It runs under the scoped forge deadline,
+    /// capped at [`GH_POST_TIMEOUT`], with its process group killed at the
+    /// bound: a hung `gh` never blocks the caller.
     // trace:STORY-3120 | ai:claude
     fn gh_stdin(&self, args: &[&str], input: &str) -> Result<std::process::Output> {
-        use std::io::Write;
+        use crate::bounded_process::BoundedCommandOutput as Bounded;
+        use std::io::{Seek, Write};
         crate::pr_train::before_train_forge_call("GitHub command")?;
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        let mut child = Command::new(&gh)
-            .current_dir(&self.project_root)
-            .args(args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn_retrying_etxtbsy()
-            .context("could not invoke `gh` — is the GitHub CLI installed?")?;
-        let mut stdin = child.stdin.take().context("no stdin for `gh`")?;
-        let body = input.to_owned();
-        let writer = std::thread::spawn(move || stdin.write_all(body.as_bytes()));
-        let out = child.wait_with_output().context("wait for `gh`")?;
-        let written = writer
-            .join()
-            .map_err(|_| anyhow::anyhow!("gh stdin writer panicked"))?;
-        // A child that exits without reading reports through its status.
-        if out.status.success() {
-            written.context("write `gh` stdin")?;
+        let mut body = tempfile::tempfile().context("stage `gh` stdin")?;
+        body.write_all(input.as_bytes())
+            .and_then(|()| body.rewind())
+            .context("stage `gh` stdin")?;
+        let timeout = crate::forge_lookup::remaining_call_budget(GH_POST_TIMEOUT)
+            .context("forge deadline expired before `gh` ran")?;
+        let mut cmd = Command::new(&gh);
+        cmd.current_dir(&self.project_root).args(args).stdin(body);
+        match crate::bounded_process::command_output_with_timeout_detail(cmd, timeout) {
+            Bounded::Completed(out) => Ok(out),
+            Bounded::TimedOut => {
+                anyhow::bail!("`gh` timed out after {:.1}s", timeout.as_secs_f32())
+            }
+            Bounded::SpawnFailed => {
+                anyhow::bail!("could not invoke `gh` — is the GitHub CLI installed?")
+            }
         }
-        Ok(out)
     }
 
     // trace:BUG-2492 | ai:codex — retain hold labels for coarse pending classification.
