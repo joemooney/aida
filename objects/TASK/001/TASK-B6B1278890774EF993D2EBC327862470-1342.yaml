@@ -3,17 +3,22 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1342
 agreed_id: TASK-3869
 title: 'STORY-3076: review prepare hardening II (pinned-root confinement, rename churn, pathspec scope, gitlinks, anchoring render, spec IDs, non-UTF-8, no-textconv)'
 description: |
-  Deferred from the STORY-3076 S2 (#4511, TASK-3862) review (advisor-122 ruling 2026-11-24 04:14; filed by product-15). Standard, LOW, after S3 (TASK-3863). "review prepare hardening II".
+  review prepare hardening II, NARROWED by advisor-122 2026-11-26 14:44 (product-15 audit 14:40; originally deferred from the STORY-3076 S2 #4511 review). STRICT.
 
-  ## Acceptance
-  - AC1: Pinned-root confinement under concurrent reparenting for BOTH writes and reads (2)(6); rename-aware churn (8); consistent pathspec scoping (9); non-regular entries and gitlinks handled (10).
-  - AC2: Rendering of anchoring outcomes (11); store ID resolution for --specs (12); lossless non-UTF-8 paths with escaping (13); --no-textconv on content reads (14). Tests for each; split into II-a/II-b if over ~300 lines.
+  DELIVERED by STORY-3120 (S3a/S5a/S5b/S5c), no further work: (14) --no-textconv on content reads; (9) consistent pathspec scoping (--literal-pathspecs); (11) rendering of anchoring outcomes; (8) rename-aware churn.
+
+  ## Acceptance (remaining scope)
+  - AC1 (10): gitlinks, submodules, symlinks and other non-regular entries are SKIPPED from the review inventory with a named reason, never followed or read through. Tests for each kind.
+  - AC2 (12): --specs resolves store IDs ONLY through the trusted store (never from PR-controlled files), with a refusal on unknown IDs. Tests.
+  - AC3 (2)(6): PROOF tests for pinned-root confinement on reads AND writes, including a concurrent re-parent / symlink swap.
+  - AC4 (13): a lossless non-UTF-8 path round trip, with escaping, proven by a test.
+  <=300 lines; lane after STORY-3120 S5c merges (same files).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-26T21:35:10.423109059Z
+modified_at: 2026-11-26T21:36:37.851252328Z
 req_type: Task
 tags:
 - review
@@ -52,6 +57,28 @@ history:
   - field_name: priority
     old_value: Low
     new_value: Medium
+- id: 01a219c9-fddb-7763-ad5f-30fedbf8b2ee
+  author: joe
+  timestamp: 2026-11-26T21:36:37.851251834Z
+  changes:
+  - field_name: description
+    old_value: |
+      Deferred from the STORY-3076 S2 (#4511, TASK-3862) review (advisor-122 ruling 2026-11-24 04:14; filed by product-15). Standard, LOW, after S3 (TASK-3863). "review prepare hardening II".
+
+      ## Acceptance
+      - AC1: Pinned-root confinement under concurrent reparenting for BOTH writes and reads (2)(6); rename-aware churn (8); consistent pathspec scoping (9); non-regular entries and gitlinks handled (10).
+      - AC2: Rendering of anchoring outcomes (11); store ID resolution for --specs (12); lossless non-UTF-8 paths with escaping (13); --no-textconv on content reads (14). Tests for each; split into II-a/II-b if over ~300 lines.
+    new_value: |
+      review prepare hardening II, NARROWED by advisor-122 2026-11-26 14:44 (product-15 audit 14:40; originally deferred from the STORY-3076 S2 #4511 review). STRICT.
+
+      DELIVERED by STORY-3120 (S3a/S5a/S5b/S5c), no further work: (14) --no-textconv on content reads; (9) consistent pathspec scoping (--literal-pathspecs); (11) rendering of anchoring outcomes; (8) rename-aware churn.
+
+      ## Acceptance (remaining scope)
+      - AC1 (10): gitlinks, submodules, symlinks and other non-regular entries are SKIPPED from the review inventory with a named reason, never followed or read through. Tests for each kind.
+      - AC2 (12): --specs resolves store IDs ONLY through the trusted store (never from PR-controlled files), with a refusal on unknown IDs. Tests.
+      - AC3 (2)(6): PROOF tests for pinned-root confinement on reads AND writes, including a concurrent re-parent / symlink swap.
+      - AC4 (13): a lossless non-UTF-8 path round trip, with escaping, proven by a test.
+      <=300 lines; lane after STORY-3120 S5c merges (same files).
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
