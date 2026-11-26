@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:50:49.914099231Z
-modified_at: 2026-11-26T20:30:05.451778209Z
+modified_at: 2026-11-26T20:32:06.955296520Z
 req_type: Task
 tags:
 - review-watch
@@ -31,6 +31,26 @@ comments:
   modified_at: 2026-11-26T20:19:30.562512975Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2198e-ed2b-7142-888b-a3a680ddabb7
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, review_watch select_with_probes):** compute the pause before the reclaim; skip `reclaim_tree` when paused or `pickup_retries >= 3`. Tests in `task_1993_review_watch_tests.rs`: paused → reclaim closure never called; capped → never called.
+    - **AC2 (unit):** a capped held-tree attempt is reported as `Admission::Held { retained: true, why: "pickup retry cap reached" }` so it enters the pass report's retained list; `retained_blocks` surfaces a cap entry immediately (no 30-min wait) with the existing fix line (inspect checkout, `aida session end --branch`, `aida review watch --release`). New `RetainedReview::Reclaimed` variant distinguishes an actual reclaim from a free branch; a reclaim followed by a dispatched retry resets `pickup_retries` to 0. Tests: capped → no reclaim + surfaced (retained_blocks); reclaim + pickup → `pickup_retries == 0`.
+    - **AC3 (fixture, bug_2457_review_repickup_tests.rs):** drive the REAL `reclaim_retained_review_tree` with a recording fake `aida` installed through the `aida_exe_path` test seam (`kernel::test_aida_exe`; `aida_exe_path` does not consult PATH, so the per-thread seam is the honest equivalent), exiting non-zero: assert argv `session end <lease> --yes --skip-ci`, result `Kept("reclaim check failed: session end refused: <stderr tail>")`, checkout still present. No network (fake gh).
+
+    ### Expected files
+    - `aida-cli-lib/src/review_watch.rs`, `aida-cli-lib/src/queue_cmd/work.rs`, `aida-cli-lib/src/advisor_loop_service.rs`
+    - `aida-cli-lib/src/tests/task_1993_review_watch_tests.rs`, `aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - AC3 says "no dispatch, the hold kept": the real-subprocess test asserts at the reclaim function level (Kept + tree present + named cause); the select-level no-dispatch with a Kept result is already covered by the BUG-2776 dirty case. Acceptable?
+  created_at: 2026-11-26T20:32:06.955296520Z
+  modified_at: 2026-11-26T20:32:06.955296520Z
+  session_id: 01a2198cd2c9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21981-6588-7e10-93e8-353bc7d2488d
   author: joe
