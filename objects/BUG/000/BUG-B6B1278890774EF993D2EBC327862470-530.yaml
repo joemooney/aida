@@ -1,0 +1,31 @@
+id: 01a216f5-be0d-7222-9523-9e270c9b9e46
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-530
+agreed_id: BUG-2769
+title: Auto-train holds the admission lock while idle (no train in flight), starving manual trains
+description: |
+  advisor-122 2026-11-26 01:27 (filed by product-15). The auto-train holds the admission lock while IDLE, with no train in flight. (1) 2025-11-25 20:00-20:11: pid 2725221 held admission 11 min with no train PR; Joe approved killing it. (2) 2026-11-26 01:15-01:25: pid 293658 has held admission 10+ min with no open train PR while Joe's manual train for #4464 (pid 359733) waits. BUG-2765 (review-watch forge reads) and BUG-2767 (culprit/drain) are both live, so this is a separate gap in the auto-train's own lock lifetime.
+
+  ## Acceptance
+  - AC1: the auto-train takes admission ONLY while assembling or running a train, and releases it between polls (idle = no lock held).
+  - AC2: a manual `aida pr train N` waiting on an idle auto-train is admitted within one auto-train poll interval.
+  - AC3: a test: an idle auto-train loop does not hold admission across polls, and a contending manual train is admitted.
+  - AC4: a log/status line names the holder and the phase whenever the auto-train holds admission for more than N seconds.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T08:25:33.453173985Z
+modified_at: 2026-11-26T08:25:33.453173985Z
+req_type: Bug
+tags:
+- admission
+- landing
+- throughput
+- train
+filed_at:
+  code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cb984b75d1
+  vendor: claude
