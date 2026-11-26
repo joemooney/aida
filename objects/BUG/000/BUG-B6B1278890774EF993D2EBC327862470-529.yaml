@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T04:15:09.651417894Z
+modified_at: 2026-11-26T04:18:14.171845543Z
 req_type: Bug
 tags:
 - ci
@@ -32,6 +32,28 @@ comments:
   modified_at: 2026-11-26T04:12:06.555554921Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21613-501b-7f43-b337-d627c7b5ddb6
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (manual-inspection + CI evidence):** job metadata for run 45747748433 job 139667847339 (exit 143 at 3m44s into `Run tests`, i.e. during the dev-profile `cargo test --list` build of the aida-cli-lib test binary) and #4569 job 139574004800 (Run tests stalled 37 min vs a healthy ~14.5 min, killed at the 40-min cap). Raw job logs are unreachable from this lane (blob host sandbox-denied). Consistent with VM memory exhaustion/thrash but not proven; the new resource watch logs MemAvailable/swap peaks per lane so the PR's own CI runs confirm or refute it.
+    - **AC2 (behavioral, CI):** hosted lib shards build with `CARGO_PROFILE_DEV_DEBUG=line-tables-only` (full DWARF on the largest crate dominates rustc/link RSS). Three consecutive green lib-1 runs must come from CI on the PR; not provable locally.
+    - **AC3 (behavioral, unit):** `ci-test-shards.py` resource watch: MemAvailable under `AIDA_CI_MEM_FLOOR_MIB` for 3 samples, or `AIDA_CI_TEST_DEADLINE_SECS` elapsed, prints `::error::CI (<shard>): ...` naming cause and kills the process group. Unit tests in `tests/test_ci_test_shards.py` (fake meminfo/clock + a real child killed on deadline).
+
+    ### Expected files
+    - `.github/workflows/ci.yml`
+    - `scripts/ci-test-shards.py`
+    - `scripts/ci-gate-tiers.toml`
+    - `tests/test_ci_test_shards.py`
+
+    ### Ambiguities / conflicts as questions
+    - Dell1 (self-hosted) lanes keep their seeded profile; the debuginfo change and memory floor apply only to hosted runners, deadline applies everywhere. OK?
+  created_at: 2026-11-26T04:18:14.171845543Z
+  modified_at: 2026-11-26T04:18:14.171845543Z
+  session_id: 01a216104e2c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
