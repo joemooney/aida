@@ -133,6 +133,9 @@ pub struct ProjectReviewRulesConfig {
     pub default_effort: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Effort for the `--adversarial` challenger pass, validated the same way.
+    #[serde(default)]
+    pub challenger_effort: Option<String>,
 }
 
 /// A single path-scoped rule entry in `.aida/review-rules.toml`.
@@ -1401,10 +1404,22 @@ where
 /// GitHub Code Scanning (`github/codeql-action/upload-sarif`).
 // trace:STORY-3120 | ai:codex
 pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Value {
+    findings_to_sarif_json_with_suppressed(findings, &[])
+}
+
+/// As [`findings_to_sarif_json`], plus `suppressed` findings, each with its
+/// justification, emitted as SARIF results carrying an `external` suppression
+/// rather than dropped. trace:STORY-3120 | ai:claude
+pub fn findings_to_sarif_json_with_suppressed(
+    findings: &[RawReviewFinding],
+    suppressed: &[(RawReviewFinding, String)],
+) -> serde_json::Value {
     let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
     let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len());
+    let rows = (findings.iter().map(|f| (f, None)))
+        .chain(suppressed.iter().map(|(f, why)| (f, Some(why))));
 
-    for f in findings {
+    for (f, justification) in rows {
         let cat_clean = if f.category.trim().is_empty() {
             "general"
         } else {
@@ -1455,7 +1470,7 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
 
         // SARIF 2.1 §3.11.5 requires doubling literal braces in message strings.
         let message_text = message_text.replace('{', "{{").replace('}', "}}");
-        results.push(serde_json::json!({
+        let mut result = serde_json::json!({
             "ruleId": rule_id,
             "level": level,
             "message": {
@@ -1475,7 +1490,12 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
                     }
                 }
             ]
-        }));
+        });
+        if let Some(why) = justification {
+            result["suppressions"] =
+                serde_json::json!([{"kind": "external", "justification": why}]);
+        }
+        results.push(result);
     }
 
     let rules: Vec<serde_json::Value> = rules_map.into_values().collect();

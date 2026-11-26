@@ -695,6 +695,34 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
     );
 }
 
+/// The retention dry run names leftovers its owner scope held as kept, never
+/// as something `aida agent gc` would remove.
+// trace:TASK-3918 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3918_retention_report_keeps_held_leftovers_out_of_the_reapable_count() {
+    use aida_core::mailbox_lifecycle::leftovers::{HeldLeftover, Leftovers, OwnerLiveness};
+    let held = Leftovers {
+        held: vec![
+            HeldLeftover {
+                path: "/w/.aida/.mailbox-tomb-a".into(),
+                owner: OwnerLiveness::Live,
+            },
+            HeldLeftover {
+                path: "/w/.aida/.mailbox.creating.b".into(),
+                owner: OwnerLiveness::Unknown,
+            },
+        ],
+        ..Default::default()
+    };
+    let lines = crate::mailbox_cmd::retention_leftover_lines(&held);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("2 leftover(s) kept: their owner is live"),
+        "{lines:?}"
+    );
+}
+
 /// `aida agent gc` judges each leftover's owner: a live or dormant lease, or a
 /// live process inside the checkout, keeps it; an unjudgeable lease, an
 /// unattributed leftover or an incomplete view is unknown and kept; only an
