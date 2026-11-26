@@ -28,6 +28,7 @@ pub(crate) mod parent;
 // Consumed by slice C's renderers. trace:STORY-2326 | ai:claude
 #[allow(dead_code)]
 pub(crate) mod resources;
+pub(crate) mod review_runner;
 pub(crate) mod spawn;
 
 pub(crate) use context::{LaunchContext, LaunchRefusal, LaunchRequest};

@@ -1,6 +1,7 @@
 //! Vendor-facing rendering and effectful launch adapters over the core registry.
 // trace:STORY-2539 | ai:codex
 pub(crate) mod profile;
+pub(crate) mod review_runner;
 
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
 
