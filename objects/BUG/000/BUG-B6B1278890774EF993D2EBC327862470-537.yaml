@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T19:09:55.259555206Z
+modified_at: 2026-11-26T19:10:37.604661581Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -110,6 +110,12 @@ comments:
   content: Implementer push 1eba036e95ff declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T19:09:55.259554342Z
   modified_at: 2026-11-26T19:09:55.259554342Z
+  session_id: 01a218e28a8c
+- id: 01a21944-5224-75b0-93e9-0bd066502117
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2776-rw-reclaim-held` at head `1eba036e95ffbc060aba8b5844232897f0def674`.'
+  created_at: 2026-11-26T19:10:37.604657851Z
+  modified_at: 2026-11-26T19:10:37.604657851Z
   session_id: 01a218e28a8c
 history:
 - id: 01a218dd-3006-7b12-a565-eb8e5e0a12d8
