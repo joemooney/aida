@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:55:19.345403417Z
-modified_at: 2026-11-26T05:29:58.968183178Z
+modified_at: 2026-11-26T05:30:35.875546640Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -37,6 +37,12 @@ comments:
   modified_at: 2026-11-26T04:21:12.127529709Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21655-8fe3-7a41-9a56-e2a74af0f854
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `lane-hosts-non-utf8` at head `68ecbd824098731929e8aeec11fb3525bc342558`.'
+  created_at: 2026-11-26T05:30:35.875543166Z
+  modified_at: 2026-11-26T05:30:35.875543166Z
+  session_id: 01a21651638d
 history:
 - id: 01a21493-ae4d-74b1-82ba-a2bb2bee369b
   author: joe
