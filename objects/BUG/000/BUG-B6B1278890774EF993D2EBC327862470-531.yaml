@@ -15,12 +15,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-26T09:45:27.604365843Z
+modified_at: 2026-11-26T09:47:56.156300404Z
 req_type: Bug
 tags:
 - agents
 - dell1
 - mail
+comments:
+- id: 01a21741-6431-7fa3-8ac4-388b73689d40
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:47):
+    # BUG-2770: aida agent gc cannot scope mailbox leftovers by age or live session (advisor-122 01:53; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2770-gc-scope. STANDARD. <=200 lines. Completing (BUG-2770) trailer.
+    READ: `aida show BUG-2770` (evidence + AC1-AC4). AC1: never remove leftovers whose owning session/lease is live. AC2: --older-than applies to mailbox leftover files too. AC3: the dry run marks each candidate live/dead/unknown, and unknown is skipped (fail-safe). AC4: tests.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T09:47:56.156300404Z
+  modified_at: 2026-11-26T09:47:56.156300404Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2173e-e582-7153-b482-a9c2c1f63d41
   author: joe
