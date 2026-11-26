@@ -110,6 +110,12 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "LEVEL", requires = "adversarial")]
     pub challenger_effort: Option<String>,
 
+    /// Challenger agent for `--adversarial`: `claude` or `codex`. Overrides
+    /// the automatic pick, which commit `[AI:<tool>]` tags steer.
+    // trace:STORY-3120 | ai:claude
+    #[clap(long, value_name = "AGENT", requires = "adversarial")]
+    pub challenger_agent: Option<String>,
+
     /// Write a SARIF 2.1.0 report inside the repository.
     #[clap(long, value_name = "PATH", requires = "findings_source")]
     pub sarif: Option<PathBuf>,
@@ -306,6 +312,9 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         // trace:STORY-3120 | ai:claude
         let parent_env = Environment::capture().to_pairs();
         let agent = args.agent.as_deref().map(review_vendor).transpose()?;
+        let forced = (args.challenger_agent.as_deref().map(review_vendor))
+            .transpose()
+            .context("--challenger-agent")?;
         let mut call = RunnerCall {
             agent,
             checkout: &project_root,
@@ -320,11 +329,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         call.tuning = resolve_for_run(call.vendor(), &parent_env, flags, trusted)?;
         let (base, head) = (merge_base.as_deref(), head_ref.as_deref());
         let range = format!("{}..{}", base.unwrap_or_default(), head.unwrap_or_default());
-        // A credential file's old content never reaches a runner, renamed or not.
-        let renames: BTreeMap<&str, &str> = (inventory.reviewable_files.iter())
-            .filter_map(|f| Some((f.path.as_str(), f.old_path.as_deref()?)))
-            .filter(|(_, old)| !aida_core::review_engine::is_credential_path(old))
-            .collect();
+        let renames = rename_sources(&inventory, &excludes);
         let prompt = |batch: &ReviewBatch| {
             batch_prompt(
                 &project_root,
@@ -346,7 +351,8 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             ];
             let authors = challenger::detect_ai_authors(&git_text(&project_root, &log)?);
             let effort = args.challenger_effort.as_deref();
-            let (pass, summary) = challenger::challenger_call(&call, &authors, effort, trusted)?;
+            let (pass, summary) =
+                challenger::challenger_call(&call, &authors, forced, effort, trusted)?;
             if let Some(note) = &summary.note {
                 eprintln!("adversarial review: {note}");
             }
@@ -652,6 +658,22 @@ fn run_review_base<'a>(mode: &str, merge_base: Option<&'a str>) -> Result<&'a st
     }
 }
 
+/// Reviewable renames whose old path passes every inventory exclusion
+/// (secret, substrate, generated, user pattern); only those old paths reach
+/// a runner's diff. Inventory already drops such renames; this keeps the
+/// prompt safe on its own. trace:STORY-3120 | ai:claude
+fn rename_sources<'a>(
+    inventory: &'a ClassifiedInventory,
+    excludes: &[(&str, CompiledGlob)],
+) -> BTreeMap<&'a str, &'a str> {
+    (inventory.reviewable_files.iter())
+        .filter_map(|f| Some((f.path.as_str(), f.old_path.as_deref()?)))
+        .filter(|(_, old)| {
+            aida_core::review_engine::classify_path_exclusion(old, excludes).is_none()
+        })
+        .collect()
+}
+
 fn ensure_in_inventory(inventory: &ClassifiedInventory, found: &[RawReviewFinding]) -> Result<()> {
     let allowed: BTreeSet<_> = inventory
         .reviewable_files
@@ -764,9 +786,19 @@ fn review_batches(
         }
         let rows = match challenge {
             Some(pass) if !rows.is_empty() => {
+                // Fail closed with the cause: an unauthenticated or
+                // rate-limited challenger never lets findings through
+                // unchallenged. trace:STORY-3120 | ai:claude
+                let who = pass.vendor().map_or("the custom runner", |v| v.program);
                 let out = pass
                     .run(&challenger::challenge_prompt(&rows, &context)?)
-                    .with_context(|| format!("challenge batch {}", i + 1))?;
+                    .with_context(|| {
+                        format!(
+                            "challenge batch {}: challenger {who} failed; if it is not \
+                             signed in or is rate-limited, pick another with --challenger-agent",
+                            i + 1
+                        )
+                    })?;
                 let (kept, dropped) = challenger::apply_verdicts(rows, &out)
                     .with_context(|| format!("challenge batch {} output", i + 1))?;
                 refuted.extend(dropped);
@@ -1177,11 +1209,12 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         for spec in &bundle.linked_specs {
             push(
                 format!(
-                    "### {} — {} ({})\n\n{}\n\n",
+                    "### {} — {} ({})\n\n{}\n",
                     code_span(&aida_core::node_alias::display_spec_id(&spec.spec_id)),
                     code_span(&spec.title),
                     code_span(&spec.status),
-                    spec.acceptance_markdown
+                    // Spec text is fenced, as agent text is. trace:STORY-3120 | ai:claude
+                    fenced(&spec.acceptance_markdown)
                 ),
                 0,
             );
@@ -1241,11 +1274,11 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         for pb in &bundle.playbooks {
             push(
                 format!(
-                    "### Playbook {} — {} ({})\n\n{}\n\n",
+                    "### Playbook {} — {} ({})\n\n{}\n",
                     code_span(&pb.id),
                     code_span(&pb.title),
                     code_span(&pb.pattern),
-                    pb.checklist
+                    fenced(&pb.checklist)
                 ),
                 0,
             );
@@ -1988,6 +2021,80 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             sent.contains("rename from old.rs") && sent.contains("+fn c() { x }"),
             "{sent}"
         );
+        // A challenger that is signed out or rate-limited refuses the run,
+        // naming its cause and the override. trace:STORY-3120 | ai:claude
+        let body = format!(
+            "#!/bin/sh\ncat >/dev/null\nif [ \"$AIDA_REVIEW_PASS\" = challenger ]; then \
+             echo 'rate limit exceeded' >&2; exit 1; else echo '{finder}'; fi\n"
+        );
+        std::fs::write(&src, body).unwrap();
+        let mut install = Command::new("install");
+        let status = install.arg("-m755").args([&src, &runner]).status();
+        assert!(status.unwrap().success());
+        let err = format!("{:#}", handle_review_prepare(&args, &store).unwrap_err());
+        for want in [
+            "challenger the custom runner failed",
+            "--challenger-agent",
+            "rate limit",
+        ] {
+            assert!(err.contains(want), "{want}: {err}");
+        }
+    }
+
+    /// A rename's old path reaches the runner's diff only when it passes
+    /// every inventory exclusion, not only the credential one.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5c_rename_old_paths_apply_every_inventory_exclusion() {
+        let file = |path: &str, old: &str| aida_core::review_engine::ReviewableFile {
+            path: path.into(),
+            old_path: Some(old.into()),
+            kind: FileChangeKind::Renamed,
+            additions: 1,
+            deletions: 1,
+            estimated_tokens: 10,
+            playbook_id: "default".into(),
+            has_trace_comment: false,
+        };
+        let olds = [
+            ".env",
+            ".aida/sessions/s.rs",
+            "Cargo.lock",
+            "legacy/a.rs",
+            "was.rs",
+        ];
+        let inventory = ClassifiedInventory {
+            reviewable_files: (olds.iter().enumerate())
+                .map(|(i, old)| file(&format!("n{i}.rs"), old))
+                .collect(),
+            excluded_files: Vec::new(),
+            inventory_sha256: String::new(),
+        };
+        let patterns = ["legacy/*".to_owned()];
+        let excludes = compile_exclusions(&patterns).unwrap();
+        let kept = rename_sources(&inventory, &excludes);
+        assert_eq!(kept, BTreeMap::from([("n4.rs", "was.rs")]));
+        // Inventory classification drops the same renames on its own.
+        let entries: Vec<_> = (inventory.reviewable_files.iter())
+            .map(|f| RawDiffEntry {
+                path: f.path.clone(),
+                old_path: f.old_path.clone(),
+                kind: f.kind,
+                additions: 1,
+                deletions: 1,
+                is_binary: false,
+                patch_bytes: 10,
+            })
+            .collect();
+        let registry = PlaybookRegistry::default();
+        let classified =
+            classify_with_exclusions(&entries, &registry, &excludes, 1 << 20, |_| false);
+        let reviewable: Vec<_> = classified
+            .reviewable_files
+            .iter()
+            .map(|f| &f.path)
+            .collect();
+        assert_eq!(reviewable, ["n4.rs"]);
     }
 
     /// End to end: `--run-review` takes its rules from the merge base (the
@@ -2239,11 +2346,15 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let bundle = ReviewPreparationBundle {
             mode: "range".into(),
             base_ref: None,
-            head_ref: None,
+            head_ref: Some("@head <b>".into()),
             merge_base: None,
             inventory: ClassifiedInventory {
                 reviewable_files: Vec::new(),
-                excluded_files: Vec::new(),
+                excluded_files: vec![aida_core::review_engine::ExcludedFile {
+                    path: "@excl <b>".into(),
+                    kind: FileChangeKind::Modified,
+                    reason: "@reason [x](http://e)".into(),
+                }],
                 inventory_sha256: String::new(),
             },
             // Spec and playbook titles and ids render as code, too.
@@ -2258,14 +2369,14 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 id: "@pb".into(),
                 title: hostile.into(),
                 pattern: "@glob <b>".into(),
-                checklist: "- check".into(),
+                checklist: format!("@check {hostile}"),
                 active_facets: Vec::new(),
             }],
             linked_specs: vec![LinkedSpecAcceptance {
                 spec_id: "STORY-1".into(),
                 title: hostile.into(),
                 status: "@status".into(),
-                acceptance_markdown: "- ok".into(),
+                acceptance_markdown: format!("- @accept {hostile}"),
             }],
             coverage_verification: None,
             anchored_findings: Some(vec![finding.clone()]),
@@ -2274,6 +2385,8 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                     finding,
                     reason: format!("{hostile}\r\n@admin"),
                 }],
+                challenger_agent: Some("@agent <b>".into()),
+                note: Some("@note **bold**\n# heading".into()),
                 ..Default::default()
             }),
         };
@@ -2294,6 +2407,13 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             "@pb",
             "@glob",
             "@status",
+            "@head",
+            "@excl",
+            "@reason",
+            "@check",
+            "@accept",
+            "@agent",
+            "@note",
             "<img",
             "<b>",
             "**bold**",
@@ -2443,7 +2563,11 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert_eq!(argv.trim(), "pr comment 9 --body-file - -R acme/widgets");
         let body = std::fs::read_to_string(root.join("body")).unwrap();
         assert!(body.starts_with("# AIDA Deterministic Review Preparation"));
-        fake("sleep 30\n");
+        let pids = root.join("pids");
+        fake(&format!(
+            "echo $$ > '{0}'\nsleep 30 &\necho $! >> '{0}'\nwait\n",
+            pids.display()
+        ));
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_secs(1);
         let err = crate::forge_lookup::with_forge_lookup_deadline(budget, || {
@@ -2451,6 +2575,45 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         });
         assert!(format!("{err:#}").contains("timed out"), "{err:#}");
         assert!(started.elapsed() < std::time::Duration::from_secs(15));
+        // The killed gh and its child are gone, not orphaned. trace:STORY-3120 | ai:claude
+        let pids = std::fs::read_to_string(&pids).unwrap();
+        let pids: Vec<&str> = pids.split_whitespace().collect();
+        assert_eq!(pids.len(), 2, "{pids:?}");
+        // `ps` prints nothing for a reaped pid and `Z` for a zombie.
+        let running = |pid: &str| {
+            let out = Command::new("ps").args(["-o", "stat=", "-p", pid]).output();
+            let state = String::from_utf8(out.unwrap().stdout).unwrap();
+            !state.trim().is_empty() && !state.trim().starts_with('Z')
+        };
+        let settle = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while pids.iter().any(|p| running(p)) && std::time::Instant::now() < settle {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(!pids.iter().any(|p| running(p)), "orphaned: {pids:?}");
+        // gh failing without reading stdin is a failed post with its stderr.
+        crate::test_exec::write_executable(&gh, "#!/bin/sh\necho 'auth required' >&2\nexit 4\n");
+        let err = format!(
+            "{:#}",
+            post_review_comment(&forge, 9, &bundle, "r.md").unwrap_err()
+        );
+        assert!(
+            err.contains("gh pr comment failed for #9: auth required"),
+            "{err}"
+        );
+        // A spawn failure keeps its errno.
+        std::fs::remove_file(&gh).unwrap();
+        std::fs::write(&gh, "#!/bin/sh\n").unwrap();
+        let err = format!(
+            "{:#}",
+            post_review_comment(&forge, 9, &bundle, "r.md").unwrap_err()
+        );
+        assert!(err.contains("os error 13"), "EACCES: {err}");
+        env.set_key("AIDA_TEST_GH_BINARY", &root.join("missing-gh"));
+        let err = format!(
+            "{:#}",
+            post_review_comment(&forge, 9, &bundle, "r.md").unwrap_err()
+        );
+        assert!(err.contains("os error 2"), "ENOENT: {err}");
     }
 
     /// A cut inside a `~~~` fence closes it with tildes; an inline triple
