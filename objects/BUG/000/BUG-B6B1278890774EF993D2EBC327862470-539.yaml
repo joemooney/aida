@@ -9,12 +9,12 @@ description: |
   - AC1: a PRE-START mail-retention refusal from the writer-admission scan is RETRYABLE: the launch waits with bounded backoff (e.g. 3 tries over about 5 min), re-runs the fresh scan, and proceeds once every writer is verified; it ends the lane only after the retries are spent, with the unverified writer pids/binaries named in the error.
   - AC2: the error names WHICH writer could not be verified (pid, comm, and binary sha or "(deleted)").
   - AC3: tests: transient unverified → verified on retry → launch proceeds; persistently unverified → a refusal naming the writer.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T19:25:12.061197557Z
+modified_at: 2026-11-26T21:03:41.677447514Z
 req_type: Bug
 tags:
 - lanes
@@ -52,6 +52,13 @@ history:
   author: joe
   timestamp: 2026-11-26T19:22:53.645409180Z
   changes: []
+- id: 01a219ab-d66d-7ed0-9686-b1c906f2915b
+  author: aida-session-start
+  timestamp: 2026-11-26T21:03:41.677446630Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
