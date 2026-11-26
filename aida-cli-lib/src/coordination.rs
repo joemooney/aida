@@ -709,7 +709,11 @@ pub(crate) fn exited_holder_is_dead(holder: &Claim, now: DateTime<Utc>) -> bool 
     }
     // An older exit stamp cannot override a lease rebound to a live worker.
     let Some(id) = holder.lease_id.as_deref() else {
-        return false;
+        // An unbound claim names no lease, so no lane record or local lease
+        // can bind a worker to it (lanes register only with a lease). The dead
+        // creator and expired heartbeat are the whole evidence, provided its
+        // clone is present here. trace:BUG-2773 | ai:claude
+        return Path::new(&holder.clone_path).join(".aida").is_dir();
     };
     let lease = match crate::leases::read_exact_lease(Path::new(&holder.clone_path), id) {
         Ok(lease) => lease,
@@ -744,10 +748,11 @@ pub(crate) fn exited_holder_is_dead(holder: &Claim, now: DateTime<Utc>) -> bool 
 // trace:BUG-2655 | ai:codex
 fn salvage_exited_claim(holder: &Claim) -> Result<()> {
     let root = Path::new(&holder.clone_path);
-    let id = holder
-        .lease_id
-        .as_deref()
-        .context("claim has no lease binding")?;
+    // An unbound claim names no lease and so no seat: nothing to salvage.
+    // trace:BUG-2773 | ai:claude
+    let Some(id) = holder.lease_id.as_deref() else {
+        return Ok(());
+    };
     let tree = match crate::leases::read_exact_lease(root, id)? {
         Some(lease) => lease.worktree_path,
         // No agent ever ran for this generation, so it wrote nothing to
@@ -852,17 +857,40 @@ fn bound_holder_is_dead(holder: &Claim, clone_path: &Path) -> bool {
     crate::worktree_gc::lease_is_dead(&lease, facts)
 }
 
+/// The `aida doctor heal stale-leases --id` target for a shared claim, only
+/// when that heal would release it here. The single eligibility predicate for
+/// the doctor finding, the targeted heal and the admission refusal hint.
+// trace:BUG-2773 | ai:claude
+pub(crate) fn shared_heal_id(claim: &Claim, now: DateTime<Utc>) -> Option<String> {
+    let id = claim.claim_id.as_deref()?;
+    exited_holder_is_dead(claim, now).then(|| format!("shared-{id}"))
+}
+
 // A holder without exact death evidence retains Unknown. Legacy claims carry
 // no lease binding at all; bound claims name the lease they were minted for.
 // trace:BUG-2586 | ai:codex
 fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
+    // Prescribe the heal only when the heal path would accept it.
+    // trace:BUG-2773 | ai:claude
+    let next = match shared_heal_id(holder, Utc::now()) {
+        Some(id) => format!(
+            "release this expired exited holder with \
+             `aida doctor heal stale-leases --id {id} --yes`"
+        ),
+        None if holder.host != hostname() => format!(
+            "on host {}, heal the holder only if `aida doctor check leases` lists it",
+            holder.host
+        ),
+        None => "the holder is not eligible for `aida doctor heal stale-leases` \
+                 (it needs an expired heartbeat and a dead creator)"
+            .to_string(),
+    };
     format!(
         "implementer admission refused for `{scope}`: holder state Unknown; \
          host={}, worker PID=unknown, lease={}, launcher=unbound, agent={}, clone={}, \
          invocation={}, creator PID={} (not worker evidence). Shared claim: {}. \
          --force-claim requires positive death evidence for the exact holder. \
-         Inspect `aida doctor check leases`; release this expired exited holder with \
-         `aida doctor heal stale-leases --id shared-{} --yes` from its host",
+         Inspect `aida doctor check leases`; {next}",
         holder.host,
         holder.lease_id.as_deref().unwrap_or("unbound"),
         holder.agent,
@@ -870,7 +898,6 @@ fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
         holder.claim_id.as_deref().unwrap_or("legacy-unbound"),
         holder.pid,
         path.display(),
-        holder.claim_id.as_deref().unwrap_or("legacy-unbound"),
     )
 }
 
@@ -2310,10 +2337,10 @@ mod tests {
             )
             .unwrap_err()
             .to_string();
-            assert!(
-                error.contains("aida doctor heal stale-leases --id shared-dead-generation --yes"),
-                "{error}"
-            );
+            // A refusal never prescribes a heal the heal path would refuse.
+            // trace:BUG-2773 | ai:claude
+            assert!(!error.contains("doctor heal stale-leases --id"), "{error}");
+            assert!(error.contains("not eligible for"), "{error}");
             assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
         }
     }
@@ -2636,6 +2663,64 @@ mod tests {
         );
     }
 
+    // The dell1 claim: lease=unbound, launcher=unbound, a dead creator with a
+    // legacy start identity, heartbeat 2026-11-15, recorded on this host for
+    // a clone present here. Admission names the heal; check lists it; the
+    // targeted heal releases it. trace:BUG-2773 | ai:claude
+    #[test]
+    fn bug2773_unbound_claim_with_dead_creator_is_listed_and_healed() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, mut holder) = bug2697_never_spawned_fixture(dir.path());
+        holder.claim_id = Some("7e3e3d5a-f42d-4ada-bf2a-49674c0b976e".into());
+        holder.lease_id = None;
+        holder.pid_start_time = Some("linux-starttime:6708816".into());
+        holder.started_at = "2026-11-15T14:40:00Z".into();
+        holder.heartbeat_at = "2026-11-15T14:47:00Z".into();
+        std::fs::write(
+            claim_path(&store, &holder.scope),
+            toml::to_string(&holder).unwrap(),
+        )
+        .unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "unbound claim").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        let id = "shared-7e3e3d5a-f42d-4ada-bf2a-49674c0b976e";
+        assert_eq!(shared_heal_id(&holder, Utc::now()).as_deref(), Some(id));
+        let error = acquire_claim_bound(
+            &store,
+            &holder.scope,
+            dir.path(),
+            "claude",
+            false,
+            false,
+            Some("new-lease"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("lease=unbound, launcher=unbound"), "{error}");
+        assert!(
+            error.contains(&format!("aida doctor heal stale-leases --id {id} --yes")),
+            "{error}"
+        );
+        let findings = crate::doctor_root::collect_doctor_findings_at(
+            dir.path(),
+            &aida_core::RequirementsStore::default(),
+            Some("leases"),
+            Path::new("/proc"),
+            None,
+        )
+        .unwrap();
+        let finding = findings.iter().find(|f| f.id == id).expect("listed");
+        assert!(finding.safe_heal);
+        let (targeted, _) = crate::doctor_root::targeted_stale_finding(dir.path(), id)
+            .unwrap()
+            .expect("the prescribed heal accepts it");
+        assert_eq!(targeted.action, finding.action);
+        assert!(heal_exited_claim(&store, &holder).unwrap());
+        assert!(!claim_path(&store, &holder.scope).exists());
+    }
+
     #[test]
     // trace:BUG-2697 | ai:claude
     fn bug2697_failed_start_without_rollback_releases_only_its_own_claim() {
@@ -2724,7 +2809,7 @@ mod tests {
         changed = holder.clone();
         changed.pid_namespace = Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1);
         assert!(refused(&changed));
-        // Another host, a process-backed lock, a reviewer claim, no lease binding.
+        // Another host, a process-backed lock, a reviewer claim.
         changed = holder.clone();
         changed.host = "other-host".into();
         assert!(refused(&changed));
@@ -2734,12 +2819,12 @@ mod tests {
         changed = holder.clone();
         changed.review_verb = true;
         assert!(refused(&changed));
-        changed = holder.clone();
-        changed.lease_id = None;
-        assert!(refused(&changed));
-        // A clone that is not present here proves nothing.
+        // A clone that is not present here proves nothing, bound or unbound.
+        // trace:BUG-2773 | ai:claude
         changed = holder.clone();
         changed.clone_path = dir.path().join("absent-clone").display().to_string();
+        assert!(refused(&changed));
+        changed.lease_id = None;
         assert!(refused(&changed));
         // A lane record means a worker was spawned: its exit is required.
         let record = clone.join(".aida/lanes/headless-01a1f4f93790.json");
