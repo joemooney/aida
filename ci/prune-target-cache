@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+
+# Bound this job's slot-local Cargo target cache before it builds.
+#
+# CARGO_INCREMENTAL=1 is deliberate (STORY-1216), but rustc never removes an
+# incremental crate directory whose hash stopped being used (new flags, new
+# toolchain, renamed crate), so /ci-cache/target-v2-<slot> grew without bound:
+# 255G across two slots on the runner host, 119G of it under debug/incremental.
+#
+# Race-free by construction: CARGO_TARGET_DIR is keyed by CI_CONCURRENT_ID, and
+# the runner gives a concurrent slot to one job at a time, so no other job can
+# hold this directory while this pre-job step runs.
+#
+#   1. Age: remove incremental crate dirs untouched for more than
+#      AIDA_CI_CACHE_MAX_AGE_DAYS (default 7). rustc writes a new session dir
+#      into the crate dir on every compile, so the crate dir's mtime is its
+#      last use.
+#   2. Size: while the slot exceeds AIDA_CI_CACHE_SLOT_CAP_GIB (default 60),
+#      remove the least recently used incremental crate dirs. If the slot is
+#      still above the cap with no incremental state left, clear the slot
+#      (one cold build) rather than let it grow.
+# trace:TASK-3910 | ai:claude
+target=${CARGO_TARGET_DIR:?CARGO_TARGET_DIR must identify the slot-local cache}
+age_days=${AIDA_CI_CACHE_MAX_AGE_DAYS:-7}
+cap_kib=${AIDA_CI_CACHE_SLOT_CAP_KIB:-$(( ${AIDA_CI_CACHE_SLOT_CAP_GIB:-60} * 1024 * 1024 ))}
+
+if ! test -d "$target"; then
+    echo "prune-target-cache: $target does not exist yet; nothing to prune"
+    exit 0
+fi
+
+before=$(du -sk "$target" | cut -f1)
+size=$before
+cutoff=$(( $(date +%s) - age_days * 86400 ))
+aged=0
+lru=0
+
+# Incremental crate dirs (debug/incremental, release/incremental and
+# <triple>/<profile>/incremental), least recently used first, as
+# "<mtime-seconds> <path>" lines. One pass: aged dirs go regardless of size,
+# newer ones only while the slot is above the cap.
+list=$(mktemp)
+find "$target" -mindepth 2 -maxdepth 3 -type d -name incremental -print |
+    while IFS= read -r inc; do
+        find "$inc" -mindepth 1 -maxdepth 1 -type d -printf '%Ts %p\n'
+    done | sort -n > "$list"
+while IFS=' ' read -r mtime dir; do
+    if test "$mtime" -lt "$cutoff"; then
+        aged=$((aged + 1))
+    elif test "$size" -gt "$cap_kib"; then
+        lru=$((lru + 1))
+    else
+        break
+    fi
+    freed=$(du -sk "$dir" | cut -f1)
+    rm -rf "$dir"
+    size=$((size - freed))
+done < "$list"
+rm -f "$list"
+
+if test "$size" -gt "$cap_kib"; then
+    echo "prune-target-cache: $target is ${size} KiB with no incremental state left, above the ${cap_kib} KiB cap; clearing the slot"
+    find "$target" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    size=0
+fi
+
+echo "prune-target-cache: $target ${before} KiB -> ${size} KiB (cap ${cap_kib} KiB); removed $aged aged and $lru LRU incremental dirs"

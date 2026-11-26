@@ -82,6 +82,11 @@ default:
   # pull_policy if-not-present. Bump the tag together with ci/Dockerfile.
   image: localhost/aida-ci:1.92-2
   before_script:
+    # Bound this slot's target cache before building: incremental crate dirs
+    # older than 7 days go, then LRU ones while the slot is above 60 GiB.
+    # Override with AIDA_CI_CACHE_MAX_AGE_DAYS / AIDA_CI_CACHE_SLOT_CAP_GIB.
+    # trace:TASK-3910 | ai:claude
+    - ci/prune-target-cache
     - ci/restore-git-mtimes
 
 # Shared rules for the merge gates (verify / test / bwrap-confinement): MR

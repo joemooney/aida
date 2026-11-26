@@ -18,7 +18,7 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
             .map(|s| s.avail)
             .or_else(|| disk_free_bytes(p))
     };
-    disk_headroom_light_report_finish(
+    let mut report = disk_headroom_light_report_finish(
         project_root,
         cfg.as_ref(),
         scheduled,
@@ -38,7 +38,12 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
             };
             (reclaimable, top)
         },
-    )
+    );
+    // Outside the injected halves: the walk is host state, measured once per run.
+    // trace:TASK-3910 | ai:claude
+    report.findings.extend(ci_cache_findings(cfg.as_ref()));
+    report.total = report.findings.len();
+    report
 }
 
 /// Reclaim unheld, ended lane overlays first, then worktree caches with the existing
@@ -502,6 +507,118 @@ pub(super) fn disk_headroom_findings(
 ) -> Vec<DoctorFinding> {
     free_bytes
         .and_then(|free| disk_headroom_finding(free, min_free_gib))
+        .into_iter()
+        .collect()
+}
+
+/// The runner host's persistent GitLab CI cache (`/ci-cache` inside jobs):
+/// the Cargo registry plus one incremental target dir per runner slot. It
+/// reached 255 GiB unnoticed and took the host root to 90% (TASK-3910).
+// trace:TASK-3910 | ai:claude
+pub(super) const DEFAULT_CI_CACHE_DIR: &str = "/var/cache/aida-ci";
+
+/// Two 60 GiB slot caps (`ci/prune-target-cache`) plus registry headroom.
+// trace:TASK-3910 | ai:claude
+pub(super) const DEFAULT_CI_CACHE_MAX_GIB: u64 = 150;
+
+/// Bound on the cache walk. The guard runs on a schedule with a timeout, and
+/// a slow walk that cannot finish is inconclusive rather than an alert.
+// trace:TASK-3910 | ai:claude
+pub(super) const CI_CACHE_WALK_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// `[doctor.disk_headroom] ci_cache_dir` / `ci_cache_max_gib`, with defaults.
+/// `ci_cache_max_gib = 0` disables the check.
+// trace:TASK-3910 | ai:claude
+pub(super) fn ci_cache_config(cfg: Option<&toml::Value>) -> (std::path::PathBuf, u64) {
+    let section = cfg
+        .and_then(|c| c.get("doctor"))
+        .and_then(|d| d.get("disk_headroom"));
+    let dir = section
+        .and_then(|d| d.get("ci_cache_dir"))
+        .and_then(|v| v.as_str())
+        .unwrap_or(DEFAULT_CI_CACHE_DIR);
+    let max_gib = section
+        .and_then(|d| d.get("ci_cache_max_gib"))
+        .and_then(|v| v.as_integer())
+        .filter(|v| *v >= 0)
+        .map_or(DEFAULT_CI_CACHE_MAX_GIB, |v| v as u64);
+    (std::path::PathBuf::from(dir), max_gib)
+}
+
+/// Bytes under `dir`, following no symlinks. Stops early once the total
+/// exceeds `stop_above` (already enough to alert) or at `deadline`. Returns
+/// `(bytes, exceeded)`; `None` when the directory does not exist or the
+/// deadline passed below the threshold (inconclusive).
+// trace:TASK-3910 | ai:claude
+pub(super) fn ci_cache_bytes(
+    dir: &std::path::Path,
+    stop_above: u64,
+    deadline: std::time::Instant,
+) -> Option<(u64, bool)> {
+    if !dir.is_dir() {
+        return None;
+    }
+    let mut total = 0u64;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        if total > stop_above {
+            return Some((total, true));
+        }
+        if std::time::Instant::now() >= deadline {
+            return None;
+        }
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            match entry.metadata() {
+                Ok(md) if md.is_dir() => stack.push(entry.path()),
+                Ok(md) if md.is_file() => total = total.saturating_add(md.len()),
+                _ => {}
+            }
+        }
+    }
+    Some((total, total > stop_above))
+}
+
+/// Pure verdict: a finding when the CI cache is above its cap, silent below.
+// trace:TASK-3910 | ai:claude
+pub(super) fn ci_cache_finding(
+    dir: &std::path::Path,
+    measured: Option<(u64, bool)>,
+    max_gib: u64,
+) -> Option<DoctorFinding> {
+    let (bytes, exceeded) = measured?;
+    if !exceeded || max_gib == 0 {
+        return None;
+    }
+    Some(DoctorFinding {
+        category: DISK_HEADROOM_CATEGORY.to_string(),
+        id: "disk-headroom-ci-cache".to_string(),
+        summary: format!(
+            "the CI cache {} holds at least {}, above its {max_gib} GiB cap \
+             (`[doctor.disk_headroom] ci_cache_max_gib`)",
+            dir.display(),
+            crate::worktree_reclaim::human_bytes(bytes)
+        ),
+        action: "each CI job prunes its own slot (ci/prune-target-cache); check that jobs \
+                 still run it, lower AIDA_CI_CACHE_SLOT_CAP_GIB, or remove `target-v2-*/*/\
+                 incremental` while no CI job is running"
+            .to_string(),
+        safe_heal: false,
+    })
+}
+
+/// Measure the configured CI cache within [`CI_CACHE_WALK_BUDGET`] and judge it.
+// trace:TASK-3910 | ai:claude
+pub(super) fn ci_cache_findings(cfg: Option<&toml::Value>) -> Vec<DoctorFinding> {
+    let (dir, max_gib) = ci_cache_config(cfg);
+    if max_gib == 0 {
+        return Vec::new();
+    }
+    let cap = max_gib.saturating_mul(1024 * 1024 * 1024);
+    let measured = ci_cache_bytes(&dir, cap, std::time::Instant::now() + CI_CACHE_WALK_BUDGET);
+    ci_cache_finding(&dir, measured, max_gib)
         .into_iter()
         .collect()
 }

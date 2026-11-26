@@ -2555,15 +2555,16 @@ fn origin_gc_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
     )
 }
 
-fn origin_oids(
-    main: &Path,
-    timeout: std::time::Duration,
-    args: &[&str],
-    cap: usize,
-) -> Vec<String> {
-    if timeout.is_zero() {
-        return Vec::new();
-    }
+// trace:STORY-3059 | ai:codex
+pub(crate) fn origin_branch_at(main: &Path, branch: &str, tip: &str) -> bool {
+    let reference = format!("refs/heads/{branch}");
+    let cmd = origin_read_command(main, &["ls-remote", "--refs", "origin", &reference]);
+    crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15)).is_some_and(|out| {
+        out.status.success() && out.stdout == format!("{tip}\t{reference}\n").as_bytes()
+    })
+}
+
+fn origin_read_command(main: &Path, args: &[&str]) -> std::process::Command {
     let mut cmd = aida_core::git_ops::host_remote_git_command(main, "origin");
     cmd.env(ACCESSOR_ENV, "1")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -2573,6 +2574,19 @@ fn origin_oids(
         )
         .stdin(std::process::Stdio::null())
         .args(args);
+    cmd
+}
+
+fn origin_oids(
+    main: &Path,
+    timeout: std::time::Duration,
+    args: &[&str],
+    cap: usize,
+) -> Vec<String> {
+    if timeout.is_zero() {
+        return Vec::new();
+    }
+    let cmd = origin_read_command(main, args);
     let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };

@@ -62,6 +62,19 @@ so sharing one target between the runner's `concurrent-0` and `concurrent-1`
 checkout roots made the slots repeatedly recompile each other's crates. The
 separate `verify` and `test` jobs can use both slots without that churn.
 
+Incremental state is never removed by rustc once its crate hash stops being
+used, so each builder job first runs `ci/prune-target-cache` on its own slot:
+incremental crate directories unused for 7 days are removed, then the least
+recently used ones while the slot exceeds 60 GiB, and, as a last resort, the
+whole slot is cleared if it still exceeds the cap. Only that slot's job can
+hold the slot, so the prune never races a build. Tune it with the
+`AIDA_CI_CACHE_MAX_AGE_DAYS` and `AIDA_CI_CACHE_SLOT_CAP_GIB` CI variables.
+On the runner host, `aida doctor check disk-headroom` (and the scheduled
+disk-headroom guard) reports `/var/cache/aida-ci` once it exceeds 150 GiB;
+set `[doctor.disk_headroom] ci_cache_dir` and `ci_cache_max_gib` (0 disables)
+to change that.
+<!-- trace:TASK-3910 | ai:claude -->
+
 The pipeline sets `GIT_CLEAN_FLAGS: none`. The checkout and Cargo target are
 deliberately persistent, and cleaning the checkout caused Cargo to recompile
 unchanged workspace crates after GitLab refreshed their mtimes. Build outputs

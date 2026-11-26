@@ -423,6 +423,9 @@ pub(crate) struct NotifyRow {
 // trace:TASK-1177 | ai:claude
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub(crate) struct ReapReport {
+    /// Clone teardown owns these caches for this pass, including when it refuses.
+    #[serde(skip)]
+    pub clone_cache_names: std::collections::HashSet<std::ffi::OsString>,
     /// Spec-linked branches ahead of main with no open PR and no live lease.
     /// Reported alongside reap state so `aida session reap` never removes or
     /// ignores work that still needs a PR/recovery drive.
@@ -1017,6 +1020,9 @@ fn lease_scanner<'a>(
         if lease.tree_kind == crate::seat_clone::TreeKind::Clone
             || crate::seat_clone::seat_clone_root(&lease.worktree_path).is_some()
         {
+            if let Some(name) = lease.worktree_path.file_name() {
+                report.clone_cache_names.insert(name.to_owned());
+            }
             let row = scan_clone_lease(project_root, lease, spec_finished, &live, &active, now);
             match row.verdict {
                 "reap" => report.reapable.push(row),
@@ -1419,7 +1425,8 @@ pub(crate) fn scan_clone_lease(
     };
     let branch = resolved_branch.as_deref().unwrap_or(&lease.branch);
     let mut branch_tip = None;
-    let verdict = classify_clone_reap(
+    let mut checked_merge = false;
+    let mut verdict = classify_clone_reap(
         || {
             if let Err(error) = &resolved_branch {
                 return crate::seat_clone::Probe::Unknown(format!("{error:#}"));
@@ -1445,12 +1452,21 @@ pub(crate) fn scan_clone_lease(
         process_exited,
         spec_finished,
         || {
+            checked_merge = true;
             matches!(
                 detect_merged_pr_for_branch_via_forge(project_root, branch),
                 PrLookup::Found(_)
             )
         },
     );
+    // A closed PR at this tip takes precedence over a historical merge on the same branch.
+    // trace:STORY-3059 | ai:codex
+    if checked_merge {
+        if let Some(reason) = clone_history_veto(project_root, lease, branch, branch_tip.as_deref())
+        {
+            verdict = ReapVerdict::Skip(reason);
+        }
+    }
     ReapRow {
         session: lease.id.clone(),
         scope: lease.scope.clone(),
@@ -1465,6 +1481,39 @@ pub(crate) fn scan_clone_lease(
         branch_tip,
         outcome: None,
         ending_retained: crate::leases::is_ending_retained(lease),
+    }
+}
+
+/// The closed-unmerged exact-tip veto, shared by the scan and the reap.
+/// `published` is claimed only when a live, bounded origin read shows the
+/// branch at this tip; local tracking refs never establish it.
+// trace:STORY-3059 | ai:claude
+fn clone_history_veto(
+    root: &std::path::Path,
+    lease: &SessionLease,
+    branch: &str,
+    tip: Option<&str>,
+) -> Option<String> {
+    use crate::forge_observed::Observed;
+    let unknown = || Some(format!("could not verify PR history for `{branch}` — kept"));
+    let Some(sha) = tip else { return unknown() };
+    match crate::forge::observe_terminal_branch(root, branch, sha, true) {
+        Observed::Known(tip) if tip.matched => {
+            let publication = if crate::seat_clone::origin_branch_at(root, branch, sha) {
+                "published"
+            } else {
+                "publication unverified"
+            };
+            // Name the closed change so the operator can salvage it directly.
+            // trace:STORY-3059 | ai:claude
+            let change = match tip.number {
+                Some(n) => format!("PR #{n} closed unmerged"),
+                None => "closed PR".to_owned(),
+            };
+            Some(format!("{change} on branch `{branch}` ({publication}) is recoverable; manual recovery: see BUG-2755 / `aida session show {}`", lease.id))
+        }
+        Observed::Known(_) => None,
+        _ => unknown(),
     }
 }
 
@@ -1505,6 +1554,13 @@ pub(crate) fn reap_one_clone(
     };
     // trace:TASK-2110 | ai:claude
     let shipped = crate::seat_clone::merged_pr_heads(project_root, &branch);
+    // Re-observe exact-tip PR history at the destructive boundary: a PR can
+    // close unmerged at an unchanged SHA after the scan. Closed or unknown
+    // history preserves the seat before mail retirement or clone removal.
+    // trace:STORY-3059 | ai:claude
+    if let Some(reason) = clone_history_veto(project_root, lease, &branch, Some(tip)) {
+        return format!("skipped — {reason}");
+    }
     // The clone's mail is retired first: a refusal keeps the session,
     // ending-retained with its grant revoked, as the worktree path does.
     // trace:STORY-1843 | ai:claude
@@ -2621,11 +2677,11 @@ pub(crate) struct QuietReap {
 /// what the reap did beyond releasing leases (TASK-1915 F4).
 // trace:TASK-1915 | ai:claude
 pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
-    reap_quiet_with_skips(project_root).0
+    reap_quiet_with_report(project_root).0
 }
 
 // trace:TASK-3858 | ai:codex
-pub(crate) fn reap_quiet_with_skips(project_root: &std::path::Path) -> (QuietReap, Vec<ReapRow>) {
+pub(crate) fn reap_quiet_with_report(project_root: &std::path::Path) -> (QuietReap, ReapReport) {
     let agent_gc = agent_registry::gc_dead_agents(project_root, false, None)
         .map(|r| r.removed_count())
         .map_err(|e| format!("{e:#}"));
@@ -2649,7 +2705,7 @@ pub(crate) fn reap_quiet_with_skips(project_root: &std::path::Path) -> (QuietRea
                 agent_gc,
                 leases: gone,
             },
-            report.skipped,
+            report,
         );
     }
     let leases = list_leases(project_root);
@@ -2668,7 +2724,7 @@ pub(crate) fn reap_quiet_with_skips(project_root: &std::path::Path) -> (QuietRea
                 .map(|(lease, tip)| (lease.id.clone(), reap_one(project_root, lease, tip))),
         )
         .collect();
-    (QuietReap { agent_gc, leases }, report.skipped)
+    (QuietReap { agent_gc, leases }, report)
 }
 
 // The reapable-predicate matrix + the process-exited derivation.
