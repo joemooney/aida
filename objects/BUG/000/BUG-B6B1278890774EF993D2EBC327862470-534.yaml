@@ -9,12 +9,12 @@ description: |
   - AC1: a shared claim with lease=unbound and launcher=unbound, a dead creator and an expired heartbeat is classified as an eligible stale lease by `aida doctor check leases` and released by the prescribed `aida doctor heal stale-leases --id shared-<invocation>`.
   - AC2: an admission refusal never prescribes a heal command that the heal path would refuse (one shared eligibility predicate for both); a test.
   - AC3: a test with exactly this claim shape (unbound lease, unbound launcher, dead creator, old heartbeat).
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T15:25:24.710612077Z
+modified_at: 2026-11-26T15:35:53.096105813Z
 req_type: Bug
 tags:
 - admission
@@ -87,6 +87,12 @@ comments:
   modified_at: 2026-11-26T15:23:54.241457197Z
   session_id: 01a2184e943e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2187f-b9c3-7ad1-820c-961bc58babcf
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-26T15:35:53.539316446Z
+  modified_at: 2026-11-26T15:35:53.539316446Z
+  session_id: 01a2187c0023
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
@@ -120,6 +126,14 @@ history:
   session_id: 01a2184e943e
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2187f-b9c3-7ad1-820c-960a2a8a23c4
+  author: aida-orchestrator
+  timestamp: 2026-11-26T15:35:53.539313693Z
+  session_id: 01a2187c0023
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
@@ -132,3 +146,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T15:25:24.710612077Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2773 (completing). AC1: verified by bug2773_unbound_claim_with_dead_creator_is_listed_and_healed (collect_doctor_findings_at lists shared-<invocation> with safe_heal, targeted_stale_finding accepts it, heal_exited_claim deletes it). AC2: verified. coordination::shared_heal_id is the single predicate for doctor_root::shared_stale_finding and implementer_refusal; the flipped bug2655_force_refuses_fresh_or_live_creator_preserving_claim test asserts that fresh and live holders get no heal command. AC3: verified by the same AC1 test, which uses the dell1 shape (lease=unbound, launcher=unbound, dead creator with a legacy linux-starttime identity, heartbeat 2026-11-15). Bug protocol item ''the PR touches at least one test file'': met (coordination.rs tests module). CI: fast gates green, including the store-writer inventory; fast compile was pending at review time. Request changes for one blocking defect. The new unbound branch of exited_holder_is_dead accepts a dead creator plus an expired TTL as death evidence. For a non-process-backed claim, both are true about 30 minutes after creation whatever the holder''s state, so the branch never checks whether the holder clone still has a Live or Dormant session for the scope. The heal path and --force-claim admission both use this predicate, so both inherit the gap. A smaller p3 test gap is listed too.'
+  recovery_hint: address the review findings, move BUG-2773 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-26T15:35:53.096105813Z
