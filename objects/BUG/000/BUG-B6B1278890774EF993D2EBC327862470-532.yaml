@@ -9,12 +9,12 @@ description: |
   - AC1: a manual train waiting on admission is admitted BEFORE the auto-train starts its NEXT train: FIFO across waiters, or the auto-train yields whenever a cooperative manual waiter is recorded.
   - AC2: the waiting manual train is visible in `aida advisor loops train-status` / `aida pr train --check` ("operator train for #N waiting since HH:MM; auto-train yields next").
   - AC3: a test: an auto-train finishing train A with a recorded manual waiter does not start train B until the manual train has run (or released).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T13:18:03.909122576Z
+modified_at: 2026-11-26T13:22:16.215423340Z
 req_type: Bug
 tags:
 - admission
@@ -46,6 +46,13 @@ history:
   author: joe
   timestamp: 2026-11-26T13:15:33.323202742Z
   changes: []
+- id: 01a21805-6417-7673-81fc-473137a2ab00
+  author: aida-session-start
+  timestamp: 2026-11-26T13:22:16.215422590Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
