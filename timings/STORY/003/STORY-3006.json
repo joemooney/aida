@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-3006",
+  "publishes": [
+    {
+      "at": "2026-11-26T03:08:04.940513161Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T21:28:42.485069808Z",
+      "spec": "STORY-3006",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "17 changes are open and the limit is 10; STORY-3006 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T03:08:04.795902821Z",
+      "spec": "STORY-3006",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "467f62335cef5f08cb850e95f6562cc81c7995a2",
+        "pr": 4600,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
