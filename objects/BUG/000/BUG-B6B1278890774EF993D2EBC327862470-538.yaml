@@ -2,20 +2,26 @@ id: 01a21923-0137-7800-b20b-147dfab06724
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-538
 agreed_id: BUG-2777
 title: A train ejection for stacked-diff drift loops the same train forever instead of routing the PR to sync + independent re-review
-description: |
-  advisor-122 2026-11-26 11:37 (filed by product-15). #4464 BUG-2735 (supervised, approved) sat ALL DAY. Every train EJECTED it with "its diff changes when stacked on main … the approval does not cover what would land", and the operator train loop (/tmp/train/N) retried the SAME train silently each time. Nothing surfaced or routed it until the advisor ran update-branch (new head 7d711a72) and launched a fresh independent review by hand.
+description: 'advisor-122 2026-11-26 11:37 (filed by product-15). #4464 BUG-2735 (supervised, approved) sat ALL DAY. Every train EJECTED it with "its diff changes when stacked on main … the approval does not cover what would land", and the operator train loop (/tmp/train/N) retried the SAME train silently each time. Nothing surfaced or routed it until the advisor ran update-branch (new head 7d711a72) and launched a fresh independent review by hand.
+
 
   ## Acceptance
+
   - AC1: when a train ejects a member for "diff changes when stacked on main" (the approval does not cover what would land), the PR is routed in the same pass: (a) the train/auto-train records a typed `stacked-diff-drift` ejection; (b) when the PR is mergeable without conflicts, it runs update-branch (or the sync path) and queues an independent re-review at the new head, never carrying the old approval over; (c) when it conflicts, it routes to conflict repair (or a fresh slice) with a human-inbox item.
+
   - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
+
   - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
+
   - AC4: tests for each AC.
+
+  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T22:21:14.264175629Z
+created_at: 2026-11-26 18:34:14.199561+00:00
+modified_at: 2026-11-26 22:21:14.264175+00:00
 req_type: Bug
 tags:
 - landing
@@ -25,211 +31,259 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a21989-7b81-7eb2-a9da-414dc7e53451
-  created_at: 2026-11-26T20:26:18.147089332Z
+  created_at: 2026-11-26 20:26:18.147089+00:00
   created_by: dirtlab
 comments:
 - id: 01a21929-0689-7b92-9d1e-d3dc5a24ac39
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:40):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:40):
+
     # BUG-2777: a stacked-diff-drift ejection routes the PR (sync + independent re-review) instead of looping the train (advisor-122 11:37; product-15). Lane: CLAUDE. STRICT (train path). MAIN, NEW branch bug-2777-ejection-routing. <=250 lines; if over, ship AC1+AC2 with (Refs BUG-2777) and list AC3. Otherwise use the completing (BUG-2777) trailer.
+
     READ: `aida show BUG-2777` (the #4464 incident, AC1-AC4), the train ejection path (grep "diff changes when stacked"), BUG-2771 #4659/the fresh slice (fairness), and the review-watch queueing path. NEVER carry an approval across a head change.
-    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
-  created_at: 2026-11-26T18:40:32.691554246Z
-  modified_at: 2026-11-26T18:40:32.691554246Z
+
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.'
+  created_at: 2026-11-26 18:40:32.691554+00:00
+  modified_at: 2026-11-26 18:40:32.691554+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21957-5047-74b1-90ef-87a7647d551d
   author: dirtlab
-  content: |-
-    ## Implementer approach
+  content: '## Implementer approach
+
 
     ### Acceptance criteria and evidence
+
     - **AC1 (unit + command-level helper):** extend the BUG-2767 culprit record (`.aida/train-culprits.json`) with a typed `kind: stacked-diff-drift` row plus the routed next step. After `drive`, every member ejected with the stacked-diff reason is recorded at its ejected head and routed: `Forge::update_change_branch` pinned to that head, then `try_auto_queue_pr_review` on its branch (the new head carries no verdict, so it is reviewed independently); on refusal (conflict) an advisor mailbox request names conflict repair / a fresh slice. Test: `bug2777_*` in `pr_train_culprit.rs` (record/hold/route) and a routing test with a fake forge.
+
     - **AC2 (unit):** the drift hold refuses the same head even when the PR is named on `aida pr train N` (naming clears only a red-culprit hold), worded with the routed next step; a new head rides. Test in `pr_train_culprit.rs` + `culprit_admission`.
+
     - **AC3 (unit):** `landing_drought::Ready` gains the drift row; a PR held for stacked-diff drift > 30 min is its own cause with the route as the fix. Test in `story_3131_landing_drought_tests.rs`.
+
     - **AC4:** the tests above.
 
+
     ### Expected files
+
     - `aida-cli-lib/src/pr_train_culprit.rs`
+
     - `aida-cli-lib/src/pr_train.rs` (reason const, post-drive routing, admission)
+
     - `aida-cli-lib/src/landing_drought.rs` + its tests
 
+
     ### Ambiguities / conflicts as questions
-    - TASK-1960 carry-over is gate policy and untouched: after update-branch the drifted diff no longer matches the approved patch-id, so the approval does not carry; for drift caused by an earlier train member (not main) carry-over could still apply. Is a gate-side refusal for that case wanted as a follow-up?
-  created_at: 2026-11-26T19:31:22.311624599Z
-  modified_at: 2026-11-26T19:31:22.311624599Z
+
+    - TASK-1960 carry-over is gate policy and untouched: after update-branch the drifted diff no longer matches the approved patch-id, so the approval does not carry; for drift caused by an earlier train member (not main) carry-over could still apply. Is a gate-side refusal for that case wanted as a follow-up?'
+  created_at: 2026-11-26 19:31:22.311624+00:00
+  modified_at: 2026-11-26 19:31:22.311624+00:00
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21988-b6fa-7510-9530-aff652fb5f94
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 000ed109fe (git diff origin/main...HEAD, 2 commits).
 
+
     Acceptance evidence
+
     - AC1 [behavioral-test]: typed row `kind: stacked-diff-drift` in .aida/train-culprits.json (pr_train_culprit.rs record_drift; test bug2777_drift_row_is_typed_and_naming_does_not_clear_it). Same-pass routing after drive (pr_train.rs handler, route_drift): update_change_branch pinned to the ejected head, then try_auto_queue_pr_review on the PR branch; a refused update becomes an advisor request naming conflict repair or a fresh slice (test bug2777_drift_routes_to_update_and_review_or_conflict_repair covers both branches and a failed escalation). The ejection reason is a shared STACKED_DRIFT prefix, asserted in build_drops_a_member_whose_diff_changes_when_stacked_even_without_a_conflict.
+
     - AC2 [behavioral-test]: culprit_admission checks drift_hold before naming can clear anything, so `aida pr train N` and --all-ready both refuse the same head and print the route. A new head rides (bug2777_a_drifted_head_is_refused_even_when_named). clear() never clears a drift row.
+
     - AC3 [behavioral-test]: landing_drought Ready.drift is read from the record; a drift older than 30 min is its own cause, with the route as the fix, even inside the ready dwell; drifted heads do not count as landable (bug2777_stacked_diff_drift_over_30m_is_its_own_cause).
+
     - AC4: 18/18 targeted tests pass (lane job: bug2777 bug2767 story_3131 build_drops). make check-ci-fast exit 0.
 
+
     Probe findings and fixes
-    - Probe 5 (authority): the branch update first ran without the train's dispatch re-check. Fixed: routing now runs after the rails release the ports and calls ports.dispatch_check() per PR, and skips once authority is lost. It is live trains only, never dry-run or --local-ci.
+
+    - Probe 5 (authority): the branch update first ran without the train''s dispatch re-check. Fixed: routing now runs after the rails release the ports and calls ports.dispatch_check() per PR, and skips once authority is lost. It is live trains only, never dry-run or --local-ci.
+
     - Probe 3 (multiplicity): a PR ejected by several bisect sub-trains would have been routed N times. Fixed with a routed set.
+
     - Probe 1: head matching is case-insensitive in drift, drift_hold and hold. The test that caught a case echo was fixed.
+
     - Probe 2: a new serde field with a default reads old rows as Red. An older binary ignores the field, so it treats a drift row as a red culprit (naming clears it there).
+
     - Fail-closed: an unreadable record refuses in drift_hold, as hold does.
+
     - Store-writer inventory: added a row for record_drift (same run lock as record).
 
+
     Residual risks
-    - The TASK-1960 carry-over gate is untouched. If the drift came from an earlier train member rather than from main, the updated head's patch-id could still match and the approval could carry. This needs a gate-side follow-up if it matters.
+
+    - The TASK-1960 carry-over gate is untouched. If the drift came from an earlier train member rather than from main, the updated head''s patch-id could still match and the approval could carry. This needs a gate-side follow-up if it matters.
+
     - update-branch is pinned to the ejected head but does not check for a live author lease (the review watcher does). An author pushing at the same time makes the update fail, and the PR is then routed to the advisor.
-    - A no-op update-branch (already up to date) is reported as 'does not update cleanly', with the forge error.
-  created_at: 2026-11-26T20:25:19.866801491Z
-  modified_at: 2026-11-26T20:25:19.866801491Z
+
+    - A no-op update-branch (already up to date) is reported as ''does not update cleanly'', with the forge error.'
+  created_at: 2026-11-26 20:25:19.866801+00:00
+  modified_at: 2026-11-26 20:25:19.866801+00:00
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21989-13e7-7f60-9898-bafb10c2a81d
   author: aida-publication-done
   content: Implementer push 36ffea9bc517 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-26T20:25:43.655962476Z
-  modified_at: 2026-11-26T20:25:43.655962476Z
+  created_at: 2026-11-26 20:25:43.655962+00:00
+  modified_at: 2026-11-26 20:25:43.655962+00:00
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21996-5e21-7c93-8e84-723dfccbf64d
   author: aida-orchestrator
   content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
-  created_at: 2026-11-26T20:40:14.625082207Z
-  modified_at: 2026-11-26T20:40:14.625082207Z
+  created_at: 2026-11-26 20:40:14.625082+00:00
+  modified_at: 2026-11-26 20:40:14.625082+00:00
   session_id: 01a219933890
 - id: 01a21998-3c4e-73e3-a911-a7b90d11b3ef
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 adds a typed stacked-diff-drift row to the train-culprit sidecar, routes a drift ejection in the same pass (update-branch pinned to the ejected head plus a review queue, or an advisor conflict-repair request), refuses the drifted head even when the PR is named, and reports drift older than 30 minutes as its own landing-drought cause. The unit pieces are sound and tested: AC1 is verified by bug2777_drift_routes_to_update_and_review_or_conflict_repair, bug2777_drift_row_is_typed_and_naming_does_not_clear_it and the STACKED_DRIFT prefix assertion in build_drops_...; AC2 by bug2777_a_drifted_head_is_refused_even_when_named; AC3 by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC4 is only partly met, because nothing tests the train-handler wiring that ties these together. That wiring is new code on the strict train/landing path: the post-drive loop in pr_train_handler_with_dispatch_ctx filters on the prefix, dedupes per PR, re-checks dispatch authority before the forge branch mutation, and calls record_drift. Under ADR-76 an untested refusal path in authority code blocks. Bug protocol: the PR touches at least one test file (met). CI was pending at review time: fast gates green, fast compile pending. The other findings are p3 follow-ups.. No triage reason was given.'
-  created_at: 2026-11-26T20:42:17.038377269Z
-  modified_at: 2026-11-26T20:42:17.038377269Z
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 adds a typed stacked-diff-drift row to the train-culprit sidecar, routes a drift ejection in the same pass (update-branch pinned to the ejected head plus a review queue, or an advisor conflict-repair request), refuses the drifted head even when the PR is named, and reports drift older than 30 minutes as its own landing-drought cause. The unit pieces are sound and tested: AC1 is verified by bug2777_drift_routes_to_update_and_review_or_conflict_repair, bug2777_drift_row_is_typed_and_naming_does_not_clear_it and the STACKED_DRIFT prefix assertion in build_drops_...; AC2 by bug2777_a_drifted_head_is_refused_even_when_named; AC3 by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC4 is only partly met, because nothing tests the train-handler wiring that ties these together. That wiring is new code on the strict train/landing path: the post-drive loop
+    in pr_train_handler_with_dispatch_ctx filters on the prefix, dedupes per PR, re-checks dispatch authority before the forge branch mutation, and calls record_drift. Under ADR-76 an untested refusal path in authority code blocks. Bug protocol: the PR touches at least one test file (met). CI was pending at review time: fast gates green, fast compile pending. The other findings are p3 follow-ups.. No triage reason was given.'
+  created_at: 2026-11-26 20:42:17.038377+00:00
+  modified_at: 2026-11-26 20:42:17.038377+00:00
 - id: 01a21998-65f9-7fc1-acba-3a0b6738b17c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2777):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2777):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 36ffea9bc517
+
     Recorded: 2026-11-26T20:40:04.747104434+00:00
+
     Findings:
-    1. [blocking_tier: untested-path; file: aida-cli-lib/src/pr_train.rs, pr_train_handler_with_dispatch_ctx post-drive drift-routing loop] No test covers the new train-handler wiring. Untested: (a) the train itself writes a typed stacked-diff-drift row for a member that drive() ejected with the STACKED_DRIFT reason (AC1(a) is only tested by calling culprit::record_drift directly); (b) the authority refusal path, where ports.dispatch_check() fails and update_change_branch must NOT be called (the forge branch mutation runs under the train's dispatch authority); (c) the per-PR dedupe across bisect sub-trains; (d) the dispatch_abort short-circuit. A regression that drops the dispatch_check call, or the record_drift call, passes every test in this PR. Add a handler-level or extracted-loop test with a fake forge/ports that asserts the refusal skips the branch update and that a routed drift is recorded at the ejected head.
-    2. [blocking_tier: p3] When dispatch authority is lost (dispatch_abort set, or dispatch_check fails), the loop `continue`s before culprit::record_drift, so no drift hold is written. The hold is a local runtime sidecar and needs no dispatch authority. The next train then re-admits and re-ejects the same head, which is the loop AC2 forbids, though only for one extra round. Record the drift row (with a 'not routed: <reason>' route) even when routing is skipped. Suggested follow-up.
-    3. [blocking_tier: p3] The success route text in route_drift states that 'the approval at <head> does not carry', but nothing enforces it. The TASK-1960 carry-over gate is untouched, and when the update-branch merge leaves the PR's own patch-id unchanged (for example, drift caused by an earlier train member rather than by main), the old approval does carry to the new head. The train's patch-id proof still means only the approved content lands, so this is not a safety hole. But the printed route and the hold message overstate the guarantee, and the advisor brief said never to carry across a head change. Either reword the route, or add the gate-side refusal the implementer asked about. Suggested follow-up.
-    4. [blocking_tier: p3] landing_drought::scan reads the drift row with exec.project_root(), but the train writes it to the main worktree's .aida/train-culprits.json. Run from a seat worktree, `aida doctor` never sees the drift row, so the AC3 cause is missed and a drifted PR still counts as landable. pr_head_pins in the same scan already has this problem, so it is not new. Resolve the main worktree (crate::main_worktree_root_from) for both. Suggested follow-up.
+
+    1. [blocking_tier: untested-path; file: aida-cli-lib/src/pr_train.rs, pr_train_handler_with_dispatch_ctx post-drive drift-routing loop] No test covers the new train-handler wiring. Untested: (a) the train itself writes a typed stacked-diff-drift row for a member that drive() ejected with the STACKED_DRIFT reason (AC1(a) is only tested by calling culprit::record_drift directly); (b) the authority refusal path, where ports.dispatch_check() fails and update_change_branch must NOT be called (the forge branch mutation runs under the train''s dispatch authority); (c) the per-PR dedupe across bisect sub-trains; (d) the dispatch_abort short-circuit. A regression that drops the dispatch_check call, or the record_drift call, passes every test in this PR. Add a handler-level or extracted-loop test with a fake forge/ports that asserts the refusal skips the branch update and that a routed drift is recorded at the ejected head.
+
+    2. [blocking_tier: p3] When dispatch authority is lost (dispatch_abort set, or dispatch_check fails), the loop `continue`s before culprit::record_drift, so no drift hold is written. The hold is a local runtime sidecar and needs no dispatch authority. The next train then re-admits and re-ejects the same head, which is the loop AC2 forbids, though only for one extra round. Record the drift row (with a ''not routed: <reason>'' route) even when routing is skipped. Suggested follow-up.
+
+    3. [blocking_tier: p3] The success route text in route_drift states that ''the approval at <head> does not carry'', but nothing enforces it. The TASK-1960 carry-over gate is untouched, and when the update-branch merge leaves the PR''s own patch-id unchanged (for example, drift caused by an earlier train member rather than by main), the old approval does carry to the new head. The train''s patch-id proof still means only the approved content lands, so this is not a safety hole. But the printed route and the hold message overstate the guarantee, and the advisor brief said never to carry across a head change. Either reword the route, or add the gate-side refusal the implementer asked about. Suggested follow-up.
+
+    4. [blocking_tier: p3] landing_drought::scan reads the drift row with exec.project_root(), but the train writes it to the main worktree''s .aida/train-culprits.json. Run from a seat worktree, `aida doctor` never sees the drift row, so the AC3 cause is missed and a drifted PR still counts as landable. pr_head_pins in the same scan already has this problem, so it is not new. Resolve the main worktree (crate::main_worktree_root_from) for both. Suggested follow-up.
+
     5. [blocking_tier: p3] culprit rows are keyed by PR alone. In the same train run, the drift-routing loop writes its rows before the culprit::record loop for red culprits. A PR that one bisect sub-train dropped for drift and another found red alone therefore has its stacked-diff-drift row overwritten by a Red row, which naming can clear. Also, record_drift is called with train=None, so the row loses the train number that red rows carry. Suggested follow-up.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-26T20:42:27.705647177Z
-  modified_at: 2026-11-26T20:42:27.705647177Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-26 20:42:27.705647+00:00
+  modified_at: 2026-11-26 20:42:27.705647+00:00
 - id: 01a2199a-f4ef-7531-9ffe-94e62817c528
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:44):
-    # BUG-2777 r1 on #4685 (advisor-122 ruling 2026-11-26 13:47 at 36ffea9b: a FINAL request-changes; product-15). Lane: CLAUDE. STRICT (train path). MAIN, existing branch bug-2777-ejection-routing / PR #4685. Keep the title's trailer. <=300 lines total; if over, ship (1)-(3) here and list (4)+(5) under "Still to do" (use "(Refs BUG-2777)" in that case).
-    BINDING:
-     (1) A HANDLER-level test that the train writes the typed stacked-diff-drift row AND routes it (not just the helper).
-     (2) Record the drift hold even when dispatch authority is LOST (it's a local sidecar), so the next train doesn't re-admit and re-eject the same head.
-     (3) Do NOT touch the TASK-1960 carry-over gate. Only make the route text accurate: "a re-review is needed if the patch changed; a patch-id-identical approval carries".
-     (4) landing_drought::scan reads culprits from the MAIN worktree's .aida (the same resolver the train writes with). TEST it from a seat worktree.
-     (5) Key culprit rows so a drift row and a red-culprit row for the SAME PR can both exist, or make the precedence explicit and tested.
-    One targeted cargo test run on this host, make check-ci-fast, then push to #4685. COMMIT your work.
-  created_at: 2026-11-26T20:44:59.485130591Z
-  modified_at: 2026-11-26T20:44:59.485130591Z
+  content: "AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:44):\n# BUG-2777 r1 on #4685 (advisor-122 ruling 2026-11-26 13:47 at 36ffea9b: a FINAL request-changes; product-15). Lane: CLAUDE. STRICT (train path). MAIN, existing branch bug-2777-ejection-routing / PR #4685. Keep the title's trailer. <=300 lines total; if over, ship (1)-(3) here and list (4)+(5) under \"Still to do\" (use \"(Refs BUG-2777)\" in that case).\nBINDING:\n (1) A HANDLER-level test that the train writes the typed stacked-diff-drift row AND routes it (not just the helper).\n (2) Record the drift hold even when dispatch authority is LOST (it's a local sidecar), so the next train doesn't re-admit and re-eject the same head.\n (3) Do NOT touch the TASK-1960 carry-over gate. Only make the route text accurate: \"a re-review is needed if the patch changed; a patch-id-identical approval carries\".\n (4) landing_drought::scan reads culprits from the MAIN worktree's .aida (the same resolver the train writes with).\
+    \ TEST it from a seat worktree.\n (5) Key culprit rows so a drift row and a red-culprit row for the SAME PR can both exist, or make the precedence explicit and tested.\nOne targeted cargo test run on this host, make check-ci-fast, then push to #4685. COMMIT your work."
+  created_at: 2026-11-26 20:44:59.485130+00:00
+  modified_at: 2026-11-26 20:44:59.485130+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a219a9-e185-73f2-a05c-5a158f668d60
   author: aida-publication-done
   content: Implementer push 36ffea9bc517 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-26T21:01:33.445672206Z
-  modified_at: 2026-11-26T21:01:33.445672206Z
+  created_at: 2026-11-26 21:01:33.445672+00:00
+  modified_at: 2026-11-26 21:01:33.445672+00:00
   session_id: 01a219535435
 - id: 01a219aa-c85c-7612-87df-a4e5c4197749
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-2777-ejection-routing` at head `36ffea9bc51797e6a523d58c668abd4888c859e1`.'
-  created_at: 2026-11-26T21:02:32.540961307Z
-  modified_at: 2026-11-26T21:02:32.540961307Z
+  created_at: 2026-11-26 21:02:32.540961+00:00
+  modified_at: 2026-11-26 21:02:32.540961+00:00
   session_id: 01a219535435
 - id: 01a219cd-8a09-7f03-9afb-d2dcfef6dfcb
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 4cbdf72716. Round 2 for #4685.
+
     - (1) [behavioral-test] The post-drive loop is now route_drift_ejections, behind a DriftRouter trait, and the handler calls it through LiveDriftRouter. bug2777_train_routes_and_records_a_drift_ejection_only_under_authority sends a real build() drift ejection through it. It checks: a typed row at the ejected head, routing once across duplicate sub-train ejections, a red ejection not routed, and that the branch is not updated once authority is lost. The test is at the extracted-loop level, not a full handler run (the handler needs find_project_root and a live forge).
-    - (2) Without authority the drift row is still written, with the route 'not routed: <why>; ...'. Tested.
-    - (3) Route text now reads 'a re-review is needed if the patch changed; a patch-id-identical approval carries'. The TASK-1960 gate is untouched.
+
+    - (2) Without authority the drift row is still written, with the route ''not routed: <why>; ...''. Tested.
+
+    - (3) Route text now reads ''a re-review is needed if the patch changed; a patch-id-identical approval carries''. The TASK-1960 gate is untouched.
+
     - (4) landing_drought::scan reads pins and drift rows via main_worktree_root_from (train_state). Tested from a git-worktree seat.
-    - (5) Precedence: record() keeps a drift row at the same head, and a red at a new head replaces it. Tested. A drift row's train stays None because the drift ejection happens at build() time, before any train PR number exists.
-    - Residual risk: LiveDriftRouter's abort caching is covered by inspection only.
-    Tests: 6 bug2777 tests pass (aida lane job).
-  created_at: 2026-11-26T21:40:30.344968913Z
-  modified_at: 2026-11-26T21:40:30.344968913Z
+
+    - (5) Precedence: record() keeps a drift row at the same head, and a red at a new head replaces it. Tested. A drift row''s train stays None because the drift ejection happens at build() time, before any train PR number exists.
+
+    - Residual risk: LiveDriftRouter''s abort caching is covered by inspection only.
+
+    Tests: 6 bug2777 tests pass (aida lane job).'
+  created_at: 2026-11-26 21:40:30.344968+00:00
+  modified_at: 2026-11-26 21:40:30.344968+00:00
   session_id: 01a219b01ddd
   harness_version: 2.1.319 (Claude Code)
 - id: 01a219f0-95af-7010-92cd-7681729c2291
   author: aida-orchestrator
   content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
-  created_at: 2026-11-26T22:18:47.087403610Z
-  modified_at: 2026-11-26T22:18:47.087403610Z
+  created_at: 2026-11-26 22:18:47.087403+00:00
+  modified_at: 2026-11-26 22:18:47.087403+00:00
   session_id: 01a219eba530
 - id: 01a219f1-2288-7342-a5e6-bf635caba107
   author: joe
-  content: |-
-    ADVISOR RULING 15:22 (binding for #4685 r2; the r1 CR is valid):
+  content: 'ADVISOR RULING 15:22 (binding for #4685 r2; the r1 CR is valid):
+
     1. Add a LiveDriftRouter test for the authority-refusal path: dispatch_abort is already set, so the hold is recorded and nothing is dispatched.
-    2. Drift caused by an EARLIER TRAIN MEMBER is NOT a conflict repair. In that case the branch is already up to date with main, so update-branch is a no-op. Classify it as 'member-induced drift' and re-queue the PR for the next train, alone or behind that member. Do not re-review it when its own diff vs main is unchanged (patch-id check), and do not escalate. Add a test for this.
-    Only a real update-branch conflict escalates.
-  created_at: 2026-11-26T22:19:06.856157522Z
-  modified_at: 2026-11-26T22:19:06.856157522Z
+
+    2. Drift caused by an EARLIER TRAIN MEMBER is NOT a conflict repair. In that case the branch is already up to date with main, so update-branch is a no-op. Classify it as ''member-induced drift'' and re-queue the PR for the next train, alone or behind that member. Do not re-review it when its own diff vs main is unchanged (patch-id check), and do not escalate. Add a test for this.
+
+    Only a real update-branch conflict escalates.'
+  created_at: 2026-11-26 22:19:06.856157+00:00
+  modified_at: 2026-11-26 22:19:06.856157+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a219f1-2ba6-7de3-ae53-72fc2b43a252
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 round 2 at 4cbdf727. Most of round 1 is resolved. Advisor binding (2): the drift hold is written even when authority is lost, tested in bug2777_train_routes_and_records_a_drift_ejection_only_under_authority. Binding (3): the route text is accurate, and the TASK-1960 gate is untouched. Binding (4): landing_drought::scan reads train state from the main worktree via main_worktree_root_from, tested from a git-worktree seat in bug2777_scan_reads_train_state_from_the_main_worktree. Binding (5): a drift row and a red row at the same head have an explicit, tested precedence. AC2 is met by bug2777_a_drifted_head_is_refused_even_when_named: the head is refused even when named and the route is printed. AC3 is met by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC1 is met at the extracted-loop level: route_drift_ejections, fed by a real build() drift ejection through a fake DriftRouter, checks routing, the typed row, per-PR dedupe and that a red ejection is not routed. One blocking gap remains on the strict train/authority path, which ADR-76 treats as blocking. The live authority adapter LiveDriftRouter::authority has no test: neither its dispatch_abort short-circuit nor its mapping of a dispatch_check failure. Neither does the handler call site that feeds it. A mutation that makes authority() always return Ok, or that drops the route_drift_ejections call, passes every test in this PR, and round 1 named this gap (items b and d). The implementer''s self-review says the abort caching is covered by inspection only. The tests module is a child of pr_train, and existing tests build LiveTrainForge with dispatch_ctx None and a fake forge, so the missing test is cheap to write. The base moved by one commit (BUG-2775, review vendor table); it touches none of these files, so no finding depends on it. CI was pending at review time: fast gates pass, fast compile pending, and merge-hold-gate is awaiting clearance.. No triage reason was given.'
-  created_at: 2026-11-26T22:19:25.478581242Z
-  modified_at: 2026-11-26T22:19:25.478581242Z
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2777 round 2 at 4cbdf727. Most of round 1 is resolved. Advisor binding (2): the drift hold is written even when authority is lost, tested in bug2777_train_routes_and_records_a_drift_ejection_only_under_authority. Binding (3): the route text is accurate, and the TASK-1960 gate is untouched. Binding (4): landing_drought::scan reads train state from the main worktree via main_worktree_root_from, tested from a git-worktree seat in bug2777_scan_reads_train_state_from_the_main_worktree. Binding (5): a drift row and a red row at the same head have an explicit, tested precedence. AC2 is met by bug2777_a_drifted_head_is_refused_even_when_named: the head is refused even when named and the route is printed. AC3 is met by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC1 is met at the extracted-loop level: route_drift_ejections, fed by a real build() drift ejection
+    through a fake DriftRouter, checks routing, the typed row, per-PR dedupe and that a red ejection is not routed. One blocking gap remains on the strict train/authority path, which ADR-76 treats as blocking. The live authority adapter LiveDriftRouter::authority has no test: neither its dispatch_abort short-circuit nor its mapping of a dispatch_check failure. Neither does the handler call site that feeds it. A mutation that makes authority() always return Ok, or that drops the route_drift_ejections call, passes every test in this PR, and round 1 named this gap (items b and d). The implementer''s self-review says the abort caching is covered by inspection only. The tests module is a child of pr_train, and existing tests build LiveTrainForge with dispatch_ctx None and a fake forge, so the missing test is cheap to write. The base moved by one commit (BUG-2775, review vendor table); it touches none of these files, so no finding depends on it. CI was pending at review time: fast gates pass,
+    fast compile pending, and merge-hold-gate is awaiting clearance.. No triage reason was given.'
+  created_at: 2026-11-26 22:19:25.478581+00:00
+  modified_at: 2026-11-26 22:19:25.478581+00:00
 - id: 01a219f1-57e6-73b2-91db-989182f61a39
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2777):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2777):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 4cbdf727160d
+
     Recorded: 2026-11-26T22:16:12.617217580+00:00
+
     Findings:
-    1. [aida-cli-lib/src/pr_train.rs LiveDriftRouter::authority and its call site in pr_train_handler_with_dispatch_ctx] Untested authority refusal path in the live adapter. route_drift_ejections is tested only through FakeRouter, so nothing exercises (a) the short-circuit when dispatch_abort is already set (drive lost authority, so the branch update must not run); (b) mapping a ports.dispatch_check() failure to Err and caching it in abort, so that later PRs in the same loop are refused without another check; or (c) the handler wiring that builds LiveDriftRouter with &mut dispatch_abort and calls route_drift_ejections. A mutation that makes authority() return Ok(()) unconditionally lets update_change_branch run after the train's dispatch authority is gone, and a mutation that drops the route_drift_ejections call returns the train to the BUG-2777 loop. Both pass every test in this PR. Round 1 named these (items b and d), and the implementer's self-review lists the abort caching as inspection-only. Fix: in story_1690_train_tests.rs (a child module of pr_train), build LiveDriftRouter over a LiveTrainForge (dispatch_ctx None, a fake or GitHub forge as the existing tests at about line 3370 do) with abort = Some("lease expired"). Call route_drift_ejections with a drift ejection and assert that no branch update was attempted, that the warning names the abort reason, and that the hold reads 'not routed: lease expired'. If practical, also cover a failing dispatch_check.
-    2. [aida-cli-lib/src/pr_train.rs route_drift] Sometimes the drift comes from an earlier train member rather than from main, so the PR branch is already up to date with main. Then update_change_branch fails as a no-op, and route_drift reports 'the branch does not update cleanly ... conflict repair' and escalates to the advisor, which misdiagnoses a train-ordering drift as a merge conflict. The implementer listed this as a residual risk. Suggested follow-up: tell an already-up-to-date refusal apart from a real conflict, and route it to a re-train without the earlier member (or a re-review).
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-26T22:19:36.806100605Z
-  modified_at: 2026-11-26T22:19:36.806100605Z
+
+    1. [aida-cli-lib/src/pr_train.rs LiveDriftRouter::authority and its call site in pr_train_handler_with_dispatch_ctx] Untested authority refusal path in the live adapter. route_drift_ejections is tested only through FakeRouter, so nothing exercises (a) the short-circuit when dispatch_abort is already set (drive lost authority, so the branch update must not run); (b) mapping a ports.dispatch_check() failure to Err and caching it in abort, so that later PRs in the same loop are refused without another check; or (c) the handler wiring that builds LiveDriftRouter with &mut dispatch_abort and calls route_drift_ejections. A mutation that makes authority() return Ok(()) unconditionally lets update_change_branch run after the train''s dispatch authority is gone, and a mutation that drops the route_drift_ejections call returns the train to the BUG-2777 loop. Both pass every test in this PR. Round 1 named these (items b and d), and the implementer''s self-review lists the abort caching as inspection-only.
+    Fix: in story_1690_train_tests.rs (a child module of pr_train), build LiveDriftRouter over a LiveTrainForge (dispatch_ctx None, a fake or GitHub forge as the existing tests at about line 3370 do) with abort = Some("lease expired"). Call route_drift_ejections with a drift ejection and assert that no branch update was attempted, that the warning names the abort reason, and that the hold reads ''not routed: lease expired''. If practical, also cover a failing dispatch_check.
+
+    2. [aida-cli-lib/src/pr_train.rs route_drift] Sometimes the drift comes from an earlier train member rather than from main, so the PR branch is already up to date with main. Then update_change_branch fails as a no-op, and route_drift reports ''the branch does not update cleanly ... conflict repair'' and escalates to the advisor, which misdiagnoses a train-ordering drift as a merge conflict. The implementer listed this as a residual risk. Suggested follow-up: tell an already-up-to-date refusal apart from a real conflict, and route it to a re-train without the earlier member (or a re-review).
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-26 22:19:36.806100+00:00
+  modified_at: 2026-11-26 22:19:36.806100+00:00
 - id: 01a219f3-13b8-7091-b76a-37423ddd6661
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:21):
-    # BUG-2777 r2 on #4685 (advisor-122 ruling 2026-11-26 15:22 at 4cbdf727: a valid request-changes; product-15). Lane: CLAUDE. STRICT (train path). MAIN, existing branch bug-2777-ejection-routing / PR #4685. Keep the title. <=300 lines total.
-    BINDING:
-     (1) A LiveDriftRouter test for the AUTHORITY-REFUSAL path: dispatch_abort already set → the hold is recorded, and NO dispatch happens.
-     (2) Drift caused by an EARLIER TRAIN MEMBER (the branch is already up to date with main, so update-branch is a no-op) is NOT a conflict repair. Classify it as MEMBER-INDUCED drift and re-queue it for the next train (alone, or behind that member). NO re-review when its own patch-id vs main is unchanged; NO escalation. TEST it. Only a REAL update-branch conflict escalates.
-    One targeted cargo test run on this host, make check-ci-fast, then push to #4685. COMMIT your work.
-  created_at: 2026-11-26T22:21:14.264175629Z
-  modified_at: 2026-11-26T22:21:14.264175629Z
+  content: "AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:21):\n# BUG-2777 r2 on #4685 (advisor-122 ruling 2026-11-26 15:22 at 4cbdf727: a valid request-changes; product-15). Lane: CLAUDE. STRICT (train path). MAIN, existing branch bug-2777-ejection-routing / PR #4685. Keep the title. <=300 lines total.\nBINDING:\n (1) A LiveDriftRouter test for the AUTHORITY-REFUSAL path: dispatch_abort already set → the hold is recorded, and NO dispatch happens.\n (2) Drift caused by an EARLIER TRAIN MEMBER (the branch is already up to date with main, so update-branch is a no-op) is NOT a conflict repair. Classify it as MEMBER-INDUCED drift and re-queue it for the next train (alone, or behind that member). NO re-review when its own patch-id vs main is unchanged; NO escalation. TEST it. Only a REAL update-branch conflict escalates.\nOne targeted cargo test run on this host, make check-ci-fast, then push to #4685. COMMIT your work."
+  created_at: 2026-11-26 22:21:14.264175+00:00
+  modified_at: 2026-11-26 22:21:14.264175+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a07-0f00-74c2-91de-55c1892d10bd
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2777-ejection-routing` at head `4cbdf727160da85e30e54b7a37db8b4a9a0c9ed3`.'
+  created_at: 2026-11-26 22:43:19.936179+00:00
+  modified_at: 2026-11-26 22:43:19.936179+00:00
+  session_id: 01a219b01ddd
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
-  timestamp: 2026-11-26T18:38:47.700595512Z
+  timestamp: 2026-11-26 18:38:47.700595+00:00
   changes: []
 - id: 01a21953-9e18-7c03-bada-405633a09cae
   author: aida-session-start
-  timestamp: 2026-11-26T19:27:20.088746364Z
+  timestamp: 2026-11-26 19:27:20.088746+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21989-13e7-7f60-9898-bae4e4fff416
   author: aida-publication-done
-  timestamp: 2026-11-26T20:25:43.655960519Z
+  timestamp: 2026-11-26 20:25:43.655960+00:00
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -238,19 +292,19 @@ history:
     new_value: Done
 - id: 01a21989-a31d-7f60-8882-d98f71d12b6e
   author: dirtlab
-  timestamp: 2026-11-26T20:26:20.317031556Z
+  timestamp: 2026-11-26 20:26:20.317031+00:00
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a2198b-1ee3-7743-8248-7a8d78da751f
   author: dirtlab
-  timestamp: 2026-11-26T20:27:57.539986341Z
+  timestamp: 2026-11-26 20:27:57.539986+00:00
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a21996-5e21-7c93-8e84-722c59d1dfac
   author: aida-orchestrator
-  timestamp: 2026-11-26T20:40:14.625079753Z
+  timestamp: 2026-11-26 20:40:14.625079+00:00
   session_id: 01a219933890
   changes:
   - field_name: status
@@ -258,14 +312,14 @@ history:
     new_value: NeedsAttention
 - id: 01a21998-3c4e-73e3-a911-a7a1cdb5b415
   author: joe
-  timestamp: 2026-11-26T20:42:17.038367120Z
+  timestamp: 2026-11-26 20:42:17.038367+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a219a9-e185-73f2-a05c-5a0a76037598
   author: aida-publication-done
-  timestamp: 2026-11-26T21:01:33.445670226Z
+  timestamp: 2026-11-26 21:01:33.445670+00:00
   session_id: 01a219535435
   changes:
   - field_name: status
@@ -273,7 +327,7 @@ history:
     new_value: Done
 - id: 01a219f0-95af-7010-92cd-7677d92046be
   author: aida-orchestrator
-  timestamp: 2026-11-26T22:18:47.087401240Z
+  timestamp: 2026-11-26 22:18:47.087401+00:00
   session_id: 01a219eba530
   changes:
   - field_name: status
@@ -281,7 +335,7 @@ history:
     new_value: NeedsAttention
 - id: 01a219f1-2ba6-7de3-ae53-72e53cc02215
   author: joe
-  timestamp: 2026-11-26T22:19:25.478570900Z
+  timestamp: 2026-11-26 22:19:25.478570+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
@@ -296,5 +350,5 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: true
-  implemented_at: 2026-11-26T20:27:55.536518317Z
+  implemented_at: 2026-11-26 20:27:55.536518+00:00
   implemented_by: dirtlab
