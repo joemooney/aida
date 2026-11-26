@@ -9,12 +9,12 @@ description: |
   - AC1: check pause AND the pickup retry cap BEFORE any reclaim; a paused or capped watcher NEVER ends a checkout.
   - AC2: when the cap is hit, the PR goes to the BUG-2776 AC3 doctor surface with a named next step, never a silent hold; a successful reclaim followed by a successful pickup RESETS the cap.
   - AC3: ONE test of the REAL reclaim path with a fake `aida` on PATH: assert the argv `session end <lease> --yes --skip-ci`, and handle a NON-ZERO exit (no dispatch, the hold kept, a named cause). No network. Plus tests: paused → no reclaim; capped → no reclaim + surfaced; reclaim + pickup → cap reset.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:50:49.914099231Z
-modified_at: 2026-11-26T20:19:30.562512975Z
+modified_at: 2026-11-26T20:30:05.451778209Z
 req_type: Task
 tags:
 - review-watch
@@ -36,6 +36,13 @@ history:
   author: joe
   timestamp: 2026-11-26T20:17:20.264579968Z
   changes: []
+- id: 01a2198d-128b-77a1-8df8-c11da49e9bda
+  author: aida-session-start
+  timestamp: 2026-11-26T20:30:05.451777139Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
