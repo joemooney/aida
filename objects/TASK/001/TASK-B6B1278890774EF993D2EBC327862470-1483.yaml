@@ -9,12 +9,12 @@ description: |
   - AC1: when a bisect half (or any follow-up train) is built, a member whose PR head has moved since the parent train was built is DROPPED from the half as superseded, not tested. It re-enters later at its new approved head through normal admission.
   - AC2: the drop is logged and named in `aida pr train --check` / the train body ("superseded: head moved 04aa3b22 → cd340a59").
   - AC3: a test: a member whose head moved is dropped from the bisect half, and the remaining members are still tested.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:01:40.126033678Z
-modified_at: 2026-11-26T07:42:03.937964049Z
+modified_at: 2026-11-26T09:15:12.167298913Z
 req_type: Task
 tags:
 - landing
@@ -119,6 +119,20 @@ history:
   session_id: 01a21688f171
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21723-3162-7150-874b-5171550e82b2
+  author: aida-auto-bump
+  timestamp: 2026-11-26T09:15:12.098301504Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21723-31a7-7162-9c14-b00a82caba82
+  timestamp: 2026-11-26T09:15:12.167295914Z
+  agent: aida
+  commit_sha: 852cb9c4a4da3e6f5c235f2b99d184c7a759a0ab
+  summary: 'TASK-3913 PASS. AC1 verified by task3913_a_bisect_half_drops_a_member_whose_head_moved: drive_into re-reads live heads via Rails::member_head on every follow-up wave (follow_up flag, pr_train.rs drive_into) and drop_superseded removes moved members before build; [1,2,3,4] red with #2 moved -> halves test [1] and [3,4], #2 never re-tested, not a culprit. AC2 verified by the same test: reason ''superseded: head moved <old> -> <new>'' is eprintln-logged, carried in Built.dropped/out.ejected (PR comment via Rails::ejected), and rendered in train_pr_body as ''Not in this train: #2 ...'' before the members line. AC3 verified by the same test (remaining members tested and landed). Deep pass: an unknown/unreadable live head (member_head None) keeps the member, which is safe because the existing land-time gate refuses a moved head; empty groups after the drop skip build; a drop resets the infra-rerun budget as a new composition; LiveTrainForge::member_head mirrors the existing confirm_member_head read. The live wrapper is exercised only through the scripted Rails, and is a thin delegation. CI pending at review time.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 467f62335cef5f08cb850e95f6562cc81c7995a2
@@ -131,3 +145,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T07:12:19.916746091Z
   implemented_by: dirtlab
+  completed_at: 2026-11-26T09:15:12.098293588Z
+  completion_sha: 852cb9c4a4da3e6f5c235f2b99d184c7a759a0ab
