@@ -1,0 +1,31 @@
+id: 01a218e5-49c1-7770-a7ef-a048f0d79ca9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1525
+agreed_id: TASK-3919
+title: Deputy shell runner re-execs itself onto the current live binary between jobs when its exe is deleted or stale
+description: |
+  advisor-122 2026-11-26 10:27 (filed by product-15). BUG-2774's new reporting caught it again: deputy "default" (pid 3364365) runs a DELETED live binary after the advisor's two promotions today, so the auto-train is blocked-deputy, and only Joe may restart that deputy. This happens after EVERY format-changing promotion (memory: BUG-2654 ENOENT, restart-runners-after-promotion), and each time it costs an operator step and a stalled train.
+
+  ## Acceptance
+  - AC1: the deputy shell runner checks between jobs, only when IDLE (no job running). When /proc/self/exe reads "(deleted)", or its build sha differs from the live binary's, it execs the live binary with the SAME args, name, binding and grant, and logs the old sha, the new sha and the reason.
+  - AC2: it NEVER re-execs mid-job. A job in flight finishes first, and a job submitted during the re-exec window is queued, not lost.
+  - AC3: tests: deleted exe → re-exec when idle; a sha mismatch → re-exec when idle; a job in flight → no re-exec until it ends; the binding survives (a job after the re-exec still binds and runs).
+  - AC4: the same rule for the relay/runner loops that hold the live binary, if they share the runner code.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T17:26:49.537367250Z
+modified_at: 2026-11-26T17:26:49.537367250Z
+req_type: Task
+tags:
+- deputy
+- promotion
+- strict
+- throughput
+filed_at:
+  code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d38eee408f3
+  vendor: claude
