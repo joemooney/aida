@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T02:18:46.080402301Z
+modified_at: 2026-11-26T02:20:52.546663770Z
 req_type: Task
 tags:
 - landing
@@ -26,6 +26,18 @@ relationships:
   target_id: 01a2158d-3ada-73e3-b86a-91dc240139ef
   created_at: 2026-11-26T02:18:42.190416286Z
   created_by: joe
+comments:
+- id: 01a215a8-18bc-73d1-984a-1d5f66517047
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:20):
+    # TASK-3912: [landing] max_prs_per_train knob (advisor-122 19:21; product-15). Lane: CLAUDE. MAIN, NEW branch. STANDARD. <=150 lines. Completing (TASK-3912) trailer.
+    READ: `aida show TASK-3912`. Add the knob to the [landing] config section (default unset = today's behaviour) and apply it where the AUTO-train builds its member list (dispatch_flow.rs ~:293 sets max: prs.len(); find the auto/--all-ready member selection). Explicit operator lists stay unaffected. AC2 test. Do NOT set the value in .aida/config.toml in this PR (that's AC3, a follow-up).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T02:20:52.546663770Z
+  modified_at: 2026-11-26T02:20:52.546663770Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
