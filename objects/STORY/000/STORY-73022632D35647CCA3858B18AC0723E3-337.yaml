@@ -1,0 +1,33 @@
+id: 01a21683-5eb7-7160-8571-456bcf8c8c55
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-337
+title: 'Review PR-4627: [AI:claude] feat(lanes): treat an agent usage limit as a typed outage [slice 1] (Refs STORY-3134)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a2161a`) for branch `vendor-outage-typed`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4627>
+  - Branch: `vendor-outage-typed` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3134
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4627` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T06:20:37.943780154Z
+modified_at: 2026-11-26T06:20:37.943780154Z
+req_type: Story
+filed_at:
+  code_sha: 761d7c2aefebdc82c9dfe1508c09cf34d0ce8591
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 761d7c2aef
