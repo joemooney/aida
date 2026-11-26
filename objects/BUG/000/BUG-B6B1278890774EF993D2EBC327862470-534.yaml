@@ -1,0 +1,29 @@
+id: 01a21845-df97-7211-84c2-b64cd9b68d42
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-534
+agreed_id: BUG-2773
+title: Admission refusal prescribes doctor heal stale-leases for an unbound shared claim, but heal and doctor check leases do not see it as eligible (spec cannot be launched)
+description: |
+  Found 2026-11-26 07:21 by product-15 (BUG-2584 launch refused twice). Admission refused: "implementer admission refused for BUG-...-349: holder state Unknown; host=dell1, worker PID=unknown, lease=unbound, launcher=unbound, agent=implementer, clone=/home/dirtlab/ai/aida, invocation=7e3e3d5a-f42d-4ada-bf2a-49674c0b976e, creator PID=1112433 (not worker evidence). Shared claim: .aida-store/coordination/leases/bug-...-349-83a7988a590cf263.toml. --force-claim requires positive death evidence for the exact holder. ... release this expired exited holder with `aida doctor heal stale-leases --id shared-7e3e3d5a-f42d-4ada-bf2a-49674c0b976e --yes` from its host". On dell1 the creator pid 1112433 is DEAD and the claim's heartbeat_at is 2026-11-15T14:47Z (11 days old), but the prescribed command answers: error: "no eligible stale lease finding shared-7e3e3d5a-...", and `aida doctor check leases` does not list this claim at all (it does list other expired shared claims with dead creators). So the refusal prescribes a fix that cannot run, and the spec cannot be launched. (A backup of the claim file is at dell1:~/heal-backup-<ts>/.)
+
+  ## Acceptance
+  - AC1: a shared claim with lease=unbound and launcher=unbound, a dead creator and an expired heartbeat is classified as an eligible stale lease by `aida doctor check leases` and released by the prescribed `aida doctor heal stale-leases --id shared-<invocation>`.
+  - AC2: an admission refusal never prescribes a heal command that the heal path would refuse (one shared eligibility predicate for both); a test.
+  - AC3: a test with exactly this claim shape (unbound lease, unbound launcher, dead creator, old heartbeat).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T14:32:42.135724878Z
+modified_at: 2026-11-26T14:32:42.135724878Z
+req_type: Bug
+tags:
+- admission
+- lanes
+- leases
+filed_at:
+  code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 15bbbc68222
+  vendor: claude
