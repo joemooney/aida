@@ -18,12 +18,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T22:51:37.391070504Z
-modified_at: 2026-11-26T22:56:31.105258058Z
+modified_at: 2026-11-26T22:58:36.443338727Z
 req_type: Bug
 tags:
 - STORY-3120
 - review
 - security
+comments:
+- id: 01a21a15-4b11-74b3-a852-10bae0706cd3
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:58):
+    # BUG-2779: no panic on untrusted challenger output; top-level errors keep their cause (advisor-122 approved 16:02: HIGH, STRICT, TOP; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2779-challenger-parse. <=200 lines. Completing (BUG-2779) trailer.
+    READ: `aida show BUG-2779`; aida-cli-lib/src/launch/review_challenger.rs ~154 (find('{')/rfind('}') then &raw[start..=end]), and every similar extraction of runner output (grep rfind('}') / find('{') under aida-cli-lib/src and aida-core/src/review_engine*).
+    AC1: parse with a real JSON scanner (e.g. serde_json::Deserializer::from_str(..).into_iter() over candidate starts) or at least check start < end; MALFORMED challenger output is treated as challenger-UNAVAILABLE (fail closed; it never reports an adversarial pass; if S5d's partial path isn't on main yet, return a typed error naming the cause). A fuzz-ish table test: "} sorry {", "done} {", "}", "{", "", a fenced block plus trailing prose, a nested {} inside strings. AC2: review prepare's top-level error prints the full cause chain (test: --sarif outside the repo shows "--write outside repository").
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T22:58:36.443338727Z
+  modified_at: 2026-11-26T22:58:36.443338727Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a12-632b-7fd1-8ace-6d3a575c7e9f
   author: joe
