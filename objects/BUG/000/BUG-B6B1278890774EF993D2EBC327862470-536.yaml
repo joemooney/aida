@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T19:12:19.601161167Z
+modified_at: 2026-11-26T19:14:06.501955372Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -145,6 +145,26 @@ comments:
   modified_at: 2026-11-26T18:22:53.749223998Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21947-8226-7801-966e-7347f5b1fad0
+  author: dirtlab
+  content: |-
+    ## Implementer approach (fresh slice, bug-2775-fresh)
+
+    Port of #4672 onto main (applied cleanly; ratchet-set conflict with the S5 tests resolved by keeping both). Reuses the earlier approach comment for AC1/AC2/AC3-proxy.
+
+    ### Acceptance criteria and evidence
+    - AC1/AC2: the ported tests (bug2775_runner_errors_name_runner_pass_batch_and_cause, bug2775_run_review_agent_resolves_and_states_the_default, bug2775_runner_cmd_note_only_when_the_variable_is_set), unit.
+    - AC3 addendum (unit, review_runner.rs): new bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast. A stub reads stdin to EOF and then `read`s an answer: it gets EOF at once. A stub that prompts on /dev/tty fails fast (<10s against a 30s deadline) with the exit status and a stderr tail naming tty. The runner now spawns via setsid (its own session with no controlling terminal) instead of process_group(0), so a terminal prompt fails with ENXIO instead of stopping on SIGTTIN until the deadline. Kill-the-group still works (pgid == pid).
+
+    ### Expected files
+    - aida-cli-lib/src/launch/review_runner.rs, review_challenger.rs, review_prepare.rs, vendors/review_runner.rs, scripts/ratchet-set.json
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-26T19:14:06.501955372Z
+  modified_at: 2026-11-26T19:14:06.501955372Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
