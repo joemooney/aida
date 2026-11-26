@@ -1692,6 +1692,14 @@ pub(crate) fn release_protected_lease(
 /// before its log goes away. Touches no worktree and no branch.
 // trace:TASK-1784 | ai:claude
 pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str) {
+    crate::session_reap::release_lease_files_with_reason(project_root, lease_id, "lease reaped");
+}
+
+pub(crate) fn release_lease_files_with_reason(
+    project_root: &std::path::Path,
+    lease_id: &str,
+    reason: &str,
+) {
     aggregate_session_activity_into_roles(project_root, lease_id);
     // BUG-2139: a reaped lease takes its headless child's grant with it.
     // trace:BUG-2139 | ai:claude
@@ -1703,7 +1711,7 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     // trace:TASK-2902 | ai:codex
     crate::native_publication::release(project_root, lease_id);
     // trace:STORY-2325 | ai:claude
-    crate::ownership::dual::lease_released(project_root, lease_id, "lease reaped");
+    crate::ownership::dual::lease_released(project_root, lease_id, reason);
     let activity = session_activity_path(project_root, lease_id);
     if activity.exists() {
         let _ = std::fs::remove_file(&activity);
