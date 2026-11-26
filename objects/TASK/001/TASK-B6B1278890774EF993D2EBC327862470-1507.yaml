@@ -1,0 +1,29 @@
+id: 01a217ec-e057-7183-910a-f5f1a34e508a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1507
+agreed_id: TASK-3917
+title: Auto-train pre-scan and real pass share one admission predicate; cache pre-scan forge reads (BUG-2769 follow-up)
+description: |
+  Follow-up to BUG-2769 (landed 2026-11-26 05:40 via train #4651). Deferred by advisor-122 (02:27 and 04:50 rulings on #4640). Filed by product-15.
+
+  ## Acceptance
+  - AC1: the auto-train pre-scan (train_wanted) and the real pass use ONE predicate (typed_gate_member_with + ownership), not the legacy eligible gate, so they cannot disagree.
+  - AC2: dedupe or cache the pre-scan forge (gh) reads per poll so an idle loop does not spend the shared ~5000/h GitHub budget.
+  - AC3: tests for the running-train and recovery AC4 phases, and reset TEST_HOLD_WARN_MS after the bug2769 tests (a test-isolation leak).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T12:55:29.623470732Z
+modified_at: 2026-11-26T12:55:29.623470732Z
+req_type: Task
+tags:
+- landing
+- throughput
+- train
+filed_at:
+  code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 15bbbc68222
+  vendor: claude
