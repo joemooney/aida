@@ -1,0 +1,88 @@
+id: 01a2196b-813e-7270-8a07-0c7b37524709
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-369
+title: 'Review PR-4683: [AI:claude] fix(deputy): the shell runner re-execs onto the live binary between jobs when its image is deleted or stale (TASK-3919)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a218ee`) for branch `task-3919-deputy-reexec`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4683>
+  - Branch: `task-3919-deputy-reexec` → `main`
+
+  ## Covers
+
+  - TASK-3919
+  - TASK-3912
+  - BUG-2773
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4683` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T19:53:25.566601905Z
+modified_at: 2026-11-26T19:54:01.980138344Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a218e5-49c1-7770-a7ef-a048f0d79ca9
+  created_at: 2026-11-26T19:53:29.949833353Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a215a5-1661-7d81-984f-eca5198e20e1
+  created_at: 2026-11-26T19:53:39.357401776Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a21845-df97-7211-84c2-b64cd9b68d42
+  created_at: 2026-11-26T19:53:54.871532761Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-26T19:54:01.980098056Z
+  created_by: dirtlab
+history:
+- id: 01a2196b-9ab7-7541-ba20-8ea22bf6c887
+  author: dirtlab
+  timestamp: 2026-11-26T19:53:32.087577713Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2196b-bf42-7c60-89f8-1c14c4a5e229
+  author: dirtlab
+  timestamp: 2026-11-26T19:53:41.442462614Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2196b-fbf4-7e51-a926-8a5426c4b1d1
+  author: dirtlab
+  timestamp: 2026-11-26T19:53:56.980882548Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2196c-17d6-73f0-bfa8-7659a2ac2f99
+  author: dirtlab
+  timestamp: 2026-11-26T19:54:04.118759128Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 0f7f446ae70fbae45f220a8d9a7e6477cae3c25d
+  branch: task-3919-deputy-reexec
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 52ac09e8a4
+  vendor: claude
+  session: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)

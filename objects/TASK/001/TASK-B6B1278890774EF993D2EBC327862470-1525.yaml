@@ -22,6 +22,12 @@ tags:
 - promotion
 - strict
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2196b-813e-7270-8a07-0c7b37524709
+  created_at: 2026-11-26T19:53:34.310433599Z
+  created_by: dirtlab
 comments:
 - id: 01a218ea-937e-73b3-95c9-fa881b1c1225
   author: joe
@@ -97,6 +103,13 @@ comments:
   modified_at: 2026-11-26T19:52:32.951556349Z
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2196b-1200-7f41-8f5c-6c7b7937c64a
+  author: aida-publication-done
+  content: Implementer push 0f7f446ae70f declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T19:52:57.088254481Z
+  modified_at: 2026-11-26T19:52:57.088254481Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21982-5121-7e22-836c-65c955902701
   author: joe
   content: 'FOLLOW-UP (advisor-122 2026-11-26 13:12, on the #4683 approval; not blocking): Joe''s default deputy runs WITHOUT --loop, so a failed re-exec (which exits rather than continuing stale) leaves NO default deputy. `aida doctor` should flag a "no default deputy" state (no live runner bound for the default name) with the restart command, and train-status should name it when the auto-train is blocked on it.'
@@ -110,6 +123,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2196b-1200-7f41-8f5c-6c64aac908b6
+  author: aida-publication-done
+  timestamp: 2026-11-26T19:52:57.088251904Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a2196b-ab96-7741-8b19-ed48573d867a
+  author: dirtlab
+  timestamp: 2026-11-26T19:53:36.406703586Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
