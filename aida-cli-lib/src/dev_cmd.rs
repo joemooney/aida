@@ -65,6 +65,10 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
         DevCommand::Rollback { after_wave, force } => {
             crate::dev_build::handle_dev_rollback(*after_wave, *force)
         }
+        // trace:STORY-3148 | ai:claude
+        DevCommand::Provisional { target, reason } => {
+            crate::dev_provisional::handle(target, reason)
+        }
         DevCommand::BuildGuard {
             profile,
             after_wave,

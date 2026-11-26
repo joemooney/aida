@@ -161,6 +161,8 @@ mod dev_autopromote;
 mod dev_cmd;
 // trace:TASK-3812 | ai:claude
 mod dev_fresh;
+// trace:STORY-3148 | ai:claude
+mod dev_provisional;
 mod digest;
 mod digest_cmd;
 mod digest_throughput;
