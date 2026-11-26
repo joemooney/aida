@@ -13,12 +13,12 @@ description: |
   - AC5: `aida dev rollback` restores the previous pair and clears the PROVISIONAL marker.
   - AC6: an operator doc section, "Outage playbook: provisional live" (when to use it, the fail-closed rule, how to roll back), in the operator docs.
   - AC7: tests for the refusal rules (non-operator; permissive diff without override), autobuild skip, auto-revert on landing, and rollback clearing the marker.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T07:22:39.548864952Z
+modified_at: 2026-11-26T07:54:21.091714534Z
 req_type: Story
 tags:
 - dev
@@ -116,6 +116,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a216d9-2c23-7b23-8991-4a41b1c4016d
+  author: aida-session-start
+  timestamp: 2026-11-26T07:54:21.091713700Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
