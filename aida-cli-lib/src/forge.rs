@@ -1467,6 +1467,31 @@ pub(crate) fn observe_github_pr_merged_with_binary(
         })
 }
 
+/// BUG-2738: a PR's raw forge state (`OPEN` / `MERGED` / `CLOSED`), `None`
+/// when gh is missing or the read fails or is malformed.
+// trace:BUG-2738 | ai:claude
+pub(crate) fn github_pr_state(root: &Path, number: u64) -> Option<String> {
+    // Unit tests never reach a real forge unless they stub gh.
+    if cfg!(test) && std::env::var_os("AIDA_TEST_GH_BINARY").is_none() {
+        return None;
+    }
+    let mut command = Command::new(crate::resolve_gh_binary()?);
+    command
+        .current_dir(root)
+        .args(["pr", "view", &number.to_string(), "--json", "state"]);
+    match crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        command,
+        std::time::Duration::from_secs(15),
+    )) {
+        Observed::Known(stdout) => serde_json::from_str::<serde_json::Value>(&stdout)
+            .ok()?
+            .get("state")?
+            .as_str()
+            .map(str::to_string),
+        Observed::Pending(_) | Observed::Transient(_) => None,
+    }
+}
+
 /// How far `head` is behind `base` on GitHub (the compare API's
 /// `behind_by` for `base...head`), bounded by the forge call timeout. Any
 /// failure to run or answer is `Transient`, and a reply that is not a count is

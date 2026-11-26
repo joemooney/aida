@@ -3606,6 +3606,24 @@ fn handle_review_record_context_with_policy_at(
             "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
             spec.to_ascii_uppercase()
         );
+        // BUG-2738: a stale refusal must not reopen a landed spec. An
+        // unreadable PR state leaves the shelve below in place.
+        // trace:BUG-2738 | ai:claude
+        let pr_state = pr.and_then(|n| crate::forge::github_pr_state(&project_root, n));
+        if let Some(reason) = crate::leases::record_refusal_on_landed_spec(
+            &project_root,
+            spec,
+            pr_state.as_deref(),
+            &recorded_by,
+            kind.label(),
+        )? {
+            println!(
+                "  {} {} not shelved: {reason}; the verdict is recorded and noted on the spec.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                spec.to_ascii_uppercase()
+            );
+            return Ok(());
+        }
         match shelve_spec_on_failure(
             &project_root,
             spec,
