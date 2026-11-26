@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:55:19.345403417Z
-modified_at: 2026-11-26T04:17:55.797364899Z
+modified_at: 2026-11-26T04:21:12.127529709Z
 req_type: Task
 comments:
 - id: 01a20558-cfe2-7770-8249-1be89fdb1625
@@ -21,6 +21,17 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 2026-11-25 14:24, delegated authority): APPROVED (product+advisor backlog pass).'
   created_at: 2026-11-25T21:19:10.572585995Z
   modified_at: 2026-11-25T21:19:10.572585995Z
+- id: 01a21616-5254-7f32-b6d0-8e995ccc3140
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:21):
+    # TASK-3837 (approved; product-15 2026-11-25 21:25, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch lane-hosts-non-utf8. STANDARD, small. <=300 changed lines; if it doesn't fit, ship a first slice with (Refs TASK-3837) and say what remains in the PR body, otherwise use the completing (TASK-3837) trailer.
+    READ FIRST: `aida show TASK-3837 --comments` (evidence, ACs, rulings). Keep it minimal: treat a non-UTF-8 sibling pathname as skip-with-warning (or OsStr handling) instead of aborting the claim snapshot; add a test.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T04:21:12.127529709Z
+  modified_at: 2026-11-26T04:21:12.127529709Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-ae4d-74b1-82ba-a2bb2bee369b
   author: joe
