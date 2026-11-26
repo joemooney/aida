@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-26T01:19:44.321629794Z
+modified_at: 2026-11-26T01:22:09.722985967Z
 req_type: Bug
 tags:
 - landing
@@ -153,6 +153,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T01:19:44.166968154Z
   modified_at: 2026-11-26T01:19:44.166968154Z
+- id: 01a21572-578a-7130-958e-7e63fa7fe805
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:22):
+    # BUG-2733 r2 on #4598 (advisor-122 ruling 2026-11-25 18:22 at bc543885: 2 security majors + p2s + test gaps; product-15). Lane: CLAUDE. STRICT. MAIN, existing branch bug-2733-linear-promotion-specs / PR #4598. <=80 lines. Keep the PR title.
+    (F1+F2, security) Every patch-id git call goes through aida_core::git_ops::host_git_command (seat-clone refusal, the contained-tree config pins, fsmonitor off), and add --no-textconv --no-ext-diff on `git log -p`. NO raw Command::new("git").
+    (F3) Use --binary --full-index so binary-only changes don't collide.
+    (F6, fail-safe) If the base contains the patch-id AND a later commit whose REVERSE patch-id matches (a revert), do NOT treat the commit as already on base. When in doubt, KEEP the spec (the supervised gate applies).
+    (F4) A TEST through pr_service::ship_gate_spec_records on a promotion-shaped branch.
+    (F5) A train-check TEST that the refusal names ONLY the new commit's specs.
+    Keep task_3792 green and unchanged. Run `cargo test -p aida-cli-lib pr_train` plus the BUG-2733 tests on this host, then make check-ci-fast, then push to #4598. COMMIT your work.
+  created_at: 2026-11-26T01:22:09.722985967Z
+  modified_at: 2026-11-26T01:22:09.722985967Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
