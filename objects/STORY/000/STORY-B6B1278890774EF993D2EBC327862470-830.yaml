@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-26T08:00:18.203767648Z
+modified_at: 2026-11-26T08:02:51.708474234Z
 req_type: Story
 tags:
 - landing
@@ -270,6 +270,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T08:00:18.044453073Z
   modified_at: 2026-11-26T08:00:18.044453073Z
+- id: 01a216e1-3a62-7470-a6e4-8b86505b391c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:02):
+    # STORY-3131 S2 r1 on #4634 (advisor-122 ruling 2026-11-26 01:04 at 7f8ce287; product-15). Lane: CLAUDE. MAIN, existing branch story-3131-s2-causes / PR #4634. <=40 lines. Keep the PR title.
+    (F2) "Green PR with no verdict at head" is a FINDING only when NO review is running or queued for that head AND it's past ready_dwell_minutes; otherwise it is INFORMATIONAL (shown, not failing). A normal review backlog must not fail the job. TEST both.
+    (F1) A lock held by a DEAD or UNIDENTIFIED driver counts as STALE (exactly today's case). TEST.
+    (F5) Pass the scan's `now` into lock_driver().
+    (F4) Fix the PR BODY: it currently describes #4541; it must describe THIS slice plus the AC-D (event-driven approval→train handoff) deferral.
+    DEFERRED (do NOT do): the scan() wiring test gap (an S3 item).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4634 and update its body. COMMIT your work.
+  created_at: 2026-11-26T08:02:51.708474234Z
+  modified_at: 2026-11-26T08:02:51.708474234Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
