@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T01:24:57.921736407Z
+modified_at: 2026-11-26T01:30:17.724622006Z
 req_type: Story
 tags:
 - integration
@@ -605,6 +605,38 @@ comments:
   modified_at: 2026-11-26T01:24:57.921736407Z
   session_id: 01a21542873b
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21579-c994-7c72-b06d-ca71064a4445
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4603 r1 @ 7eaafda4b3a (STORY-3120 S3b micro-round). Own change vs the integration merge 4900757e6f1: review_tuning.rs +134/-38, plus config-trust and store-writers registrations.
+
+    Result: PASS. STRICT tier, so it needs an INDEPENDENT review at this head.
+
+    B1 (fixed):
+    - resolve_for_run no longer takes project_root. The reviewer-seat tuning comes from resolve_agent_tuning_from(global ~/.aida/agents.toml, base blob of .aida/config.toml, base blob of .aida/agents.toml). The blobs are written into a TempDir created and dropped in the same call; the checkout copies are never read.
+    - trusted_review_base (renamed from trusted_review_rules) returns rules plus the seat blobs. Its diff guard now covers review-rules.toml, .aida/config.toml and .aida/agents.toml, and the refusal names the changed files.
+    - Tests:
+      - The base seat effort "high" resolves.
+      - A change lowering it to "low" refuses, both uncommitted (head=None) and committed.
+      - An untracked .aida/agents.toml in the checkout has no effect: it resolves to "high".
+      - The injected seat value is still refused by validation.
+
+    Should-fix (a) (fixed): every trusted-base git call (diff, ls-tree, cat-file) goes through `git --no-replace-objects`.
+
+    Should-fix (b)/(c) are covered as a doc contract on trusted_review_base: `base` must be the merge-base of the forge target and the reviewed head SHA, and never a PR-supplied value. S3a-2 wiring MUST honour it; I'll check that at its pre-check.
+
+    Registrations:
+    - `[keys.trusted.agents] "*" = "policy"` follows the file's existing convention for dynamic key names (cf. line 919).
+    - The reader entry for review_tuning.rs uses channel "trusted".
+    - The store-writers row for the TempDir scratch write is lane_private.
+
+    Accepted cost: any PR that edits .aida/config.toml (for any key) or .aida/agents.toml can't be machine-reviewed with --run-review. This fails closed, and such PRs are rare and get a human or advisor review anyway. A later slice could narrow the guard to the [agents] table.
+
+    Merge-tree: CLEAN against origin/integration and against #4604 (TASK-3320).
+  created_at: 2026-11-26T01:30:17.724622006Z
+  modified_at: 2026-11-26T01:30:17.724622006Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
