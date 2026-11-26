@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T06:06:30.145300064Z
+modified_at: 2026-11-26T06:08:49.718586209Z
 req_type: Story
 tags:
 - agents
@@ -78,6 +78,21 @@ comments:
     - codex_reset_time (vendors/usage_limit.rs:725-749) reads codex's 'try again at <date> <time>' as a wall-clock time in the parsing host's local timezone. When the launcher host and the codex host differ in timezone (lane host versus primary), the recorded reset is off by the difference. Launches then resume early (and fail again) or stay refused afte
   created_at: 2026-11-26T06:06:25.311888006Z
   modified_at: 2026-11-26T06:06:25.311888006Z
+- id: 01a21678-cb54-7e52-ae70-159a87e1e1e2
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:08):
+    # STORY-3134 S1 r1 on #4627 (advisor-122 ruling 2026-11-25 23:09 at 741bbc73; product-15). Lane: CLAUDE. MAIN, existing branch vendor-outage-typed / PR #4627. <=80 lines. Keep the "(Refs STORY-3134)" title.
+    (F1, security MUST) preserve_seat must NOT run raw `git` from the host inside a seat clone (seat-controlled config and hooks → host execution). REUSE the existing sanctioned salvage/seat-transport path, the same one conflict-repair salvage and `session end --force` use (host_git_command with the seat-clone pins, or the seat-side publish route).
+    (F2) The push goes through the remote_credentials routing; no unrouted push.
+    (F3) Detection classifies ONLY the run's TERMINAL event (or a dedicated limit event), not "the last matching line in the tail".
+    (F4) A TEST through lane_host::preflight / `queue work --no-human` showing an active outage REFUSES the launch.
+    DEFERRED (do NOT do): the fast-fix child ordering; the codex reset-time timezone.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4627. COMMIT your work.
+  created_at: 2026-11-26T06:08:49.718586209Z
+  modified_at: 2026-11-26T06:08:49.718586209Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
