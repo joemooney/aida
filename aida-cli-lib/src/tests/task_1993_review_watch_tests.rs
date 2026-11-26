@@ -5975,3 +5975,336 @@ fn bug2763_exited_hold_is_scoped_to_reviewed_head() {
     assert!(history.conclusive(&old.head));
     assert!(!history.conclusive(&new.head));
 }
+
+/// AC2: the forge scan is slow (a stub forge that sleeps per PR), and a ship
+/// and a manual train are each admitted while a PR's forge read is still in
+/// flight. Only the decision takes the claim: a ship holding exclusive
+/// admission at that moment defers the decision to the next pass.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_ship_and_manual_train_admitted_during_a_slow_forge_scan() {
+    use std::time::Duration;
+    let (temp, store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 5\n",
+    )
+    .unwrap();
+    let mut admission = None;
+    assert_eq!(hold_admission(&root, &mut admission, false).unwrap(), None);
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["legacy review-watch".to_string()]
+    );
+    let mut claim = PassClaim::new(&root, &mut admission);
+    claim.release("pass setup");
+    let mut pass = service::PassCounts::default();
+    let mut watched = Watched::default();
+    let mut held_ship = None;
+    let result = watch_pass(
+        &store,
+        &mut claim,
+        vec![
+            change(1, 1, false),
+            change(2, 2, false),
+            change(3, 3, false),
+        ],
+        &mut pass,
+        &mut watched,
+        |change, claim| {
+            // A waiter arrives as this PR's forge read starts.
+            let (tx, rx) = std::sync::mpsc::channel();
+            let waiter = root.clone();
+            let id = change.id;
+            std::thread::spawn(move || {
+                let got = if id == 2 {
+                    crate::admission_owner::manual_train_admission(&waiter, false)
+                } else {
+                    crate::admission_owner::ship_admission(&waiter)
+                };
+                let _ = tx.send(got.map(|c| c.expect("waiter holds its own claim")));
+            });
+            // The stub forge: one slow `gh pr view` per PR.
+            std::thread::sleep(Duration::from_millis(1500));
+            let got = rx
+                .try_recv()
+                .expect("admitted while the forge read was in flight")
+                .unwrap();
+            // PR-1's ship and PR-2's train finish; PR-3's ship still holds.
+            if id == 3 {
+                held_ship = Some(got);
+            } else {
+                drop(got);
+            }
+            match claim.decide(&change, || unreachable!("snapshot is fresh"))? {
+                Some(reason) => {
+                    assert!(reason.contains("admission yielded"), "{reason}");
+                    Ok(Admission::Skipped("deferred"))
+                }
+                None => {
+                    assert!(bug2703_loop_claims(&root).contains(&"legacy review-watch".into()));
+                    Ok(Admission::Settled)
+                }
+            }
+        },
+    );
+    result.unwrap();
+    assert!(watched.refused.is_empty(), "{:?}", watched.refused);
+    assert_eq!(pass.skipped["deferred"], vec!["PR-3".to_string()]);
+    // The other two were decided (settled) under the retaken claim.
+    assert_eq!(
+        pass.skipped["skipped"],
+        vec!["PR-1".to_string(), "PR-2".to_string()]
+    );
+    // The claim is given up after every decision.
+    assert!(claim.claim.is_none());
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["manual train/ship".to_string()]
+    );
+    drop(held_ship);
+}
+
+/// AC1: under the claim, a snapshot older than the bound is rechecked by a
+/// re-read made with the claim released; a moved change is not decided.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_stale_snapshot_is_reread_outside_the_claim() {
+    let (temp, _store) = fixture();
+    let root = temp.path().to_path_buf();
+    let stale = std::time::Instant::now() - SNAPSHOT_TTL - std::time::Duration::from_secs(1);
+    let c = change(7, 7, false);
+    let mut admission = None;
+    let mut claim = PassClaim::new(&root, &mut admission);
+    claim.observed = stale;
+    let current = claim
+        .decide(&c, || {
+            assert!(
+                bug2703_loop_claims(&root).is_empty(),
+                "re-read under the claim"
+            );
+            Ok(c.clone())
+        })
+        .unwrap();
+    assert_eq!(current, None);
+    assert!(
+        claim.claim.is_some(),
+        "an unchanged change is decided under the claim"
+    );
+    claim.release("test");
+    for (reread, want) in [
+        (
+            Ok(change(7, 8, false)),
+            "change moved during the forge scan",
+        ),
+        (
+            Err(anyhow::anyhow!("gh down")),
+            "forge re-read refused: gh down",
+        ),
+    ] {
+        let reason = claim.decide(&c, || reread).unwrap().unwrap();
+        assert!(reason.contains(want), "{reason}");
+        assert!(claim.claim.is_none(), "no decision on a moved change");
+    }
+}
+
+/// AC3: a hold longer than the bound is logged, naming its phase.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_long_admission_hold_warns_with_its_phase() {
+    let (temp, _store) = fixture();
+    let mut admission = None;
+    assert_eq!(
+        hold_admission(temp.path(), &mut admission, false).unwrap(),
+        None
+    );
+    let mut claim = PassClaim::new(temp.path(), &mut admission);
+    assert_eq!(claim.release("pass setup"), None, "a short hold is quiet");
+    assert_eq!(
+        claim
+            .decide(&change(1, 1, false), || unreachable!())
+            .unwrap(),
+        None
+    );
+    claim.since = Some(std::time::Instant::now() - HOLD_WARN - std::time::Duration::from_secs(5));
+    let warning = claim.release("dispatch decision for PR-1").unwrap();
+    assert!(
+        warning.contains("during dispatch decision for PR-1"),
+        "{warning}"
+    );
+    assert!(warning.contains("admission held 35s"), "{warning}");
+    assert_eq!(claim.release("again"), None, "nothing held, nothing logged");
+}
+
+/// r1 F1/F2: the production `admit_change`, given the pass claim, makes its
+/// forge reads (the base probe's fetch) without the claim, then decides and
+/// launches the review under it; a stale head's `update-branch` (a forge
+/// write) also runs under it. Every fake forge, Git and launcher call logs
+/// whether the watcher's claim was held at that moment.
+// trace:BUG-2765 | ai:claude
+#[test]
+fn bug2765_admit_change_reads_unclaimed_then_writes_under_the_claim() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let (root, hub, bin) = (
+        temp.path().join("repo"),
+        temp.path().join("hub.git"),
+        temp.path().join("bin"),
+    );
+    std::fs::create_dir(&root).unwrap();
+    std::fs::create_dir(&bin).unwrap();
+    let real_git = crate::find_executable_on_path("git").expect("git on PATH");
+    let git_run = |cwd: &Path, args: &[&str]| -> String {
+        let out = Command::new(&real_git)
+            .args(crate::test_git::git_command().get_args())
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8(out.stdout).unwrap().trim().into()
+    };
+    git_run(
+        temp.path(),
+        &["init", "-q", "--bare", hub.to_str().unwrap()],
+    );
+    git_run(&root, &["init", "-q", "-b", "main"]);
+    git_run(&root, &["config", "user.name", "fixture"]);
+    git_run(&root, &["config", "user.email", "fixture@test"]);
+    std::fs::write(root.join("own.rs"), "initial").unwrap();
+    git_run(&root, &["add", "."]);
+    git_run(&root, &["commit", "-q", "-m", "initial"]);
+    git_run(&root, &["checkout", "-q", "-b", "feature"]);
+    std::fs::write(root.join("own.rs"), "feature").unwrap();
+    git_run(&root, &["commit", "-qam", "feature"]);
+    let head = git_run(&root, &["rev-parse", "HEAD"]);
+    git_run(&root, &["checkout", "-q", "main"]);
+    git_run(&root, &["remote", "add", "origin", hub.to_str().unwrap()]);
+    git_run(
+        &root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    git_run(
+        &root,
+        &["push", "-q", "origin", "main", "feature:refs/pull/1/head"],
+    );
+    let q = |p: &Path| crate::sh_single_quote(&p.to_string_lossy());
+    let log = temp.path().join("calls.log");
+    let claimed = format!(
+        "if grep -qs 'legacy review-watch' {}/*.json; then c=held; else c=free; fi\n",
+        q(&root.join(".aida/admission-owner"))
+    );
+    crate::test_exec::write_executable(&bin.join("git"), &format!(
+        "#!/bin/sh\n{claimed}if [ \"$1 $2 $3\" = 'remote get-url origin' ]; then echo https://github.com/owner/repo.git; exit 0; fi\nif [ \"$1\" = fetch ]; then echo \"fetch claim=$c\" >> {log}; shift 5; exec {git} fetch --no-write-fetch-head --no-tags -- {hub} \"$@\"; fi\nexec {git} \"$@\"\n",
+        log = q(&log), hub = q(&hub), git = q(&real_git)));
+    crate::test_exec::write_executable(&bin.join("gh"), &format!(
+        "#!/bin/sh\n{claimed}echo \"gh $1 $2 $3 claim=$c\" >> {log}\n[ \"$1 $2\" = 'pr update-branch' ]\n",
+        log = q(&log)));
+    let launcher = bin.join("launcher");
+    crate::test_exec::write_executable(
+        &launcher,
+        &format!(
+            "#!/bin/sh\n{claimed}echo \"launch $1 $2 claim=$c\" >> {log}\n",
+            log = q(&log)
+        ),
+    );
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let mut env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "advisor",
+        &["reviewer"],
+        &[
+            ("PATH", Some(path.as_str())),
+            ("HOME", Some(temp.path().to_str().unwrap())),
+            ("AIDA_HOME", Some(temp.path().to_str().unwrap())),
+            ("GH_REPO", None),
+            ("AIDA_BIN", None),
+        ],
+    );
+    let parent = crate::gate::seat_authority::test_support::mint_grant_for(
+        &root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+    let repo = forge::Repository::load(&root).unwrap();
+    let store = Store::open(&root, &repo.identity).unwrap();
+    let args = ReviewWatchArgs {
+        control: None,
+        once: true,
+        interval: 1,
+        max_concurrent: Some(2),
+        vendor: None,
+        release: None,
+        launch_reservation: None,
+    };
+    let fresh = forge::Change {
+        id: 1,
+        head: head.clone(),
+        head_branch: Some("feature".into()),
+        overlap: None,
+        ..change(1, 1, false)
+    };
+    // PR-2: a stale head already notified, whose author has no live session.
+    let stale = forge::Change {
+        id: 2,
+        head_branch: Some("gone".into()),
+        ..change(2, 2, true)
+    };
+    let Action::Notify(notice) = select(&store, &stale, None, 2).unwrap() else {
+        panic!("a stale overlapping head is notified first")
+    };
+    deliver(&root, &notice).unwrap();
+    store
+        .transaction(&stale.key(), |state| {
+            let entry = state.entries.get_mut(&stale.key()).unwrap();
+            entry.notices.get_mut(&stale.head).unwrap().sent = true;
+            Ok(())
+        })
+        .unwrap();
+    let mut admission = None;
+    let mut claim = PassClaim::new(&root, &mut admission);
+    let authors = update::AuthorLiveness::default();
+    let mut children = Vec::new();
+    let mut admit = |c: &forge::Change, claim: &mut PassClaim<'_>| {
+        admit_change(
+            &root,
+            &repo,
+            &store,
+            &args,
+            &mut children,
+            &authors,
+            c.clone(),
+            Some(&launcher),
+            Some(claim),
+        )
+        .unwrap()
+    };
+    assert!(matches!(admit(&stale, &mut claim), Admission::Settled));
+    assert!(claim.claim.is_none(), "given up before the report");
+    assert!(matches!(admit(&fresh, &mut claim), Admission::Admitted));
+    assert!(claim.claim.is_some(), "the launch runs under the claim");
+    for dispatcher in &mut children {
+        dispatcher.child.wait().unwrap();
+    }
+    claim.release("test");
+    let calls = std::fs::read_to_string(&log).unwrap();
+    let lines: Vec<&str> = calls.lines().collect();
+    assert_eq!(
+        lines,
+        vec![
+            "gh pr update-branch 2 claim=held",
+            "fetch claim=free",
+            "launch review watch claim=held",
+        ],
+        "{calls}"
+    );
+}
