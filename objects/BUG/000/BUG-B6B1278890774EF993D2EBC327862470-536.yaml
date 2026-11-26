@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T16:21:44.655142438Z
+modified_at: 2026-11-26T16:50:15.939283115Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -65,6 +65,13 @@ comments:
     - With no --agent and no [agents] vendor, default to claude (the repo-wide built-in default) instead of refusing? Taking claude and saying so.
   created_at: 2026-11-26T16:25:24.110671284Z
   modified_at: 2026-11-26T16:25:24.110671284Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a218c3-d103-7e11-b78a-baf41901ea6e
+  author: dirtlab
+  content: Commit eaffc38b73 references this requirement
+  created_at: 2026-11-26T16:50:15.939283115Z
+  modified_at: 2026-11-26T16:50:15.939283115Z
   session_id: 01a218a9014e
   harness_version: 2.1.319 (Claude Code)
 history:
