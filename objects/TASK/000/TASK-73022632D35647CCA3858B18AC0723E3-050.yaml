@@ -1,5 +1,6 @@
 id: 01a21777-43e6-7822-86ae-0e387d2351ad
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-050
+agreed_id: TASK-3478
 title: agent gc now keeps anchor-level mailbox id temps (unattributed owner) instead of reaping them
 description: |
   BUG-2770 made `aida agent gc` reap only leftovers whose owner is provably dead. write_source_id temp files under the anchor dir (scan_id_temps(&anchored.anchor, ...) in aida-core/src/mailbox_lifecycle/leftovers.rs) cannot be attributed to any one checkout, so they are classed Unknown and are always kept. Before this change gc reaped them once they were 10 minutes old. If they pile up, they need an owner record (for example the minting checkout in the temp name) or a dedicated rule.
@@ -19,6 +20,13 @@ tags:
 - from-implementer:BUG-2770
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a217a4-df51-7bd1-b679-179793d6c41c
+  author: joe
+  timestamp: 2026-11-26T11:36:50.769633122Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
   branch: bug-2770-gc-scope

@@ -1,5 +1,6 @@
 id: 01a21732-5e95-74c3-a6fb-f8af49f52534
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1495
+agreed_id: TASK-3479
 title: 'Review follow-up: open->landed only covers PRs created in the last 60 days with a 1000-row cap (forge.rs Git'
 description: |-
   From STORY-3143
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2148c-15aa-74a2-90f5-6b603346566c
   created_at: 2026-11-26T09:32:02.098209241Z
+history:
+- id: 01a217a5-1db2-7e30-8e72-2e0c2f3c7c6f
+  author: joe
+  timestamp: 2026-11-26T11:37:06.738170875Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: aeb25528590f62531a8b19593e3fc98c019b71fe
   branch: pr-4641

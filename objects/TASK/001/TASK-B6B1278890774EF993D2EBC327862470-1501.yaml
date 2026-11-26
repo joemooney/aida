@@ -1,5 +1,6 @@
 id: 01a21789-b133-79d3-80c3-d6fa6b5756d0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1501
+agreed_id: TASK-3481
 title: 'Review follow-up: aida-core/src/mailbox_lifecycle/activation.rs:234: the retention dry run still calls the u'
 description: |-
   From BUG-2770
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
   created_at: 2026-11-26T11:07:51.482512560Z
+history:
+- id: 01a217a5-990f-7d90-a932-01d39aac9b29
+  author: joe
+  timestamp: 2026-11-26T11:37:38.319319866Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
   branch: pr-4645

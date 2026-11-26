@@ -1,5 +1,6 @@
 id: 01a21788-e2e1-77c3-9ba6-52cb8537fc05
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1500
+agreed_id: TASK-3482
 title: 'Review follow-up: aida-cli-lib/src/agent_registry_root.rs LeftoverOwners::probe is untested: the CLI test bu'
 description: |-
   From BUG-2770
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2170d-2deb-75c1-93dc-e09f4d31bf8d
   created_at: 2026-11-26T11:07:07.578476276Z
+history:
+- id: 01a217a5-d622-7380-b92f-296450f0087b
+  author: joe
+  timestamp: 2026-11-26T11:37:53.954585456Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
   branch: pr-4645
