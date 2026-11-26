@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T15:49:49.073608609Z
+modified_at: 2026-11-26T15:51:08.112315934Z
 req_type: Task
 tags:
 - landing
@@ -110,6 +110,26 @@ comments:
   modified_at: 2026-11-26T15:45:32.468912039Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2188d-ae50-7781-8da9-f5d166cac1dc
+  author: dirtlab
+  content: |-
+    ## Implementer approach (fresh slice, replaces #4616)
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** `landing_policy::story2897_landing_policy_tests::max_prs_per_train_caps_the_auto_train_and_defaults_to_today` proves the knob parses, defaults to today's 10 when unset, and falls back with a warning on invalid values; `advisor_train_handler` (the automatic train) reads it, explicit `aida pr train` keeps its --max.
+    - **AC2 (unit):** `story_1690_train_tests::max_prs_per_train_admits_three_now_and_the_next_three_next_pass`.
+    - **AC3:** deferred follow-up (config change after landing), not in this slice.
+
+    ### Expected files
+    - aida-cli-lib/src/{landing_policy,pr_train,config_cmd}.rs, tests/story_1690_train_tests.rs
+    - docs/configuration-guide.md (+ generated showcase), scripts/store-writers.toml
+
+    ### Ambiguities / conflicts as questions
+    - None. The TASK-3917 prescan's per-member dry-run `max: 10` is a single-member admission check and stays as is.
+  created_at: 2026-11-26T15:51:08.112315934Z
+  modified_at: 2026-11-26T15:51:08.112315934Z
+  session_id: 01a2188c2c68
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
