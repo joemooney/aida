@@ -1256,7 +1256,10 @@ write no discovery report.
 
 Delegation deliberately only narrows during ordinary rotation. To accept a
 wider grant, change deputy, or recover a missing service receipt, the operator
-must reset the binding from a host terminal:
+must reset the binding from a host terminal. The same reset fixes a deputy
+whose runner binary was deleted or replaced by a promotion: `aida advisor
+loops status`, `train-status` and `aida doctor check deputy-binary` name that
+deputy, its pid, binary path and age.
 
 1. Pause the recorded deputy with `aida deputy shell pause --name NAME`.
    Inspect `aida advisor loops status`, `service.json`, `service.log` and the
