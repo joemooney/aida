@@ -13,12 +13,12 @@ description: |
   - AC5: `aida dev rollback` restores the previous pair and clears the PROVISIONAL marker.
   - AC6: an operator doc section, "Outage playbook: provisional live" (when to use it, the fail-closed rule, how to roll back), in the operator docs.
   - AC7: tests for the refusal rules (non-operator; permissive diff without override), autobuild skip, auto-revert on landing, and rollback clearing the marker.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T04:17:40.939402324Z
+modified_at: 2026-11-26T04:17:43.726561917Z
 req_type: Story
 tags:
 - dev
@@ -31,6 +31,14 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 21:20, Joe-requested): APPROVED HIGH, STRICT (it swaps the live binary and rebinds the loops), drive. Binding notes: (a) STRICT because a provisional binary runs every gate; the default refusal of permissiveness diffs is a real check: classify by touched paths (the gate/approval/admission/containment strict paths), not by commit message. (b) The PROVISIONAL marker also blocks dev build promotes from main unless --replace-provisional, and the auto-revert path is tested. (c) Per today''s finding, the route is an integration-style promote, never a hand copy into live/. (d) Slices: S1 build+promote+marker+rollback (at most 300); S2 loop rebind/restart + autobuild interplay + TTL; S3 docs.'
   created_at: 2026-11-26T04:17:40.939402324Z
   modified_at: 2026-11-26T04:17:40.939402324Z
+history:
+- id: 01a21612-d92e-7803-b9af-433a3b0c05bb
+  author: joe
+  timestamp: 2026-11-26T04:17:43.726556414Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
   branch: main
