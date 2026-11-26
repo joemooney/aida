@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T20:32:11.401841590Z
+modified_at: 2026-11-26T20:33:25.964401424Z
 req_type: Task
 tags:
 - deputy
@@ -120,6 +120,12 @@ comments:
   content: Implementer push 0f7f446ae70f declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T20:32:11.401840626Z
   modified_at: 2026-11-26T20:32:11.401840626Z
+  session_id: 01a218eed076
+- id: 01a21990-21cc-7ac3-9454-39a449bf8445
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3919-deputy-reexec` at head `0f7f446ae70fbae45f220a8d9a7e6477cae3c25d`.'
+  created_at: 2026-11-26T20:33:25.964388974Z
+  modified_at: 2026-11-26T20:33:25.964388974Z
   session_id: 01a218eed076
 history:
 - id: 01a218ef-06e9-70b1-85a7-aae51066fd02
