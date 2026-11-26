@@ -220,6 +220,53 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.build(expected=1)
         self.assertEqual(before, self.snapshot())
 
+    # trace:STORY-2839 | ai:claude
+    def build_table(self, markdown):
+        self.source.write_text('# Fixture guide\n\n' + markdown)
+        self.git('add', '.')
+        self.build()
+        self.git('add', '.')
+        self.build('--check')
+        return (self.site / 'guide.html').read_text()
+
+    def search_record(self):
+        index = (self.site / 'search-data.js').read_text().split('window.AIDA_DOCS = ', 1)[1]
+        return json.loads(index.strip().removesuffix(';'))[0]['text']
+
+    def test_markdown_tables_render_headers_cells_and_links(self):
+        page = self.build_table(
+            '| Step | Role |\n'
+            '| --- | :-: |\n'
+            '| `aida approve` | [advisor](elsewhere.md) |\n'
+            '| short |\n'
+            '\nAfter the table.\n')
+        self.assertIn('<div class="table-wrap"><table><thead><tr><th>Step</th><th>Role</th></tr></thead>'
+                      '<tbody><tr><td><code>aida approve</code></td><td><a href="../elsewhere.md">advisor</a></td></tr>'
+                      '<tr><td>short</td><td></td></tr></tbody></table></div>\n<p>After the table.</p>', page)
+        self.assertEqual(self.search_record(), 'Fixture guide Step Role aida approve advisor short After the table.')
+
+    def test_table_cells_are_html_escaped(self):
+        page = self.build_table(
+            '| Cell | Note |\n'
+            '| --- | --- |\n'
+            '| <b>bold</b> | <script>alert(1)</script> |\n')
+        self.assertIn('<td>&lt;b&gt;bold&lt;/b&gt;</td><td>&lt;script&gt;alert(1)&lt;/script&gt;</td>', page)
+        self.assertNotIn('<b>bold</b>', page)
+        self.assertNotIn('<script>alert', page)
+
+    def test_escaped_pipe_stays_inside_one_cell(self):
+        page = self.build_table(
+            '| Command | Meaning |\n'
+            '| --- | --- |\n'
+            r'| `a \| b` | either a \| b |' '\n')
+        self.assertIn('<tbody><tr><td><code>a | b</code></td><td>either a | b</td></tr></tbody>', page)
+        self.assertIn('a | b either a | b', self.search_record())
+
+    def test_pipe_lines_without_a_separator_stay_paragraphs(self):
+        page = self.build_table('| not | a table |\n| still | prose |\n\n| a | b |\n| --- |\n')
+        self.assertNotIn('<table>', page)
+        self.assertIn('<p>| not | a table | | still | prose |</p>', page)
+
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_term_cards_show_only_for_a_search(self):
         script = r'''

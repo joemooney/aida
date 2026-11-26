@@ -165,11 +165,12 @@ printf 'spawn\n' >> "$1"
     });
     assert_eq!(outcomes.iter().filter(|v| **v).count(), 1);
     assert_eq!(std::fs::read_to_string(&marker).unwrap().lines().count(), 1);
+    // The winner's claim fences its own head (BUG-2763 keys claims by head).
     assert!(!f
         .step(
             &f.a,
             "PR-7",
-            &"b".repeat(40),
+            &"a".repeat(40),
             Uuid::new_v4(),
             State::Reserved
         )
@@ -220,6 +221,39 @@ printf 'spawn\n' >> "$1"
             .unwrap()
     );
     assert_eq!(std::fs::read_to_string(&marker).unwrap().lines().count(), 2);
+}
+// Hub half: A's claim is left Running by an ambiguous exit, yet B is admitted
+// and dispatched; both heads then stay fenced against a second node.
+// trace:BUG-2763.AC1 | ai:claude
+// trace:BUG-2763.AC2 | ai:codex
+#[test]
+fn bug2763_running_hub_claim_allows_dispatch_only_for_a_different_head() {
+    let f = Fixture::new();
+    let _env = f.environment();
+    let old = "a".repeat(40);
+    let new = "b".repeat(40);
+    crate::review_watch::fixture_admission_exit(&f.a, true, false, || {}).unwrap();
+    let repo = private_repo().unwrap();
+    let store = f.a.join(".aida-store");
+    let roster = roster(&store, &super::super::head(&store).unwrap()).unwrap();
+    let (_, table) = read_table(repo.path(), &f.hub, "PR-7").unwrap();
+    let held = chain(&f.hub, "PR-7", &table.changes["PR-7"], &roster).unwrap();
+    assert_eq!(held.last().unwrap().head, old);
+    assert_eq!(held.last().unwrap().state, State::Running);
+    let marker = f.temp.path().join("spawned");
+    assert!(crate::review_watch::fixture_admit_dispatch(
+        &f.a,
+        &new,
+        Path::new("/usr/bin/touch"),
+        &marker
+    )
+    .unwrap());
+    assert!(marker.is_file());
+    for head in [&old, &new] {
+        assert!(!f
+            .step(&f.b, "PR-7", head, Uuid::new_v4(), State::Reserved)
+            .unwrap());
+    }
 }
 #[test]
 fn story2492_admission_transitions_fence_tokens_and_terminal_heads() {

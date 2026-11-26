@@ -42,7 +42,8 @@ mirror_remotes = ["gitlab"]
 # would NOT reach them. Override per-run with the env var, or (once TASK-1116
 # lands) a `--vendor`/`--agent` flag on the drive command.
 [agents]
-vendor = "codex"
+# TEMPORARY: codex usage limit until 2026-11-29 10:41; revert to codex then
+vendor = "claude"
 
 [drain]
 # STORY-975: retry a transient phase failure before parking NeedsAttention.

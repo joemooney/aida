@@ -928,6 +928,7 @@ impl Store {
             );
             let released = entry.attempts.len();
             entry.attempts.clear();
+            entry.skipped = None;
             Ok(released)
         })
     }
@@ -2036,6 +2037,9 @@ fn select_with_probes(
         let mut no_verdict_attempts = 0;
         let mut no_verdict_ready = false;
         let mut pickup_retries = 0;
+        // An exited attempt holds only its own head. Even a surviving reviewer can
+        // record only its old head, and the verdict gate checks the reviewed SHA.
+        // trace:BUG-2763 | ai:codex
         if let Some(attempt) = entry.attempts.iter_mut().find(|a| a.head == change.head) {
             if history.conclusive(&change.head) {
                 attempt.no_verdict_retry_at = None;
@@ -3834,47 +3838,132 @@ fn reviewed_fast_settled(
     Ok(false)
 }
 
-// Both recorders persist the PR and attested SHA in the verdict. Remember
-// a consumed intent while GitHub registers the FULL run.
+/// An approving, open spec-keyed verdict attested at its own reviewed head,
+/// indexed by that head. `aida review record <SPEC>` without `--pr` writes
+/// only the spec key; the exact head SHA identifies the PR it approved.
+// trace:BUG-2764 | ai:claude
+fn spec_approvals_by_head(root: &Path) -> std::collections::BTreeMap<String, String> {
+    use crate::gate::review_verdict::{read_recorded_verdict, verdict_keys};
+    let mut by_head = std::collections::BTreeMap::new();
+    for key in verdict_keys(root) {
+        if crate::gate::ledger::ChangeKey::parse(&key).is_some() {
+            continue;
+        }
+        let Some(v) = read_recorded_verdict(root, &key) else {
+            continue;
+        };
+        if let Some(head) = v.reviewed_sha.as_deref() {
+            if v.kind.approves()
+                && !v.is_closed()
+                && v.attestation.as_ref().is_some_and(|a| a.sha == head)
+            {
+                by_head.entry(head.to_string()).or_insert(key);
+            }
+        }
+    }
+    by_head
+}
+
+/// The promotion pass. Writes one line per approved PR it considered to
+/// `out` (promoted, or skipped with its reason) and every failure, per-PR or
+/// pass-level, to `err` before returning an error: schedule.log keeps only
+/// stderr, and agent output mode prints the final error on stdout.
+// trace:BUG-2764 | ai:claude
+pub(crate) fn promote_approved_heads(
+    root: &Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<()> {
+    let (lines, failures) = match promotion_pass(root) {
+        Ok(pass) => pass,
+        Err(error) => {
+            let _ = writeln!(err, "promotion pass failed: {error:#}");
+            return Err(error);
+        }
+    };
+    // A closed stdout must not hide the failures below.
+    for line in &lines {
+        let _ = writeln!(out, "{line}");
+    }
+    for failure in &failures {
+        let _ = writeln!(err, "{failure}");
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "{} approved PR(s) could not be promoted",
+        failures.len()
+    );
+    Ok(())
+}
+
+/// Both recorders persist the PR and attested SHA in the verdict; a consumed
+/// intent is remembered while GitHub registers the FULL run. Returns the
+/// per-PR outcome lines and the per-PR failures.
 // trace:BUG-2729 | ai:codex
-pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
+// trace:BUG-2764 | ai:claude
+fn promotion_pass(root: &Path) -> Result<(Vec<String>, Vec<String>)> {
     use crate::full_tier::{bounded, request_full_ci_with};
     use crate::gate::review_verdict::read_recorded_verdict;
-    let repo = forge::Repository::load(root)?;
-    let runtime = Directory::shared(&root.join(".aida"))?;
-    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))?;
-    let promote = |change: forge::Change| -> Result<()> {
+    let repo = forge::Repository::load(root).context("load the forge repository")?;
+    let runtime = Directory::shared(&root.join(".aida")).context("open .aida")?;
+    let receipts = Directory::open(&runtime.path().join("full-ci-requests"))
+        .context("open .aida/full-ci-requests")?;
+    let spec_approvals = std::cell::OnceCell::new();
+    let promote = |change: forge::Change| -> Result<Option<String>> {
         let pr = change.id;
         let key = change.key();
         let receipt = format!("{key}.full-ci");
         let _lock = receipts.lock(&format!("{receipt}.lock"))?;
-        let Some(v) = read_recorded_verdict(root, &key) else {
-            return Ok(());
+        let own = read_recorded_verdict(root, &key);
+        // A PR's own verdict for its current head wins; otherwise an
+        // approval recorded under a spec key at exactly this head counts.
+        let (v, source) = match own {
+            Some(v) if v.reviewed_sha.as_deref() == Some(change.head.as_str()) => (v, key.clone()),
+            own => match spec_approvals
+                .get_or_init(|| spec_approvals_by_head(root))
+                .get(&change.head)
+                .and_then(|spec: &String| Some((read_recorded_verdict(root, spec)?, spec.clone())))
+            {
+                Some(found) => found,
+                None => match own {
+                    Some(v) => (v, key.clone()),
+                    None => return Ok(None),
+                },
+            },
         };
-        let Some(head) = v.reviewed_sha.as_deref() else {
-            return Ok(());
+        let Some(head) = v.reviewed_sha.clone() else {
+            return Ok(None);
         };
+        let head = head.as_str();
+        if !v.kind.approves() || v.is_closed() {
+            return Ok(None);
+        }
+        let short = head.get(..12).unwrap_or(head);
+        let skipped = |reason: &str| -> Result<Option<String>> {
+            Ok(Some(format!(
+                "{key}: skipped ({reason}) [{source} @ {short}]"
+            )))
+        };
+        if v.attestation.as_ref().is_none_or(|a| a.sha != head) {
+            return skipped("approval carries no recorder attestation for its head");
+        }
         // Legacy SHA-only receipts lack base evidence and are retried once.
         let identity = format!("{head}\n{}", change.base);
-        if !v.kind.approves()
-            || v.is_closed()
-            || v.attestation.as_ref().is_none_or(|a| a.sha != head)
-            || receipts.read(&receipt)?.as_deref() == Some(identity.as_bytes())
-        {
-            return Ok(());
+        if receipts.read(&receipt)?.as_deref() == Some(identity.as_bytes()) {
+            return skipped("ci:full already requested for this head");
         }
         // Discovery can precede publication of a verdict for a newer head.
         // Consuming that verdict against the old snapshot loses its request.
         let current = repo.change(root, pr)?;
         if current.head != change.head || current.base != change.base {
-            return Ok(());
+            return skipped("head or base moved since discovery; retried next tick");
         }
         if head != change.head {
-            eprintln!("{key}: discarding FULL request for superseded head {head}");
-            return receipts.write(&receipt, identity.as_bytes());
+            receipts.write(&receipt, identity.as_bytes())?;
+            return skipped("approval is for a superseded head; discarded");
         }
         if !reviewed_fast_settled(root, &repo, &change)? {
-            return Ok(());
+            return skipped("FAST CI at this head has not finished");
         }
         let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
             let current = repo.change(root, pr).map_err(|e| e.to_string())?;
@@ -3884,26 +3973,227 @@ pub(crate) fn promote_approved_heads(root: &Path) -> Result<()> {
             bounded(root, cli, args)
         })
         .map_err(anyhow::Error::msg)?;
-        if edited {
-            let current = repo.change(root, pr)?;
-            if current.head == head && current.base == change.base {
-                receipts.write(&receipt, identity.as_bytes())?;
-            }
+        if !edited {
+            return skipped("label left unchanged: a FULL run exists or a check is running");
         }
-        Ok(())
+        let current = repo.change(root, pr)?;
+        if current.head == head && current.base == change.base {
+            receipts.write(&receipt, identity.as_bytes())?;
+        }
+        Ok(Some(format!(
+            "{key}: promoted (ci:full requested) [{source} @ {short}]"
+        )))
     };
-    let mut failures = Vec::new();
-    for change in repo.discover(root)?.into_iter().filter(|c| !c.gitlab) {
-        if let Err(error) = promote(change) {
-            failures.push(error.to_string());
+    let (mut lines, mut failures) = (Vec::new(), Vec::new());
+    let changes = repo.discover(root).context("discover open pull requests")?;
+    for change in changes.into_iter().filter(|c| !c.gitlab) {
+        let key = change.key();
+        match promote(change) {
+            Ok(line) => lines.extend(line),
+            Err(error) => failures.push(format!("{key}: failed: {error:#}")),
         }
     }
-    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
-    Ok(())
+    Ok((lines, failures))
+}
+
+/// Runs a promotion pass, capturing (result, stdout lines, stderr text).
+#[cfg(test)]
+fn promote_captured(root: &Path) -> (Result<()>, Vec<String>, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let result = promote_approved_heads(root, &mut out, &mut err);
+    let out = String::from_utf8(out).unwrap();
+    let lines = out.lines().map(str::to_owned).collect();
+    (result, lines, String::from_utf8(err).unwrap())
 }
 
 #[cfg(test)]
 pub(crate) fn test_apply_recorded_full_ci(root: &Path, pr: u64, head: &str, record: impl FnOnce()) {
+    install_full_ci_stub(root, pr, head);
+    let write = |name, value: &str| std::fs::write(root.join(name), value).unwrap();
+    write("state", "absent");
+    record();
+    assert!(!root.join("edits").exists());
+    let replacement = "a".repeat(40);
+    write("old", &replacement);
+    for state in [
+        "stale",
+        "absent",
+        "queued",
+        "newer",
+        "in_progress",
+        "foreign",
+        "retargeted",
+        "missing",
+        "moved",
+        "done",
+        "again",
+    ] {
+        let completed = matches!(state, "done" | "again");
+        write("state", if completed { "completed" } else { state });
+        write("current", head);
+        let result = promote_captured(root).0;
+        assert_eq!(
+            result.is_err(),
+            matches!(state, "missing" | "moved"),
+            "{state}: {result:?}"
+        );
+        assert_eq!(root.join("edits").exists(), completed);
+    }
+    let edits = std::fs::read_to_string(root.join("edits")).unwrap();
+    let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
+    assert_eq!(edits.trim(), expected);
+    write("base", "release");
+    promote_captured(root).0.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.join("edits")).unwrap(),
+        format!("{expected}\n{expected}\n")
+    );
+}
+
+/// AC2: an approval recorded under a spec key (`aida review record <SPEC>`
+/// without `--pr`) is promoted in both orders: recorded after FAST settled
+/// (the next tick adds ci:full) and recorded while FAST runs (no edit, then
+/// the first tick after FAST completes adds it). AC3: each tick reports one
+/// line naming the PR and its outcome.
+// trace:BUG-2764 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2764_spec_keyed_approval_promotes_in_both_orders() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for approve_first in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("project");
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let path = format!("{}:/usr/bin:/bin", root.display());
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("HOME", Some(home.to_str().unwrap())),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_PROJECT_ROOT", Some(root.to_str().unwrap())),
+            ("AIDA_DRIVE_ROOT", Some(root.to_str().unwrap())),
+            ("PATH", Some(path.as_str())),
+        ]);
+        let head = crate::test_git::commit_fixture(&root);
+        install_full_ci_stub(&root, 61, &head);
+        let write = |name: &str, value: &str| std::fs::write(root.join(name), value).unwrap();
+        write("current", &head);
+        let approve = || {
+            let dir = root.join(".aida/review-verdicts");
+            std::fs::create_dir_all(&dir).unwrap();
+            let body = serde_json::json!({"verdict":"approved","reviewed_sha":head,
+                "summary":"approved by hand","recorder_attestation":{"sha":head}});
+            std::fs::write(dir.join("BUG-1.json"), body.to_string()).unwrap();
+        };
+        let tick = || {
+            let (result, lines, _) = promote_captured(&root);
+            result.unwrap();
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            lines[0].clone()
+        };
+        let edits = || std::fs::read_to_string(root.join("edits")).unwrap_or_default();
+        if approve_first {
+            write("state", "in_progress");
+            approve();
+            let line = tick();
+            assert!(line.starts_with("PR-61: skipped (FAST CI"), "{line}");
+            assert!(line.contains("[BUG-1 @"), "{line}");
+            assert_eq!(edits(), "");
+            write("state", "completed");
+        } else {
+            write("state", "completed");
+            // No approval yet: nothing considered, nothing edited.
+            let (result, lines, _) = promote_captured(&root);
+            result.unwrap();
+            assert!(lines.is_empty(), "{lines:?}");
+            approve();
+        }
+        let line = tick();
+        assert!(line.starts_with("PR-61: promoted"), "{line}");
+        assert_eq!(edits().trim(), "pr edit 61 -R o/r --add-label ci:full");
+        // The receipt stops a second request for the same head.
+        let line = tick();
+        assert!(line.contains("already requested"), "{line}");
+        assert_eq!(edits().lines().count(), 1);
+    }
+}
+
+/// AC3 failure path: a PR whose promotion fails is reported on stderr while
+/// the other PR's line still reaches stdout, and the pass fails; a failed
+/// discovery leaves its reason on stderr too.
+// trace:BUG-2764 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2764_promotion_failures_reach_stderr() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&root).unwrap();
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("AIDA_PROJECT_ROOT", Some(root.to_str().unwrap())),
+        ("AIDA_DRIVE_ROOT", Some(root.to_str().unwrap())),
+        ("PATH", Some(path.as_str())),
+    ]);
+    let head = crate::test_git::commit_fixture(&root);
+    forge::git(
+        &root,
+        &["remote", "add", "origin", "git@github.com:o/r.git"],
+    )
+    .unwrap();
+    let change = |pr: u64| {
+        serde_json::json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,
+            "baseRefName":"main","author":{"login":"alice"}})
+    };
+    let script = format!(
+        "#!/bin/sh\n[ -f fail-list ] && exit 1\ncase \"$*\" in\n  *\"pr list\"*) echo '[{},{}]';;\n  *) exit 1;;\nesac\n",
+        change(71),
+        change(72)
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let verdict = |name: &str, attested: bool| {
+        let mut body = serde_json::json!({"verdict":"approved","reviewed_sha":head,"summary":"ok"});
+        if attested {
+            body["recorder_attestation"] = serde_json::json!({"sha": head});
+        }
+        std::fs::write(dir.join(name), body.to_string()).unwrap();
+    };
+    // PR-71 is skipped before any forge call; PR-72's `pr view` fails.
+    verdict("PR-71.json", false);
+    verdict("PR-72.json", true);
+    let (result, lines, err) = promote_captured(&root);
+    assert!(result.is_err(), "{lines:?}");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("PR-71: skipped (approval carries no recorder"),
+        "{lines:?}"
+    );
+    assert!(err.starts_with("PR-72: failed: "), "{err}");
+    assert!(err.contains("forge discovery failed"), "{err}");
+    // A pass-level failure (discovery) also leaves its reason on stderr.
+    std::fs::write(root.join("fail-list"), "").unwrap();
+    let (result, lines, err) = promote_captured(&root);
+    assert!(result.is_err() && lines.is_empty(), "{lines:?}");
+    assert!(
+        err.starts_with("promotion pass failed: discover open pull requests: "),
+        "{err}"
+    );
+}
+
+#[cfg(test)]
+fn install_full_ci_stub(root: &Path, pr: u64, head: &str) {
     use serde_json::json;
     let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
     let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
@@ -3928,45 +4218,6 @@ esac"#
     );
     crate::test_exec::write_executable(&root.join("gh"), script);
     forge::git(root, &["remote", "add", "origin", "git@github.com:o/r.git"]).unwrap();
-    let write = |name, value: &str| std::fs::write(root.join(name), value).unwrap();
-    write("state", "absent");
-    record();
-    assert!(!root.join("edits").exists());
-    let replacement = "a".repeat(40);
-    write("old", &replacement);
-    for state in [
-        "stale",
-        "absent",
-        "queued",
-        "newer",
-        "in_progress",
-        "foreign",
-        "retargeted",
-        "missing",
-        "moved",
-        "done",
-        "again",
-    ] {
-        let completed = matches!(state, "done" | "again");
-        write("state", if completed { "completed" } else { state });
-        write("current", head);
-        let result = promote_approved_heads(root);
-        assert_eq!(
-            result.is_err(),
-            matches!(state, "missing" | "moved"),
-            "{state}: {result:?}"
-        );
-        assert_eq!(root.join("edits").exists(), completed);
-    }
-    let edits = std::fs::read_to_string(root.join("edits")).unwrap();
-    let expected = format!("pr edit {pr} -R o/r --add-label ci:full");
-    assert_eq!(edits.trim(), expected);
-    write("base", "release");
-    promote_approved_heads(root).unwrap();
-    assert_eq!(
-        std::fs::read_to_string(root.join("edits")).unwrap(),
-        format!("{expected}\n{expected}\n")
-    );
 }
 
 // trace:TASK-1993 | ai:claude

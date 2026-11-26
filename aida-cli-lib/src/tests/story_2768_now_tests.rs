@@ -72,6 +72,7 @@ fn pass(changes: Vec<Pr>, rows: Vec<Row>, foreign: Vec<crate::coordination::Clai
         book: Default::default(),
         notes: Vec::new(),
         warnings: Vec::new(),
+        discovery_cut: false,
     }
 }
 
