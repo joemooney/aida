@@ -34,8 +34,11 @@ import re
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
+import threading
+import time
 import tomllib
 import xml.etree.ElementTree as ET
 
@@ -272,15 +275,17 @@ def union_problems(packages, budgets):
     return sorted(required - set(seen)), sorted(u for u, n in seen.items() if n > 1)
 
 
-def lib_test_names(root, profile):
+def lib_test_names(root, profile, watch=None):
     command = ['cargo', 'test'] + LIB_UNIT + profile + ['--', '--list', '--format', 'terse']
     print('+ ' + ' '.join(command), flush=True)
     # The listing's own "Running" line would read as an unfinished binary in the timings log.
-    listing = subprocess.run(command, cwd=root, capture_output=True, text=True)
-    if listing.returncode:
-        sys.stderr.write(listing.stderr)
-        raise ValueError(f'listing the lib tests exited {listing.returncode}')
-    return [line[:-len(': test')] for line in listing.stdout.splitlines() if line.endswith(': test')]
+    # Watched: it compiles the lib test binary, the lane's memory peak. trace:BUG-2768 | ai:claude
+    code, (out, err), cause = run_watched(command, root, watch or ResourceWatch('lib'),
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if cause or code:
+        sys.stderr.write(err)
+        raise ValueError(cause or f'listing the lib tests exited {code}')
+    return [line[:-len(': test')] for line in out.splitlines() if line.endswith(': test')]
 
 
 RUNNING_RE = re.compile(r'(\d{4}-\d\d-\d\dT[\d:]+(?:\.\d+)?)Z running (\d+) tests?$')
@@ -333,6 +338,96 @@ def lib_weights(paths, threads):
         for module, secs in per_module.items():
             best[module] = max(best[module], secs)
     return [f'"{m}" = {round(s, 1)}' for m, s in sorted(best.items()) if round(s, 1) >= 0.1]
+
+
+def meminfo_mib(path='/proc/meminfo'):
+    try:
+        text = Path(path).read_text()
+    except OSError:
+        return {}
+    return {k: int(v.split()[0]) // 1024 for k, v in (line.split(':', 1) for line in text.splitlines() if ':' in line)}
+
+
+class ResourceWatch:
+    """Fail a lane early, by name and cause, before the runner VM is reclaimed.
+
+    A hosted runner that runs out of memory thrashes until GitHub kills it
+    ("received a shutdown signal", exit 143) or the job hits its timeout.
+    AIDA_CI_MEM_FLOOR_MIB: MemAvailable below it for STRIKES samples fails
+    the lane. AIDA_CI_TEST_DEADLINE_SECS: fails it before the job timeout.
+    Unset or 0 disables either check; the peak summary is printed regardless.
+    trace:BUG-2768 | ai:claude
+    """
+    STRIKES = 3
+
+    def __init__(self, shard, env=os.environ, clock=time.monotonic, meminfo=meminfo_mib):
+        self.shard, self.clock, self.meminfo = shard, clock, meminfo
+        self.floor = int(env.get('AIDA_CI_MEM_FLOOR_MIB') or 0)
+        self.deadline = int(env.get('AIDA_CI_TEST_DEADLINE_SECS') or 0)
+        self.start, self.low, self.min_avail, self.max_swap = clock(), 0, None, 0
+        self.armed = bool(self.floor or self.deadline)
+
+    def sample(self):
+        """One sample; the failure cause, or None."""
+        info, elapsed = self.meminfo(), self.clock() - self.start
+        avail = info.get('MemAvailable')
+        if avail is not None:
+            self.min_avail = avail if self.min_avail is None else min(self.min_avail, avail)
+            self.max_swap = max(self.max_swap, info.get('SwapTotal', 0) - info.get('SwapFree', 0))
+            self.low = self.low + 1 if self.floor and avail < self.floor else 0
+        if self.low >= self.STRIKES:
+            return (f'memory exhausted: MemAvailable {avail} MiB of {info.get("MemTotal")} MiB, '
+                    f'under the {self.floor} MiB floor for {self.low} samples (swap used {self.max_swap} MiB)')
+        if self.deadline and elapsed >= self.deadline:
+            return f'deadline: still running after {int(elapsed)}s, past its {self.deadline}s budget'
+        return None
+
+    def summary(self):
+        return (f'# resource-watch {self.shard}: {int(self.clock() - self.start)}s, '
+                f'min MemAvailable {self.min_avail} MiB, peak swap used {self.max_swap} MiB')
+
+
+def run_watched(command, root, watch, period=5.0, **popen):
+    """(exit code, (stdout, stderr), failure cause) of command, killed in its own process group on a breach."""
+    # Its own process group only when a check can kill it: unarmed (local)
+    # runs stay in the terminal's group, so Ctrl+C still reaches cargo.
+    proc = subprocess.Popen(command, cwd=root, start_new_session=watch.armed, **popen)
+    cause, done = [], threading.Event()
+
+    def guard():
+        ticks = 0
+        while not done.wait(period):
+            found, ticks = watch.sample(), ticks + 1
+            if ticks % 12 == 0:  # A reclaimed VM prints no summary; leave a trail.
+                print(watch.summary(), flush=True)
+            if found:
+                cause.append(found)
+                print(f'::error::CI ({watch.shard}): {found}; stopping the lane', file=sys.stderr, flush=True)
+                # SIGTERM lets nextest stop its tests; SIGKILL whatever ignores it.
+                for sig in (signal.SIGTERM, signal.SIGKILL):
+                    try:
+                        os.killpg(proc.pid, sig)
+                    except ProcessLookupError:
+                        return
+                    if done.wait(10):
+                        return
+                return
+
+    thread = threading.Thread(target=guard, daemon=True)
+    thread.start()
+    try:
+        out = proc.communicate()
+    except BaseException:  # A cancelled job must not leave the group running.
+        if watch.armed:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        raise
+    finally:
+        done.set()
+    thread.join()
+    return proc.returncode, out, cause[0] if cause else None
 
 
 def nextest_installed(root):
@@ -413,6 +508,7 @@ def main(argv=None):
               'running the same selections under cargo test', flush=True)
         args.runner = 'cargo'
     status, reports = 0, 0
+    watch = ResourceWatch(args.shard)
     for shard in SHARDS if args.shard == 'all' else [args.shard]:
         if shard == 'lib-1' and args.shard == 'all':
             continue  # lib-0 ran the whole binary.
@@ -420,7 +516,7 @@ def main(argv=None):
             filters = []
             if shard.startswith('lib-') and args.shard != 'all':
                 try:
-                    names = lib_test_names(root, profile)
+                    names = lib_test_names(root, profile, watch)
                     filters = lib_halves(names, module_seconds)[int(shard[-1])]
                 except ValueError as err:
                     print(f'::error::cannot plan {shard}: {err}', file=sys.stderr)
@@ -433,11 +529,15 @@ def main(argv=None):
                 # Both runners take libtest-style substring filters after `--`.
                 command += ['--'] + filters if filters else []
                 print('+ ' + ' '.join(command), flush=True)
-                code = subprocess.call(command, cwd=root)
+                code, _, cause = run_watched(command, root, watch)
+                if cause:
+                    print(watch.summary(), flush=True)
+                    return 1
                 if code:
                     status = 1  # --no-fail-fast also spans separate cargo invocations.
                 if command[1] == 'nextest':
                     reports += keep_junit(metadata['target_directory'], shard, reports) is not None
+    print(watch.summary(), flush=True)
     return status
 
 

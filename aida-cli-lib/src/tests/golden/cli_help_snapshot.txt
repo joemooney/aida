@@ -23319,6 +23319,7 @@ Usage: aida report [OPTIONS] [COMMAND]
 Commands:
   bug             Compose and optionally file an upstream AIDA bug report
   idea            Compose and optionally file an upstream AIDA idea report
+  backlog         Classify open specs and rank areas by hotness (read-only)
   ai-integration  Generate AI integration report
   help            Print this message or the help of the given subcommand(s)
 
@@ -23393,6 +23394,36 @@ Options:
 
       --no-file
           Do not file a local upstream:aida spec after printing
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida report backlog
+Classify open specs and rank areas by hotness (read-only)
+
+Each open spec gets an area, a size (S/M/L/XL), its priority and status, and a noise flag for
+review-finding specs. Areas are ranked by a weighted blend of open and high-priority specs, change
+requests in the last 7 days, open PRs and 14-day file churn. The area map and weights live under
+`[report.backlog]` in `.aida/config.toml`.
+
+Usage: aida report backlog [OPTIONS]
+
+Options:
+      --json
+          Emit JSON (same as the global `--format json`)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -56930,6 +56961,37 @@ Working on aida itself
         "name": "title",
         "takes_value": true,
         "help": "Short report title. The pasted subject becomes `aida: <title>`"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "report",
+      "backlog"
+    ],
+    "about": "Classify open specs and rank areas by hotness (read-only)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON (same as the global `--format json`)"
       }
     ],
     "hidden": true
