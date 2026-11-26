@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T07:09:19.840024994Z
-modified_at: 2026-11-26T07:12:57.360572849Z
+modified_at: 2026-11-26T07:16:33.742852049Z
 req_type: Task
 tags:
 - review
@@ -23,6 +23,18 @@ relationships:
   target_id: 01a20c77-240b-7661-a187-79a92f601809
   created_at: 2026-11-26T07:12:57.360526674Z
   created_by: joe
+comments:
+- id: 01a216b6-d23d-71f2-bfda-2bb58f307f38
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:16):
+    # TASK-3914: extend the review-engine credential screen (TASK-3320 follow-up; integration-30 00:10; product-15). Lane: CLAUDE. STRICT (credential screening). INTEGRATION, NEW branch int44-cred-paths. Completing (TASK-3914) trailer. <=120 lines.
+    READ: `aida show TASK-3914`, and TASK-3320's is_credential_path / ensure_in_inventory code on integration. Add the AC1 patterns at root and nested, with one test per pattern; keep TASK-3320's tests green.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T07:16:33.742852049Z
+  modified_at: 2026-11-26T07:16:33.742852049Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a216b3-3ac2-73f2-9348-b88cea4c9520
   author: joe
