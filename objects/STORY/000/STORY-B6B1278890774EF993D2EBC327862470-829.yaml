@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T04:25:51.874785683Z
+modified_at: 2026-11-26T05:14:53.443248321Z
 req_type: Story
 tags:
 - integration
@@ -853,6 +853,21 @@ comments:
   created_at: 2026-11-26T04:25:51.874785683Z
   modified_at: 2026-11-26T04:25:51.874785683Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21647-6f62-7320-b32b-a5e58aeb26db
+  author: joe
+  content: |-
+    Integration pre-check: PR #4619 head 3270445ed5 (delta from a73b2c2f04: 1b4f236a044 + 3270445ed5f) — PASS
+
+    - --run-review now builds a CoverageLedger from the runner's `files` rows and always runs verify_coverage_ledger; a runner that reports no coverage fails ("file coverage verification failed"), so silence is no longer a clean pass. Fail-closed.
+    - Coverage rows naming a file outside their batch refuse the run; only `reviewed` rows count (skipped files show as unaccounted — stricter than --verify-coverage, acceptable).
+    - --run-review conflicts with --verify-coverage (no double source).
+    - New end-to-end test proves rules come from the merge base (uncommitted worktree rules excluding *.rs are ignored, the runner runs) and the report is still written before the error. Added to ratchet set.
+    - Security lens: no new git/env/trust surface; runner output is still bounded by the inventory check.
+    Carry-forwards unchanged (git_text → host_git_command; S5 CI timeout docs).
+  created_at: 2026-11-26T05:14:53.443248321Z
+  modified_at: 2026-11-26T05:14:53.443248321Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
