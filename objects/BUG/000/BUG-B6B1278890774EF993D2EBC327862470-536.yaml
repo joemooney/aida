@@ -17,15 +17,24 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T16:16:17.317572330Z
+modified_at: 2026-11-26T16:16:20.273385677Z
 req_type: Bug
 tags:
 - STORY-3120
 - review
+relationships:
+- rel_type: References
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-26T16:16:20.273338350Z
+  created_by: joe
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
   timestamp: 2026-11-26T16:16:17.399594955Z
+  changes: []
+- id: 01a218a4-c779-7822-b73f-a3ed7c408a28
+  author: joe
+  timestamp: 2026-11-26T16:16:21.881631182Z
   changes: []
 execution_mode: drain
 filed_at:
