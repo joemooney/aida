@@ -1,5 +1,6 @@
 id: 01a2164b-73d8-7912-a6b3-52fb714f9595
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1487
+agreed_id: TASK-3473
 title: 'Review follow-up: The breach kill in run_watched is incomplete. guard() returns as soon as the direct child '
 description: |-
   From BUG-2768
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21609-e1b7-7091-8146-ab61403671d1
   created_at: 2026-11-26T05:19:48.477805672Z
+history:
+- id: 01a216b1-75b3-7470-9a53-804e7b0f416e
+  author: joe
+  timestamp: 2026-11-26T07:10:58.483347491Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e430c0baf88df0c260070b7093e640e9838d6a29
   branch: pr-4623
