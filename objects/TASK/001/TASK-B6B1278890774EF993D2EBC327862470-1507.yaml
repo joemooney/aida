@@ -9,12 +9,12 @@ description: |
   - AC1: the auto-train pre-scan (train_wanted) and the real pass use ONE predicate (typed_gate_member_with + ownership), not the legacy eligible gate, so they cannot disagree.
   - AC2: dedupe or cache the pre-scan forge (gh) reads per poll so an idle loop does not spend the shared ~5000/h GitHub budget.
   - AC3: tests for the running-train and recovery AC4 phases, and reset TEST_HOLD_WARN_MS after the bug2769 tests (a test-isolation leak).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-26T13:01:33.088470057Z
+modified_at: 2026-11-26T13:05:24.022967214Z
 req_type: Task
 tags:
 - landing
@@ -46,6 +46,13 @@ history:
   author: joe
   timestamp: 2026-11-26T12:59:40.166197740Z
   changes: []
+- id: 01a217f5-f236-7513-a90d-e7d2d1057d3c
+  author: aida-session-start
+  timestamp: 2026-11-26T13:05:24.022960017Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
