@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:24:10.635879426Z
-modified_at: 2026-11-26T00:17:51.342646455Z
+modified_at: 2026-11-26T00:18:55.238605764Z
 req_type: Bug
 comments:
 - id: 01a21493-6f47-7ed1-8c8e-85fdd72abf7f
@@ -72,6 +72,12 @@ comments:
   content: Implementer push 3e675a5c6e9d declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T00:17:51.342645879Z
   modified_at: 2026-11-26T00:17:51.342645879Z
+  session_id: 01a214ed601d
+- id: 01a21538-3686-7352-9bff-0ee6f947a92b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2745-hold-marker-refusal` at head `3e675a5c6e9d70e0725409446d11a65dc0a16b91`.'
+  created_at: 2026-11-26T00:18:55.238600156Z
+  modified_at: 2026-11-26T00:18:55.238600156Z
   session_id: 01a214ed601d
 history:
 - id: 01a21493-77a9-7c53-a7a7-683c2a24c1c7
