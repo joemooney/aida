@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T20:37:21.160967441Z
+modified_at: 2026-11-26T20:40:07.108487172Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -220,6 +220,11 @@ comments:
     - Style: run_review_agent (review_prepare.rs) matches the literal "AIDA_REVIEW_RUNNER_CMD" rather than sharing the RUNNER_CMD constant or RunnerCall's var()/runner_cmd_set() logic, so the two 'is the runner command set' checks could drift.
   created_at: 2026-11-26T20:37:21.160967441Z
   modified_at: 2026-11-26T20:37:21.160967441Z
+- id: 01a21996-40c4-72e3-b9b3-3a3ea65d4651
+  author: joe
+  content: 'RESIDUAL ACCEPTED by advisor-122 (2026-11-26 13:44, on #4684 @4c6c4a8a): proxy URLs with embedded credentials reach the vendor binary; this is the operator-owned route (a fixed 4-name allowlist HTTPS_PROXY/HTTP_PROXY/NO_PROXY/ALL_PROXY, case-insensitive, taken only from the operator process env, never repo/PR-controlled), the same route the vendor CLI sees when the operator runs it interactively.'
+  created_at: 2026-11-26T20:40:07.108487172Z
+  modified_at: 2026-11-26T20:40:07.108487172Z
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
