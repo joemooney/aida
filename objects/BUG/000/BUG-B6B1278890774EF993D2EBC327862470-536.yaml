@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T16:16:20.273385677Z
+modified_at: 2026-11-26T16:18:05.599841083Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -27,6 +27,18 @@ relationships:
   target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   created_at: 2026-11-26T16:16:20.273338350Z
   created_by: joe
+comments:
+- id: 01a218a6-9c3b-76d0-9c19-736c102f04da
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:18):
+    # BUG-2775: --run-review hides the runner failure; wrong default-agent note; claude batch hits the deadline (product-15 trial, 2026-11-26). Lane: CLAUDE. MAIN, NEW branch bug-2775-run-review-errors (S3a/S3b/S4 are on main). STRICT (review runner). <=200 lines. Completing (BUG-2775) trailer.
+    READ: `aida show BUG-2775` (exact outputs and timings). First REPRODUCE on this host: `aida review prepare --pr 4666 --run-review --adversarial` (no --agent) and with `--agent claude`, and record the real cause (temporarily print the error chain). AC1: print the full cause chain with vendor/pass/batch/cause. AC2: the AIDA_REVIEW_RUNNER_CMD note only when it is actually set, and state the resolved default vendor. AC3: fix the root cause of the 15-min claude batch (e.g. a non-interactive flag, auth or settings in the cleared env, or stdin not closed), keeping every S3a security property (empty cwd, env allowlist, no project settings or tools). Tests with stub runners.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T16:18:05.599841083Z
+  modified_at: 2026-11-26T16:18:05.599841083Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
