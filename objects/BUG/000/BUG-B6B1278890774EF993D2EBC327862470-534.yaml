@@ -9,17 +9,23 @@ description: |
   - AC1: a shared claim with lease=unbound and launcher=unbound, a dead creator and an expired heartbeat is classified as an eligible stale lease by `aida doctor check leases` and released by the prescribed `aida doctor heal stale-leases --id shared-<invocation>`.
   - AC2: an admission refusal never prescribes a heal command that the heal path would refuse (one shared eligibility predicate for both); a test.
   - AC3: a test with exactly this claim shape (unbound lease, unbound launcher, dead creator, old heartbeat).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T14:54:51.442114723Z
+modified_at: 2026-11-26T15:25:24.710612077Z
 req_type: Bug
 tags:
 - admission
 - lanes
 - leases
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21875-0f1b-7700-aaa8-0d65feb66cde
+  created_at: 2026-11-26T15:24:21.962490159Z
+  created_by: dirtlab
 comments:
 - id: 01a2184b-c575-7333-b91b-471ca6ea0652
   author: joe
@@ -74,6 +80,13 @@ comments:
   modified_at: 2026-11-26T14:54:51.442114723Z
   session_id: 01a2184e943e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21874-c001-7971-937d-3a8d27f08e3c
+  author: aida-publication-done
+  content: Implementer push d169b25498d0 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T15:23:54.241457197Z
+  modified_at: 2026-11-26T15:23:54.241457197Z
+  session_id: 01a2184e943e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
@@ -86,6 +99,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21874-c001-7971-937d-3a76939b0d7c
+  author: aida-publication-done
+  timestamp: 2026-11-26T15:23:54.241455539Z
+  session_id: 01a2184e943e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21875-347d-7e02-b870-0bc7e97f2435
+  author: dirtlab
+  timestamp: 2026-11-26T15:24:24.061808394Z
+  session_id: 01a2184e943e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21876-2a1f-7b02-a71d-238c17eefaa2
+  author: dirtlab
+  timestamp: 2026-11-26T15:25:26.943604666Z
+  session_id: 01a2184e943e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
@@ -94,3 +128,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 15bbbc68222
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T15:25:24.710612077Z
+  implemented_by: dirtlab
