@@ -1,0 +1,37 @@
+id: 01a218ed-3796-78b1-bee5-bcad3bf24b1c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1526
+agreed_id: TASK-3920
+title: 'Auto-train recovery is a resumable step: persist state, release run lock + admission before an external wait, re-acquire and re-validate (BUG-2774 AC1)'
+description: |
+  Split from BUG-2774 AC1 (advisor-122 2026-11-26 10:40; filed by product-15). BUG-2774 shipped reporting only (#4667). Its lane left AC1 undone: "the recovery's train run lock makes a plain release refuse review-watch's join; it needs an admission design decision". STRICT: a SKETCH with advisor signoff comes BEFORE any code.
+
+  DIRECTION (binding): recovery becomes a RESUMABLE step. Before waiting on any external or deputy job it
+  (a) persists its recovery state (train id, step, expected main tip);
+  (b) releases BOTH the train run lock and admission;
+  (c) waits outside the locks with a bounded deadline;
+  (d) re-acquires through normal admission (no queue jumping, but it keeps its fairness position as with BUG-2771) and RE-VALIDATES the main tip, the train PR state and the members' heads.
+  On any drift it abandons that recovery step and recomputes; it never resumes blind.
+
+  ## Acceptance
+  - AC1: a SKETCH comment, signed off by the advisor, naming the state file, the functions, and exactly what a concurrent review-watch join or a manual train may do in the gap, with a proof that each is safe.
+  - AC2: an implementation of (a)-(d) per the sketch.
+  - AC3: tests: a deputy job blocks for longer than the deadline and review-watch admits work meanwhile; main moves during the wait → recompute; a member head moves → recompute; recovery keeps its fairness position.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T17:35:29.174799431Z
+modified_at: 2026-11-26T17:35:29.174799431Z
+req_type: Task
+tags:
+- admission
+- auto-train
+- strict
+- throughput
+filed_at:
+  code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d38eee408f3
+  vendor: claude
