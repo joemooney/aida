@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A CR verdict on a spec that is already COMPLETED, or whose PR is MERGED or CLOSED, does NOT flip its status. The verdict is still recorded in the gate ledger and a spec comment names the writer and the verdict. Test: a CR on a Completed spec leaves it Completed, with a ledger entry plus a comment.
   - AC2: A live In Progress spec still shelves exactly as today. Test.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T14:47:45.471546383Z
+modified_at: 2026-11-26T15:09:17.343201107Z
 req_type: Bug
 tags:
 - leases
@@ -106,6 +106,37 @@ comments:
   modified_at: 2026-11-26T14:47:45.471546383Z
   session_id: 01a218395b6c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21866-fbba-7f20-9c53-57e6ad9b739c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f970be07c5 (git diff origin/main...HEAD, 5 files, +253/-6)
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: tests/bug_2738_landed_refusal_tests.rs — request_changes_on_completed_spec_records_comment_without_shelving (Completed stays Completed, no failure_reason, comment authored by and naming the writer + 'CHANGES REQUESTED'); request_changes_on_done_spec_with_merged_pr_is_not_shelved (BUG-2728 shape: Done + MERGED stays Done); landed_refusal_covers_completed_and_merged_or_closed_prs_only (CLOSED too, case/whitespace tolerant). Gate-ledger entry: the verdict file and phase-3 handshake are written earlier in handle_review_record_context_with_policy_at, before any hold or spec side effect (review_commands.rs, 'Both verdict artifacts are durable before hold or spec-state side effects'); the guard sits after that, so the ledger record is unchanged. No command-level test drives the full aida review record path.
+    - AC2 [behavioral-test]: request_changes_on_live_in_progress_spec_still_shelves: In Progress + OPEN PR is not landed and leaves no comment; shelve_spec_on_failure then flips it to NeedsAttention with the existing shelve comment.
+    - Targeted run: cargo test -p aida-cli-lib --lib bug_2738 gives 4 passed; condition_cmd (STORY-2402 merged-probe adapter, refactored to share the state read) gives 5 passed. make check-ci-fast exit 0.
+
+    Probe findings:
+    - P1 consistency: PR state compared uppercase after trim; the merged probe keeps its exact-match semantics.
+    - P3 multiplicity: one spec and one PR per verdict; no loops.
+    - P5 fail-open: if gh is missing or fails, or the state is unknown, the guard returns None and the shelve runs as before (conservative). The merge hold is still placed before the guard, so an OPEN PR stays protected whatever the guard decides.
+    - Previously a CR on a Completed spec set failure_reason, appended to the punts ledger, and printed 'parked in Needs Attention' even though the status never moved. That false message is gone now.
+
+    Fixes during self-review: removed a cfg(test) env read (ExecContext ratchet); shared one gh Command site in forge.rs (launch ratchet); regenerated scripts/store-writers.toml (it also re-sorted 3 pre-existing rows).
+
+    Residual risks: only the aida review record path is guarded. The stranded sweep (review stranded --fix) and the orchestrator RealPhaseDriver::shelve_on_failure still shelve without a PR-state check; both act on live drains/holds. A merged PR is detected only when gh answers.
+  created_at: 2026-11-26T15:08:52.026552938Z
+  modified_at: 2026-11-26T15:08:52.026552938Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21867-5e9f-72f3-bf40-3bdef8b48362
+  author: aida-publication-done
+  content: Implementer push 5a1122ae5b23 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T15:09:17.343200421Z
+  modified_at: 2026-11-26T15:09:17.343200421Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
@@ -148,6 +179,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21867-5e9f-72f3-bf40-3bcfc342f883
+  author: aida-publication-done
+  timestamp: 2026-11-26T15:09:17.343197583Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
