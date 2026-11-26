@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T18:43:49.793419269Z
+modified_at: 2026-11-26T18:45:36.629575799Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -92,6 +92,19 @@ comments:
   modified_at: 2026-11-26T18:34:03.218601320Z
   session_id: 01a218e28a8c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2192d-aaf2-77d0-a2f8-6f1d78738324
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:45):
+    # BUG-2776 r1 on #4678 (advisor-122 ruling 2026-11-26 11:48 at 1eba036e: a LEGIT request-changes; product-15). Lane: CLAUDE. MAIN, existing branch bug-2776-rw-reclaim-held / PR #4678. Keep the "(BUG-2776)" title.
+    BINDING:
+     (b) Check pause AND the pickup retry cap BEFORE any reclaim: a paused or capped watcher NEVER ends a checkout. When the cap is hit, the PR goes to the AC3 doctor surface with a named next step, never a silent hold. A successful reclaim followed by a successful pickup RESETS the cap. TESTS: paused → no reclaim; capped → no reclaim, and the AC3 surface names the next step; reclaim + pickup → cap reset.
+     (a) ONE test exercising the REAL reclaim path with a fake `aida` on PATH: assert the argv `session end <lease> --yes --skip-ci`, and handle a NON-ZERO exit (no dispatch, the hold kept, a named cause). No network.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4678. COMMIT your work.
+  created_at: 2026-11-26T18:45:36.629575799Z
+  modified_at: 2026-11-26T18:45:36.629575799Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a218dd-3006-7b12-a565-eb8e5e0a12d8
   author: joe
