@@ -1230,6 +1230,13 @@ aida review prepare --telemetry-report</code></pre>
               <td><code>findings_to_sarif_json_with_telemetry</code>, <code>compute_addressed_findings_with</code>, &amp; <code>compute_f_beta_score</code>: native Rust SARIF §3.35 <code>suppressions</code> archive, <code>.aida/review-telemetry/reviews.jsonl</code> ledger, deterministic 50/50 A/B arm assignment, and live git hunk-overlap addressed-rate tracking.</td>
               <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
             </tr>
+            <tr>
+              <td><strong>7. CodeGraph AST Blast-Radius &amp; Call-Graph Enrichment</strong></td>
+              <td>Static call-graph &amp; cross-file blast-radius analysis</td>
+              <td>Diff-only review prompts blind to untouched callers across the codebase</td>
+              <td><code>build_codegraph_review_context</code> &amp; <code>format_codegraph_batch_context_markdown</code>: automatic read-only query against <code>.codegraph/codegraph.db</code> intersecting diff hunk line ranges with AST symbols to inject inbound external callers (flagging callers <code>UNTOUCHED in diff</code> for <code>contract-drift</code>) and outbound callee signatures.</td>
+              <td><span class="badge badge-elite">0% Code · 0% Prose · 0 Deps</span></td>
+            </tr>
           </tbody>
         </table>
       </div>

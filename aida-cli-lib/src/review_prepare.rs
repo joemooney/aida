@@ -10,12 +10,15 @@ use aida_core::review_engine::{
     classify_diff_inventory, compute_addressed_findings_with, compute_severity_weighted_score,
     detect_ai_authors, estimate_review_cost_usd, extract_confirmed_findings_from_sarif,
     findings_exceeding_threshold, findings_to_sarif_json_with_telemetry,
-    format_forge_review_markdown_with_adversarial, format_review_telemetry_report_markdown,
-    parse_runner_findings_json, resolve_ab_arm_assignment, summarize_review_telemetry_by_arm,
-    verify_coverage_ledger, AdversarialReviewSummary, ClassifiedInventory, CoverageLedger,
-    CoverageVerificationReport, DismissedReviewFinding, FileChangeKind, PlaybookRegistry,
-    ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook, ReviewBatch,
-    ReviewTelemetryRecord, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
+    format_codegraph_batch_context_markdown, format_forge_review_markdown_with_adversarial,
+    format_review_telemetry_report_markdown, parse_runner_findings_json,
+    parse_unified_diff_new_line_ranges, resolve_ab_arm_assignment,
+    summarize_review_telemetry_by_arm, verify_coverage_ledger, AdversarialReviewSummary,
+    ClassifiedInventory, CodegraphCrossFileEdge, CodegraphFileFanIn, CodegraphReviewContext,
+    CodegraphTouchedSymbol, CoverageLedger, CoverageVerificationReport, DismissedReviewFinding,
+    FileChangeKind, PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding,
+    ResolvedPlaybook, ReviewBatch, ReviewTelemetryRecord, DEFAULT_BATCH_TOKEN_BUDGET,
+    DEFAULT_MAX_FILES_PER_BATCH,
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -189,6 +192,12 @@ pub struct ReviewPrepareArgs {
     /// Write output inside the repository (relative paths start at the project root).
     #[clap(long, value_name = "PATH")]
     pub write: Option<PathBuf>,
+
+    /// Disable automatic `.codegraph/codegraph.db` AST blast-radius & cross-file
+    /// caller/callee enrichment even when a local CodeGraph database is present.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long)]
+    pub no_codegraph: bool,
 }
 
 /// Linked AIDA spec summary + extracted acceptance criteria included in the bundle.
@@ -224,6 +233,8 @@ pub struct ReviewPreparationBundle {
     pub detected_author_agents: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filed_bug_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codegraph_context: Option<CodegraphReviewContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub telemetry: Option<ReviewTelemetryRecord>,
 }
@@ -340,6 +351,20 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         head_ref.as_deref(),
         &content_cache,
     );
+
+    // 6c. Optional CodeGraph AST Blast-Radius & Cross-File Caller/Callee enrichment
+    //     when `.codegraph/codegraph.db` is available and `--no-codegraph` is not set.
+    let codegraph_context = if args.no_codegraph {
+        None
+    } else {
+        build_codegraph_review_context(
+            &project_root,
+            &mode,
+            merge_base.as_deref(),
+            head_ref.as_deref(),
+            &inventory,
+        )
+    };
     let prepare_elapsed_ms = prepare_start.elapsed().as_millis() as u64;
 
     // 7. Optional: execute automated batch review (`--run-review`), or load external
@@ -407,6 +432,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             &playbooks,
             &linked_specs,
             &content_cache,
+            codegraph_context.as_ref(),
         )?;
         if let Some(ref mut summary) = adv {
             summary.detected_author_agents = detected_author_agents.clone();
@@ -588,6 +614,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         adversarial_summary,
         detected_author_agents,
         filed_bug_ids,
+        codegraph_context,
         telemetry: Some(telemetry_record),
     };
 
@@ -1129,6 +1156,13 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         }
     }
 
+    if let Some(cg) = &bundle.codegraph_context {
+        let cg_md = format_codegraph_batch_context_markdown(cg, None);
+        if !cg_md.is_empty() {
+            out.push_str(&cg_md);
+        }
+    }
+
     if !bundle.inventory.excluded_files.is_empty() {
         out.push_str("## Excluded Files\n\n");
         for ex in &bundle.inventory.excluded_files {
@@ -1576,6 +1610,285 @@ fn detect_changed_ai_authors(
     detect_ai_authors(&messages, &samples)
 }
 
+/// Query `<project_root>/.codegraph/codegraph.db` in read-only mode (if present) to enrich
+/// the review preparation bundle and batch prompts with AST symbol definitions, inbound
+/// cross-file callers (highlighting callers untouched by this diff), and outbound callees.
+// trace:STORY-3120 | ai:antigravity
+fn build_codegraph_review_context(
+    project_root: &Path,
+    mode: &str,
+    merge_base: Option<&str>,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+) -> Option<CodegraphReviewContext> {
+    use rusqlite::{Connection, OpenFlags};
+
+    if inventory.reviewable_files.is_empty() {
+        return None;
+    }
+    let db_path = project_root.join(".codegraph").join("codegraph.db");
+    if !db_path.is_file() {
+        return None;
+    }
+
+    let conn = Connection::open_with_flags(
+        &db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .ok()?;
+    let _ = conn.busy_timeout(std::time::Duration::from_millis(250));
+
+    let diff_files: BTreeSet<&str> = inventory
+        .reviewable_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
+    let range_arg = match (mode, merge_base, head_ref) {
+        ("commit" | "range", Some(mb), Some(head)) => Some(format!("{mb}..{head}")),
+        _ => None,
+    };
+
+    let mut file_fan_in = Vec::new();
+    let mut touched_symbols = Vec::new();
+    let mut total_untouched_external_callers = 0usize;
+
+    let mut fan_in_stmt = conn
+        .prepare(
+            "SELECT COUNT(DISTINCT caller.file_path), COUNT(*)
+             FROM edges e
+             JOIN nodes target ON e.target = target.id
+             JOIN nodes caller ON e.source = caller.id
+             WHERE target.file_path = ?1 AND caller.file_path != ?1",
+        )
+        .ok()?;
+
+    let mut symbols_stmt = conn
+        .prepare(
+            "SELECT id, kind, name, start_line, end_line, signature
+             FROM nodes
+             WHERE file_path = ?1
+               AND kind IN ('function', 'method', 'struct', 'trait', 'enum', 'interface', 'class')
+             ORDER BY start_line ASC",
+        )
+        .ok()?;
+
+    let mut callers_stmt = conn
+        .prepare(
+            "SELECT caller.file_path, caller.name, caller.kind, COALESCE(e.line, caller.start_line), caller.signature
+             FROM edges e
+             JOIN nodes caller ON e.source = caller.id
+             WHERE e.target = ?1
+               AND caller.file_path != ?2
+               AND e.kind IN ('calls', 'references', 'instantiates', 'implements')
+             ORDER BY caller.file_path ASC, e.line ASC",
+        )
+        .ok()?;
+
+    let mut callees_stmt = conn
+        .prepare(
+            "SELECT target.file_path, target.name, target.kind, COALESCE(e.line, target.start_line), target.signature
+             FROM edges e
+             JOIN nodes target ON e.target = target.id
+             WHERE e.source = ?1
+               AND target.file_path != ?2
+               AND e.kind = 'calls'
+               AND target.kind IN ('function', 'method')
+             ORDER BY target.file_path ASC, target.start_line ASC
+             LIMIT 5",
+        )
+        .ok()?;
+
+    for rf in &inventory.reviewable_files {
+        let path = rf.path.as_str();
+        if let Ok((distinct_files, inbound_edges)) = fan_in_stmt.query_row([path], |row| {
+            Ok((row.get::<_, usize>(0)?, row.get::<_, usize>(1)?))
+        }) {
+            if distinct_files > 0 {
+                file_fan_in.push(CodegraphFileFanIn {
+                    file_path: path.to_string(),
+                    distinct_caller_files: distinct_files,
+                    inbound_edges,
+                    is_high_fan_in_hub: distinct_files >= 25,
+                });
+            }
+        }
+
+        let hunk_ranges = if mode == "scan" {
+            vec![(1usize, usize::MAX)]
+        } else {
+            let patch = if let Some(r) = &range_arg {
+                git_text(
+                    project_root,
+                    &[
+                        "diff",
+                        "--unified=0",
+                        "--no-ext-diff",
+                        "--no-color",
+                        "--end-of-options",
+                        r,
+                        "--",
+                        path,
+                    ],
+                )
+                .unwrap_or_default()
+            } else {
+                git_text(
+                    project_root,
+                    &[
+                        "diff",
+                        "--unified=0",
+                        "--no-ext-diff",
+                        "--no-color",
+                        "HEAD",
+                        "--",
+                        path,
+                    ],
+                )
+                .unwrap_or_default()
+            };
+            let parsed = parse_unified_diff_new_line_ranges(&patch);
+            if parsed.is_empty() {
+                vec![(1usize, usize::MAX)]
+            } else {
+                parsed
+            }
+        };
+
+        let Ok(rows) = symbols_stmt.query_map([path], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, isize>(3)?.max(1) as usize,
+                row.get::<_, isize>(4)?.max(1) as usize,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        }) else {
+            continue;
+        };
+
+        let mut file_symbol_count = 0usize;
+        for row in rows.flatten() {
+            if file_symbol_count >= 12 {
+                break;
+            }
+            let (node_id, kind, name, start_line, end_line, signature) = row;
+            let overlaps = hunk_ranges
+                .iter()
+                .any(|(hs, he)| start_line <= *he && end_line >= *hs);
+            if !overlaps {
+                continue;
+            }
+
+            let mut total_external_callers = 0usize;
+            let mut untouched_external_callers = 0usize;
+            let mut sample_callers = Vec::new();
+            let mut seen_callers = BTreeSet::new();
+
+            if let Ok(caller_rows) = callers_stmt.query_map([node_id.as_str(), path], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, isize>(3)?.max(1) as usize,
+                    r.get::<_, Option<String>>(4)?,
+                ))
+            }) {
+                for c in caller_rows.flatten() {
+                    let (c_path, c_name, c_kind, c_line, c_sig) = c;
+                    let dedup_key = format!("{c_path}:{c_name}:{c_line}");
+                    if !seen_callers.insert(dedup_key) {
+                        continue;
+                    }
+                    total_external_callers += 1;
+                    let is_untouched = !diff_files.contains(c_path.as_str());
+                    if is_untouched {
+                        untouched_external_callers += 1;
+                    }
+                    if sample_callers.len() < 6 {
+                        sample_callers.push(CodegraphCrossFileEdge {
+                            file_path: c_path,
+                            symbol_name: c_name,
+                            symbol_kind: c_kind,
+                            line: c_line,
+                            signature: c_sig.map(|s| truncate_str(&s, 120)),
+                            is_untouched_in_diff: is_untouched,
+                        });
+                    }
+                }
+            }
+
+            let mut sample_callees = Vec::new();
+            let mut seen_callees = BTreeSet::new();
+            if let Ok(callee_rows) = callees_stmt.query_map([node_id.as_str(), path], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, isize>(3)?.max(1) as usize,
+                    r.get::<_, Option<String>>(4)?,
+                ))
+            }) {
+                for c in callee_rows.flatten() {
+                    let (t_path, t_name, t_kind, t_line, t_sig) = c;
+                    let dedup_key = format!("{t_path}:{t_name}");
+                    if !seen_callees.insert(dedup_key) {
+                        continue;
+                    }
+                    if sample_callees.len() < 5 {
+                        sample_callees.push(CodegraphCrossFileEdge {
+                            file_path: t_path.clone(),
+                            symbol_name: t_name,
+                            symbol_kind: t_kind,
+                            line: t_line,
+                            signature: t_sig.map(|s| truncate_str(&s, 120)),
+                            is_untouched_in_diff: !diff_files.contains(t_path.as_str()),
+                        });
+                    }
+                }
+            }
+
+            total_untouched_external_callers += untouched_external_callers;
+            touched_symbols.push(CodegraphTouchedSymbol {
+                file_path: path.to_string(),
+                name,
+                kind,
+                start_line,
+                end_line,
+                signature: signature.map(|s| truncate_str(&s, 120)),
+                total_external_callers,
+                untouched_external_callers,
+                sample_callers,
+                sample_callees,
+            });
+            file_symbol_count += 1;
+        }
+    }
+
+    if file_fan_in.is_empty() && touched_symbols.is_empty() {
+        return None;
+    }
+
+    Some(CodegraphReviewContext {
+        index_path: ".codegraph/codegraph.db".to_string(),
+        total_touched_symbols: touched_symbols.len(),
+        total_untouched_external_callers,
+        file_fan_in,
+        touched_symbols,
+    })
+}
+
+fn truncate_str(s: &str, max_chars: usize) -> String {
+    let clean = s.trim().replace('\n', " ");
+    if clean.chars().count() <= max_chars {
+        clean
+    } else {
+        let mut out: String = clean.chars().take(max_chars).collect();
+        out.push('…');
+        out
+    }
+}
+
 /// File confirmed findings at or above `min_severity` as draft `BUG` requirements in the AIDA store.
 // trace:STORY-3120 | ai:antigravity
 fn file_bugs_for_confirmed_findings(
@@ -1950,6 +2263,7 @@ fn auto_opposing_agent(project_root: &Path, finder_agent: &str) -> String {
 /// When `challenger` is `Some((challenger_agent, challenger_model))`, runs a second
 /// Blue-Team Skeptical Challenger pass to disprove false-positive candidate findings.
 // trace:STORY-3120 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
 fn execute_automated_batch_reviews(
     project_root: &Path,
     agent: &str,
@@ -1963,6 +2277,7 @@ fn execute_automated_batch_reviews(
     playbooks: &[ResolvedPlaybook],
     linked_specs: &[LinkedSpecAcceptance],
     content_cache: &BTreeMap<String, String>,
+    codegraph_context: Option<&CodegraphReviewContext>,
 ) -> Result<(
     Vec<RawReviewFinding>,
     CoverageLedger,
@@ -1988,6 +2303,7 @@ fn execute_automated_batch_reviews(
             &playbooks_map,
             linked_specs,
             content_cache,
+            codegraph_context,
         )?;
         metrics.finder_prompt_bytes += prompt.len();
         let finder_start = Instant::now();
@@ -2006,6 +2322,7 @@ fn execute_automated_batch_reviews(
                     &batch_findings,
                     linked_specs,
                     content_cache,
+                    codegraph_context,
                 );
                 metrics.challenger_prompt_bytes += challenger_prompt.len();
                 let chall_start = Instant::now();
@@ -2069,6 +2386,7 @@ fn build_adversarial_challenger_prompt(
     candidates: &[RawReviewFinding],
     linked_specs: &[LinkedSpecAcceptance],
     content_cache: &BTreeMap<String, String>,
+    codegraph_context: Option<&CodegraphReviewContext>,
 ) -> String {
     let mut prompt = String::new();
     prompt.push_str(
@@ -2093,6 +2411,13 @@ fn build_adversarial_challenger_prompt(
                 spec.title,
                 spec.acceptance_markdown
             ));
+        }
+    }
+
+    if let Some(cg) = codegraph_context {
+        let cg_md = format_codegraph_batch_context_markdown(cg, Some(&batch.files));
+        if !cg_md.is_empty() {
+            prompt.push_str(&cg_md);
         }
     }
 
@@ -2127,6 +2452,7 @@ fn build_adversarial_challenger_prompt(
     prompt
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_batch_review_prompt(
     project_root: &Path,
     mode: &str,
@@ -2136,6 +2462,7 @@ fn build_batch_review_prompt(
     playbooks_map: &BTreeMap<&str, &ResolvedPlaybook>,
     linked_specs: &[LinkedSpecAcceptance],
     content_cache: &BTreeMap<String, String>,
+    codegraph_context: Option<&CodegraphReviewContext>,
 ) -> Result<String> {
     let mut prompt = String::new();
     prompt.push_str("You are an AIDA deterministic batch code reviewer. Review every file in this batch against the linked AIDA acceptance criteria and active playbooks.\n\n");
@@ -2163,6 +2490,13 @@ fn build_batch_review_prompt(
                 "### {} (`{}`)\n{}\n\n",
                 pb.title, pb.id, pb.checklist
             ));
+        }
+    }
+
+    if let Some(cg) = codegraph_context {
+        let cg_md = format_codegraph_batch_context_markdown(cg, Some(&batch.files));
+        if !cg_md.is_empty() {
+            prompt.push_str(&cg_md);
         }
     }
 
@@ -2704,6 +3038,43 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         )
         .unwrap();
 
+        // Populate a fixture `.codegraph/codegraph.db` with `lib.rs::compute`,
+        // an untouched external caller `main.rs::run_app`, and an external callee `util.rs::check`:
+        std::fs::create_dir_all(root.join(".codegraph")).unwrap();
+        {
+            let cg_conn = rusqlite::Connection::open(root.join(".codegraph/codegraph.db")).unwrap();
+            cg_conn
+                .execute_batch(
+                    "CREATE TABLE nodes (
+                        id TEXT PRIMARY KEY,
+                        kind TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        qualified_name TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        language TEXT NOT NULL,
+                        start_line INTEGER NOT NULL,
+                        end_line INTEGER NOT NULL,
+                        start_column INTEGER NOT NULL,
+                        end_column INTEGER NOT NULL,
+                        signature TEXT,
+                        updated_at INTEGER NOT NULL
+                    );
+                    CREATE TABLE edges (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        source TEXT NOT NULL,
+                        target TEXT NOT NULL,
+                        kind TEXT NOT NULL,
+                        line INTEGER
+                    );
+                    INSERT INTO nodes VALUES ('fn:compute', 'function', 'compute', 'lib::compute', 'lib.rs', 'rust', 2, 5, 0, 0, 'pub fn compute()', 1);
+                    INSERT INTO nodes VALUES ('fn:run_app', 'function', 'run_app', 'main::run_app', 'main.rs', 'rust', 10, 20, 0, 0, 'pub fn run_app()', 1);
+                    INSERT INTO nodes VALUES ('fn:check', 'function', 'check', 'util::check', 'util.rs', 'rust', 1, 4, 0, 0, 'pub fn check() -> bool', 1);
+                    INSERT INTO edges (source, target, kind, line) VALUES ('fn:run_app', 'fn:compute', 'calls', 14);
+                    INSERT INTO edges (source, target, kind, line) VALUES ('fn:compute', 'fn:check', 'calls', 3);",
+                )
+                .unwrap();
+        }
+
         let args = ReviewPrepareArgs {
             scan: true,
             path: vec!["lib.rs".into()],
@@ -2728,6 +3099,13 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(bundle.coverage_verification.as_ref().unwrap().passed);
         assert_eq!(bundle.detected_author_agents, vec!["agy".to_string()]);
         assert_eq!(bundle.filed_bug_ids.len(), 1);
+        let cg = bundle.codegraph_context.as_ref().unwrap();
+        assert_eq!(cg.total_touched_symbols, 1);
+        assert_eq!(cg.total_untouched_external_callers, 1);
+        assert_eq!(cg.touched_symbols[0].name, "compute");
+        assert_eq!(cg.touched_symbols[0].sample_callers[0].file_path, "main.rs");
+        assert!(cg.touched_symbols[0].sample_callers[0].is_untouched_in_diff);
+        assert_eq!(cg.touched_symbols[0].sample_callees[0].symbol_name, "check");
         let tel = bundle.telemetry.as_ref().unwrap();
         assert_eq!(tel.ab_arm, "ab-adversarial");
         assert_eq!(tel.pass1_candidate_findings, 2);

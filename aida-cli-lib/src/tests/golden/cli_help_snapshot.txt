@@ -22921,6 +22921,10 @@ Options:
       --write <PATH>
           Write output inside the repository (relative paths start at the project root)
 
+      --no-codegraph
+          Disable automatic `.codegraph/codegraph.db` AST blast-radius & cross-file caller/callee
+          enrichment even when a local CodeGraph database is present
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida review record
@@ -56390,6 +56394,11 @@ Working on aida itself
         "name": "model",
         "takes_value": true,
         "help": "Model to pass to the review runner CLI (e.g. `o3`, `gpt-5.3-codex`, `claude-opus-4-6`). Overrides `.aida/review-rules.toml` (`default_model`) and `[agents.<vendor>.seats.reviewer] model`"
+      },
+      {
+        "name": "no-codegraph",
+        "takes_value": false,
+        "help": "Disable automatic `.codegraph/codegraph.db` AST blast-radius & cross-file caller/callee enrichment even when a local CodeGraph database is present"
       },
       {
         "name": "path",

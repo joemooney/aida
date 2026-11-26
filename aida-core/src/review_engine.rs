@@ -1425,6 +1425,202 @@ pub struct ReviewTelemetryRecord {
     pub addressed_rate_pct: Option<u8>,
 }
 
+/// One external caller or callee edge discovered in `.codegraph/codegraph.db`.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphCrossFileEdge {
+    pub file_path: String,
+    pub symbol_name: String,
+    pub symbol_kind: String,
+    pub line: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    /// True if `file_path` is NOT among the files reviewed in this changeset
+    /// (signals potential `contract-drift` or `incomplete-fix` risk for untouched callers).
+    pub is_untouched_in_diff: bool,
+}
+
+/// CodeGraph impact analysis for a single modified function, method, struct, trait, or enum.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphTouchedSymbol {
+    pub file_path: String,
+    pub name: String,
+    pub kind: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    pub total_external_callers: usize,
+    pub untouched_external_callers: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sample_callers: Vec<CodegraphCrossFileEdge>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sample_callees: Vec<CodegraphCrossFileEdge>,
+}
+
+/// File-level fan-in hub statistics from `.codegraph/codegraph.db`.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphFileFanIn {
+    pub file_path: String,
+    pub distinct_caller_files: usize,
+    pub inbound_edges: usize,
+    pub is_high_fan_in_hub: bool,
+}
+
+/// Complete CodeGraph AST blast-radius & cross-file caller/callee enrichment report
+/// attached to `aida review prepare` when `.codegraph/codegraph.db` is available.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphReviewContext {
+    pub index_path: String,
+    pub total_touched_symbols: usize,
+    pub total_untouched_external_callers: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_fan_in: Vec<CodegraphFileFanIn>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub touched_symbols: Vec<CodegraphTouchedSymbol>,
+}
+
+/// Parse unified diff (`@@ -old_start,old_len +new_start,new_len @@`) headers and return
+/// 1-based inclusive `(start_line, end_line)` spans in the new/target file.
+// trace:STORY-3120 | ai:antigravity
+pub fn parse_unified_diff_new_line_ranges(patch: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    for line in patch.lines() {
+        if !line.starts_with("@@") {
+            continue;
+        }
+        let Some(plus_idx) = line.find('+') else {
+            continue;
+        };
+        let after_plus = &line[plus_idx + 1..];
+        let token = after_plus.split_whitespace().next().unwrap_or("");
+        let (start_str, count_str) = match token.split_once(',') {
+            Some((s, c)) => (s, Some(c)),
+            None => (token, None),
+        };
+        let Ok(start) = start_str.parse::<usize>() else {
+            continue;
+        };
+        let count = count_str.and_then(|c| c.parse::<usize>().ok()).unwrap_or(1);
+        if start == 0 && count == 0 {
+            continue;
+        }
+        let s = start.max(1);
+        let e = if count <= 1 { s } else { s + count - 1 };
+        ranges.push((s, e));
+    }
+    ranges
+}
+
+/// Format the CodeGraph cross-file caller/callee impact section for a specific batch of files
+/// (or all files when `filter_files` is `None`). Returns an empty string if no CodeGraph
+/// data matches the requested files.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_codegraph_batch_context_markdown(
+    cg: &CodegraphReviewContext,
+    filter_files: Option<&[String]>,
+) -> String {
+    let matches_file = |path: &str| match filter_files {
+        Some(list) => list.iter().any(|f| f == path),
+        None => true,
+    };
+
+    let matching_hubs: Vec<&CodegraphFileFanIn> = cg
+        .file_fan_in
+        .iter()
+        .filter(|h| matches_file(&h.file_path) && h.distinct_caller_files > 0)
+        .collect();
+    let matching_syms: Vec<&CodegraphTouchedSymbol> = cg
+        .touched_symbols
+        .iter()
+        .filter(|s| matches_file(&s.file_path))
+        .collect();
+
+    if matching_hubs.is_empty() && matching_syms.is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::new();
+    out.push_str("## CodeGraph AST Blast-Radius & Cross-File Caller/Callee Context\n\n");
+    out.push_str("Use this deterministic AST dependency context from `.codegraph/codegraph.db` to detect `contract-drift` and `incomplete-fix` across untouched callers, and to verify real callee signatures before flagging speculative false positives:\n\n");
+
+    if !matching_hubs.is_empty() {
+        out.push_str("### File-Level Inbound Fan-In\n");
+        for h in matching_hubs {
+            let hub_badge = if h.is_high_fan_in_hub {
+                " **[HIGH BLAST-RADIUS HUB]**"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "- `{}`: referenced by **{}** distinct caller file(s) ({} inbound AST edges){}\n",
+                h.file_path, h.distinct_caller_files, h.inbound_edges, hub_badge
+            ));
+        }
+        out.push('\n');
+    }
+
+    if !matching_syms.is_empty() {
+        out.push_str("### Modified Symbols & Cross-File Call Graph\n");
+        for sym in matching_syms {
+            let sig_suffix = sym
+                .signature
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| format!(" — `{}`", s.replace('\n', " ")))
+                .unwrap_or_default();
+            out.push_str(&format!(
+                "- **`{}`** ({} in `{}:{}-{}`){}\n",
+                sym.name, sym.kind, sym.file_path, sym.start_line, sym.end_line, sig_suffix
+            ));
+            if sym.total_external_callers > 0 {
+                out.push_str(&format!(
+                    "  - **Inbound External Callers**: {} total (**{} untouched in this diff**)\n",
+                    sym.total_external_callers, sym.untouched_external_callers
+                ));
+                for caller in &sym.sample_callers {
+                    let status = if caller.is_untouched_in_diff {
+                        "UNTOUCHED in diff"
+                    } else {
+                        "in diff"
+                    };
+                    out.push_str(&format!(
+                        "    - `{}:{}` in `{}` ({}) [{}]\n",
+                        caller.file_path,
+                        caller.line,
+                        caller.symbol_name,
+                        caller.symbol_kind,
+                        status
+                    ));
+                }
+            }
+            if !sym.sample_callees.is_empty() {
+                out.push_str("  - **Outbound External Callees**:\n");
+                for callee in &sym.sample_callees {
+                    let callee_sig = callee
+                        .signature
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| format!(": `{}`", s.replace('\n', " ")))
+                        .unwrap_or_default();
+                    out.push_str(&format!(
+                        "    - `{}` (`{}:{}`){}\n",
+                        callee.symbol_name, callee.file_path, callee.line, callee_sig
+                    ));
+                }
+            }
+        }
+        out.push('\n');
+    }
+
+    out
+}
+
 /// Aggregated statistics for a single A/B experiment arm across recorded reviews.
 // trace:STORY-3120 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3310,5 +3506,52 @@ fn beta() {
             canonical_module_stem("tb/axi_fifo_tb.sv")
         );
         assert_eq!(canonical_module_stem("src/contest.rs"), "contest");
+
+        let ranges = parse_unified_diff_new_line_ranges(
+            "@@ -10,4 +12,6 @@ fn foo()\n+a\n@@ -30 +45 @@ fn bar()\n+b\n",
+        );
+        assert_eq!(ranges, vec![(12, 17), (45, 45)]);
+
+        let cg_ctx = CodegraphReviewContext {
+            index_path: ".codegraph/codegraph.db".into(),
+            total_touched_symbols: 1,
+            total_untouched_external_callers: 1,
+            file_fan_in: vec![CodegraphFileFanIn {
+                file_path: "lib.rs".into(),
+                distinct_caller_files: 30,
+                inbound_edges: 42,
+                is_high_fan_in_hub: true,
+            }],
+            touched_symbols: vec![CodegraphTouchedSymbol {
+                file_path: "lib.rs".into(),
+                name: "compute".into(),
+                kind: "function".into(),
+                start_line: 2,
+                end_line: 5,
+                signature: Some("pub fn compute() -> Result<i32>".into()),
+                total_external_callers: 1,
+                untouched_external_callers: 1,
+                sample_callers: vec![CodegraphCrossFileEdge {
+                    file_path: "main.rs".into(),
+                    symbol_name: "run_app".into(),
+                    symbol_kind: "function".into(),
+                    line: 14,
+                    signature: None,
+                    is_untouched_in_diff: true,
+                }],
+                sample_callees: vec![CodegraphCrossFileEdge {
+                    file_path: "util.rs".into(),
+                    symbol_name: "validate_input".into(),
+                    symbol_kind: "function".into(),
+                    line: 8,
+                    signature: Some("pub fn validate_input(x: i32) -> bool".into()),
+                    is_untouched_in_diff: true,
+                }],
+            }],
+        };
+        let cg_md = format_codegraph_batch_context_markdown(&cg_ctx, Some(&["lib.rs".to_string()]));
+        assert!(cg_md.contains("[HIGH BLAST-RADIUS HUB]"));
+        assert!(cg_md.contains("UNTOUCHED in diff"));
+        assert!(cg_md.contains("validate_input"));
     }
 }
