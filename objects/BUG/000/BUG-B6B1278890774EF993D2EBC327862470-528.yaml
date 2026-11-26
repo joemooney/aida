@@ -1,0 +1,29 @@
+id: 01a2158d-3ada-73e3-b86a-91dc240139ef
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-528
+agreed_id: BUG-2767
+title: Auto-train re-admits a red train's culprit PR at the same head, and starts bisect trains during an advisor drain
+description: |
+  advisor-122 2026-11-25 18:55 (filed by product-15). (1) Train #4605 (6 PRs) went red on #4482 BUG-2739 (an unclassified store-writer inventory row) and bisected into #4608 (landed) and #4609 (red on #4482 again). The auto-train then RE-ADMITTED #4482 at the SAME head into train #4611 (with #4475), which will fail the same way: one wasted CI cycle (~45 min) per re-admission. (2) The advisor drained the auto-train at 01:46Z, but it still STARTED follow-up bisect trains #4610/#4611 at 01:50Z and held admission for 93+ min while Joe's supervised PRs starved.
+
+  ## Acceptance
+  - AC1: a PR ejected or bisected as the CULPRIT of a red train is not re-admitted to any train until its head SHA changes or an operator clears it explicitly (a recorded clearance); `aida pr train --check` names it as "held: culprit of train #N at <sha>".
+  - AC2: while an advisor or operator DRAIN of the auto-train is active, it starts NO new trains, including follow-up bisect trains. In-flight train CI is left alone (never cancelled).
+  - AC3: tests for AC1 (same-head re-admission refused; a new head is re-admitted) and AC2 (a drain blocks a bisect start).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T01:51:46.906577705Z
+modified_at: 2026-11-26T01:51:46.906577705Z
+req_type: Bug
+tags:
+- landing
+- throughput
+- train
+filed_at:
+  code_sha: fa7028b4df8d8ce2aa0e3f270a743cca265b957e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa7028b4df8
+  vendor: claude
