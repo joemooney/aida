@@ -928,6 +928,27 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // A deputy hosting the review-watch or auto-train service on a stale or
+    // deleted binary: two receipt reads and a /proc probe. trace:BUG-2774 | ai:claude
+    let deputy_binary = crate::review_watch::service::DEPUTY_BINARY_CATEGORY;
+    if doctor_category_selected(opts.category.as_deref(), deputy_binary)? {
+        for finding in [
+            crate::review_watch::service::deputy_binary_finding(&project_root),
+            crate::review_watch::train_service::deputy_binary_finding(&project_root),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !findings
+                .iter()
+                .any(|f| f.category == deputy_binary && f.id == finding.id)
+            {
+                findings.push(finding);
+            }
+        }
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // The throughput guard (opt-in append path: only when --category is
     // explicitly passed, since it runs a landing pass against the forge).
     // trace:STORY-2906 | ai:claude
