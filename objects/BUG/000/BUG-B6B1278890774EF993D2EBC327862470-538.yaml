@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T21:02:32.540965440Z
+modified_at: 2026-11-26T21:40:30.344968913Z
 req_type: Bug
 tags:
 - landing
@@ -151,6 +151,22 @@ comments:
   created_at: 2026-11-26T21:02:32.540961307Z
   modified_at: 2026-11-26T21:02:32.540961307Z
   session_id: 01a219535435
+- id: 01a219cd-8a09-7f03-9afb-d2dcfef6dfcb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4cbdf72716. Round 2 for #4685.
+    - (1) [behavioral-test] The post-drive loop is now route_drift_ejections, behind a DriftRouter trait, and the handler calls it through LiveDriftRouter. bug2777_train_routes_and_records_a_drift_ejection_only_under_authority sends a real build() drift ejection through it. It checks: a typed row at the ejected head, routing once across duplicate sub-train ejections, a red ejection not routed, and that the branch is not updated once authority is lost. The test is at the extracted-loop level, not a full handler run (the handler needs find_project_root and a live forge).
+    - (2) Without authority the drift row is still written, with the route 'not routed: <why>; ...'. Tested.
+    - (3) Route text now reads 'a re-review is needed if the patch changed; a patch-id-identical approval carries'. The TASK-1960 gate is untouched.
+    - (4) landing_drought::scan reads pins and drift rows via main_worktree_root_from (train_state). Tested from a git-worktree seat.
+    - (5) Precedence: record() keeps a drift row at the same head, and a red at a new head replaces it. Tested. A drift row's train stays None because the drift ejection happens at build() time, before any train PR number exists.
+    - Residual risk: LiveDriftRouter's abort caching is covered by inspection only.
+    Tests: 6 bug2777 tests pass (aida lane job).
+  created_at: 2026-11-26T21:40:30.344968913Z
+  modified_at: 2026-11-26T21:40:30.344968913Z
+  session_id: 01a219b01ddd
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
