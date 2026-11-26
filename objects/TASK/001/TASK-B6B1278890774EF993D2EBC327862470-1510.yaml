@@ -1,0 +1,31 @@
+id: 01a21822-8f93-70b0-b6c1-342140dafdf4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1510
+title: 'Review follow-up: TASK-3917 follow-up: the 10-minute refusal cache (advisor_loop_train.rs Refusals/REJUDGE) '
+description: |-
+  From TASK-3917
+  Reviewed sha: 02ed97be57e00b936cfb972411934302f69ce733
+
+  TASK-3917 follow-up: the 10-minute refusal cache (advisor_loop_train.rs Refusals/REJUDGE) is keyed only by (PR, head). State that changes without a head move is not seen for up to 10 minutes: an approval being recorded, CI turning green, a train ending, or a rider's train being abandoned. AutomaticPrescan (and with it abandoned-train detection) loads only when some uncached change needs judging, so riders of a dead train can wait out the whole window. The delay is bounded and the implementer flagged it, but it adds latency on the landing path. Fix: invalidate the cache when a verdict-ledger, approval or train-journal change is seen, or shorten the window for approval and train refusals.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T13:54:07.891236538Z
+modified_at: 2026-11-26T13:54:07.891236538Z
+req_type: Task
+tags:
+- carried-from:TASK-3917
+- finding-hash:a17ea02b
+- from-review:TASK-3917
+relationships:
+- rel_type: References
+  target_id: 01a217ec-e057-7183-910a-f5f1a34e508a
+  created_at: 2026-11-26T13:54:07.891281378Z
+filed_at:
+  code_sha: 02ed97be57e00b936cfb972411934302f69ce733
+  branch: pr-4656
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 15bbbc68222
+  vendor: claude
+  session: 01a2181fdb3e
