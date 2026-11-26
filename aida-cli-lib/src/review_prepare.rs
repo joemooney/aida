@@ -7,7 +7,7 @@
 use crate::launch::review_challenger::{self as challenger, AdversarialSummary, RefutedFinding};
 use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
 use crate::launch::review_tuning::{resolve_for_run, trusted_review_base};
-use crate::vendors::review_runner::{review_vendor, ReviewVendor};
+use crate::vendors::review_runner::{review_vendor, ReviewVendor, DEFAULT_REVIEW_VENDOR};
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::exec_context::Environment;
 use aida_core::review_engine::{
@@ -18,7 +18,6 @@ use aida_core::review_engine::{
 };
 use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
 use aida_core::review_engine::{FileCoverageEntry, FileCoverageStatus};
-use aida_core::vendors::LaunchVendor;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -695,14 +694,13 @@ fn run_review_agent(
     if custom {
         return Ok(None);
     }
-    let (name, from) = match aida_core::agents_config::resolve_default_vendor(root) {
-        Some(name) => (name, "[agents] vendor"),
+    let (vendor, from) = match aida_core::agents_config::resolve_default_vendor(root) {
+        Some(name) => (review_vendor(&name)?, "[agents] vendor"),
         None => (
-            LaunchVendor::Claude.as_str().into(),
+            DEFAULT_REVIEW_VENDOR,
             "the built-in default (no [agents] vendor)",
         ),
     };
-    let vendor = review_vendor(&name)?;
     eprintln!("run review: using {} from {from}", vendor.program);
     Ok(Some(vendor))
 }
