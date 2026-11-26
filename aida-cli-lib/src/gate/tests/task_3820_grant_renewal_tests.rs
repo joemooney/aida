@@ -576,3 +576,35 @@ fn task_3820_marker_dropped_before_the_locked_write_refuses() {
         now + Duration::hours(1)
     );
 }
+
+// trace:TASK-3884 | ai:codex
+#[test]
+fn task_3884_contended_grant_times_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env =
+        crate::gate::test_support::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let id = test_support::mint_grant_for(tmp.path(), PRINCIPAL, "advisor", &[]);
+    test_support::rewrite_grant(&id, |g| g.binding.clear());
+    let before = bytes(&id);
+    let receipt = crate::gate::kernel_deps::ContainmentReceipt::current_process_test_receipt();
+    let path = grant_lock_dir().unwrap().join(format!("{id}.lock"));
+    crate::test_env_base::assert_lock_timeout(&path, |end| {
+        bind_contained_launch_worker_until(&id, &receipt, Some(end)).map(|()| true)
+    });
+    assert_eq!(bytes(&id), before);
+
+    let clock = std::cell::Cell::new(Instant::now());
+    let end = clock.get() + std::time::Duration::from_secs(3600);
+    let slow_read = |id: &str| {
+        let grant = read_grant(id)?;
+        clock.set(end);
+        Ok(grant)
+    };
+    let change = |_: &mut SeatGrant| panic!("expired update ran");
+    let error = update_grant_until(&id, Some(end), slow_read, || clock.get(), change, |_| false)
+        .unwrap_err()
+        .downcast::<std::io::Error>()
+        .unwrap();
+    assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+    assert_eq!(bytes(&id), before);
+}
