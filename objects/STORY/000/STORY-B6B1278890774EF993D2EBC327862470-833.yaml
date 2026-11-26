@@ -297,12 +297,27 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a21806-4a21-7840-9518-77ff4e36060b
+  author: aida-auto-bump
+  timestamp: 2026-11-26T13:23:15.105945172Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 processing_record:
 - id: 01a21803-a7e1-7f22-af1d-278d1a19226e
   timestamp: 2026-11-26T13:20:22.497389149Z
   agent: aida
   commit_sha: 2d89ef450561e39de69593890f3ab7765146154b
   summary: Completed via merge 2d89ef45
+- id: 01a21806-4a68-70a1-9521-8e7d3ad7f08a
+  timestamp: 2026-11-26T13:23:15.176918582Z
+  agent: aida
+  commit_sha: 956182606ddd54e31684fadbd306e34d412bf297
+  summary: 'STORY-3143 S3 (completing). AC1 verified by story_3143_html_is_self_contained_and_escaped (render_html: inline style, no script/link/src/href/url, every cell through esc()) plus S1 tests story_3143_classifies_area_difficulty_and_noise and story_3143_area_map_and_weights_come_from_config. The flag is --report-format table|json|html (-f), not --format, because the global --format owns that name (BUG-2189). That follows the report ai-integration precedent (report_cmd_args.rs:90-92). I accept it as meeting the AC; --json plus html is refused. AC2 verified by story_3143_hotness_blends_weighted_signals, story_3143_default_areas_map_code_paths and the new story_3143_assemble_signals_from_fixture_reads, which covers the 7-day CR window, the ledger spec-to-area join, multi-spec PR attribution and the churn parse. AC3 verified by story_3143_flow_metrics_from_fixture_ledger, story_3143_landings_parse_pr_numbers_from_subjects, story_3143_cr_rounds_grouped_by_spec (per-spec rounds up to the last landing; landed PRs with no verdicts skipped) and story_3143_stale_claims_and_recommendations, which now covers a lane log keeping an old status fresh. story_3143_driver_activity_from_lane_logs covers the newest mtime winning and a missing directory. Holders still fail closed when PR or lease reads fail (asserted). AC4 verified by story_3143_stale_claims_and_recommendations: commands are prescribed only and nothing runs. The S3 scope items (HTML, driver activity, flow_days/opened_lookback_days window, CR by spec, gather_signals test gap) are all present. The one commit the base gained (BUG-2733 train fix) does not touch these files. CI pending at review time (fast gates green, fast compile pending). One p3 follow-up, deferred.'
+  punted:
+  - 'punted: STORY-3143 S2 (completing). AC2 verified by story_3143_hotness_blends_weighted_signals, story_3143_default_areas_map_code_paths and cr_by_area in story_3143_flow_metrics_from_fixture_ledger. AC3 verified by story_3143_landings_parse_pr_numbers_from_subjects, story_3143_flow_metrics_from_fixture_ledger and story_3143_stale_claims_and_recommendations; it fails closed on an unknown holder set. AC4 verified by story_3143_stale_claims_and_recommendations; the prescribed `aida edit --superseded-by`, `aida defer --until manual:` and `--status approved` flags exist and nothing is executed. AC1 is unmet: the AC requires --format table|json|html and HTML is not implemented, yet the PR claims completion. Blocking: unmet-claimed-ac. The p3/test-gap items are follow-ups. CI pending at review time.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
