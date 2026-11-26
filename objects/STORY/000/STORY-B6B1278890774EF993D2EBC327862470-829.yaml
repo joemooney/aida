@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T17:31:01.559673730Z
+modified_at: 2026-11-26T17:32:38.763063355Z
 req_type: Story
 tags:
 - integration
@@ -1344,6 +1344,13 @@ comments:
     Nit 2: --literal-pathspecs applies to `--scan --path <p>` too, so a glob passed as --path now matches literally. That is probably the safer default; mention it in the S5c docs (F).
   created_at: 2026-11-26T17:31:01.559673730Z
   modified_at: 2026-11-26T17:31:01.559673730Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a218ea-dccb-77c2-91a7-bb4761393574
+  author: joe
+  content: 'AUDIT VERDICT (not a lane instruction): S5c carry-forwards from the #4673 pre-check, per the advisor''s 10:36 ruling: (1) the gh_stdin timeout test must also assert the killed fake gh process is gone; (2) document that --literal-pathspecs makes ''aida review prepare --scan --path <p>'' match p literally (no globs). These join S5c items C (--challenger-agent + unauthenticated/rate-limited fallback), D (all exclusions on rename old paths) and F (docs).'
+  created_at: 2026-11-26T17:32:38.763063355Z
+  modified_at: 2026-11-26T17:32:38.763063355Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
