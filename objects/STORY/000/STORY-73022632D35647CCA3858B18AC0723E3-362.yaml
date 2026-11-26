@@ -1,5 +1,6 @@
 id: 01a218e4-5641-79c3-9fb1-0f6bb00b1cbb
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-362
+agreed_id: STORY-3188
 title: 'Review PR-4672: [AI:claude] fix(review): default review vendor lives in the vendor table (BUG-2775)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a218a9`) for branch `bug-2775-run-review-errors`.
@@ -52,6 +53,12 @@ history:
   timestamp: 2026-11-26T17:25:59.998731127Z
   session_id: 01a218a9014e
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a218e7-2c74-77d1-81a1-ce26f84b94dc
+  author: joe
+  timestamp: 2026-11-26T17:28:53.108865887Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 46793d2c72c82cc39b20ba2ae9a81b17ebc8cd17

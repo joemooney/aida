@@ -1,5 +1,6 @@
 id: 01a218e5-5104-7070-bd3b-0208d1fb558c
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-054
+agreed_id: TASK-3511
 title: Agent-mode CLI errors drop the anyhow cause chain (only the first line survives)
 description: |
   agent_errors.rs agent_error_summary_help takes only msg.lines().next() of the Debug-formatted error. Every `with_context` cause below the outermost context is invisible to agents (AIDA_HEADLESS / agent output mode). BUG-2775 ("review batch 1" with no cause) is one instance; it was fixed locally by flattening runner errors to one line, but every other command with layered context has the same blind spot.
@@ -18,6 +19,13 @@ tags:
 - from-implementer:BUG-2775
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a218e6-eaae-7570-8b7b-68adb3fac1de
+  author: joe
+  timestamp: 2026-11-26T17:28:36.270752640Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 46793d2c72c82cc39b20ba2ae9a81b17ebc8cd17
   branch: bug-2775-run-review-errors
