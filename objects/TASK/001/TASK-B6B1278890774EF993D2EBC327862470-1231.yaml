@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T05:50:44.058058096Z
-modified_at: 2026-11-26T20:40:39.983271968Z
+modified_at: 2026-11-26T20:42:00.667728826Z
 req_type: Task
 tags:
 - carried-from:BUG-2723
@@ -45,6 +45,24 @@ comments:
   modified_at: 2026-11-26T19:45:39.044878100Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21997-fc5b-72c1-bd35-d69d8b520652
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    No `## Acceptance` section; brief asks for a focused docs assertion.
+    - **Unit (python unittest, CI step `python3 -m unittest tests/test_ci_tiers.py`):** new `test_task3266_wait_for_fast_before_retoggling_inherited_full` asserts the TASK-3266-traced paragraph (wait for FAST on the updated head before removing/re-adding an inherited `ci:full`; re-adding starts FULL on the updated head). The existing `test_bug2723_wait_before_retoggling_full` covers only the shorter BUG-2723 sentence.
+
+    ### Expected files
+    - `tests/test_ci_tiers.py`
+
+    ### Ambiguities / conflicts as questions
+    - None (the doc carries the instruction twice; deduping is out of scope for a test-only slice).
+  created_at: 2026-11-26T20:42:00.667728826Z
+  modified_at: 2026-11-26T20:42:00.667728826Z
+  session_id: 01a2199667fe
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
   author: joe
