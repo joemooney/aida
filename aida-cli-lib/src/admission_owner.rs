@@ -1,3 +1,4 @@
+// mandate-gate
 //! Cooperative admission exclusion. Kernel flock is the exclusion authority.
 //! Review controllers and cooperative trains share a mode; land excludes both.
 // trace:STORY-2857 | ai:codex

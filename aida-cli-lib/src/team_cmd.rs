@@ -1,3 +1,4 @@
+// mandate-gate
 //! `aida team` command cluster (STORY-647 team / RBAC management).
 //!
 //! The team roster view (`aida team`), the per-user role roster writes
