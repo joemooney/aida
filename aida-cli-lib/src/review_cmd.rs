@@ -75,7 +75,16 @@ fn run_review(
             args.cmd.is_none(),
             "promotion cannot be combined with a review command"
         );
-        crate::review_watch::promote_approved_heads(&crate::find_project_root()?)?;
+        // One line per approved PR on stdout; every failure, including a
+        // missing project root, on stderr. trace:BUG-2764 | ai:claude
+        let root = crate::find_project_root().inspect_err(|error| {
+            eprintln!("promotion pass failed: {error:#}");
+        })?;
+        crate::review_watch::promote_approved_heads(
+            &root,
+            &mut std::io::stdout(),
+            &mut std::io::stderr(),
+        )?;
         return Ok(crate::cmdkit::Flow::Return);
     }
     match &ctx.store {
