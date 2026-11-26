@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-26T06:36:50.491629744Z
+modified_at: 2026-11-26T07:18:16.317243659Z
 req_type: Bug
 tags:
 - leases
@@ -425,6 +425,20 @@ comments:
   modified_at: 2026-11-26T06:33:21.797869424Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a216b8-23fd-7443-a94f-d1a8f898f273
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f694d9696a (fresh port of approved #4541 @ a27b058a onto main c8c3a3e139).
+    Acceptance evidence: absent tree -> release with no salvage, clean present tree -> atomic move to ~/salvage/reaped, mode-000 parent (EACCES) -> refuse with lease bytes unchanged, no new attestation event, and the tree still in place (repair_attestation.py, run by aida-cli/tests/bug_2722_repair_attestation.rs). The EXDEV path asserts pending->failed event pair.
+    Port adaptations: collect_doctor_findings_at keeps main's BUG-2739 lazy OnceCell live-session probe with the exact-lease selection; reader.rs keeps both doctor_lease_liveness (main) and current_lease_state; store-writers keeps #4541's rows except heal_doctor_lease (renamed to apply_doctor_lease on main, whose rows are kept) and the attest_clone_lease->collect_doctor_findings_at row, which main's scanner now reports stale. No new sites added. read_exact_lease_snapshot keeps the read_only/BUG-2655 classification.
+    Probes: refusal paths (unknown binding, unstable identity, lease change during confirmation, non-stale holder, typed-ID mismatch) are unchanged from the approved diff. Fail-open check: pin() continues only on ENOENT.
+    Validation: cargo test -p aida-cli-lib --lib -- doctor gave 413 passed and 2 failed; both failures are bug_1749_doctor_toon_tests needing a prebuilt aida binary in this seat, which is environmental. make check-ci-fast exit 0.
+    Residual risk: the aida-cli integration test repair_attestation.py was not run locally; CI covers it.
+  created_at: 2026-11-26T07:18:16.317243659Z
+  modified_at: 2026-11-26T07:18:16.317243659Z
+  session_id: 01a21692038f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
