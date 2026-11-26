@@ -17,11 +17,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T16:12:46.878986729Z
+modified_at: 2026-11-26T16:16:17.317572330Z
 req_type: Bug
 tags:
 - STORY-3120
 - review
+history:
+- id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
+  author: joe
+  timestamp: 2026-11-26T16:16:17.399594955Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
   branch: main
