@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T17:29:20.457258254Z
+modified_at: 2026-11-26T17:45:27.110566846Z
 req_type: Bug
 tags:
 - lanes
@@ -32,6 +32,28 @@ comments:
   modified_at: 2026-11-26T17:24:38.632228632Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a218f6-5746-7a53-bf5b-45dcf20afa32
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    Following the authoritative brief (supersedes AC1's remote-reachability rule): in `seat_clone::create`, after the existing "directory already exists" refusal and before claiming the directory, a leftover `refs/aida/seats/<dir>` pin is released through the existing `release_orphan_pin` (re-checks clone absent + no clone lease naming it, compare-and-delete on the listed oid) with a stderr log line; when a lease still names it the launch refuses with a pin-specific message instead of git's "reference already exists".
+    - **Unit (fixture):** `bug_2772_stale_pin_without_clone_or_lease_is_replaced` — create, rm clone dir, create again succeeds and the pin names the new base.
+    - **Unit (fixture):** `bug_2772_pin_with_a_live_lease_refuses` — clone dir gone but a clone lease names it: refuse, pin untouched.
+    - **Unit (fixture):** `bug_2772_pin_whose_clone_exists_refuses` — clone dir present: refuse, pin untouched.
+    - AC2 (session end removes the pin) is already done by `destroy` (`release_pin` beside the clone removal) and covered by `task_2053_bwrap_destroy_salvages_then_removes_clone_target_and_pin`; no change.
+
+    ### Expected files
+    - `aida-cli-lib/src/seat_clone.rs`
+    - `aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - AC1 asks for a remote-reachability check on the stale pin; the brief instead keys staleness on no clone + no lease. The pin only keeps main's base commit alive for a clone that no longer exists, so I follow the brief. Should a unique-commit guard be added later?
+  created_at: 2026-11-26T17:45:27.110566846Z
+  modified_at: 2026-11-26T17:45:27.110566846Z
+  session_id: 01a218e76317
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218e0-ea73-7a92-9d85-2f50a6c28366
   author: joe
