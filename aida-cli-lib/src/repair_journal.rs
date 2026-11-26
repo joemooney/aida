@@ -24,14 +24,16 @@ pub(crate) enum SpawnOutcome {
     Started,
     ProvenDead,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Validation {
+    #[serde(default)]
+    pub advisory: bool,
     pub tree: String,
     pub command: Vec<String>,
     pub success: bool,
     pub recorded_at: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RefusalNotice {
     pub reason: String,
     pub accepted_delivery: Option<String>,
@@ -41,7 +43,7 @@ pub(crate) struct RefusalNotice {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery_unknown: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RepairEntry {
     pub key: RepairKey,
     pub dispatched_by: String,
@@ -60,6 +62,8 @@ pub(crate) struct RepairEntry {
     // Older boolean-only records cannot supply this evidence.
     #[serde(default)]
     pub regenerated_tree: Option<String>,
+    #[serde(default)]
+    pub snapshot_deferred: Option<String>,
     // Preparation restores outputs from this entry's immutable base/head inputs.
     // Missing evidence (including journals from older hosts) fails closed.
     #[serde(default)]
@@ -84,7 +88,7 @@ impl RepairEntry {
     pub fn require_regenerated_tree(&self, tree: &str) -> Result<()> {
         self.require_prepared()?;
         anyhow::ensure!(
-            self.regeneration_success == Some(true)
+            (self.regeneration_success == Some(true) || self.snapshot_deferred.is_some())
                 && self.regenerated_tree.as_deref() == Some(tree),
             "staged repair tree changed or lacks successful regeneration; retry publication"
         );
@@ -95,15 +99,144 @@ impl RepairEntry {
 struct Journal {
     version: u32,
     entries: Vec<RepairEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    releases: Vec<ReservationRelease>,
 }
+
+#[derive(Serialize, Deserialize)]
+struct ReservationRelease {
+    #[serde(default)]
+    merge: Option<ReleasedMerge>,
+    id: String,
+    uid: u32,
+    at: String,
+    reason: String,
+}
+#[derive(Serialize, Deserialize)]
+struct ReleasedMerge {
+    branch: String,
+    head: String,
+    base: String,
+    pr: u64,
+}
+
+impl From<&RepairEntry> for ReleasedMerge {
+    fn from(entry: &RepairEntry) -> Self {
+        Self {
+            branch: entry.branch.clone(),
+            head: entry.key.original_head.clone(),
+            base: entry.base.clone(),
+            pr: entry.key.pr,
+        }
+    }
+}
+/// What one dispatch attempt reserved: the entry exactly as written, and the
+/// ProvenDead entry it replaced, if any. Only that attempt holds it.
+// trace:BUG-2761 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct AttemptReservation {
+    entry: RepairEntry,
+    replaced: Option<RepairEntry>,
+}
+
 pub(crate) struct RepairGuard {
     _lock: File,
     path: PathBuf,
     journal: Journal,
 }
+// trace:BUG-2722 | ai:codex
+fn reservation_id(entry: &RepairEntry) -> String {
+    format!(
+        "pr-{}-{}-{}",
+        entry.key.pr, entry.key.original_head, entry.lane_id
+    )
+}
+
+// Check ancestors from root to leaf. A dangling symlink anywhere in the
+// chain is not evidence that a worktree has gone away.
+fn path_absent(path: &Path) -> Result<bool> {
+    use std::path::Component;
+    anyhow::ensure!(
+        path.is_absolute()
+            && path.file_name().is_some()
+            && path
+                .components()
+                .all(|c| matches!(c, Component::RootDir | Component::Normal(_))),
+        "ambiguous path {}",
+        path.display()
+    );
+    use std::os::{
+        fd::{AsRawFd, FromRawFd},
+        unix::ffi::OsStrExt,
+    };
+    let mut parent = File::open("/")?;
+    for part in path.components().skip(1) {
+        let name = std::ffi::CString::new(part.as_os_str().as_bytes())?;
+        // Pin each directory before inspecting its child. Never follow a
+        // replaced ancestor while proving a missing suffix.
+        let fd = unsafe {
+            libc::openat(
+                parent.as_raw_fd(),
+                name.as_ptr(),
+                libc::O_PATH | libc::O_NOFOLLOW | libc::O_DIRECTORY | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::NotFound {
+                return Ok(true);
+            }
+            return Err(error).with_context(|| format!("inspect directory {}", path.display()));
+        }
+        parent = unsafe { File::from_raw_fd(fd) };
+    }
+    Ok(false)
+}
+
+fn reservation_lease(entry: &RepairEntry) -> Result<&'static str> {
+    let id = &entry.lane_id;
+    anyhow::ensure!(
+        !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+        "invalid lease ID"
+    );
+    let root = &entry.key.repository;
+    if path_absent(&crate::leases::leases_dir(root))? {
+        return Ok("absent");
+    }
+    let path = crate::leases::lease_path(root, id);
+    match std::fs::symlink_metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok("absent"),
+        result => {
+            result?;
+        }
+    }
+    let bytes = crate::observation_envelope::read_bounded(&path, 256 * 1024)?;
+    let lease: crate::SessionLease = toml::from_str(std::str::from_utf8(&bytes)?)?;
+    anyhow::ensure!(
+        lease.id == *id && lease.worktree_path == entry.tree_path && lease.branch == entry.branch,
+        "lease identity mismatch"
+    );
+    anyhow::ensure!(
+        crate::leases::lease_recorded_owner(&lease)
+            == aida_core::liveness::RecordedLeaseOwner::Dead,
+        "lease {id} has a live or unverified owner"
+    );
+    Ok("present without a live recorded owner")
+}
+
+impl Journal {
+    fn reservation(&self, id: &str) -> Result<&RepairEntry> {
+        let mut matches = self.entries.iter().filter(|e| reservation_id(e) == id);
+        let entry = matches
+            .next()
+            .context("unknown reservation; inspect aida doctor check repair-reservations")?;
+        anyhow::ensure!(matches.next().is_none(), "ambiguous reservation ID");
+        Ok(entry)
+    }
+}
+
 impl RepairGuard {
     pub fn lock(main: &Path) -> Result<Self> {
-        use std::os::unix::fs::OpenOptionsExt;
         let dir = main.join(".aida");
         std::fs::create_dir_all(&dir)?;
         anyhow::ensure!(
@@ -112,10 +245,23 @@ impl RepairGuard {
         );
         let path = dir.join("repair-journal.json");
         let lock = lock_file(&dir.join("repair-journal.lock"))?;
+        let journal = Self::read(main, &path)?;
+        Ok(Self {
+            _lock: lock,
+            path,
+            journal,
+        })
+    }
+    fn read(main: &Path, path: &Path) -> Result<Journal> {
+        use std::os::unix::fs::OpenOptionsExt;
+        anyhow::ensure!(
+            std::fs::symlink_metadata(main.join(".aida"))?.is_dir(),
+            "invalid repair journal directory"
+        );
         let journal = match std::fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(&path)
+            .open(path)
         {
             Ok(mut f) => {
                 use std::io::Read;
@@ -131,6 +277,7 @@ impl RepairGuard {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Journal {
                 version: 1,
                 entries: vec![],
+                releases: vec![],
             },
             Err(e) => return Err(e).context("cannot read repair journal"),
         };
@@ -146,12 +293,89 @@ impl RepairGuard {
                 "invalid or duplicate repair journal key"
             );
         }
-        Ok(Self {
-            _lock: lock,
-            path,
-            journal,
-        })
+        Ok(journal)
     }
+    // trace:BUG-2722 | ai:codex
+    pub(crate) fn repair_findings(&self) -> Vec<crate::DoctorFinding> {
+        self.journal
+            .entries
+            .iter()
+            .filter(|e| e.spawn != SpawnOutcome::ProvenDead)
+            .map(|e| {
+                let id = reservation_id(e);
+                let summary = format!(
+                    "reserved lane {}, tree {}",
+                    e.lane_id,
+                    e.tree_path.display()
+                );
+                let action =
+                    format!("aida doctor heal repair-reservations --id {id} --attest '<reason>'");
+                crate::DoctorFinding {
+                    category: "repair-reservations".into(),
+                    action,
+                    id,
+                    summary,
+                    safe_heal: false,
+                }
+            })
+            .collect()
+    }
+
+    pub(crate) fn attest_reservation(
+        main: &Path,
+        id: &str,
+        reason: &str,
+        input: impl std::io::Read + std::io::IsTerminal,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            input.is_terminal() && !reason.trim().is_empty(),
+            "release requires a terminal and attestation"
+        );
+        let snapshot = Self::read(main, &main.join(".aida/repair-journal.json"))?;
+        let entry = snapshot.reservation(id)?;
+        anyhow::ensure!(
+            entry.spawn != SpawnOutcome::ProvenDead,
+            "reservation already released"
+        );
+        let lease = reservation_lease(entry)?;
+        let absent = path_absent(&entry.tree_path)?;
+        let count = if absent {
+            None
+        } else {
+            crate::seat_clone::repair_unpushed_count(&entry.key.repository, &entry.tree_path)
+        };
+        let tree_state = if absent { "absent" } else { "present" };
+        let count = count.map_or_else(|| "unavailable".into(), |v| v.to_string());
+        eprintln!("Entry {id}\nLease {}: {lease}\nTree {:?}: {tree_state}\nUnpushed HEAD commits: {count}\nReason: {reason:?}\nType {id} to release:", entry.lane_id, entry.tree_path);
+        let mut answer = String::new();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(input), &mut answer)?;
+        anyhow::ensure!(
+            answer.trim_end_matches(['\r', '\n']) == id,
+            "confirmation did not match"
+        );
+        let mut guard = Self::lock(main)?;
+        anyhow::ensure!(
+            guard.journal.reservation(id)? == entry,
+            "reservation changed during confirmation"
+        );
+        anyhow::ensure!(
+            reservation_lease(entry)? == lease && path_absent(&entry.tree_path)? == absent,
+            "lease or tree changed during confirmation"
+        );
+        let merge = ReleasedMerge::from(entry);
+        let entry = guard.entry_mut(&entry.key)?;
+        entry.validation = None;
+        entry.spawn = SpawnOutcome::ProvenDead;
+        guard.journal.releases.push(ReservationRelease {
+            merge: Some(merge),
+            id: id.into(),
+            uid: unsafe { libc::geteuid() },
+            at: chrono::Utc::now().to_rfc3339(),
+            reason: reason.into(),
+        });
+        guard.save()
+    }
+
     fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
         self.journal
             .entries
@@ -160,14 +384,69 @@ impl RepairGuard {
             .context("missing repair reservation")
     }
 
-    pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<()> {
-        if let Some(previous) = self.journal.entries.iter().find(|e| e.key == entry.key) {
+    /// Retire exactly the reservation this attempt wrote, after its pre-agent
+    /// rollback removed the tree. Another attempt's entry, a recorded spawn or
+    /// attestation, or a surviving tree keeps it (`false`). A ProvenDead entry
+    /// the attempt replaced is restored unchanged. No schema change.
+    // trace:BUG-2761 | ai:claude
+    pub fn roll_back_attempt(&mut self, attempt: &AttemptReservation) -> Result<bool> {
+        let ours = &attempt.entry;
+        let Some(i) = self.journal.entries.iter().position(|e| e.key == ours.key) else {
+            return Ok(false);
+        };
+        let current = &self.journal.entries[i];
+        let identity = |e: &RepairEntry| {
+            (
+                reservation_id(e),
+                e.tree_path.clone(),
+                e.reserved_at.clone(),
+            )
+        };
+        if current.spawn != SpawnOutcome::Unknown
+            || identity(current) != identity(ours)
+            || !path_absent(&current.tree_path)?
+        {
+            return Ok(false);
+        }
+        match attempt.replaced.clone() {
+            Some(previous) => self.journal.entries[i] = previous,
+            None => {
+                self.journal.entries.remove(i);
+            }
+        }
+        self.save()?;
+        Ok(true)
+    }
+
+    pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<AttemptReservation> {
+        let replaced = self
+            .journal
+            .entries
+            .iter()
+            .find(|e| e.key == entry.key)
+            .cloned();
+        if let Some(previous) = replaced.as_ref() {
             anyhow::ensure!(previous.spawn == SpawnOutcome::ProvenDead, "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
+            // Upgrade releases written before merge inputs were included in the audit.
+            for release in self
+                .journal
+                .releases
+                .iter_mut()
+                .filter(|r| r.merge.is_none() && r.id == reservation_id(previous))
+            {
+                release.merge = Some(ReleasedMerge::from(previous));
+            }
+            // A successor starts from its own observed paths, head and base.
+            entry.preparation_success = None;
+            entry.regeneration_success = None;
+            entry.regenerated_tree = None;
+            entry.validation = None;
             entry.refusal_notice = previous.refusal_notice.clone();
         }
         self.journal.entries.retain(|e| e.key != entry.key);
-        self.journal.entries.push(entry);
-        self.save()
+        self.journal.entries.push(entry.clone());
+        self.save()?;
+        Ok(AttemptReservation { entry, replaced })
     }
 
     // `command` is the trusted project policy that ran, or empty when none was
@@ -178,10 +457,12 @@ impl RepairGuard {
         tree: &str,
         command: &[String],
         success: bool,
+        advisory: bool,
     ) -> Result<()> {
         let entry = self.entry_mut(key)?;
         entry.require_regenerated_tree(tree)?;
         entry.validation = Some(Validation {
+            advisory,
             tree: tree.into(),
             command: command.to_vec(),
             success,
@@ -190,21 +471,42 @@ impl RepairGuard {
         self.save()
     }
     /// Every merge `[tree, first parent, second parent]` that matches a
-    /// journaled repair on `branch` needs successful validation of that tree.
+    /// journaled repair on `branch` needs validation of that tree, subject to its recorded snapshot deferral.
     // trace:TASK-3804 | ai:claude
     pub fn require_validated_merges(&self, branch: &str, merges: &[[String; 3]]) -> Result<()> {
         for [tree, first, second] in merges {
+            let mut current_validation = false;
             for entry in self.journal.entries.iter().filter(|entry| {
                 entry.branch == branch && &entry.key.original_head == first && &entry.base == second
             }) {
-                let validated = entry
-                    .validation
-                    .as_ref()
-                    .is_some_and(|validation| validation.success && &validation.tree == tree);
+                let validated = entry.spawn != SpawnOutcome::ProvenDead
+                    && entry.validation.as_ref().is_some_and(|validation| {
+                        &validation.tree == tree
+                            && (validation.success
+                                || (validation.advisory
+                                    && entry.snapshot_deferred.is_some()
+                                    && entry.require_regenerated_tree(tree).is_ok()))
+                    });
                 if !validated {
                     return Err(UnvalidatedRepairPublication {
                         pr: entry.key.pr,
                         route: "seat-committed conflict merge".into(),
+                    }
+                    .into());
+                }
+                current_validation = true;
+            }
+            if !current_validation {
+                if let Some(merge) = self
+                    .journal
+                    .releases
+                    .iter()
+                    .filter_map(|r| r.merge.as_ref())
+                    .find(|m| m.branch == branch && &m.head == first && &m.base == second)
+                {
+                    return Err(UnvalidatedRepairPublication {
+                        pr: merge.pr,
+                        route: "released conflict merge".into(),
                     }
                     .into());
                 }
@@ -272,6 +574,7 @@ impl RepairGuard {
             .context("missing repair reservation")?;
         entry.preparation_success = Some(success);
         if !success {
+            entry.snapshot_deferred = None;
             entry.regenerated_tree = None;
             entry.validation = None;
         }
@@ -285,11 +588,17 @@ impl RepairGuard {
             .find(|e| &e.key == key)
             .context("missing repair reservation")?;
         entry.regeneration_success = Some(success);
+        entry.snapshot_deferred = None;
         entry.regenerated_tree = None;
         entry.validation = None;
         self.save()
     }
-    pub fn record_regenerated_tree(&mut self, key: &RepairKey, tree: &str) -> Result<()> {
+    pub fn record_regenerated_tree(
+        &mut self,
+        key: &RepairKey,
+        tree: &str,
+        warning: Option<String>,
+    ) -> Result<()> {
         anyhow::ensure!(
             tree.len() >= 40 && tree.bytes().all(|b| b.is_ascii_hexdigit()),
             "invalid regenerated tree id"
@@ -304,7 +613,8 @@ impl RepairGuard {
             entry.preparation_success == Some(true),
             "repair preparation did not succeed"
         );
-        entry.regeneration_success = Some(true);
+        entry.regeneration_success = warning.is_none().then_some(true);
+        entry.snapshot_deferred = warning;
         entry.regenerated_tree = Some(tree.to_owned());
         self.save()
     }
@@ -332,7 +642,9 @@ impl RepairGuard {
         Ok(entry)
     }
     fn save(&self) -> Result<()> {
-        aida_core::fs_atomic::write_atomic(&self.path, serde_json::to_vec_pretty(&self.journal)?)?;
+        let bytes = serde_json::to_vec_pretty(&self.journal)?;
+        anyhow::ensure!(bytes.len() <= 4 * 1024 * 1024, "repair journal too large");
+        aida_core::fs_atomic::write_atomic(&self.path, bytes)?;
         Ok(())
     }
 }
@@ -533,6 +845,115 @@ fn notify_refusal_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:BUG-2756 | ai:codex
+    #[test]
+    fn seat_committed_advisory_validation_requires_matching_deferred_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut journal = RepairGuard::lock(temp.path()).unwrap();
+        let key = RepairKey {
+            repository: temp.path().into(),
+            pr: 4533,
+            original_head: "a".repeat(40),
+        };
+        let tree = "c".repeat(40);
+        let merge = [tree.clone(), key.original_head.clone(), "b".repeat(40)];
+        journal
+            .reserve(RepairEntry {
+                key: key.clone(),
+                dispatched_by: "direct-rework".into(),
+                reserved_at: "now".into(),
+                lane_id: "lease-1".into(),
+                tree_path: temp.path().join("seat"),
+                branch: "pr".into(),
+                base: merge[2].clone(),
+                spawn: SpawnOutcome::Started,
+                original_conflict_paths: vec!["src/lib.rs".into()],
+                regeneration_success: None,
+                regenerated_tree: Some(tree.clone()),
+                snapshot_deferred: Some("snapshot failed".into()),
+                preparation_success: Some(true),
+                validation: None,
+                refusal_notice: None,
+            })
+            .unwrap();
+        let check = |guard: &RepairGuard| {
+            guard.require_validated_merges("pr", std::slice::from_ref(&merge))
+        };
+        let command = vec!["cargo".into(), "check".into()];
+        journal
+            .record_validation(&key, &tree, &command, false, false)
+            .unwrap();
+        assert!(check(&journal).is_err());
+        journal
+            .record_validation(&key, &tree, &command, false, true)
+            .unwrap();
+        check(&journal).unwrap();
+        journal.entry_mut(&key).unwrap().regenerated_tree = Some("d".repeat(40));
+        assert!(check(&journal).is_err());
+        journal.entry_mut(&key).unwrap().regenerated_tree = Some(tree);
+        journal.entry_mut(&key).unwrap().spawn = SpawnOutcome::ProvenDead;
+        assert!(check(&journal).is_err());
+    }
+
+    // T2: a failure between reserve and worker start retires exactly that
+    // attempt's entry; a prior ProvenDead entry it replaced is restored, and
+    // another attempt's entry or a surviving tree is never touched.
+    // trace:BUG-2761 | ai:claude
+    #[test]
+    fn bug_2761_attempt_rollback_retires_only_its_own_reservation() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let entry = |pr: u64, lane: &str, tree: &str, spawn: SpawnOutcome| RepairEntry {
+            key: RepairKey {
+                repository: main.into(),
+                pr,
+                original_head: "b".repeat(40),
+            },
+            dispatched_by: "direct-rework".into(),
+            reserved_at: format!("{lane}-at"),
+            lane_id: lane.into(),
+            tree_path: main.join(tree),
+            branch: "pr".into(),
+            base: "c".repeat(40),
+            spawn,
+            original_conflict_paths: vec!["src/lib.rs".into()],
+            regeneration_success: None,
+            regenerated_tree: None,
+            snapshot_deferred: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        };
+        let entries = || RepairGuard::lock(main).unwrap().journal.entries;
+        let reserve = |e| RepairGuard::lock(main).unwrap().reserve(e).unwrap();
+        let roll_back = |a| {
+            RepairGuard::lock(main)
+                .unwrap()
+                .roll_back_attempt(a)
+                .unwrap()
+        };
+        let other = entry(1, "other-lane", "other-seat", SpawnOutcome::Unknown);
+        let dead = entry(2, "old-lane", "old-seat", SpawnOutcome::ProvenDead);
+        reserve(other.clone());
+        reserve(dead.clone());
+        let ours = reserve(entry(2, "new-lane", "gone-seat", SpawnOutcome::Unknown));
+        let fresh = reserve(entry(3, "new-lane", "gone-seat-3", SpawnOutcome::Unknown));
+        // Preparation evidence recorded after reserve does not change identity.
+        let mut guard = RepairGuard::lock(main).unwrap();
+        guard.record_preparation(&ours.entry.key, true).unwrap();
+        drop(guard);
+        assert!(roll_back(&ours) && roll_back(&fresh));
+        assert_eq!(entries(), vec![other, dead]);
+        // Already retired, or replaced by another attempt: nothing changes.
+        assert!(!roll_back(&fresh));
+        let replaced = reserve(entry(2, "third-lane", "gone-seat", SpawnOutcome::Unknown));
+        assert!(!roll_back(&ours));
+        // A tree the rollback did not remove keeps its reservation.
+        std::fs::create_dir(main.join("gone-seat")).unwrap();
+        assert!(!roll_back(&replaced));
+        assert_eq!(entries()[1], replaced.entry);
+    }
+
     // trace:TASK-3804 | ai:codex
     #[test]
     fn task_3804_repair_refusal_sends_once_per_pr_head() {
@@ -557,6 +978,7 @@ mod tests {
                     spawn: SpawnOutcome::ProvenDead,
                     original_conflict_paths: vec!["src/lib.rs".into()],
                     regeneration_success: None,
+                    snapshot_deferred: None,
                     regenerated_tree: None,
                     preparation_success: None,
                     validation: None,
@@ -589,6 +1011,121 @@ mod tests {
         assert_eq!(sent.len(), 2);
     }
 
+    // trace:BUG-2722 | ai:codex
+    #[test]
+    fn bug_2722_ended_lane_moved_tree_releases_only_selected_head() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let key = reserved(main, "660c0e87e696e0560b23715a1cbda490ad330edc");
+        let other = reserved(main, "other");
+        let mut journal = RepairGuard::lock(main).unwrap();
+        let mut entry = journal.entry_mut(&key).unwrap().clone();
+        entry.key.pr = 4376;
+        entry.lane_id = "01a2053df3e6".into();
+        entry.branch = "bug-b6b1278890774ef993d2ebc327862470-433".into();
+        entry.tree_path = main
+            .join("worktrees")
+            .join(format!("aida-seat-aida-{}", entry.branch));
+        entry.spawn = SpawnOutcome::Unknown;
+        entry.preparation_success = Some(true);
+        entry.original_conflict_paths = [
+            "queue_cmd/work.rs",
+            "review_draft.rs",
+            "tests/bug_2149_2150_standalone_reviewer_tests.rs",
+        ]
+        .map(|p| format!("aida-cli-lib/src/{p}"))
+        .into();
+        std::fs::create_dir(entry.tree_path.parent().unwrap()).unwrap();
+        entry.reserved_at = "2026-01-01T00:00:00Z".into();
+        let id = reservation_id(&entry);
+        journal.reserve(entry.clone()).unwrap();
+        use std::io::Write;
+        use std::os::fd::FromRawFd;
+        fn terminal(answer: &str) -> (File, File) {
+            let (mut master, mut slave) = (-1, -1);
+            assert_eq!(
+                unsafe {
+                    libc::openpty(
+                        &mut master,
+                        &mut slave,
+                        std::ptr::null_mut(),
+                        std::ptr::null(),
+                        std::ptr::null(),
+                    )
+                },
+                0
+            );
+            let mut master = unsafe { File::from_raw_fd(master) };
+            writeln!(master, "{answer}").unwrap();
+            (master, unsafe { File::from_raw_fd(slave) })
+        }
+        drop(journal);
+        let reason = "verified moved checkout";
+        std::fs::create_dir(&entry.tree_path).unwrap();
+        std::fs::rename(&entry.tree_path, main.join("moved")).unwrap();
+        assert!(RepairGuard::attest_reservation(
+            main,
+            &id,
+            reason,
+            File::open("/dev/null").unwrap()
+        )
+        .is_err());
+        let (_master, input) = terminal("wrong");
+        assert!(RepairGuard::attest_reservation(main, &id, reason, input).is_err());
+        let dir = crate::leases::leases_dir(main);
+        std::fs::create_dir(&dir).unwrap();
+        let lease = crate::leases::lease_path(main, &entry.lane_id);
+        let live = serde_json::json!({"id":entry.lane_id,"scope":"BUG-2669","slug":"bug-2669","owner":"implementer","worktree_path":entry.tree_path,"branch":entry.branch,"started_at":entry.reserved_at,"hostname":"host","pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"active_pid":std::process::id()});
+        std::fs::write(&lease, toml::to_string(&live).unwrap()).unwrap();
+        let (_master, input) = terminal(&id);
+        assert!(RepairGuard::attest_reservation(main, &id, reason, input)
+            .unwrap_err()
+            .to_string()
+            .contains("live or unverified"));
+        std::fs::remove_file(lease).unwrap();
+        let (_master, input) = terminal(&id);
+        RepairGuard::attest_reservation(main, &id, reason, input).unwrap();
+        let mut journal = RepairGuard::lock(main).unwrap();
+        assert_eq!(journal.journal.releases[0].reason, reason);
+        assert_eq!(journal.journal.releases[0].id, id);
+        assert_eq!(journal.journal.releases[0].uid, unsafe { libc::geteuid() });
+        chrono::DateTime::parse_from_rfc3339(&journal.journal.releases[0].at).unwrap();
+        entry.lane_id = "successor".into();
+        let old_merge = [
+            String::from("old-tree"),
+            entry.key.original_head.clone(),
+            entry.base.clone(),
+        ];
+        entry.base = "new-base".into();
+        entry.spawn = SpawnOutcome::Unknown;
+        journal.reserve(entry.clone()).unwrap();
+        assert!(journal
+            .for_tree(
+                &entry.tree_path,
+                &entry.branch,
+                &entry.key.original_head,
+                &old_merge[2]
+            )
+            .is_err());
+        assert!(journal
+            .require_validated_merges(&entry.branch, &[old_merge])
+            .is_err());
+        let successor = journal
+            .for_tree(
+                &entry.tree_path,
+                &entry.branch,
+                &entry.key.original_head,
+                "new-base",
+            )
+            .unwrap();
+        assert!(successor.require_prepared().is_err());
+        assert!(successor.validation.is_none());
+        assert_eq!(
+            journal.entry_mut(&other).unwrap().spawn,
+            SpawnOutcome::Started
+        );
+    }
+
     fn reserved(main: &Path, head: &str) -> RepairKey {
         let key = RepairKey {
             repository: main.into(),
@@ -608,6 +1145,7 @@ mod tests {
                 spawn: SpawnOutcome::Started,
                 original_conflict_paths: vec!["src/lib.rs".into()],
                 regeneration_success: None,
+                snapshot_deferred: None,
                 regenerated_tree: None,
                 preparation_success: None,
                 validation: None,
@@ -819,6 +1357,7 @@ mod tests {
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: vec![],
             regeneration_success: None,
+            snapshot_deferred: None,
             regenerated_tree: None,
             preparation_success: None,
             validation: None,
@@ -875,7 +1414,7 @@ mod tests {
             .transfer_adopted_lane(&entry.tree_path, "pr", "lease-1", "new")
             .unwrap();
         guard
-            .record_regenerated_tree(&key, &"c".repeat(40))
+            .record_regenerated_tree(&key, &"c".repeat(40), None)
             .unwrap();
         drop(guard);
         let mut guard = RepairGuard::lock(main).unwrap();

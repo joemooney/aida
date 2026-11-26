@@ -126,7 +126,19 @@ fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Res
 /// host. `aida-cli-lib`'s `bug_1929_store_git_guard` test enforces it.
 // trace:BUG-1929 | ai:claude
 pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
-    let cwd = cwd.as_ref();
+    build_host_git_command(cwd.as_ref(), true)
+}
+
+/// Build a fetch or read-only probe with store hooks disabled. Store writes
+/// must use the ordinary builder to establish the verified hooks profile.
+// trace:BUG-2750.AC1 | ai:codex
+pub fn host_fetch_git_command(cwd: &Path) -> Command {
+    let mut cmd = build_host_git_command(cwd, false);
+    cmd.args(["-c", "core.hooksPath=/dev/null"]);
+    cmd
+}
+
+fn build_host_git_command(cwd: &Path, enable_store_hooks: bool) -> Command {
     // Git never runs under the mailbox Lifecycle lock. trace:STORY-1843 | ai:claude
     #[cfg(all(unix, feature = "native"))]
     crate::mailbox_lifecycle::enter_lock_class("git");
@@ -155,7 +167,11 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     // below and the refusal check both need it; resolving it twice ran an
     // extra `git rev-parse` and re-verified the hooks on every store git call.
     // trace:BUG-2192 | ai:claude
-    let store_hooks = is_store_tree(cwd).then(|| resolve_store_hooks_dir(cwd));
+    let store_hooks = if enable_store_hooks {
+        is_store_tree(cwd).then(|| resolve_store_hooks_dir(cwd))
+    } else {
+        Some(Ok(None))
+    };
     let mut cmd = Command::new("git");
     cmd.current_dir(cwd)
         .args(host_git_hardening_with(cwd, store_hooks.as_ref()))
@@ -288,10 +304,11 @@ fn contained_seat_git_command(cwd: &Path) -> Command {
         }
         // `--global` reads only the user's own file; `/` is no repository.
         // raw-git-ok(TASK-2053): runs in `/`, never in a clone.
-        let value = Command::new("git")
+        let mut probe = Command::new("git");
+        probe
             .current_dir("/")
-            .args(["config", "--global", "--get", key])
-            .output()
+            .args(["config", "--global", "--get", key]);
+        let value = crate::store_hooks::probe_output(probe)
             .ok()
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -352,13 +369,13 @@ fn gitmodules_names_from(top: &Path, sources: Vec<Vec<String>>) -> Result<Vec<St
         crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1985): `git config` reads one file or blob and never
         // walks the tree; host_git_command itself calls this.
-        let out = Command::new("git")
-            .current_dir(top)
+        let mut cmd = Command::new("git");
+        cmd.current_dir(top)
             .args(["-c", "core.fsmonitor=false", "config"])
             .args(&source)
-            .args(["-z", "--get-regexp", r"^submodule\."])
-            .output()
-            .context("run git config over .gitmodules")?;
+            .args(["-z", "--get-regexp", r"^submodule\."]);
+        let out =
+            crate::store_hooks::probe_output(cmd).context("run git config over .gitmodules")?;
         match out.status.code() {
             Some(0) => {}
             // No submodule key at all.
@@ -579,15 +596,15 @@ pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
     let read = |args: &[&str]| -> Result<Option<String>> {
         crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1929): read-only lookup used to build the hardening.
-        let out = Command::new("git")
-            .env(
-                "PATH",
-                crate::store_hooks::safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
-            )
-            .current_dir(store)
-            .args(["-c", "core.fsmonitor=false"])
-            .args(args)
-            .output()
+        let mut cmd = Command::new("git");
+        cmd.env(
+            "PATH",
+            crate::store_hooks::safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+        )
+        .current_dir(store)
+        .args(["-c", "core.fsmonitor=false"])
+        .args(args);
+        let out = crate::store_hooks::probe_output(cmd)
             .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
         Ok(out.status.success().then(|| {
             String::from_utf8_lossy(&out.stdout)
@@ -2121,6 +2138,7 @@ pub use config_lock::{
     clear_sandbox_config_lock, config_lock_path, is_sandbox_placeholder,
     output_healing_config_lock, repair_push_upstream, sandbox_config_lock,
 };
+pub(crate) use remote_credentials::CONFIG_READ_DEADLINE;
 pub use remote_credentials::{
     configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
     operator_credential_helper_configured, percent_decode, split_http_url_userinfo,
@@ -3950,6 +3968,19 @@ pub fn restore_stranded_autostash(repo: &Path, pre_stash_top: Option<&str>) -> A
 // Orphan Branch + Worktree
 // ---------------------------------------------------------------------------
 
+// trace:BUG-2749 | ai:codex
+fn retire_missing_registration(repo: &Path, path: &Path) -> Result<()> {
+    use crate::worktree_registration::{inspect_missing_registration, RegistrationClearOutcome};
+    let path = repo.canonicalize()?.join(path);
+    let outcome = inspect_missing_registration(repo, &path, None, false, false, || {}, || {});
+    anyhow::ensure!(
+        outcome != RegistrationClearOutcome::Declined,
+        "retained worktree registration for {}: restore the checkout and inspect its index before retrying",
+        path.display()
+    );
+    Ok(())
+}
+
 /// Create an orphan branch and worktree for the AIDA store.
 ///
 /// This is the recommended approach for single-repo projects:
@@ -3981,17 +4012,12 @@ pub fn create_store_worktree(
         );
     }
 
+    retire_missing_registration(repo_root, Path::new(worktree_dir))?;
+
     // Check if the orphan branch already exists (e.g., after clone)
     let branch_exists = git(repo_root, &["rev-parse", "--verify", branch_name])
         .map(|r| r.success)
         .unwrap_or(false);
-
-    // BUG-39: drop any stale worktree registrations before trying to add
-    // a fresh one. `git worktree prune` is a no-op when nothing's stale,
-    // so always-running it is safe and avoids the cryptic "missing but
-    // already registered worktree" error users hit after manually
-    // deleting the worktree directory. trace:BUG-39 | ai:claude
-    let _ = git(repo_root, &["worktree", "prune"]);
 
     if branch_exists {
         // Branch exists (e.g., from a clone) — just add the worktree
@@ -4287,8 +4313,6 @@ mod bug2188_publish_fallback_tests {
 // expected admin directory before add; a failed hook cannot leave a pool orphan.
 // trace:BUG-2188 | ai:codex
 pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Result<()> {
-    // Preserve stale-registration cleanup before allocating a new pool tree.
-    let _ = git(repo_root, &["worktree", "prune"]);
     anyhow::ensure!(
         matches!(std::fs::symlink_metadata(path), Err(ref e) if e.kind() == std::io::ErrorKind::NotFound),
         "pool worktree path {} already exists or is unreadable",
@@ -4825,6 +4849,7 @@ fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
     // trace:TASK-1952 | trace:TASK-2146 | ai:claude
     let out = host_git_command(&top)
         .args(["-c", "core.quotePath=true"])
+        .arg("--no-optional-locks")
         .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status")?;
@@ -4914,17 +4939,21 @@ fn porcelain_unquote(field: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// `path` quoted as porcelain v1 prints it under the default
-/// `core.quotePath=true`: bare unless it holds a control byte, `"`, `\\` or
-/// a non-ASCII byte.
+/// `path` (raw bytes) quoted as porcelain v1 prints it under the default
+/// `core.quotePath=true`: bare unless it holds a space, a control byte, `"`,
+/// `\\` or a non-ASCII byte, so a trailing space or a non-UTF-8 name reads
+/// unambiguously.
 // trace:TASK-1952 | trace:TASK-1943 | ai:claude
-fn porcelain_quote(path: &str) -> String {
+// trace:TASK-3882 | ai:claude
+pub fn porcelain_quote(path: impl AsRef<[u8]>) -> String {
+    let path = path.as_ref();
     let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
-    if !path.bytes().any(needs) {
-        return path.to_string();
+    if !path.iter().any(|&b| b == b' ' || needs(b)) {
+        // Every byte is printable ASCII here.
+        return String::from_utf8_lossy(path).into_owned();
     }
     let mut out = String::from("\"");
-    for b in path.bytes() {
+    for &b in path {
         match b {
             7 => out.push_str("\\a"),
             8 => out.push_str("\\b"),
@@ -4961,6 +4990,7 @@ fn submodule_has_changes(work_tree: &Path, git_dir: &Path, depth: usize) -> Resu
     let out = host_git_command(work_tree)
         .arg(format!("--git-dir={}", git_dir.display()))
         .arg(format!("--work-tree={}", work_tree.display()))
+        .arg("--no-optional-locks")
         .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status in a submodule")?;
@@ -5047,7 +5077,11 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
     let raw = if contained_code_tree(worktree_path) {
         contained_safety_scan(worktree_path)?.0
     } else {
+        // Pin quoting so a `core.quotePath=false` user setting cannot let
+        // distinct non-UTF-8 names collapse in the lossy text conversion.
+        // trace:TASK-3882 | ai:claude
         let out = host_git_command(worktree_path)
+            .args(["-c", "core.quotePath=true", "--no-optional-locks"])
             .args(["status", "--porcelain", "--ignore-submodules=none"])
             .output()
             .context("run git status")?;
@@ -5064,6 +5098,76 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
         .filter(|l| !l.trim().is_empty())
         .map(str::to_string)
         .collect())
+}
+
+/// Dirty paths for a refusal message only, never a safety decision: every
+/// untracked file is listed on its own (`--untracked-files=all`), read as raw
+/// NUL-separated porcelain v2 and rendered as porcelain v1 lines with each
+/// path quoted exactly once by [`porcelain_quote`], whatever
+/// `core.quotePath` says. Submodules are never entered; the safety readers
+/// above report them.
+// trace:TASK-3882 | ai:claude
+pub fn refusal_status_lines(worktree_path: &Path) -> Result<Vec<String>> {
+    let out = host_git_command(worktree_path)
+        .arg("--no-optional-locks")
+        .args(["status", "--porcelain=v2", "-z", "--untracked-files=all"])
+        .arg("--ignore-submodules=all")
+        .output()
+        .context("run git status")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git status failed in {}",
+        worktree_path.display()
+    );
+    Ok(porcelain_v2_z_lines(&out.stdout, true, |_| false))
+}
+
+/// `git status --porcelain=v2 -z` records as one line each, every path quoted
+/// once by [`porcelain_quote`] from its raw bytes: as porcelain v1 (`XY path`,
+/// `XY from -> to`) when `v1`, else as v2 lines (a rename is `... to\tfrom`;
+/// a quoted path never holds a raw tab). Untracked records `skip` accepts
+/// (given the raw `? <path>` record, when it is UTF-8) are dropped.
+// trace:TASK-3882 | ai:claude
+pub fn porcelain_v2_z_lines(raw: &[u8], v1: bool, skip: impl Fn(&str) -> bool) -> Vec<String> {
+    let mut records = raw.split(|b| *b == 0).filter(|r| !r.is_empty());
+    let mut lines = Vec::new();
+    while let Some(record) = records.next() {
+        let fields = match record.first() {
+            Some(b'?') if std::str::from_utf8(record).is_ok_and(&skip) => continue,
+            Some(b'?' | b'!') => 1,
+            Some(b'1') => 8,
+            Some(b'2') => 9,
+            Some(b'u') => 10,
+            _ => 0,
+        };
+        let path = (fields > 0)
+            .then(|| record.splitn(fields + 1, |b| *b == b' ').nth(fields))
+            .flatten();
+        let Some(path) = path else {
+            lines.push(String::from_utf8_lossy(record).into_owned());
+            continue;
+        };
+        let prefix = String::from_utf8_lossy(&record[..record.len() - path.len()]);
+        let from = (record[0] == b'2').then(|| porcelain_quote(records.next().unwrap_or_default()));
+        let path = porcelain_quote(path);
+        lines.push(if v1 {
+            let xy = match record[0] {
+                b'?' => "??".to_string(),
+                b'!' => "!!".to_string(),
+                _ => prefix.split(' ').nth(1).unwrap_or("").replace('.', " "),
+            };
+            match from {
+                Some(from) => format!("{xy} {from} -> {path}"),
+                None => format!("{xy} {path}"),
+            }
+        } else {
+            match from {
+                Some(from) => format!("{prefix}{path}\t{from}"),
+                None => format!("{prefix}{path}"),
+            }
+        });
+    }
+    lines
 }
 
 /// True when a worktree has uncommitted changes (tracked or untracked,
@@ -5144,6 +5248,10 @@ pub fn remove_worktree_unguarded(
     worktree_path: &Path,
     force: bool,
 ) -> Result<()> {
+    let target = repo_root.join(worktree_path);
+    if !target.try_exists()? {
+        return retire_missing_registration(repo_root, worktree_path);
+    }
     let path_str = worktree_path.to_string_lossy();
     let mut args: Vec<&str> = vec!["worktree", "remove"];
     // `--` below keeps a dash-led path a path. trace:BUG-1622 | ai:claude
@@ -5523,6 +5631,8 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
     }
 }
 
+const KEEP_WORKTREES: &str = "gc.worktreePruneExpire=never";
+
 /// Run `git gc --auto` on the store repo — a cheap no-op unless the (lowered)
 /// `gc.auto` threshold is exceeded, in which case git repacks loose objects.
 /// Best-effort: failures are swallowed.
@@ -5537,7 +5647,7 @@ pub fn gc_auto(repo: &Path) -> bool {
     {
         return false;
     }
-    git(repo, &["gc", "--auto"])
+    git(repo, &["-c", KEEP_WORKTREES, "gc", "--auto"])
         .map(|out| out.success)
         .unwrap_or(false)
 }
@@ -5660,7 +5770,7 @@ pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
         !crate::db::any_store_write_lock_held(),
         "store GC must run outside the store writer transaction"
     );
-    git(repo, &["gc", "--aggressive"])
+    git(repo, &["-c", KEEP_WORKTREES, "gc", "--aggressive"])
 }
 
 /// Outcome of squashing the orphan store branch to a single snapshot commit.

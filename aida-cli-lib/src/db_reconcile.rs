@@ -2248,6 +2248,53 @@ pub(crate) fn auto_bump_done_to_completed_with(
     storage: &Storage,
     extract_followups: bool,
 ) -> Result<(Vec<AutoBumpFlip>, bool)> {
+    scan_and_share(
+        project_root,
+        store_path,
+        ScanCommits::Head(pre_sha),
+        storage,
+        extract_followups,
+    )
+}
+
+/// Which commits a completion scan reads.
+// trace:STORY-3006 | ai:claude
+#[derive(Clone, Copy)]
+enum ScanCommits<'a> {
+    /// Pull side: `pre..HEAD` (or the last 50) with HEAD on the default branch.
+    Head(Option<&'a str>),
+    /// Landing side: exactly the commits the landing put on the default branch.
+    Landed(&'a [String]),
+}
+
+/// STORY-3006: the pull-side scanner run at merge time over exactly the
+/// commits a landing put on the default branch: same trailer rules, same
+/// eligibility guard, same store push. What it completes is no longer
+/// eligible, so the next pull's scan of those commits is a no-op.
+// trace:STORY-3006 | ai:claude
+pub(crate) fn complete_landed_commits(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    storage: &Storage,
+    landed: &[String],
+) -> Result<(Vec<AutoBumpFlip>, bool)> {
+    scan_and_share(
+        project_root,
+        store_path,
+        ScanCommits::Landed(landed),
+        storage,
+        true,
+    )
+}
+
+// trace:STORY-86 trace:STORY-3006 | ai:claude
+fn scan_and_share(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    commits: ScanCommits<'_>,
+    storage: &Storage,
+    extract_followups: bool,
+) -> Result<(Vec<AutoBumpFlip>, bool)> {
     // D5 (BUG-2696): landing-time status writes reach the shared store in the
     // same pass, so lane hosts see a completion before their next admission
     // check instead of after someone's `db sync --push`.
@@ -2256,7 +2303,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     let result = auto_bump_scan(
         project_root,
         store_path,
-        pre_sha,
+        commits,
         storage,
         extract_followups,
     );
@@ -2278,23 +2325,11 @@ pub(crate) fn auto_bump_done_to_completed_with(
     }
 }
 
-// trace:STORY-86 trace:BUG-1633 | ai:claude
-fn auto_bump_scan(
-    project_root: &std::path::Path,
-    store_path: &std::path::Path,
-    pre_sha: Option<&str>,
-    storage: &Storage,
-    extract_followups: bool,
-) -> Result<(Vec<AutoBumpFlip>, bool)> {
-    use aida_core::git_ops;
-    use std::process::Command as ProcessCommand;
-
-    // ── Step 1: detect the default branch ──
-    // Try `git symbolic-ref --short refs/remotes/origin/HEAD` first
-    // (it's set at clone time). Fall back to current_branch ∈
-    // {main, master}. If neither, skip silently — no remote means
-    // no merges to react to.
-    let default_branch: Option<String> = ProcessCommand::new("git")
+/// Step 1 of the pull-side scan: HEAD must be the default branch (origin/HEAD,
+/// else `main`/`master`). No remote means no merges to react to.
+// trace:STORY-86 | ai:claude
+fn scan_head_is_default_branch(project_root: &std::path::Path) -> bool {
+    let default_branch: Option<String> = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
         .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
@@ -2307,18 +2342,45 @@ fn auto_bump_scan(
                 .map(|s| s.trim().to_string())
                 .and_then(|s| s.strip_prefix("origin/").map(|x| x.to_string()))
         });
-
-    let current = git_ops::current_branch(project_root).ok();
+    let current = aida_core::git_ops::current_branch(project_root).ok();
     let default_branch = default_branch.or_else(|| match current.as_deref() {
         Some("main") | Some("master") => current.clone(),
         _ => None,
     });
-    let Some(default_branch) = default_branch else {
-        return Ok((Vec::new(), false));
+    default_branch.is_some_and(|d| current.as_deref() == Some(d.as_str()))
+}
+
+// trace:STORY-3006 | ai:claude
+fn is_full_hex_sha(sha: &str) -> bool {
+    matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+// trace:STORY-86 trace:BUG-1633 | ai:claude
+fn auto_bump_scan(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    commits: ScanCommits<'_>,
+    storage: &Storage,
+    extract_followups: bool,
+) -> Result<(Vec<AutoBumpFlip>, bool)> {
+    use std::process::Command as ProcessCommand;
+
+    // A landing names commits it proved are on the default branch, so HEAD is
+    // moot; only full hex object names reach `git log`. trace:STORY-3006 | ai:claude
+    let pre_sha = match commits {
+        ScanCommits::Head(pre_sha) => {
+            if !scan_head_is_default_branch(project_root) {
+                return Ok((Vec::new(), false));
+            }
+            pre_sha
+        }
+        ScanCommits::Landed(landed) => {
+            if !landed.iter().any(|sha| is_full_hex_sha(sha)) {
+                return Ok((Vec::new(), true));
+            }
+            None
+        }
     };
-    if current.as_deref() != Some(default_branch.as_str()) {
-        return Ok((Vec::new(), false));
-    }
 
     // A Refs-only merge never enters the completion flips below. Close its
     // waiting review even when there are no specs eligible for completion.
@@ -2372,9 +2434,14 @@ fn auto_bump_scan(
         "-z".to_string(),
         "--pretty=format:%H%x1f%B".to_string(),
     ];
-    match pre_sha {
-        Some(pre) => log_args.push(format!("{}..HEAD", pre)),
-        None => {
+    match (commits, pre_sha) {
+        // trace:STORY-3006 | ai:claude
+        (ScanCommits::Landed(landed), _) => {
+            log_args.push("--no-walk=unsorted".to_string());
+            log_args.extend(landed.iter().filter(|s| is_full_hex_sha(s)).cloned());
+        }
+        (ScanCommits::Head(_), Some(pre)) => log_args.push(format!("{}..HEAD", pre)),
+        (ScanCommits::Head(_), None) => {
             log_args.push("--max-count=50".to_string());
             log_args.push("HEAD".to_string());
         }

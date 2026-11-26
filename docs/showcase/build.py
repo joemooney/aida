@@ -27,6 +27,39 @@ PAGES = [(p['source'], p['output'], p['label']) for p in MANIFEST['pages']]
 # docs/. Every other selected source must live under docs/.
 GLOSSARY_SOURCE_DIR = ROOT / 'aida-core/templates/.aida/discipline'
 
+# trace:STORY-2839 | ai:claude
+# Guide headers group pages into dropdown menus; unlisted pages stay direct links.
+NAV_GROUPS = {
+    'How it works': ('workflow.html', 'autonomy.html', 'capabilities.html', 'code-review.html'),
+    'Governance': ('authority.html', 'trust.html', 'metrics.html', 'engineering-audit.html'),
+    'Operations': ('setup.html', 'configuration.html', 'integrations.html', 'air-gapped.html'),
+    'Reference': ('library.html', 'glossary.html', 'features.html', 'executive-brief.html'),
+}
+# Hand-written pages outside the manifest; linked only when present on disk.
+EXTRA_NAV_PAGES = (('code-review.html', 'Code review'), ('engineering-audit.html', 'Engineering audit'),
+                   ('features.html', 'All features'), ('executive-brief.html', 'Executive brief'))
+
+
+def nav_link(dest, label, current):
+    return f'<a href="{dest}"' + (' aria-current="page"' if dest == current else '') + f'>{html.escape(label)}</a>'
+
+
+def build_nav(current):
+    """Render direct links, then one dropdown per non-empty NAV_GROUPS entry."""
+    labels = {'library.html': 'Library', **{dest: label for _, dest, label in PAGES}}
+    labels.update((dest, label) for dest, label in EXTRA_NAV_PAGES if (SITE / dest).is_file())
+    grouped = {dest for dests in NAV_GROUPS.values() for dest in dests}
+    parts = [nav_link(dest, label, current) for dest, label in labels.items() if dest not in grouped]
+    for group, dests in NAV_GROUPS.items():
+        links = ''.join(nav_link(dest, labels[dest], current) for dest in dests if dest in labels)
+        if not links:
+            continue
+        active = ' nav-group-active' if current in dests else ''
+        parts.append(f'<div class="nav-group{active}"><button type="button" class="nav-trigger" aria-expanded="false">'
+                     f'{html.escape(group)} <span class="nav-caret" aria-hidden="true">▾</span></button>'
+                     f'<div class="nav-menu">{links}</div></div>')
+    return ''.join(parts)
+
 
 def slug(title):
     return re.sub(r'[^a-z0-9 -]', '', title.lower()).replace(' ', '-')
@@ -75,8 +108,53 @@ def figure(graphic_path, fallback):
 FIGURE = re.compile(r'^!\[([^\]]+)\]\(([^)]+\.svg)\)$')
 
 
+# trace:STORY-2839 | ai:claude
+# GFM pipe tables: a `| a | b |` header line directly followed by a
+# `| --- | :-: |` separator with the same cell count. `\|` is a literal pipe
+# inside a cell; cell text goes through inline(), which HTML-escapes it.
+TABLE_PIPE = re.compile(r'(?<!\\)\|')
+
+
+def is_table_row(line):
+    stripped = line.strip()
+    return len(stripped) > 1 and stripped.startswith('|') and stripped.endswith('|') and not stripped.endswith('\\|')
+
+
+def parse_table_row(line):
+    return [cell.strip().replace('\\|', '|') for cell in TABLE_PIPE.split(line.strip()[1:-1])]
+
+
+def is_table_separator(line, width):
+    if not is_table_row(line):
+        return False
+    cells = parse_table_row(line)
+    return len(cells) == width and all(re.fullmatch(r':?-+:?', cell) for cell in cells)
+
+
+# trace:STORY-2839 | ai:claude
+# The renderer has no nested lists and no single-asterisk emphasis, so either
+# would publish literal "  - " or "*text*". Refuse the source instead, naming
+# file:line, rather than render it wrong.
+NESTED_ITEM = re.compile(r'^\s+(?:[-*+]|\d+[.)])\s')
+STRAY_ASTERISK = re.compile(r'\*(?=\S)|(?<=\S)\*')
+
+
+def refuse_unrendered(source, name):
+    code = False
+    for number, line in enumerate(source.splitlines(), 1):
+        if line.startswith('```'):
+            code = not code
+        if code or line.startswith(('```', '<!--')):
+            continue
+        if NESTED_ITEM.match(line):
+            raise ValueError(f'{name}:{number}: nested list items are not rendered; flatten the list')
+        text = re.sub(r'`[^`]+`', '', re.sub(r'^[-*] ', '', line))
+        if STRAY_ASTERISK.search(re.sub(r'\*\*[^*]+\*\*', '', text)):
+            raise ValueError(f'{name}:{number}: single-asterisk emphasis is not rendered; use **bold** or plain text')
+
+
 def render(source, base='.'):
-    output, paragraph, listing, code, slugs = [], [], None, None, set()
+    output, paragraph, listing, table, code, slugs = [], [], None, None, None, set()
     def flush():
         if paragraph:
             output.append('<p>' + inline(' '.join(paragraph), base) + '</p>')
@@ -86,9 +164,20 @@ def render(source, base='.'):
         if listing:
             output.append(f'</{listing}>')
             listing = None
-    for line in source.splitlines():
+    def close_table():
+        nonlocal table
+        if table:
+            headers, rows = table
+            cells = lambda row, tag: ''.join(f'<{tag}>{inline(cell, base)}</{tag}>' for cell in (row + [''] * len(headers))[:len(headers)])
+            body = ''.join('<tr>' + cells(row, 'td') + '</tr>' for row in rows)
+            output.append('<div class="table-wrap"><table><thead><tr>' + cells(headers, 'th') + '</tr></thead><tbody>' + body + '</tbody></table></div>')
+            table = None
+    lines, skip = source.splitlines(), False
+    for i, line in enumerate(lines):
+        if skip:
+            skip = False; continue
         if line.startswith('```'):
-            flush(); close_list()
+            flush(); close_list(); close_table()
             if code is None:
                 code = []
             else:
@@ -98,6 +187,13 @@ def render(source, base='.'):
         if code is not None:
             code.append(line); continue
         if line.startswith('<!--'):
+            continue
+        if table is not None and is_table_row(line):
+            table[1].append(parse_table_row(line)); continue
+        close_table()
+        if is_table_row(line) and i + 1 < len(lines) and is_table_separator(lines[i + 1], len(parse_table_row(line))):
+            flush(); close_list()
+            table, skip = (parse_table_row(line), []), True
             continue
         image = FIGURE.match(line)
         if image:
@@ -132,7 +228,7 @@ def render(source, base='.'):
             output.append('<blockquote><p>' + inline(line[2:], base) + '</p></blockquote>')
         elif line.strip():
             paragraph.append(line)
-    flush(); close_list()
+    flush(); close_list(); close_table()
     if code is not None:
         raise ValueError('Unclosed code fence')
     return '\n'.join(output)
@@ -144,6 +240,13 @@ def search_text(content):
     text = re.sub(r'\[([^\]]+)\]\([^\s)]+\)', r'\1', text)
     text = re.sub(r'^#{1,6} ', '', text, flags=re.M)
     text = re.sub(r'^> ?', '', text, flags=re.M)
+    # trace:STORY-2839 | ai:claude — table separators and pipes are layout, not text.
+    def table_text(line):
+        if not is_table_row(line):
+            return line
+        cells = parse_table_row(line)
+        return '' if all(re.fullmatch(r':?-+:?', cell) for cell in cells) else ' '.join(cells)
+    text = '\n'.join(table_text(line) for line in text.splitlines())
     text = text.replace('`', '').replace('**', '')
     return re.sub(r'\s+', ' ', text).strip()
 
@@ -195,10 +298,11 @@ def render_outputs():
             raise ValueError('Only ordinary Markdown sources may be selected')
         subprocess.run(['git', 'ls-files', '--error-unmatch', '--', str(resolved.relative_to(ROOT.resolve()))], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
         content = source_path.read_text()
+        refuse_unrendered(content, str(resolved.relative_to(ROOT.resolve())))
         entries.append({'title': content.splitlines()[0].removeprefix('# '), 'url': output, 'source': '../' + source, 'category': metadata['category'], 'text': search_text(content), 'sha256': hashlib.sha256(content.encode()).hexdigest()})
         if is_glossary:
             terms.extend(glossary_terms(content, output, source, metadata['category']))
-        nav = '<a href="library.html">Library</a>' + ''.join(f'<a href="{dest}"' + (' aria-current="page"' if dest == output else '') + f'>{html.escape(label)}</a>' for _, dest, label in PAGES)
+        nav = build_nav(output)
         graphic_path = SITE / 'assets' / (Path(output).stem + '.svg')
         graphic = ''
         if graphic_path.exists():
@@ -209,7 +313,6 @@ def render_outputs():
         if output == 'autonomy.html':
             landing = (SITE / 'index.html').read_text()
             interactive = re.search(r'<section class="autonomy shell" id="autonomy">.*?</section>', landing, re.S).group(0)
-            scripts = '<script src="app.js" defer></script>'
         # trace:TASK-B6B1278890774EF993D2EBC327862470-113 | ai:codex
         heading, separator, body = render(content, posixpath.dirname(source) or '.').partition('</h1>')
         if not separator or not heading.startswith('<h1 '):
@@ -231,7 +334,7 @@ def render_library(template, entries, terms=()):
         cards.append(f'<article class="library-card term-card" data-url="{term["url"]}" data-category="{term["category"]}" data-term hidden><p class="eyebrow">glossary term</p><h2><a href="{term["url"]}">{html.escape(term["title"])}</a></h2><p class="excerpt">{html.escape(term["text"][:180])}…</p></article>')
     entries = list(entries) + list(terms)
     content = (SITE / 'library-template.html').read_text().replace('{{cards}}', '\n'.join(cards))
-    nav = '<a href="library.html" aria-current="page">Library</a>' + ''.join(f'<a href="{output}">{html.escape(title)}</a>' for _, output, title in PAGES)
+    nav = build_nav('library.html')
     scripts = '<script src="search-data.js" defer></script><script src="library.js" defer></script>'
     page = template.replace('{{heading}}', '').replace('{{title}}', 'Documentation library').replace('{{nav}}', nav).replace('{{source}}', 'publication.json').replace('{{content}}', content).replace('{{graphic}}', '').replace('{{interactive}}', '').replace('{{scripts}}', scripts)
     page = page.replace('{{provenance}}', 'the publication manifest')

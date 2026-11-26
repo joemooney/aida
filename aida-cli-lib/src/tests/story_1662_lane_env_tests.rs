@@ -480,6 +480,7 @@ fn the_doctor_daemon_scan_reads_an_injected_proc_root() {
         &store,
         Some("claude-daemon-grant"),
         proc_root.path(),
+        None,
     )
     .unwrap();
     assert_eq!(

@@ -145,14 +145,26 @@ pub(crate) fn check_one(
         Err(why) => return refused(pr, Gate::Riding, why, Evidence::Unavailable),
     }
     match typed_gate_member_with(checks, base, pr) {
-        Ok(member) => Row {
-            pr,
-            eligible: true,
-            head: Some(member.head),
-            gate: None,
-            reason: None,
-            remedy: None,
-            evidence: Evidence::Read,
+        // A red train's culprit at an unchanged head. trace:BUG-2767 | ai:claude
+        Ok(member) => match culprit::hold(checks.marker_root(), pr, &member.head) {
+            Some(why) => Row {
+                pr,
+                eligible: false,
+                head: None,
+                gate: Some("culprit-hold"),
+                reason: Some(why),
+                remedy: Some(format!("push a new head, or name it: `aida pr train {pr}`")),
+                evidence: Evidence::Read,
+            },
+            None => Row {
+                pr,
+                eligible: true,
+                head: Some(member.head),
+                gate: None,
+                reason: None,
+                remedy: None,
+                evidence: Evidence::Read,
+            },
         },
         Err(MemberGateError::Refused(reason)) => refused(pr, last_gate(), reason, Evidence::Read),
         Err(MemberGateError::Unavailable(reason)) => {

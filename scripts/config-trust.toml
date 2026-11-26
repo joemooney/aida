@@ -111,7 +111,7 @@ sites = 1
 # names them in prose, and routes edits through the registered writers.
 [readers."aida-cli-lib/src/config_cmd.rs"]
 channels = ["worktree", "home", "write", "other-file", "prose"]
-sites = 33
+sites = 34 # Includes the approved-small menu guidance. trace:STORY-3038 | ai:codex
 
 # Settles a config edit by staging and committing exactly `.aida/config.toml`;
 # it reads no keys from the file. trace:BUG-1938 | ai:claude
@@ -991,6 +991,7 @@ smoke_check = "command" # accepted alternate section spelling
 
 [keys.trusted.agents]
 confirm_bypass = "policy" # can only tighten; malformed means "on"
+"*" = "policy" # review_tuning: [agents.<vendor>.seats.reviewer] model / effort, allowlisted
 
 [keys.trusted.review]
 # trace:TASK-3815 | ai:codex — shared trusted reader; optional prompt/report policy.
@@ -1095,6 +1096,13 @@ codex_min_grant_secs = "policy"
 # trace:STORY-2593 | ai:codex
 [readers."aida-cli-lib/src/launch/codex_auth.rs"]
 channels = ["write"]
+sites = 1
+
+# Reviewer-seat [agents] tuning from the reviewed change's BASE blob (git
+# cat-file); a change that edits the file is refused, the worktree never read.
+# trace:STORY-3120 | ai:claude
+[readers."aida-cli-lib/src/launch/review_tuning.rs"]
+channels = ["trusted"]
 sites = 1
 
 # STORY-2641: host Cargo config selects the lane wrapper; never seat config.

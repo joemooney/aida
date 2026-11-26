@@ -40,6 +40,9 @@ pub(crate) enum UnsetDefault {
     Supervised,
     /// An unset mode on a listed, non-sensitive spec type gates as `drain`.
     Drain,
+    /// Only approved, small changes outside strict-tier code.
+    // trace:STORY-3038 | ai:codex
+    ApprovedSmall,
 }
 
 impl UnsetDefault {
@@ -47,6 +50,7 @@ impl UnsetDefault {
         match self {
             Self::Supervised => "supervised",
             Self::Drain => "drain",
+            Self::ApprovedSmall => "approved-small",
         }
     }
 }
@@ -56,6 +60,8 @@ impl UnsetDefault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnsetModePolicy {
     pub(crate) default: UnsetDefault,
+    safe_paths: Vec<glob::Pattern>,
+    pub(crate) configured_default: bool,
     /// The spec types the drain default applies to. Empty: none.
     pub(crate) drain_types: Vec<RequirementType>,
     /// Values that were ignored, each with its reason.
@@ -70,6 +76,8 @@ impl Default for UnsetModePolicy {
     fn default() -> Self {
         Self {
             default: UnsetDefault::default(),
+            safe_paths: vec![glob::Pattern::new("docs/cli/*.md").unwrap()],
+            configured_default: false,
             drain_types: Vec::new(),
             warnings: Vec::new(),
             protected: Ok(ProtectedPaths::floor()),
@@ -126,10 +134,11 @@ impl UnsetModePolicy {
             Some(v) => match v.as_str().map(str::trim) {
                 Some("supervised") => UnsetDefault::Supervised,
                 Some("drain") => UnsetDefault::Drain,
+                Some("approved-small") => UnsetDefault::ApprovedSmall,
                 Some(other) => {
                     policy.warnings.push(format!(
                         "`[gate.unset_mode] default` is set to `{other}`, which is not a known \
-                         value (allowed: supervised, drain); an unset execution mode stays \
+                         value (allowed: supervised, drain, approved-small); an unset execution mode stays \
                          supervised"
                     ));
                     return policy;
@@ -144,6 +153,33 @@ impl UnsetModePolicy {
                 }
             },
         };
+        policy.configured_default = section.get("default").is_some();
+        policy.default = default;
+        if default == UnsetDefault::ApprovedSmall {
+            if let Some(value) = section.get("drain_safe_paths") {
+                let patterns = value.as_array().and_then(|items| {
+                    items
+                        .iter()
+                        .map(|item| {
+                            let path = item.as_str()?;
+                            if path.contains('\0')
+                                || path.split('/').any(|part| matches!(part, "" | "." | ".."))
+                            {
+                                return None;
+                            }
+                            glob::Pattern::new(path).ok()
+                        })
+                        .collect::<Option<Vec<_>>>()
+                });
+                policy.safe_paths = patterns.unwrap_or_else(|| {
+                    policy.warnings.push("invalid drain_safe_paths".into());
+                    Vec::new()
+                });
+            }
+        }
+        if default != UnsetDefault::Drain {
+            return policy;
+        }
         let mut types = Vec::new();
         match section.get("drain_types") {
             None => {}
@@ -165,14 +201,13 @@ impl UnsetModePolicy {
                     .into(),
             ),
         }
-        if default == UnsetDefault::Drain && types.is_empty() {
+        if types.is_empty() {
             policy.warnings.push(
                 "`[gate.unset_mode] default = \"drain\"` lists no `drain_types`; an unset \
                  execution mode stays supervised"
                     .into(),
             );
         }
-        policy.default = default;
         policy.drain_types = types;
         policy
     }
@@ -217,8 +252,13 @@ impl UnsetModePolicy {
     /// commit, so a default branch other than `main` is read consistently.
     // trace:STORY-2884 | ai:claude
     pub(crate) fn load(root: &Path) -> Self {
-        let policy =
-            Self::from_body(crate::trusted_config::read_trusted_config_toml_local(root).as_deref());
+        let base = crate::trusted_config::local_trusted_default_branch_sha(root);
+        Self::load_at(root, base.as_deref())
+    }
+
+    fn load_at(root: &Path, base: Option<&str>) -> Self {
+        let body = base.and_then(|sha| crate::trusted_config::read_config_at_sha(root, sha));
+        let policy = Self::from_body(body.as_deref());
         if !policy.drains_any() {
             return policy;
         }
@@ -242,7 +282,8 @@ impl UnsetModePolicy {
 
     /// Whether the project sets the drain default at all (any listed type).
     pub(crate) fn drains_any(&self) -> bool {
-        self.default == UnsetDefault::Drain && !self.drain_types.is_empty()
+        self.default == UnsetDefault::ApprovedSmall
+            || (self.default == UnsetDefault::Drain && !self.drain_types.is_empty())
     }
 
     /// The effective gating mode of `req`, given `gating` — the mode the
@@ -255,6 +296,14 @@ impl UnsetModePolicy {
         gating: Option<ExecutionMode>,
         req: &Requirement,
     ) -> EffectiveMode {
+        // Landing remains supervised until each forge attempt revalidates approved-small.
+        if self.default == UnsetDefault::ApprovedSmall {
+            return EffectiveMode::from(gating);
+        }
+        self.classify(gating, req)
+    }
+
+    fn classify(&self, gating: Option<ExecutionMode>, req: &Requirement) -> EffectiveMode {
         if gating.is_some() {
             return EffectiveMode::from(gating);
         }
@@ -262,7 +311,22 @@ impl UnsetModePolicy {
             return EffectiveMode::from(None);
         }
         let word = type_word(&req.req_type);
-        let withheld = if !self.drain_types.contains(&req.req_type) {
+        // trace:STORY-3038 | ai:codex
+        let small_policy = self.default == UnsetDefault::ApprovedSmall;
+        let tagged = |name: &str| {
+            req.tags
+                .iter()
+                .any(|tag| tag.trim().eq_ignore_ascii_case(name))
+        };
+        let withheld = if small_policy
+            && (req.status != aida_core::RequirementStatus::Approved
+                || !tagged("small")
+                || ["strict", "strict-tier", "tier:strict", "review:draft-only"]
+                    .into_iter()
+                    .any(tagged))
+        {
+            Err("the project default requires an approved small standard-tier spec".into())
+        } else if !small_policy && !self.drain_types.contains(&req.req_type) {
             Err(format!(
                 "the project's drain default does not cover type {word}"
             ))
@@ -284,6 +348,7 @@ impl UnsetModePolicy {
                 mode: Some(ExecutionMode::Drain),
                 source: ModeSource::ProjectDefault {
                     req_type: word,
+                    safe_paths: small_policy.then(|| self.safe_paths.clone()),
                     protected: protected.clone(),
                 },
             },
@@ -307,7 +372,8 @@ pub(crate) fn show_label(
     if req.execution_mode.is_some() {
         return None;
     }
-    let policy = UnsetModePolicy::load(root);
+    let base = crate::trusted_config::local_trusted_default_branch_sha(root)?;
+    let policy = UnsetModePolicy::load_at(root, Some(&base));
     if !policy.drains_any() {
         return None;
     }
@@ -315,8 +381,57 @@ pub(crate) fn show_label(
         .relationships
         .iter()
         .any(|r| r.rel_type == aida_core::RelationshipType::SupersededBy);
+    let unset_label = || {
+        let mut mode = policy.classify(None, req);
+        if policy.default == UnsetDefault::ApprovedSmall && mode.is_project_default() {
+            // Local and origin evidence must identify one branch at one commit.
+            let paths = req.spec_id.as_ref().and_then(|id| {
+                if !aida_core::object_store::valid_spec_id_format(id) {
+                    return None;
+                }
+                let mut git = aida_core::git_ops::host_git_command(root);
+                git.args([
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname)",
+                    "refs/heads",
+                    "refs/remotes/origin",
+                ]);
+                let out = crate::forge_lookup::deadline_output(git, std::process::Command::output)
+                    .ok()?;
+                if !out.status.success() {
+                    return None;
+                }
+                let mut candidate = None;
+                for line in std::str::from_utf8(&out.stdout).ok()?.lines() {
+                    let (reference, sha) = line.split_once(' ')?;
+                    let branch = reference
+                        .strip_prefix("refs/heads/")
+                        .or_else(|| reference.strip_prefix("refs/remotes/origin/"))?;
+                    if [Some(id.as_str()), req.agreed_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|id| crate::pr_lookup::branch_name_references_spec(branch, id))
+                    {
+                        if candidate
+                            .replace((branch, sha))
+                            .is_some_and(|prior| prior != (branch, sha))
+                        {
+                            return None;
+                        }
+                    }
+                }
+                let (_, head) = candidate?;
+                preview_paths(root, &base, head)
+            });
+            mode.withdraw_for_change(paths.as_deref());
+            if mode.is_project_default() {
+                return APPROVED_SMALL_PREVIEW.to_owned();
+            }
+        }
+        mode.label()
+    };
     if !superseded {
-        return Some(policy.resolve(None, req).label());
+        return Some(unset_label());
     }
     let Some(requirements) = store() else {
         return Some("unset (supervised: its superseding carrier could not be read)".into());
@@ -333,7 +448,7 @@ pub(crate) fn show_label(
                 aida_core::node_alias::display_spec_id(&carrier_id)
             ))
         }
-        None => Some(policy.resolve(None, req).label()),
+        None => Some(unset_label()),
     }
 }
 
@@ -348,6 +463,18 @@ fn sensitive_class(req: &Requirement) -> Option<String> {
         .or_else(|| crate::gate::mandate::excluded_class(req))
 }
 
+// Protect enforcement source trees as units so new checks inherit supervision.
+const STRICT_PATHS: &[&str] = &[
+    ".githooks",
+    ".github/workflows",
+    ".gitlab-ci.yml",
+    "aida-cli-lib/src",
+    "aida-core/src",
+    "aida-core/templates/hooks",
+    "aida-mcp/src",
+    "aida-server/src/web_auth.rs",
+];
+
 /// Where an effective gating mode came from.
 // trace:STORY-2884 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -359,6 +486,7 @@ pub(crate) enum ModeSource {
     /// change must not touch for the default to stand.
     ProjectDefault {
         req_type: String,
+        safe_paths: Option<Vec<glob::Pattern>>,
         protected: ProtectedPaths,
     },
     /// No mode set and no default applies. `withheld` says why when the
@@ -427,11 +555,33 @@ impl EffectiveMode {
     /// `None` when unknown) touch a protected gate path read with the setting.
     // trace:STORY-2884 | ai:claude
     pub(crate) fn withdraw_for_change(&mut self, paths: Option<&[String]>) {
-        let ModeSource::ProjectDefault { protected, .. } = &self.source else {
+        let ModeSource::ProjectDefault {
+            protected,
+            safe_paths,
+            ..
+        } = &self.source
+        else {
             return;
         };
         if let Some(why) = protected_path_reason(paths, protected) {
             self.withdraw(why);
+        } else if let (Some(patterns), Some(paths)) = (safe_paths, paths) {
+            let options = glob::MatchOptions {
+                require_literal_separator: true,
+                ..glob::MatchOptions::new()
+            };
+            if paths.is_empty() {
+                self.withdraw("not defaulted, the change is empty".into());
+            } else if let Some(path) = paths.iter().find(|p| {
+                STRICT_PATHS
+                    .iter()
+                    .any(|strict| Path::new(p).starts_with(strict))
+                    || !patterns.iter().any(|g| g.matches_with(p, options))
+            }) {
+                self.withdraw(format!(
+                    "not defaulted, {path} is strict-tier or outside drain_safe_paths"
+                ));
+            }
         }
     }
 
@@ -526,6 +676,50 @@ fn short_sha(sha: &str) -> &str {
     sha.get(..12).unwrap_or(sha)
 }
 
+const APPROVED_SMALL_PREVIEW: &str =
+    "drain-eligible (preview; landing stays supervised until TASK-3890)";
+
+pub(crate) fn label_fields(label: &str) -> (&'static str, &'static str) {
+    if label == APPROVED_SMALL_PREVIEW {
+        ("mode_preview", "Mode preview:")
+    } else {
+        ("effective_mode", "Effective mode:")
+    }
+}
+
+/// Raw tree modes expose gitlinks even when their names match the docs allow-list.
+// trace:STORY-3038.AC1 | ai:codex
+fn preview_paths(root: &Path, base: &str, head: &str) -> Option<Vec<String>> {
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    cmd.args([
+        "diff",
+        "--raw",
+        "-z",
+        "--no-renames",
+        "--ignore-submodules=none",
+        "--no-ext-diff",
+    ])
+    .arg(format!("{base}...{head}"))
+    .arg("--");
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output).ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let mut records = std::str::from_utf8(&out.stdout)
+        .ok()?
+        .split_terminator('\0');
+    let mut paths = Vec::new();
+    while let Some(header) = records.next() {
+        let mut modes = header.strip_prefix(':')?.split(' ');
+        if [modes.next()?, modes.next()?].contains(&"160000") {
+            return None;
+        }
+        let path = records.next()?;
+        paths.push((!path.is_empty()).then(|| path.to_owned())?);
+    }
+    (out.stdout.is_empty() || out.stdout.ends_with(&[0])).then_some(paths)
+}
+
 /// Files `head` changes against its merge base with `base` (a ref such as
 /// `origin/main`). `None` when git cannot say — the caller withdraws the
 /// project default.
@@ -546,13 +740,14 @@ pub(crate) fn changed_paths(root: &Path, base: &str, head: &str) -> Option<Vec<S
     if !out.status.success() {
         return None;
     }
-    Some(
-        out.stdout
-            .split(|b| *b == 0)
-            .filter(|p| !p.is_empty())
-            .map(|p| String::from_utf8_lossy(p).into_owned())
-            .collect(),
-    )
+    let names = std::str::from_utf8(&out.stdout).ok()?;
+    if !names.is_empty() && !names.ends_with('\0') {
+        return None;
+    }
+    names
+        .split_terminator('\0')
+        .map(|path| (!path.is_empty()).then(|| path.to_owned()))
+        .collect()
 }
 
 #[cfg(test)]

@@ -576,11 +576,12 @@ pub(crate) fn is_store_tracked_runtime_path(path: &str) -> bool {
 }
 
 pub(crate) fn collect_doctor_findings(
-    project_root: &std::path::Path,
+    root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
-    category_filter: Option<&str>,
+    category: Option<&str>,
 ) -> Result<Vec<DoctorFinding>> {
-    collect_doctor_findings_at(project_root, store, category_filter, &doctor_proc_root())
+    let proc = doctor_proc_root();
+    collect_doctor_findings_at(root, store, category, &proc, None)
 }
 
 /// The `stale-locks` findings: the cache lock-info sidecar (and any unshared
@@ -754,6 +755,112 @@ pub(crate) fn stale_lock_findings(
     Ok(out)
 }
 
+// trace:BUG-2739 | ai:codex
+fn shared_stale_finding(
+    claim: &crate::coordination::Claim,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<DoctorFinding> {
+    // trace:BUG-2773 | ai:claude — the predicate the admission hint shares
+    let id = crate::coordination::shared_heal_id(claim, now)?;
+    Some(DoctorFinding {
+        category: "stale-leases".into(),
+        action: format!("aida doctor heal stale-leases --id {id} --yes"),
+        id,
+        summary: format!(
+            // trace:BUG-2697 | ai:claude — also an admission that never spawned
+            "expired shared claim for {} (lease {}, no running worker, dead creator)",
+            claim.scope,
+            claim.lease_id.as_deref().unwrap_or("unbound")
+        ),
+        safe_heal: true,
+    })
+}
+
+// trace:BUG-2739 | ai:codex
+fn local_stale_finding(
+    project_root: &std::path::Path,
+    lease: &leases::SessionLease,
+    live_sessions: &std::cell::OnceCell<Vec<process_probe::LiveSession>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<DoctorFinding> {
+    let worktree_exists = lease.worktree_path.exists();
+    // BUG-511: review-verb leases classify by creator PID, not worktree.
+    let (state, pid_dead) =
+        crate::ownership::reader::doctor_lease_liveness(lease, live_sessions, now);
+    let branch_merged = matches!(
+        detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
+        PrLookup::Found(_)
+    );
+    // STORY-1843 C2: a session whose end was refused to keep its mail is
+    // reported as ending-retained, never as live or cleaned up; the heal
+    // retries the end. trace:STORY-1843 | ai:claude
+    let ending_retained = crate::leases::is_ending_retained(lease);
+    if matches!(state, LeaseState::Stale) || pid_dead || branch_merged || ending_retained {
+        Some(DoctorFinding {
+            category: "stale-leases".to_string(),
+            id: lease.id.clone(),
+            summary: format!(
+                "{} owns {} on branch `{}` ({})",
+                lease.id,
+                lease.scope,
+                lease.branch,
+                if ending_retained {
+                    format!(
+                        "ending-retained: its end was refused ({}); the tree and lease are \
+                             kept",
+                        lease
+                            .ending_retained_reason
+                            .as_deref()
+                            .unwrap_or("its mail could not be retained")
+                    )
+                } else if !worktree_exists {
+                    "worktree missing".to_string()
+                } else if pid_dead {
+                    "creator pid dead".to_string()
+                } else if branch_merged {
+                    "branch merged".to_string()
+                } else {
+                    state.label().to_string()
+                }
+            ),
+            action: format!("save patch if dirty, then end lease {}", lease.id),
+            safe_heal: true,
+        })
+    } else {
+        None
+    }
+}
+
+// trace:BUG-2739 | ai:codex
+#[derive(Debug)]
+pub(crate) enum SelectedLease {
+    Local(leases::SessionLease),
+    Shared(std::path::PathBuf, crate::coordination::Claim),
+}
+
+pub(crate) fn targeted_stale_finding(
+    project_root: &std::path::Path,
+    id: &str,
+) -> Result<Option<(DoctorFinding, SelectedLease)>> {
+    let now = chrono::Utc::now();
+    if let Some(generation) = id.strip_prefix("shared-") {
+        let root = aida_core::store_locate::detect_distributed_store_from(project_root)
+            .ok_or_else(|| anyhow::anyhow!("shared store unavailable"))?;
+        return Ok(
+            crate::coordination::claim_by_generation(&root, generation)?.and_then(|claim| {
+                shared_stale_finding(&claim, now)
+                    .map(|finding| (finding, SelectedLease::Shared(root, claim)))
+            }),
+        );
+    }
+    Ok(
+        leases::read_exact_lease(project_root, id)?.and_then(|lease| {
+            local_stale_finding(project_root, &lease, &std::cell::OnceCell::new(), now)
+                .map(|finding| (finding, SelectedLease::Local(lease)))
+        }),
+    )
+}
+
 /// TASK-2216: the process table the doctor scans for a claude daemon holding
 /// a grant. `/proc`, except under `cfg(test)`, where no doctor test reads the
 /// real machine's processes; a test that wants the scan injects a fake root
@@ -774,12 +881,15 @@ pub(crate) fn collect_doctor_findings_at(
     store: &aida_core::models::RequirementsStore,
     category_filter: Option<&str>,
     proc_root: &std::path::Path,
+    exact: Option<&crate::leases::SessionLease>,
 ) -> Result<Vec<DoctorFinding>> {
     let filter = category_filter.map(normalize_doctor_category).transpose()?;
     let mut out = Vec::new();
     let cleanup = collect_cleanup_report(project_root, store);
-    let leases = list_leases(project_root);
-    let live_sessions = process_probe::probe_live_claude_sessions();
+    let leases = exact
+        .map(|lease| vec![lease.clone()])
+        .unwrap_or_else(|| list_leases(project_root));
+    let live_sessions = std::cell::OnceCell::new();
     let now = chrono::Utc::now();
 
     let mut push = |finding: DoctorFinding| {
@@ -1082,79 +1192,22 @@ pub(crate) fn collect_doctor_findings_at(
     // trace:BUG-2655 | ai:codex
     if let Some(root) =
         aida_core::store_locate::detect_distributed_store_from(project_root).filter(|_| {
-            filter
-                .as_deref()
-                .is_none_or(|category| category == "stale-leases")
+            exact.is_none()
+                && filter
+                    .as_deref()
+                    .is_none_or(|category| category == "stale-leases")
         })
     {
         for claim in crate::coordination::list_claims(&root) {
-            if let Some(id) = claim
-                .claim_id
-                .as_deref()
-                .filter(|_| crate::coordination::exited_holder_is_dead(&claim, now))
-            {
-                push(DoctorFinding {
-                    category: "stale-leases".into(),
-                    id: format!("shared-{id}"),
-                    summary: format!(
-                        // trace:BUG-2697 | ai:claude — also an admission that never spawned
-                        "expired shared claim for {} (lease {}, no running worker, dead creator)",
-                        claim.scope,
-                        claim.lease_id.as_deref().unwrap_or("unknown")
-                    ),
-                    action: format!("aida doctor heal stale-leases --id shared-{id} --yes"),
-                    safe_heal: true,
-                });
+            if let Some(finding) = shared_stale_finding(&claim, now) {
+                push(finding);
             }
         }
     }
 
     for lease in &leases {
-        let worktree_exists = lease.worktree_path.exists();
-        // BUG-511: review-verb leases classify by creator PID, not worktree.
-        let state = crate::leases::lease_state_for(lease, &live_sessions, now);
-        let pid_dead = lease
-            .creator_pid
-            .is_some_and(|pid| !process_probe::pid_is_alive(pid));
-        let branch_merged = matches!(
-            detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
-            PrLookup::Found(_)
-        );
-        // STORY-1843 C2: a session whose end was refused to keep its mail is
-        // reported as ending-retained, never as live or cleaned up; the heal
-        // retries the end. trace:STORY-1843 | ai:claude
-        let ending_retained = crate::leases::is_ending_retained(lease);
-        if matches!(state, LeaseState::Stale) || pid_dead || branch_merged || ending_retained {
-            push(DoctorFinding {
-                category: "stale-leases".to_string(),
-                id: lease.id.clone(),
-                summary: format!(
-                    "{} owns {} on branch `{}` ({})",
-                    lease.id,
-                    lease.scope,
-                    lease.branch,
-                    if ending_retained {
-                        format!(
-                            "ending-retained: its end was refused ({}); the tree and lease are \
-                             kept",
-                            lease
-                                .ending_retained_reason
-                                .as_deref()
-                                .unwrap_or("its mail could not be retained")
-                        )
-                    } else if !worktree_exists {
-                        "worktree missing".to_string()
-                    } else if pid_dead {
-                        "creator pid dead".to_string()
-                    } else if branch_merged {
-                        "branch merged".to_string()
-                    } else {
-                        state.label().to_string()
-                    }
-                ),
-                action: format!("save patch if dirty, then end lease {}", lease.id),
-                safe_heal: true,
-            });
+        if let Some(finding) = local_stale_finding(project_root, lease, &live_sessions, now) {
+            push(finding);
         }
 
         if matches!(
@@ -1566,6 +1619,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["cache-refresh", "refresh-worker", "cache-worker"],
         "cache-refresh",
     ),
+    (&["repair-reservations"], "repair-reservations"),
     (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
     (
         &["abandoned-lease", "abandoned-leases", "abandoned"],
@@ -1898,6 +1952,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:STORY-2630 | ai:codex
     (&["codegraph", "code-graph"], "codegraph"),
+    // trace:BUG-2774 | ai:claude
+    (&["deputy-binary", "stale-deputy"], "deputy-binary"),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
     // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
     (
@@ -1914,7 +1970,10 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     // trace:STORY-2849 | ai:codex
+    (&["stalled-reviews"], "stalled-reviews"),
     (&["landing-health"], "landing-health"),
+    // trace:STORY-3131 | ai:claude
+    (&["landing-drought", "drought"], "landing-drought"),
     // Open changes nobody is moving. trace:STORY-2906 | ai:claude
     (
         &["throughput-guard", "throughput", "land-stalls", "stalls"],

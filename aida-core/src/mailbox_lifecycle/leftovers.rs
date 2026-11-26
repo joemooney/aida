@@ -18,6 +18,12 @@
 //! its entry. Markers are dropped under the Lifecycle lock. The retention
 //! dry run reports; `aida agent gc` reaps.
 //!
+//! A scoped scan ([`scan_scoped`]) also attributes each candidate to the
+//! checkout that owns it and asks the caller whether that owner is live:
+//! only a provably dead owner's leftovers are reaped, and an optional age
+//! floor applies to every candidate, era markers included.
+//! trace:BUG-2770 | ai:claude
+//!
 //! trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 
 use serde::Serialize;
@@ -44,6 +50,82 @@ pub struct Leftovers {
     // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub corrupt: Vec<PathBuf>,
+    /// Candidates kept because their owner is live or cannot be judged.
+    // trace:BUG-2770 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held: Vec<HeldLeftover>,
+}
+
+/// Whether the checkout owning a leftover still has a live session or lease.
+// trace:BUG-2770 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OwnerLiveness {
+    Live,
+    Dead,
+    /// Not provable either way: kept, never reaped.
+    Unknown,
+}
+
+/// The checkout a leftover belongs to.
+// trace:BUG-2770 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Owner {
+    /// A checkout root (main checkout, linked worktree or seat clone).
+    Checkout(PathBuf),
+    /// A linked worktree known only by its admin name (its admin entry is gone).
+    Worktree(String),
+    /// Nothing attributes it to one checkout.
+    Unattributed,
+}
+
+/// A leftover kept because its owner is not provably dead.
+// trace:BUG-2770 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HeldLeftover {
+    pub path: PathBuf,
+    pub owner: OwnerLiveness,
+}
+
+/// What a scoped scan may touch: candidates at least `min_age` old (never
+/// younger than [`STALE_AFTER`] for tombs, staging, temps and asides) whose
+/// owner `owner` judges [`OwnerLiveness::Dead`].
+// trace:BUG-2770 | ai:claude
+pub struct Scope<'a> {
+    pub min_age: Option<Duration>,
+    pub owner: &'a dyn Fn(&Owner) -> OwnerLiveness,
+}
+
+fn every_owner_dead(_: &Owner) -> OwnerLiveness {
+    OwnerLiveness::Dead
+}
+
+/// One scan's settings and findings.
+struct Pass<'a> {
+    reap: bool,
+    now: SystemTime,
+    scope: &'a Scope<'a>,
+    out: Leftovers,
+}
+
+impl Pass<'_> {
+    /// May `path` be removed? Too young: silently not a candidate. Owner not
+    /// provably dead: held and reported. `floor` is the kind's own minimum age.
+    fn admit(&mut self, path: &Path, floor: Duration, owner: impl FnOnce() -> Owner) -> bool {
+        let floor = self.scope.min_age.map_or(floor, |age| age.max(floor));
+        if !is_older(path, self.now, floor) {
+            return false;
+        }
+        let liveness = (self.scope.owner)(&owner());
+        if liveness == OwnerLiveness::Dead {
+            return true;
+        }
+        self.out.held.push(HeldLeftover {
+            path: path.to_path_buf(),
+            owner: liveness,
+        });
+        false
+    }
 }
 
 /// Scan every checkout the anchor of `project_root` has a source for (and
@@ -54,7 +136,32 @@ pub fn scan(project_root: &Path, reap: bool) -> Leftovers {
 }
 
 pub(crate) fn scan_at(project_root: &Path, reap: bool, now: SystemTime) -> Leftovers {
-    let mut out = Leftovers::default();
+    let scope = Scope {
+        min_age: None,
+        owner: &every_owner_dead,
+    };
+    scan_scoped_at(project_root, reap, now, &scope)
+}
+
+/// [`scan`] limited by `scope`: only old-enough leftovers of dead owners are
+/// reaped; the rest of the candidates land in `held`.
+// trace:BUG-2770 | ai:claude
+pub fn scan_scoped(project_root: &Path, reap: bool, scope: &Scope<'_>) -> Leftovers {
+    scan_scoped_at(project_root, reap, SystemTime::now(), scope)
+}
+
+pub(crate) fn scan_scoped_at(
+    project_root: &Path,
+    reap: bool,
+    now: SystemTime,
+    scope: &Scope<'_>,
+) -> Leftovers {
+    let mut pass = Pass {
+        reap,
+        now,
+        scope,
+        out: Leftovers::default(),
+    };
     let mut aida_dirs = BTreeSet::from([project_root.join(".aida")]);
     let anchor = super::locate_anchor(project_root).ok().flatten();
     if let Some(anchored) = &anchor {
@@ -65,14 +172,39 @@ pub(crate) fn scan_at(project_root: &Path, reap: bool, now: SystemTime) -> Lefto
         }
     }
     for dir in &aida_dirs {
-        scan_aida_dir(dir, reap, now, &mut out);
-        scan_id_temps(dir, reap, now, &mut out);
+        let owner = dir
+            .parent()
+            .map_or(Owner::Unattributed, |c| Owner::Checkout(c.to_path_buf()));
+        scan_aida_dir(dir, &owner, &mut pass);
+        scan_id_temps(dir, &owner, &mut pass);
     }
     if let Some(anchored) = &anchor {
-        scan_era_markers(&anchored.anchor, &anchored.common, reap, now, &mut out);
-        scan_id_temps(&anchored.anchor, reap, now, &mut out);
+        scan_era_markers(&anchored.anchor, &anchored.common, &mut pass);
+        scan_id_temps(&anchored.anchor, &Owner::Unattributed, &mut pass);
     }
-    out
+    pass.out
+}
+
+/// The checkout an era marker's admin name stands for: the main checkout, a
+/// seat clone's root, or a linked worktree read from its admin `gitdir`; a
+/// pruned linked worktree is known only by name.
+// trace:BUG-2770 | ai:claude
+fn marker_owner(common: &Path, admin: &str) -> Owner {
+    if admin.is_empty() {
+        return common
+            .parent()
+            .map_or(Owner::Unattributed, |c| Owner::Checkout(c.to_path_buf()));
+    }
+    if let Some(root) = admin.strip_prefix("seat-clone:") {
+        return Owner::Checkout(PathBuf::from(root));
+    }
+    let gitdir = std::fs::read_to_string(super::admin_dir(common, admin).join("gitdir"));
+    match gitdir.ok().as_deref().map(str::trim).map(Path::new) {
+        Some(dot_git) if dot_git.is_absolute() => dot_git
+            .parent()
+            .map_or(Owner::Unattributed, |c| Owner::Checkout(c.to_path_buf())),
+        _ => Owner::Worktree(admin.to_string()),
+    }
 }
 
 /// Remove `<parent>/.<name>.creating.*` staging directories older than
@@ -107,7 +239,8 @@ fn source_mailboxes(anchor: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-fn scan_aida_dir(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
+fn scan_aida_dir(dir: &Path, owner: &Owner, pass: &mut Pass<'_>) {
+    let reap = pass.reap;
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -125,26 +258,24 @@ fn scan_aida_dir(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
             // Anything but directories and the nonce is mail; an unreadable
             // tomb counts as mail too.
             if super::guard::check_empty_tree(&path, true).is_err() {
-                out.stranded_tombs.push(path);
-            } else if is_stale_dir(&path, now) && (!reap || remove_empty_tomb(&path).is_ok()) {
-                out.reapable.push(path);
+                pass.out.stranded_tombs.push(path);
+            } else if pass.admit(&path, STALE_AFTER, || owner.clone())
+                && (!reap || remove_empty_tomb(&path).is_ok())
+            {
+                pass.out.reapable.push(path);
             }
         } else if name.starts_with(".mailbox.creating.")
-            && is_stale_dir(&path, now)
+            && std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_dir())
+            && pass.admit(&path, STALE_AFTER, || owner.clone())
             && (!reap || remove_staging(&path).is_ok())
         {
-            out.reapable.push(path);
+            pass.out.reapable.push(path);
         }
     }
 }
 
-fn scan_era_markers(
-    anchor: &Path,
-    common: &Path,
-    reap: bool,
-    now: SystemTime,
-    out: &mut Leftovers,
-) {
+fn scan_era_markers(anchor: &Path, common: &Path, pass: &mut Pass<'_>) {
+    let reap = pass.reap;
     let Ok(entries) = std::fs::read_dir(anchor.join(super::NONCE_ERA_DIR)) else {
         return;
     };
@@ -159,18 +290,20 @@ fn scan_era_markers(
             // An aside of a pre-record marker (the bare admin name) is judged
             // against that admin name's entry.
             // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
-            let admin_dir = match record {
-                Some(record) => record.admin_dir,
+            let (admin, admin_dir) = match record {
+                Some(record) => (record.admin, record.admin_dir),
                 None => match bare_admin_name(&bytes) {
-                    Some(admin) => super::admin_dir(common, admin),
+                    Some(admin) => (admin.to_string(), super::admin_dir(common, admin)),
                     None => {
-                        out.corrupt.push(path);
+                        pass.out.corrupt.push(path);
                         continue;
                     }
                 },
             };
-            if is_old(&path, now) && (!reap || settle_aside(&path, &marker, &admin_dir)) {
-                out.reapable.push(path);
+            if pass.admit(&path, STALE_AFTER, || marker_owner(common, &admin))
+                && (!reap || settle_aside(&path, &marker, &admin_dir))
+            {
+                pass.out.reapable.push(path);
             }
             continue;
         }
@@ -180,10 +313,13 @@ fn scan_era_markers(
             continue;
         };
         if super::era_marker_stale(&path, &record.admin_dir)
+            && pass.admit(&path, Duration::ZERO, || {
+                marker_owner(common, &record.admin)
+            })
             && (!reap
                 || super::drop_stale_era_marker(anchor, &path, &record.admin_dir).unwrap_or(false))
         {
-            out.reapable.push(path);
+            pass.out.reapable.push(path);
         }
     }
 }
@@ -210,7 +346,8 @@ fn bare_admin_name(bytes: &[u8]) -> Option<&str> {
 /// older than [`STALE_AFTER`], left by a writer that crashed before placing
 /// them.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
-fn scan_id_temps(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
+fn scan_id_temps(dir: &Path, owner: &Owner, pass: &mut Pass<'_>) {
+    let reap = pass.reap;
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -225,8 +362,11 @@ fn scan_id_temps(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
     paths.sort();
     for path in paths {
         let file = std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_file());
-        if file && is_old(&path, now) && (!reap || std::fs::remove_file(&path).is_ok()) {
-            out.reapable.push(path);
+        if file
+            && pass.admit(&path, STALE_AFTER, || owner.clone())
+            && (!reap || std::fs::remove_file(&path).is_ok())
+        {
+            pass.out.reapable.push(path);
         }
     }
 }
@@ -262,12 +402,12 @@ fn settle_aside(aside: &Path, marker: &Path, admin_dir: &Path) -> bool {
 /// Is `path` a real directory last changed at least [`STALE_AFTER`] before
 /// `now`? Its change time counts, so a rename into place restarts the clock.
 fn is_stale_dir(path: &Path, now: SystemTime) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_dir()) && is_old(path, now)
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_dir())
+        && is_older(path, now, STALE_AFTER)
 }
 
-/// Was `path` last changed (or renamed) at least [`STALE_AFTER`] before
-/// `now`?
-fn is_old(path: &Path, now: SystemTime) -> bool {
+/// Was `path` last changed (or renamed) at least `floor` before `now`?
+fn is_older(path: &Path, now: SystemTime, floor: Duration) -> bool {
     let Ok(meta) = std::fs::symlink_metadata(path) else {
         return false;
     };
@@ -281,8 +421,7 @@ fn is_old(path: &Path, now: SystemTime) -> bool {
             None => return false,
         },
     };
-    now.duration_since(latest)
-        .is_ok_and(|age| age >= STALE_AFTER)
+    now.duration_since(latest).is_ok_and(|age| age >= floor)
 }
 
 /// Remove an empty tomb: its subdirectories, its nonce, then itself. A file

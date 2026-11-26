@@ -1589,7 +1589,7 @@ fi
 printf '\0'
 ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || git rev-list --count main..HEAD 2>/dev/null || printf '0')
 printf '%s\0' "$ahead"
-git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
+git status --porcelain=v1 -z --ignored=no --untracked-files=all --ignore-submodules=all
 "#;
     run_sandboxed_until(
         clone,
@@ -2089,13 +2089,19 @@ pub(crate) fn probe_until(
     // `--ignore-submodules=none`: a seat's `.gitmodules` `ignore = dirty`
     // must not hide anything, should a submodule appear after the check.
     // trace:TASK-2053 | ai:claude
-    let status = match probe_run(
+    // TASK-3882: raw NUL-separated records, so each path is quoted exactly
+    // once from its bytes (never by Git, never through lossy text).
+    // trace:TASK-3882 | ai:claude
+    let status = match run_sandboxed_until(
         clone,
         main,
+        "git",
         &[
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
+            "-z".as_ref(),
             "--branch".as_ref(),
+            "--ignored=no".as_ref(), // trace:BUG-2742 | ai:codex
             "--untracked-files=all".as_ref(),
             "--ignore-submodules=none".as_ref(),
             // Match commit_pending: the host marker is never seat work.
@@ -2104,23 +2110,25 @@ pub(crate) fn probe_until(
             ".".as_ref(),
             format!(":(exclude){MARKER_RELATIVE}").as_ref(),
         ],
-        "git",
+        PROBE_OUTPUT_CAP,
+        deadline,
     ) {
         Ok(out) => out,
         Err(why) => return Probe::Unknown(format!("working tree status: {why}")),
     };
-    let mut facts = parse_status_v2(&status);
     // The sandbox's empty `.gitmodules` placeholder holds no work, so it
     // does not make a clean clone read as dirty.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
-    if is_empty_gitmodules_placeholder(clone) {
-        facts.dirty.retain(|line| line != "? .gitmodules");
-    }
-    // The session's runtime links and build/cache output are not work.
+    let placeholder = is_empty_gitmodules_placeholder(clone);
+    // The session's runtime links and build/cache output are not work; they
+    // are judged on the raw path, before it is quoted for display.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-    facts.dirty.retain(|line| {
-        !is_runtime_noise_entry(clone, line) && !is_mirrored_handshake_entry(main, clone, line)
+    let lines = aida_core::git_ops::porcelain_v2_z_lines(&status, false, |line| {
+        (placeholder && line == "? .gitmodules")
+            || is_runtime_noise_entry(clone, line)
+            || is_mirrored_handshake_entry(main, clone, line)
     });
+    let mut facts = parse_status_v2(&lines.join("\n"));
     let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -2243,24 +2251,22 @@ pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
 
 /// A `git status --porcelain=v2` entry as `<kind>: <path>`, so a refusal
 /// names the file rather than printing modes and object ids. A line that does
-/// not parse is shown as it is. The path is seat-written, so it is escaped.
+/// not parse is shown escaped. Paths arrive already quoted once by
+/// [`aida_core::git_ops::porcelain_v2_z_lines`], so they are shown as given.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// trace:TASK-3882 | ai:claude
 pub(crate) fn describe_status_entry(line: &str) -> String {
     let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
     let xy = line.split(' ').nth(1).unwrap_or("");
     let described = match line.as_bytes().first() {
-        Some(b'?') => field(1).map(|p| format!("untracked: {}", p.escape_debug())),
-        Some(b'!') => field(1).map(|p| format!("ignored: {}", p.escape_debug())),
-        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", p.escape_debug())),
+        Some(b'?') => field(1).map(|p| format!("untracked: {p}")),
+        Some(b'!') => field(1).map(|p| format!("ignored: {p}")),
+        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {p}")),
         Some(b'2') => field(9).map(|p| match p.split_once('\t') {
-            Some((to, from)) => format!(
-                "renamed ({xy}): {} -> {}",
-                from.escape_debug(),
-                to.escape_debug()
-            ),
-            None => format!("renamed ({xy}): {}", p.escape_debug()),
+            Some((to, from)) => format!("renamed ({xy}): {from} -> {to}"),
+            None => format!("renamed ({xy}): {p}"),
         }),
-        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", p.escape_debug())),
+        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {p}")),
         _ => None,
     };
     described.unwrap_or_else(|| line.escape_debug().to_string())
@@ -2549,15 +2555,16 @@ fn origin_gc_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
     )
 }
 
-fn origin_oids(
-    main: &Path,
-    timeout: std::time::Duration,
-    args: &[&str],
-    cap: usize,
-) -> Vec<String> {
-    if timeout.is_zero() {
-        return Vec::new();
-    }
+// trace:STORY-3059 | ai:codex
+pub(crate) fn origin_branch_at(main: &Path, branch: &str, tip: &str) -> bool {
+    let reference = format!("refs/heads/{branch}");
+    let cmd = origin_read_command(main, &["ls-remote", "--refs", "origin", &reference]);
+    crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15)).is_some_and(|out| {
+        out.status.success() && out.stdout == format!("{tip}\t{reference}\n").as_bytes()
+    })
+}
+
+fn origin_read_command(main: &Path, args: &[&str]) -> std::process::Command {
     let mut cmd = aida_core::git_ops::host_remote_git_command(main, "origin");
     cmd.env(ACCESSOR_ENV, "1")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -2567,6 +2574,19 @@ fn origin_oids(
         )
         .stdin(std::process::Stdio::null())
         .args(args);
+    cmd
+}
+
+fn origin_oids(
+    main: &Path,
+    timeout: std::time::Duration,
+    args: &[&str],
+    cap: usize,
+) -> Vec<String> {
+    if timeout.is_zero() {
+        return Vec::new();
+    }
+    let cmd = origin_read_command(main, args);
     let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };
@@ -3068,6 +3088,26 @@ pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
     salvage_capped(main, clone, SALVAGE_OUTPUT_CAP, false)
 }
 
+/// Informational only. Keep Git from the seat inside the salvage read sandbox.
+// trace:BUG-2722 | ai:codex
+pub(crate) fn repair_unpushed_count(main: &Path, tree: &Path) -> Option<u64> {
+    let output = run_sandboxed(
+        tree,
+        main,
+        "git",
+        &[
+            "rev-list".as_ref(),
+            "--count".as_ref(),
+            "HEAD".as_ref(),
+            "--not".as_ref(),
+            "--remotes".as_ref(),
+        ],
+        128,
+    )
+    .ok()?;
+    std::str::from_utf8(&output).ok()?.trim().parse().ok()
+}
+
 /// [`salvage`] for a caller that gives up the lane's lease once the patch
 /// exists: a staged version that neither HEAD nor the working tree holds
 /// fails it, checked inside the sandbox, so no patch claims to be the whole
@@ -3213,7 +3253,7 @@ pub(crate) fn prepare_rework_merge_fixture(
     pr: u64,
     lane_id: &str,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, None, || {
         rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main"))
     })
 }
@@ -3294,10 +3334,18 @@ pub(crate) fn prepare_rework_merge(
     resume: bool,
     pr: u64,
     lane_id: &str,
+    attempt: &RepairAttempt<'_>,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
-        rework_base_branch(main, pr, branch)
-    })
+    prepare_rework_merge_with_base(
+        main,
+        tree,
+        branch,
+        resume,
+        pr,
+        lane_id,
+        Some(attempt),
+        || rework_base_branch(main, pr, branch),
+    )
 }
 
 // Inject the forge observation at the boundary; all Git and repair preparation
@@ -3310,6 +3358,7 @@ fn prepare_rework_merge_with_base(
     resume: bool,
     pr: u64,
     lane_id: &str,
+    attempt: Option<&RepairAttempt<'_>>,
     discover_base: impl FnOnce() -> Result<String>,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
@@ -3394,7 +3443,7 @@ fn prepare_rework_merge_with_base(
     let pending_resume = resume
         && execute(&["status", "--porcelain", "--untracked-files=all"])
             .is_ok_and(|status| !status.is_empty());
-    prepare_host_repair_with(
+    prepare_host_repair_routed(
         main, tree, pr, lane_id,
         &execute,
         branch,
@@ -3406,13 +3455,14 @@ fn prepare_rework_merge_with_base(
                 pr,
                 original_head: head,
             });
-            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only)
+            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only, None).map(|_| ())
         },
         || {
             // trace:BUG-2603 | ai:codex
             let base = discover_base()?;
             fetch_rework_heads(main, &base, branch)
         },
+        attempt,
     )
     .map_err(|error| {
         if let Some(key) = repair_key.into_inner() {
@@ -3590,7 +3640,8 @@ fn regenerate_repair_outputs(
     identity: &[(&'static str, std::ffi::OsString)],
     parent: &aida_core::exec_context::Environment,
     restore_only: bool,
-) -> Result<()> {
+    publication_lane: Option<&str>,
+) -> Result<Option<String>> {
     use std::ffi::OsStr;
     // Repositories without registered outputs need no generator (including
     // minimal worktree fixtures). Inspect the pinned host object, not the seat.
@@ -3611,7 +3662,7 @@ fn regenerate_repair_outputs(
         "aida-core/templates/skills",
     ]);
     if run(inventory, "inspect pinned regeneration outputs")?.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     let pack_outputs = serde_json::to_string(
         &aida_core::scaffolding::agent_pack::rendered_portable_pack(
@@ -3677,7 +3728,7 @@ fn regenerate_repair_outputs(
     let execute_driver = |sandbox: &[std::ffi::OsString],
                           args: &[&OsStr],
                           timeout: std::time::Duration|
-     -> Result<()> {
+     -> Result<Option<String>> {
         let mut cmd = std::process::Command::new("bwrap");
         cmd.args(sandbox)
             .arg("--")
@@ -3685,7 +3736,14 @@ fn regenerate_repair_outputs(
             .args(args)
             .stdin(std::process::Stdio::null());
         match crate::command_output_with_timeout_capped(cmd, timeout, PROBE_OUTPUT_CAP) {
-            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(None),
+            // Only the embedded publication driver returns 75 after restoring the
+            // golden and passing the remaining output checks. trace:BUG-2756 | ai:codex
+            crate::BoundedCommandOutput::Completed(out)
+                if publication_lane.is_some() && out.status.code() == Some(75) =>
+            {
+                record_snapshot_warning(main, publication_lane.unwrap(), &out.stderr).map(Some)
+            }
             crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
                 "repair regeneration refused: {}",
                 String::from_utf8_lossy(&out.stderr)
@@ -3801,12 +3859,53 @@ fn regenerate_repair_outputs(
             OsStr::new("-c"),
             OsStr::new(driver),
             OsStr::new(base),
-            OsStr::new("generate"),
+            OsStr::new(if publication_lane.is_some() {
+                "publish"
+            } else {
+                "generate"
+            }),
             OsStr::new(&pack_outputs),
             OsStr::new(&budget),
         ],
         REPAIR_GENERATION_TIMEOUT,
     )
+}
+
+// trace:BUG-2756 | ai:codex
+fn record_snapshot_warning(main: &Path, lane: &str, stderr: &[u8]) -> Result<String> {
+    let stderr = String::from_utf8_lossy(stderr);
+    let warning = stderr
+        .lines()
+        .last()
+        .context("missing snapshot diagnostic")?;
+    anyhow::ensure!(
+        warning.starts_with("snapshot regeneration failed: ")
+            && warning.ends_with("; CI will verify"),
+        "invalid snapshot diagnostic"
+    );
+    eprintln!("{warning}");
+    let deliver = || -> Result<()> {
+        let lease = crate::list_leases(main)
+            .into_iter()
+            .find(|lease| lease.id == lane)
+            .context("missing publication lease for snapshot comment")?;
+        let mut appended = false;
+        crate::lane_recovery::storage_for(main)?.update_atomically(|store| {
+            if let Some(req) = store.get_requirement_by_spec_id_mut(&lease.scope) {
+                req.comments.push(aida_core::Comment::new(
+                    "host repair".into(),
+                    warning.into(),
+                ));
+                appended = true;
+            }
+        })?;
+        anyhow::ensure!(appended, "missing leased spec {}", lease.scope);
+        Ok(())
+    };
+    if let Err(error) = deliver() {
+        eprintln!("could not append snapshot warning for lane {lane}: {error:#}");
+    }
+    Ok(warning.into())
 }
 
 /// The host kill bound for publication-time regeneration. Unlike a Git probe,
@@ -3880,9 +3979,16 @@ fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -
             .is_some_and(|paths| !paths.is_empty())
 }
 
-// Host-staged conflict preparation. The shared reservation precedes the merge;
-// any ambiguous failure keeps it. Only proof of lane death may release it.
-// trace:STORY-2710 | ai:codex
+/// A dispatch attempt's hooks into host repair preparation: `admit` decides
+/// the launch route before any reservation, and `reserved` receives the
+/// reservation this attempt wrote so its pre-agent rollback can retire it.
+// trace:BUG-2761 | ai:claude
+pub(crate) struct RepairAttempt<'a> {
+    pub admit: &'a dyn Fn() -> Result<()>,
+    pub reserved: &'a std::cell::RefCell<Option<crate::repair_journal::AttemptReservation>>,
+}
+
+#[cfg(test)]
 fn prepare_host_repair_with(
     main: &Path,
     tree: &Path,
@@ -3893,6 +3999,36 @@ fn prepare_host_repair_with(
     resume: bool,
     regenerate: impl FnOnce(&str, bool) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Vec<String>> {
+    prepare_host_repair_routed(
+        main,
+        tree,
+        pr,
+        lane_id,
+        execute,
+        branch,
+        resume,
+        regenerate,
+        fetch_heads,
+        None,
+    )
+}
+
+// Host-staged conflict preparation. The shared reservation precedes the merge;
+// any ambiguous failure keeps it. Only proof of lane death, or the reserving
+// attempt's own pre-agent rollback, may release it.
+// trace:STORY-2710 | ai:codex
+fn prepare_host_repair_routed(
+    main: &Path,
+    tree: &Path,
+    pr: u64,
+    lane_id: &str,
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    resume: bool,
+    regenerate: impl FnOnce(&str, bool) -> Result<()>,
+    fetch_heads: impl FnOnce() -> Result<(String, String)>,
+    attempt: Option<&RepairAttempt<'_>>,
 ) -> Result<Vec<String>> {
     use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome};
     anyhow::ensure!(
@@ -3906,8 +4042,12 @@ fn prepare_host_repair_with(
         let guard = RepairGuard::lock(main)?;
         let entry = guard.for_tree(tree, branch, &head, &merge)?;
         anyhow::ensure!(
-            resume && entry.lane_id == lane_id && pr_head == head,
-            "pending repair belongs to a different lane or head"
+            resume
+                && entry.lane_id == lane_id
+                && entry.key.pr == pr
+                && pr_head == head
+                && merge == base,
+            "pending repair belongs to a different lane, PR, head or base"
         );
         let paths = entry.original_conflict_paths.clone();
         let key = entry.key.clone();
@@ -3965,8 +4105,13 @@ fn prepare_host_repair_with(
             before == pr_head,
             "repair requires the exact original PR head; local commits preserved"
         );
+        // Choose the launch route before reserving: a refused route leaves
+        // the journal and index untouched. trace:BUG-2761 | ai:claude
+        if let Some(attempt) = attempt {
+            (attempt.admit)()?;
+        }
         let mut journal = RepairGuard::lock(main)?;
-        journal.reserve(RepairEntry {
+        let reserved = journal.reserve(RepairEntry {
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: chrono::Utc::now().to_rfc3339(),
@@ -3977,15 +4122,31 @@ fn prepare_host_repair_with(
             spawn: SpawnOutcome::Unknown,
             original_conflict_paths: observed_paths,
             regeneration_success: None,
+            snapshot_deferred: None,
             regenerated_tree: None,
             preparation_success: None,
             validation: None,
             refusal_notice: None,
         })?;
         drop(journal);
+        if let Some(attempt) = attempt {
+            *attempt.reserved.borrow_mut() = Some(reserved);
+        }
         match execute(&["merge", "--no-edit", "--no-verify", &base]) {
             Ok(_) => {
-                anyhow::bail!("conflict observation changed; reservation retained for recovery")
+                // State the journal as it is: the entry stands with an unknown
+                // spawn; only a pickup attempt's pre-agent rollback (which
+                // removes the tree) retires it. trace:BUG-2761 | ai:claude
+                let state = if attempt.is_some() {
+                    "until this pickup's rollback removes the tree and retires it"
+                } else {
+                    "for recovery"
+                };
+                anyhow::bail!(
+                    "conflict observation changed: the merge applied without conflicts; \
+                     the repair reservation for PR #{pr} stays recorded with an unknown \
+                     spawn {state}"
+                )
             }
             Err(why) => {
                 execute(&["rev-parse", "--verify", "MERGE_HEAD"])
@@ -4150,6 +4311,7 @@ mod rework_merge_tests {
             false,
             2603,
             "integration-lane",
+            None,
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -4175,6 +4337,7 @@ mod rework_merge_tests {
             false,
             2603,
             "integration-lane",
+            None,
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -4471,6 +4634,105 @@ mod rework_merge_tests {
         assert!(!fx.main.join(".aida/repair-journal.json").exists());
     }
 
+    // T2: an interactive conflict pickup is refused by its route before any
+    // reservation or merge; a headless retry at the same head then reserves
+    // and hands the reservation to its attempt. trace:BUG-2761 | ai:claude
+    #[test]
+    fn bug_2761_refused_route_reserves_nothing_and_headless_retry_reserves() {
+        use crate::session::HeadlessVendor;
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        std::fs::write(fx.main.join("shared"), "base\n").unwrap();
+        g(&["add", "shared"]);
+        g(&["commit", "-qm", "base"]);
+        g(&["checkout", "-qb", "repair"]);
+        std::fs::write(fx.main.join("shared"), "lane\n").unwrap();
+        g(&["commit", "-qam", "lane"]);
+        let head = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "-q", "main"]);
+        std::fs::write(fx.main.join("shared"), "main\n").unwrap();
+        g(&["commit", "-qam", "main"]);
+        let base = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "-q", "repair"]);
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success()
+                    || repair_merge_tree_conflict(args, out.status.code(), &out.stdout),
+                "Git refused"
+            );
+            let text = String::from_utf8(out.stdout)?;
+            Ok(if args.contains(&"-z") {
+                text
+            } else {
+                text.trim().to_owned()
+            })
+        };
+        // Nothing is reserved yet; a refused route must not create the journal.
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/\n").unwrap();
+        let journal_path = fx.main.join(".aida/repair-journal.json");
+        let index = g(&["ls-files", "--stage"]);
+        let run = |interactive: bool, slot: &std::cell::RefCell<_>| {
+            let admit = || -> Result<()> {
+                if interactive {
+                    crate::queue_cmd::conflict_route_admission(
+                        &crate::queue_cmd::ReworkConflictLaunch {
+                            vendor: HeadlessVendor::Codex,
+                            resume: false,
+                            interactive: true,
+                            contained: true,
+                            scope: "BUG-2761",
+                            pr: 2761,
+                            branch: "repair",
+                        },
+                    )?;
+                }
+                Ok(())
+            };
+            prepare_host_repair_routed(
+                &fx.main,
+                &fx.main,
+                2761,
+                "lease-new",
+                &execute,
+                "repair",
+                false,
+                |_, _| Ok(()),
+                || Ok((base.clone(), head.clone())),
+                Some(&RepairAttempt {
+                    admit: &admit,
+                    reserved: slot,
+                }),
+            )
+        };
+        let slot = std::cell::RefCell::new(None);
+        let refused = run(true, &slot).unwrap_err();
+        assert!(
+            format!("{refused:#}").contains("supervised headless launch"),
+            "{refused:#}"
+        );
+        assert!(!journal_path.exists());
+        assert!(slot.borrow().is_none());
+        assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
+        assert_eq!(g(&["ls-files", "--stage"]), index);
+        assert_eq!(g(&["rev-parse", "HEAD"]), head);
+        // The headless retry is not blocked by a stranded reservation.
+        let paths = run(false, &slot).unwrap();
+        assert_eq!(paths, ["shared"]);
+        assert!(slot.borrow().is_some());
+        let journal = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+        assert_eq!(
+            journal
+                .for_tree(&fx.main, "repair", &head, &base)
+                .unwrap()
+                .lane_id,
+            "lease-new"
+        );
+    }
+
     // A real staged merge, with the index left untouched while the lane edits
     // files. This exercises the marker gate without requiring bubblewrap.
     // trace:STORY-2710 | ai:codex
@@ -4676,6 +4938,13 @@ mod rework_merge_tests {
             assert_eq!(g(&["rev-parse", "HEAD"]), head);
             assert_eq!(g(&["rev-parse", "MERGE_HEAD"]), merge_head);
         }
+        // Marker-free bytes do not resolve unmerged index entries. trace:BUG-2756 | ai:codex
+        std::fs::write(fx.main.join(path), "resolved bytes\n").unwrap();
+        assert!(require_merged_index(&execute)
+            .unwrap_err()
+            .to_string()
+            .contains("unresolved index entries"));
+        std::fs::write(fx.main.join(path), ">>>>>>> main\n").unwrap();
         // A failed prior host commit may have staged the resolution: scan it
         // on retry as well, rather than trusting absence of unmerged entries.
         g(&["add", "--", path]);
@@ -5550,6 +5819,10 @@ fn commit_pending_with(
         )
         .map_err(|failure| recovery("stage", failure))?;
         if let Some(base) = merge_base.as_deref() {
+            require_merged_index(&|program, args| {
+                run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+                    .map_err(|why| anyhow::anyhow!("could not inspect staged index: {why}"))
+            })?;
             let head = head_before.as_deref().context("missing repair head")?;
             let key = crate::repair_journal::RepairGuard::lock(main)?
                 .for_tree(clone, branch, head, base)?
@@ -5558,13 +5831,14 @@ fn commit_pending_with(
             // Invalidate prior success before any generator can write. Every
             // publication attempt regenerates; stale success never grants credit.
             crate::repair_journal::RepairGuard::lock(main)?.record_regeneration(&key, false)?;
-            regenerate_repair_outputs(
+            let warning = regenerate_repair_outputs(
                 clone,
                 main,
                 base,
                 &identity,
                 &aida_core::exec_context::Environment::capture(),
                 false,
+                repair.as_ref().map(|(_, lane, _)| lane.as_str()),
             )?;
             // Registered generators can reintroduce markers into a resolved
             // original conflict. Refuse before staging or recording success.
@@ -5585,8 +5859,11 @@ fn commit_pending_with(
             )?
             .trim()
             .to_owned();
-            crate::repair_journal::RepairGuard::lock(main)?
-                .record_regenerated_tree(&key, &generated_tree)?;
+            crate::repair_journal::RepairGuard::lock(main)?.record_regenerated_tree(
+                &key,
+                &generated_tree,
+                warning,
+            )?;
         }
         if merge_base.is_none() {
             unstage_marker()?;
@@ -5601,21 +5878,32 @@ fn commit_pending_with(
                 .to_owned())
             };
             let staged_tree = write_tree()?;
-            crate::repair_journal::RepairGuard::lock(main)?
-                .for_tree(
+            let deferred = {
+                let journal = crate::repair_journal::RepairGuard::lock(main)?;
+                let entry = journal.for_tree(
                     clone,
                     branch,
                     &key.original_head,
                     merge_base.as_deref().unwrap(),
-                )?
-                .require_regenerated_tree(&staged_tree)?;
+                )?;
+                entry.require_regenerated_tree(&staged_tree)?;
+                entry.snapshot_deferred.is_some()
+            };
             let snapshot = tempfile::tempdir()?;
             let mut command = Vec::new();
+            let mut compile_ok = false;
             let checked = snapshot_repair_tree(main, clone, &staged_tree, snapshot.path())
                 .and_then(|()| {
                     let (ran, result) = compile(main, clone, lane, snapshot.path());
                     command = ran;
-                    result
+                    compile_ok = result.is_ok();
+                    match result {
+                        Err(error) if deferred && error.is::<crate::lane_job::RepairCompileFailure>() => {
+                            eprintln!("advisory repair compile failed: {error:#}");
+                            Ok(())
+                        }
+                        result => result,
+                    }
                 })
                 .and_then(|()| {
                     anyhow::ensure!(
@@ -5629,7 +5917,13 @@ fn commit_pending_with(
                 });
             let recorded =
                 crate::repair_journal::RepairGuard::lock(main).and_then(|mut journal| {
-                    journal.record_validation(key, &staged_tree, &command, checked.is_ok())
+                    journal.record_validation(
+                        key,
+                        &staged_tree,
+                        &command,
+                        compile_ok && checked.is_ok(),
+                        deferred && checked.is_ok(),
+                    )
                 });
             match (checked, recorded) {
                 (Err(error), Err(record_error)) => {
@@ -5849,6 +6143,17 @@ fn refuse_pending_conflict_markers(
         matches.split(|b| *b == 0).filter(|p| !p.is_empty())
             .map(|p| format!("{:?}", String::from_utf8_lossy(p)))
             .collect::<Vec<_>>().join(", ")
+    );
+    Ok(())
+}
+
+fn require_merged_index(
+    execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+) -> Result<()> {
+    // trace:BUG-2756 | ai:codex
+    anyhow::ensure!(
+        execute("git", &["ls-files".as_ref(), "--unmerged".as_ref()])?.is_empty(),
+        "refusing to publish: unresolved index entries in repair merge"
     );
     Ok(())
 }

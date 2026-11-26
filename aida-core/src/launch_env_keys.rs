@@ -165,6 +165,17 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // The operator's reasoned host-limit override for one launch command;
     // a vendor child must never inherit it. trace:BUG-2682 | ai:claude
     "AIDA_OVER_HOST_LIMIT",
+    // The operator's review-runner program and the per-run signals that
+    // launch::review_runner sets on that runner alone. trace:STORY-3120 | ai:claude
+    "AIDA_REVIEW_RUNNER_CMD",
+    "AIDA_REVIEW_PASS",
+    "AIDA_REVIEW_RESOLVED_AGENT",
+    // The operator's review model/effort inputs and their validated values.
+    "AIDA_REVIEW_EFFORT",
+    "AIDA_REVIEW_MODEL",
+    "AIDA_REVIEW_RESOLVED_MODEL",
+    "AIDA_REVIEW_RESOLVED_EFFORT",
+    "AIDA_REVIEW_CHALLENGER_EFFORT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
@@ -360,6 +371,8 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_SKIP_XPLAT_CHECK",
     "AIDA_SPINNING_AFTER_SECS",
     "AIDA_STALE_LOCKS_DEADLINE_SECS",
+    // Doctor threshold is local to the invoking process. trace:STORY-3095 | ai:codex
+    "AIDA_STALLED_REVIEW_MINUTES",
     "AIDA_STORE_GC_AGGRESSIVE_PACKS",
     "AIDA_STORE_GC_AUTO",
     "AIDA_STORE_GUARD_FLOOR",

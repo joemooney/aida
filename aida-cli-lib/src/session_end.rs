@@ -1636,7 +1636,13 @@ pub(crate) fn session_end_with_discard_unpushed(
                         target.worktree_path.display()
                     )
                 };
-                for line in &dirty_entries {
+                // trace:TASK-3882 | ai:claude
+                let evidence = if is_clone {
+                    dirty_entries.clone()
+                } else {
+                    refusal_evidence(&target.worktree_path, &dirty_entries)
+                };
+                for line in &evidence {
                     msg.push_str(&format!("  {}\n", line));
                 }
                 if is_clone {
@@ -2053,7 +2059,7 @@ pub(crate) fn session_end_with_discard_unpushed(
             }
             Err(e) => match crate::mail_retention::retention_refusal(&e) {
                 Some(refusal) => late_refusal = Some(refusal.clone()),
-                None if had_retirement => {
+                None if had_retirement || !target.worktree_path.exists() => {
                     failed_step = Some(format!("the worktree could not be removed: {e:#}"))
                 }
                 // R3-F2: never a raw `git worktree remove --force`, which
@@ -2093,7 +2099,7 @@ pub(crate) fn session_end_with_discard_unpushed(
     };
     if let Some((lines, refusal)) = kept {
         #[cfg(unix)]
-        if !is_clone {
+        if !is_clone && target.worktree_path.is_dir() {
             if let Err(err) = crate::worktree_gc::link_worktree_runtime_state(
                 &project_root,
                 &target.worktree_path,
@@ -2290,13 +2296,7 @@ pub(crate) fn session_end_with_discard_unpushed(
         );
     }
 
-    // BUG-614: lossless prune of administrative worktree entries whose
-    // directories are already gone. `git worktree prune` ONLY removes the
-    // bookkeeping for worktrees whose on-disk dir no longer exists — it never
-    // touches a live worktree — so it is always safe and cheap. Running it on
-    // session-end keeps `.git/worktrees/` from accumulating stale entries
-    // (which scale the per-worktree git spawns `aida status` makes). Quiet,
-    // best-effort: a failure here never fails the session teardown.
+    // Retire missing registrations only after checking their indexes.
     // trace:BUG-614 | ai:claude
     lossless_prune_worktrees(&project_root);
 
@@ -2561,6 +2561,29 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
         })
         .filter(|entry| !is_runtime_link(entry))
         .collect()
+}
+
+/// A worktree refusal's evidence. The gate decided on `entries` (the shared
+/// safety reader, untracked directories collapsed); for display only, each
+/// collapsed untracked directory is replaced by the files under it, every
+/// path quoted once, so a trailing space or a non-UTF-8 name reads
+/// unambiguously. Should that scan fail or find nothing, `entries` stand.
+// trace:TASK-3882 | ai:claude
+fn refusal_evidence(worktree: &std::path::Path, entries: &[String]) -> Vec<String> {
+    let expanded = aida_core::git_ops::refusal_status_lines(worktree)
+        .map(|lines| dirty_entries_ignoring_runtime_links(worktree, lines))
+        .unwrap_or_default();
+    if expanded.is_empty() {
+        return entries.to_vec();
+    }
+    // Keep the gate's tracked, submodule and failure entries ("?? (why)").
+    let mut out: Vec<String> = entries
+        .iter()
+        .filter(|e| (!e.starts_with("?? ") || e.starts_with("?? (")) && !expanded.contains(e))
+        .cloned()
+        .collect();
+    out.extend(expanded);
+    out
 }
 
 /// Every untracked file under `dir` in `worktree`, one porcelain entry each.

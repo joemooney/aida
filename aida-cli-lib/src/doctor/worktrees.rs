@@ -1424,17 +1424,165 @@ pub(super) fn heal_doctor_dead_agent(
     })
 }
 
+// trace:BUG-2755 | ai:codex
+pub(super) fn attest_clone_lease(main: &std::path::Path, id: &str, reason: &str) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let read =
+        || crate::leases::read_exact_lease_snapshot(main, id)?.context("no matching local lease");
+    let (lease, raw) = read()?;
+    let store = Storage::new(main.join(".aida-store")).load()?;
+    let proc = crate::doctor_root::doctor_proc_root();
+    let findings = crate::doctor_root::collect_doctor_findings_at(
+        main,
+        &store,
+        Some("stale-leases"),
+        &proc,
+        Some(&lease),
+    )?;
+    anyhow::ensure!(
+        findings.iter().any(|f| f.id == id),
+        "no eligible stale lease finding `{id}`"
+    );
+    let salvage = crate::home_dir()
+        .context("home directory unavailable")?
+        .join("salvage/reaped");
+    let tree = &lease.worktree_path;
+    anyhow::ensure!(
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone
+            && crate::mail_retention::verified_clone_main(main, tree).is_none(),
+        "expected a clone without a verified binding"
+    );
+    anyhow::ensure!(!lease.scope.contains('/'), "unsafe salvage name");
+    let normalized: std::path::PathBuf = tree.components().collect();
+    anyhow::ensure!(
+        tree.is_absolute()
+            && normalized.as_os_str() == tree.as_os_str()
+            && !tree
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+            && !main.starts_with(tree)
+            && !tree.starts_with(main)
+            && tree.file_name().is_some_and(|n| n
+                .as_encoded_bytes()
+                .starts_with(aida_core::seat_clone_detect::CLONE_DIR_PREFIX.as_bytes())),
+        "ambiguous clone path"
+    );
+    let dest = salvage.join(format!(
+        "{}-{id}-{}",
+        lease.scope,
+        chrono::Utc::now().timestamp()
+    ));
+    let pin = || -> Result<Option<std::fs::File>> {
+        for ancestor in tree.ancestors() {
+            match std::fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW)
+                .open(ancestor)
+            {
+                Ok(dir) => {
+                    anyhow::ensure!(ancestor.canonicalize()? == ancestor, "ambiguous clone path");
+                    return Ok((ancestor == tree).then_some(dir));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        anyhow::bail!("missing clone path ancestors")
+    };
+    let identity = |dir: &Option<std::fs::File>| {
+        dir.as_ref()
+            .map(|f| f.metadata().map(|m| (m.dev(), m.ino())))
+            .transpose()
+    };
+    // Keep the inode allocated even if the checkout is unlinked during confirmation.
+    let before = pin()?;
+    eprintln!("Warning: clone binding and other users of {} are unverified. Stop all writers. If present, the entire directory will move to {}. Type {id} to release its lease.", tree.display(), dest.display());
+    let mut reply = String::new();
+    std::io::stdin().read_line(&mut reply)?;
+    let confirmed = reply.trim_end_matches(['\r', '\n']);
+    anyhow::ensure!(confirmed == id, "lease ID confirmation mismatch");
+    crate::session::with_lease_write_lock(main, || {
+        let (current, bytes) = read()?;
+        anyhow::ensure!(bytes == raw, "lease changed during confirmation");
+        anyhow::ensure!(
+            crate::ownership::reader::current_lease_state(&current) == crate::LeaseState::Stale,
+            "lease {id} holder is not stale"
+        );
+        if before.is_some() {
+            std::fs::create_dir_all(&salvage)?;
+            let canonical = salvage.canonicalize()?;
+            anyhow::ensure!(canonical == salvage, "ambiguous salvage directory");
+        }
+        anyhow::ensure!(
+            crate::mail_retention::verified_clone_main(main, tree).is_none()
+                && identity(&pin()?)? == identity(&before)?,
+            "clone changed during confirmation"
+        );
+        let outcome = if before.is_some() {
+            format!("salvage destination {}", dest.display())
+        } else {
+            "tree absent, nothing to salvage".into()
+        };
+        let audit = format!("operator attested {id}: {reason}; {outcome}");
+        // Immutable lease events, including for pre-ownership leases: a
+        // write-ahead "pending" intent, then the final outcome or failure.
+        // trace:BUG-2755 | ai:claude
+        let directory = main.join(".aida/sessions");
+        let record = |record: serde_json::Value| -> Result<()> {
+            let event = directory.join(format!("{id}-{}.attestation.json", uuid::Uuid::new_v4()));
+            let pending = tempfile::NamedTempFile::new_in(&directory)?;
+            serde_json::to_writer(pending.as_file(), &record)?;
+            pending.as_file().sync_all()?;
+            pending.persist_noclobber(event)?;
+            std::fs::File::open(&directory)?.sync_all()?;
+            Ok(())
+        };
+        record(
+            serde_json::json!({ "lease_id": id, "reason": reason, "outcome": "pending", "planned": outcome }),
+        )?;
+        let done = (|| -> Result<()> {
+            if before.is_some() {
+                aida_core::mailbox_lifecycle::rename_noreplace(tree, &dest)
+                    .with_context(|| format!("atomic salvage to {}", dest.display()))?;
+            }
+            eprintln!("{outcome}");
+            crate::session_reap::release_lease_files_with_reason(main, id, &audit);
+            let removed = !crate::lease_path(main, id).try_exists()?;
+            anyhow::ensure!(removed, "lease {id} could not be removed");
+            Ok(())
+        })();
+        let last = match &done {
+            Ok(()) => outcome.clone(),
+            Err(e) => format!("failed: {e:#}"),
+        };
+        record(serde_json::json!({ "lease_id": id, "reason": reason, "outcome": last }))?;
+        done
+    })
+}
+
 pub(super) fn heal_doctor_lease(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
+    apply_doctor_lease(project_root, finding, None)
+}
+
+pub(super) fn apply_doctor_lease(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+    expected: Option<crate::doctor_root::SelectedLease>,
+) -> Result<DoctorHealResult> {
+    use crate::doctor_root::SelectedLease;
     // trace:BUG-2655 | ai:codex
     if let Some(id) = finding.id.strip_prefix("shared-") {
         let root = aida_core::store_locate::detect_distributed_store_from(project_root)
             .ok_or_else(|| anyhow::anyhow!("shared store unavailable"))?;
-        let claim = crate::coordination::list_claims(&root)
-            .into_iter()
-            .find(|c| c.claim_id.as_deref() == Some(id));
+        // trace:BUG-2739 | ai:codex
+        let claim = match expected {
+            Some(SelectedLease::Shared(store, claim)) if store == root => Some(claim),
+            None => crate::coordination::claim_by_generation(&root, id)?,
+            _ => anyhow::bail!("selected shared store changed"),
+        };
         let removed = match claim {
             Some(claim) => crate::coordination::heal_exited_claim(&root, &claim)?,
             None => false,
@@ -1451,10 +1599,18 @@ pub(super) fn heal_doctor_lease(
     // run, or by a concurrent session) is a no-op, not an error — mirror the
     // dead-agent "already gone" handling so heal stays idempotent.
     // trace:BUG-471 | ai:claude
-    let Some(lease) = list_leases(project_root)
-        .into_iter()
-        .find(|lease| lease.id == finding.id)
-    else {
+    let current = match expected {
+        Some(SelectedLease::Local(original)) => {
+            let selected = crate::doctor_root::targeted_stale_finding(project_root, &finding.id)?;
+            match selected {
+                Some((_, SelectedLease::Local(current))) if current == original => Some(current),
+                _ => anyhow::bail!("selected lease changed or is no longer eligible"),
+            }
+        }
+        Some(_) => anyhow::bail!("selected lease identity mismatch"),
+        None => crate::leases::read_exact_lease(project_root, &finding.id)?,
+    };
+    let Some(lease) = current else {
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -1463,6 +1619,13 @@ pub(super) fn heal_doctor_lease(
             detail: Some("lease already ended".to_string()),
         });
     };
+    anyhow::ensure!(
+        lease.tree_kind != crate::seat_clone::TreeKind::Clone
+            || crate::mail_retention::verified_clone_main(project_root, &lease.worktree_path)
+                .is_some(),
+        "clone binding unknown; use doctor heal stale-leases --id {} --attest '<reason>'",
+        lease.id
+    );
     // A worktree a live process is using (or one the scan could not verify)
     // is skipped before the salvage step: nothing is salvaged, ended or
     // removed. trace:BUG-1947 | ai:claude

@@ -94,6 +94,23 @@ fn task3420_unacked_preserved_retires_and_remains_readable_without_activation() 
     );
 }
 
+/// Exit-time retention admits writers by a process scan alone: leftovers of
+/// dead owners beside the mailbox (an empty tomb, a crashed creator's
+/// staging) never turn into a writer-admission refusal.
+// trace:TASK-3918 | ai:claude
+#[test]
+fn task3918_dead_owner_leftovers_do_not_refuse_retirement() {
+    let root = seed();
+    preserve_canonical(root.path());
+    let aida = root.path().join(".aida");
+    for leftover in [".mailbox-tomb-eeee", ".mailbox.creating.ffff"] {
+        std::fs::create_dir_all(aida.join(leftover).join("inbox")).unwrap();
+        std::fs::write(aida.join(leftover).join(SOURCE_ID_FILE), "0".repeat(32)).unwrap();
+    }
+    let (_, retained) = retired(retire_source(root.path(), &opts()).unwrap());
+    assert!(retained.join("data/unacked.json").exists());
+}
+
 #[test]
 fn task3420_unacked_unpreserved_retains() {
     let root = seed();

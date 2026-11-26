@@ -3815,3 +3815,53 @@ fn landing_health_tick_routes_to_live_codex_advisor_or_product() {
         }
     }
 }
+
+// trace:BUG-2762 | ai:codex
+#[test]
+fn bug_2762_repository_job_commands_are_allowlisted() {
+    let config: ConfigFile = toml::from_str(include_str!("../../../.aida/config.toml")).unwrap();
+    for job in config.schedule.unwrap().jobs {
+        if let Some(command) = job.command {
+            parse_scheduled_command(&command)
+                .unwrap_or_else(|err| panic!("job {}: {err}", job.name));
+        }
+    }
+}
+
+// trace:BUG-2762 | ai:codex
+#[test]
+fn bug_2762_stalled_reviews_is_a_scheduler_only_gate() {
+    let command =
+        parse_scheduled_command("doctor check stalled-reviews --fail-on-findings").unwrap();
+    assert_eq!(
+        command.args,
+        [
+            "doctor",
+            "check",
+            "stalled-reviews",
+            "--json",
+            "--fail-on-findings"
+        ]
+    );
+    assert!(!command.hook_allowed);
+}
+
+// The landing-drought guard runs under its own 60s hard ceiling and is
+// registered exactly once. trace:STORY-3131 | ai:claude
+#[test]
+fn story_3131_landing_drought_has_own_timeout() {
+    let cmd = parse_scheduled_command("doctor check landing-drought --fail-on-findings").unwrap();
+    assert!(!cmd.hook_allowed);
+    assert_eq!(command_timeout(&cmd), LANDING_DROUGHT_TIMEOUT);
+    assert_eq!(LANDING_DROUGHT_TIMEOUT, std::time::Duration::from_secs(60));
+    for display in [
+        "doctor check landing-drought --fail-on-findings",
+        "doctor check stalled-reviews --fail-on-findings",
+    ] {
+        let rows = command_table()
+            .iter()
+            .filter(|(_, c)| c.display == display)
+            .count();
+        assert_eq!(rows, 1, "{display} must be registered once");
+    }
+}

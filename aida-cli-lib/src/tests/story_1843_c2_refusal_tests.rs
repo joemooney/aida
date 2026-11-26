@@ -388,21 +388,7 @@ fn r3_f1_late_mail_before_a_session_end_removal_keeps_the_session() {
     );
     late_mail_before_removal(&wt, "late.json");
 
-    let refused = crate::session_end::session_end(
-        Some(id),
-        None,
-        None,
-        true,
-        true,
-        false,
-        false,
-        false,
-        true,
-        false,
-        true,
-        false,
-    )
-    .unwrap_err();
+    let refused = end_removing(id, true).unwrap_err();
     let text = format!("{refused:#}");
     assert!(text.contains("NOT ended"), "{text}");
     // R3-F2: the refusal never suggests an unfenced raw removal.
@@ -679,8 +665,8 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
     assert_eq!(
         gc[..2],
         [
-            "Mailbox leftover: would remove /w/.aida/.mailbox-tomb-b",
-            "Mailbox leftover: would remove /w/.aida/.mailbox.creating.c",
+            "Mailbox leftover: would remove /w/.aida/.mailbox-tomb-b (owner dead)",
+            "Mailbox leftover: would remove /w/.aida/.mailbox.creating.c (owner dead)",
         ]
     );
     assert!(
@@ -705,6 +691,148 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
     let reaped = crate::agent_registry_root::gc_leftover_lines(&leftovers, false);
     assert_eq!(
         reaped[0],
-        "Mailbox leftover: removed /w/.aida/.mailbox-tomb-b"
+        "Mailbox leftover: removed /w/.aida/.mailbox-tomb-b (owner dead)"
     );
+}
+
+/// The retention dry run names leftovers its owner scope held as kept, never
+/// as something `aida agent gc` would remove.
+// trace:TASK-3918 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3918_retention_report_keeps_held_leftovers_out_of_the_reapable_count() {
+    use aida_core::mailbox_lifecycle::leftovers::{HeldLeftover, Leftovers, OwnerLiveness};
+    let held = Leftovers {
+        held: vec![
+            HeldLeftover {
+                path: "/w/.aida/.mailbox-tomb-a".into(),
+                owner: OwnerLiveness::Live,
+            },
+            HeldLeftover {
+                path: "/w/.aida/.mailbox.creating.b".into(),
+                owner: OwnerLiveness::Unknown,
+            },
+        ],
+        ..Default::default()
+    };
+    let lines = crate::mailbox_cmd::retention_leftover_lines(&held);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("2 leftover(s) kept: their owner is live"),
+        "{lines:?}"
+    );
+}
+
+/// `aida agent gc` judges each leftover's owner: a live or dormant lease, or a
+/// live process inside the checkout, keeps it; an unjudgeable lease, an
+/// unattributed leftover or an incomplete view is unknown and kept; only an
+/// owner with nothing holding it is dead. Each kept line names its verdict.
+// trace:BUG-2770 trace:BUG-2770.AC1 trace:BUG-2770.AC3 trace:BUG-2770.AC4 | ai:claude
+#[cfg(unix)]
+#[test]
+fn agent_gc_judges_leftover_owners_fail_safe() {
+    use crate::agent_registry_root::{gc_leftover_lines, LeftoverOwners};
+    use aida_core::liveness::LeaseState;
+    use aida_core::mailbox_lifecycle::leftovers::{HeldLeftover, Leftovers, Owner, OwnerLiveness};
+    let owners = LeftoverOwners {
+        leases: vec![
+            ("/w/live".into(), LeaseState::Live),
+            ("/w/dormant".into(), LeaseState::Dormant),
+            ("/w/foreign".into(), LeaseState::Unknown),
+            ("/w/stale".into(), LeaseState::Stale),
+        ],
+        session_cwds: vec!["/w/busy/sub".into()],
+        complete: true,
+    };
+    let checkout = |p: &str| Owner::Checkout(p.into());
+    assert_eq!(owners.judge(&checkout("/w/live")), OwnerLiveness::Live);
+    assert_eq!(owners.judge(&checkout("/w/dormant")), OwnerLiveness::Live);
+    assert_eq!(owners.judge(&checkout("/w/busy")), OwnerLiveness::Live);
+    assert_eq!(
+        owners.judge(&Owner::Worktree("live".into())),
+        OwnerLiveness::Live
+    );
+    assert_eq!(
+        owners.judge(&checkout("/w/foreign")),
+        OwnerLiveness::Unknown
+    );
+    assert_eq!(owners.judge(&Owner::Unattributed), OwnerLiveness::Unknown);
+    assert_eq!(owners.judge(&checkout("/w/stale")), OwnerLiveness::Dead);
+    assert_eq!(
+        owners.judge(&Owner::Worktree("gone".into())),
+        OwnerLiveness::Dead
+    );
+    let blind = LeftoverOwners {
+        complete: false,
+        ..owners
+    };
+    assert_eq!(blind.judge(&checkout("/w/stale")), OwnerLiveness::Unknown);
+    assert_eq!(blind.judge(&checkout("/w/live")), OwnerLiveness::Live);
+
+    let report = Leftovers {
+        held: vec![
+            HeldLeftover {
+                path: "/w/live/.aida/.mailbox-tomb-a".into(),
+                owner: OwnerLiveness::Live,
+            },
+            HeldLeftover {
+                path: "/a/nonce-era/x".into(),
+                owner: OwnerLiveness::Unknown,
+            },
+        ],
+        ..Default::default()
+    };
+    let lines = gc_leftover_lines(&report, true);
+    assert!(
+        lines[0].contains("kept: /w/live/.aida/.mailbox-tomb-a (owner live"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[1].contains("kept: /a/nonce-era/x (owner unknown"),
+        "{lines:?}"
+    );
+}
+
+fn end_removing(id: &str, force: bool) -> anyhow::Result<()> {
+    crate::session_end::session_end(
+        Some(id),
+        None,
+        None,
+        true,
+        force,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+}
+
+// trace:BUG-2749 | ai:codex
+#[test]
+fn bug_2749_session_end_retains_missing_checkout_with_staged_work() {
+    let repo = repo();
+    let root = repo.path();
+    let wt = worktree(root, "staged-end");
+    let id = "0019f1843a05";
+    let lease = write_lease(root, id, &wt, "staged-end", "");
+    std::fs::write(wt.join("only"), "staged").unwrap();
+    git(&wt, &["add", "only"]);
+    let index = PathBuf::from(git(&wt, &["rev-parse", "--absolute-git-dir"])).join("index");
+    let staged = std::fs::read(&index).unwrap();
+    std::fs::remove_dir_all(wt).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let err = end_removing(id, false).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("retained worktree registration"),
+        "{err:#}"
+    );
+    assert!(lease.exists());
+    assert_eq!(std::fs::read(index).unwrap(), staged);
 }

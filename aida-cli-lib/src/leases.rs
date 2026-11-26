@@ -55,7 +55,7 @@ pub(crate) mod leases_args;
 pub(crate) use leases_args::*;
 
 // trace:TASK-714
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub(crate) struct SessionLease {
     /// Versioned cooperative holder evidence; absent/refused captures retain legacy policy.
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
@@ -328,6 +328,13 @@ pub(crate) fn read_exact_lease(
     root: &std::path::Path,
     id: &str,
 ) -> anyhow::Result<Option<SessionLease>> {
+    Ok(crate::leases::read_exact_lease_snapshot(root, id)?.map(|(lease, _)| lease))
+}
+
+pub(crate) fn read_exact_lease_snapshot(
+    root: &std::path::Path,
+    id: &str,
+) -> anyhow::Result<Option<(SessionLease, String)>> {
     anyhow::ensure!(
         !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
         "invalid lease id"
@@ -349,7 +356,7 @@ pub(crate) fn read_exact_lease(
     file.read_to_string(&mut raw)?;
     let lease: SessionLease = toml::from_str(&raw)?;
     anyhow::ensure!(lease.id == id, "lease identity mismatch");
-    Ok(Some(lease))
+    Ok(Some((lease, raw)))
 }
 
 /// The lease's last sign of life: the later of `started_at` and its lease
@@ -3753,7 +3760,7 @@ pub(crate) fn shelve_spec_on_failure(
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
     // trace:TASK-1468 | ai:claude
-    let Some(mut req) = backend.get_requirement_unambiguous(spec)? else {
+    let Some(req) = backend.get_requirement_unambiguous(spec)? else {
         // Spec not in the store — orchestrator was driving a stale id.
         // Best-effort: log and skip rather than crash the failure path.
         eprintln!(
@@ -3763,7 +3770,6 @@ pub(crate) fn shelve_spec_on_failure(
         );
         return Ok(None);
     };
-    let display_id = req.display_id();
 
     let now = chrono::Utc::now();
     let fr = aida_core::FailureReason {
@@ -3788,10 +3794,24 @@ pub(crate) fn shelve_spec_on_failure(
     // never reached InProgress (a phase-0 setup failure) still record the
     // FailureReason so the operator sees it, but skip the status flip so
     // we don't fight the guard.
-    shelve_status_flip(&mut req);
-    req.failure_reason = Some(fr.clone());
-    req.modified_at = now;
-    backend.update_requirement(&req)?;
+    // trace:BUG-2736 | ai:codex
+    status_write_race_seam(&store_path);
+    let Some(written) = backend.update_spec_atomically(&req, |req| {
+        if shelve_status_flip(req) {
+            req.add_comment(aida_core::Comment::new(
+                aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR.to_string(),
+                format!(
+                    "Shelved by leases::shelve_spec_on_failure during {phase_slug}: {kind_slug}"
+                ),
+            ));
+        }
+        req.failure_reason = Some(fr.clone());
+        req.modified_at = now;
+    })?
+    else {
+        return Ok(None);
+    };
+    let display_id = written.display_id();
 
     // Best-effort ledger append + role activity record. A failure here
     // must not undo the spec update, which is the load-bearing part.

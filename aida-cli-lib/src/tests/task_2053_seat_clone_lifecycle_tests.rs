@@ -57,6 +57,24 @@ fn write_clone_lease(main: &Path, clone: &Path, id: &str) {
     .unwrap();
 }
 
+// trace:BUG-2722 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2722_unpushed_count_on_complete_branch() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "unpushed", "01a2053df3e6");
+    git_ok(&clone, &["update-ref", "refs/remotes/origin/base", "HEAD"]);
+    git_ok(&clone, &["checkout", "-b", "complete"]);
+    seat_commit(&clone, "local-only");
+    let patch = salvage_complete(&fx.main, &clone).unwrap();
+    std::fs::remove_file(patch.with_extension("bundle")).unwrap();
+    assert_eq!(repair_unpushed_count(&fx.main, &clone), Some(1));
+    git_ok(&clone, &["checkout", "feat"]);
+    assert_eq!(repair_unpushed_count(&fx.main, &clone), Some(0));
+}
+
 /// Commit a file in the clone (test-side git: the fixture plays the seat).
 fn seat_commit(clone: &Path, file: &str) {
     std::fs::write(clone.join(file), "seat work\n").unwrap();
@@ -1150,7 +1168,7 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     }
     let still_held =
         || clone.exists() && ref_exists(&fx.main, &pin) && crate::lease_path(&fx.main, id).exists();
-    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
     for force in [false, true] {
         let refused = format!("{:#}", end_session(id, force).unwrap_err());
         assert!(refused.contains("submodules"), "{refused}");
@@ -1158,6 +1176,16 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     }
     crate::worktree_dismiss::handle_dismiss(Some(clone.to_str().unwrap()), None).unwrap();
     assert!(still_held());
+    // The reap re-observes exact-tip PR history first and keeps the seat when
+    // it is unknown; give it a forge with no closed PR so the submodule
+    // refusal is what keeps this clone. trace:STORY-3059 | ai:claude
+    drop(ambient);
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let _ambient = fixture_pr_history(&fx);
     let lease = crate::list_leases(&fx.main)
         .into_iter()
         .find(|l| l.id == id)
@@ -1674,12 +1702,21 @@ fn task_2053_bwrap_probe_reads_a_reftable_clone() {
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     if !bwrap_live() {
         return;
     }
     let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "reap", "c0ffee000024");
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let _ambient = fixture_pr_history(&fx);
     let lease = || {
         crate::list_leases(&fx.main)
             .into_iter()
@@ -1889,6 +1926,83 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
         entries,
         vec!["1 commit(s) that origin does not have".to_string()]
     );
+}
+
+/// TASK-3882: the clone probe reads raw `-z` status, so a refusal quotes each
+/// path once whatever the seat's `core.quotePath`: a tab and trailing space,
+/// distinct non-UTF-8 names, and both endpoints of a rename.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3882_bwrap_clone_refusal_quotes_each_path_once() {
+    use std::os::unix::ffi::OsStrExt;
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "quote", "c0ffee003882");
+    seat_commit(&clone, "old  ");
+    git_ok(&clone, &["mv", "--", "old  ", "new "]);
+    git_ok(&clone, &["config", "core.quotePath", "false"]);
+    for name in [b"a\t ".as_slice(), b"\xfe ", b"\xff "] {
+        std::fs::write(clone.join(std::ffi::OsStr::from_bytes(name)), "x").unwrap();
+    }
+    let items = unshipped_items(&known(probe(&fx.main, &clone)));
+    for expected in [
+        r#"renamed (R.): "old  " -> "new ""#,
+        r#"untracked: "a\t ""#,
+        r#"untracked: "\376 ""#,
+        r#"untracked: "\377 ""#,
+    ] {
+        assert!(items.iter().any(|i| i == expected), "{expected}: {items:?}");
+    }
+}
+
+/// TASK-3882: a worktree refusal lists each file of an untracked directory,
+/// quoted once (trailing space, tab, distinct non-UTF-8 names) under
+/// `core.quotePath=false`, and keeps the tree and lease.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-1369.AC1 trace:TASK-3882 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_3882_worktree_refusal_quotes_each_path_once() {
+    use std::os::unix::ffi::OsStrExt;
+    let fx = fixture();
+    let tree = fx.root.join("worktree-3882");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-b", "feat", tree.to_str().unwrap()],
+    );
+    let id = "c0ffee013882";
+    let lease = crate::lease_path(&fx.main, id);
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(
+        &lease,
+        format!(
+            "id = \"{id}\"\nscope = \"TASK-3882\"\nslug = \"task-3882\"\nowner = \"test\"\n\
+             worktree_path = {}\nbranch = \"feat\"\nstarted_at = \"2026-11-25T00:00:00Z\"\n\
+             hostname = \"h\"\n",
+            aida_core::toml_quote::toml_string(&tree.display().to_string())
+        ),
+    )
+    .unwrap();
+    git_ok(&tree, &["config", "core.quotePath", "false"]);
+    std::fs::create_dir(tree.join("notes")).unwrap();
+    std::fs::write(tree.join("notes/todo "), "pending").unwrap();
+    for name in [b"a\t ".as_slice(), b"\xfe ", b"\xff "] {
+        std::fs::write(tree.join(std::ffi::OsStr::from_bytes(name)), "x").unwrap();
+    }
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let msg = format!("{:#}", end_session(id, false).unwrap_err());
+    for expected in [
+        r#"  ?? "notes/todo ""#,
+        r#"  ?? "a\t ""#,
+        r#"  ?? "\376 ""#,
+        r#"  ?? "\377 ""#,
+    ] {
+        assert!(msg.lines().any(|l| l == expected), "{expected}: {msg}");
+    }
+    assert!(!msg.contains("?? notes/"), "{msg}");
+    assert!(tree.exists() && lease.exists());
 }
 
 /// BUG-051: every probe `git status` entry is named by its path, and a set
@@ -2621,6 +2735,28 @@ fn bug2454_hanging_sandbox_allows_explicit_lease_release() {
     assert_eq!(std::fs::read_to_string(calls).unwrap().lines().count(), 4);
 }
 
+fn fixture_pr_history(fx: &Fixture) -> crate::test_env::AmbientGuard {
+    std::fs::write(fx.main.join(".aida/test-pr-history"), "[]").unwrap();
+    let shims = fx.root.join("shims");
+    std::fs::create_dir_all(&shims).unwrap();
+    crate::test_exec::write_executable(
+        &shims.join("gh"),
+        r#"#!/bin/sh
+[ "$1" = --version ] && exit 0
+case " $* " in *' --head feat '*) ;; *) exit 1;; esac
+case "$*" in
+  *'--state all'*) cat .aida/test-pr-history ;;
+  *headRefOid*) exit 0 ;;
+  *'--state merged'*) printf '2473\tFinished work\thttps://github.com/test/repo/pull/2473\tfeat\n' ;;
+  *) exit 1 ;;
+esac
+"#,
+    );
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
+    crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))])
+}
+
 /// A legacy MCP claim must inspect the physical clone through the sandbox,
 /// even when it omitted the branch and tree_kind. A clean published clone is
 /// not salvageable; the existing completion/merge gates still decide reap.
@@ -2730,17 +2866,16 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     let persisted = crate::list_leases(&fx.main).remove(0);
     assert_eq!(persisted.tree_kind, TreeKind::Worktree);
     assert!(persisted.branch.is_empty());
-    let shims = fx.root.join("shims");
-    std::fs::create_dir_all(&shims).unwrap();
-    // Refuse an empty/wrong branch and serve only a merged PR for feat.
-    crate::test_exec::write_executable(
-        &shims.join("gh"),
-        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncase \" $* \" in *' --head feat '*) ;; *) exit 1;; esac\ncase \"$*\" in *headRefOid*) exit 0;; esac\nprintf '2473\\tFinished work\\thttps://github.com/test/repo/pull/2473\\tfeat\\n'\n",
-    );
-    let environment = aida_core::exec_context::Environment::capture();
-    let path = format!("{}:{}", shims.display(), environment.var("PATH").unwrap());
-    let _ambient =
-        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let _ambient = fixture_pr_history(&fx);
+    let history = fx.main.join(".aida/test-pr-history");
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let pr = |state, sha: &str, fork| {
+        serde_json::json!([{
+            "state": state, "headRefName": "feat", "headRefOid": sha, "isCrossRepository": fork
+        }])
+        .to_string()
+    };
+    std::fs::write(&history, pr("OPEN", &head, false)).unwrap();
     let report = crate::session_reap::scan_reapable(&fx.main);
     let row = report
         .reapable
@@ -2759,6 +2894,88 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     assert!(outcome.salvageable.is_empty(), "{outcome:?}");
     assert!(outcome.unknown.is_empty(), "{outcome:?}");
     assert!(crate::session_hygiene::keep_items(&outcome, 24).is_empty());
+
+    // trace:STORY-3059 | ai:codex
+    // Missing exact-tip history cannot authorize reap through the historical merge.
+    std::fs::write(&history, "invalid").unwrap();
+    let unknown = crate::session_reap::scan_reapable(&fx.main);
+    assert!(unknown.reapable.is_empty());
+    assert!(unknown
+        .skipped
+        .iter()
+        .any(|r| r.session == lease.id && r.reason.contains("could not verify PR history")));
+    let reap_saved =
+        || crate::session_reap::reap_one(&fx.main, &persisted, row.branch_tip.as_deref());
+    assert!(reap_saved().contains("could not verify PR history"));
+    std::fs::write(&history, pr("CLOSED", "", false)).unwrap();
+    assert!(reap_saved().contains("could not verify PR history"));
+    // The forge row's number is carried into the recovery hint.
+    // trace:STORY-3059 | ai:claude
+    let mut closed: serde_json::Value = serde_json::from_str(&pr("CLOSED", &head, false)).unwrap();
+    closed[0]["number"] = 4570.into();
+    std::fs::write(&history, closed.to_string()).unwrap();
+    let snapshot = || {
+        // Archive the entire fixture including loose/packed refs, index, files and alternate.
+        assert!(clone.join(".git/objects/info/alternates").is_file());
+        let archive = std::process::Command::new("tar")
+            .current_dir(&clone)
+            .args(["--sort=name", "--format=gnu", "-cf", "-", "."])
+            .output()
+            .unwrap();
+        assert!(archive.status.success());
+        archive.stdout
+    };
+    let before = snapshot();
+    assert!(reap_saved().contains("recoverable"));
+    let dry = crate::session_reap::scan_reapable(&fx.main);
+    assert!(dry.reapable.is_empty());
+    assert!(snapshot() == before, "hygiene changed the seat clone");
+    let (real, scan) = crate::session_reap::reap_quiet_with_report(&fx.main);
+    assert!(scan.clone_cache_names.contains(clone.file_name().unwrap()));
+    assert!(real.leases.is_empty());
+    let report_line = |rows, dry_run| {
+        let outcome = crate::session_hygiene::HygieneOutcome {
+            scan_skipped: rows,
+            ..Default::default()
+        };
+        crate::session_hygiene::render_summary(&outcome, dry_run)
+            .lines()
+            .find(|line| line.contains(&lease.id) && line.contains("recoverable"))
+            .expect("missing recovery hint")
+            .to_owned()
+    };
+    let hint = report_line(dry.skipped, true);
+    assert!(hint.contains("(published)"));
+    assert!(
+        hint.contains("PR #4570 closed unmerged on branch `feat`"),
+        "{hint}"
+    );
+    assert!(hint.contains(&format!("BUG-2755 / `aida session show {}`", lease.id)));
+    crate::session_misc::session_show(Some(&lease.id), false).unwrap();
+    let caches = fx.main.join("target/worktrees");
+    let retained = caches.join(clone.file_name().unwrap());
+    let orphan = caches.join("unrelated-orphan");
+    std::fs::create_dir_all(&retained).unwrap();
+    std::fs::create_dir_all(&orphan).unwrap();
+    crate::session_hygiene::run(&crate::session_hygiene::HygieneOptions {
+        dry_run: false,
+        idle_hours: 0,
+    })
+    .unwrap();
+    assert!(retained.is_dir() && !orphan.exists());
+    for args in [
+        vec!["update-ref", "refs/heads/feat", "main"],
+        vec!["update-ref", "-d", "refs/heads/feat"],
+    ] {
+        git_ok(&fx.origin, &args);
+        assert_eq!(git_ok(&clone, &["rev-parse", "origin/feat"]), head);
+        let scan = crate::session_reap::scan_reapable(&fx.main);
+        assert!(report_line(scan.skipped, true).contains("publication unverified"));
+    }
+    git_ok(&fx.origin, &["update-ref", "refs/heads/feat", &head]);
+    assert_eq!(report_line(scan.skipped, false), hint);
+    assert!(snapshot() == before, "hygiene changed the seat clone");
+    assert!(crate::lease_path(&fx.main, &lease.id).is_file());
 
     // Leave real dirt in place while collection gathers and re-probes the
     // persisted dead lease. Age the file so the normal 24h route is exercised.
@@ -2825,6 +3042,27 @@ fn bug_2473_bwrap_clean_pushed_clone_is_not_salvageable_and_passes_reap_gates() 
     );
     assert!(clone.exists());
     assert!(!crate::list_leases(&fx.main).is_empty());
+    git_ok(&clone, &["restore", "published.txt"]);
+    git_ok(&clone, &["branch", "-D", "unpublished"]);
+    let parent = git_ok(&clone, &["rev-parse", "HEAD^"]);
+    for evidence in [
+        pr("CLOSED", &parent, false),
+        pr("CLOSED", &head, true),
+        pr("MERGED", &head, false),
+    ] {
+        std::fs::write(&history, evidence).unwrap();
+        assert_eq!(
+            crate::session_reap::scan_reapable(&fx.main).reapable.len(),
+            1
+        );
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    // Actual teardown also needs the independently verified host/mail binding.
+    write_clone_lease(&fx.main, &clone, &lease.id);
+    let verified = crate::list_leases(&fx.main).remove(0);
+    let removed = crate::session_reap::reap_one(&fx.main, &verified, Some(&head));
+    assert!(removed.starts_with("reaped"), "{removed}");
+    assert!(!clone.exists());
 }
 
 /// A broken clone is unknown, and the guard's ordinary Display carries the
@@ -3158,6 +3396,50 @@ fn bug_2606_bwrap_escalated_dirty_lane_triage_cleanup_retains_work() {
     assert!(
         fx.main.join(".aida/salvage").exists(),
         "cleanup reached salvage"
+    );
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_ignored_state_and_tracked_edits() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "ignored-state", "c0ffee002742");
+    let state = ".aida/hygiene-state.json";
+    std::fs::write(clone.join(state), "{}").unwrap();
+    assert_eq!(git_ok(&clone, &["check-ignore", state]), state);
+    let inspect = || crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    let clean = inspect();
+    assert!(clean.error.is_none() && !clean.dirty, "{clean:?}");
+    assert!(!known(probe(&fx.main, &clone)).unshipped());
+
+    std::fs::write(clone.join("README.md"), "pending edit").unwrap();
+    let dirty = inspect();
+    assert!(dirty.error.is_none() && dirty.dirty, "{dirty:?}");
+    assert!(known(probe(&fx.main, &clone)).unshipped());
+}
+
+// trace:BUG-2742 | ai:codex
+#[test]
+fn task_2053_bwrap_bug_2742_untracked_file_blocks_reap() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "untracked", "c0ffee002742");
+    std::fs::write(clone.join("notes.txt"), "unfinished").unwrap();
+    let report = crate::dispatch_health_ps::probe_worktree_from(&fx.main, &clone);
+    assert!(report.error.is_none() && report.dirty, "{report:?}");
+    assert!(known(probe(&fx.main, &clone))
+        .dirty
+        .contains(&"? notes.txt".to_owned()));
+    let kept = destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap();
+    assert!(matches!(kept, Destroyed::Kept { .. }), "{kept:?}");
+    assert_eq!(
+        std::fs::read(clone.join("notes.txt")).unwrap(),
+        b"unfinished"
     );
 }
 

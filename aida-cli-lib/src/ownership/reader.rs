@@ -6,6 +6,31 @@ use anyhow::Result;
 use chrono::Utc;
 use std::path::Path;
 
+// trace:BUG-2739 | ai:codex
+pub(crate) fn doctor_lease_liveness(
+    lease: &crate::leases::SessionLease,
+    sessions: &std::cell::OnceCell<Vec<crate::process_probe::LiveSession>>,
+    now: chrono::DateTime<Utc>,
+) -> (crate::LeaseState, bool) {
+    let live = sessions.get_or_init(crate::process_probe::probe_live_claude_sessions);
+    let state = crate::leases::lease_state_for(lease, live, now);
+    let dead = lease.creator_pid.is_some_and(|pid| {
+        local_process_is_dead(
+            pid,
+            lease.creator_pid_start_time.as_deref(),
+            lease.pid_namespace,
+            true,
+        )
+    });
+    (state, dead)
+}
+
+// trace:BUG-2755 | ai:codex
+pub(crate) fn current_lease_state(lease: &crate::leases::SessionLease) -> crate::LeaseState {
+    let live = crate::process_probe::probe_live_claude_sessions();
+    crate::leases::lease_state_for(lease, &live, Utc::now())
+}
+
 /// Compatibility death observation for shared-claim creators and headless
 /// workers. Callers bind the recorded process to a local-host claim or a child
 /// they launched; a foreign/unknown PID view cannot supply death evidence.
@@ -17,6 +42,15 @@ pub(crate) fn local_claim_process_is_dead(
     recorded_start: Option<&str>,
     pid_namespace: Option<u64>,
 ) -> bool {
+    local_process_is_dead(pid, recorded_start, pid_namespace, false)
+}
+
+fn local_process_is_dead(
+    pid: u32,
+    recorded_start: Option<&str>,
+    pid_namespace: Option<u64>,
+    count_exited: bool,
+) -> bool {
     pid != 0
         && aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
         && match aida_core::proc_identity::observe_legacy_registry(
@@ -24,6 +58,9 @@ pub(crate) fn local_claim_process_is_dead(
             recorded_start,
             pid_namespace,
         ) {
+            aida_core::proc_identity::Verdict::Dead(
+                aida_core::proc_identity::DeadReason::Exited,
+            ) => count_exited,
             aida_core::proc_identity::Verdict::Dead(
                 aida_core::proc_identity::DeadReason::Absent,
             ) => true,
@@ -190,7 +227,7 @@ pub(crate) enum LegacyRule {
 
 pub(crate) struct LeaseReader<'a> {
     root: &'a Path,
-    reqs: std::cell::OnceCell<Option<aida_core::RequirementsStore>>,
+    reqs: std::cell::OnceCell<Option<std::borrow::Cow<'a, aida_core::RequirementsStore>>>,
     live: std::cell::OnceCell<Vec<crate::process_probe::LiveSession>>,
     registry: std::cell::OnceCell<Vec<crate::agent_registry::AgentRegistryEntry>>,
 }
@@ -205,6 +242,14 @@ impl<'a> LeaseReader<'a> {
         }
     }
 
+    // trace:STORY-3095 | ai:codex
+    pub(crate) fn with_store(root: &'a Path, store: &'a aida_core::RequirementsStore) -> Self {
+        Self {
+            reqs: Some(std::borrow::Cow::Borrowed(store)).into(),
+            ..Self::new(root)
+        }
+    }
+
     fn key(&self, lease: &crate::SessionLease) -> Result<Option<WorkKey>> {
         let resolve = |label: &str| {
             uuid::Uuid::parse_str(label.trim())
@@ -212,7 +257,9 @@ impl<'a> LeaseReader<'a> {
                 .map(crate::gate::canon::SpecKey)
                 .or_else(|| {
                     self.reqs
-                        .get_or_init(|| crate::load_store_for_lookup(self.root))
+                        .get_or_init(|| {
+                            crate::load_store_for_lookup(self.root).map(std::borrow::Cow::Owned)
+                        })
                         .as_ref()
                         .and_then(|s| dual::spec_key_in_store(s, label))
                 })
@@ -665,7 +712,9 @@ hostname = "test"
         let reader = LeaseReader::new(root.path());
         reader
             .reqs
-            .set(Some(aida_core::RequirementsStore::default()))
+            .set(Some(std::borrow::Cow::Owned(
+                aida_core::RequirementsStore::default(),
+            )))
             .ok()
             .unwrap();
         assert!(reader.record(&lease).unwrap().is_none());
@@ -741,7 +790,9 @@ hostname = "test"
             let reader = LeaseReader::new(root.path());
             reader
                 .reqs
-                .set(Some(aida_core::RequirementsStore::default()))
+                .set(Some(std::borrow::Cow::Owned(
+                    aida_core::RequirementsStore::default(),
+                )))
                 .ok()
                 .unwrap();
             reader

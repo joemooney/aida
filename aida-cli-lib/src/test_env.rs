@@ -161,3 +161,29 @@ mod documentation_tests {
         assert!(constant.contains("live-bwrap CI gate"), "{constant}");
     }
 }
+
+// trace:TASK-3884 | ai:codex
+pub(crate) fn assert_lock_timeout(
+    path: &std::path::Path,
+    attempt: impl FnOnce(std::time::Instant) -> anyhow::Result<bool>,
+) {
+    use fs2::FileExt;
+    use std::time::{Duration, Instant};
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let held = std::fs::File::create(path).unwrap();
+    held.lock_exclusive().unwrap();
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    let holder = std::thread::spawn(move || {
+        let _ = wait.recv_timeout(Duration::from_secs(2));
+        drop(held);
+    });
+    let start = Instant::now();
+    let err = attempt(start + Duration::from_millis(20)).unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<std::io::Error>().unwrap().kind(),
+        std::io::ErrorKind::TimedOut
+    );
+    assert!((Duration::from_millis(20)..Duration::from_secs(1)).contains(&start.elapsed()));
+    drop(release);
+    holder.join().unwrap();
+}

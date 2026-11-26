@@ -10,14 +10,33 @@
       "scope": "module",
       "source": "aida-core/src/review_engine.rs",
       "tests": [
+        "s1_runner_findings_sarif_and_threshold",
         "config_defaults_only_when_absent",
         "credential_components_at_any_depth",
+        "credential_npmrc",
+        "credential_cargo_credentials",
+        "credential_cargo_credentials_toml",
+        "credential_vault_token",
+        "credential_terraformrc",
+        "credential_terraform_rc",
+        "credential_terraform_d_tfrc",
+        "credential_gem_credentials",
+        "credential_dockercfg",
+        "credential_config_hub",
+        "credential_pattern_neighbours_stay_reviewable",
+        "h2b_compiled_globs_bound_expansion",
+        "h2b_crlf_padding",
+        "h2b_resolved_span_preserves_hints",
+        "h2b_linear_repeated_prefix",
+        "h2c_equal_stems_in_different_directories_stay_separate",
+        "h2c_rust_facets_follow_sample_paths",
         "h2a_budget_is_a_cap",
         "h2a_digest_frames_paths",
         "h2a_duplicates_are_ambiguous",
         "h2a_single_bracket_citations",
         "h2a_token_overflow",
         "rename_excludes_either_path",
+        "root_and_nested_credential_paths_are_excluded",
         "runtime_prefix_requires_exact_components",
         "test_anchor_snippet_lines_exact_and_whitespace_tolerant",
         "test_bundle_review_batches_pairs_tests_and_respects_budget",
@@ -37,13 +56,67 @@
       "filter": "review_prepare::tests::",
       "source": "aida-cli-lib/src/review_prepare.rs",
       "tests": [
+        "s2_export_gate_checks_changed_paths",
+        "s3a2_run_review_base_and_sanitized_diff",
+        "s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage",
+        "s3a2_run_review_refuses_findings_outside_the_inventory",
+        "s3fu_git_text_uses_host_git_hardening",
+        "s4_adversarial_run_suppresses_but_gates_refuted_findings",
+        "s5_post_comment_is_opt_in_and_requires_pr",
+        "s5_posted_comment_renders_agent_text_inert",
+        "s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
         "option_like_endpoints_refuse_before_git",
         "prepare_excludes_credentials_before_revision_reads",
+        "root_credential_dirs_excluded_reported_and_refused_as_findings",
         "root_commit_preserves_unusual_git_paths",
         "write_confines_new_and_existing_paths"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "launch::review_challenger::tests::",
+      "source": "aida-cli-lib/src/launch/review_challenger.rs",
+      "tests": [
+        "s4_challenger_effort_injection_refused_at_every_source",
+        "s4_challenger_refutation_drops_and_reproduction_keeps",
+        "s4_challenger_spawn_contract_and_opposition",
+        "s4_detect_ai_authors_from_commit_tags"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "launch::review_runner::tests::",
+      "source": "aida-cli-lib/src/launch/review_runner.rs",
+      "tests": [
+        "s3a_runner_deadline_and_output_caps_fail_closed",
+        "s3a_runner_spawn_contract",
+        "s3a_runner_survives_default_sigpipe",
+        "s3a2_runner_fails_closed_on_escaped_descendant",
+        "s3b_runner_argv_carries_only_validated_tuning"
+      ],
+      "scope": "module"
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "launch::review_tuning::tests::",
+      "source": "aida-cli-lib/src/launch/review_tuning.rs",
+      "tests": [
+        "s3b_review_rules_come_from_the_trusted_base",
+        "s3b_tuning_refuses_injected_values_from_every_source"
       ],
       "scope": "module"
     },

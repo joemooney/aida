@@ -254,7 +254,7 @@ pub(crate) fn pr_ship_approval_gate(
 pub(crate) fn merge_approval_inputs(
     roots: &[&std::path::Path],
     main_worktree: &std::path::Path,
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     known_ids: &[String],
     head_branch: Option<&str>,
     head_sha: Option<&str>,
@@ -262,8 +262,14 @@ pub(crate) fn merge_approval_inputs(
     Vec<crate::gate::review_verdict::RecordedVerdict>,
     crate::gate::ship::ShipApprovalPolicy,
 ) {
-    let (candidates, policy, _) =
-        merge_approval_subject(roots, main_worktree, pr, known_ids, head_branch, head_sha);
+    let (candidates, policy, _) = merge_approval_subject(
+        roots,
+        main_worktree,
+        change,
+        known_ids,
+        head_branch,
+        head_sha,
+    );
     (candidates, policy)
 }
 
@@ -273,7 +279,7 @@ pub(crate) fn merge_approval_inputs(
 pub(crate) fn merge_approval_subject(
     roots: &[&std::path::Path],
     main_worktree: &std::path::Path,
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     known_ids: &[String],
     head_branch: Option<&str>,
     head_sha: Option<&str>,
@@ -282,8 +288,14 @@ pub(crate) fn merge_approval_subject(
     crate::gate::ship::ShipApprovalPolicy,
     Vec<String>,
 ) {
-    let (candidates, policy, ids, _) =
-        merge_approval_subject_observed(roots, main_worktree, pr, known_ids, head_branch, head_sha);
+    let (candidates, policy, ids, _) = merge_approval_subject_observed(
+        roots,
+        main_worktree,
+        change,
+        known_ids,
+        head_branch,
+        head_sha,
+    );
     (candidates, policy, ids)
 }
 
@@ -295,7 +307,7 @@ pub(crate) fn merge_approval_subject(
 pub(crate) fn merge_approval_subject_observed(
     roots: &[&std::path::Path],
     main_worktree: &std::path::Path,
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     known_ids: &[String],
     head_branch: Option<&str>,
     head_sha: Option<&str>,
@@ -305,9 +317,11 @@ pub(crate) fn merge_approval_subject_observed(
     Vec<String>,
     bool,
 ) {
+    let change = change.into();
     let (ids, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
-    let candidates = crate::gate::ship::merge_gate_verdict_candidates(roots, pr, &ids, head_sha);
+        pr_gate_subject(main_worktree, change.number, known_ids, head_branch);
+    let candidates =
+        crate::gate::ship::merge_gate_verdict_candidates(roots, change, &ids, head_sha);
     // An unconfirmed subject (forge unreachable) names no author set: every
     // recorded author counts. trace:BUG-1918 | ai:claude
     // trace:BUG-2199 | ai:claude

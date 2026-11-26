@@ -1138,12 +1138,14 @@ pub(crate) fn carried_approval(
 pub(crate) fn live_carried_approval(
     roots: &[&Path],
     root: &Path,
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     head: &str,
     base: Option<&str>,
     hints: &[String],
     record_proof: bool,
 ) -> Result<crate::gate::review_carryover::CarryOver, String> {
+    let change = change.into();
+    let pr = change.number;
     let (current_head, current_base) =
         crate::gate::approval::carryover_change_identity(root, pr)
             .map_err(|why| format!("carry-over change unavailable: {why}"))?;
@@ -1154,9 +1156,9 @@ pub(crate) fn live_carried_approval(
     }
     let base = Some(current_base.as_str());
     let (candidates, policy, mut ids) =
-        crate::gate::approval::merge_approval_subject(roots, root, pr, hints, None, Some(head));
+        crate::gate::approval::merge_approval_subject(roots, root, change, hints, None, Some(head));
     ids.extend_from_slice(hints);
-    let bodies = corpus_gate_bodies(roots, pr, &ids)?;
+    let bodies = corpus_gate_bodies(roots, change, &ids)?;
     let site = if record_proof {
         crate::gate::review_carryover::CarryOverSite::new(root, base)
     } else {
@@ -1468,10 +1470,10 @@ fn corpus_carry_over(
 // trace:BUG-1774 | ai:claude
 pub(crate) fn corpus_gate_bodies(
     roots: &[&Path],
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     spec_hints: &[String],
 ) -> Result<Vec<(String, String)>, String> {
-    corpus_gate_bodies_at(roots, pr, spec_hints, None)
+    corpus_gate_bodies_at(roots, change, spec_hints, None)
 }
 
 /// [`corpus_gate_bodies`] for a merge decision about `head`. A spec key is
@@ -1484,10 +1486,12 @@ pub(crate) fn corpus_gate_bodies(
 // trace:BUG-2569 | ai:claude
 pub(crate) fn corpus_gate_bodies_at(
     roots: &[&Path],
-    pr: u64,
+    change: impl Into<crate::gate::ledger::ChangeKey>,
     spec_hints: &[String],
     head: Option<&str>,
 ) -> Result<Vec<(String, String)>, String> {
+    let change = change.into();
+    let pr = change.number;
     let head = head.map(str::trim).filter(|head| !head.is_empty());
     let in_head = |sha: &str| match (roots.first(), head) {
         (Some(repo), Some(head)) => crate::gate::review_carryover::commit_in_head(repo, sha, head),
@@ -1495,7 +1499,7 @@ pub(crate) fn corpus_gate_bodies_at(
     };
     let mut keys: Vec<String> = Vec::new();
     if pr > 0 {
-        keys.push(format!("PR-{pr}"));
+        keys.push(change.as_key());
     }
     for id in spec_hints {
         let id = id.trim().to_ascii_uppercase();
@@ -1525,7 +1529,7 @@ pub(crate) fn corpus_gate_bodies_at(
                 .filter_map(|store| {
                     match head {
                         Some(_) => crate::gate::ledger::project::newest_verdict_event_for_merge(
-                            store, key, pr, head, &in_head,
+                            store, key, change, head, &in_head,
                         ),
                         None => crate::gate::ledger::project::newest_verdict_event(store, key),
                     }
@@ -2303,6 +2307,31 @@ pub(crate) fn human_recorded_clearance(project_root: &Path, pr: u64) -> Option<H
         PrincipalIdentity::parse(&clearance.cleared_by).principal_kind,
         PrincipalKind::Human | PrincipalKind::Operator
     )
+    .then_some(clearance)
+}
+
+/// BUG-2745: `pr`'s latest release, when the gate ledger records it as a
+/// typed rework hold that a recorded reviewer verdict auto-released, and no
+/// hold is open since. Written primary-side from any checkout (a reviewer
+/// worktree included), so it is read from the shared ledger. The kind is
+/// the released ledger hold's own, not the clearance's claim. A legacy
+/// clearance file, a non-rework or legacy hold, another principal or a
+/// release without its verdict answers `None` (fail closed).
+// trace:BUG-2745 | ai:claude
+pub(crate) fn verdict_auto_release(project_root: &Path, pr: u64) -> Option<HoldClearance> {
+    let state = crate::gate::ledger::hold::state(project_root, pr);
+    if !state.on_ledger || state.open.is_some() {
+        return None;
+    }
+    let released = state.released?;
+    let clearance: HoldClearance =
+        serde_json::from_value(serde_json::Value::Object(state.release?)).ok()?;
+    (clearance.pr == pr
+        && clearance.cleared_by == crate::gate::rework_hold_release::PRINCIPAL
+        && released.reason_kind == HoldReasonKind::Rework
+        && !released.legacy
+        && clearance.reason_kind == released.reason_kind
+        && clearance.released_by_verdict.is_some())
     .then_some(clearance)
 }
 

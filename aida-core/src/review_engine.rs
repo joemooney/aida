@@ -127,6 +127,15 @@ pub struct ProjectReviewRulesConfig {
     pub max_files_per_batch: Option<usize>,
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
+    /// Review-runner defaults; the CLI validates both against its allowlists
+    /// and reads them only from the trusted base. trace:STORY-3120 | ai:claude
+    #[serde(default)]
+    pub default_effort: Option<String>,
+    #[serde(default)]
+    pub default_model: Option<String>,
+    /// Effort for the `--adversarial` challenger pass, validated the same way.
+    #[serde(default)]
+    pub challenger_effort: Option<String>,
 }
 
 /// A single path-scoped rule entry in `.aida/review-rules.toml`.
@@ -200,21 +209,21 @@ pub struct PlaybookFacet {
 /// Clean-room registry of built-in and project-defined path-scoped review playbooks.
 #[derive(Debug, Clone)]
 pub struct PlaybookRegistry {
-    custom_rules: Vec<CustomPathRule>,
-    builtin_rules: Vec<ResolvedPlaybook>,
+    custom_rules: Vec<(CompiledGlob, CustomPathRule)>,
+    builtin_rules: Vec<(CompiledGlob, ResolvedPlaybook)>,
     default_playbook: ResolvedPlaybook,
 }
 
 impl Default for PlaybookRegistry {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new(Vec::new()).expect("built-in playbook globs compile")
     }
 }
 
 impl PlaybookRegistry {
     /// Construct a registry with built-in Rust-first + polyglot review playbooks
     /// layered beneath optional project-specific rules.
-    pub fn new(custom_rules: Vec<CustomPathRule>) -> Self {
+    pub fn new(custom_rules: Vec<CustomPathRule>) -> anyhow::Result<Self> {
         let builtin_rules = vec![
             ResolvedPlaybook {
                 id: "rust".to_string(),
@@ -317,11 +326,27 @@ impl PlaybookRegistry {
             active_facets: Vec::new(),
         };
 
-        Self {
-            custom_rules,
-            builtin_rules,
+        Ok(Self {
+            custom_rules: custom_rules
+                .into_iter()
+                .map(|rule| {
+                    let glob = CompiledGlob::new(&rule.pattern).with_context(|| {
+                        format!("invalid playbook {} pattern {:?}", rule.id, rule.pattern)
+                    })?;
+                    Ok((glob, rule))
+                })
+                .collect::<anyhow::Result<_>>()?,
+            builtin_rules: builtin_rules
+                .into_iter()
+                .map(|rule| {
+                    let glob = CompiledGlob::new(&rule.pattern).with_context(|| {
+                        format!("invalid playbook {} pattern {:?}", rule.id, rule.pattern)
+                    })?;
+                    Ok((glob, rule))
+                })
+                .collect::<anyhow::Result<_>>()?,
             default_playbook,
-        }
+        })
     }
 
     /// Resolve the effective base playbook for a relative repository path.
@@ -329,11 +354,12 @@ impl PlaybookRegistry {
         let builtin = self
             .builtin_rules
             .iter()
-            .find(|r| glob_matches(&r.pattern, rel_path))
+            .find(|(glob, _)| glob.matches(rel_path))
+            .map(|(_, rule)| rule)
             .unwrap_or(&self.default_playbook);
 
-        for custom in &self.custom_rules {
-            if glob_matches(&custom.pattern, rel_path) {
+        for (index, (glob, custom)) in self.custom_rules.iter().enumerate() {
+            if glob.matches(rel_path) {
                 if custom.merge_builtin {
                     return ResolvedPlaybook {
                         id: format!("{}+{}", builtin.id, custom.id),
@@ -349,11 +375,11 @@ impl PlaybookRegistry {
                     };
                 } else {
                     return ResolvedPlaybook {
-                        id: custom.id.clone(),
+                        id: format!("rule:{index}:{}", custom.id),
                         title: format!("Project Rule ({})", custom.id),
                         pattern: custom.pattern.clone(),
                         checklist: custom.checklist.trim().to_string(),
-                        active_facets: Vec::new(),
+                        active_facets: vec![custom.id.clone()],
                     };
                 }
             }
@@ -369,12 +395,22 @@ impl PlaybookRegistry {
     pub fn enrich_with_content_facets(
         &self,
         mut playbook: ResolvedPlaybook,
-        corpus_samples: &[&str],
+        corpus_samples: &[(&str, &str)],
     ) -> ResolvedPlaybook {
-        if !playbook.id.starts_with("rust") || corpus_samples.is_empty() {
+        // trace:TASK-3880 | ai:codex
+        let rust_samples: Vec<_> = corpus_samples
+            .iter()
+            .filter_map(|&(path, body)| {
+                Path::new(path)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+                    .then_some(body)
+            })
+            .collect();
+        if rust_samples.is_empty() {
             return playbook;
         }
-        let facets = detect_rust_content_facets(corpus_samples);
+        let facets = detect_rust_content_facets(&rust_samples);
         for facet in facets {
             playbook.active_facets.push(facet.id.clone());
             playbook.checklist.push_str(&format!(
@@ -494,17 +530,34 @@ pub fn detect_rust_content_facets(samples: &[&str]) -> Vec<PlaybookFacet> {
 /// Matching is case-insensitive on ASCII path characters and normalizes path separators to `/`.
 // trace:STORY-3076 | ai:antigravity
 pub fn glob_matches(pattern: &str, candidate: &str) -> bool {
-    let norm_candidate = candidate.replace('\\', "/").to_ascii_lowercase();
-    for expanded in expand_braces(pattern) {
-        let norm_pat = expanded.replace('\\', "/").to_ascii_lowercase();
-        let regex_str = glob_to_regex(&norm_pat);
-        if let Ok(re) = Regex::new(&regex_str) {
-            if re.is_match(&norm_candidate) {
-                return true;
-            }
+    CompiledGlob::new(pattern).is_ok_and(|glob| glob.matches(candidate))
+}
+
+// trace:TASK-3872 | ai:codex
+#[derive(Debug, Clone)]
+pub struct CompiledGlob(Regex);
+
+#[cfg(test)]
+thread_local! { static GLOB_COMPILES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
+impl CompiledGlob {
+    fn new(pattern: &str) -> anyhow::Result<Self> {
+        #[cfg(test)]
+        GLOB_COMPILES.set(GLOB_COMPILES.get() + 1);
+        let alternatives = expand_braces(pattern)
+            .into_iter()
+            .map(|pat| glob_to_regex(&pat.replace('\\', "/").to_ascii_lowercase()))
+            .collect::<Vec<_>>();
+        if alternatives.is_empty() {
+            anyhow::bail!("brace expansion exceeds compilation limits");
         }
+        Ok(Self(Regex::new(&alternatives.join("|"))?))
     }
-    false
+
+    fn matches(&self, candidate: &str) -> bool {
+        self.0
+            .is_match(&candidate.replace('\\', "/").to_ascii_lowercase())
+    }
 }
 
 fn expand_braces(pattern: &str) -> Vec<String> {
@@ -517,6 +570,15 @@ fn expand_braces(pattern: &str) -> Vec<String> {
     let close = open + rel_close;
     let prefix = &pattern[..open];
     let suffix = &pattern[close + 1..];
+    let count = pattern[open + 1..close].split(',').count();
+    if count > 256
+        || (prefix.len() + suffix.len())
+            .saturating_mul(count)
+            .saturating_add(close - open)
+            > 1024 * 1024
+    {
+        return Vec::new();
+    }
     pattern[open + 1..close]
         .split(',')
         .map(|alt| format!("{prefix}{}{suffix}", alt.trim()))
@@ -566,6 +628,28 @@ pub fn estimate_file_tokens(patch_bytes: usize, additions: usize, deletions: usi
 pub fn classify_exclusion(
     entry: &RawDiffEntry,
     user_excludes: &[String],
+) -> anyhow::Result<Option<ExclusionReason>> {
+    Ok(classify_compiled(
+        entry,
+        &compile_exclusions(user_excludes)?,
+    ))
+}
+
+pub fn compile_exclusions(patterns: &[String]) -> anyhow::Result<Vec<(&str, CompiledGlob)>> {
+    patterns
+        .iter()
+        .map(|p| {
+            Ok((
+                p.as_str(),
+                CompiledGlob::new(p).with_context(|| format!("invalid exclusion pattern {p:?}"))?,
+            ))
+        })
+        .collect()
+}
+
+pub fn classify_compiled(
+    entry: &RawDiffEntry,
+    user_excludes: &[(&str, CompiledGlob)],
 ) -> Option<ExclusionReason> {
     if entry.is_binary {
         return Some(ExclusionReason::BinaryFile);
@@ -580,7 +664,10 @@ pub fn classify_exclusion(
         .find_map(|path| classify_path_exclusion(path, user_excludes))
 }
 
-fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<ExclusionReason> {
+fn classify_path_exclusion(
+    path: &str,
+    user_excludes: &[(&str, CompiledGlob)],
+) -> Option<ExclusionReason> {
     let norm = path.replace('\\', "/");
     let file_name = Path::new(&norm)
         .file_name()
@@ -623,13 +710,24 @@ fn classify_path_exclusion(path: &str, user_excludes: &[String]) -> Option<Exclu
     }
 
     // Check user/project configured exclusion patterns.
-    for pat in user_excludes {
-        if glob_matches(pat, &norm) {
-            return Some(ExclusionReason::UserExcludedPattern(pat.clone()));
+    for (pat, glob) in user_excludes {
+        if glob.matches(&norm) {
+            return Some(ExclusionReason::UserExcludedPattern((*pat).to_owned()));
         }
     }
 
     None
+}
+
+/// True when `path` (repository-relative, `/` or `\` separated) names a
+/// credential file or lies under a credential directory, at the repository
+/// root or nested at any depth. Such paths are never read into a review
+/// prompt, and findings that cite them are refused.
+// trace:TASK-3320 | ai:claude
+pub fn is_credential_path(path: &str) -> bool {
+    let norm = path.replace('\\', "/");
+    let file_name = norm.rsplit('/').next().unwrap_or(&norm);
+    is_secret_sensitive_path(&norm, file_name)
 }
 
 fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
@@ -639,15 +737,54 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
         || lower_name.ends_with(".pem")
         || lower_name.ends_with(".key")
         || lower_name.ends_with(".p12")
-        || lower_name == "id_rsa"
-        || lower_name == "id_ed25519"
-        || lower_name == "credentials.json"
+        || lower_name.ends_with(".pfx")
+        || matches!(
+            lower_name.as_str(),
+            "id_rsa"
+                | "id_dsa"
+                | "id_ecdsa"
+                | "id_ed25519"
+                | "credentials.json"
+                | ".netrc"
+                | "_netrc"
+                | ".git-credentials"
+                | ".pgpass"
+                | ".pypirc"
+                // trace:TASK-3914 | ai:claude
+                | ".npmrc"
+                | ".vault-token"
+                | ".terraformrc"
+                | "terraform.rc"
+                | ".dockercfg"
+        )
     {
         return true;
     }
-    norm_path
+    // trace:TASK-3320 | ai:claude
+    // Component matching, ASCII case-insensitive (a case-insensitive checkout
+    // resolves `.AWS/credentials` to the same directory as `.aws/credentials`).
+    let parts: Vec<String> = norm_path
         .split('/')
-        .any(|part| matches!(part, ".aws" | ".ssh"))
+        .map(|part| part.to_ascii_lowercase())
+        .collect();
+    parts
+        .iter()
+        .any(|part| matches!(part.as_str(), ".aws" | ".ssh" | ".gnupg" | ".azure"))
+        || parts.windows(2).any(|w| {
+            matches!(
+                (w[0].as_str(), w[1].as_str()),
+                (".config", "gcloud")
+                    | (".config", "gh")
+                    | (".docker", "config.json")
+                    | (".kube", "config")
+                    // trace:TASK-3914 | ai:claude
+                    | (".config", "hub")
+                    | (".cargo", "credentials")
+                    | (".cargo", "credentials.toml")
+                    | (".terraform.d", "credentials.tfrc.json")
+                    | (".gem", "credentials")
+            )
+        })
 }
 
 /// Classify raw diff entries into reviewable and excluded lists, resolving each
@@ -658,11 +795,28 @@ pub fn classify_diff_inventory<F>(
     registry: &PlaybookRegistry,
     user_excludes: &[String],
     token_cap: usize,
-    mut trace_detector: F,
-) -> ClassifiedInventory
+    trace_detector: F,
+) -> anyhow::Result<ClassifiedInventory>
 where
     F: FnMut(&str) -> bool,
 {
+    let excludes = compile_exclusions(user_excludes)?;
+    Ok(classify_with_exclusions(
+        entries,
+        registry,
+        &excludes,
+        token_cap,
+        trace_detector,
+    ))
+}
+
+pub fn classify_with_exclusions(
+    entries: &[RawDiffEntry],
+    registry: &PlaybookRegistry,
+    excludes: &[(&str, CompiledGlob)],
+    token_cap: usize,
+    mut trace_detector: impl FnMut(&str) -> bool,
+) -> ClassifiedInventory {
     let mut reviewable_files = Vec::new();
     let mut excluded_files = Vec::new();
 
@@ -681,7 +835,7 @@ where
     for entry in &sorted_entries {
         let estimated_tokens =
             estimate_file_tokens(entry.patch_bytes, entry.additions, entry.deletions);
-        let reason = classify_exclusion(entry, user_excludes)
+        let reason = classify_compiled(entry, excludes)
             .map(|r| r.label())
             .or_else(|| {
                 (estimated_tokens > token_cap).then(|| {
@@ -732,15 +886,13 @@ pub struct ReviewBatch {
 
 /// Normalize a file stem so implementation files and their sibling/companion test
 /// files (`foo.rs` + `foo_test.rs` + `foo_tests.rs` + `foo.test.ts`) share a stem key.
-/// Generic entry-point stems (`lib`, `mod`, `main`, `index`) are qualified with their
-/// parent directory so unrelated crates (`aida-core/src/lib.rs` vs `aida-cli-lib/src/lib.rs`)
-/// are not erroneously paired together.
+/// Keep repository directories case-sensitive when identifying companions.
+// trace:TASK-3880 | ai:codex
 pub fn canonical_module_stem(path: &str) -> String {
-    let norm = path.replace('\\', "/");
-    let file_name = Path::new(&norm)
+    let file_name = Path::new(path)
         .file_name()
         .and_then(|s| s.to_str())
-        .unwrap_or(&norm)
+        .unwrap_or(path)
         .to_ascii_lowercase();
 
     let without_ext = match file_name.rfind('.') {
@@ -765,21 +917,15 @@ pub fn canonical_module_stem(path: &str) -> String {
         }
     }
 
-    if matches!(core_stem, "lib" | "mod" | "main" | "index") {
-        let parent_dir = Path::new(&norm)
-            .parent()
-            .map(|p| p.to_string_lossy().to_ascii_lowercase())
-            .unwrap_or_default();
-        if !parent_dir.is_empty() {
-            return format!("{parent_dir}/{core_stem}");
-        }
+    let mut dir = Path::new(path).parent().unwrap_or(Path::new(""));
+    if dir.ends_with("tests") || dir.ends_with("test") {
+        dir = dir.parent().unwrap_or(dir);
     }
-
-    core_stem.to_string()
+    dir.join(core_stem).to_string_lossy().into_owned()
 }
 
 /// Bundle reviewable files into semantic, token-bounded batches:
-/// 1. Files sharing a canonical module stem (e.g. `foo.rs` and `tests/foo_test.rs`)
+/// 1. Files sharing a canonical module stem (e.g. `foo.rs` and `foo_test.rs`)
 ///    are paired first so implementation and test changes are reviewed together.
 /// 2. Unpaired files are grouped by shared `playbook_id`, packing into batches
 ///    that respect `max_tokens_per_batch` and `max_files_per_batch`.
@@ -802,11 +948,20 @@ pub fn bundle_review_batches(
 
     // Group by canonical module stem first to detect source+test companions.
     let mut by_stem: BTreeMap<String, Vec<&ReviewableFile>> = BTreeMap::new();
+    let keys: BTreeSet<_> = files
+        .iter()
+        .map(|f| canonical_module_stem(&f.path))
+        .collect();
     for f in files {
-        by_stem
-            .entry(canonical_module_stem(&f.path))
-            .or_default()
-            .push(f);
+        let mut key = canonical_module_stem(&f.path);
+        if matches!(
+            Path::new(&f.path).parent().and_then(Path::to_str),
+            Some("tests" | "test")
+        ) && keys.contains(&format!("src/{key}"))
+        {
+            key = format!("src/{key}");
+        }
+        by_stem.entry(key).or_default().push(f);
     }
 
     let mut raw_batches: Vec<(String, Vec<&ReviewableFile>)> = Vec::new();
@@ -834,21 +989,27 @@ pub fn bundle_review_batches(
     for (playbook_id, group) in unpaired_by_playbook {
         let mut current: Vec<&ReviewableFile> = Vec::new();
         let mut current_tokens = 0usize;
+        let mut current_stems = BTreeMap::new();
         let mut part = 1usize;
 
         for f in group {
             let would_exceed_files = current.len() >= file_cap;
             let would_exceed_tokens = !current.is_empty()
                 && f.estimated_tokens > token_cap.saturating_sub(current_tokens);
-            if would_exceed_files || would_exceed_tokens {
+            let key = canonical_module_stem(&f.path);
+            let (dir, stem) = key.rsplit_once('/').unwrap_or(("", &key));
+            let other_directory = current_stems.get(stem).is_some_and(|seen| seen != dir);
+            if would_exceed_files || would_exceed_tokens || other_directory {
                 raw_batches.push((
                     format!("playbook:{playbook_id}#{}", part),
                     std::mem::take(&mut current),
                 ));
                 current_tokens = 0;
+                current_stems.clear();
                 part += 1;
             }
             current_tokens = current_tokens.saturating_add(f.estimated_tokens);
+            current_stems.insert(stem.to_owned(), dir.to_owned());
             current.push(f);
         }
         if !current.is_empty() {
@@ -1020,7 +1181,7 @@ pub fn anchor_snippet_lines(
     snippet: &str,
     hint_line: Option<usize>,
 ) -> Option<AnchoredSpan> {
-    let snippet_trimmed = snippet.trim_matches('\n').trim_matches('\r');
+    let snippet_trimmed = snippet.trim_matches(['\r', '\n']);
     if snippet_trimmed.trim().is_empty() {
         return None;
     }
@@ -1032,17 +1193,7 @@ pub fn anchor_snippet_lines(
     }
 
     // Pass 1: exact line-by-line match.
-    let mut exact_candidates = Vec::new();
-    let window = needle_lines.len();
-    for start_idx in 0..=(file_lines.len() - window) {
-        let matches_exact = (0..window).all(|offset| {
-            file_lines[start_idx + offset].trim_end_matches('\r')
-                == needle_lines[offset].trim_end_matches('\r')
-        });
-        if matches_exact {
-            exact_candidates.push((start_idx + 1, start_idx + window));
-        }
-    }
+    let exact_candidates = matching_spans(&needle_lines, &file_lines, |s| s.trim_end_matches('\r'));
 
     if let Some((start_line, end_line)) = pick_closest_span(&exact_candidates, hint_line) {
         return Some(AnchoredSpan {
@@ -1059,20 +1210,50 @@ pub fn anchor_snippet_lines(
         return None;
     }
 
-    let mut trimmed_candidates = Vec::new();
-    for start_idx in 0..=(file_lines.len() - window) {
-        let matches_trimmed =
-            (0..window).all(|offset| file_lines[start_idx + offset].trim() == norm_needle[offset]);
-        if matches_trimmed {
-            trimmed_candidates.push((start_idx + 1, start_idx + window));
-        }
-    }
+    let trimmed_candidates = matching_spans(&norm_needle, &file_lines, str::trim);
 
     pick_closest_span(&trimmed_candidates, hint_line).map(|(start_line, end_line)| AnchoredSpan {
         start_line,
         end_line,
         match_kind: "trimmed_whitespace".to_string(),
     })
+}
+
+// trace:TASK-3872 | ai:codex
+#[cfg(test)]
+thread_local! { static LINE_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
+fn matching_spans(
+    needle: &[&str],
+    lines: &[&str],
+    normalize: fn(&str) -> &str,
+) -> Vec<(usize, usize)> {
+    let needle: Vec<_> = needle.iter().map(|line| normalize(line)).collect();
+    let mut prefix = vec![0; needle.len()];
+    let advance = |mut n: usize, line: &str, prefix: &[usize]| {
+        let equals = |n: usize| {
+            #[cfg(test)]
+            LINE_COMPARISONS.set(LINE_COMPARISONS.get() + 1);
+            needle[n] == line
+        };
+        while n > 0 && !equals(n) {
+            n = prefix[n - 1];
+        }
+        n + usize::from(equals(n))
+    };
+    for i in 1..needle.len() {
+        prefix[i] = advance(prefix[i - 1], needle[i], &prefix);
+    }
+    let mut spans = Vec::new();
+    let mut matched = 0;
+    for (i, line) in lines.iter().enumerate() {
+        matched = advance(matched, normalize(line), &prefix);
+        if matched == needle.len() {
+            spans.push((i + 2 - matched, i + 1));
+            matched = prefix[matched - 1];
+        }
+    }
+    spans
 }
 
 fn pick_closest_span(
@@ -1182,11 +1363,12 @@ pub struct RawReviewFinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_line: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_span: Option<AnchoredSpan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor_status: Option<String>,
 }
 
-/// Anchor a batch of findings against a file-content provider, updating `start_line`,
-/// `end_line`, and `anchor_status` (`"exact"`, `"trimmed_whitespace"`, `"unanchored"`, or `"no_snippet"`).
+/// Anchor a batch of findings against a file-content provider, updating `resolved_span` and `anchor_status` (`"exact"`, `"trimmed_whitespace"`, `"unanchored"`, or `"no_snippet"`).
 // trace:STORY-3076 | ai:antigravity
 pub fn anchor_findings_with<F>(
     findings: &[RawReviewFinding],
@@ -1198,12 +1380,12 @@ where
     let mut out = Vec::with_capacity(findings.len());
     for f in findings {
         let mut cloned = f.clone();
+        cloned.resolved_span = None;
         if let Some(snippet) = f.existing_code.as_deref() {
             if let Some(content) = read_file(&f.path) {
                 if let Some(span) = anchor_snippet_lines(&content, snippet, f.start_line) {
-                    cloned.start_line = Some(span.start_line);
-                    cloned.end_line = Some(span.end_line);
-                    cloned.anchor_status = Some(span.match_kind);
+                    cloned.anchor_status = Some(span.match_kind.clone());
+                    cloned.resolved_span = Some(span);
                 } else {
                     cloned.anchor_status = Some("unanchored".to_string());
                 }
@@ -1218,9 +1400,354 @@ where
     out
 }
 
+/// Convert anchored review findings into a SARIF 2.1.0 JSON document suitable for
+/// GitHub Code Scanning (`github/codeql-action/upload-sarif`).
+// trace:STORY-3120 | ai:codex
+pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Value {
+    findings_to_sarif_json_with_suppressed(findings, &[])
+}
+
+/// As [`findings_to_sarif_json`], plus `suppressed` findings, each with its
+/// justification, emitted as SARIF results carrying an `external` suppression
+/// rather than dropped. trace:STORY-3120 | ai:claude
+pub fn findings_to_sarif_json_with_suppressed(
+    findings: &[RawReviewFinding],
+    suppressed: &[(RawReviewFinding, String)],
+) -> serde_json::Value {
+    let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+    let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len());
+    let rows = (findings.iter().map(|f| (f, None)))
+        .chain(suppressed.iter().map(|(f, why)| (f, Some(why))));
+
+    for (f, justification) in rows {
+        let cat_clean = if f.category.trim().is_empty() {
+            "general"
+        } else {
+            f.category.trim()
+        };
+        let rule_id = format!("aida.review.{cat_clean}");
+        rules_map.entry(rule_id.clone()).or_insert_with(|| {
+            serde_json::json!({
+                "id": rule_id,
+                "name": format!("AidaReview{}", cat_clean),
+                "shortDescription": {
+                    "text": format!("AIDA deterministic review finding ({cat_clean})")
+                }
+            })
+        });
+
+        let level = match severity_rank(&f.severity) {
+            Some(3..=4) | None => "error",
+            Some(2) => "warning",
+            _ => "note",
+        };
+
+        let (start, end) = match &f.resolved_span {
+            Some(span) => (span.start_line, span.end_line),
+            None => (f.start_line.unwrap_or(1), f.end_line.unwrap_or(1)),
+        };
+        let start_line = start.max(1);
+        let end_line = end.max(start_line);
+
+        // Encode path bytes so reserved characters remain part of the filename.
+        let mut uri = String::new();
+        for byte in f.path.bytes() {
+            if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
+                uri.push(char::from(byte));
+            } else {
+                use std::fmt::Write;
+                write!(uri, "%{byte:02X}").unwrap();
+            }
+        }
+
+        let mut message_text = f.message.clone();
+        if let Some(suggestion) = f.suggestion_code.as_deref() {
+            if !suggestion.trim().is_empty() {
+                message_text.push_str("\n\nSuggested fix:\n");
+                message_text.push_str(suggestion.trim());
+            }
+        }
+
+        // SARIF 2.1 §3.11.5 requires doubling literal braces in message strings.
+        let message_text = message_text.replace('{', "{{").replace('}', "}}");
+        let mut result = serde_json::json!({
+            "ruleId": rule_id,
+            "level": level,
+            "message": {
+                "text": message_text
+            },
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": uri,
+                            "uriBaseId": "%SRCROOT%"
+                        },
+                        "region": {
+                            "startLine": start_line,
+                            "endLine": end_line
+                        }
+                    }
+                }
+            ]
+        });
+        if let Some(why) = justification {
+            result["suppressions"] =
+                serde_json::json!([{"kind": "external", "justification": why}]);
+        }
+        results.push(result);
+    }
+
+    let rules: Vec<serde_json::Value> = rules_map.into_values().collect();
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "aida-review-engine",
+                        "informationUri": "https://github.com/joemooney/aida",
+                        "rules": rules
+                    }
+                },
+                "originalUriBaseIds": {
+                    "%SRCROOT%": {"description": {"text": "Repository root"}}
+                },
+                "results": results
+            }
+        ]
+    })
+}
+
+/// Envelope parsed from an automated batch review runner's stdout.
+#[derive(Deserialize)]
+struct BatchRunnerOutput {
+    findings: Vec<RawReviewFinding>,
+    #[serde(default)]
+    files: Vec<FileCoverageEntry>,
+}
+
+/// Parse JSON output from an automated batch review runner (`claude --print` or
+/// `AIDA_REVIEW_RUNNER_CMD`). Accepts either a `{ "findings": [...], "files": [...] }`
+/// object or a bare `[ RawReviewFinding, ... ]` array, stripping surrounding markdown
+/// code fences if present.
+// trace:STORY-3120 | ai:codex
+pub fn parse_runner_findings_json(
+    raw: &str,
+) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String> {
+    let raw = raw.trim();
+    let trimmed = if let Some(fenced) = raw.strip_prefix("```") {
+        let (language, body) = fenced.split_once('\n').ok_or("missing fenced JSON body")?;
+        if !language.trim().is_empty() && !language.trim().eq_ignore_ascii_case("json") {
+            return Err("expected a JSON code fence".into());
+        }
+        body.trim_end()
+            .strip_suffix("```")
+            .ok_or("unterminated JSON fence")?
+            .trim()
+    } else {
+        raw
+    };
+    if trimmed.starts_with('[') {
+        let findings: Vec<RawReviewFinding> = serde_json::from_str(trimmed)
+            .map_err(|e| format!("failed to parse runner findings array: {e}"))?;
+        return Ok((findings, CoverageLedger::default()));
+    }
+    let env: BatchRunnerOutput = serde_json::from_str(trimmed)
+        .map_err(|e| format!("failed to parse runner output object: {e}"))?;
+    Ok((env.findings, CoverageLedger { files: env.files }))
+}
+
+/// Numeric rank for a review finding severity (`critical`=4, `high`=3, `medium`=2, `low`=1).
+// trace:STORY-3120 | ai:codex
+pub fn severity_rank(severity: &str) -> Option<u8> {
+    match severity.trim().to_ascii_lowercase().as_str() {
+        "critical" => Some(4),
+        "high" | "error" => Some(3),
+        "medium" | "warning" | "warn" => Some(2),
+        "low" | "info" | "note" => Some(1),
+        _ => None,
+    }
+}
+
+/// Return all findings whose severity meets or exceeds `threshold` (`critical`, `high`, `medium`, `low`).
+// trace:STORY-3120 | ai:codex
+pub fn findings_exceeding_threshold<'a>(
+    findings: &'a [RawReviewFinding],
+    threshold: &str,
+) -> Result<Vec<&'a RawReviewFinding>, String> {
+    let min_rank = severity_rank(threshold).ok_or_else(|| {
+        format!(
+            "invalid --fail-on severity `{threshold}` (expected `critical`, `high`, `medium`, or `low`)"
+        )
+    })?;
+    Ok(findings
+        .iter()
+        .filter(|f| severity_rank(&f.severity).unwrap_or(4) >= min_rank)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-3120 | ai:codex
+    #[test]
+    fn s1_runner_findings_sarif_and_threshold() {
+        let raw_runner = r#"```json
+{
+  "findings": [
+    {
+      "path": "src/auth.rs",
+      "severity": "high",
+      "category": "fail-open",
+      "message": "Swallowed verification error allows unauthenticated access.",
+      "existing_code": "let _ = verify_token(tok);",
+      "suggestion_code": "verify_token(tok)?;",
+      "start_line": 42,
+      "end_line": 42
+    }
+  ],
+  "files": [
+    { "path": "src/auth.rs", "status": "reviewed" }
+  ]
+}
+```"#;
+
+        let (findings, ledger) =
+            parse_runner_findings_json(raw_runner).expect("runner JSON should parse");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(ledger.files.len(), 1);
+        assert_eq!(findings[0].path, "src/auth.rs");
+
+        let sarif = findings_to_sarif_json(&findings);
+        assert_eq!(sarif["version"], "2.1.0");
+        let result0 = &sarif["runs"][0]["results"][0];
+        assert_eq!(result0["ruleId"], "aida.review.fail-open");
+        assert_eq!(result0["level"], "error");
+        assert_eq!(
+            result0["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/auth.rs"
+        );
+        assert_eq!(
+            result0["locations"][0]["physicalLocation"]["region"]["startLine"],
+            42
+        );
+
+        let exceeded = findings_exceeding_threshold(&findings, "high").unwrap();
+        assert_eq!(exceeded.len(), 1);
+        assert!(findings_exceeding_threshold(&findings, "critical")
+            .unwrap()
+            .is_empty());
+        let mut moved = findings[0].clone();
+        moved.severity = " ERROR ".into();
+        moved.path = r"src/a\b #%.rs".into();
+        moved.message = "use {0}".into();
+        moved.suggestion_code = Some("if ok {}".into());
+        moved.resolved_span = Some(AnchoredSpan {
+            start_line: 8,
+            end_line: 10,
+            match_kind: "exact".into(),
+        });
+        let both = [findings[0].clone(), moved];
+        let run = &findings_to_sarif_json(&both)["runs"][0];
+        assert_eq!(run["tool"]["driver"]["rules"].as_array().unwrap().len(), 1);
+        let location = &run["results"][1]["locations"][0]["physicalLocation"];
+        assert_eq!(
+            location["region"],
+            serde_json::json!({"startLine":8,"endLine":10})
+        );
+        assert_eq!(location["artifactLocation"]["uri"], "src/a%5Cb%20%23%25.rs");
+        let base_id = location["artifactLocation"]["uriBaseId"].as_str().unwrap();
+        assert_eq!(base_id, "%SRCROOT%");
+        assert!(run["originalUriBaseIds"][base_id].is_object());
+        assert_eq!(
+            run["results"][1]["message"]["text"],
+            "use {{0}}\n\nSuggested fix:\nif ok {{}}"
+        );
+        assert_eq!(
+            findings_exceeding_threshold(&both, " HIGH ").unwrap().len(),
+            2
+        );
+        assert!(findings_exceeding_threshold(&both, "other").is_err());
+        for severity in ["blocker", ""] {
+            let mut unknown = findings[0].clone();
+            unknown.severity = severity.into();
+            let report = findings_to_sarif_json(std::slice::from_ref(&unknown));
+            assert_eq!(report["runs"][0]["results"][0]["level"], "error");
+            assert_eq!(
+                findings_exceeding_threshold(&[unknown], "critical")
+                    .unwrap()
+                    .len(),
+                1
+            );
+        }
+        assert!(parse_runner_findings_json("[]").unwrap().0.is_empty());
+        assert!(parse_runner_findings_json(r#"{"error":"runner failed"}"#).is_err());
+    }
+
+    // trace:TASK-3872 | ai:codex
+    #[test]
+    fn h2b_compiled_globs_bound_expansion() {
+        let rules = [String::from("*{*,x}/FoO")];
+        let registry = PlaybookRegistry::default();
+        let compiled = compile_exclusions(&rules).unwrap();
+        let before = GLOB_COMPILES.get();
+        for path in ["one.rs", "two.rs"] {
+            registry.resolve(path);
+        }
+        assert!(compiled[0].1.matches(r"a\b\foo"));
+        assert!(compiled[0].1.matches("foo"));
+        assert_eq!(GLOB_COMPILES.get(), before);
+        let invalid = format!("{{{}z}}", "x,".repeat(256));
+        let error = classify_diff_inventory(
+            &diff_entries(&["ordinary.rs"], false),
+            &registry,
+            std::slice::from_ref(&invalid),
+            usize::MAX,
+            |_| panic!("classified invalid inventory"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains(&invalid));
+    }
+
+    #[test]
+    fn h2b_crlf_padding() {
+        let span = anchor_snippet_lines("a\nb", "\r\n\r\na\r\nb\r\n\r\n", None).unwrap();
+        assert_eq!(
+            (span.start_line, span.end_line, span.match_kind.as_str()),
+            (1, 2, "exact")
+        );
+    }
+
+    #[test]
+    fn h2b_resolved_span_preserves_hints() {
+        let finding = serde_json::from_value(serde_json::json!({"path":"a","severity":"low","category":"c","message":"m","existing_code":"x","start_line":9,"end_line":10})).unwrap();
+        let anchored = anchor_findings_with(&[finding], |_| Some("x\nx".into()));
+        assert_eq!(
+            (anchored[0].start_line, anchored[0].end_line),
+            (Some(9), Some(10))
+        );
+        assert_eq!(anchored[0].resolved_span.as_ref().unwrap().start_line, 2);
+        assert!(anchor_findings_with(&anchored, |_| None)[0]
+            .resolved_span
+            .is_none());
+    }
+
+    #[test]
+    fn h2b_linear_repeated_prefix() {
+        LINE_COMPARISONS.set(0);
+        let file = format!("{}b", "a\n".repeat(32000));
+        let snippet = format!("{}b", "a\n".repeat(16000));
+        assert_eq!(
+            anchor_snippet_lines(&file, &snippet, None)
+                .unwrap()
+                .start_line,
+            16001
+        );
+        assert!((1..=3 * (32001 + 16001)).contains(&LINE_COMPARISONS.get()));
+    }
 
     // trace:TASK-3867 | ai:codex
     fn diff_entries(paths: &[&str], binary: bool) -> Vec<RawDiffEntry> {
@@ -1240,12 +1767,16 @@ mod tests {
 
     fn inventory(paths: &[&str], binary: bool) -> ClassifiedInventory {
         let entries = diff_entries(paths, binary);
-        classify_diff_inventory(&entries, &Default::default(), &[], usize::MAX, |_| false)
+        classify_diff_inventory(&entries, &Default::default(), &[], usize::MAX, |_| false).unwrap()
     }
 
     #[test]
     fn h2a_digest_frames_paths() {
         let pair = inventory(&["a", "b"], true).inventory_sha256;
+        assert_eq!(
+            pair,
+            "820722b38f0f59d7c5bdbe39d59476b82e641280521335f50b4b359fd5f024e5"
+        );
         assert_eq!(pair, inventory(&["b", "a"], true).inventory_sha256);
         assert_ne!(
             pair,
@@ -1299,7 +1830,8 @@ mod tests {
         assert_eq!(bundle_review_batches(&files, 32, 2).unwrap().len(), 2);
         let mut entries = diff_entries(&["large.rs", "small.rs"], false);
         entries[0].additions = 3;
-        let inv = classify_diff_inventory(&entries, &Default::default(), &[], 32, |_| false);
+        let inv =
+            classify_diff_inventory(&entries, &Default::default(), &[], 32, |_| false).unwrap();
         assert_eq!(inv.excluded_files.len(), 1);
         assert_eq!(inv.excluded_files[0].path, "large.rs");
         assert_eq!(
@@ -1339,6 +1871,134 @@ mod tests {
         }
     }
 
+    // trace:TASK-3320 | ai:claude
+    #[test]
+    fn root_and_nested_credential_paths_are_excluded() {
+        for rel in [
+            ".aws/credentials",
+            ".ssh/config",
+            ".gnupg/pubring.kbx",
+            ".azure/accessTokens.json",
+            ".config/gcloud/application_default_credentials.json",
+            ".config/gh/hosts.yml",
+            ".docker/config.json",
+            ".kube/config",
+            ".netrc",
+            "_netrc",
+            ".git-credentials",
+            ".pgpass",
+            ".pypirc",
+            ".AWS/credentials",
+            ".Docker/Config.json",
+        ] {
+            for prefix in ["", "nested/", "a/b/"] {
+                let path = format!("{prefix}{rel}");
+                assert_eq!(
+                    classify_path_exclusion(&path, &[]),
+                    Some(ExclusionReason::SecretSensitivePath),
+                    "{path}"
+                );
+                assert!(is_credential_path(&path), "{path}");
+                assert!(is_credential_path(&path.replace('/', "\\")), "{path}");
+            }
+        }
+        for path in [
+            ".docker/Dockerfile",
+            ".config/nvim/init.lua",
+            "gcloud/setup.md",
+            "src/netrc.rs",
+            ".kube-docs/config",
+        ] {
+            assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
+            assert!(!is_credential_path(path), "{path}");
+        }
+    }
+
+    // trace:TASK-3914 | ai:claude
+    fn assert_credential_at_every_depth(rel: &str) {
+        for prefix in ["", "nested/", "a/b/"] {
+            for path in [
+                format!("{prefix}{rel}"),
+                format!("{prefix}{}", rel.to_ascii_uppercase()),
+            ] {
+                assert_eq!(
+                    classify_path_exclusion(&path, &[]),
+                    Some(ExclusionReason::SecretSensitivePath),
+                    "{path}"
+                );
+                assert!(is_credential_path(&path), "{path}");
+                assert!(is_credential_path(&path.replace('/', "\\")), "{path}");
+            }
+        }
+    }
+
+    #[test]
+    fn credential_npmrc() {
+        assert_credential_at_every_depth(".npmrc");
+    }
+
+    #[test]
+    fn credential_cargo_credentials() {
+        assert_credential_at_every_depth(".cargo/credentials");
+    }
+
+    #[test]
+    fn credential_cargo_credentials_toml() {
+        assert_credential_at_every_depth(".cargo/credentials.toml");
+    }
+
+    #[test]
+    fn credential_vault_token() {
+        assert_credential_at_every_depth(".vault-token");
+    }
+
+    #[test]
+    fn credential_terraformrc() {
+        assert_credential_at_every_depth(".terraformrc");
+    }
+
+    #[test]
+    fn credential_terraform_rc() {
+        assert_credential_at_every_depth("terraform.rc");
+    }
+
+    #[test]
+    fn credential_terraform_d_tfrc() {
+        assert_credential_at_every_depth(".terraform.d/credentials.tfrc.json");
+    }
+
+    #[test]
+    fn credential_gem_credentials() {
+        assert_credential_at_every_depth(".gem/credentials");
+    }
+
+    #[test]
+    fn credential_dockercfg() {
+        assert_credential_at_every_depth(".dockercfg");
+    }
+
+    #[test]
+    fn credential_config_hub() {
+        assert_credential_at_every_depth(".config/hub");
+    }
+
+    #[test]
+    fn credential_pattern_neighbours_stay_reviewable() {
+        for path in [
+            ".cargo/config",
+            "nested/.cargo/env",
+            "docs/npmrc.md",
+            "terraform/main.tf",
+            ".terraform.d/plugins/x",
+            ".gem/specs/x.gemspec",
+            ".config/hubble.toml",
+            "vault-token.rs",
+        ] {
+            assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
+            assert!(!is_credential_path(path), "{path}");
+        }
+    }
+
     #[test]
     fn rename_excludes_either_path() {
         for (old, new) in [(".ssh/config", "public"), ("public", ".ssh/config")] {
@@ -1352,7 +2012,7 @@ mod tests {
                 patch_bytes: 0,
             };
             assert_eq!(
-                classify_exclusion(&entry, &[]),
+                classify_exclusion(&entry, &[]).unwrap(),
                 Some(ExclusionReason::SecretSensitivePath)
             );
         }
@@ -1465,7 +2125,8 @@ mod tests {
         let inv =
             classify_diff_inventory(&entries, &registry, &user_excludes, usize::MAX, |path| {
                 path.ends_with("review_engine.rs")
-            });
+            })
+            .unwrap();
 
         assert_eq!(inv.reviewable_files.len(), 1);
         assert_eq!(
@@ -1509,13 +2170,13 @@ mod tests {
                 merge_builtin: true,
             },
             CustomPathRule {
-                id: "proto_custom".to_string(),
+                id: "rust".to_string(),
                 pattern: "**/*.proto".to_string(),
                 checklist: "- Ensure field numbers are never reused.".to_string(),
                 merge_builtin: false,
             },
         ];
-        let reg = PlaybookRegistry::new(custom);
+        let reg = PlaybookRegistry::new(custom).unwrap();
 
         let merged = reg.resolve("aida-cli-lib/src/gate/review_verdict.rs");
         assert_eq!(merged.id, "rust+gate_strict");
@@ -1525,7 +2186,11 @@ mod tests {
             .contains("Verify gate authority never fails open."));
 
         let replaced = reg.resolve("proto/aida.proto");
-        assert_eq!(replaced.id, "proto_custom");
+        let unrelated = reg.resolve("other.rs");
+        assert_ne!(replaced.id, unrelated.id);
+        assert_eq!(replaced.active_facets, ["rust"]);
+        assert!(unrelated.active_facets.is_empty());
+        assert!(!unrelated.checklist.contains("field numbers"));
         assert_eq!(
             replaced.checklist,
             "- Ensure field numbers are never reused."
@@ -1540,7 +2205,10 @@ mod tests {
         // Pure arithmetic file triggers zero conditional facets
         let pure_enriched = reg.enrich_with_content_facets(
             base.clone(),
-            &["pub fn add(a: i32, b: i32) -> i32 { a + b }"],
+            &[(
+                "pure_math.rs",
+                "pub fn add(a: i32, b: i32) -> i32 { a + b }",
+            )],
         );
         assert!(pure_enriched.active_facets.is_empty());
         assert!(!pure_enriched.checklist.contains("Conditional Facet:"));
@@ -1553,7 +2221,7 @@ mod tests {
                 unsafe { libc::getpid(); }
             }
         ";
-        let enriched = reg.enrich_with_content_facets(base, &[io_unsafe_sample]);
+        let enriched = reg.enrich_with_content_facets(base, &[("src/run.rs", io_unsafe_sample)]);
         assert_eq!(
             enriched.active_facets,
             vec![
@@ -1565,6 +2233,39 @@ mod tests {
         assert!(enriched.checklist.contains("rust_io_subprocess_security"));
         assert!(!enriched.checklist.contains("rust_macros"));
         assert!(!enriched.checklist.contains("rust_async_concurrency"));
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-1364.AC2 | ai:codex
+    #[test]
+    fn h2c_rust_facets_follow_sample_paths() {
+        let reg = PlaybookRegistry::default();
+        let mut pb = reg.resolve("a.rs");
+        pb.id = "custom".into();
+        let samples = [("a.Rs", "unsafe {"), ("a.py", "Command::new(")];
+        let enriched = reg.enrich_with_content_facets(pb.clone(), &samples);
+        assert_eq!(enriched.active_facets, ["rust_unsafe_ffi"]);
+        pb.id = "rust-custom".into();
+        assert!(reg
+            .enrich_with_content_facets(pb, &samples[1..])
+            .active_facets
+            .is_empty());
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-1364.AC1 | ai:codex
+    #[test]
+    fn h2c_equal_stems_in_different_directories_stay_separate() {
+        assert_eq!(
+            canonical_module_stem("src/foo.rs"),
+            canonical_module_stem("src/tests/foo_tests.rs")
+        );
+        let files = inventory(
+            &["A/src/file.rs", "a/src/file_test.rs", "a/tests/file.rs"],
+            false,
+        )
+        .reviewable_files;
+        let batches = bundle_review_batches(&files, usize::MAX, 10).unwrap();
+        assert_eq!(batches.len(), 3);
+        assert!(batches.iter().all(|batch| batch.files.len() == 1));
     }
 
     #[test]
@@ -1612,11 +2313,11 @@ mod tests {
             },
         ];
 
-        // Budget 2000 tokens: parser.rs + parser_test.rs (1400 tokens) pair into `module:parser`,
+        // Budget 2000 tokens: parser.rs + parser_test.rs (1400 tokens) pair into `module:src/parser`,
         // while alpha.rs (1500) and beta.rs (1500) split into two separate playbook batches.
         let batches = bundle_review_batches(&files, 2000, 4).unwrap();
         assert_eq!(batches.len(), 3);
-        assert_eq!(batches[0].label, "module:parser");
+        assert_eq!(batches[0].label, "module:src/parser");
         assert_eq!(
             batches[0].files,
             vec![

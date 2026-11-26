@@ -421,12 +421,23 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
+**Conflict repair reservations.** Find the entry with `aida doctor check repair-reservations`. At a direct human terminal, run `aida doctor heal repair-reservations --id <id> --attest "<reason>"`. Inspect the lease, tree path and informational unpushed HEAD count, then type the full entry ID. A live or unverifiable recorded owner blocks release. The journal records the effective user ID, time and reason alongside the release. A moved tree can be released without a worker receipt.
+<!-- trace:BUG-2722 | ai:codex -->
+
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared
 claims whose local session record has disappeared. On the holder's host, an
 expired non-process-backed claim is eligible only when its creator is provably
 dead and the exact headless worker record is stamped exited with a dead worker.
 Live processes, foreign PID namespaces and missing or mismatched worker records
-retain the claim. `aida doctor heal stale-leases --id shared-<claim-id> --yes`
+retain the claim. A claim with no lease binding (`lease=unbound`) records only
+the short-lived command that wrote it, so its dead creator proves little. It is
+eligible only when its heartbeat is older than 24 hours (or three TTLs, if
+longer), its clone records no session lease, lane record or unended agent
+session for that claim or scope, and the clone is absent or has no uncommitted
+work. An admission refusal names the heal command only when the heal would
+accept the claim; otherwise it says why the claim is retained.
+<!-- trace:BUG-2773 | ai:claude -->
+`aida doctor heal stale-leases --id shared-<claim-id> --yes`
 heals one reported generation; omitting `--id` uses the ordinary category-wide
 heal. Recovery saves dirty work first, rechecks the claim under the store lock,
 and releases only that shared claim, retaining local leases and worktrees.
@@ -1072,6 +1083,25 @@ the reason, the operator and the time; `.aida/events.jsonl` keeps the record.
 Use the same host network namespace for all managed launchers on the machine.
 Let existing startup reservations drain and stop queued launch commands before
 changing the host settings. New launch commands read the updated policy.
+
+<!-- trace:TASK-3911 | ai:claude -->
+The same `[lanes]` table also limits delegated lane jobs (`aida lane job run`
+and the host fast gate) when each job starts. Every key is optional; when a
+key is unset, jobs start the same way as before:
+
+```toml
+[lanes]
+max_compile_concurrency = 4      # lane jobs compiling at once on this host
+cargo_build_jobs = 4             # CARGO_BUILD_JOBS for each lane job
+min_job_memory_headroom_gib = 8  # wait for this much RAM + free swap
+```
+
+A job that finds every compile slot in use, or memory below the job floor,
+waits in its lane and starts once a slot frees up or memory recovers. A job
+waiting on memory gives its slot back while it waits. When a floor is set and
+memory cannot be measured, the job is refused. Each job reads the file
+when it starts, so a change applies from the next job on. For dell1, set `max_compile_concurrency` and
+`cargo_build_jobs` to four.
 
 <!-- trace:BUG-2519 | ai:codex -->
 The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working

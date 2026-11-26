@@ -338,6 +338,13 @@ struct Script {
     tested: Vec<Vec<u64>>,
     landed: Vec<Vec<u64>>,
     told: Vec<u64>,
+    /// A drain is active once this many trains have been tested.
+    drain_after: Option<usize>,
+    /// (PR, new head): the PR's live head once any train has been tested.
+    // trace:TASK-3913 | ai:claude
+    moved: Vec<(u64, String)>,
+    /// Every built train, as `test` saw it (train bodies render from it).
+    built: Vec<Built>,
 }
 
 fn prs(ms: &[Member]) -> Vec<u64> {
@@ -369,6 +376,7 @@ impl Rails for Script {
             .map(|t| {
                 let ids = prs(&t.members());
                 self.tested.push(ids.clone());
+                self.built.push(t.clone());
                 if self.infra_runs > 0 {
                     self.infra_runs -= 1;
                     return CiVerdict::InfraRed(
@@ -414,6 +422,137 @@ impl Rails for Script {
     fn ejected(&mut self, e: &Ejected) {
         self.told.push(e.pr);
     }
+    fn drained(&mut self) -> Option<String> {
+        let drained = self.drain_after.is_some_and(|n| self.tested.len() >= n);
+        drained.then(|| "advisor loops drained by joe".into())
+    }
+    fn train_id(&self, train: &Built) -> Option<u64> {
+        Some(9000 + train.cars.len() as u64)
+    }
+    fn member_head(&mut self, pr: u64) -> Option<String> {
+        let moved = self.moved.iter().find(|(p, _)| *p == pr);
+        let now = moved
+            .filter(|_| !self.tested.is_empty())
+            .map(|(_, h)| h.clone());
+        now.or_else(|| Some(ms(&[pr])[0].head.clone()))
+    }
+}
+
+/// TASK-3913 AC1-AC3: a member whose head moved after the parent train was
+/// built is dropped from the bisect half as superseded, named in the half's
+/// train body, and never tested; the remaining members are still tested.
+// trace:TASK-3913 | ai:claude
+#[test]
+fn task3913_a_bisect_half_drops_a_member_whose_head_moved() {
+    let new_head = "cd340a59".repeat(5);
+    let mut rails = Script {
+        bad: vec![2],
+        moved: vec![(2, new_head.clone())],
+        ..Script::default()
+    };
+    let out = drive(&mut rails, ms(&[1, 2, 3, 4])).unwrap();
+    assert_eq!(rails.tested[0], vec![1, 2, 3, 4]);
+    assert!(
+        rails.tested[1..].iter().all(|t| !t.contains(&2)),
+        "the superseded head is never re-tested: {:?}",
+        rails.tested
+    );
+    // [1] lands first, so [3, 4] goes stale once and is rebuilt.
+    assert_eq!(rails.tested[1..3], [vec![1], vec![3, 4]]);
+    assert_eq!(rails.landed, vec![vec![1], vec![3, 4]]);
+    assert!(out.culprits.is_empty(), "not a culprit: {:?}", out.culprits);
+    assert_eq!(prs_of(&out.ejected), vec![2]);
+    let old = short(&ms(&[2])[0].head).to_string();
+    let reason = &out.ejected[0].reason;
+    let named = format!("superseded: head moved {old} → {}", short(&new_head));
+    assert!(reason.starts_with(&named), "{reason}");
+    assert!(reason.contains("normal admission"), "{reason}");
+    assert_eq!(rails.told, vec![2]);
+    let half = rails
+        .built
+        .iter()
+        .find(|b| prs(&b.members()) == [1])
+        .unwrap();
+    let body = train_pr_body(half);
+    assert!(body.contains(&format!("#2 {named}")), "{body}");
+    // The members line stays last, naming only the tested member.
+    assert!(body.ends_with(&format!("\n{}\n", members_line(&half.cars))));
+}
+
+/// BUG-2767 AC2: a drain that starts after a red train's CI finished
+/// starts neither bisect half; its members wait for a later train.
+// trace:BUG-2767 | ai:claude
+#[test]
+fn bug2767_a_drain_blocks_the_bisect_follow_up_trains() {
+    let mut rails = Script {
+        bad: vec![2],
+        drain_after: Some(1),
+        ..Script::default()
+    };
+    let out = drive(&mut rails, ms(&[1, 2, 3, 4])).unwrap();
+    assert_eq!(
+        rails.tested,
+        vec![vec![1, 2, 3, 4]],
+        "no bisect train started"
+    );
+    assert!(out.landed.is_empty() && out.culprits.is_empty() && out.error.is_none());
+    assert_eq!(prs_of(&out.ejected), vec![1, 2, 3, 4]);
+    assert!(out.ejected[0]
+        .reason
+        .contains("no new train starts while advisor loops drained"));
+    // With no drain the same red bisects to its culprit, recorded at its head.
+    let mut rails = Script {
+        bad: vec![2],
+        ..Script::default()
+    };
+    let out = drive(&mut rails, ms(&[1, 2, 3, 4])).unwrap();
+    assert!(rails.tested.len() > 1, "bisected");
+    assert_eq!(out.culprits.len(), 1, "{:?}", out.culprits);
+    let (pr, head, train) = &out.culprits[0];
+    assert_eq!((*pr, *train), (2, Some(9001)));
+    assert_eq!(head, &ms(&[2])[0].head);
+}
+
+/// BUG-2767 AC1: a swept-in culprit is refused at the red head and admitted
+/// at a new one; naming it is the operator's recorded clearance.
+// trace:BUG-2767 | ai:claude
+#[test]
+fn bug2767_a_culprit_is_not_readmitted_at_the_same_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    culprit::record(root, 4482, "aaaa1111", Some(4609)).unwrap();
+    let opts = |prs: &'static [u64], all_ready| TrainOptions {
+        prs,
+        all_ready,
+        dry_run: false,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    };
+    let swept = opts(&[], true);
+    let why = culprit_admission(root, &swept, &member(4482, "aaaa1111", "s"))
+        .unwrap()
+        .expect("same head is refused");
+    assert!(
+        why.starts_with("held: culprit of train #4609 at aaaa111"),
+        "{why}"
+    );
+    let moved = culprit_admission(root, &swept, &member(4482, "bbbb2222", "s")).unwrap();
+    assert_eq!(moved, None, "a new head is re-admitted");
+    let named = opts(&[4482], false);
+    let cleared = culprit_admission(root, &named, &member(4482, "aaaa1111", "s")).unwrap();
+    assert_eq!(cleared, None, "naming the PR clears the hold");
+    assert_eq!(
+        culprit::hold(root, 4482, "aaaa1111"),
+        None,
+        "clearance recorded"
+    );
+}
+
+fn prs_of(ejected: &[Ejected]) -> Vec<u64> {
+    let mut prs: Vec<u64> = ejected.iter().map(|e| e.pr).collect();
+    prs.sort_unstable();
+    prs
 }
 
 fn ms(ids: &[u64]) -> Vec<Member> {
@@ -1372,6 +1511,7 @@ fn live_gate_lands_a_project_default_drain_spec_only_off_protected_paths() {
     let defaulted = || EffectiveMode {
         mode: Some(aida_core::ExecutionMode::Drain),
         source: ModeSource::ProjectDefault {
+            safe_paths: None,
             req_type: "bug".into(),
             protected: crate::gate::mandate_gates::ProtectedPaths::floor(),
         },
@@ -2992,6 +3132,7 @@ case "$*" in
   'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) if [ -f runs.json ]; then cat runs.json; else echo '{"total_count":0,"workflow_runs":[]}'; fi ;;
   'pr checks '*) cat rows.json ;;
   'api repos/{owner}/{repo}/actions/jobs/17')
     if [ -f job-denied ]; then echo 'HTTP 403' >&2; exit 1; fi
@@ -3068,6 +3209,11 @@ esac
             _ => matches!(state, TrainCiReadiness::Red(_)),
         });
     }
+    // Unreadable pinned evidence cannot turn a stale failed Build into a bisection.
+    write(dir, "runs.json", "invalid JSON");
+    let error = host.train_ci_snapshot(&change, &tip, &[]).unwrap_err();
+    assert!(error.is::<TrainCiReadError>() && error.to_string().contains("invalid JSON"));
+    std::fs::remove_file(dir.join("runs.json")).unwrap();
     // trace:BUG-2671 | ai:codex
     let mut rows: Vec<serde_json::Value> = serde_json::from_str(&rows_json(None)).unwrap();
     rows.extend([
@@ -3494,6 +3640,7 @@ case "$*" in
   'pr view '*) cat head.json ;;
   'api repos/{owner}/{repo}/branches/main/protection') cat protection.json ;;
   'api repos/{owner}/{repo}/rules/branches/main?per_page=100&page='*) echo '[]' ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) echo '{"total_count":0,"workflow_runs":[]}' ;;
   'pr checks '*) n=$(cat poll); cat "rows-$n.json" ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
@@ -6497,4 +6644,193 @@ fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
             vec!["TASK-3797"]
         );
     }
+}
+
+// trace:BUG-2723 | ai:codex
+#[test]
+fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
+    use crate::forge::tier_runs::fixture::{read, run, HEAD};
+    let fast = run(10, "fast", "cancelled");
+    let full = run(11, "full", "success");
+    let judge = |runs: &[serde_json::Value]| {
+        let selection = read(runs).unwrap();
+        // The PR rollup omitted FULL Build and retained a stale FAST failure.
+        let mut row = bug2401_row(TRAIN_CI_AGGREGATE, "fail");
+        row.run_id = Some("10".into());
+        let mut rows = vec![row];
+        super::apply_train_selection(&mut rows, &selection).unwrap();
+        let required = [TRAIN_CI_AGGREGATE.into()];
+        let cfg = Default::default();
+        let mut state = train_ci_readiness(&rows, &required, &cfg, false);
+        super::describe_train_ci_refusal(&mut state, &rows, &required, &cfg, false, &selection);
+        state
+    };
+    assert_eq!(
+        judge(&[fast.clone(), full.clone()]),
+        TrainCiReadiness::Green
+    );
+    let mut jobless = run(11, "", "cancelled");
+    jobless["fixture_tier"] = serde_json::Value::Null;
+    assert_eq!(
+        judge(&[fast.clone(), jobless.clone(), run(12, "full", "success")]),
+        TrainCiReadiness::Green
+    );
+    assert!(
+        matches!(judge(&[run(10, "full", "success"), jobless]), TrainCiReadiness::InfraRed(detail) if detail.contains("run 11 attempt 1 tier unavailable conclusion cancelled"))
+    );
+    let mut rerun = run(10, "fast", "failure");
+    rerun["run_attempt"] = 2.into();
+    assert_eq!(
+        judge(&[rerun.clone(), full.clone()]),
+        TrainCiReadiness::Green
+    );
+    assert!(
+        matches!(judge(&[rerun.clone(),run(12,"fast","cancelled")]),TrainCiReadiness::InfraRed(s) if s.contains("run 12 attempt 1 tier FAST conclusion cancelled"))
+    );
+    assert!(matches!(
+        judge(&[rerun.clone(), run(12, "fast", "in_progress")]),
+        TrainCiReadiness::Pending(_)
+    ));
+    assert!(
+        matches!(judge(&[rerun.clone(),run(12,"fast","failure")]), TrainCiReadiness::Red(reason)
+        if reason.contains("run 12 attempt 1") && !reason.contains("run 10"))
+    );
+    for cause in ["failure", "cancelled"] {
+        assert!(
+            matches!(judge(&[rerun.clone(),run(11,"full",cause)]),TrainCiReadiness::Red(s) if s.contains("run 10 attempt 2 tier FAST conclusion failure"))
+        );
+    }
+    for (field, value) in [
+        ("path", serde_json::json!("another.yml")),
+        ("workflow_id", 2.into()),
+        ("head_repository", serde_json::json!({"id":2})),
+        ("head_branch", "another".into()),
+    ] {
+        let mut other = full.clone();
+        other[field] = value;
+        assert!(
+            matches!(judge(&[rerun.clone(), other]), TrainCiReadiness::Red(_)),
+            "{field}"
+        );
+    }
+    // An untiered workflow can cancel even though one of its jobs reports failure.
+    let mut external = run(42, "", "cancelled");
+    external["path"] = ".github/workflows/audit.yml".into();
+    external["fixture_tier"] = serde_json::Value::Null;
+    let selection = read(&[external]).unwrap();
+    let mut row = bug2401_row("audit", "fail");
+    row.run_id = Some("42".into());
+    let cfg = Default::default();
+    let rows = [row];
+    let mut state = train_ci_readiness(&rows, &[], &cfg, false);
+    super::describe_train_ci_refusal(&mut state, &rows, &[], &cfg, false, &selection);
+    assert!(
+        matches!(state, TrainCiReadiness::Red(s) if s.contains("run 42 conclusion cancelled") && s.contains("supersession unavailable"))
+    );
+    let checks = crate::forge::CommitChecks {
+        sha: HEAD.into(),
+        checks: vec![crate::forge::CommitCheck {
+            name: "audit".into(),
+            outcome: crate::forge::CheckOutcome::Failed,
+            run_id: Some("42".into()),
+            workflow_id: None,
+            cancelled: false,
+            job_id: Some(123),
+            run_attempt: Some(1),
+            run_in_progress: false,
+        }],
+    };
+    assert!(
+        matches!(selection.judge_commit_checks(checks, &[]).unwrap(),
+        crate::forge::CommitCi::Failed(names) if names[0].contains("run 42 conclusion cancelled") && names[0].contains("supersession unavailable"))
+    );
+    let target = serde_json::json!({"number":1,"base":{"ref":"main"}});
+    for owners in [
+        serde_json::json!([{"number":2,"base":{"ref":"integration"}}]),
+        serde_json::json!([{"number":2,"base":{"ref":"main"}}]),
+        serde_json::json!([{"number":1,"base":{"ref":"integration"}}]),
+        serde_json::json!([target, {"number":2,"base":{"ref":"integration"}}]),
+        serde_json::json!([]),
+        serde_json::Value::Null,
+    ] {
+        let mut foreign = full.clone();
+        foreign["pull_requests"] = owners;
+        let error = read(&[rerun.clone(), foreign]).unwrap_err();
+        assert!(error.to_string().contains("not uniquely associated"));
+    }
+    let mut wrong = full;
+    wrong["head_sha"] = "b".repeat(40).into();
+    assert!(read(&[fast, wrong]).is_err());
+    for bytes in [
+        b"broken".as_slice(),
+        br#"{"total_count":1,"workflow_runs":[]}"#,
+    ] {
+        assert!(
+            crate::forge::tier_runs::latest_runs_at(HEAD, 1, "main", |_| Ok(bytes.to_vec()))
+                .is_err()
+        );
+    }
+    let err = crate::forge::tier_runs::latest_runs_at(HEAD, 1, "main", |_| {
+        anyhow::bail!("checkpoint failure")
+    })
+    .unwrap_err();
+    assert!(err.to_string().contains("checkpoint failure"));
+}
+
+/// TASK-3917 AC1: the one member predicate the pass and the auto-train
+/// pre-scan share refuses a PR already riding a live train before any gate
+/// read; the legacy automatic eligibility gate alone could not see that.
+// trace:TASK-3917 | ai:claude
+#[test]
+fn task3917_member_predicate_refuses_a_rider_before_any_gate_read() {
+    let root = repo();
+    let mut checks = FakeChecks::new();
+    let opts = TrainOptions {
+        prs: &[],
+        all_ready: true,
+        dry_run: true,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    };
+    let open = vec![(12, Some(vec![(9, "abc1234".to_string())]))];
+    let verdict = admit_member(
+        &mut checks,
+        root.path(),
+        "main",
+        9,
+        &opts,
+        (&open, &[]),
+        |_| false,
+    )
+    .unwrap();
+    assert!(
+        matches!(&verdict, Err(MemberGateError::Refused(why)) if why.contains("riding live train PR #12")),
+        "{verdict:?}"
+    );
+    assert!(checks.calls.is_empty(), "{:?}", checks.calls);
+}
+
+/// TASK-3912 AC2: with `max_prs_per_train = 3` and six ready PRs, the
+/// automatic train admits the first three and the next pass the next three.
+// trace:TASK-3912 | ai:claude
+#[test]
+fn max_prs_per_train_admits_three_now_and_the_next_three_next_pass() {
+    let policy = crate::landing_policy::from_body(Some("[landing]\nmax_prs_per_train = 3\n"));
+    let max = policy.auto_train_max();
+    let mut first: Vec<u64> = vec![11, 12, 13, 14, 15, 16];
+    let waiting = split_bounded_train(&mut first, max);
+    assert_eq!(first, [11, 12, 13]);
+    assert_eq!(waiting, [14, 15, 16]);
+    let mut second = waiting;
+    assert!(split_bounded_train(&mut second, max).is_empty());
+    assert_eq!(second, [14, 15, 16]);
+    // Unset keeps today's cap: all six ride one train.
+    let mut all: Vec<u64> = (1..=6).collect();
+    let default_max = crate::landing_policy::from_body(Some("[landing]\n")).auto_train_max();
+    assert!(split_bounded_train(&mut all, default_max).is_empty());
+    assert_eq!(all.len(), 6);
+    // A zero max still admits one, as `--max` always has.
+    let mut one = vec![1u64, 2];
+    assert_eq!(split_bounded_train(&mut one, 0), [2]);
 }

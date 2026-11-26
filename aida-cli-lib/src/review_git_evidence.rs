@@ -440,6 +440,9 @@ pub(crate) fn promotion_merge_subjects(
     let mut subjects = Vec::new();
     let mut tree_cut = None;
     let mut ambiguous_tree = false;
+    // A linear promotion (main plus cherry-picked squashes) has no merges:
+    // each single-parent `(#N)` squash is a constituent. trace:BUG-2733 | ai:claude
+    let mut linear = Some(Vec::new());
     for (index, row) in history.lines().enumerate() {
         let mut fields = row.splitn(4, '\x1f');
         let (Some(sha), Some(tree), Some(parents), Some(subject)) =
@@ -456,8 +459,17 @@ pub(crate) fn promotion_merge_subjects(
         if landed_heads.contains(sha) {
             return Ok(subjects);
         }
-        let constituent = parents.split_whitespace().count() == 2
-            && crate::integration_cmd::review::merged_pr(subject).is_some();
+        let parent_count = parents.split_whitespace().count();
+        let constituent =
+            parent_count == 2 && crate::integration_cmd::review::merged_pr(subject).is_some();
+        if parent_count != 1
+            || crate::pr_lookup::extract_pr_number_from_commit_subject(subject).is_none()
+        {
+            linear = None;
+        }
+        if let Some(linear) = &mut linear {
+            linear.push((sha.to_owned(), subject.to_owned()));
+        }
         if landed_trees.contains(tree) {
             // An exact receipt can resolve a run of equal trees. A tree match
             // alone cannot tell which merges in that run were promoted.
@@ -478,6 +490,10 @@ pub(crate) fn promotion_merge_subjects(
         );
         subjects.truncate(len);
         return Ok(subjects);
+    }
+    if let Some(mut linear) = linear.filter(|l| !l.is_empty()) {
+        crate::base_patch_equivalents::retain_new(repo, &base, head, &mut linear, |(sha, _)| sha);
+        return Ok(linear.into_iter().map(|(_, subject)| subject).collect());
     }
     anyhow::ensure!(
         history.is_empty() || first_promotion && history.lines().count() <= LIMIT,

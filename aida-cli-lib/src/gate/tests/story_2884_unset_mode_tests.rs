@@ -563,3 +563,123 @@ fn show_label_follows_the_superseding_carrier() {
     let label = show_label(dir.path(), &child, || Some(vec![c])).unwrap();
     assert_eq!(label, "drain (project default for unset bug)");
 }
+
+// trace:STORY-3038.AC1 trace:STORY-3038.AC2 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-820.AC1 trace:STORY-b6b1278890774ef993d2ebc327862470-820.AC2 | ai:codex
+#[test]
+fn approved_small_default_requires_approval_size_and_standard_tier() {
+    let enabled = policy("[gate.unset_mode]\ndefault = 'approved-small' # opt in");
+    let mut req = spec(RequirementType::Story, "Fix Shift key handling", &["Small"]);
+    assert!(enabled.classify(None, &req).requires_supervision());
+    req.status = aida_core::RequirementStatus::Approved;
+    assert!(policy("").classify(None, &req).requires_supervision());
+    assert!(enabled.resolve(None, &req).requires_supervision());
+    let mode = enabled.classify(None, &req);
+    assert_eq!(
+        at_change(mode.clone(), paths(&["docs/cli/02-specs.md"])).mode,
+        Some(ExecutionMode::Drain)
+    );
+    for excluded in [vec![], vec!["src/new.rs"], vec!["docs/cli/nested/page.md"]] {
+        assert!(at_change(mode.clone(), paths(&excluded)).requires_supervision());
+    }
+    for invalid in ["[]", "42", "['docs/cli/*.md', '[']"] {
+        let policy = policy(&format!(
+            "[gate.unset_mode]\ndefault='approved-small'\ndrain_safe_paths={invalid}"
+        ));
+        let mode = policy.classify(None, &req);
+        assert!(at_change(mode, paths(&["docs/cli/02-specs.md"])).requires_supervision());
+    }
+    let broad = policy("[gate.unset_mode]\ndefault='approved-small'\ndrain_safe_paths=['**']");
+    assert!(!at_change(broad.classify(None, &req), paths(&["src/new.rs"])).requires_supervision());
+    for path in [
+        "aida-cli-lib/src/advisor_code_gate.rs",
+        "aida-cli-lib/src/team_cmd.rs",
+        "aida-cli-lib/src/admission_owner.rs",
+        "aida-cli-lib/src/role_cmd.rs",
+        "aida-cli-lib/src/launch/grant.rs",
+        "aida-cli-lib/src/worktree_lease.rs",
+        "aida-cli-lib/src/claim.rs",
+        "aida-cli-lib/src/locking_gate.rs",
+        "aida-core/src/lock.rs",
+        "aida-cli-lib/src/seat_occupancy/runtime.rs",
+        "aida-core/src/git_ops/remote_credentials.rs",
+        ".gitlab-ci.yml",
+        "aida-cli-lib/src/commit.rs",
+        ".githooks/pre-commit",
+    ] {
+        let mode = broad.classify(None, &req);
+        let mixed = paths(&["docs/cli/02-specs.md", path]);
+        assert!(at_change(mode, mixed).requires_supervision(), "{path}");
+    }
+    assert!(at_change(mode, None).requires_supervision());
+    assert_eq!(
+        enabled.classify(Some(ExecutionMode::Guided), &req).mode,
+        Some(ExecutionMode::Guided)
+    );
+    req.tags.insert("strict-tier".into());
+    assert!(enabled.classify(None, &req).requires_supervision());
+    req.tags.clear();
+    assert!(enabled.classify(None, &req).requires_supervision());
+}
+
+#[test]
+fn approved_small_approval_and_show_label_use_unique_work_branch() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
+    let repo = repo_on("main", "[gate.unset_mode]\ndefault='approved-small'");
+    let root = repo.path();
+    let mut req = spec(RequirementType::Story, "Docs", &["small"]);
+    req.spec_id = Some("STORY-42".into());
+    req.status = aida_core::RequirementStatus::Approved;
+    let label = || show_label(root, &req, || None).unwrap();
+    assert!(label().starts_with("unset (supervised"));
+    let module = repo_on("main", "");
+    git_in(
+        root,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            module.path().to_str().unwrap(),
+            "docs/cli/vendor.md",
+        ],
+    );
+    std::fs::write(root.join("excluded.txt"), "unchanged").unwrap();
+    git_in(root, &["add", "."]);
+    git_in(root, &["commit", "-qm", "baseline"]);
+    git_in(root, &["checkout", "-qb", "story-42-work"]);
+    std::fs::write(root.join("docs/cli/test.md"), "docs").unwrap();
+    git_in(root, &["add", "."]);
+    git_in(root, &["commit", "-qm", "docs"]);
+    assert_eq!(label(), APPROVED_SMALL_PREVIEW);
+    git_in(root, &["config", "diff.renames", "true"]);
+    git_in(root, &["mv", "excluded.txt", "docs/cli/moved.md"]);
+    git_in(root, &["commit", "-qm", "move unchanged file"]);
+    assert!(label().starts_with("unset (supervised"));
+    git_in(root, &["reset", "--hard", "HEAD^"]);
+
+    use std::os::unix::ffi::OsStrExt;
+    std::fs::write(
+        root.join(std::ffi::OsStr::from_bytes(b"docs/cli/\xff.md")),
+        "docs",
+    )
+    .unwrap();
+    git_in(root, &["add", "docs/cli"]);
+    git_in(root, &["commit", "-qm", "non UTF-8 path"]);
+    assert!(label().starts_with("unset (supervised"));
+    git_in(root, &["reset", "--hard", "HEAD^"]);
+    git_in(
+        &root.join("docs/cli/vendor.md"),
+        &["commit", "--allow-empty", "-qm", "advance"],
+    );
+    git_in(root, &["add", "--force", "docs/cli/vendor.md"]);
+    git_in(root, &["commit", "-qm", "advance gitlink"]);
+    git_in(root, &["config", "diff.ignoreSubmodules", "all"]);
+    assert!(label().starts_with("unset (supervised"));
+    git_in(root, &["reset", "--hard", "HEAD^"]);
+
+    assert_eq!(label(), APPROVED_SMALL_PREVIEW);
+    git_in(root, &["branch", "story-42-alternate"]);
+    assert!(label().starts_with("unset (supervised"));
+}

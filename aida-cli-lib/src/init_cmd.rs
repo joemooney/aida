@@ -2970,6 +2970,7 @@ pub(crate) fn push_set_upstream(dir: &std::path::Path, branch: &str) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Returns true only for ordinary re-init of an existing distributed checkout.
 pub(crate) fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
@@ -2987,7 +2988,7 @@ pub(crate) fn handle_init_distributed_worktree(
     // default pre-filled. trace:STORY-652
     node_name: Option<&str>,
     footprint: Option<crate::cli::InitFootprint>,
-) -> Result<()> {
+) -> Result<bool> {
     use aida_core::git_ops;
 
     let cwd = std::env::current_dir()?;
@@ -3036,7 +3037,7 @@ pub(crate) fn handle_init_distributed_worktree(
     // handle_init_adopted would ignore. trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
     let Some(footprint) = distributed_init_footprint(&cwd, footprint, resolve_init_footprint)?
     else {
-        return handle_init_adopted(&cwd, worktree_dir, branch_name, node_name);
+        return handle_init_adopted(&cwd, worktree_dir, branch_name, node_name).map(|()| false);
     };
 
     // BUG-446: refuse to initialize over a workspace-of-projects. A fresh
@@ -3106,7 +3107,8 @@ pub(crate) fn handle_init_distributed_worktree(
             commit_scaffold,
             node_name,
             Some(footprint),
-        );
+        )
+        .map(|()| false);
     }
 
     // Check if already initialized
@@ -3147,7 +3149,8 @@ pub(crate) fn handle_init_distributed_worktree(
                 commit_scaffold,
                 node_name,
                 Some(footprint),
-            );
+            )
+            .map(|()| false);
         }
         if explicit_footprint == Some(crate::cli::InitFootprint::Full)
             && read_init_footprint(&cwd) == Some(crate::cli::InitFootprint::Minimal)
@@ -3188,7 +3191,7 @@ pub(crate) fn handle_init_distributed_worktree(
                 crate::cli::InitFootprint::Full,
                 false,
             )?;
-            return Ok(());
+            return Ok(false);
         }
         maybe_repair_codex_hooks_on_reinit(&cwd, agent, no_hooks)?;
         eprintln!(
@@ -3198,7 +3201,7 @@ pub(crate) fn handle_init_distributed_worktree(
         eprintln!("  Use {} to reinitialize.", "--force".bold());
         eprintln!("  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),");
         eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
-        return Ok(());
+        return Ok(true);
     }
 
     // --force on a populated store would silently wipe N requirements and reseed
@@ -3208,7 +3211,7 @@ pub(crate) fn handle_init_distributed_worktree(
         let existing_store = cwd.join(worktree_dir);
         if let Some(count) = count_requirements_in_store(&existing_store) {
             if count > 0 && !confirm_destructive_reset(count, &existing_store)? {
-                return Ok(());
+                return Ok(false);
             }
         }
     }
@@ -3653,7 +3656,7 @@ pub(crate) fn handle_init_distributed_worktree(
         maybe_scaffold_codex_prompts_on_init(std::path::Path::new("."));
     }
 
-    Ok(())
+    Ok(false)
 }
 
 // trace:STORY-2539 | ai:codex
@@ -5260,7 +5263,8 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             *commit_scaffold,
             node_name.as_deref(),
             *footprint,
-        );
+        )
+        .map(|_| ());
     }
     let init_footprint = self::resolve_init_footprint(&init_root, *footprint)?;
     let init_selection = if init_footprint == cli::InitFootprint::Full {
@@ -5271,6 +5275,9 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
     } else {
         None
     };
+    // Ordinary re-init can commit an explicitly accepted policy. Clone bootstrap
+    // still follows its scaffold commit decision. trace:BUG-2752 | ai:codex
+    let mut initialized = false;
     let resolved_agent = init_selection.map(|selection| selection.names().join(","));
     let agent = resolved_agent.as_deref().or(agent.as_deref());
     // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -5306,7 +5313,7 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             Some(init_footprint),
         )?;
     } else {
-        self::handle_init_distributed_worktree(
+        initialized = self::handle_init_distributed_worktree(
             *force,
             *no_skills,
             agent.as_deref(),
@@ -5319,6 +5326,18 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             node_name.as_deref(),
             Some(init_footprint),
         )?;
+    }
+    // Settle an explicit native opt-in while the scaffold commit is still
+    // clean, before unrelated setup prompts can edit the same config.
+    // trace:BUG-2752 | ai:codex
+    if !*no_agent_config
+        && init_selection.is_some_and(|selection| selection.codex)
+        && std::io::stdin().is_terminal()
+        && std::io::stdout().is_terminal()
+    {
+        if let Err(error) = config_cmd::setup_init_native_policy(&init_root, initialized) {
+            eprintln!("  Native sandbox opt-in skipped: {error}");
+        }
     }
     // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
     // ready out of the box — consistent with how init already scaffolds
@@ -5370,16 +5389,6 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
                 "Note:".dimmed(),
                 e
             );
-        }
-        // trace:BUG-2513 | ai:codex
-        let root = statusline_project_root();
-        if let Err(e) = config_cmd::offer_init_codex_native(
-            &root,
-            init_selection.is_some_and(|selection| selection.codex),
-            std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
-            || crate::prompt_yes_no(crate::vendors::native_setup::PROMPT, false),
-        ) {
-            eprintln!("  Native sandbox opt-in skipped: {e}");
         }
         if let Err(e) = config_cmd::maybe_offer_permission_posture_fix(&statusline_project_root()) {
             eprintln!(

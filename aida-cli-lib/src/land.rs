@@ -75,6 +75,7 @@ pub(crate) enum Ci {
     Pending,
     Green,
     StaleBase(String),
+    WaitingForRun(String),
     /// The failed checks, named.
     Red(String),
 }
@@ -84,6 +85,7 @@ impl Ci {
         match self {
             Ci::None => "none".into(),
             Ci::Pending => "pending".into(),
+            Ci::WaitingForRun(run) => format!("waiting for CI: {run}"),
             Ci::Green => "green".into(),
             Ci::StaleBase(_) => "stale-base".into(),
             Ci::Red(names) => format!("red: {names}"),
@@ -529,6 +531,9 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
             format!("{base}. Refresh CI with a clean update-branch"),
         );
     }
+    if let (Ci::WaitingForRun(detail), true) = (&ci, evidence.ci_gates_landing()) {
+        return row(State::Blocked, Action::Wait, None, detail.clone());
+    }
     if let (Ci::Red(failed), true) = (&ci, evidence.ci_gates_landing()) {
         return rework(
             State::CiFailed,
@@ -717,8 +722,11 @@ fn git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<std::process::Ou
         .args(args)
         .stdin(std::process::Stdio::null());
     crate::review_watch::forge::clear_routing(&mut command);
-    crate::command_output_with_timeout(command, std::time::Duration::from_secs(timeout_secs))
-        .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))
+    crate::command_output_with_timeout(
+        command,
+        crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(timeout_secs))?,
+    )
+    .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))
 }
 
 /// A git command in `root` that contacts origin: routing cleared first,
@@ -741,7 +749,7 @@ fn origin_command(root: &Path, args: &[&str]) -> std::process::Command {
 fn origin_git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<String> {
     let out = crate::command_output_with_timeout(
         origin_command(root, args),
-        std::time::Duration::from_secs(timeout_secs),
+        crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(timeout_secs))?,
     )
     .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))?;
     anyhow::ensure!(
@@ -844,8 +852,12 @@ fn fetch(
         .write(true)
         .open(&lock_path)
         .with_context(|| format!("opening {}", lock_path.display()))?;
-    lock.lock_exclusive()
-        .with_context(|| format!("locking {}", lock_path.display()))?;
+    if crate::forge_lookup::forge_lookup_deadline().is_some() {
+        lock.try_lock_exclusive()
+    } else {
+        lock.lock_exclusive()
+    }
+    .with_context(|| format!("locking {}", lock_path.display()))?;
     // Released when `lock` drops, on every return below.
     let mut specs: BTreeSet<String> = BTreeSet::new();
     for pr in changes {
@@ -888,8 +900,11 @@ fn fetch(
         ],
     );
     command.args(&specs);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(120))
-        .context("the fetch of open changes failed to run or timed out")?;
+    let out = crate::command_output_with_timeout(
+        command,
+        crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(120))?,
+    )
+    .context("the fetch of open changes failed to run or timed out")?;
     anyhow::ensure!(
         out.status.success(),
         "the fetch of open changes failed: {}",
@@ -1433,8 +1448,30 @@ fn short(sha: &str) -> &str {
 }
 
 /// CI summed over a GitHub `statusCheckRollup`.
-#[cfg(test)]
-fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
+// trace:STORY-3095 | ai:codex
+pub(crate) fn green_rollup_at(
+    rollup: &serde_json::Value,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let rows = rollup.as_array()?;
+    if !matches!(ci_of_checks(rows), Ci::Green) {
+        return None;
+    }
+    let mut latest = None;
+    for check in newest_checks(rows) {
+        let timestamp = if check["state"].is_string() {
+            &check["createdAt"]
+        } else {
+            &check["completedAt"]
+        };
+        latest = latest.max(Some(
+            chrono::DateTime::parse_from_rfc3339(timestamp.as_str()?).ok()?,
+        ));
+    }
+    latest
+}
+
+// trace:STORY-3131 | ai:claude
+pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     ci_of_checks(rollup.as_array().into_iter().flatten())
 }
 
@@ -1459,13 +1496,16 @@ fn ci_of_checks<'a>(checks: impl IntoIterator<Item = &'a serde_json::Value>) -> 
             // A cancelled run did not test the head: CI is not green, and
             // it is not a failure of the change either.
             "CANCELLED" => pending = true,
-            _ => failed.push(name),
+            _ => failed.push(match check["selectionDetail"].as_str() {
+                Some(detail) => format!("{name} {detail}"),
+                None => name,
+            }),
         }
     }
     if !failed.is_empty() {
         failed.sort();
         failed.dedup();
-        return Ci::Red(one_line(&failed.join(", "), 80));
+        return Ci::Red(failed.join(", "));
     }
     if pending {
         Ci::Pending
@@ -1497,7 +1537,12 @@ fn newest_checks<'a>(
     // A check that ran more than once at this head counts once, by its
     // newest run: a cancelled run that a later run replaced says nothing.
     let mut newest: BTreeMap<(String, String), &serde_json::Value> = BTreeMap::new();
+    let mut selected = Vec::new();
     for check in checks {
+        if check["selectedRun"].is_u64() {
+            selected.push(check);
+            continue;
+        }
         let key = (check_text(check, "workflowName"), check_name(check));
         let started = |check: &serde_json::Value| check_text(check, "startedAt");
         match newest.get(&key) {
@@ -1507,55 +1552,63 @@ fn newest_checks<'a>(
             }
         }
     }
-    newest.into_values().collect()
+    selected.extend(newest.into_values());
+    selected
 }
 
-// trace:BUG-2692 | ai:codex
-#[cfg(test)]
-fn ci_of_github_rollup(
+// trace:BUG-2723 | ai:codex
+fn summarize_github_rollup(
     rollup: &serde_json::Value,
-    head: &str,
-    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
-) -> Ci {
-    summarize_github_rollup(rollup, head, metadata).0
-}
-
-fn summarize_github_rollup<'a>(
-    rollup: &'a serde_json::Value,
-    head: &str,
-    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
-) -> (Ci, Vec<&'a serde_json::Value>) {
-    let Some(rows) = rollup.as_array() else {
-        return (Ci::None, Vec::new());
-    };
-    let run_id = |row: &serde_json::Value| {
-        crate::ci_gate::run_id_from_check_link(row["detailsUrl"].as_str()?)
-    };
-    let candidates: Vec<_> = rows
-        .iter()
-        .filter_map(|row| Some((row["name"].as_str()?, run_id(row)?)))
-        .collect();
-    let replaced = crate::forge::replaced_fast_runs(
-        candidates.iter().map(|(name, id)| (*name, id.as_str())),
-        Some(head),
-        metadata,
-    );
-    let kept: Vec<_> = rows
-        .iter()
-        .filter(|row| !crate::forge::is_replaced_run(&replaced, run_id(row).as_deref()))
-        .collect();
-    let aggregate_passed = replaced.values().all(|replacement| {
-        kept.iter().any(|row| {
-            row["name"] == crate::forge::CI_AGGREGATOR_CHECK
-                && row["conclusion"] == "SUCCESS"
-                && run_id(row).and_then(|id| id.parse::<u64>().ok()) == Some(*replacement)
-        })
-    });
-    let mut ci = ci_of_checks(kept.iter().copied());
-    if ci == Ci::Green && !aggregate_passed {
-        ci = Ci::Pending;
+    selection: &crate::forge::tier_runs::TierSelection,
+    slug: &str,
+) -> Result<(Ci, Vec<serde_json::Value>)> {
+    let mut kept = Vec::new();
+    for row in rollup.as_array().context("missing statusCheckRollup")? {
+        let id = row["detailsUrl"].as_str().and_then(|url| {
+            let (owner, _) = url.strip_prefix("https://")?.split_once("/actions/runs/")?;
+            if owner.eq_ignore_ascii_case(slug) {
+                crate::ci_gate::run_id_from_check_link(url)
+            } else {
+                None
+            }
+        });
+        selection.verify_marker(row["name"].as_str().unwrap_or_default(), id.as_deref())?;
+        if !id.is_some_and(|id| selection.owned.contains(&id)) {
+            kept.push(row.clone());
+        }
     }
-    (ci, kept)
+    for run in &selection.selected {
+        for row in run.rows()? {
+            let conclusion = match row.bucket.as_str() {
+                "pass" => "SUCCESS",
+                "cancel" => "CANCELLED",
+                "skipping" => "SKIPPED",
+                "pending" => "",
+                _ => "FAILURE",
+            };
+            let link = row
+                .job_id
+                .map(|id| format!("https://{slug}/actions/runs/{}/job/{id}", run.id));
+            kept.push(
+                serde_json::json!({"name":row.name, "conclusion":conclusion, "selectedRun":run.id,
+                "selectionDetail":run.detail(), "workflowName":row.workflow, "detailsUrl":link}),
+            );
+        }
+    }
+    let mut ci = ci_of_checks(&kept);
+    if ci == Ci::Pending {
+        if let Some(detail) = kept
+            .iter()
+            .find(|r| {
+                r["selectedRun"].is_u64()
+                    && matches!(r["conclusion"].as_str(), Some("" | "CANCELLED"))
+            })
+            .and_then(|r| r["selectionDetail"].as_str())
+        {
+            ci = Ci::WaitingForRun(detail.to_owned());
+        }
+    }
+    Ok((ci, kept))
 }
 
 /// A change from the watcher's discovery, which reports no checks. That is
@@ -1655,6 +1708,9 @@ pub(crate) struct Pass {
     pub notes: Vec<String>,
     /// What the pass could not read and so does not show.
     pub warnings: Vec<String>,
+    /// Discovery stopped at the read deadline: changes past it are unknown.
+    /// trace:BUG-2730 | ai:claude
+    pub discovery_cut: bool,
 }
 
 /// The warning for a lease store that could not be read.
@@ -1679,16 +1735,14 @@ pub(crate) fn open_change_count(start: &Path) -> Result<usize> {
 
 /// Discover the open changes and derive a row for each.
 pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
-    live_pass_with(start, |_, _, _| ()).map(|(pass, ())| pass)
+    live_pass_with(start, |changes, evidence| (pass(changes, evidence), ())).map(|(pass, ())| pass)
 }
 
-/// [`live_pass`], with a second reader of the same pass: `also` sees the
-/// changes, their rows and the evidence the rows were derived from, each
-/// fact read once.
+/// Discover changes once and derive rows and optional observations from shared evidence.
 // trace:STORY-2906 | ai:claude
 pub(crate) fn live_pass_with<T>(
     start: &Path,
-    also: impl FnOnce(&[Pr], &[Row], &dyn Evidence) -> T,
+    read: impl FnOnce(&[Pr], &dyn Evidence) -> (Vec<Row>, T),
 ) -> Result<(Pass, T)> {
     // Every change's approval reads verdicts under several keys, and each
     // read used to rediscover the whole gate ledger: minutes for twenty open
@@ -1699,24 +1753,16 @@ pub(crate) fn live_pass_with<T>(
     let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
-    let (changes, github_checks) = match discover_rich(&root, &repo)? {
-        Some(discovered) => discovered,
+    let (changes, github_checks, discovery_cut) = match discover_rich(&root, &repo)? {
+        Some((changes, checks)) => (changes, checks, false),
         None => {
-            // The watcher's discovery carries no title; the specs a change
-            // ships are read from it, so each is asked for.
-            let forge = crate::forge::forge_for(&root);
-            let changes = repo
-                .discover(&root)?
-                .into_iter()
-                .map(|change| {
-                    let title = forge
-                        .change_title_and_body(change.id)
-                        .map(|(title, _)| title)
-                        .unwrap_or_default();
-                    plain_change(change, title)
-                })
-                .collect();
-            (changes, BTreeMap::new())
+            let (changes, cut) = repo.discover_with(&root, |change, row| {
+                let title = row["title"]
+                    .as_str()
+                    .context("forge listing row has no title")?;
+                Ok(plain_change(change, title.to_owned()))
+            })?;
+            (changes, BTreeMap::new(), cut)
         }
     };
     let gitlab = repo.github_slug().is_none();
@@ -1748,12 +1794,14 @@ pub(crate) fn live_pass_with<T>(
     // trace:STORY-2906 | ai:claude
     let (rows, extra) = {
         let memo = Memo::new(&live);
-        let rows = pass(&changes, &memo);
-        let extra = also(&changes, &rows, &memo);
-        (rows, extra)
+        read(&changes, &memo)
     };
     // trace:TASK-3813 | ai:codex
-    metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
+    // A partial guard pass cannot establish that an omitted change closed.
+    // trace:BUG-2730 | ai:codex
+    if rows.len() == changes.len() && !discovery_cut {
+        metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
+    }
     // Lanes that could not be read are said to be missing, never shown as
     // "no lanes".
     let (local_lanes, warnings) = match live.local_leases() {
@@ -1772,6 +1820,7 @@ pub(crate) fn live_pass_with<T>(
             book: live.book,
             notes,
             warnings,
+            discovery_cut,
         },
         extra,
     ))
