@@ -151,6 +151,7 @@ pub(crate) use work::canonical_resume_branch;
 // trace:STORY-2749 | ai:claude
 pub(crate) use work::conflict_route_admission;
 pub(crate) use work::ResumePublicationFailure;
+// trace:BUG-2776 | ai:claude
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
     append_standalone_reviewer_prompt_suffixes, append_untraced_criteria_prompt_block,
@@ -207,6 +208,9 @@ pub(crate) use work::{
     effective_execution_mode, headless_plan_refusal, launcher_track,
     operator_track_headless_refusal, spec_track, track_refusal, SpecTrack, OPERATOR_TRACK,
     TRACK_TAG_PREFIX,
+};
+pub(crate) use work::{
+    reclaim_retained_review_tree, reclaim_retained_review_tree_with, RetainedReview,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};
 #[cfg(test)]
