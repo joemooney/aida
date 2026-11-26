@@ -338,6 +338,8 @@ struct Script {
     tested: Vec<Vec<u64>>,
     landed: Vec<Vec<u64>>,
     told: Vec<u64>,
+    /// A drain is active once this many trains have been tested.
+    drain_after: Option<usize>,
 }
 
 fn prs(ms: &[Member]) -> Vec<u64> {
@@ -414,6 +416,89 @@ impl Rails for Script {
     fn ejected(&mut self, e: &Ejected) {
         self.told.push(e.pr);
     }
+    fn drained(&mut self) -> Option<String> {
+        let drained = self.drain_after.is_some_and(|n| self.tested.len() >= n);
+        drained.then(|| "advisor loops drained by joe".into())
+    }
+    fn train_id(&self, train: &Built) -> Option<u64> {
+        Some(9000 + train.cars.len() as u64)
+    }
+}
+
+/// BUG-2767 AC2: a drain that starts after a red train's CI finished
+/// starts neither bisect half; its members wait for a later train.
+// trace:BUG-2767 | ai:claude
+#[test]
+fn bug2767_a_drain_blocks_the_bisect_follow_up_trains() {
+    let mut rails = Script {
+        bad: vec![2],
+        drain_after: Some(1),
+        ..Script::default()
+    };
+    let out = drive(&mut rails, ms(&[1, 2, 3, 4])).unwrap();
+    assert_eq!(
+        rails.tested,
+        vec![vec![1, 2, 3, 4]],
+        "no bisect train started"
+    );
+    assert!(out.landed.is_empty() && out.culprits.is_empty() && out.error.is_none());
+    assert_eq!(prs_of(&out.ejected), vec![1, 2, 3, 4]);
+    assert!(out.ejected[0]
+        .reason
+        .contains("no new train starts while advisor loops drained"));
+    // With no drain the same red bisects to its culprit, recorded at its head.
+    let mut rails = Script {
+        bad: vec![2],
+        ..Script::default()
+    };
+    let out = drive(&mut rails, ms(&[1, 2, 3, 4])).unwrap();
+    assert!(rails.tested.len() > 1, "bisected");
+    assert_eq!(out.culprits.len(), 1, "{:?}", out.culprits);
+    let (pr, head, train) = &out.culprits[0];
+    assert_eq!((*pr, *train), (2, Some(9001)));
+    assert_eq!(head, &ms(&[2])[0].head);
+}
+
+/// BUG-2767 AC1: a swept-in culprit is refused at the red head and admitted
+/// at a new one; naming it is the operator's recorded clearance.
+// trace:BUG-2767 | ai:claude
+#[test]
+fn bug2767_a_culprit_is_not_readmitted_at_the_same_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    culprit::record(root, 4482, "aaaa1111", Some(4609)).unwrap();
+    let opts = |prs: &'static [u64], all_ready| TrainOptions {
+        prs,
+        all_ready,
+        dry_run: false,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    };
+    let swept = opts(&[], true);
+    let why = culprit_admission(root, &swept, &member(4482, "aaaa1111", "s"))
+        .unwrap()
+        .expect("same head is refused");
+    assert!(
+        why.starts_with("held: culprit of train #4609 at aaaa111"),
+        "{why}"
+    );
+    let moved = culprit_admission(root, &swept, &member(4482, "bbbb2222", "s")).unwrap();
+    assert_eq!(moved, None, "a new head is re-admitted");
+    let named = opts(&[4482], false);
+    let cleared = culprit_admission(root, &named, &member(4482, "aaaa1111", "s")).unwrap();
+    assert_eq!(cleared, None, "naming the PR clears the hold");
+    assert_eq!(
+        culprit::hold(root, 4482, "aaaa1111"),
+        None,
+        "clearance recorded"
+    );
+}
+
+fn prs_of(ejected: &[Ejected]) -> Vec<u64> {
+    let mut prs: Vec<u64> = ejected.iter().map(|e| e.pr).collect();
+    prs.sort_unstable();
+    prs
 }
 
 fn ms(ids: &[u64]) -> Vec<Member> {
