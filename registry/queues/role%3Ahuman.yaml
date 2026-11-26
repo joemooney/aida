@@ -236,3 +236,10 @@
   note: 'operator hold retained; date:2026-11-22: met (today is 2026-11-22)'
   added_at: 2026-11-22T00:32:53.819064803Z
   for_role: human
+- user_id: role:human
+  requirement_id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
+  position: 52000
+  added_by: aida:defer-resurface
+  note: 'operator hold retained; date:2026-11-26: met (today is 2026-11-26)'
+  added_at: 2026-11-26T00:45:48.719386565Z
+  for_role: human
