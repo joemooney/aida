@@ -515,6 +515,20 @@ comments:
     A reference merge (commit db7061570fa3, `(Refs STORY-2839)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T12:49:38.224209449Z
   modified_at: 2026-11-26T12:49:38.224209449Z
+- id: 01a21806-a1b8-7dd2-86a8-69046a6b77d2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 307d221dbd (PR #4655, slice e, base integration).
+    [evidence: behavioral-test] Renderer guard: build.py refuse_unrendered() refuses indented list markers and single-asterisk emphasis, naming file:line, before any write. Tests: test_nested_list_item_is_refused_naming_file_and_line, test_single_asterisk_emphasis_is_refused_naming_file_and_line, and test_bold_code_spans_fences_and_bullets_with_asterisks_still_build (25 OK under unittest; pytest is not installed on this host).
+    [evidence: documentation-inspection] The field-guide tables in product-workflow.md were checked against aida mandate start/edit/session --help, ci_gate.rs ([ci] informational_workflows, default Cross-platform*; required checks are never informational), gate/mandate.rs (24h cap, configurable via [mandate] max_ttl_hours, 168h ceiling) and the docs/cli/07 [queue] standalone_implementer_cap. Three reference errors were corrected: supervised-spec coverage under --drive, 'commits on main auto-complete referenced specs', and the cache path.
+    Probes: the guard and renderer agree on fence toggling, code-span and bold regexes, and <!-- skips; tabs count as indentation. Stray * in prose URLs or globs is refused (fail-closed), so wrap them in backticks.
+    SVG safety: no script, handlers, href, foreignObject, image, use, @import or javascript:; both parse as XML; each has a dark-scheme block.
+    Residual: description-level targets (field-guide.html and field-guide-act1-5.svg) were superseded by the grooming and slice briefs; the glossary.html term coverage came from earlier slices. make check-ci-fast exit 0.
+  created_at: 2026-11-26T13:23:37.528599851Z
+  modified_at: 2026-11-26T13:23:37.528599851Z
+  session_id: 01a217e981c6
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21808-5d5f-7821-b370-d00c6a8de7a7
   author: joe
   content: |-

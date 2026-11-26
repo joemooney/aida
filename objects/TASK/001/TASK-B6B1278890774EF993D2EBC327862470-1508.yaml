@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:56:00.822526486Z
-modified_at: 2026-11-26T13:07:16.958744300Z
+modified_at: 2026-11-26T13:22:27.399985663Z
 req_type: Task
 tags:
 - agents
@@ -35,6 +35,25 @@ comments:
   modified_at: 2026-11-26T13:01:51.256125655Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21805-8fc8-7813-a1fc-6f745fdac953
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, aida-core):** `dry_run_report`/`record` take the leftover `Scope`; the CLI builds it from the same `LeftoverOwners` probe agent gc uses (shared helper). Test `task3918_retention_dry_run_holds_a_live_owners_leftovers` (leftovers_tests): a stale tomb is held (owner live) instead of reapable, and reapable when the owner is dead. CLI unit test: `retention_leftover_lines` reports held leftovers as kept, not as gc-removable.
+    - **AC2 (unit, aida-core, message_state_tests):** retirement with dead-owner leftovers (empty tomb, creator staging) beside the mailbox and an admitting fresh scan retires. Finding: `fresh_scan_admits` is purely a /proc writer scan and never reads leftovers, so the refusal text cannot be caused by leftovers; the test pins that.
+
+    ### Expected files
+    - aida-core/src/mailbox_lifecycle/activation.rs, leftovers_tests.rs, message_state_tests.rs
+    - aida-cli-lib/src/agent_registry_root.rs, mailbox_cmd.rs, tests/story_1843_c2_refusal_tests.rs
+
+    ### Ambiguities / conflicts as questions
+    - AC2 premise: the observed WriterAdmissionUnknown refusals come from unverified writer processes, not leftovers. Shipping the regression test plus the corrected dry-run report (which previously misattributed the problem to 460 leftovers); OK?
+  created_at: 2026-11-26T13:22:27.399985663Z
+  modified_at: 2026-11-26T13:22:27.399985663Z
+  session_id: 01a217f774a0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217f0-aaf8-75e3-aea2-15ed1f819cb4
   author: joe
