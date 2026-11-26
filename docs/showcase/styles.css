@@ -45,8 +45,11 @@
 .nav-menu a[aria-current="page"],.guide-header .nav-menu a[aria-current="page"]{background:#ece8de;color:var(--orange);font-weight:600;text-decoration:none}
 .nav-menu a[aria-current="page"]:after{content:"●";font-size:8px;margin-left:12px;color:var(--orange)}
 .nav-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
-.theme-toggle{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 12px/1 var(--mono);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
-.theme-toggle:hover{border-color:var(--orange);color:var(--orange)}
+.theme-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:#fbf9f4}
+.theme-switch button{appearance:none;display:grid;place-items:center;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer;transition:color .2s,background-color .2s}
+.theme-switch button:hover{color:var(--ink)}
+.theme-switch button[aria-pressed="true"]{background:#e4dfd3;color:var(--ink)}
+.theme-switch svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 html[data-theme="terminal"]{--paper:#111513;--ink:#ece9e0;--muted:#a5aba2;--line:#2c3530;--orange:#ff7849;--bright:#ff8658;--dark:#181e1a;color-scheme:dark}
 html[data-theme="terminal"] .secondary:hover,html[data-theme="terminal"] .mode-picker button:hover{background:#1b211e}
 html[data-theme="terminal"] .mode-detail{background:#171c19}
@@ -58,4 +61,5 @@ html[data-theme="terminal"] .statement-emblem,html[data-theme="terminal"] .foote
 html[data-theme="terminal"] .nav-menu{background:#181d1a;box-shadow:0 16px 36px rgba(0,0,0,.55)}
 html[data-theme="terminal"] .nav-menu a:hover,html[data-theme="terminal"] .nav-menu a:focus-visible,html[data-theme="terminal"] .guide-header .nav-menu a:hover,html[data-theme="terminal"] .guide-header .nav-menu a:focus-visible{background:#222925}
 html[data-theme="terminal"] .nav-menu a[aria-current="page"],html[data-theme="terminal"] .guide-header .nav-menu a[aria-current="page"]{background:#262e29}
-html[data-theme="terminal"] .theme-toggle{background:#181d1a}
+html[data-theme="terminal"] .theme-switch{background:#181d1a}
+html[data-theme="terminal"] .theme-switch button[aria-pressed="true"]{background:#262e29;color:#ece9e0}

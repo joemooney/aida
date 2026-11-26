@@ -21,23 +21,36 @@ tabs.forEach((tab, index) => {
   tab.addEventListener('keydown', event => { let next; if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;event.preventDefault();chooseMode(tabs[next].dataset.mode,true); });
 });
 // trace:STORY-2839 | ai:antigravity
-const themeBtn = document.getElementById('theme-toggle');
-function syncThemeButton() {
-  const dark = document.documentElement.getAttribute('data-theme') === 'terminal';
-  const icon = document.getElementById('theme-icon');
-  const label = document.getElementById('theme-label');
-  if (icon) icon.textContent = dark ? '☀' : '☾';
-  if (label) label.textContent = dark ? 'Light' : 'Dark';
+const themePicks = Array.from(document.querySelectorAll('[data-theme-pick]'));
+const mql = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function getStoredThemePref() {
+  try {
+    const raw = localStorage.getItem('aida-theme');
+    if (raw === 'light' || raw === 'paper') return 'light';
+    if (raw === 'dark' || raw === 'terminal') return 'dark';
+    if (raw === 'system') return 'system';
+  } catch (_) {}
+  return 'light';
 }
-syncThemeButton();
-if (themeBtn && !themeBtn.getAttribute('data-bound')) {
-  themeBtn.setAttribute('data-bound', 'true');
-  themeBtn.addEventListener('click', () => {
-    const dark = document.documentElement.getAttribute('data-theme') === 'terminal';
-    const next = dark ? 'paper' : 'terminal';
-    document.documentElement.setAttribute('data-theme', next);
-    try { localStorage.setItem('aida-theme', next); } catch (_) {}
-    syncThemeButton();
+function applyThemePref(pref, persist = false) {
+  const effective = pref === 'dark' ? 'terminal' : (pref === 'light' ? 'paper' : (mql && mql.matches ? 'terminal' : 'paper'));
+  document.documentElement.setAttribute('data-theme', effective);
+  if (persist) {
+    try { localStorage.setItem('aida-theme', pref); } catch (_) {}
+  }
+  themePicks.forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.getAttribute('data-theme-pick') === pref));
+  });
+}
+applyThemePref(getStoredThemePref(), false);
+themePicks.forEach(btn => {
+  if (btn.getAttribute('data-bound')) return;
+  btn.setAttribute('data-bound', 'true');
+  btn.addEventListener('click', () => applyThemePref(btn.getAttribute('data-theme-pick'), true));
+});
+if (mql && mql.addEventListener) {
+  mql.addEventListener('change', () => {
+    if (getStoredThemePref() === 'system') applyThemePref('system', false);
   });
 }
 const navGroups = Array.from(document.querySelectorAll('.nav-group'));
