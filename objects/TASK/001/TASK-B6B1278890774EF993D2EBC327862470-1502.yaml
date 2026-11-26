@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T11:35:34.469183420Z
-modified_at: 2026-11-26T11:44:07.282243830Z
+modified_at: 2026-11-26T11:46:56.855208175Z
 req_type: Task
 tags:
 - landing
@@ -37,6 +37,25 @@ comments:
   modified_at: 2026-11-26T11:40:29.086602227Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a217ae-1ed7-7a32-ab12-bd9c035aeaf1
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 (port): `git diff origin/main...origin/story-2897-fresh` applied with --3way onto main 2d89ef4505 cleanly; existing STORY-2897 unit tests (review_commands story_2897_*, review_draft story_2897_submit_draft_*, review_verdict story_2897_draft_matches_record_compares_needs, task_1945 ready tests, story_2897_main_watch_tests) are the command-level/unit evidence.
+    - AC2 (perf): time `two_node_ship_watch_rework_and_train_entry_points` and `bug_2398_final_spawn_boundary_ratchet` via lane job runner on branch vs main. Suspect: `landing_policy::load` (3 git spawns; the two_node fixture shims git with Python) now runs on every readiness evaluate and every `review record`. Fix: load only when the verdict is WAITING; memoize the policy per readiness evidence.
+    - AC3: title ends `(TASK-3916)`, body says Refs STORY-2897.
+
+    ### Expected files
+    - the 16 files from #4569, plus review_watch_ready.rs / review_commands.rs perf edits
+
+    ### Ambiguities / conflicts as questions
+    - The perf brief file .aida/tmp/brief-STORY-2897-perf.md is not present in this seat; proceeding from the task description.
+  created_at: 2026-11-26T11:46:56.855208175Z
+  modified_at: 2026-11-26T11:46:56.855208175Z
+  session_id: 01a217ab36b6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217a6-589a-7891-b915-54bdff4ed45d
   author: joe
