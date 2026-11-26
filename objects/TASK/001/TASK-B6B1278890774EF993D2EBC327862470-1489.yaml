@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: the credential-path screen also covers .npmrc, .cargo/credentials and .cargo/credentials.toml, .vault-token, terraform tokens (.terraformrc, terraform.rc, .terraform.d/credentials.tfrc.json), and similar well-known token files, at the repo root and nested.
   - AC2: a test per new pattern; existing TASK-3320 tests stay green.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:09:19.840024994Z
-modified_at: 2026-11-26T08:41:01.277134650Z
+modified_at: 2026-11-26T12:45:29.798500775Z
 req_type: Task
 tags:
 - review
@@ -133,6 +133,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-26T08:41:04.169740798Z
   changes: []
+- id: 01a217e3-b8f7-7061-ad03-4f7812e7c122
+  author: aida-auto-bump
+  timestamp: 2026-11-26T12:45:29.719601530Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a217e3-b946-7492-9bdd-2320209f10b7
+  timestamp: 2026-11-26T12:45:29.798496499Z
+  agent: aida
+  commit_sha: 1086efb4e0f6cbbf4c859ede6533c174f6e2e39c
+  summary: 'Promotion 45 reviewed at head 592c346326d6f9aa2ab895c98e27e452149ca252 (1 commit behind main; no finding depends on base changes). TASK-3914 AC1: verified by review_engine.rs is_secret_sensitive_path additions (.npmrc, .vault-token, .terraformrc, terraform.rc, .dockercfg file names; .cargo/credentials, .cargo/credentials.toml, .terraform.d/credentials.tfrc.json, .gem/credentials, .config/hub component pairs), all ASCII case-insensitive, tested at root, nested/ and a/b/ depths with upper-case and backslash variants via assert_credential_at_every_depth. AC2: verified by one test per pattern (credential_npmrc ... credential_config_hub) plus credential_pattern_neighbours_stay_reviewable negative cases; no TASK-3320 test changed or removed; new tests added to scripts/ratchet-set.json. Refs STORY-3120: review_prepare now refuses findings outside their batch (tested with b.rs in-inventory/out-of-batch), git_text uses host_git_command with its env pins preserved across env_clear (s3fu test proves fsmonitor hook not run, raw-git control); review_runner kills /proc-found pipe holders after grace and still fails closed (bail on any escaped descendant), test asserts the pid is reported and reaped. Refs STORY-2839 docs/SVGs: no active content in SVGs, links are relative. CI pending at review time (fast compile and fast gates green; full-tier shards pending).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: c8c3a3e139acd702925182e8241a52ad1dafae73
@@ -141,3 +155,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c8c3a3e139a
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T12:45:29.719593460Z
+  completion_sha: 1086efb4e0f6cbbf4c859ede6533c174f6e2e39c
