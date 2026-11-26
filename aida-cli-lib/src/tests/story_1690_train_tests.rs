@@ -259,9 +259,13 @@ struct FakeRouter {
     checks: usize,
     updates: Vec<(u64, String)>,
     requeued: Vec<u64>,
+    induced: Option<String>,
 }
 
 impl DriftRouter for FakeRouter {
+    fn member_induced(&mut self, _: &str) -> Option<String> {
+        self.induced.clone()
+    }
     fn authority(&mut self) -> std::result::Result<(), String> {
         self.checks += 1;
         if self.checks > self.grants {
@@ -342,6 +346,118 @@ fn bug2777_train_routes_and_records_a_drift_ejection_only_under_authority() {
         why.contains("routed: not routed: the dispatch lease expired"),
         "{why}"
     );
+}
+
+/// BUG-2777 (advisor ruling 2): drift from an earlier train member, the branch
+/// already containing main, is re-queued for the next train: no branch update,
+/// no re-review, no escalation, no hold. A branch behind main is not.
+// trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_member_induced_drift_requeues_without_update_review_or_hold() {
+    let tmp = repo();
+    let r = tmp.path();
+    let main = git(r, &["rev-parse", "main"]);
+    let a = pr_branch(r, "a", |r| set_line(r, "f.txt", 5, "a's line 5"));
+    let b = pr_branch(r, "b", |r| set_line(r, "f.txt", 7, "b's line 7"));
+    let members = [member(1, &a, "a"), member(2, &b, "b")];
+    let built = build(r, "main", &members).unwrap();
+    assert!(built.dropped[0].reason.starts_with(STACKED_DRIFT));
+    let own = crate::gate::review_carryover::patch_id(r, &main, &b).unwrap();
+    assert_eq!(member_induced_drift(r, &main, &b), Some(own.clone()));
+    write(r, "g.txt", "main moved\n");
+    let moved = commit(r, "main moves");
+    assert_eq!(member_induced_drift(r, &moved, &b), None, "behind main");
+
+    let heads: Vec<(u64, String)> = members.iter().map(|m| (m.pr, m.head.clone())).collect();
+    let state = tempfile::tempdir().unwrap();
+    let mut router = FakeRouter {
+        grants: 1,
+        induced: Some(own),
+        ..FakeRouter::default()
+    };
+    let mut warnings = Vec::new();
+    route_drift_ejections(
+        state.path(),
+        &built.dropped,
+        &heads,
+        &mut router,
+        &mut warnings,
+    );
+    assert!(router.updates.is_empty(), "update-branch is a no-op here");
+    assert!(
+        router.requeued.is_empty(),
+        "own diff unchanged: no re-review"
+    );
+    assert_eq!(
+        router.checks, 0,
+        "no forge mutation, so no authority needed"
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(
+        culprit::drift_hold(state.path(), 2, &b),
+        None,
+        "re-queued for the next train"
+    );
+}
+
+/// BUG-2777 r2: the live router refuses once the train lost its dispatch
+/// authority: the hold names the reason and the forge is never called, for
+/// every PR in the loop (the abort is cached). trace:BUG-2777 | ai:claude
+#[test]
+fn bug2777_live_router_holds_without_dispatch_authority() {
+    let tmp = repo();
+    let r = tmp.path();
+    let b = pr_branch(r, "b", |r| set_line(r, "f.txt", 7, "b's line 7"));
+    let c = pr_branch(r, "c", |r| set_line(r, "f.txt", 9, "c's line 9"));
+    write(r, "g.txt", "main moved\n");
+    let main = commit(r, "main moves");
+    let bin = tempfile::tempdir().unwrap();
+    let gh = bin.path().join("gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\ntouch \"$0.called\"\nexit 1\n");
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
+    let forge = crate::forge::forge_for_kind(r, crate::forge::ForgeKind::GitHub);
+    let mut ports = LiveTrainForge {
+        project_root: r.into(),
+        main_worktree: r.into(),
+        base: "main".into(),
+        forge: forge.as_ref(),
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    let mut abort = Some("lease expired".to_string());
+    let mut router = LiveDriftRouter {
+        ports: &mut ports,
+        abort: &mut abort,
+        main: &main,
+    };
+    let drift = |pr| Ejected {
+        pr,
+        reason: format!("{STACKED_DRIFT} on main"),
+    };
+    let heads = [(2, b.clone()), (3, c.clone())];
+    let state = tempfile::tempdir().unwrap();
+    let mut warnings = Vec::new();
+    route_drift_ejections(
+        state.path(),
+        &[drift(2), drift(3)],
+        &heads,
+        &mut router,
+        &mut warnings,
+    );
+    assert!(!bin.path().join("gh.called").exists(), "no branch update");
+    assert_eq!(
+        warnings,
+        [
+            "#2 not routed: lease expired",
+            "#3 not routed: lease expired"
+        ]
+    );
+    for (pr, head) in &heads {
+        let why = culprit::drift_hold(state.path(), *pr, head).expect("held");
+        assert!(why.contains("routed: not routed: lease expired"), "{why}");
+    }
+    assert_eq!(abort.as_deref(), Some("lease expired"));
 }
 
 /// BUG-2777 AC2: a drifted head is refused even when named, with the route;

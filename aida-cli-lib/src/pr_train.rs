@@ -445,9 +445,23 @@ pub(crate) fn route_drift(
     }
 }
 
+/// Member-induced drift: `head` already contains `main`, so a branch update is
+/// a no-op and the drift came from an earlier member of the train. Returns the
+/// head's patch-id vs `main`, which is its own (approved) diff, unchanged.
+// trace:BUG-2777 | ai:claude
+pub(crate) fn member_induced_drift(repo: &Path, main: &str, head: &str) -> Option<String> {
+    let contains = git_raw(repo, &["merge-base", "--is-ancestor", main, head]).ok()?;
+    if !contains.status.success() {
+        return None;
+    }
+    crate::gate::review_carryover::patch_id(repo, main, head).ok()
+}
+
 /// What routing a drift ejection touches: the train's dispatch authority, the
 /// forge branch update, the review queue and the advisor. trace:BUG-2777 | ai:claude
 pub(crate) trait DriftRouter {
+    /// `Some(patch-id)` when the drift is member-induced ([`member_induced_drift`]).
+    fn member_induced(&mut self, head: &str) -> Option<String>;
     /// `Err(why)` once the train no longer holds its dispatch authority.
     fn authority(&mut self) -> std::result::Result<(), String>;
     fn update_branch(&mut self, pr: u64, head: &str) -> Result<()>;
@@ -475,6 +489,18 @@ pub(crate) fn route_drift_ejections(
             continue;
         };
         if !routed.insert(e.pr) {
+            continue;
+        }
+        // Not a conflict: no branch update, no re-review, no escalation and
+        // no hold, so the next train re-admits the head. trace:BUG-2777 | ai:claude
+        if let Some(patch) = router.member_induced(head) {
+            println!(
+                "  routed #{}: member-induced drift: the branch already contains main and its \
+                 own diff (patch-id {}) is unchanged, so its approval carries; re-queued for \
+                 the next train, alone or behind the earlier member",
+                e.pr,
+                short(&patch)
+            );
             continue;
         }
         let route = match router.authority() {
@@ -510,9 +536,15 @@ pub(crate) fn route_drift_ejections(
 struct LiveDriftRouter<'p, 'a> {
     ports: &'p mut LiveTrainForge<'a>,
     abort: &'p mut Option<String>,
+    /// The main tip the train was built on.
+    main: &'p str,
 }
 
 impl DriftRouter for LiveDriftRouter<'_, '_> {
+    fn member_induced(&mut self, head: &str) -> Option<String> {
+        member_induced_drift(&self.ports.main_worktree, self.main, head)
+    }
+
     fn authority(&mut self) -> std::result::Result<(), String> {
         if let Some(why) = self.abort.as_ref() {
             return Err(why.clone());
@@ -5745,6 +5777,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         let mut router = LiveDriftRouter {
             ports: &mut ports,
             abort: &mut dispatch_abort,
+            main: &main,
         };
         route_drift_ejections(
             &main_worktree,
