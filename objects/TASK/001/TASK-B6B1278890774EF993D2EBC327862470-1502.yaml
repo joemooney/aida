@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T11:35:34.469183420Z
-modified_at: 2026-11-26T11:38:52.820483780Z
+modified_at: 2026-11-26T11:40:29.086602227Z
 req_type: Task
 tags:
 - landing
@@ -24,6 +24,19 @@ relationships:
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-26T11:38:19.380565444Z
   created_by: joe
+comments:
+- id: 01a217a8-7099-74a3-a9a4-4e4a3b34784f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:40):
+    # TASK-3916 (STORY-2897 FRESH SLICE) + perf fix (replaces closed #4569, approved @ a6f5aba4; advisor-122 04:16; product-15 04:28). Lane: CLAUDE. MAIN, NEW branch story-2897-fresh2 (cut from the current main tip). Title "[AI:claude] feat(land): enforce landing-mode readiness and WAITING dependencies (Refs STORY-2897) (TASK-3916)". <=300 lines. NO test-budget changes.
+    1. PORT #4569's approved change onto current main: `git diff origin/main...origin/story-2897-fresh` is the reference. Adapt only to what main changed.
+    2. Then do the perf round from .aida/tmp/brief-STORY-2897-perf.md: time two_node_ship_watch_rework_and_train_entry_points and bug_2398_final_spawn_boundary_ratchet on this branch vs origin/main (3 runs each), find what the change made slower (main_watch open_episode / waiting-needs I/O or polling), and fix it so both come back to main's times. Record before/after in the PR body.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4569 (closed: retained clone with journal entry 59)". COMMIT your work.
+  created_at: 2026-11-26T11:40:29.086602227Z
+  modified_at: 2026-11-26T11:40:29.086602227Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a217a6-589a-7891-b915-54bdff4ed45d
   author: joe
