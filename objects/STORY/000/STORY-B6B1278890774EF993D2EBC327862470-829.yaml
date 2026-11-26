@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T18:07:26.681999875Z
+modified_at: 2026-11-26T18:10:48.872808198Z
 req_type: Story
 tags:
 - integration
@@ -1359,6 +1359,25 @@ comments:
   created_at: 2026-11-26T17:58:55.180789140Z
   modified_at: 2026-11-26T17:58:55.180789140Z
   session_id: 01a218c693e2
+- id: 01a2190d-ce05-7330-a3d2-70c9f62a1e9d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:10):
+    # STORY-3120 S5c: the rest of S5 after S5b #4673 (product-15 2026-11-26). Lane: CLAUDE. STRICT (challenger selection). INTEGRATION, NEW branch cut from the integration tip AFTER #4673 merged. Title "(Refs STORY-3120)". <=300 lines. Do NOT rebase onto main.
+    READ: `aida show STORY-3120 --comments`, .aida/tmp/brief-STORY-3120-S5b.md items C, D, F and H, and #4673's body ("Still to do in S5c").
+    SCOPE: the S5b items NOT shipped in #4673:
+     (C) a `--challenger-agent <vendor>` operator override (allowlist-validated, operator flag only, never repo config) + unauthenticated/rate-limited fallback or a clear refusal; a forged [AI:<tool>] tag must not help. TEST.
+     (D) rename old-path filtering applies ALL inventory exclusions. TEST.
+     (H1) spec-derived text in the posted comment (linked spec titles, acceptance_markdown, playbook checklists) is rendered inert, with no live @mentions, links or HTML. TEST. (Skip if #4673 already shipped it; check.)
+     (H2) a test for gh_stdin when gh exits non-zero WITHOUT reading stdin (skip if shipped).
+     (I) advisor-122 10:36 + integration-30 10:40: the S5b timeout test asserts the killed fake gh child is GONE (no orphan).
+     (F) DOCS: --run-review, --adversarial, --effort and --challenger-effort (resolution order flag > AIDA_REVIEW_EFFORT > review-rules default_effort > the [agents] seat effort; the allowlists), --challenger-agent, --fail-on with refuted findings still counting, --post-comment's opt-in rule and 60k cap, AND (advisor 10:36) literal pathspecs for `--scan --path`. No nested lists, no *italics*. If over 300 lines, split docs into S5d.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+     (J) From the #4673 review @b60031ed: (1) extend s5_posted_comment_renders_agent_text_inert to the remaining code-spanned fields (head_ref Some, non-empty excluded_files, a non-default AdversarialSummary challenger_agent/note); (2) gh_stdin keeps the spawn errno (ENOENT/EACCES) in its SpawnFailed error, as the old spawn_retrying_etxtbsy().context path did; TEST.
+  created_at: 2026-11-26T18:10:48.872808198Z
+  modified_at: 2026-11-26T18:10:48.872808198Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
