@@ -9,12 +9,12 @@ description: |
   - AC1: a shared claim with lease=unbound and launcher=unbound, a dead creator and an expired heartbeat is classified as an eligible stale lease by `aida doctor check leases` and released by the prescribed `aida doctor heal stale-leases --id shared-<invocation>`.
   - AC2: an admission refusal never prescribes a heal command that the heal path would refuse (one shared eligibility predicate for both); a test.
   - AC3: a test with exactly this claim shape (unbound lease, unbound launcher, dead creator, old heartbeat).
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T15:40:22.651180756Z
+modified_at: 2026-11-26T15:47:55.768008790Z
 req_type: Bug
 tags:
 - admission
@@ -128,6 +128,12 @@ comments:
   modified_at: 2026-11-26T15:40:22.651180756Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2188a-bef8-7ae1-8c91-2974e6adc9d1
+  author: aida-publication-done
+  content: Implementer push d169b25498d0 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T15:47:55.768003635Z
+  modified_at: 2026-11-26T15:47:55.768003635Z
+  session_id: 01a2184e943e
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
@@ -176,6 +182,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a2188a-bef7-7440-af61-dae7082e9982
+  author: aida-publication-done
+  timestamp: 2026-11-26T15:47:55.768001120Z
+  session_id: 01a2184e943e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
