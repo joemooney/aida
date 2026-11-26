@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:55:19.345403417Z
-modified_at: 2026-11-26T05:30:48.915838665Z
+modified_at: 2026-11-26T05:39:24.232395856Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -49,6 +49,11 @@ comments:
   created_at: 2026-11-26T05:30:48.915832727Z
   modified_at: 2026-11-26T05:30:48.915832727Z
   session_id: 01a21651638d
+- id: 01a2165d-9fc8-7153-ad51-d0ef4999e1b9
+  author: joe
+  content: 'REJECTED as obsolete (product-15 2026-11-25 22:50, per the implementer punt): the code this task fixes (aida-cli-lib/src/lane_hosts.rs, the git ls-tree -z claim snapshot with from_utf8(row)?, observed_claims) never reached main. It existed only on PR #4382 (bug-b6b1...-468), which closed unmerged, and the parent BUG-2706 is deferred until 2026-12-15 (advisor ruling 2026-11-22). If BUG-2706 resumes, fold this finding into its rework as a comment there.'
+  created_at: 2026-11-26T05:39:24.232395856Z
+  modified_at: 2026-11-26T05:39:24.232395856Z
 history:
 - id: 01a21493-ae4d-74b1-82ba-a2bb2bee369b
   author: joe
