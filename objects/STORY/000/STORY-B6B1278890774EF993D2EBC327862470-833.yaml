@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T04:30:13.663571828Z
+modified_at: 2026-11-26T05:13:33.685900910Z
 req_type: Story
 tags:
 - planning
@@ -38,6 +38,23 @@ comments:
   modified_at: 2026-11-26T04:20:47.206472480Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21645-f6f5-7642-99a2-34f6de45439e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c57dd78079 (slice 1, Refs STORY-3143: AC1+AC2).
+
+    AC1 [evidence: behavioral-test]: `aida report backlog [--json]` (aida-cli-lib/src/backlog_report.rs). Area from `[report.backlog.areas]` keyword/path map with defaults; S/M/L/XL from type, description length, AC count, heavy tags; priority, status; noise from from-review:/carried-from:/kind: tags. Tests: story_3143_classifies_area_difficulty_and_noise, story_3143_area_map_and_weights_come_from_config.
+    AC2 [evidence: behavioral-test]: per-area hotness = weighted open + high + 7d CR verdicts on the gate ledger + open PRs (forge inventory, spec IDs from title/branch) + 14d git churn on area paths; weights in `[report.backlog.weights]`. Test: story_3143_hotness_blends_weighted_signals, story_3143_spec_ids_in_pr_titles_and_branches.
+
+    Probe findings fixed: (1) noise tags (from-review:) voted for the review-gate area; now excluded from area text. (2) PR titles carry the agreed short ID while spec_id holds the origin form; the ID index now holds both. (3) displayed IDs use friendly_id (node-alias ratchet).
+    Deviations: table/json only. A local --format would collide with the global --format (BUG-2189), so JSON is --json or the global --format json. HTML is not in this slice. GitHub open-PR inventory now also fetches title (forge.rs).
+    Residual risks: the default areas have no paths except docs/ci, so churn is zero for the other areas until a project configures paths. Area matching is whole-word keywords, and ties go to the alphabetically first area. Signal collection is not unit-tested (ledger, forge, git IO); unavailable signals are reported in output, never silently zeroed... except the ledger read, which returns empty on error. Over the 300-line budget: ~410 code + ~120 test lines after rustfmt.
+    Remaining for slice 2: AC3 flow metrics, AC4 recommendations.
+  created_at: 2026-11-26T05:13:33.685900910Z
+  modified_at: 2026-11-26T05:13:33.685900910Z
+  session_id: 01a2161dec9c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe

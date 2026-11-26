@@ -960,6 +960,31 @@ comments:
   modified_at: 2026-11-26 04:25:51.874785+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21646-ab01-7591-848c-3ddbd31d6bc1
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 3270445ed5 (PR #4619, round 5)
+
+
+    Acceptance evidence:
+
+    - F1 (coverage ledger): review_batches now returns the runner''s ledger, keeping only rows marked `reviewed`. A row naming a file outside its own batch is refused. handle_review_prepare verifies the merged ledger against the inventory, and the existing coverage bail returns non-zero whether or not --fail-on is set. --verify-coverage now conflicts with --run-review, so a supplied ledger file cannot stand in for the runner''s. Tests: s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage (a runner returning {"findings":[]} fails with ''coverage verification failed'' naming a.rs) and s3a2_run_review_refuses_findings_outside_the_inventory (a skipped row is not counted; a reviewed row outside the batch is refused).
+
+    - F3 (end to end): the same test drives handle_review_prepare --from <base> --run-review --fail-on high. The worktree has an uncommitted review-rules.toml with exclude=["*.rs"]. If those rules were read, nothing would be reviewable and the run would pass. The test asserts that the runner ran, that a.rs is in the inventory, and that the run fails until the runner reports a.rs reviewed.
+
+    - Validation: the 3 s3a2 tests pass in a lane job (cargo test --profile agent -p aida-cli-lib --lib). make check-ci-fast exits 0. The first run failed only because the new test was missing from scripts/ratchet-set.json; it is now listed there.
+
+
+    Probes: an empty inventory gives 100% coverage, a pass (no files to review). Duplicate rows across batches are reported as ambiguous and fail. A runner reporting ''skipped'' with a reason is treated as not covered (stricter than the --verify-coverage contract).
+
+    Deferred per brief: F2 (rename context) and F4 (signalling the escaped descendant).
+
+    Residual risk: the runner''s ''reviewed'' is still the runner''s own claim; it is not checked independently.'
+  created_at: 2026-11-26 05:14:19.777730+00:00
+  modified_at: 2026-11-26 05:14:19.777730+00:00
+  session_id: 01a2161e5c70
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21647-6f62-7320-b32b-a5e58aeb26db
   author: joe
   content: 'Integration pre-check: PR #4619 head 3270445ed5 (delta from a73b2c2f04: 1b4f236a044 + 3270445ed5f) — PASS
