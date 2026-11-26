@@ -138,6 +138,44 @@ The status badges, refusal messages and mode names in the CLI come from a few en
 - **Pickability.** Before any pickup AIDA checks, in order, that the spec is work rather than reference material, is not human-only, is not waiting in Needs Attention, and has no unfinished or rejected blocker.
 - **Locking posture.** The `[locking]` posture defaults to context-aware, which refuses a lock mismatch only during a drain; `off`, `warn` and `enforce` override it.
 
+<!-- trace:STORY-2839 | ai:claude -->
+
+### Field guide: words that sound alike
+
+Three pairs of words get mixed up in conversation. Each pair names two different things, and the difference matters when something goes wrong.
+
+| | Lane | Worktree |
+| --- | --- | --- |
+| **What it is** | The whole unit of isolated work: a spec or review, its session, seat and lease, its branch and its checkout | A second checkout of the repository on disk, created with `git worktree add`, sharing the main repository's Git objects |
+| **When it starts and ends** | Starts with `aida queue work` and ends with `aida session end` | Created when the lane starts; left behind as a stale checkout if the session dies, until `aida session reap` or `aida worktree gc` deals with it |
+| **Analogy** | An operating theatre in use: room, patient, surgeon and chart | The room alone |
+
+| | Role | Seat |
+| --- | --- | --- |
+| **What it is** | A job label such as advisor, implementer, reviewer or product | A station in the build loop that a session holds under a live [grant](../aida-core/templates/.aida/discipline/product-glossary.md#grant) |
+| **What it controls** | What the session sees: its instructions, queue and statusline badge | What the session may do: privileged steps such as recording a review verdict or shipping |
+| **How it is set** | An environment label or `--role` flag. It confers no authority. | `aida role enter <seat>` at an interactive terminal, or a delegated [child grant](../aida-core/templates/.aida/discipline/product-glossary.md#child-grant) |
+
+| | Conversation | Session |
+| --- | --- | --- |
+| **What it is** | One chat transcript with a model in Claude Code, Codex or Antigravity | One tracked unit of ownership that binds a seat, lease and worktree to a spec or review |
+| **What bounds it** | The model's context window | The work it owns, from `aida session start` to `aida session end` |
+| **How they map** | One advisor conversation can file and groom ten specs without starting any session | One large spec can rotate through several conversations, each continuing from the last one's [handoff](../aida-core/templates/.aida/discipline/product-glossary.md#handoff) |
+
+### What you choose, what you configure, and what runs on its own
+
+You do not need every term on this page to use AIDA. Most words fall into one of three groups: choices you make for a piece of work, project or host settings with safe defaults, and mechanisms that run without you. Some rules hold regardless of configuration.
+
+| Concept | You choose or configure | Fixed rule |
+| --- | --- | --- |
+| **Execution mode** | Per spec, when it is approved: `aida edit <spec> --mode drain` (or drive, guided, operator, decide) | Only drain and drive run unattended; a guided pull request always carries a merge hold |
+| **Mandate** | At an interactive terminal: `aida mandate start --ship-held` or `--drive`, a `--ttl`, and the opt-ins `--include-supervised` and `--include-gate-paths` | It needs a person at a terminal and never covers operator-only specs; its lifetime is capped at 24 hours unless `[mandate] max_ttl_hours` in `~/.aida/config.toml` changes the cap, which never exceeds 168 hours |
+| **Informational CI** | `[ci] informational_workflows` in `.aida/config.toml` (default `["Cross-platform*"]`) and `informational_checks` | A required check still gates the merge, even when its name matches the list |
+| **Lane capacity** | `[queue] standalone_implementer_cap` in `~/.aida/host.toml` or `.aida/config.toml` | One drain drives a repository at a time; a second drain, even from another clone, is refused while the first holds its claim |
+| **Locking posture** | `[locking] posture`: context-aware (default), `off`, `warn` or `enforce` | Every store write still takes the store writer lock |
+| **Review** | Which vendor and model reviews, through agent configuration | The reviewer must be a different seat from the author, and the verdict is pinned to the head commit |
+| **Runs on its own** | Nothing to set: leases, cache refresh, auto-bump to Completed, train [bisect](../aida-core/templates/.aida/discipline/product-glossary.md#bisect) | The read cache confers no authority and can always be rebuilt from the store |
+
 ## What progress means
 
 In the standard PR lifecycle, Draft captures an idea, Approved records agreement, In Progress means implementation has started, and Done means work is finished on a branch. Completed follows recognized integration evidence on the default branch. Planned is optional; Needs Attention and terminal dispositions handle work that cannot simply proceed.
