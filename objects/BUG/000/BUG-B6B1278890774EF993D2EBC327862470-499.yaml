@@ -13,12 +13,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T15:09:17.343201107Z
+modified_at: 2026-11-26T15:11:49.098293574Z
 req_type: Bug
 tags:
 - leases
 - review
 - small
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21867-dc9f-7831-a80e-4c1dd1999093
+  created_at: 2026-11-26T15:11:19.974537130Z
+  created_by: dirtlab
 comments:
 - id: 01a20b16-38b3-7b70-a0f4-a7c666c33eef
   author: joe
@@ -188,6 +194,18 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21869-4662-7a51-9c6c-7684c46b5081
+  author: dirtlab
+  timestamp: 2026-11-26T15:11:22.210911281Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21869-b3da-7e80-aea7-ee161bef82f1
+  author: dirtlab
+  timestamp: 2026-11-26T15:11:50.234649263Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
@@ -196,3 +214,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ac22ab7f548
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T15:11:49.098293574Z
+  implemented_by: dirtlab
