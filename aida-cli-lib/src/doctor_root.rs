@@ -1954,6 +1954,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:STORY-2630 | ai:codex
     (&["codegraph", "code-graph"], "codegraph"),
+    // trace:BUG-2774 | ai:claude
+    (&["deputy-binary", "stale-deputy"], "deputy-binary"),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
     // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
     (
