@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T05:21:11.241123969Z
+modified_at: 2026-11-26T05:21:23.728253483Z
 req_type: Bug
 tags:
 - ci
@@ -96,6 +96,17 @@ comments:
   created_at: 2026-11-26T05:21:11.475521678Z
   modified_at: 2026-11-26T05:21:11.475521678Z
   session_id: 01a216486046
+- id: 01a2164d-2310-7533-b621-feeb9b988896
+  author: joe
+  content: |-
+    DEFERRED p3s for a follow-up (advisor-122 2026-11-25 22:24 on #4623 @ e430c0ba): (1) measure the deadline from script start; (2) SIGKILL surviving process-group members; (3) print the summary on a listing breach. Review findings for reference:
+    - BUG-2768 AC1 unmet (claimed by the completing (BUG-2768) trailer): nothing confirming or refuting the memory cause is recorded on the spec. The implementer's approach comment says the evidence is 'consistent with ... but not proven' and defers to this PR's own CI runs. Fix: once this head's hosted l
+    - BUG-2768 AC2 unmet (claimed): AC2 requires lib-1 to complete under hosted limits in 3 consecutive runs. At review time this head's hosted lib-1 job (run 45760225097, job 139708247543) has been running for 4 minutes and there are no prior runs with line-tables-only. The bound itself is sound: CARGO_P
+    - ResourceWatch measures its deadline from script start, not from job start (scripts/ci-test-shards.py ResourceWatch.__init__; ci.yml AIDA_CI_TEST_DEADLINE_SECS=1980). On the first cold-cache run under the new ci-dev-profile-lib-lines key, setup plus 'Build aida binary for lib unit tests' can take mor
+    - The breach kill in run_watched is incomplete. guard() returns as soon as the direct child exits after SIGTERM, so group members that survive SIGTERM (nextest's test processes or rustc) are never sent SIGKILL. A runner cancel or timeout SIGTERMs python, which dies without raising BaseException, so th
+    - When the planner's listing breaches (main: `except ValueError` then `return 1`), the script returns without printing watch.summary(). The '# resource-watch' peak line is therefore missing in exactly the cargo test --list build phase where #4617 died, and for a deadline breach there no MemAvailable/s
+  created_at: 2026-11-26T05:21:23.728253483Z
+  modified_at: 2026-11-26T05:21:23.728253483Z
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
