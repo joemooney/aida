@@ -1,0 +1,28 @@
+id: 01a217a3-b545-73a0-b660-ba242216f1f3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1502
+agreed_id: TASK-3916
+title: 'STORY-2897 slice: landing-mode readiness and WAITING dependencies, ported fresh onto main with the lib-0 slowdown fixed (replaces #4569)'
+description: |
+  Child slice of STORY-2897 (landing-mode readiness + WAITING dependencies), filed by product-15 2026-11-26 04:40 under its own spec ID so its lane is not blocked by STORY-2897's retained lease 01a2156f34c2 (clone -797, pinned by repair-journal entry 59, which only an operator attest can release). #4569 (approved @ a6f5aba4) is closed in favour of this.
+
+  ## Acceptance
+  - AC1: port #4569's approved change onto current main (reference: origin/story-2897-fresh).
+  - AC2: fix the lib-0 slowdown it introduced: two_node_ship_watch_rework_and_train_entry_points (155.9s vs 128.4s on main) and bug_2398_final_spawn_boundary_ratchet (33.7s vs under the SLOW threshold), with no test-budget changes; before/after timings in the PR body.
+  - AC3: the PR title carries "(Refs STORY-2897 TASK-N)" form, or completes this task and refs STORY-2897.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T11:35:34.469183420Z
+modified_at: 2026-11-26T11:35:34.469183420Z
+req_type: Task
+tags:
+- landing
+- train
+filed_at:
+  code_sha: 2d89ef450561e39de69593890f3ab7765146154b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461541dfb1
+  vendor: claude
