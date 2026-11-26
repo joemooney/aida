@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-25T23:02:57.181216589Z
+modified_at: 2026-11-26T00:01:56.040519101Z
 req_type: Story
 tags:
 - integration
@@ -496,6 +496,41 @@ comments:
   created_at: 2026-11-25T22:40:14.179249364Z
   modified_at: 2026-11-25T22:40:14.179249364Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21528-ea12-7de2-b1e8-c3b748f71f07
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4603 @ 7dd897021ef (STORY-3120 S3b: --effort/--model tuning plus trusted-base review rules; Refs-only; +401/-2, of which about 190 are tests).
+
+    Result: FAIL, with ONE blocking item (B1). Everything else passes. STRICT tier, so it needs an INDEPENDENT review at the final head.
+
+    Scope guard (product 16:14): PASS. There is no new runner spawn path and no --run-review wiring; review_tuning is dead code outside tests, like S3a. The only new child processes are `git diff/ls-tree/cat-file`, run through host_git_command, which refuses seat clones.
+
+    B1 (blocking; comment 19 item 8 / advisor 09:33 "the PR under review cannot pick its own reviewer, model and effort"):
+    - resolve_for_run takes the 4th precedence source, the reviewer seat's effort and model, from aida_core::agents_config::resolve_agent_tuning(project_root, ...). That reads project_root/.aida/config.toml and project_root/.aida/agents.toml from the WORKING TREE, which is the checkout under review (agents_config.rs:358-372).
+    - So a PR that adds `[agents.codex.seats.reviewer] effort = "low"` (or a weak model) downgrades its own review whenever no flag, env value or review-rules default is set.
+    - The allowlist stops injection but not a downgrade.
+    - Required:
+      - read the project [agents] tuning from the trusted base, the same way as review-rules.toml: the base blobs of .aida/config.toml and .aida/agents.toml, passed to resolve_agent_tuning_from. The global ~/.aida/agents.toml stays as is.
+      - AND extend the trusted_review_rules diff guard to refuse when the change modifies .aida/config.toml [agents] or .aida/agents.toml. Refusing on any change to either file is acceptable.
+      - TEST: a head commit that sets a reviewer-seat effort in .aida/config.toml either refuses or has no effect on the resolved tuning.
+
+    Passes:
+    1. The effort allowlist is fixed per vendor (claude low..max, codex low..xhigh, custom cmd low..xhigh). EVERY source is validated before the first set value is taken, so a valid flag doesn't mask a bad lower source. The error names the source. Tests cover the injected `high"\nfoo=1` at flag, env, rules and seat, for claude, codex and the custom cmd. run() re-checks effort against the vendor actually spawned, so claude's max can't reach codex (tested).
+    2. The model is checked against [A-Za-z0-9._:/-], at most 128 characters and no leading '-', for every source. It goes in as its own argv element after --model.
+    3. Codex effort becomes `-c model_reasoning_effort=<enum>`, built only from the &'static allowlist entry, never the raw string. Flags are inserted before `--`, so the stdin `-` stays last for codex.
+    4. review-rules.toml is read via ls-tree/cat-file at `base^{commit}`. A symlink or non-blob is refused. A diff of base..head (or base..worktree) touching the file refuses the run, and that covers edits, additions and deletions. A revision starting with '-' is refused (tested).
+    5. The four new AIDA_REVIEW_* keys are added to DROPPED_AIDA_KEYS.
+
+    Should-fix (non-blocking, may ride the B1 round or S3a-2):
+    (a) The trusted-base git calls should pass --no-replace-objects (`git --no-replace-objects ls-tree/cat-file`). Otherwise a refs/replace entry substitutes the "base" blob (the S2 #4511 lesson).
+    (b) The diff guard compares the trees base and head directly. If `base` is the moving target tip and the target branch changed review-rules.toml after the PR forked, the run is refused spuriously. That fails closed, but S3a-2 should pass the merge-base as `base`.
+    (c) For S3a-2 wiring: `base` must come from the forge target or the local default ref, never from a PR-supplied value. `head` must be the reviewed head SHA (not None) in CI, so uncommitted working-tree state doesn't matter.
+
+    Merge-tree against origin/integration: CLEAN. FAST is green so far (2 SUCCESS, remainder pending or skipped).
+  created_at: 2026-11-26T00:01:56.040519101Z
+  modified_at: 2026-11-26T00:01:56.040519101Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
