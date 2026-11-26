@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Lane-recovery treats an OPEN PR from the lane's branch into ANY base (including `integration` / promote branches) as the lane's PR: no "no open PR" needs-attention while it's open. Test with an integration-base PR fixture.
   - AC2: When a landing's completion trailer names a spec in needs-attention whose PR is landed, it completes the spec (or reports clearly why not). Test.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-24T17:25:14.437900475Z
+modified_at: 2026-11-26T03:07:43.583089537Z
 req_type: Bug
 tags:
 - integration
@@ -314,6 +314,19 @@ history:
   timestamp: 2026-11-24T17:24:09.397141412Z
   session_id: 01a20e4f3409
   changes: []
+- id: 01a215d2-c24c-7270-8cb5-d3821c85bb33
+  author: aida-auto-bump
+  timestamp: 2026-11-26T03:07:43.565001883Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a215d2-c25f-7fc1-9c67-82abb38fafba
+  timestamp: 2026-11-26T03:07:43.583087683Z
+  agent: aida
+  commit_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
+  summary: Completed via merge e5e3711c
 execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
@@ -322,3 +335,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4e140498bc8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T03:07:43.564995499Z
+  completion_sha: e5e3711c9f9fdd4617a00cefb897e8b493269c47
