@@ -1,0 +1,18 @@
+{
+  "id": "main-red-b4c61d1f69f2536883ca2d64aba061031f1463de-green-advisor",
+  "thread_id": "main-red-b4c61d1f69f2536883ca2d64aba061031f1463de-green",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795692057561,
+  "body": "Main is green again at 7461541dfb11 after 124 min red (first red: b4c61d1f69f2). Outcome: recovered.",
+  "subject": "main is green again at 7461541dfb11",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
