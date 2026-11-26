@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T14:19:14.785680525Z
+modified_at: 2026-11-26T14:21:02.362455482Z
 req_type: Bug
 tags:
 - leases
@@ -72,6 +72,26 @@ comments:
   modified_at: 2026-11-26T14:14:32.641916990Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2183b-321a-71a1-8237-f7b80d647021
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + store fixture):** `leases::landed_refusal` pure decision (Completed status, or PR state MERGED/CLOSED -> landed) tested in a new `bug_2738_landed_refusal_tests.rs`; `record_refusal_on_landed_spec` on a Completed fixture spec leaves status Completed, sets no failure_reason, and adds a comment naming the writer and verdict. The gate-ledger verdict record is written earlier in `aida review record` (before hold/spec side effects) and is untouched; the test asserts the comment and status, and the ledger write ordering is cited from review_commands.rs.
+    - **AC2 (unit + store fixture):** an In Progress spec with an OPEN (or unknown) PR is not landed, and `shelve_spec_on_failure` still flips it to Needs Attention with the existing shelve comment.
+
+    ### Expected files
+    - `aida-cli-lib/src/leases.rs` (decision + comment writer)
+    - `aida-cli-lib/src/review_commands.rs` (guard before `shelve_spec_on_failure` on the record path; gh PR-state read)
+    - `aida-cli-lib/src/tests/bug_2738_landed_refusal_tests.rs` + tests mod registration
+
+    ### Ambiguities / conflicts as questions
+    - When gh cannot answer the PR state, the guard falls back to today's shelve (status check only). Acceptable? Proceeding with that lean.
+  created_at: 2026-11-26T14:21:02.362455482Z
+  modified_at: 2026-11-26T14:21:02.362455482Z
+  session_id: 01a218395b6c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
