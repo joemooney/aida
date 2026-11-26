@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:09:19.840024994Z
-modified_at: 2026-11-26T08:37:07.970252207Z
+modified_at: 2026-11-26T08:38:07.440933693Z
 req_type: Task
 tags:
 - review
@@ -84,6 +84,12 @@ comments:
   content: Implementer push 2912cd16b5ca declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T08:37:07.970250224Z
   modified_at: 2026-11-26T08:37:07.970250224Z
+  session_id: 01a216cf8f0e
+- id: 01a21701-3f50-7072-afbb-364c320f74e8
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int44-cred-paths` at head `2912cd16b5ca0c7e17db2d20792e45d5aeae5381`.'
+  created_at: 2026-11-26T08:38:07.440930693Z
+  modified_at: 2026-11-26T08:38:07.440930693Z
   session_id: 01a216cf8f0e
 history:
 - id: 01a216b3-3ac2-73f2-9348-b88cea4c9520
