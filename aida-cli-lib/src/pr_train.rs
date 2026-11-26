@@ -5418,6 +5418,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     for w in &warnings {
         println!("  warning: {w}");
     }
+    if !opts.dry_run && !outcome.landed.is_empty() {
+        complete_landed_specs(&main_worktree, &outcome.landed);
+    }
     if !opts.dry_run && !outcome.landed.is_empty() && !opts.no_pull {
         let status = std::process::Command::new(crate::pr_cmd::pr_ship_post_merge_aida_exe())
             .arg("pull")
@@ -5454,9 +5457,42 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     Ok(())
 }
 
+/// STORY-3006: complete the landed commits' trailer specs at merge, through
+/// the scanner `aida pull` runs; the advisor-loop train never pulls. A failure
+/// warns, and the next `aida pull` scans the same commits.
+// trace:STORY-3006 | ai:claude
+pub(crate) fn complete_landed_specs(main_worktree: &Path, landed: &[(u64, String)]) {
+    if !crate::db_reconcile::auto_bump_enabled() {
+        return;
+    }
+    let shas: Vec<String> = landed.iter().map(|(_, sha)| sha.clone()).collect();
+    let store_path = main_worktree.join(".aida-store");
+    let storage = crate::Storage::new(&store_path);
+    match crate::db_reconcile::complete_landed_commits(main_worktree, &store_path, &storage, &shas)
+    {
+        Ok((flips, _)) => {
+            for flip in &flips {
+                println!(
+                    "  completed {} at merge ({})",
+                    flip.spec_id,
+                    short(&flip.sha)
+                );
+            }
+        }
+        Err(e) => eprintln!(
+            "  warning: could not complete the landed specs ({e:#}); the next `aida pull` will"
+        ),
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/story_1690_train_tests.rs"]
 mod tests;
+
+// trace:STORY-3006 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_3006_complete_at_merge_tests.rs"]
+mod story_3006_complete_at_merge_tests;
 
 // Automatic services use a stricter member contract than explicit trains:
 // authoritative approval coverage and no mandate hold release. Protected fast
