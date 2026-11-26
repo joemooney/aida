@@ -14,12 +14,24 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T04:10:35.991630247Z
+modified_at: 2026-11-26T04:12:06.555554921Z
 req_type: Bug
 tags:
 - ci
 - landing
 - throughput
+comments:
+- id: 01a2160d-eeef-7062-893e-275166cdaa6d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:12):
+    # BUG-2768: CI lib-1 shard dies on GitHub-hosted runners (advisor-122 21:10; product-15). Lane: CLAUDE. MAIN, NEW branch. STRICT (CI workflow). <=150 lines. Completing (BUG-2768) trailer.
+    READ: `aida show BUG-2768` (evidence + AC1-AC3). ci.yml ~:174-215 defines the shard matrix; lib-0/lib-1 split aida-cli-lib's unit tests by module (TASK-1979). Use `gh run view 45747748433 --log` and the #4569 lib-1 runs as evidence. Prefer the smallest bounded fix: CARGO_BUILD_JOBS for the lib shards and/or a lighter test profile (debuginfo/codegen) and/or a further split, plus AC3's explicit early-failure message. Do NOT move shards onto self-hosted runners. Keep every CI gate intact (make check-ci-fast).
+    Publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T04:12:06.555554921Z
+  modified_at: 2026-11-26T04:12:06.555554921Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
