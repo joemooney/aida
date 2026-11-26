@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3910",
+  "publishes": [
+    {
+      "at": "2026-11-26T03:08:06.864238622Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T21:16:58.172260143Z",
+      "spec": "TASK-3910",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "18 changes are open and the limit is 10; TASK-3910 continues on the branch selected for existing work, which is not limited",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-26T03:08:06.720823441Z",
+      "spec": "TASK-3910",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "804149ce5ca42575aac1db67ab52658394ac3572",
+        "pr": 4596,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
