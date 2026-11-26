@@ -9,16 +9,22 @@ description: |
   - AC1: clone creation treats an existing seat pin whose commit is already reachable from the origin base (or any remote branch) as STALE and replaces it, with a log line; a pin protecting a commit that is on NO remote is never replaced (refuse with the salvage hint instead).
   - AC2: session end / seat salvage removes the seat pin together with the clone, so a pin cannot outlive its clone.
   - AC3: tests for the stale-pin replace, the unique-commit refusal, and pin removal on session end.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T17:45:27.110566846Z
+modified_at: 2026-11-26T18:25:39.964820896Z
 req_type: Bug
 tags:
 - lanes
 - seat-clone
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2191a-3424-70c2-b4bf-2e965cb9244a
+  created_at: 2026-11-26T18:24:45.160319468Z
+  created_by: dirtlab
 comments:
 - id: 01a218e3-8880-7632-9b58-b85041962ab7
   author: joe
@@ -54,6 +60,25 @@ comments:
   modified_at: 2026-11-26T17:45:27.110566846Z
   session_id: 01a218e76317
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21919-8c95-7332-b5e8-bc30bee1f85a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ac47b96cb6 (git diff origin/main...HEAD: seat_clone.rs +38, lifecycle tests +59).
+    Acceptance evidence (per the authoritative brief): stale pin with no clone and no lease is released and re-pinned — bug_2772_a_stale_pin_with_no_clone_or_lease_is_replaced; lease-held pin and live-clone pin refuse, pin untouched — bug_2772_a_pin_held_by_a_lease_or_a_live_clone_refuses. AC2 (session end/destroy releases the pin) was already in place (destroy -> release_pin) and covered by task_2053_bwrap_destroy_salvages_then_removes_clone_target_and_pin. Targeted run: cargo test -p aida-cli-lib --lib -- seat_clone: 404 passed, 0 failed. make check-ci-fast: exit 0.
+    Probes: (1) pin name vs lease match both use the clone dir name, same as orphan_pins. (3) N leases: any() — one naming the clone refuses. (4) dangling symlink at dest: symlink_metadata sees it -> refuses (safe). Concurrent launches at one path: compare-and-delete on the read oid, then create_dir claims; the loser refuses. (5) only refs/aida/seats/<dest> is touched; removal re-checks dir absent + no clone lease right before update-ref -d <pin> <oid>.
+    Residual risks: AC1's 'commit on no remote -> refuse' rule is not implemented — the brief keys staleness on no clone + no lease instead (the pin only protects a base commit main already holds). An unparseable lease file is skipped by list_leases, so it would not block release; the clone dir is absent in that case anyway.
+  created_at: 2026-11-26T18:23:54.517657696Z
+  modified_at: 2026-11-26T18:23:54.517657696Z
+  session_id: 01a218e76317
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21919-d6f3-7823-b434-616395d0c9df
+  author: aida-publication-done
+  content: Implementer push b9e84bdb3a76 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T18:24:13.555568283Z
+  modified_at: 2026-11-26T18:24:13.555568283Z
+  session_id: 01a218e76317
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218e0-ea73-7a92-9d85-2f50a6c28366
   author: joe
@@ -66,6 +91,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21919-d6f3-7823-b434-61570a3a263f
+  author: aida-publication-done
+  timestamp: 2026-11-26T18:24:13.555566687Z
+  session_id: 01a218e76317
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a2191a-5ab8-7b63-88d0-3ae8e5585a85
+  author: dirtlab
+  timestamp: 2026-11-26T18:24:47.288074498Z
+  session_id: 01a218e76317
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2191b-30ea-7c42-8fc2-49dafd58ca62
+  author: dirtlab
+  timestamp: 2026-11-26T18:25:42.122101758Z
+  session_id: 01a218e76317
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 4d918b28370443f66f32aebc1f6f6074501ad557
@@ -74,3 +120,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 15bbbc68222
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T18:25:39.964820896Z
+  implemented_by: dirtlab
