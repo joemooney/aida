@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2773",
+  "publishes": [
+    {
+      "at": "2026-11-26T18:19:31.928986893Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T15:35:36.975502261Z",
+      "spec": "BUG-2773",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4666,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "d169b25498d0770d01241a37abe8cf81163753ec"
+      }
+    },
+    {
+      "ts": "2026-11-26T15:35:55.895305072Z",
+      "spec": "BUG-2773",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2773 (completing). AC1: verified by bug2773_unbound_claim_with_dead_creator_is_listed_and_healed (collect_doctor_findings_at lists shared-<invocation> with safe_heal, targeted_stale_finding accepts it, heal_exited_claim deletes it). AC2: verified. coordination::shared_heal_id is the single predicate for doctor_root::shared_stale_finding and implementer_refusal; the flipped bug2655_force_refuses_fresh_or_live_creator_preserving_claim test asserts that fresh and live holders get no heal command. AC3: verified by the same AC1 test, which uses the dell1 shape (lease=unbound, launcher=unbound, dead creator with a legacy linux-starttime identity, heartbeat 2026-11-15). Bug protocol item 'the PR touches at least one test file': met (coordination.rs tests module). CI: fast gates green, including the store-writer inventory; fast compile was pending at review time. Request changes for one blocking defect. The new unbound branch of exited_holder_is_dead accepts a dead creator plus an expired TTL as death evidence. For a non-process-backed claim, both are true about 30 minutes after creation whatever the holder's state, so the branch never checks whether the holder clone still has a Live or Dormant session for the scope. The heal path and --force-claim admission both use this predicate, so both inherit the gap. A smaller p3 test gap is listed too.",
+        "recovery_hint": "address the review findings, move BUG-2773 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T16:50:09.683013461Z",
+      "spec": "BUG-2773",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4666,
+        "verdict": "APPROVED",
+        "reviewed_sha": "67629843c466be9583facbb0ee20f8c5e445a77a"
+      }
+    },
+    {
+      "ts": "2026-11-26T18:15:36.619889006Z",
+      "spec": "BUG-2773",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4666
+      }
+    },
+    {
+      "ts": "2026-11-26T18:19:31.675546197Z",
+      "spec": "BUG-2773",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e927dff7e4fb074b582537778ade224ed696dc8e",
+        "pr": 4666,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
