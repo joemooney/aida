@@ -5579,3 +5579,9 @@ pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
 #[cfg(test)]
 #[path = "tests/story_2905_train_pin_claim_tests.rs"]
 mod story_2905_train_pin_claim_tests;
+
+// BUG-2745: the train's mandate cover reads a verdict auto-release as a
+// recorded clearance. trace:BUG-2745 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2745_verdict_release_tests.rs"]
+mod bug_2745_verdict_release_tests;
