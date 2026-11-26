@@ -9,12 +9,12 @@ description: |
   - AC1: a manual train waiting on admission is admitted BEFORE the auto-train starts its NEXT train: FIFO across waiters, or the auto-train yields whenever a cooperative manual waiter is recorded.
   - AC2: the waiting manual train is visible in `aida advisor loops train-status` / `aida pr train --check` ("operator train for #N waiting since HH:MM; auto-train yields next").
   - AC3: a test: an auto-train finishing train A with a recorded manual waiter does not start train B until the manual train has run (or released).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-26T18:03:05.845823448Z
+modified_at: 2026-11-26T18:44:31.602564725Z
 req_type: Bug
 tags:
 - admission
@@ -29,6 +29,11 @@ relationships:
     custom: implemented-by
   target_id: 01a21827-404e-79f1-afcf-f9cda1b59a60
   created_at: 2026-11-26T13:59:22.787225612Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2192c-408c-7113-ae31-6b4d1ba0161f
+  created_at: 2026-11-26T18:44:31.602497044Z
   created_by: dirtlab
 comments:
 - id: 01a21801-c7ed-7342-96b4-dca39e386dd9
@@ -135,6 +140,28 @@ comments:
   modified_at: 2026-11-26T18:03:05.845823448Z
   session_id: 01a219055533
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2192b-ac78-7cc1-8c1e-6364b58a3717
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d877ea8959 (port of approved #4659 @ d50327f9 onto main 4af2602e90; 231 lines).
+    - AC1/AC3 [behavioral-test]: review_watch::train::bug2769_idle_admission_tests::bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter passes (lane job, 10/10 with the bug2769/2732/2703/2765 neighbours). yield_reason (admission_owner.rs) yields only for the exact purpose 'legacy auto-train', the same string as ADMISSION_PURPOSE in advisor_loop_train.rs.
+    - AC2 [behavioral-test]: describe() line asserted in the same test; shown in train-status (advisor_loop_service status_value/status_lines) and in pr train --check text/json (pr_train_check).
+    - Adaptation: store-writers.toml conflict. Main (TASK-3912) had already removed the pr_train_handler truncate row, so I kept only the new manual_train_admission row. check-store-writers.py reconciles. #4667 status lines and #4668's split_bounded_train do not interact; manual_train_admission has no new callers.
+    - Probes: (1) waiter PR-list match is order-sensitive ([1,2] vs [2,1] resets since): cosmetic. (3) single waiter slot: concurrent manual waiters are last-writer-wins, and any admitted manual train clears it; the others re-record on retry. (4) A far-future expires_at is rejected by the TTL bound; an unparsable record is ignored. (5) Fail-safe: the waiter grants nothing. At worst it delays the auto-train by 15 min (TTL) if the operator stops retrying.
+    - Gates: make check-ci-fast exit 0 (lane job j20261126T181845326-5-0).
+    - Residual risk: an abandoned waiter stalls auto-trains for up to 15 min.
+  created_at: 2026-11-26T18:43:42.328083312Z
+  modified_at: 2026-11-26T18:43:42.328083312Z
+  session_id: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2192b-e55f-7160-abfe-235ca38d645d
+  author: aida-publication-done
+  content: Implementer push a68c57341021 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T18:43:56.895698260Z
+  modified_at: 2026-11-26T18:43:56.895698260Z
+  session_id: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
@@ -180,6 +207,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2192b-e55f-7160-abfe-2349abbafb64
+  author: aida-publication-done
+  timestamp: 2026-11-26T18:43:56.895696277Z
+  session_id: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a2192c-7ddc-7783-a19a-6aea765d36f5
+  author: dirtlab
+  timestamp: 2026-11-26T18:44:35.932242809Z
+  session_id: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94

@@ -1,0 +1,54 @@
+id: 01a2192c-408c-7113-ae31-6b4d1ba0161f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-367
+title: 'Review PR-4679: [AI:claude] test(auto-train): trace the BUG-2771 acceptance criteria to the loop test (BUG-2771)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21905`) for branch `train-fair-admission-fresh`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4679>
+  - Branch: `train-fair-admission-fresh` → `main`
+
+  ## Covers
+
+  - BUG-2771
+  - BUG-2773
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4679` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T18:44:20.236333164Z
+modified_at: 2026-11-26T18:44:24.495044076Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
+  created_at: 2026-11-26T18:44:24.495003539Z
+  created_by: dirtlab
+history:
+- id: 01a2192c-60c3-7dc3-a343-cf98f266af36
+  author: dirtlab
+  timestamp: 2026-11-26T18:44:28.483355080Z
+  session_id: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: a68c57341021443485650e7f20ddbe165affcfbd
+  branch: train-fair-admission-fresh
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4af2602e90
+  vendor: claude
+  session: 01a219055533
+  harness_version: 2.1.319 (Claude Code)
