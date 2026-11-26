@@ -141,60 +141,16 @@
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
 - user_id: dirtlab
-  requirement_id: 01a21609-e1b7-7091-8146-ab61403671d1
-  position: 1421000
-  added_by: dirtlab
-  added_at: 2026-11-26T04:14:19.305426095Z
-  for_role: implementer
-- user_id: dirtlab
-  requirement_id: 01a214b5-d807-7f73-ac35-a8f2d9d840c5
-  position: 1422000
-  added_by: dirtlab
-  added_at: 2026-11-26T04:24:08.999211085Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a2148c-15aa-74a2-90f5-6b603346566c
   position: 1424000
   added_by: dirtlab
   added_at: 2026-11-26T04:29:01.027039233Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a2164a-c7c6-7312-ade3-0e8f013521be
-  position: 1426000
-  added_by: dirtlab
-  note: auto-queued by `session end` (01a21619); covers 1 spec
-  added_at: 2026-11-26T05:19:05.073961942Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
-  requirement_id: 01a21635-3a7a-71b2-865f-7d50d6e86f88
-  position: 1428000
-  added_by: dirtlab
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-11-26T05:22:25.291436123Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
-  requirement_id: 01a2167d-1f09-7530-9795-08ecc8805243
-  position: 1430000
-  added_by: dirtlab
-  note: auto-queued by `session end` (01a2161d); covers 0 specs
-  added_at: 2026-11-26T06:13:58.291258899Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
   requirement_id: 01a21683-5eb7-7160-8571-456bcf8c8c55
   position: 1431000
   added_by: dirtlab
   note: auto-queued by `session end` (01a2161a); covers 0 specs
   added_at: 2026-11-26T06:20:49.065104688Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
-  requirement_id: 01a216b3-ba65-7863-9c43-3fe9f9e40cd5
-  position: 1432000
-  added_by: dirtlab
-  note: auto-queued by `session end` (01a2164d); covers 0 specs
-  added_at: 2026-11-26T07:13:45.349341763Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
