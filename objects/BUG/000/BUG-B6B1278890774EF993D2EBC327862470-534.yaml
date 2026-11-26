@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T15:37:46.060410635Z
+modified_at: 2026-11-26T15:37:57.468453513Z
 req_type: Bug
 tags:
 - admission
@@ -98,6 +98,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2773 (completing). AC1: verified by bug2773_unbound_claim_with_dead_creator_is_listed_and_healed (collect_doctor_findings_at lists shared-<invocation> with safe_heal, targeted_stale_finding accepts it, heal_exited_claim deletes it). AC2: verified. coordination::shared_heal_id is the single predicate for doctor_root::shared_stale_finding and implementer_refusal; the flipped bug2655_force_refuses_fresh_or_live_creator_preserving_claim test asserts that fresh and live holders get no heal command. AC3: verified by the same AC1 test, which uses the dell1 shape (lease=unbound, launcher=unbound, dead creator with a legacy linux-starttime identity, heartbeat 2026-11-15). Bug protocol item ''the PR touches at least one test file'': met (coordination.rs tests module). CI: fast gates green, including the store-writer inventory; fast compile was pending at review time. Request changes for one blocking defect. The new unbound branch of exited_holder_is_dead accepts a dead creator plus an expired TTL as death evidence. For a non-process-backed claim, both are true about 30 minutes after creation whatever the holder''s state, so the branch never checks whether the holder clone still has a Live or Dormant session for the scope. The heal path and --force-claim admission both use this predicate, so both inherit the gap. A smaller p3 test gap is listed too.. No triage reason was given.'
   created_at: 2026-11-26T15:37:46.060406440Z
   modified_at: 2026-11-26T15:37:46.060406440Z
+- id: 01a21881-9d3f-71b0-b790-6ccd1be6736c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2773):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d169b25498d0
+    Recorded: 2026-11-26T15:34:50.388896284+00:00
+    Findings:
+    1. Blocking (strict-tier lease/admission code). aida-cli-lib/src/coordination.rs:711-717 (the new `let Some(id) = holder.lease_id ... else { return clone/.aida is_dir }` branch of exited_holder_is_dead) treats a dead creator plus an expired heartbeat as positive death evidence for an unbound claim. For a non-process-backed claim, build_claim (coordination.rs:1003-1008) records pid = std::process::id(), the short-lived `aida session start` process, and heartbeat_at is never refreshed. The module doc (coordination.rs:50-66, BUG-1765) and the build_claim comment both say this pid must NOT drive same-host reclaim, and that TTL age alone never expires a verified-live or dormant session. So every same-host, non-review, unbound claim becomes eligible about 30 minutes after it is written, whether or not the holder clone still runs a session on that scope. Failure scenario: a legacy unbound claim whose clone still holds a Live or Dormant local session lease for the scope (worktree present, Claude alive or paused). `aida doctor check leases` lists it as safe_heal. `aida doctor heal stale-leases --id shared-<id> --yes` releases it, and salvage_exited_claim now returns Ok(()) without saving anything. An implementer `--force-claim` admission (coordination.rs:1159/1166) also replaces it. A second clone or lane can then start the same spec over the paused session's work, which is the duplicate-work race this registry exists to prevent. Fix: in the unbound branch, also require !probe_session_liveness(holder, &hostname()) (the holder clone's own `.aida/sessions` table for the scope; Live or Dormant retains). Add a refusal test: an unbound, expired claim with a dead creator plus a live or dormant local session lease for its scope in the present clone is not listed, not healed and not force-reclaimed. The dell1 shape (no live session) stays eligible, so AC1 is unaffected.
+    2. aida-cli-lib/src/coordination.rs:879-882: the new other-host branch of implementer_refusal ('on host X, heal the holder only if `aida doctor check leases` lists it') has no test; only the same-host ineligible and eligible branches are asserted. It is hint text only and decides no admission, so it is not a gate decision. Add one assertion with holder.host set to another host.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-26T15:37:57.311900597Z
+  modified_at: 2026-11-26T15:37:57.311900597Z
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
