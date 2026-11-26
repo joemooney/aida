@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T11:12:41.008520070Z
+modified_at: 2026-11-26T11:41:33.576087278Z
 req_type: Story
 tags:
 - planning
@@ -175,6 +175,25 @@ comments:
     A reference merge (commit 2d89ef450561, `(Refs STORY-3143)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T11:12:41.008512448Z
   modified_at: 2026-11-26T11:12:41.008512448Z
+- id: 01a217a9-3008-7a21-bdaa-e727645146e8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d529d3b23b (S3, completing STORY-3143).
+
+    AC1 [evidence: behavioral-test]: `aida report backlog --report-format html` (render_html in aida-cli-lib/src/backlog_report.rs) prints one self-contained page: inline style; no scripts, links or external assets; every cell goes through esc(). Sections: areas, flow, landings per day, change requests by landed spec, rework sinks, recommendations, open specs, unavailable signals. Test: story_3143_html_is_self_contained_and_escaped. Deviation: the flag is --report-format table|json|html (-f), not --format, because the global --format owns that name (BUG-2189, same as report ai-integration). --json plus --report-format html is refused.
+    p3 driver activity [behavioral-test]: stale_claims uses the later of modified_at and the newest lane-log write (.aida/headless-logs/<spec>-<session>.jsonl mtime, from driver_activity). Tests: story_3143_driver_activity_from_lane_logs, story_3143_stale_claims_and_recommendations (TASK-6 case).
+    p3 window [behavioral-test/config]: [report.backlog] flow_days (14) and opened_lookback_days (60, never below flow_days). Landings with no opened time are reported as open_to_landed_unmatched.
+    p3 CR by spec [behavioral-test]: rounds_by_spec sums change requests over all of a landed spec's PRs up to its last landing. Test: story_3143_cr_rounds_grouped_by_spec.
+    Test gap [behavioral-test]: gather_signals is split into read_signals (IO) and assemble_signals (pure). Test story_3143_assemble_signals_from_fixture_reads covers ledger events (deserialized GateEvent fixtures), the 7d CR window, spec->area join, multi-spec PR attribution, churn parse, missing branch notes, and holders that fail closed when PR or lease reads fail.
+
+    Probes: case is handled the same on both sides (ledger spec vs sink/rounds, eq_ignore_ascii_case/uppercased keys). A lane log can only make a claim look fresher, so a wrong match cannot turn a held claim into a release prescription. Multiplicity: a multi-spec landed PR credits each spec; a landed PR with no verdicts is skipped.
+    Validation: 12/12 story_3143 tests pass; help golden regenerated and passing; make check-ci-fast passes.
+    Residual risks: about 340 production and 250 test lines, over the 300-line budget. A lane log named after a branch rather than a spec ID adds no activity. read_signals itself (process/forge IO) is still exercised only by the live command. Not smoke-run against the live store from this seat.
+  created_at: 2026-11-26T11:41:33.576087278Z
+  modified_at: 2026-11-26T11:41:33.576087278Z
+  session_id: 01a21782f091
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
