@@ -9,12 +9,12 @@ description: |
   - AC1: a PRE-START mail-retention refusal from the writer-admission scan is RETRYABLE: the launch waits with bounded backoff (e.g. 3 tries over about 5 min), re-runs the fresh scan, and proceeds once every writer is verified; it ends the lane only after the retries are spent, with the unverified writer pids/binaries named in the error.
   - AC2: the error names WHICH writer could not be verified (pid, comm, and binary sha or "(deleted)").
   - AC3: tests: transient unverified → verified on retry → launch proceeds; persistently unverified → a refusal naming the writer.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T22:10:58.320264411Z
+modified_at: 2026-11-26T22:20:04.548552318Z
 req_type: Bug
 tags:
 - lanes
@@ -61,6 +61,12 @@ comments:
     - Wording: when the retries are spent on writers that run a deleted binary, the final error still says they 'should exit on their own' (retire.rs WriterAdmissionUnknown Display). Its only next step is the dry run. A long-lived old-binary MCP or server process does not exit by itself, so the final refusal should say how to stop or restart the named pid.
   created_at: 2026-11-26T22:10:58.320264411Z
   modified_at: 2026-11-26T22:10:58.320264411Z
+- id: 01a219f1-c444-7481-9238-92040261ac9c
+  author: aida-publication-done
+  content: Implementer push 70b9880abb40 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T22:20:04.548550333Z
+  modified_at: 2026-11-26T22:20:04.548550333Z
+  session_id: 01a219ab9ccf
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
@@ -80,6 +86,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a219f1-c444-7481-9238-91fc6315a45e
+  author: aida-publication-done
+  timestamp: 2026-11-26T22:20:04.548548271Z
+  session_id: 01a219ab9ccf
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
