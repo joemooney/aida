@@ -3542,7 +3542,11 @@ impl Forge for GitHubForge {
     }
 
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
-        let out = self.gh(&["pr", "comment", &c.id.to_string(), "--body", body])?;
+        let id = c.id.to_string();
+        let mut args = vec!["pr", "comment", &id, "--body", body];
+        // A pinned client posts to the repository it read. trace:STORY-3120 | ai:claude
+        args.extend(self.metadata_repo.iter().flat_map(|r| ["-R", r.as_str()]));
+        let out = self.gh(&args)?;
         anyhow::ensure!(out.status.success(), "gh pr comment failed for #{}", c.id);
         Ok(())
     }

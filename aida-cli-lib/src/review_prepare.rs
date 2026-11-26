@@ -118,6 +118,12 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "SEVERITY", requires = "findings_source")]
     pub fail_on: Option<String>,
 
+    /// Post the Markdown report as a comment on the `--pr` change. Off unless
+    /// given; agent text in the comment is code-fenced so it renders inert.
+    // trace:STORY-3120 | ai:claude
+    #[clap(long, requires = "pr")]
+    pub post_comment: bool,
+
     /// Emit machine-readable JSON output.
     #[clap(long)]
     pub json: bool,
@@ -166,6 +172,11 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
 /// Execute `aida review prepare`.
 // trace:STORY-3076 | ai:antigravity
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
+    // clap's `requires` alone lets `--from` through. trace:STORY-3120 | ai:claude
+    anyhow::ensure!(
+        !args.post_comment || args.pr.is_some(),
+        "--post-comment needs --pr"
+    );
     let project_root = find_project_root()?;
     // 1. Resolve comparison mode and git endpoints.
     let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
@@ -416,6 +427,12 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
             .with_context(|| format!("write SARIF {}", path.display()))?;
     }
+    // Outward-facing, so opt-in only and before the gates below: a failing
+    // review is still published. trace:STORY-3120 | ai:claude
+    if args.post_comment {
+        let pr = args.pr.context("--post-comment needs --pr")?;
+        post_review_comment(pr_forge(&project_root)?.as_ref(), pr, &bundle)?;
+    }
     if let (Some(threshold), Some(matches)) = (&args.fail_on, exceeded) {
         anyhow::ensure!(
             matches.is_empty(),
@@ -556,13 +573,7 @@ fn resolve_comparison_endpoints(
     }
 
     if let Some(pr_n) = args.pr {
-        let forge = detect_forge_from_origin(project_root).context("cannot resolve PR forge")?;
-        let reader: Box<dyn crate::forge::Forge> = match forge.forge_kind() {
-            crate::forge::ForgeKind::GitHub => {
-                Box::new(crate::forge::GitHubForge::for_review(project_root)?)
-            }
-            kind => crate::forge::forge_for_kind(project_root, kind),
-        };
+        let reader = pr_forge(project_root)?;
         let meta = reader.change_metadata(pr_n, &mut crate::network_retry::NoopSink)?;
         let (head, mb) = pr_comparison(project_root, &meta.base_ref, &meta.head_sha)?;
         return Ok(("range".into(), Some(meta.base_ref), Some(head), Some(mb)));
@@ -570,6 +581,39 @@ fn resolve_comparison_endpoints(
 
     let head_sha = git_rev_parse(project_root, "HEAD").ok();
     Ok(("workspace".to_string(), head_sha, None, None))
+}
+
+/// The origin's forge client, pinned to the origin repository on GitHub. It
+/// reads `--pr` metadata and posts `--post-comment`, so no raw forge CLI or
+/// HTTP call with ambient tokens is made here.
+// trace:TASK-3862 STORY-3120 | ai:claude
+fn pr_forge(project_root: &Path) -> Result<Box<dyn crate::forge::Forge>> {
+    let forge = detect_forge_from_origin(project_root).context("cannot resolve PR forge")?;
+    Ok(match forge.forge_kind() {
+        crate::forge::ForgeKind::GitHub => {
+            Box::new(crate::forge::GitHubForge::for_review(project_root)?)
+        }
+        kind => crate::forge::forge_for_kind(project_root, kind),
+    })
+}
+
+/// Post the rendered bundle on change `pr` through `forge`.
+// trace:STORY-3120 | ai:claude
+fn post_review_comment(
+    forge: &dyn crate::forge::Forge,
+    pr: u64,
+    bundle: &ReviewPreparationBundle,
+) -> Result<()> {
+    let change = crate::forge::ChangeRef {
+        id: pr,
+        url: String::new(),
+        branch: String::new(),
+        base: String::new(),
+        title: None,
+    };
+    forge
+        .comment(&change, &render_bundle_markdown(bundle))
+        .with_context(|| format!("post review comment on change {pr}"))
 }
 
 // trace:TASK-3862 | ai:codex
@@ -1071,8 +1115,8 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
                 "trace:no"
             };
             out.push_str(&format!(
-                "- `{}` ({}, +{} / -{}, ~{} tok, playbook:`{}`, {})\n",
-                f.path,
+                "- {} ({}, +{} / -{}, ~{} tok, playbook:`{}`, {})\n",
+                code_span(&f.path),
                 f.kind.as_str(),
                 f.additions,
                 f.deletions,
@@ -1095,7 +1139,7 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
                 b.playbook_ids.join(", ")
             ));
             for path in &b.files {
-                out.push_str(&format!("  - `{path}`\n"));
+                out.push_str(&format!("  - {}\n", code_span(path)));
             }
             out.push('\n');
         }
@@ -1115,8 +1159,8 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         out.push_str("## Excluded Files\n\n");
         for ex in &bundle.inventory.excluded_files {
             out.push_str(&format!(
-                "- `{}` ({}) -> `{}`\n",
-                ex.path,
+                "- {} ({}) -> `{}`\n",
+                code_span(&ex.path),
                 ex.kind.as_str(),
                 ex.reason
             ));
@@ -1132,32 +1176,40 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         ));
         for file in &cov.not_reviewable_by_batch {
             out.push_str(&format!(
-                "- **Not reviewable by batch**: `{}` ({})\n",
-                file.path, file.reason
+                "- **Not reviewable by batch**: {}\n{}",
+                code_span(&file.path),
+                fenced(&file.reason)
             ));
         }
         if !cov.ambiguous_files.is_empty() {
             out.push_str(&format!(
-                "- **Ambiguous ledger rows**: `{}`\n",
-                cov.ambiguous_files.join(", ")
+                "- **Ambiguous ledger rows**: {}\n",
+                code_span(&cov.ambiguous_files.join(", "))
             ));
         }
         if !cov.unaccounted_files.is_empty() {
             out.push_str(&format!(
-                "- **Unaccounted files**: `{}`\n",
-                cov.unaccounted_files.join(", ")
+                "- **Unaccounted files**: {}\n",
+                code_span(&cov.unaccounted_files.join(", "))
             ));
         }
         if !cov.skipped_without_reason.is_empty() {
             out.push_str(&format!(
-                "- **Skipped without reason**: `{}`\n",
-                cov.skipped_without_reason.join(", ")
+                "- **Skipped without reason**: {}\n",
+                code_span(&cov.skipped_without_reason.join(", "))
             ));
         }
         out.push('\n');
     }
 
-    // trace:STORY-3120 | ai:claude
+    // Every runner-supplied string is fenced. trace:STORY-3120 | ai:claude
+    if let Some(found) = &bundle.anchored_findings {
+        out.push_str(&format!("## Findings ({})\n\n", found.len()));
+        for f in found {
+            out.push_str(&finding_markdown("-", f));
+        }
+        out.push('\n');
+    }
     if let Some(adv) = &bundle.adversarial {
         let agent = adv.challenger_agent.as_deref().unwrap_or("custom runner");
         out.push_str(&format!(
@@ -1167,13 +1219,59 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
             out.push_str(&format!("- **Note**: {note}\n"));
         }
         for r in &adv.refuted {
-            let (path, msg) = (&r.finding.path, &r.finding.message);
-            out.push_str(&format!("- **Refuted** `{path}`: {msg} ({})\n", r.reason));
+            out.push_str(&finding_markdown("- **Refuted**", &r.finding));
+            out.push_str(&format!("  Challenger reason:\n{}", fenced(&r.reason)));
         }
         out.push('\n');
     }
 
     out
+}
+
+/// One finding: severity, category and location as code spans, the message
+/// in a fenced block.
+// trace:STORY-3120 | ai:claude
+fn finding_markdown(bullet: &str, f: &RawReviewFinding) -> String {
+    let lines = (f.resolved_span.as_ref())
+        .map(|s| format!(" lines {}-{}", s.start_line, s.end_line))
+        .unwrap_or_default();
+    let (severity, category) = (code_span(&f.severity), code_span(&f.category));
+    let path = code_span(&f.path);
+    let body = fenced(&f.message);
+    format!("{bullet} {severity} {category} in {path}{lines}\n{body}")
+}
+
+/// The longest run of `tick` in `text`.
+fn longest_run(text: &str, tick: char) -> usize {
+    let mut run = 0;
+    (text.chars())
+        .map(|c| {
+            run = if c == tick { run + 1 } else { 0 };
+            run
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+/// `text` as an inline code span, so Markdown, HTML and @mentions in it
+/// render literally: the delimiter outruns any backtick run inside and line
+/// breaks become spaces, so the text cannot end the span.
+// trace:STORY-3120 | ai:claude
+fn code_span(text: &str) -> String {
+    let flat: String = (text.chars())
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let ticks = "`".repeat(longest_run(&flat, '`') + 1);
+    format!("{ticks} {flat} {ticks}")
+}
+
+/// `text` as an indented fenced code block whose fence outruns any backtick
+/// run inside, so the text cannot close it and renders inert.
+// trace:STORY-3120 | ai:claude
+fn fenced(text: &str) -> String {
+    let fence = "`".repeat(longest_run(text, '`').max(2) + 1);
+    let body = text.replace('\r', "").replace('\n', "\n  ");
+    format!("  {fence}text\n  {body}\n  {fence}\n")
 }
 
 // trace:TASK-3862 | ai:codex
@@ -1921,5 +2019,140 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         ] {
             assert!(result.unwrap_err().to_string().contains(operation));
         }
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5_post_comment_is_opt_in_and_requires_pr() {
+        #[derive(clap::Parser)]
+        struct Cli {
+            #[clap(flatten)]
+            args: ReviewPrepareArgs,
+        }
+        use clap::Parser;
+        let parse = |argv: &[&str]| Cli::try_parse_from([&["prepare"][..], argv].concat());
+        assert!(!parse(&["--pr", "7"]).unwrap().args.post_comment);
+        let err = parse(&["--post-comment"]).err().unwrap().to_string();
+        assert!(err.contains("--pr"), "{err}");
+        assert!(
+            parse(&["--pr", "7", "--post-comment"])
+                .unwrap()
+                .args
+                .post_comment
+        );
+        // The handler refuses too, before any forge is resolved.
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "a").unwrap();
+        git_text(root, &["add", "a.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        let store = Storage::new(root.join("requirements.yaml"));
+        let mut args = ReviewPrepareArgs {
+            from: Some(base),
+            write: Some("out.md".into()),
+            ..Default::default()
+        };
+        handle_review_prepare(&args, &store).unwrap();
+        args.post_comment = true;
+        let err = handle_review_prepare(&args, &store).unwrap_err();
+        assert!(
+            err.to_string().contains("--post-comment needs --pr"),
+            "{err}"
+        );
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5_posted_comment_renders_agent_text_inert() {
+        let hostile = "@octocat <img src=x onerror=alert(1)> **bold** [x](http://e)\n\
+            ```\n# heading\n````\n- item\n";
+        let row = serde_json::json!({"path":"a`b.rs","severity":"high <b>",
+            "category":"@team\nbug","message":hostile});
+        let finding: RawReviewFinding = serde_json::from_value(row).unwrap();
+        let bundle = ReviewPreparationBundle {
+            mode: "range".into(),
+            base_ref: None,
+            head_ref: None,
+            merge_base: None,
+            inventory: ClassifiedInventory {
+                reviewable_files: Vec::new(),
+                excluded_files: Vec::new(),
+                inventory_sha256: String::new(),
+            },
+            batches: Vec::new(),
+            playbooks: Vec::new(),
+            linked_specs: Vec::new(),
+            coverage_verification: None,
+            anchored_findings: Some(vec![finding.clone()]),
+            adversarial: Some(AdversarialSummary {
+                refuted: vec![RefutedFinding {
+                    finding,
+                    reason: format!("{hostile}\r\n@admin"),
+                }],
+                ..Default::default()
+            }),
+        };
+        let forge = crate::forge::fake::RecordingForge::new();
+        post_review_comment(&forge, 42, &bundle).unwrap();
+        let posted = forge.commented();
+        assert_eq!(posted.len(), 1);
+        let (pr, body) = &posted[0];
+        assert_eq!(*pr, 42);
+        // Outside code, no agent text survives: strip every code span and
+        // fenced block and check what Markdown would still render.
+        let mut prose = String::new();
+        let mut fence: Option<String> = None;
+        for line in body.lines() {
+            let trimmed = line.trim_start();
+            let ticks: String = trimmed.chars().take_while(|&c| c == '`').collect();
+            match &fence {
+                Some(open) if trimmed.trim_end() == open => fence = None,
+                Some(_) => {}
+                None if ticks.len() >= 3 => fence = Some(ticks),
+                None => prose.push_str(&strip_code_spans(line)),
+            }
+        }
+        assert!(fence.is_none(), "unclosed fence:\n{body}");
+        for live in [
+            "@octocat",
+            "@team",
+            "@admin",
+            "<img",
+            "<b>",
+            "**bold**",
+            "](",
+            "# heading",
+        ] {
+            assert!(
+                !prose.contains(live),
+                "{live} renders live:\n{prose}\n---\n{body}"
+            );
+        }
+        assert!(
+            body.contains("@octocat <img src=x onerror=alert(1)>"),
+            "{body}"
+        );
+    }
+
+    /// `line` with CommonMark code spans removed (equal-length backtick runs).
+    fn strip_code_spans(line: &str) -> String {
+        let (mut out, mut rest) = (String::new(), line);
+        while let Some(start) = rest.find('`') {
+            out.push_str(&rest[..start]);
+            let run = rest[start..].chars().take_while(|&c| c == '`').count();
+            let after = &rest[start + run..];
+            let close = after.char_indices().map(|(i, _)| i).find(|&i| {
+                after[i..].starts_with(&"`".repeat(run))
+                    && !after[i + run..].starts_with('`')
+                    && (i == 0 || !after[..i].ends_with('`'))
+            });
+            match close {
+                Some(i) => rest = &after[i + run..],
+                None => return out + &rest[start..],
+            }
+        }
+        out + rest
     }
 }
