@@ -84,6 +84,10 @@ const CODEX: ReviewVendor = ReviewVendor {
     effort_as_config: true,
 };
 
+/// The finder when neither `--agent` nor `[agents] vendor` names one.
+/// trace:BUG-2775 | ai:claude
+pub(crate) const DEFAULT_REVIEW_VENDOR: &ReviewVendor = &CLAUDE;
+
 /// Every vendor with a hardened review contract. trace:STORY-3120 | ai:claude
 pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 2] = [&CLAUDE, &CODEX];
 
