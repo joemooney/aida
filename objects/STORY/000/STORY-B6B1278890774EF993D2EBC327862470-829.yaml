@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T15:21:30.037128430Z
+modified_at: 2026-11-26T15:23:29.107369366Z
 req_type: Story
 tags:
 - integration
@@ -1200,6 +1200,21 @@ comments:
     NOTE: S5 is the completing slice in its current brief; since S6-S10 now follow, S5 should land as "(Refs STORY-3120)", and the LAST of S6-S10 completes the story.
   created_at: 2026-11-26T15:20:05.373269485Z
   modified_at: 2026-11-26T15:20:05.373269485Z
+- id: 01a21874-9e46-7b72-81fd-8d982dfe62fb
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:23):
+    # STORY-3120 S5a r1 on #4665 (advisor-122 ruling 2026-11-26 08:21, relayed by integration-30 08:23; product-15). Lane: CLAUDE. STRICT (forge-posting code). INTEGRATION, existing branch int46-story-3120-s5 / PR #4665. Keep the "(Refs STORY-3120)" title. Do NOT rebase onto main.
+    MUST, in this PR:
+     (1) Pass the comment body via `--body-file -` on STDIN, not argv (no E2BIG with big reviews).
+     (2) CAP the body at 60,000 chars (GitHub rejects >65,536), cut on a UTF-8 boundary, truncating AFTER fencing so it never cuts inside a fence: close any open fence, then append the note "truncated: N findings omitted; full report at <path / SARIF>". Keep the summary and the findings first; trim the inventory first.
+     (3) TEST with a >70,000-char report: posted body <=60,000 chars, valid UTF-8, balanced fences, note present.
+    NIT (only if trivial, else leave it for S5b): code-span spec IDs and playbook titles.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4665. COMMIT your work.
+  created_at: 2026-11-26T15:23:29.107369366Z
+  modified_at: 2026-11-26T15:23:29.107369366Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
