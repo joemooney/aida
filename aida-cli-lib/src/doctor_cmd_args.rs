@@ -76,7 +76,7 @@ pub enum DoctorCommand {
         #[clap(long)]
         id: Option<String>,
 
-        /// Operator's reason for releasing one conflict repair reservation.
+        /// Operator's reason for releasing a repair reservation or salvaging an unverified stale clone.
         #[clap(long, requires = "id", conflicts_with = "yes")]
         attest: Option<String>,
 

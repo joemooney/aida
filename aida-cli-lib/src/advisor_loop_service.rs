@@ -488,11 +488,8 @@ fn status_value(
     degraded: &[String],
 ) -> Result<serde_json::Value> {
     let failure = failure_state(root)?;
-    let binary = binary_status(
-        state,
-        &crate::dev_build::default_live_dir()?.join("aida"),
-        crate::dev_build::binary_sha_label,
-    );
+    let live = crate::dev_build::default_live_dir()?.join("aida");
+    let binary = binary_status(state, &live, crate::dev_build::binary_sha_label);
     let mut value = serde_json::json!({
         "service": NAME, "status": status,
         "worker_binary_sha": binary["worker_binary_sha"],
@@ -508,6 +505,7 @@ fn status_value(
         "last_pass": pass,
         "degraded_reasons": degraded,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
+        "deputy_binary": host_deputy_binary(state, &live), // trace:BUG-2774 | ai:claude
     });
     // The train service says when its passes do nothing: review-gated mode,
     // or a landing policy it cannot read (STORY-2905, advisor call (c)).
@@ -516,6 +514,8 @@ fn status_value(
         if let Some(line) = crate::gate::landing_merge::train_stand_down_line(root) {
             value["standing_down"] = serde_json::json!(line);
         }
+        // A long auto-train hold, live, with its phase. trace:BUG-2769 | ai:claude
+        value["admission_hold"] = serde_json::json!(super::train::live_hold_line(root));
     }
     // trace:BUG-2703 | ai:claude
     let admission = admission_status(root, state, Utc::now());
@@ -536,10 +536,16 @@ fn status_lines(
     let mut lines = vec![binary_line(value)];
     lines.push(format!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
         value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]));
+    if value["deputy_binary"].is_object() {
+        lines.push(format!("{NAME}: {}", deputy_binary_line(&value["deputy_binary"]))); // trace:BUG-2774 | ai:claude
+    }
     if let Some(line) = value["standing_down"].as_str() {
         lines.push(format!("{NAME}: {line}"));
     }
     lines.push(format!("{NAME}: {}", admission_line(value))); // trace:BUG-2703 | ai:claude
+    if let Some(line) = value["admission_hold"].as_str() {
+        lines.push(line.to_string()); // trace:BUG-2769 | ai:claude
+    }
     // trace:BUG-2674 | ai:claude
     if let Some(pass) = pass {
         lines.push(format!(
@@ -588,6 +594,97 @@ fn binary_line(value: &serde_json::Value) -> String {
         "binary: worker {}; live {}; stale {}",
         value["worker_binary_sha"], value["live_binary_sha"], value["binary_stale"]
     )
+}
+
+/// The doctor category for a service's deputy on an old binary.
+// trace:BUG-2774 | ai:claude
+pub(crate) const DEPUTY_BINARY_CATEGORY: &str = "deputy-binary";
+
+/// The hosting deputy's runner image, `exe` (its `/proc/<pid>/exe`), when it
+/// is not the live build: removed from disk (the kernel's ` (deleted)`
+/// marker) or replaced by a promotion (another inode with another sha). A
+/// deputy on an old binary cannot run current jobs, so the service blocks
+/// behind it. An unreadable image or live build reports nothing.
+// trace:BUG-2774 | ai:claude
+fn deputy_binary(
+    deputy: &str,
+    pid: u32,
+    exe: &Path,
+    live: &Path,
+    sha: impl Fn(&Path) -> Option<String>,
+    now: std::time::SystemTime,
+) -> Option<serde_json::Value> {
+    let path = std::fs::read_link(exe).ok()?.to_string_lossy().into_owned();
+    let deleted = path.ends_with(" (deleted)");
+    let replaced = || {
+        crate::launch::control::service_image_is_live(exe, live).is_ok_and(|same| !same)
+            && sha(exe).is_some_and(|image| sha(live).is_some_and(|live| live != image))
+    };
+    if !deleted && !replaced() {
+        return None;
+    }
+    let age = std::fs::metadata(exe)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|built| now.duration_since(built).ok())
+        .map(|age| age.as_secs());
+    Some(serde_json::json!({
+        "deputy": deputy, "pid": pid, "path": path, "deleted": deleted,
+        "binary_age_seconds": age,
+    }))
+}
+
+/// The probe for this service's recorded live deputy host.
+// trace:BUG-2774 | ai:claude
+fn host_deputy_binary(state: Option<&Service>, live: &Path) -> Option<serde_json::Value> {
+    let state = state?;
+    let host = state.host.as_ref().filter(|h| h.alive())?;
+    deputy_binary(
+        &state.deputy,
+        host.pid,
+        Path::new(&format!("/proc/{}/exe", host.pid)),
+        live,
+        crate::dev_build::binary_sha_label,
+        std::time::SystemTime::now(),
+    )
+}
+
+/// The report line for a [`deputy_binary`] finding, with the fix.
+// trace:BUG-2774 | ai:claude
+fn deputy_binary_line(value: &serde_json::Value) -> String {
+    let age = value["binary_age_seconds"]
+        .as_u64()
+        .map_or_else(
+            || "age unknown".to_string(),
+            |s| format!("{}h{}m old", s / 3600, s % 3600 / 60),
+        );
+    format!(
+        "deputy {} (pid {}) runs a {} binary {} ({age}); it cannot run current jobs, so {NAME} blocks behind it. Fix: {}",
+        value["deputy"].as_str().unwrap_or("?"),
+        value["pid"],
+        if value["deleted"] == true { "deleted" } else { "stale" },
+        value["path"].as_str().unwrap_or("?"),
+        deputy_binary_fix(value["deputy"].as_str().unwrap_or("NAME")),
+    )
+}
+
+fn deputy_binary_fix(deputy: &str) -> String {
+    format!("restart the deputy on the live build with the binding reset (docs/cli/06-roles-sessions.md#review-watch-service-recovery), then `aida advisor loops rebind --deputy {deputy}`")
+}
+
+/// `aida doctor`'s finding for this service's deputy on an old binary.
+// trace:BUG-2774 | ai:claude
+pub(crate) fn deputy_binary_finding(root: &Path) -> Option<crate::DoctorFinding> {
+    let state = read(&directory(root, false).ok()??).ok()??;
+    let live = crate::dev_build::default_live_dir().ok()?.join("aida");
+    let value = host_deputy_binary(Some(&state), &live)?;
+    Some(crate::DoctorFinding {
+        category: DEPUTY_BINARY_CATEGORY.into(),
+        id: format!("{}:{}", state.deputy, value["pid"]),
+        summary: deputy_binary_line(&value),
+        action: deputy_binary_fix(&state.deputy),
+        safe_heal: false,
+    })
 }
 
 // A promotion is an orderly retirement, not a failed dispatch episode.
@@ -3440,6 +3537,63 @@ mod loop_tests {
         assert!(status_lines("running", &value, None, &[])
             .iter()
             .any(|l| l.contains("claim review-watch not held; auto-train not held")));
+    }
+
+    /// AC2/AC3: a deputy host on a deleted or replaced binary is reported,
+    /// with its name, pid, path, age and the fix; one on the live build (or
+    /// on an identical copy of it) is not.
+    // trace:BUG-2774 | ai:claude
+    #[test]
+    fn bug2774_a_deputy_on_a_stale_or_deleted_binary_is_reported() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = |name: &str, body: &[u8]| {
+            let path = temp.path().join(name);
+            std::fs::write(&path, body).unwrap();
+            path
+        };
+        let link = |name: &str, target: &Path| {
+            let path = temp.path().join(name);
+            std::os::unix::fs::symlink(target, &path).unwrap();
+            path
+        };
+        let (live, copy, old) = (
+            file("aida", b"live"),
+            file("copy", b"live"),
+            file("old", b"old"),
+        );
+        let sha = |p: &Path| std::fs::read(p).ok().map(|b| format!("{b:?}"));
+        let now = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
+        let probe = |exe: &Path| deputy_binary("default", 7, exe, &live, sha, now);
+        assert!(probe(&link("live-exe", &live)).is_none());
+        assert!(probe(&link("copy-exe", &copy)).is_none(), "same sha");
+
+        let stale = probe(&link("old-exe", &old)).expect("a replaced image");
+        assert_eq!(stale["deleted"], false);
+        assert_eq!(stale["pid"], 7);
+        assert!(stale["path"].as_str().unwrap().ends_with("/old"), "{stale}");
+        assert!(stale["binary_age_seconds"].as_u64().unwrap() >= 7200);
+        assert!(deputy_binary_line(&stale).contains("runs a stale binary"));
+
+        let gone = Path::new(&format!("{} (deleted)", old.display())).to_path_buf();
+        let deleted = probe(&link("gone-exe", &gone)).expect("the deleted marker");
+        assert_eq!(deleted["deleted"], true);
+        let value = serde_json::json!({ "deputy_binary": deleted });
+        let lines = status_lines("running", &value, None, &[]);
+        let line = lines
+            .iter()
+            .find(|l| l.contains("runs a deleted binary"))
+            .unwrap_or_else(|| panic!("{lines:?}"));
+        for part in [
+            &format!("{NAME}: deputy default (pid 7)"),
+            "(age unknown)",
+            "with the binding reset",
+            "#review-watch-service-recovery",
+            "`aida advisor loops rebind --deputy default`",
+        ] {
+            assert!(line.contains(part), "{part}: {line}");
+        }
+        let quiet = status_lines("running", &serde_json::json!({}), None, &[]);
+        assert!(!quiet.iter().any(|l| l.contains("runs a")), "{quiet:?}");
     }
 }
 

@@ -13456,7 +13456,8 @@ Options:
           Heal only this exact finding ID (as shown by doctor check)
 
       --attest <ATTEST>
-          Operator's reason for releasing one conflict repair reservation
+          Operator's reason for releasing a repair reservation or salvaging an unverified stale
+          clone
 
   -y, --yes
           Skip confirmation prompts
@@ -22851,6 +22852,14 @@ Options:
       --model <MODEL>
           Model for `--run-review`
 
+      --adversarial
+          Have a second agent reproduce or refute each finding. Refuted findings are listed apart
+          and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that
+          did not write the change
+
+      --challenger-effort <LEVEL>
+          Reasoning effort for the `--adversarial` challenger
+
       --sarif <PATH>
           Write a SARIF 2.1.0 report inside the repository
 
@@ -23416,14 +23425,22 @@ Classify open specs and rank areas by hotness (read-only)
 
 Each open spec gets an area, a size (S/M/L/XL), its priority and status, and a noise flag for
 review-finding specs. Areas are ranked by a weighted blend of open and high-priority specs, change
-requests in the last 7 days, open PRs and 14-day file churn. The area map and weights live under
-`[report.backlog]` in `.aida/config.toml`.
+requests in the last 7 days, open PRs and 14-day file churn. A flow section shows landings per day,
+open-to-landed time, change-request rounds, rework sinks and stale claims; recommendations list
+commands to run, and the report runs none. The area map, weights, `stale_days`, `flow_days` and
+`opened_lookback_days` live under `[report.backlog]` in `.aida/config.toml`.
 
 Usage: aida report backlog [OPTIONS]
 
 Options:
       --json
           Emit JSON (same as the global `--format json`)
+
+  -f, --report-format <FORMAT>
+          Report format: table, json, or html (a self-contained page)
+          
+          [default: table]
+          [possible values: table, json, html]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -46685,7 +46702,7 @@ Working on aida itself
       {
         "name": "attest",
         "takes_value": true,
-        "help": "Operator's reason for releasing one conflict repair reservation"
+        "help": "Operator's reason for releasing a repair reservation or salvaging an unverified stale clone"
       },
       {
         "name": "canonical-ids",
@@ -56275,6 +56292,11 @@ Working on aida itself
     "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
     "flags": [
       {
+        "name": "adversarial",
+        "takes_value": false,
+        "help": "Have a second agent reproduce or refute each finding. Refuted findings are listed apart and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that did not write the change"
+      },
+      {
         "name": "agent",
         "takes_value": true,
         "help": "Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)"
@@ -56288,6 +56310,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "challenger-effort",
+        "takes_value": true,
+        "help": "Reasoning effort for the `--adversarial` challenger"
       },
       {
         "name": "commit",
@@ -56992,6 +57019,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit JSON (same as the global `--format json`)"
+      },
+      {
+        "name": "report-format",
+        "takes_value": true,
+        "help": "Report format: table, json, or html (a self-contained page)"
       }
     ],
     "hidden": true

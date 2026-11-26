@@ -9,6 +9,7 @@ use crate::vendors::review_runner::ReviewVendor;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -50,14 +51,20 @@ impl RunnerCall<'_> {
         self.agent.filter(|_| self.var(RUNNER_CMD).is_none())
     }
 
+    /// `agent`'s binary on the operator's PATH, as `run` would resolve it.
+    pub(crate) fn on_path(&self, agent: &ReviewVendor) -> Option<PathBuf> {
+        std::env::split_paths(self.var("PATH").unwrap_or_default())
+            .map(|dir| dir.join(agent.program))
+            .find(|p| p.is_absolute() && p.is_file())
+    }
+
     /// Absolute runner path; refused when relative, missing, not a regular
     /// file, or inside the checkout under review.
     fn program(&self) -> Result<PathBuf> {
         let path = match (self.var(RUNNER_CMD), self.agent) {
             (Some(cmd), _) => PathBuf::from(cmd),
-            (None, Some(agent)) => std::env::split_paths(self.var("PATH").unwrap_or_default())
-                .map(|dir| dir.join(agent.program))
-                .find(|p| p.is_absolute() && p.is_file())
+            (None, Some(agent)) => self
+                .on_path(agent)
                 .with_context(|| format!("{} not found on PATH", agent.program))?,
             (None, None) => bail!("--run-review needs --agent <claude|codex> or {RUNNER_CMD}"),
         };
@@ -111,6 +118,11 @@ impl RunnerCall<'_> {
             .spawn()
             .with_context(|| format!("spawn {}", program.display()))?;
         let group = child.id() as libc::pid_t;
+        let pipes = pipe_ids([
+            child.stdin.as_ref().map(|p| p.as_raw_fd()),
+            child.stdout.as_ref().map(|p| p.as_raw_fd()),
+            child.stderr.as_ref().map(|p| p.as_raw_fd()),
+        ]);
         let tripped = Arc::new(AtomicBool::new(false));
         let capped = |stream: Option<Box<dyn Read + Send>>, cap: usize| {
             let (tripped, stream) = (Arc::clone(&tripped), stream.context("runner pipe")?);
@@ -166,13 +178,39 @@ impl RunnerCall<'_> {
         unsafe { libc::kill(-group, libc::SIGKILL) };
         let status = child.wait()?;
         // A descendant that left the group (setsid, double fork) can hold the
-        // pipes open forever: wait briefly, then fail and leak the threads.
-        let grace = Instant::now() + JOIN_GRACE;
+        // pipes open forever: wait briefly, then SIGKILL every process found
+        // holding one and fail naming them. trace:STORY-3120 | ai:claude
         let open = || !(writer.is_finished() && out.is_finished() && err.is_finished());
-        while open() && Instant::now() < grace {
-            std::thread::sleep(Duration::from_millis(20));
+        let settle = |limit: Duration| {
+            let grace = Instant::now() + limit;
+            while open() && Instant::now() < grace {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        settle(JOIN_GRACE);
+        if open() {
+            let escaped = pipe_holders(&pipes);
+            for pid in &escaped {
+                // SAFETY: kill(2) on a process found holding the runner's pipes.
+                unsafe { libc::kill(*pid, libc::SIGKILL) };
+            }
+            settle(JOIN_GRACE);
+            let pids: Vec<_> = escaped
+                .iter()
+                .map(|p| format!("escaped descendant pid {p}"))
+                .collect();
+            let found = if pids.is_empty() {
+                "no escaped descendant found".into()
+            } else {
+                pids.join(", ") + " (killed)"
+            };
+            let leaked = if open() {
+                "; its pipe threads are leaked"
+            } else {
+                ""
+            };
+            bail!("review runner left descendants holding its pipes: {found}{leaked}");
         }
-        ensure!(!open(), "review runner left descendants holding its pipes");
         let wrote = writer
             .join()
             .map_err(|_| anyhow!("stdin writer panicked"))?;
@@ -193,6 +231,34 @@ impl RunnerCall<'_> {
         wrote.context("review runner did not read the whole prompt")?;
         String::from_utf8(stdout).context("review runner output is not UTF-8")
     }
+}
+
+/// `/proc/self/fd` link targets (`pipe:[inode]`) of the runner's pipe ends.
+fn pipe_ids(fds: [Option<std::os::fd::RawFd>; 3]) -> Vec<PathBuf> {
+    let link = |fd| std::fs::read_link(format!("/proc/self/fd/{fd}")).ok();
+    fds.into_iter().flatten().filter_map(link).collect()
+}
+
+/// Other processes with an fd on one of `pipes`: the runner's escaped
+/// descendants. Empty where `/proc` is unavailable.
+fn pipe_holders(pipes: &[PathBuf]) -> Vec<libc::pid_t> {
+    let me = std::process::id() as libc::pid_t;
+    let Ok(procs) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    let holds = |pid: libc::pid_t| {
+        let fds = std::fs::read_dir(format!("/proc/{pid}/fd"))
+            .into_iter()
+            .flatten();
+        fds.flatten()
+            .any(|fd| std::fs::read_link(fd.path()).is_ok_and(|t| pipes.contains(&t)))
+    };
+    let pids = procs
+        .flatten()
+        .filter_map(|e| e.file_name().to_str()?.parse().ok());
+    let mut found: Vec<_> = pids.filter(|&pid| pid != me && holds(pid)).collect();
+    found.sort_unstable();
+    found
 }
 
 #[cfg(test)]
@@ -379,12 +445,14 @@ mod tests {
     }
 
     // trace:STORY-3120 | ai:claude
+    // Finding the escaped descendant reads /proc. trace:STORY-3120 | ai:claude
+    #[cfg(target_os = "linux")]
     #[test]
     fn s3a2_runner_fails_closed_on_escaped_descendant() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         // The descendant leaves the process group and keeps stdout/stdin open; the
         // runner exits only once it is in its own session, so the kill misses it.
-        let body = "#!/bin/sh\nsetsid sh -c 'touch \"$0.in\"; exec sleep 12' \"$0\" &\n\
+        let body = "#!/bin/sh\nsetsid sh -c 'touch \"$0.in\"; exec sleep 30' \"$0\" &\n\
             while [ ! -e \"$0.in\" ]; do sleep 0.05; done\nexit 0\n";
         let cmd = script(bin.path(), "runner", body).display().to_string();
         let env = vars(&[("PATH", "/usr/bin:/bin"), (RUNNER_CMD, &cmd)]);
@@ -394,8 +462,29 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("left descendants holding its pipes"), "{err}");
+        // trace:STORY-3120 | ai:claude
+        let pid = err
+            .split("escaped descendant pid ")
+            .nth(1)
+            .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
+            .unwrap_or_else(|| panic!("no escaped pid reported: {err}"));
+        assert!(err.contains("(killed)") && !err.contains("leaked"), "{err}");
+        let gone = || {
+            std::fs::read_to_string(format!("/proc/{pid}/stat")).map_or(true, |stat| {
+                stat.rsplit(')')
+                    .next()
+                    .unwrap()
+                    .trim_start()
+                    .starts_with('Z')
+            })
+        };
+        let wait = Instant::now() + Duration::from_secs(5);
+        while !gone() && Instant::now() < wait {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(gone(), "escaped descendant {pid} still running");
         assert!(
-            started.elapsed() < Duration::from_secs(10),
+            started.elapsed() < Duration::from_secs(11),
             "joined the descendant"
         );
     }

@@ -1,1 +1,164 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 690" role="img" aria-labelledby="title desc"><title id="title">Human and agent collaboration and its records</title><desc id="desc">Diagram one: Discuss, capture, own work, implement, independently review, integrate and return to discussion. Diagram two: code history and canonical intent are connected by traces; the read cache derives from the store, while local operational evidence has separate scope and retention.</desc><!-- trace:TASK-B6B1278890774EF993D2EBC327862470-108 | ai:codex --><rect width="760" height="690" fill="#e9e5da"/><text x="28" y="38" font-family="sans-serif" font-size="22" fill="#172116">01 / People and agents work together</text><rect x="28" y="60" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="42" y="89" font-family="sans-serif" font-size="19" fill="#913b17">1. Discuss</text><text x="42" y="118" font-family="sans-serif" font-size="14" fill="#344331">People shape the outcome</text><rect x="393" y="60" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="407" y="89" font-family="sans-serif" font-size="19" fill="#913b17">2. Capture</text><text x="407" y="118" font-family="sans-serif" font-size="14" fill="#344331">Agents record agreed intent</text><rect x="28" y="158" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="42" y="187" font-family="sans-serif" font-size="19" fill="#913b17">3. Own work</text><text x="42" y="216" font-family="sans-serif" font-size="14" fill="#344331">Roles, leases and worktrees</text><rect x="393" y="158" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="407" y="187" font-family="sans-serif" font-size="19" fill="#913b17">4. Implement</text><text x="407" y="216" font-family="sans-serif" font-size="14" fill="#344331">Build and validate</text><rect x="28" y="256" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="42" y="285" font-family="sans-serif" font-size="19" fill="#913b17">5. Review</text><text x="42" y="314" font-family="sans-serif" font-size="14" fill="#344331">Independent current evidence</text><rect x="393" y="256" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="407" y="285" font-family="sans-serif" font-size="19" fill="#913b17">6. Integrate</text><text x="407" y="314" font-family="sans-serif" font-size="14" fill="#344331">Authorized policy checks</text><path d="M730 346V367H28V346" fill="none" stroke="#913b17" stroke-width="2"/><text x="224" y="393" font-family="sans-serif" font-size="15" fill="#172116">Feedback returns to the conversation</text><text x="28" y="436" font-family="sans-serif" font-size="22" fill="#172116">02 / Records have different responsibilities</text><rect x="28" y="456" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="42" y="485" font-family="sans-serif" font-size="19" fill="#913b17">Code history</text><text x="42" y="514" font-family="sans-serif" font-size="14" fill="#344331">Source, tests and trace comments</text><rect x="393" y="456" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="407" y="485" font-family="sans-serif" font-size="19" fill="#913b17">Canonical intent</text><text x="407" y="514" font-family="sans-serif" font-size="14" fill="#344331">Specs, decisions and history</text><rect x="28" y="554" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="42" y="583" font-family="sans-serif" font-size="19" fill="#913b17">Read cache</text><text x="42" y="612" font-family="sans-serif" font-size="14" fill="#344331">Rebuilt from available store data</text><rect x="393" y="554" width="338" height="80" fill="#f4f1e9" stroke="#b6b9ab"/><text x="407" y="583" font-family="sans-serif" font-size="19" fill="#913b17">Local evidence</text><text x="407" y="612" font-family="sans-serif" font-size="14" fill="#344331">Sessions, verdicts and authority context</text><text x="28" y="668" font-family="sans-serif" font-size="15" fill="#172116">Explanatory model · Not a live dashboard or backup guarantee</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 660" role="img" aria-labelledby="title desc">
+  <title id="title">Human and agent collaboration, the five-stage delivery pipeline, and its four records</title>
+  <desc id="desc">Diagram one maps the five stages from queued spec to main: isolated lanes and worktrees, authority and grants, inspection gates and delta reviews, landing paths and merge trains with automatic bisect, and post-train pull synchronization. Diagram two maps the four records with distinct responsibilities: code history, canonical intent store, derived read cache, and local operational evidence.</desc>
+  <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-108 STORY-2839 | ai:claude -->
+  <style>
+    .bg { fill: #f4f1e9; }
+    .surface { fill: #e9e5da; stroke: #b6b9ab; stroke-width: 1.5; }
+    .card { fill: #faf8f3; stroke: #7b826f; stroke-width: 1.5; }
+    .card-accent { fill: #f7dccd; stroke: #ba3916; stroke-width: 1.8; }
+    .card-green { fill: #e1ece3; stroke: #2b6cb0; stroke-width: 1.5; }
+    .badge { fill: #ba3916; }
+    .badge-ink { fill: #ffffff; font-weight: 700; }
+    .ink { fill: #172116; }
+    .muted { fill: #4a5446; }
+    .accent { fill: #913b17; font-weight: 600; }
+    .pill { fill: #e2ddd0; stroke: #8c9280; stroke-width: 1; }
+    .edge { stroke: #5e635a; stroke-width: 2; fill: none; }
+    .edge-accent { stroke: #ba3916; stroke-width: 2; fill: none; stroke-dasharray: 5 4; }
+    text { font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+    .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #141c13; }
+      .surface { fill: #1d281b; stroke: #465242; }
+      .card { fill: #243222; stroke: #75806b; }
+      .card-accent { fill: #42261a; stroke: #ffb485; }
+      .card-green { fill: #1e352f; stroke: #63b3ed; }
+      .badge { fill: #e05a33; }
+      .ink { fill: #f4f1e9; }
+      .muted { fill: #c4cabe; }
+      .accent { fill: #ffb485; }
+      .pill { fill: #2f3e2c; stroke: #687360; }
+      .edge { stroke: #a8b0a0; }
+      .edge-accent { stroke: #ffb485; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="muted"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" class="accent"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="860" height="660" rx="6"/>
+
+  <!-- Section 01 Header -->
+  <text class="ink" x="28" y="38" font-size="20" font-weight="700">01 / Five stages from queued spec to main</text>
+  <text class="muted" x="450" y="38" font-size="13">How lanes, gates, trains, and pulls fit together</text>
+
+  <!-- Stage 1 -->
+  <rect class="card" x="28" y="56" width="148" height="190" rx="6"/>
+  <rect class="badge" x="40" y="68" width="28" height="20" rx="4"/>
+  <text class="badge-ink" x="54" y="83" font-size="12" text-anchor="middle">01</text>
+  <text class="ink" x="76" y="83" font-size="15" font-weight="700">Workshop</text>
+  <text class="accent" x="40" y="108" font-size="12">Queue &amp; Lane</text>
+  <text class="muted" x="40" y="128" font-size="11.5">• queue work</text>
+  <text class="muted" x="40" y="146" font-size="11.5">• private worktree</text>
+  <text class="muted" x="40" y="164" font-size="11.5">• session &amp; lease</text>
+  <text class="muted" x="40" y="182" font-size="11.5">• rotate &amp; handoff</text>
+  <text class="muted" x="40" y="200" font-size="11.5">• stale sweep</text>
+  <rect class="pill" x="40" y="214" width="124" height="20" rx="3"/>
+  <text class="mono ink" x="102" y="228" font-size="10.5" text-anchor="middle">implementer</text>
+
+  <!-- Stage 2 -->
+  <rect class="card" x="192" y="56" width="148" height="190" rx="6"/>
+  <rect class="badge" x="204" y="68" width="28" height="20" rx="4"/>
+  <text class="badge-ink" x="218" y="83" font-size="12" text-anchor="middle">02</text>
+  <text class="ink" x="240" y="83" font-size="15" font-weight="700">Authority</text>
+  <text class="accent" x="204" y="108" font-size="12">Seats &amp; Grants</text>
+  <text class="muted" x="204" y="128" font-size="11.5">• role vs. seat</text>
+  <text class="muted" x="204" y="146" font-size="11.5">• grant &amp; expiry</text>
+  <text class="muted" x="204" y="164" font-size="11.5">• privileged step</text>
+  <text class="muted" x="204" y="182" font-size="11.5">• mandate &amp; deputy</text>
+  <text class="muted" x="204" y="200" font-size="11.5">• permission check</text>
+  <rect class="pill" x="204" y="214" width="124" height="20" rx="3"/>
+  <text class="mono ink" x="266" y="228" font-size="10.5" text-anchor="middle">advisor / human</text>
+
+  <!-- Stage 3 -->
+  <rect class="card" x="356" y="56" width="148" height="190" rx="6"/>
+  <rect class="badge" x="368" y="68" width="28" height="20" rx="4"/>
+  <text class="badge-ink" x="382" y="83" font-size="12" text-anchor="middle">03</text>
+  <text class="ink" x="404" y="83" font-size="15" font-weight="700">Gates</text>
+  <text class="accent" x="368" y="108" font-size="12">Review &amp; CI</text>
+  <text class="muted" x="368" y="128" font-size="11.5">• PR/MR &amp; commit</text>
+  <text class="muted" x="368" y="146" font-size="11.5">• review &amp; rework</text>
+  <text class="muted" x="368" y="164" font-size="11.5">• delta review</text>
+  <text class="muted" x="368" y="182" font-size="11.5">• ratchet &amp; ci:full</text>
+  <text class="muted" x="368" y="200" font-size="11.5">• merge-hold &amp; clear</text>
+  <rect class="pill" x="368" y="214" width="124" height="20" rx="3"/>
+  <text class="mono ink" x="430" y="228" font-size="10.5" text-anchor="middle">reviewer + CI</text>
+
+  <!-- Stage 4 -->
+  <rect class="card-accent" x="520" y="56" width="148" height="190" rx="6"/>
+  <rect class="badge" x="532" y="68" width="28" height="20" rx="4"/>
+  <text class="badge-ink" x="546" y="83" font-size="12" text-anchor="middle">04</text>
+  <text class="ink" x="568" y="83" font-size="15" font-weight="700">Landing</text>
+  <text class="accent" x="532" y="108" font-size="12">Trains &amp; Bisect</text>
+  <text class="muted" x="532" y="128" font-size="11.5">• ship vs. autoland</text>
+  <text class="muted" x="532" y="146" font-size="11.5">• train &amp; riders</text>
+  <text class="muted" x="532" y="164" font-size="11.5">• red train bisect</text>
+  <text class="muted" x="532" y="182" font-size="11.5">• isolate blocker</text>
+  <text class="muted" x="532" y="200" font-size="11.5">• promote to main</text>
+  <rect class="pill" x="532" y="214" width="124" height="20" rx="3"/>
+  <text class="mono ink" x="594" y="228" font-size="10.5" text-anchor="middle">aida land / train</text>
+
+  <!-- Stage 5 -->
+  <rect class="card" x="684" y="56" width="148" height="190" rx="6"/>
+  <rect class="badge" x="696" y="68" width="28" height="20" rx="4"/>
+  <text class="badge-ink" x="710" y="83" font-size="12" text-anchor="middle">05</text>
+  <text class="ink" x="732" y="83" font-size="15" font-weight="700">Sync</text>
+  <text class="accent" x="696" y="108" font-size="12">Main &amp; Pull</text>
+  <text class="muted" x="696" y="128" font-size="11.5">• lands on main</text>
+  <text class="muted" x="696" y="146" font-size="11.5">• Done → Completed</text>
+  <text class="muted" x="696" y="164" font-size="11.5">• post-train pull</text>
+  <text class="muted" x="696" y="182" font-size="11.5">• stale pull check</text>
+  <text class="muted" x="696" y="200" font-size="11.5">• blocked-pull retry</text>
+  <rect class="pill" x="696" y="214" width="124" height="20" rx="3"/>
+  <text class="mono ink" x="758" y="228" font-size="10.5" text-anchor="middle">aida pull</text>
+
+  <!-- Stage Connectors -->
+  <path class="edge" d="M176 150L188 150" marker-end="url(#arrow)"/>
+  <path class="edge" d="M340 150L352 150" marker-end="url(#arrow)"/>
+  <path class="edge" d="M504 150L516 150" marker-end="url(#arrow)"/>
+  <path class="edge" d="M668 150L680 150" marker-end="url(#arrow)"/>
+
+  <!-- Feedback loop bar -->
+  <path class="edge-accent" d="M758 248V276H102V250" marker-end="url(#arrow-accent)"/>
+  <text class="ink" x="430" y="294" font-size="13" text-anchor="middle">Rework, a bisected blocker or a new discovery returns to the queue and the conversation</text>
+
+  <!-- Section 02 Header -->
+  <text class="ink" x="28" y="342" font-size="20" font-weight="700">02 / Four records with distinct responsibilities</text>
+  <text class="muted" x="470" y="342" font-size="13">What is shared in Git vs. derived or kept local</text>
+
+  <!-- Record 1 -->
+  <rect class="card" x="28" y="362" width="388" height="114" rx="6"/>
+  <text class="accent" x="44" y="390" font-size="17">1. Code history (Git branches &amp; main)</text>
+  <text class="muted" x="44" y="414" font-size="13">Source files, tests, CI workflows, trace comments, and commit</text>
+  <text class="muted" x="44" y="434" font-size="13">trailers. Traces link code to intent; a completing trailer on main</text>
+  <text class="muted" x="44" y="454" font-size="13">completes its spec, but a trace comment never approves a change.</text>
+
+  <!-- Record 2 -->
+  <rect class="card" x="444" y="362" width="388" height="114" rx="6"/>
+  <text class="accent" x="460" y="390" font-size="17">2. Canonical intent (.aida-store / aida-store)</text>
+  <text class="muted" x="460" y="414" font-size="13">YAML spec objects, acceptance criteria, relationships, comments,</text>
+  <text class="muted" x="460" y="434" font-size="13">and transition history on the orphan store branch. Synchronized</text>
+  <text class="muted" x="460" y="454" font-size="13">deliberately via store lock and fast-forward / rebase rules.</text>
+
+  <!-- Record 3 -->
+  <rect class="card" x="28" y="494" width="388" height="114" rx="6"/>
+  <text class="accent" x="44" y="522" font-size="17">3. Derived read cache (.aida/cache-db/)</text>
+  <text class="muted" x="44" y="546" font-size="13">Fast local SQLite projection for list, search, and statusline</text>
+  <text class="muted" x="44" y="566" font-size="13">queries. Disposable and rebuildable from canonical intent; reports</text>
+  <text class="muted" x="44" y="586" font-size="13">staleness when the store ref advances ahead of the local index.</text>
+
+  <!-- Record 4 -->
+  <rect class="card" x="444" y="494" width="388" height="114" rx="6"/>
+  <text class="accent" x="460" y="522" font-size="17">4. Local operational evidence (.aida/ &amp; ~/.aida/)</text>
+  <text class="muted" x="460" y="546" font-size="13">Session leases, the ownership journal, review verdicts,</text>
+  <text class="muted" x="460" y="566" font-size="13">merge-hold markers, handoffs, grants and mandates.</text>
+  <text class="muted" x="460" y="586" font-size="13">Machine-bound: cloning the repo never copies someone else's authority.</text>
+
+  <text class="muted" x="28" y="638" font-size="13">Explanatory model · Not a live dashboard or backup guarantee</text>
+</svg>

@@ -4,6 +4,7 @@
 //! path-scoped playbook grouping, semantic file batching, file-coverage verification,
 //! and snippet-anchored line positioning.
 
+use crate::launch::review_challenger::{self as challenger, AdversarialSummary, RefutedFinding};
 use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
 use crate::launch::review_tuning::{resolve_for_run, trusted_review_base};
 use crate::vendors::review_runner::review_vendor;
@@ -98,6 +99,17 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "MODEL", requires = "run_review")]
     pub model: Option<String>,
 
+    /// Have a second agent reproduce or refute each finding. Refuted findings
+    /// are listed apart and marked suppressed in SARIF, but still count for
+    /// `--fail-on`. It prefers a vendor that did not write the change.
+    // trace:STORY-3120 | ai:claude
+    #[clap(long, requires = "run_review")]
+    pub adversarial: bool,
+
+    /// Reasoning effort for the `--adversarial` challenger.
+    #[clap(long, value_name = "LEVEL", requires = "adversarial")]
+    pub challenger_effort: Option<String>,
+
     /// Write a SARIF 2.1.0 report inside the repository.
     #[clap(long, value_name = "PATH", requires = "findings_source")]
     pub sarif: Option<PathBuf>,
@@ -142,6 +154,8 @@ pub struct ReviewPreparationBundle {
     pub coverage_verification: Option<CoverageVerificationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anchored_findings: Option<Vec<RawReviewFinding>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adversarial: Option<AdversarialSummary>,
 }
 
 // trace:TASK-3862 | ai:codex
@@ -265,6 +279,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     };
 
     // 8. Optional: anchor findings' `existing_code` snippets to exact 1-based line numbers.
+    let mut adversarial = None;
     let anchored_findings = if let Some(findings_path) = &args.anchor_findings {
         let raw_findings = std::fs::read_to_string(findings_path)
             .with_context(|| format!("read findings JSON {}", findings_path.display()))?;
@@ -294,15 +309,52 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         call.tuning = resolve_for_run(call.vendor(), &parent_env, flags, trusted)?;
         let (base, head) = (merge_base.as_deref(), head_ref.as_deref());
         let range = format!("{}..{}", base.unwrap_or_default(), head.unwrap_or_default());
+        // A credential file's old content never reaches a runner, renamed or not.
+        let renames: BTreeMap<&str, &str> = (inventory.reviewable_files.iter())
+            .filter_map(|f| Some((f.path.as_str(), f.old_path.as_deref()?)))
+            .filter(|(_, old)| !aida_core::review_engine::is_credential_path(old))
+            .collect();
         let prompt = |batch: &ReviewBatch| {
-            batch_prompt(&project_root, &range, batch, &playbooks, &linked_specs)
+            batch_prompt(
+                &project_root,
+                &range,
+                batch,
+                &renames,
+                &playbooks,
+                &linked_specs,
+            )
         };
-        let (found, ledger) = review_batches(&call, &batches, prompt, &inventory)?;
+        // trace:STORY-3120 | ai:claude
+        let challenge = if args.adversarial {
+            let log = [
+                "log",
+                "--no-color",
+                "--format=%B",
+                "--end-of-options",
+                &range,
+            ];
+            let authors = challenger::detect_ai_authors(&git_text(&project_root, &log)?);
+            let effort = args.challenger_effort.as_deref();
+            let (pass, summary) = challenger::challenger_call(&call, &authors, effort, trusted)?;
+            if let Some(note) = &summary.note {
+                eprintln!("adversarial review: {note}");
+            }
+            Some((pass, summary))
+        } else {
+            None
+        };
+        let pass = challenge.as_ref().map(|(pass, _)| pass);
+        let (found, ledger, refuted) = review_batches(&call, pass, &batches, prompt, &inventory)?;
+        let read = |path: &str| content_cache.get(path).cloned();
+        // Refuted findings are anchored too: they still gate and reach SARIF.
+        let rows: Vec<_> = refuted.iter().map(|r| r.finding.clone()).collect();
+        let refuted = (refuted.into_iter().zip(anchor_findings_with(&rows, read)))
+            .map(|(r, finding)| RefutedFinding { finding, ..r })
+            .collect();
+        adversarial = challenge.map(|(_, summary)| AdversarialSummary { refuted, ..summary });
         // A runner that does not report every reviewable file is incomplete.
         coverage_verification = Some(verify_coverage_ledger(&inventory, &ledger));
-        Some(anchor_findings_with(&found, |path| {
-            content_cache.get(path).cloned()
-        }))
+        Some(anchor_findings_with(&found, read))
     } else {
         None
     };
@@ -318,6 +370,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
         linked_specs,
         coverage_verification,
         anchored_findings,
+        adversarial,
     };
 
     let rendered = if args.json {
@@ -328,11 +381,25 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
 
     // trace:STORY-3120 | ai:codex
     let findings = bundle.anchored_findings.as_deref().unwrap_or_default();
+    // Fail closed: a challenger's refutation never removes a finding from
+    // `--fail-on`, so a wrong or prompt-injected challenger cannot turn the
+    // gate green; SARIF keeps it as a suppressed result. trace:STORY-3120 | ai:claude
+    let suppressed: Vec<_> = (bundle.adversarial.iter().flat_map(|a| &a.refuted))
+        .map(|r| {
+            (
+                r.finding.clone(),
+                format!("refuted by challenger: {}", r.reason),
+            )
+        })
+        .collect();
+    let gated: Vec<_> = (findings.iter().cloned())
+        .chain(suppressed.iter().map(|(f, _)| f.clone()))
+        .collect();
     let exceeded = args
         .fail_on
         .as_deref()
         .map(|threshold| {
-            aida_core::review_engine::findings_exceeding_threshold(findings, threshold)
+            aida_core::review_engine::findings_exceeding_threshold(&gated, threshold)
                 .map_err(anyhow::Error::msg)
         })
         .transpose()?;
@@ -344,7 +411,8 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     }
 
     if let Some(path) = &args.sarif {
-        let report = aida_core::review_engine::findings_to_sarif_json(findings);
+        let report =
+            aida_core::review_engine::findings_to_sarif_json_with_suppressed(findings, &suppressed);
         write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
             .with_context(|| format!("write SARIF {}", path.display()))?;
     }
@@ -563,17 +631,19 @@ files listed below. Reply with JSON only: {\"findings\":[{\"path\":\"<listed fil
 \"message\":\"...\",\"existing_code\":\"verbatim lines from the new file\"}],\
 \"files\":[{\"path\":\"<listed file>\",\"status\":\"reviewed\"}]}\n\n";
 
-/// One batch's prompt: acceptance criteria, playbooks and each file's diff. A
-/// failed diff is an error, never replaced by the whole file.
+/// One batch's context: acceptance criteria, playbooks and each file's diff,
+/// from its old path for a rename. A failed diff is an error, never replaced
+/// by the whole file. `review_batches` prepends each pass's instructions.
 // trace:STORY-3120 | ai:claude
 fn batch_prompt(
     root: &Path,
     range: &str,
     batch: &ReviewBatch,
+    renames: &BTreeMap<&str, &str>,
     playbooks: &[ResolvedPlaybook],
     specs: &[LinkedSpecAcceptance],
 ) -> Result<String> {
-    let mut prompt = String::from(PROMPT_HEAD);
+    let mut prompt = String::new();
     for spec in specs {
         let id = aida_core::node_alias::display_spec_id(&spec.spec_id);
         let (title, acceptance) = (&spec.title, &spec.acceptance_markdown);
@@ -587,15 +657,9 @@ fn batch_prompt(
         prompt.push_str(&format!("## Playbook {title} (`{id}`)\n{checklist}\n\n"));
     }
     for path in &batch.files {
-        let args = [
-            "diff",
-            "--no-ext-diff",
-            "--no-color",
-            "--end-of-options",
-            range,
-            "--",
-            path,
-        ];
+        let mut args = vec!["diff", "--no-ext-diff", "--no-color", "--find-renames"];
+        args.extend(["--end-of-options", range, "--", path]);
+        args.extend(renames.get(path.as_str()));
         let patch = git_text(root, &args)?;
         let patch = if patch.trim().is_empty() {
             "(no textual change)\n"
@@ -608,25 +672,39 @@ fn batch_prompt(
 }
 
 /// Run each batch prompt; any runner error, unparsable output, finding outside
-/// the inventory or ledger row outside its batch refuses the whole run. The
+/// the inventory or its batch, or ledger row outside its batch refuses the
+/// whole run. The
 /// returned ledger keeps only files the runner reports `reviewed`, so a skip
 /// or silence leaves the file unaccounted when the caller verifies coverage.
+/// With a `challenger`, each batch's findings must then be reproduced (kept)
+/// or refuted (returned apart) by it.
 // trace:STORY-3120 | ai:claude
 fn review_batches(
     call: &RunnerCall<'_>,
+    challenge: Option<&RunnerCall<'_>>,
     batches: &[ReviewBatch],
     mut prompt: impl FnMut(&ReviewBatch) -> Result<String>,
     inventory: &ClassifiedInventory,
-) -> Result<(Vec<RawReviewFinding>, CoverageLedger)> {
-    let (mut found, mut ledger) = (Vec::new(), CoverageLedger::default());
+) -> Result<(Vec<RawReviewFinding>, CoverageLedger, Vec<RefutedFinding>)> {
+    let (mut found, mut ledger, mut refuted) = (Vec::new(), CoverageLedger::default(), Vec::new());
     for (i, batch) in batches.iter().enumerate() {
+        let context = prompt(batch)?;
         let out = call
-            .run(&prompt(batch)?)
+            .run(&format!("{PROMPT_HEAD}{context}"))
             .with_context(|| format!("review batch {}", i + 1))?;
         let (rows, files) = aida_core::review_engine::parse_runner_findings_json(&out)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("review batch {} output", i + 1))?;
         ensure_in_inventory(inventory, &rows)?;
+        // A batch's runner saw only its own files. trace:STORY-3120 | ai:claude
+        for row in &rows {
+            anyhow::ensure!(
+                batch.files.contains(&row.path),
+                "review batch {} cites a finding outside its batch: {:?}",
+                i + 1,
+                row.path
+            );
+        }
         for entry in &files.files {
             anyhow::ensure!(
                 batch.files.contains(&entry.path),
@@ -635,13 +713,25 @@ fn review_batches(
                 entry.path
             );
         }
+        let rows = match challenge {
+            Some(pass) if !rows.is_empty() => {
+                let out = pass
+                    .run(&challenger::challenge_prompt(&rows, &context)?)
+                    .with_context(|| format!("challenge batch {}", i + 1))?;
+                let (kept, dropped) = challenger::apply_verdicts(rows, &out)
+                    .with_context(|| format!("challenge batch {} output", i + 1))?;
+                refuted.extend(dropped);
+                kept
+            }
+            _ => rows,
+        };
         found.extend(rows);
         let reviewed = |e: &FileCoverageEntry| e.status == FileCoverageStatus::Reviewed;
         ledger
             .files
             .extend(files.files.into_iter().filter(reviewed));
     }
-    Ok((found, ledger))
+    Ok((found, ledger, refuted))
 }
 
 // trace:TASK-3862 | ai:codex
@@ -735,8 +825,15 @@ fn git_env_kept(key: &std::ffi::OsStr) -> bool {
     ["PATH", "HOME", "LANG", "XDG_CONFIG_HOME"].contains(&&*key) || key.starts_with("LC_")
 }
 
+/// Host git (seat-clone refusal, fsmonitor off, store pins) with only the
+/// `git_env_kept` part of the caller's environment. trace:STORY-3120 | ai:claude
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
-    let mut cmd = Command::new("git");
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    // The builder's own pins survive the clear; inherited variables do not.
+    let pins: Vec<_> = cmd
+        .get_envs()
+        .filter_map(|(k, v)| Some((k.to_owned(), v?.to_owned())))
+        .collect();
     cmd.env_clear()
         .envs(
             Environment::capture()
@@ -744,6 +841,7 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
                 .into_iter()
                 .filter(|(k, _)| git_env_kept(k)),
         )
+        .envs(pins)
         .env("GIT_NO_REPLACE_OBJECTS", "1")
         .current_dir(root);
     // No textconv driver from the reviewed tree's attributes ever runs.
@@ -1059,6 +1157,22 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         out.push('\n');
     }
 
+    // trace:STORY-3120 | ai:claude
+    if let Some(adv) = &bundle.adversarial {
+        let agent = adv.challenger_agent.as_deref().unwrap_or("custom runner");
+        out.push_str(&format!(
+            "## Adversarial Challenge\n\n- **Challenger**: `{agent}`\n"
+        ));
+        if let Some(note) = &adv.note {
+            out.push_str(&format!("- **Note**: {note}\n"));
+        }
+        for r in &adv.refuted {
+            let (path, msg) = (&r.finding.path, &r.finding.message);
+            out.push_str(&format!("- **Refuted** `{path}`: {msg} ({})\n", r.reason));
+        }
+        out.push('\n');
+    }
+
     out
 }
 
@@ -1285,6 +1399,42 @@ mod tests {
         );
     }
 
+    /// git_text goes through the host builder: a reviewed repo's
+    /// core.fsmonitor hook, which raw git runs, never runs.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3fu_git_text_uses_host_git_hardening() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, hook) = (temp.path().join("repo"), temp.path().join("fsmonitor"));
+        let hit = temp.path().join("hit");
+        std::fs::create_dir(&root).unwrap();
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "x\n").unwrap();
+        git_text(&root, &["add", "a.rs"]).unwrap();
+        let src = temp.path().join("src");
+        std::fs::write(&src, format!("#!/bin/sh\ntouch '{}'\n", hit.display())).unwrap();
+        let installed = Command::new("install")
+            .arg("-m755")
+            .args([&src, &hook])
+            .status();
+        assert!(installed.unwrap().success());
+        git_text(&root, &["config", "core.fsmonitor", hook.to_str().unwrap()]).unwrap();
+        let raw = Command::new("git")
+            .current_dir(&root)
+            .args(["status", "--porcelain"])
+            .output();
+        assert!(raw.unwrap().status.success());
+        assert!(hit.exists(), "control: raw git runs the fsmonitor hook");
+        std::fs::remove_file(&hit).unwrap();
+        assert!(git_text(&root, &["status", "--porcelain"])
+            .unwrap()
+            .contains("a.rs"));
+        assert!(
+            !hit.exists(),
+            "git_text ran the reviewed repo's fsmonitor hook"
+        );
+    }
+
     #[test]
     fn root_commit_preserves_unusual_git_paths() {
         let temp = tempfile::tempdir().unwrap();
@@ -1454,8 +1604,13 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         };
         let registry = PlaybookRegistry::new(Vec::new()).unwrap();
         let budget = DEFAULT_BATCH_TOKEN_BUDGET;
-        let inventory =
-            classify_with_exclusions(&[entry("a.rs")], &registry, &[], budget, |_| false);
+        let inventory = classify_with_exclusions(
+            &[entry("a.rs"), entry("b.rs")],
+            &registry,
+            &[],
+            budget,
+            |_| false,
+        );
         let finding = |path: &str| {
             let row =
                 serde_json::json!({"path":path,"severity":"high","category":"bug","message":"m"});
@@ -1493,7 +1648,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 estimated_tokens: 1,
             };
             let batches = [batch.clone(), batch];
-            review_batches(&call, &batches, |_| Ok("p".to_owned()), &inventory)
+            review_batches(&call, None, &batches, |_| Ok("p".to_owned()), &inventory)
         };
         assert_eq!(run(finding("a.rs")).unwrap().0.len(), 2);
         // Coverage rows: only `reviewed` counts, and only for the batch's own files.
@@ -1505,7 +1660,10 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(run(files("a.rs", "skipped")).unwrap().1.files.is_empty());
         let err = run(files("b.rs", "reviewed")).unwrap_err().to_string();
         assert!(err.contains("coverage for a file outside it"), "{err}");
-        for outside in ["b.rs", "../a.rs", "/etc/passwd", "A.rs"] {
+        // b.rs is in the inventory but not in this batch.
+        let err = run(finding("b.rs")).unwrap_err().to_string();
+        assert!(err.contains("finding outside its batch"), "{err}");
+        for outside in ["c.rs", "../a.rs", "/etc/passwd", "A.rs"] {
             let err = run(finding(outside)).unwrap_err().to_string();
             assert!(
                 err.contains("outside reviewable inventory"),
@@ -1518,6 +1676,100 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             assert!(err.contains("credential path"), "{cited}: {err}");
         }
         assert!(run("not json".into()).is_err());
+    }
+
+    /// `--adversarial` end to end: the finder reports two findings, the
+    /// challenger refutes the high one and reproduces the low one. The refuted
+    /// one still fails `--fail-on high` and is a suppressed SARIF result; a
+    /// renamed file's diff carries its old path.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s4_adversarial_run_suppresses_but_gates_refuted_findings() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir(&bin).unwrap();
+        let runner = bin.join("runner");
+        let extra = [("AIDA_REVIEW_RUNNER_CMD", runner.to_str())];
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &extra);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("old.rs"), "fn a() {}\nfn b() {}\nfn c() {}\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        git_text(&root, &["mv", "old.rs", "a.rs"]).unwrap();
+        std::fs::write(root.join("a.rs"), "fn a() {}\nfn b() {}\nfn c() { x }\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        crate::test_git::commit_fixture(&root);
+        let prompt = temp.path().join("finder-prompt");
+        let row = |m: &str, sev: &str| {
+            format!(r#"{{"path":"a.rs","severity":"{sev}","category":"bug","message":"{m}"}}"#)
+        };
+        let finder = format!(
+            r#"{{"findings":[{},{}],"files":[{{"path":"a.rs","status":"reviewed"}}]}}"#,
+            row("real", "low"),
+            row("bogus", "high")
+        );
+        let verdicts = r#"{"verdicts":[{"index":0,"verdict":"reproduced"},{"index":1,"verdict":"refuted","reason":"no"}]}"#;
+        let body = format!(
+            "#!/bin/sh\nif [ \"$AIDA_REVIEW_PASS\" = challenger ]; then cat >/dev/null; echo '{verdicts}'; \
+             else cat >{}; echo '{finder}'; fi\n",
+            prompt.display()
+        );
+        let src = temp.path().join("src");
+        std::fs::write(&src, body).unwrap();
+        let status = Command::new("install")
+            .arg("-m755")
+            .args([&src, &runner])
+            .status();
+        assert!(status.unwrap().success());
+        let args = ReviewPrepareArgs {
+            from: Some(base),
+            run_review: true,
+            adversarial: true,
+            json: true,
+            write: Some("out.json".into()),
+            sarif: Some("out.sarif".into()),
+            fail_on: Some("high".into()),
+            ..Default::default()
+        };
+        // Fail closed: the only high finding was refuted, and still fails the gate.
+        let err = handle_review_prepare(&args, &store)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("1 findings meet or exceed --fail-on high"),
+            "{err}"
+        );
+        let sarif: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("out.sarif")).unwrap()).unwrap();
+        let results = sarif["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results[0].get("suppressions").is_none());
+        assert_eq!(
+            (&results[1]["message"]["text"], &results[1]["suppressions"]),
+            (
+                &"bogus".into(),
+                &serde_json::json!([{"kind":"external","justification":"refuted by challenger: no"}])
+            )
+        );
+        let out: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("out.json")).unwrap()).unwrap();
+        let kept = out["anchored_findings"].as_array().unwrap();
+        assert_eq!((kept.len(), &kept[0]["message"]), (1, &"real".into()));
+        assert_eq!(
+            out["adversarial"]["refuted"][0]["finding"]["message"],
+            "bogus"
+        );
+        assert!(out["adversarial"]["note"]
+            .as_str()
+            .unwrap()
+            .contains("AIDA_REVIEW_RUNNER_CMD"));
+        let sent = std::fs::read_to_string(prompt).unwrap();
+        assert!(
+            sent.contains("rename from old.rs") && sent.contains("+fn c() { x }"),
+            "{sent}"
+        );
     }
 
     /// End to end: `--run-review` takes its rules from the merge base (the
@@ -1637,11 +1889,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             files: vec!["a.rs".into()],
             estimated_tokens: 1,
         };
-        let prompt = batch_prompt(root, &format!("{mb}..{head}"), &batch, &[], &[]).unwrap();
+        let none = BTreeMap::new();
+        let prompt = batch_prompt(root, &format!("{mb}..{head}"), &batch, &none, &[], &[]).unwrap();
         assert!(prompt.contains("-old\n+new\n"), "{prompt}");
         assert!(!marker.exists(), "textconv driver ran");
         let missing = format!("{mb}..{}", "f".repeat(40));
-        assert!(batch_prompt(root, &missing, &batch, &[], &[]).is_err());
+        assert!(batch_prompt(root, &missing, &batch, &none, &[], &[]).is_err());
         for key in ["GIT_DIR", "GIT_CONFIG_GLOBAL", "GIT_INDEX_FILE", "GH_TOKEN"] {
             assert!(!git_env_kept(key.as_ref()), "{key}");
         }

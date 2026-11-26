@@ -1222,7 +1222,10 @@ fn read_send_body(
 // trace:STORY-1843 | ai:claude
 #[cfg(unix)]
 fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<()> {
-    let report = aida_core::mailbox_lifecycle::activation::dry_run_report(project_root);
+    // trace:TASK-3918 | ai:claude
+    let report = crate::agent_registry_root::with_leftover_scope(project_root, None, |scope| {
+        aida_core::mailbox_lifecycle::activation::dry_run_report(project_root, scope)
+    });
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
@@ -1370,6 +1373,14 @@ pub(crate) fn retention_leftover_lines(
             leftovers.reapable.len()
         ));
     }
+    // trace:TASK-3918 | ai:claude
+    if !leftovers.held.is_empty() {
+        lines.push(format!(
+            "{} leftover(s) kept: their owner is live or cannot be proven gone; \
+             `aida agent gc` reports each one",
+            leftovers.held.len()
+        ));
+    }
     lines
 }
 
@@ -1384,8 +1395,10 @@ fn print_retention_report(_project_root: &std::path::Path, _json: bool) -> Resul
 // trace:STORY-1843 | ai:claude
 #[cfg(unix)]
 fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Result<()> {
-    let report = aida_core::mailbox_lifecycle::activation::record(project_root)
-        .map_err(|e| anyhow::anyhow!("mail retention activation could not be recorded: {e}"))?;
+    let report = crate::agent_registry_root::with_leftover_scope(project_root, None, |scope| {
+        aida_core::mailbox_lifecycle::activation::record(project_root, scope)
+    })
+    .map_err(|e| anyhow::anyhow!("mail retention activation could not be recorded: {e}"))?;
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else if report.recorded {

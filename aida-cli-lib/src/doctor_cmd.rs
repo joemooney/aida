@@ -363,38 +363,48 @@ pub(crate) fn handle_doctor_command(
             json: heal_json,
         } => {
             // trace:BUG-2722 | ai:codex
-            if normalize_doctor_category(category)? == "repair-reservations" {
+            let category = normalize_doctor_category(category)?;
+            let repair = category == "repair-reservations";
+            if repair || attest.is_some() {
                 let root = main_worktree_root_from(&find_project_root()?);
-                anyhow::ensure!(!yes && !sub_yes, "repair release refuses --yes");
-                anyhow::ensure!(!json && !heal_json, "repair release refuses --json");
-                let id = id.as_deref().context("repair release requires one --id")?;
+                anyhow::ensure!(!yes && !sub_yes, "attested release refuses --yes");
+                anyhow::ensure!(!json && !heal_json, "attested release refuses --json");
+                let id = id
+                    .as_deref()
+                    .context("attested release requires one --id")?;
                 let reason = attest
                     .as_deref()
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                    .context("repair release requires a nonempty --attest reason")?;
+                    .context("attested release requires a nonempty --attest reason")?;
                 crate::gate::seat_authority::require_direct_human()?;
                 anyhow::ensure!(
                     crate::gate::role_authority::has_integrity_floor_authority()
                         && !crate::pr_service::ship_caller_is_drive_seat()
                         && !doctor_running_autonomously(&root),
-                    "repair release requires a human operator"
+                    "attested release requires a human operator"
                 );
-                crate::repair_journal::RepairGuard::attest_reservation(
-                    &root,
-                    id,
-                    reason,
-                    std::io::stdin().lock(),
-                )?;
+                if repair {
+                    crate::repair_journal::RepairGuard::attest_reservation(
+                        &root,
+                        id,
+                        reason,
+                        std::io::stdin().lock(),
+                    )?;
+                } else {
+                    anyhow::ensure!(
+                        category == "stale-leases",
+                        "--attest requires stale-leases or repair-reservations"
+                    );
+                    attest_clone_lease(&root, id, reason)?;
+                }
                 println!("Released {id}");
                 return Ok(());
             }
-            anyhow::ensure!(attest.is_none(), "--attest requires repair-reservations");
             let yes = sub_yes;
             let json = heal_json;
             if let Some(id) = id {
                 let root = main_worktree_root_from(&find_project_root()?);
-                let category = normalize_doctor_category(category)?;
                 anyhow::ensure!(
                     category == "stale-leases",
                     "--id currently requires stale-leases"
@@ -915,6 +925,27 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // trace:STORY-2256 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), crate::codex_mail_health::CATEGORY)? {
         findings.extend(crate::codex_mail_health::service_findings(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    // A deputy hosting the review-watch or auto-train service on a stale or
+    // deleted binary: two receipt reads and a /proc probe. trace:BUG-2774 | ai:claude
+    let deputy_binary = crate::review_watch::service::DEPUTY_BINARY_CATEGORY;
+    if doctor_category_selected(opts.category.as_deref(), deputy_binary)? {
+        for finding in [
+            crate::review_watch::service::deputy_binary_finding(&project_root),
+            crate::review_watch::train_service::deputy_binary_finding(&project_root),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !findings
+                .iter()
+                .any(|f| f.category == deputy_binary && f.id == finding.id)
+            {
+                findings.push(finding);
+            }
+        }
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 

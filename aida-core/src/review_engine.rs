@@ -133,6 +133,9 @@ pub struct ProjectReviewRulesConfig {
     pub default_effort: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Effort for the `--adversarial` challenger pass, validated the same way.
+    #[serde(default)]
+    pub challenger_effort: Option<String>,
 }
 
 /// A single path-scoped rule entry in `.aida/review-rules.toml`.
@@ -747,6 +750,12 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
                 | ".git-credentials"
                 | ".pgpass"
                 | ".pypirc"
+                // trace:TASK-3914 | ai:claude
+                | ".npmrc"
+                | ".vault-token"
+                | ".terraformrc"
+                | "terraform.rc"
+                | ".dockercfg"
         )
     {
         return true;
@@ -768,6 +777,12 @@ fn is_secret_sensitive_path(norm_path: &str, file_name: &str) -> bool {
                     | (".config", "gh")
                     | (".docker", "config.json")
                     | (".kube", "config")
+                    // trace:TASK-3914 | ai:claude
+                    | (".config", "hub")
+                    | (".cargo", "credentials")
+                    | (".cargo", "credentials.toml")
+                    | (".terraform.d", "credentials.tfrc.json")
+                    | (".gem", "credentials")
             )
         })
 }
@@ -1389,10 +1404,22 @@ where
 /// GitHub Code Scanning (`github/codeql-action/upload-sarif`).
 // trace:STORY-3120 | ai:codex
 pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Value {
+    findings_to_sarif_json_with_suppressed(findings, &[])
+}
+
+/// As [`findings_to_sarif_json`], plus `suppressed` findings, each with its
+/// justification, emitted as SARIF results carrying an `external` suppression
+/// rather than dropped. trace:STORY-3120 | ai:claude
+pub fn findings_to_sarif_json_with_suppressed(
+    findings: &[RawReviewFinding],
+    suppressed: &[(RawReviewFinding, String)],
+) -> serde_json::Value {
     let mut rules_map: BTreeMap<String, serde_json::Value> = BTreeMap::new();
     let mut results: Vec<serde_json::Value> = Vec::with_capacity(findings.len());
+    let rows = (findings.iter().map(|f| (f, None)))
+        .chain(suppressed.iter().map(|(f, why)| (f, Some(why))));
 
-    for f in findings {
+    for (f, justification) in rows {
         let cat_clean = if f.category.trim().is_empty() {
             "general"
         } else {
@@ -1443,7 +1470,7 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
 
         // SARIF 2.1 §3.11.5 requires doubling literal braces in message strings.
         let message_text = message_text.replace('{', "{{").replace('}', "}}");
-        results.push(serde_json::json!({
+        let mut result = serde_json::json!({
             "ruleId": rule_id,
             "level": level,
             "message": {
@@ -1463,7 +1490,12 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
                     }
                 }
             ]
-        }));
+        });
+        if let Some(why) = justification {
+            result["suppressions"] =
+                serde_json::json!([{"kind": "external", "justification": why}]);
+        }
+        results.push(result);
     }
 
     let rules: Vec<serde_json::Value> = rules_map.into_values().collect();
@@ -1876,6 +1908,91 @@ mod tests {
             "gcloud/setup.md",
             "src/netrc.rs",
             ".kube-docs/config",
+        ] {
+            assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
+            assert!(!is_credential_path(path), "{path}");
+        }
+    }
+
+    // trace:TASK-3914 | ai:claude
+    fn assert_credential_at_every_depth(rel: &str) {
+        for prefix in ["", "nested/", "a/b/"] {
+            for path in [
+                format!("{prefix}{rel}"),
+                format!("{prefix}{}", rel.to_ascii_uppercase()),
+            ] {
+                assert_eq!(
+                    classify_path_exclusion(&path, &[]),
+                    Some(ExclusionReason::SecretSensitivePath),
+                    "{path}"
+                );
+                assert!(is_credential_path(&path), "{path}");
+                assert!(is_credential_path(&path.replace('/', "\\")), "{path}");
+            }
+        }
+    }
+
+    #[test]
+    fn credential_npmrc() {
+        assert_credential_at_every_depth(".npmrc");
+    }
+
+    #[test]
+    fn credential_cargo_credentials() {
+        assert_credential_at_every_depth(".cargo/credentials");
+    }
+
+    #[test]
+    fn credential_cargo_credentials_toml() {
+        assert_credential_at_every_depth(".cargo/credentials.toml");
+    }
+
+    #[test]
+    fn credential_vault_token() {
+        assert_credential_at_every_depth(".vault-token");
+    }
+
+    #[test]
+    fn credential_terraformrc() {
+        assert_credential_at_every_depth(".terraformrc");
+    }
+
+    #[test]
+    fn credential_terraform_rc() {
+        assert_credential_at_every_depth("terraform.rc");
+    }
+
+    #[test]
+    fn credential_terraform_d_tfrc() {
+        assert_credential_at_every_depth(".terraform.d/credentials.tfrc.json");
+    }
+
+    #[test]
+    fn credential_gem_credentials() {
+        assert_credential_at_every_depth(".gem/credentials");
+    }
+
+    #[test]
+    fn credential_dockercfg() {
+        assert_credential_at_every_depth(".dockercfg");
+    }
+
+    #[test]
+    fn credential_config_hub() {
+        assert_credential_at_every_depth(".config/hub");
+    }
+
+    #[test]
+    fn credential_pattern_neighbours_stay_reviewable() {
+        for path in [
+            ".cargo/config",
+            "nested/.cargo/env",
+            "docs/npmrc.md",
+            "terraform/main.tf",
+            ".terraform.d/plugins/x",
+            ".gem/specs/x.gemspec",
+            ".config/hubble.toml",
+            "vault-token.rs",
         ] {
             assert_eq!(classify_path_exclusion(path, &[]), None, "{path}");
             assert!(!is_credential_path(path), "{path}");

@@ -916,6 +916,15 @@ pub trait Forge {
         anyhow::bail!("open-change health inventory unavailable for this forge")
     }
 
+    /// When each change opened since `since` was created, by number.
+    // trace:STORY-3143 | ai:claude
+    fn landing_opened_since(
+        &self,
+        _since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<(u64, chrono::DateTime<chrono::Utc>)>> {
+        anyhow::bail!("change creation times unavailable for this forge")
+    }
+
     /// Historical requested changes or failed FULL CI runs before landing.
     /// Unsupported providers refuse rather than reporting clean evidence.
     // trace:STORY-2844 | ai:codex
@@ -2625,6 +2634,35 @@ impl Forge for GitHubForge {
         ])?;
         anyhow::ensure!(out.status.success(), "base workflow observation failed");
         Ok(String::from_utf8(out.stdout)?)
+    }
+
+    // trace:STORY-3143 | ai:claude
+    fn landing_opened_since(
+        &self,
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<(u64, chrono::DateTime<chrono::Utc>)>> {
+        let search = format!("created:>={}", since.format("%Y-%m-%d"));
+        let out = self.landing_gh(&[
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "1000",
+            "--search",
+            &search,
+            "--json",
+            "number,createdAt",
+        ])?;
+        anyhow::ensure!(out.status.success(), "PR creation-time listing failed");
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout)?;
+        Ok(rows
+            .iter()
+            .filter_map(|r| {
+                let at = chrono::DateTime::parse_from_rfc3339(r["createdAt"].as_str()?).ok()?;
+                Some((r["number"].as_u64()?, at.with_timezone(&chrono::Utc)))
+            })
+            .collect())
     }
 
     // trace:STORY-2849 | ai:codex

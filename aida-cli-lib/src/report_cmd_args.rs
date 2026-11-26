@@ -56,13 +56,29 @@ pub enum ReportCommand {
     /// Each open spec gets an area, a size (S/M/L/XL), its priority and status,
     /// and a noise flag for review-finding specs. Areas are ranked by a weighted
     /// blend of open and high-priority specs, change requests in the last 7
-    /// days, open PRs and 14-day file churn. The area map and weights live
-    /// under `[report.backlog]` in `.aida/config.toml`.
+    /// days, open PRs and 14-day file churn. A flow section shows landings per
+    /// day, open-to-landed time, change-request rounds, rework sinks and stale
+    /// claims; recommendations list commands to run, and the report runs none.
+    /// The area map, weights, `stale_days`, `flow_days` and
+    /// `opened_lookback_days` live under `[report.backlog]` in
+    /// `.aida/config.toml`.
     // trace:STORY-3143 | ai:claude
     Backlog {
         /// Emit JSON (same as the global `--format json`).
         #[clap(long)]
         json: bool,
+
+        /// Report format: table, json, or html (a self-contained page).
+        // Not `--format`: that is the global output-format flag (BUG-2189).
+        #[clap(
+            id = "report_format",
+            long = "report-format",
+            short = 'f',
+            value_name = "FORMAT",
+            value_parser = ["table", "json", "html"],
+            default_value = "table"
+        )]
+        report_format: String,
     },
 
     /// Generate AI integration report

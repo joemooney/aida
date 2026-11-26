@@ -455,7 +455,39 @@ pub(crate) trait Rails {
     fn train_id(&self, _train: &Built) -> Option<u64> {
         None
     }
+    /// `pr`'s live head, when a read confirms it; `None` when unknown.
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, _pr: u64) -> Option<String> {
+        None
+    }
 }
+
+/// Split off the members whose live head moved since the parent train was
+/// built: a follow-up train never re-tests a superseded head. The dropped
+/// member re-enters at its new head through normal admission.
+// trace:TASK-3913 | ai:claude
+fn drop_superseded(rails: &mut dyn Rails, group: Vec<Member>) -> (Vec<Member>, Vec<Ejected>) {
+    let mut kept = Vec::new();
+    let mut superseded = Vec::new();
+    for m in group {
+        match rails.member_head(m.pr) {
+            Some(now) if now != m.head => {
+                let reason = format!(
+                    "{SUPERSEDED} head moved {} → {}; not tested here, it re-enters at its new head through normal admission",
+                    short(&m.head),
+                    short(&now)
+                );
+                eprintln!("  #{} {reason}", m.pr);
+                superseded.push(Ejected { pr: m.pr, reason });
+            }
+            _ => kept.push(m),
+        }
+    }
+    (kept, superseded)
+}
+
+/// Reason prefix of a member dropped from a follow-up train. trace:TASK-3913 | ai:claude
+const SUPERSEDED: &str = "superseded:";
 
 /// The result of a train run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -538,6 +570,9 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
     let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), false)]);
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
+    // The first composition was just admitted at its live heads; every later
+    // train re-reads them. trace:TASK-3913 | ai:claude
+    let mut follow_up = false;
     while !pending.is_empty() {
         // A drain starts no further train, bisect halves included; the
         // waiting members ride a later train. trace:BUG-2767 | ai:claude
@@ -567,7 +602,17 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
         let base = rails.main_tip()?;
         let mut built: Vec<(Built, bool)> = Vec::new();
         for (group, infra_rerun_spent) in wave {
-            let b = rails.build(&base, &group)?;
+            let (group, superseded) = if follow_up {
+                drop_superseded(rails, group)
+            } else {
+                (group, Vec::new())
+            };
+            if group.is_empty() {
+                out.ejected.extend(superseded);
+                continue;
+            }
+            let mut b = rails.build(&base, &group)?;
+            b.dropped.extend(superseded);
             out.ejected.extend(b.dropped.iter().cloned());
             if !b.cars.is_empty() {
                 // A build that dropped a member is a new composition.
@@ -575,6 +620,7 @@ fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> R
                 built.push((b, spent));
             }
         }
+        follow_up = true;
         if built.is_empty() {
             continue;
         }
@@ -2661,7 +2707,15 @@ fn ownership_rider_refusal(
     dry_run: bool,
     forge: &dyn crate::forge::Forge,
 ) -> Result<Option<String>> {
-    ownership_rider_refusal_with(root, pr, dry_run, |train| {
+    ownership_rider_refusal_with(root, pr, dry_run, train_closed(root, forge))
+}
+
+/// Whether the forge confirms a train PR closed or merged.
+fn train_closed<'a>(
+    root: &'a Path,
+    forge: &'a dyn crate::forge::Forge,
+) -> impl FnOnce(u64) -> bool + 'a {
+    move |train| {
         let terminal = |m: &crate::forge::ChangeMetadata| {
             matches!(
                 m.state,
@@ -2671,6 +2725,38 @@ fn ownership_rider_refusal(
         matches!(crate::forge_confirmation::metadata_for(root, forge, train,
             &mut crate::network_retry::NoopSink, terminal),
             crate::forge_observed::Observed::Known(m) if terminal(&m))
+    }
+}
+
+type Riders = [(u64, Option<Vec<(u64, String)>>)];
+
+/// The member predicate a train pass applies, and the auto-train pre-scan
+/// with it (read-only), so the two cannot disagree: a PR already riding a
+/// train refuses, then the member gate (under the advisor loop it also
+/// applies the automatic approval rule), then a culprit hold.
+// trace:TASK-3917 | ai:claude
+fn admit_member(
+    checks: &mut dyn MemberChecks,
+    main_worktree: &Path,
+    base: &str,
+    pr: u64,
+    opts: &TrainOptions<'_>,
+    (open, leased): (&Riders, &Riders),
+    closed: impl FnOnce(u64) -> bool,
+) -> Result<std::result::Result<Member, MemberGateError>> {
+    let rider = ownership_rider_refusal_with(main_worktree, pr, opts.dry_run, closed)?
+        .or_else(|| train_rider_refusal(pr, open, leased));
+    if let Some(reason) = rider {
+        return Ok(Err(MemberGateError::Refused(reason)));
+    }
+    let member = match typed_gate_member_with(checks, base, pr) {
+        Ok(member) => member,
+        Err(error) => return Ok(Err(error)),
+    };
+    // trace:BUG-2767 | ai:claude
+    Ok(match culprit_admission(main_worktree, opts, &member)? {
+        Some(reason) => Err(MemberGateError::Refused(reason)),
+        None => Ok(member),
     })
 }
 
@@ -3053,7 +3139,7 @@ pub(crate) fn gate_member(
 /// when the project allowlists emails), carrying every constituent trailer
 /// for admission and merge policy, or the PR's non-completing marker.
 // trace:BUG-2635 | ai:codex
-fn member_body(
+pub(crate) fn member_body(
     project_root: &Path,
     base: &str,
     head: &str,
@@ -3103,6 +3189,14 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
         ));
     }
     s.push('\n');
+    // trace:TASK-3913 | ai:claude
+    for d in train
+        .dropped
+        .iter()
+        .filter(|d| d.reason.starts_with(SUPERSEDED))
+    {
+        s.push_str(&format!("Not in this train: #{} {}\n\n", d.pr, d.reason));
+    }
     s.push_str(&members_line(&train.cars));
     s.push('\n');
     s
@@ -3228,6 +3322,11 @@ pub(crate) trait TrainForge {
     // trace:STORY-2401 | ai:codex
     fn confirm_member_head(&mut self, _pr: u64, _head: &str) -> bool {
         false
+    }
+    /// `pr`'s live head from a confirmed read; `None` when unknown.
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, _pr: u64) -> Option<String> {
+        None
     }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
@@ -3670,6 +3769,19 @@ impl TrainForge for LiveTrainForge<'_> {
         matches!(crate::forge_confirmation::metadata(
             &self.main_worktree, self.forge, pr, &mut crate::network_retry::NoopSink,
         ), crate::forge_observed::Observed::Known(m) if m.head_sha == head)
+    }
+
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, pr: u64) -> Option<String> {
+        match crate::forge_confirmation::metadata(
+            &self.main_worktree,
+            self.forge,
+            pr,
+            &mut crate::network_retry::NoopSink,
+        ) {
+            crate::forge_observed::Observed::Known(m) => Some(m.head_sha),
+            _ => None,
+        }
     }
 
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
@@ -4532,6 +4644,11 @@ impl Rails for ForgeRails<'_> {
         self.ports.build(base, members)
     }
 
+    // trace:TASK-3913 | ai:claude
+    fn member_head(&mut self, pr: u64) -> Option<String> {
+        self.ports.member_head(pr)
+    }
+
     fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
         let mut changes = Vec::new();
         for t in trains {
@@ -5121,6 +5238,13 @@ pub(crate) fn explicit_over_max_refusal(
     })
 }
 
+/// Keep the first `max` (at least one) of the ordered `members` for this
+/// train and return the rest, in order, to wait for the next one.
+// trace:TASK-3912 | ai:claude
+pub(crate) fn split_bounded_train<T>(members: &mut Vec<T>, max: usize) -> Vec<T> {
+    members.split_off(max.max(1).min(members.len()))
+}
+
 /// `aida pr train`.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
@@ -5279,37 +5403,28 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let mut refused = Vec::new();
     for pr in candidates {
         crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
-        let ownership_refusal =
-            ownership_rider_refusal(&main_worktree, pr, opts.dry_run, forge.as_ref())?;
-        if let Some(reason) =
-            ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
-        {
-            println!("  ✗ #{pr} not eligible: {reason}");
-            refused.push(Ejected { pr, reason });
-            continue;
-        }
-        match typed_gate_member_with(
-            &mut LiveChecks {
-                project_root: &project_root,
-                main_worktree: &main_worktree,
-                forge: forge.as_ref(),
-                base: &base,
-                named: prs_named_on_command_line(opts),
-                read_only: false,
-                actor_probe: None,
-                request_full: !opts.dry_run,
-                released_member: None,
-            },
+        let mut checks = LiveChecks {
+            project_root: &project_root,
+            main_worktree: &main_worktree,
+            forge: forge.as_ref(),
+            base: &base,
+            named: prs_named_on_command_line(opts),
+            read_only: false,
+            actor_probe: None,
+            request_full: !opts.dry_run,
+            released_member: None,
+        };
+        // trace:TASK-3917 | ai:claude
+        match admit_member(
+            &mut checks,
+            &main_worktree,
             &base,
             pr,
-        ) {
+            opts,
+            (&open_trains, &leased_trains),
+            train_closed(&main_worktree, forge.as_ref()),
+        )? {
             Ok(m) => {
-                // trace:BUG-2767 | ai:claude
-                if let Some(reason) = culprit_admission(&main_worktree, opts, &m)? {
-                    println!("  ✗ #{pr} not eligible: {reason}");
-                    refused.push(Ejected { pr, reason });
-                    continue;
-                }
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
             }
@@ -5378,8 +5493,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     }
     let order = overlap::order(&files);
     members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
-    let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
-    members.truncate(opts.max.max(1));
+    let waiting: Vec<u64> = split_bounded_train(&mut members, opts.max)
+        .iter()
+        .map(|m| m.pr)
+        .collect();
     member_reviews.retain(|(pr, _)| members.iter().any(|m| m.pr == *pr));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
@@ -5606,12 +5723,16 @@ pub(crate) fn advisor_train_handler() -> Result<()> {
     }
     ADVISOR_LOOP.with(|v| v.set(true));
     let _reset = Reset;
+    // `[landing] max_prs_per_train` bounds the automatic train only; an
+    // explicit `aida pr train` keeps its own --max. trace:TASK-3912 | ai:claude
+    let main_worktree = crate::main_worktree_root_from(&crate::find_project_root()?);
+    let max = crate::landing_policy::load_reporting(&main_worktree).auto_train_max();
     pr_train_handler(&TrainOptions {
         prs: &[],
         all_ready: true,
         dry_run: false,
         local_ci: None,
-        max: 10,
+        max,
         no_pull: true,
     })
 }
@@ -5663,6 +5784,93 @@ pub(crate) fn pr_head_pin_journals(root: &Path, pr: u64) -> Result<Vec<(String, 
 // trace:STORY-2857 | ai:codex
 pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
     journal::lock_held(&root.join(".aida/train"))
+}
+
+/// Whether a journaled train awaits recovery: the auto-train's unclaimed
+/// pre-scan must then run its pass. trace:BUG-2769 | ai:claude
+pub(crate) fn automatic_recovery_needed(root: &Path) -> Result<bool> {
+    journal::recovery_needed(&root.join(".aida/train"))
+}
+
+/// The auto-train pre-scan's judge: [`admit_member`] exactly as the
+/// automatic pass applies it, read-only (no ledger answer, no ownership
+/// write, no culprit clearance). Loading it reads the live trains once.
+// trace:TASK-3917 | ai:claude
+pub(crate) struct AutomaticPrescan {
+    project_root: PathBuf,
+    main_worktree: PathBuf,
+    base: String,
+    forge: Box<dyn crate::forge::Forge>,
+    open: Vec<(u64, Option<Vec<(u64, String)>>)>,
+    leased: Vec<(u64, Option<Vec<(u64, String)>>)>,
+    /// Abandoned trains the pass would close, freeing their riders.
+    pub abandoned: bool,
+}
+impl AutomaticPrescan {
+    /// `None` where no automatic train runs: the forge is not supported.
+    pub(crate) fn load(project_root: &Path) -> Result<Option<Self>> {
+        if forge_refusal(crate::forge::resolve_forge_kind(project_root)).is_some() {
+            return Ok(None);
+        }
+        let main_worktree = crate::main_worktree_root_from(project_root);
+        let base = crate::gate::review_carryover::protected_base(&main_worktree).map_err(|e| {
+            anyhow::anyhow!("could not read origin's default branch: {}", e.reason())
+        })?;
+        let (open, leased, abandoned) = live_trains(&main_worktree)?;
+        Ok(Some(Self {
+            forge: crate::forge::forge_for(project_root),
+            project_root: project_root.to_path_buf(),
+            main_worktree,
+            base,
+            open,
+            leased,
+            abandoned: !abandoned.is_empty(),
+        }))
+    }
+
+    pub(crate) fn base(&self) -> &str {
+        &self.base
+    }
+
+    pub(crate) fn admits(&self, pr: u64) -> std::result::Result<(), MemberGateError> {
+        struct Restore(bool);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                ADVISOR_LOOP.with(|v| v.set(self.0));
+            }
+        }
+        let _restore = Restore(ADVISOR_LOOP.with(|v| v.replace(true)));
+        let opts = TrainOptions {
+            prs: &[],
+            all_ready: true,
+            dry_run: true,
+            local_ci: None,
+            max: 10,
+            no_pull: true,
+        };
+        let mut checks = LiveChecks {
+            project_root: &self.project_root,
+            main_worktree: &self.main_worktree,
+            forge: self.forge.as_ref(),
+            base: &self.base,
+            named: false,
+            read_only: true,
+            actor_probe: None,
+            request_full: false,
+            released_member: None,
+        };
+        admit_member(
+            &mut checks,
+            &self.main_worktree,
+            &self.base,
+            pr,
+            &opts,
+            (&self.open, &self.leased),
+            train_closed(&self.main_worktree, self.forge.as_ref()),
+        )
+        .map_err(|e| MemberGateError::Unavailable(format!("{e:#}")))?
+        .map(|_| ())
+    }
 }
 
 // trace:STORY-2905 | ai:claude

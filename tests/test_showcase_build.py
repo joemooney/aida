@@ -268,6 +268,34 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.assertIn('<p>| not | a table | | still | prose |</p>', page)
 
     # trace:STORY-2839 | ai:claude
+    def refused(self, markdown):
+        self.source.write_text('# Fixture guide\n\n' + markdown)
+        before = self.snapshot()
+        stderr = self.build(expected=1).stderr
+        self.assertEqual(before, self.snapshot())
+        return stderr
+
+    def relative_source(self):
+        return self.source.relative_to(self.root).as_posix()
+
+    def test_nested_list_item_is_refused_naming_file_and_line(self):
+        for marker in ('  - child', '    * child', '  1. child'):
+            with self.subTest(marker=marker):
+                stderr = self.refused('- parent\n' + marker + '\n')
+                self.assertIn(self.relative_source() + ':4: nested list items are not rendered', stderr)
+
+    def test_single_asterisk_emphasis_is_refused_naming_file_and_line(self):
+        for text in ('An *"emphasised"* example.', 'Ends with stray* mark.', '- item *em*'):
+            with self.subTest(text=text):
+                stderr = self.refused('Intro.\n\n' + text + '\n')
+                self.assertIn(self.relative_source() + ':5: single-asterisk emphasis is not rendered', stderr)
+
+    def test_bold_code_spans_fences_and_bullets_with_asterisks_still_build(self):
+        page = self.build_table('* **bold** item with `glob*` and `*em*`\n\n'
+                                '```\n  - nested in code\n*literal*\n```\n\nA 5 * 3 product.\n')
+        self.assertIn('<li><strong>bold</strong> item with <code>glob*</code> and <code>*em*</code></li>', page)
+        self.assertIn('  - nested in code\n*literal*', page)
+
     def test_header_groups_pages_into_dropdowns_and_marks_the_current_one(self):
         self.manifest['pages'][0]['output'] = 'workflow.html'
         self.manifest['pages'].append({'source': 'guide.md', 'output': 'trust.html', 'label': 'Trust & evidence', 'category': 'human'})

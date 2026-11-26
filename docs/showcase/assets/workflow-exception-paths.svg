@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 460" role="img" aria-labelledby="title desc">
+  <title id="title">When work takes a detour: the four recovery flowcharts</title>
+  <desc id="desc">Four recovery flowcharts showing how AIDA handles design forks via punts and clarification, review rework rounds via delta reviews, red merge trains via automatic bisect, and crashed sessions or stale pulls via watchdog sweeps and pull fixes.</desc>
+  <!-- trace:STORY-2839 | ai:claude -->
+  <style>
+    svg {
+      --paper: #f4f1e9;
+      --card: #faf8f2;
+      --panel: #ece8de;
+      --ink: #252a26;
+      --muted: #5e635a;
+      --line: #c9c5b8;
+      --orange: #ba3916;
+      --orange-tint: #f5e2da;
+      --green: #2d5a3c;
+      --green-tint: #dfece3;
+      --blue: #284b63;
+      --blue-tint: #dde7ee;
+      --amber: #8a5a14;
+      --amber-tint: #f3e8d2;
+      --red: #9b2c2c;
+      --red-tint: #f5dfdf;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, "Helvetica Neue", Arial, sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --paper: #161a17;
+        --card: #1f2521;
+        --panel: #252c27;
+        --ink: #ece9e0;
+        --muted: #a3a9a1;
+        --line: #3d443f;
+        --orange: #ff8658;
+        --orange-tint: #3a231b;
+        --green: #68b684;
+        --green-tint: #1d3325;
+        --blue: #7eb0d5;
+        --blue-tint: #1d2b36;
+        --amber: #e6ad4c;
+        --amber-tint: #332917;
+        --red: #f27979;
+        --red-tint: #381e1e;
+      }
+    }
+    .bg { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .panel { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; rx: 8; }
+    .card { fill: var(--card); stroke: var(--line); stroke-width: 1.3; rx: 5; }
+    .card-orange { fill: var(--orange-tint); stroke: var(--orange); stroke-width: 1.5; rx: 5; }
+    .card-green { fill: var(--green-tint); stroke: var(--green); stroke-width: 1.5; rx: 5; }
+    .card-blue { fill: var(--blue-tint); stroke: var(--blue); stroke-width: 1.5; rx: 5; }
+    .card-amber { fill: var(--amber-tint); stroke: var(--amber); stroke-width: 1.5; rx: 5; }
+    .card-red { fill: var(--red-tint); stroke: var(--red); stroke-width: 1.5; rx: 5; }
+    .eyebrow { font: 600 9.5px var(--mono); letter-spacing: 1.1px; fill: var(--orange); }
+    .h-serif { font: 400 15px var(--serif); fill: var(--ink); }
+    .title { font: 600 10.5px var(--sans); fill: var(--ink); }
+    .body { font: 400 9.5px var(--sans); fill: var(--muted); }
+    .mono { font: 500 9px var(--mono); fill: var(--ink); }
+    .arrow { stroke: var(--ink); stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+    .arrow-green { stroke: var(--green); stroke-width: 1.5; fill: none; marker-end: url(#arr-green); }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--ink)"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="var(--green)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="978" height="458" rx="8"/>
+  <text class="eyebrow" x="24" y="26">RECOVERY FLOWCHARTS · HOW AIDA HANDLES REAL-WORLD DETOURS WITHOUT GUESSING OR LOSING WORK</text>
+
+  <!-- Quadrant A: Design Fork / Punt -->
+  <rect class="panel" x="20" y="38" width="460" height="196"/>
+  <text class="eyebrow" x="34" y="56">DETOUR A · AMBIGUITY MID-IMPLEMENTATION</text>
+  <text class="h-serif" x="34" y="75">The Design-Fork Punt &amp; Clarify Loop</text>
+
+  <rect class="card-amber" x="34" y="88" width="130" height="58"/>
+  <text class="title" x="44" y="105">1. Hits Fork</text>
+  <text class="body" x="44" y="120">Agent refuses to guess</text>
+  <text class="mono" x="44" y="135">aida punt (design-fork)</text>
+
+  <path class="arrow" d="M164,117 L184,117"/>
+  <rect class="card-red" x="186" y="88" width="130" height="58"/>
+  <text class="title" x="196" y="105">2. Parked Safely</text>
+  <text class="body" x="196" y="120">State: NeedsAttention</text>
+  <text class="mono" x="196" y="135">Drain skips &amp; continues</text>
+
+  <path class="arrow" d="M316,117 L336,117"/>
+  <rect class="card-blue" x="338" y="88" width="128" height="58"/>
+  <text class="title" x="348" y="105">3. You Decide</text>
+  <text class="body" x="348" y="120">Answer recorded fork</text>
+  <text class="mono" x="348" y="135">aida decide</text>
+
+  <path class="arrow-green" d="M402,146 L402,162"/>
+  <rect class="card-green" x="34" y="164" width="432" height="54"/>
+  <text class="title" x="46" y="183">4. Resume from Exact Checkpoint (`aida queue work &lt;SPEC&gt; --resume`)</text>
+  <text class="body" x="46" y="201">Spec returns to Approved/InProgress with your recorded answer; no work is lost.</text>
+
+  <!-- Quadrant B: Review Rework & Delta Review -->
+  <rect class="panel" x="500" y="38" width="460" height="196"/>
+  <text class="eyebrow" x="514" y="56">DETOUR B · REVIEWER FINDS AN ISSUE</text>
+  <text class="h-serif" x="514" y="75">The Rework Round &amp; Delta Review Loop</text>
+
+  <rect class="card-red" x="514" y="88" width="132" height="58"/>
+  <text class="title" x="524" y="105">1. Refusal Verdict</text>
+  <text class="body" x="524" y="120">Changes Requested</text>
+  <text class="mono" x="524" y="135">+ Rework Merge Hold</text>
+
+  <path class="arrow" d="M646,117 L666,117"/>
+  <rect class="card-orange" x="668" y="88" width="130" height="58"/>
+  <text class="title" x="678" y="105">2. Rework Round</text>
+  <text class="mono" x="678" y="120">aida rework &lt;SPEC&gt;</text>
+  <text class="body" x="678" y="135">Pushes fix to same PR</text>
+
+  <path class="arrow" d="M798,117 L818,117"/>
+  <rect class="card-blue" x="820" y="88" width="126" height="58"/>
+  <text class="title" x="830" y="105">3. Delta Review</text>
+  <text class="body" x="830" y="120">Reviews new commits</text>
+  <text class="mono" x="830" y="135">Pinned to new HEAD</text>
+
+  <path class="arrow-green" d="M883,146 L883,162"/>
+  <rect class="card-green" x="514" y="164" width="432" height="54"/>
+  <text class="title" x="526" y="183">4. Automatic Rework-Hold Release → Main-Track Candidate</text>
+  <text class="body" x="526" y="201">Current-head reviewer approval automatically clears a rework-only hold so the PR can land.</text>
+
+  <!-- Quadrant C: Red Merge Train Bisect -->
+  <rect class="panel" x="20" y="248" width="460" height="194"/>
+  <text class="eyebrow" x="34" y="266">DETOUR C · BATCH CI FAILS ON THE MERGE TRAIN</text>
+  <text class="h-serif" x="34" y="285">Automatic Train Bisect &amp; Blocker Isolation</text>
+
+  <rect class="card-red" x="34" y="298" width="132" height="58"/>
+  <text class="title" x="44" y="315">1. Train Goes Red</text>
+  <text class="body" x="44" y="330">4 Riders [R1..R4] fail</text>
+  <text class="mono" x="44" y="345">ci:full shard failure</text>
+
+  <path class="arrow" d="M166,327 L186,327"/>
+  <rect class="card-amber" x="188" y="298" width="130" height="58"/>
+  <text class="title" x="198" y="315">2. Retire &amp; Split</text>
+  <text class="body" x="198" y="330">Retires failed train</text>
+  <text class="mono" x="198" y="345">Bisects: [R1,R2] | [R3,R4]</text>
+
+  <path class="arrow" d="M318,327 L338,327"/>
+  <rect class="card-red" x="340" y="298" width="126" height="58"/>
+  <text class="title" x="350" y="315">3. Isolate Culprit</text>
+  <text class="body" x="350" y="330">Finds broken Rider R3</text>
+  <text class="mono" x="350" y="345">Flags R3 as Blocker</text>
+
+  <path class="arrow-green" d="M253,356 L253,372"/>
+  <rect class="card-green" x="34" y="374" width="432" height="52"/>
+  <text class="title" x="46" y="393">4. Healthy Riders [R1, R2, R4] Still Land on `main`</text>
+  <text class="body" x="46" y="410">One bad PR never poisons the whole queue; only the isolated blocker is returned for rework.</text>
+
+  <!-- Quadrant D: Crashed Process / Stale Pull -->
+  <rect class="panel" x="500" y="248" width="460" height="194"/>
+  <text class="eyebrow" x="514" y="266">DETOUR D · CRASHED AGENT PROCESS OR STALE CHECKOUT</text>
+  <text class="h-serif" x="514" y="285">Watchdog Detection, Worktree Sweep &amp; Pull Fix</text>
+
+  <rect class="card-red" x="514" y="298" width="132" height="58"/>
+  <text class="title" x="524" y="315">1. Process Dies</text>
+  <text class="body" x="524" y="330">Orphaned lease +</text>
+  <text class="mono" x="524" y="345">Stale worktree left</text>
+
+  <path class="arrow" d="M646,327 L666,327"/>
+  <rect class="card-amber" x="668" y="298" width="130" height="58"/>
+  <text class="title" x="678" y="315">2. Watchdog Probe</text>
+  <text class="body" x="678" y="330">Checks &lt;pid&gt;@&lt;start&gt;</text>
+  <text class="mono" x="678" y="345">aida session leases</text>
+
+  <path class="arrow" d="M798,327 L818,327"/>
+  <rect class="card-blue" x="820" y="298" width="126" height="58"/>
+  <text class="title" x="830" y="315">3. Safe Sweep</text>
+  <text class="mono" x="830" y="330">aida worktree gc</text>
+  <text class="body" x="830" y="345">Skips dirty trees</text>
+
+  <path class="arrow-green" d="M883,356 L883,372"/>
+  <rect class="card-green" x="514" y="374" width="432" height="52"/>
+  <text class="title" x="526" y="393">4. Branch Freed &amp; Local Store Synced (`aida pull` / Pull Fix)</text>
+  <text class="body" x="526" y="410">Clean stale worktrees are reclaimed, orphaned leases released, and `aida pull` syncs `main`.</text>
+</svg>
