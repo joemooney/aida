@@ -2,18 +2,16 @@ id: 01a1dd66-c272-7f23-ac5e-efaa875e8c3b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-762
 agreed_id: STORY-2839
 title: Demystify AIDA delivery, train, authority, and lane terminology in docs/showcase with visual field guide and SVGs
-description: 'Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
+description: |
+  Update docs/showcase and the canonical product glossary to demystify 60+ operational, Git, train, authority, and lane concepts for both non-experts and operators. Add a 5-act visual field guide (with dual-theme light/dark SVGs), expand product-glossary.md, and refresh workflow/authority showcase guides for recent capabilities (merge train, riders, bisect, autoland/aida land, delta review, ci:full, ratchets, deputy shell, --include-gate-paths, post-train pull).
 
-
-  Targets and done check (advisor 13:58, product seat batch): edit docs/showcase/glossary.html (the canonical product glossary), docs/showcase/authority.html and docs/showcase/autonomy.html (workflow/authority guides), and add a new docs/showcase/field-guide.html (the 5-act field guide) registered in docs/showcase/build.py''s page list. New SVGs go under docs/showcase/assets/ named field-guide-act1.svg to field-guide-act5.svg, each with light and dark variants following the existing assets'' convention. Done when: every term listed in the description has a glossary entry; the five SVGs render in both themes; make check-ci-fast (docs gates) passes.
-
-  '
+  Targets and done check (advisor 13:58, product seat batch): edit docs/showcase/glossary.html (the canonical product glossary), docs/showcase/authority.html and docs/showcase/autonomy.html (workflow/authority guides), and add a new docs/showcase/field-guide.html (the 5-act field guide) registered in docs/showcase/build.py's page list. New SVGs go under docs/showcase/assets/ named field-guide-act1.svg to field-guide-act5.svg, each with light and dark variants following the existing assets' convention. Done when: every term listed in the description has a glossary entry; the five SVGs render in both themes; make check-ci-fast (docs gates) passes.
 status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-15 04:11:01.618782+00:00
-modified_at: 2026-11-26 12:19:31.695582+00:00
+created_at: 2026-11-15T04:11:01.618782Z
+modified_at: 2026-11-26T12:42:34.380290774Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -26,531 +24,466 @@ comments:
 - id: 01a1e0f9-4779-7690-9688-bb3e04d24f20
   author: joe
   content: 'Advisor 13:58: approved after edit (product seat burndown batch); acceptance appended to the description.'
-  created_at: 2026-11-15 20:49:55.577709+00:00
-  modified_at: 2026-11-15 20:49:55.577709+00:00
+  created_at: 2026-11-15T20:49:55.577709Z
+  modified_at: 2026-11-15T20:49:55.577709Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 - id: 01a20a01-43f2-7b51-8274-4b10d2999d47
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:02):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:02):
     # STORY-2839: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
 
-
     Read `aida show STORY-2839` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
-
-    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can''t fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
-
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
-
     Add `// trace:STORY-2839 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (STORY-2839)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
 
-
-    INTEGRATION BUNDLE p28 (product-15 13:02): branch `int28-story-2839`, cut from origin/integration 54e9220e1db. PR base MUST be `integration`. SMALL-PR RULE IS BINDING: if the whole spec exceeds ~300 lines, ship the FIRST coherent slice (AC1 or the first doc section) and list the rest in the PR body for product to split. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.'
-  created_at: 2026-11-23 20:02:51.304507+00:00
-  modified_at: 2026-11-23 20:02:51.304507+00:00
+    INTEGRATION BUNDLE p28 (product-15 13:02): branch `int28-story-2839`, cut from origin/integration 54e9220e1db. PR base MUST be `integration`. SMALL-PR RULE IS BINDING: if the whole spec exceeds ~300 lines, ship the FIRST coherent slice (AC1 or the first doc section) and list the rest in the PR body for product to split. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.
+  created_at: 2026-11-23T20:02:51.304507Z
+  modified_at: 2026-11-23T20:02:51.304507Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20abc-1705-75f1-b9b9-fa5ab22396a9
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 54e9220e1db9175dbb2c284241aed674328067f6, including the native worktree diff. The origin/main merge-base diff is empty. No untracked additions.
-
-    AC1: [evidence: documentation-inspection] The ten explicitly named concepts appear in the template from aida-core/templates/.aida/discipline/product-glossary.md:21 and in docs/showcase/glossary.html:19. Checked train, landing-mode and authority wording against the operator docs. ProductGlossaryTests.test_delivery_terms_have_searchable_definitions (tests/test_showcase_build.py:16) passed. Cross-reference, punctuation, duplicate-entry and missing-anchor probes passed; the template copies match and build.py --check passed. No executable authority paths changed. The book generator consumed the edited product template directly because the installed binary embeds the previous version. Broader vocabulary, field guide, themed figures and workflow/authority refresh deferred under the small-PR rule. No reviewer verdict.'
-  created_at: 2026-11-23 23:27:07.776133+00:00
-  modified_at: 2026-11-23 23:27:07.776133+00:00
+    AC1: [evidence: documentation-inspection] The ten explicitly named concepts appear in the template from aida-core/templates/.aida/discipline/product-glossary.md:21 and in docs/showcase/glossary.html:19. Checked train, landing-mode and authority wording against the operator docs. ProductGlossaryTests.test_delivery_terms_have_searchable_definitions (tests/test_showcase_build.py:16) passed. Cross-reference, punctuation, duplicate-entry and missing-anchor probes passed; the template copies match and build.py --check passed. No executable authority paths changed. The book generator consumed the edited product template directly because the installed binary embeds the previous version. Broader vocabulary, field guide, themed figures and workflow/authority refresh deferred under the small-PR rule. No reviewer verdict.
+  created_at: 2026-11-23T23:27:07.776133Z
+  modified_at: 2026-11-23T23:27:07.776133Z
   session_id: 01a20ab97aac
   harness_version: codex-cli 0.167.0
 - id: 01a20aeb-241b-70a2-9c8b-9de8a03776e5
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int28-story-2839` at head `dd0f71497a9bdad4293606519d27af18abb31562`.'
-  created_at: 2026-11-24 00:18:32.091686+00:00
-  modified_at: 2026-11-24 00:18:32.091686+00:00
+  created_at: 2026-11-24T00:18:32.091686Z
+  modified_at: 2026-11-24T00:18:32.091686Z
   session_id: 01a20ab97aac
 - id: 01a20af6-956d-77f1-82ee-01c5ffc0e4b9
   author: joe
   content: 'INTEGRATION PRE-CHECK (integration-30, 17:35): PR-4467 @ dd0f71497a9 PASSES (slice 1, Refs). Docs-only, +262/-2: ten delivery/authority terms (Autoland, Bisect, ci:full, Delta review, Deputy shell, --include-gate-paths, Merge train, Post-train pull, Ratchet, Rider) added to the product-glossary template master; mirror identical (make sync-templates), plus docs/cli/12-glossary.md and the showcase glossary/search index. Definitions checked against two-seat-protocol.md (train bisect, riders closing with a pointer, ci:full tiering, landing modes): accurate. tests/test_showcase_build.py pins each term to one search row and one glossary anchor.'
-  created_at: 2026-11-24 00:30:48.167698+00:00
-  modified_at: 2026-11-24 00:30:48.167698+00:00
+  created_at: 2026-11-24T00:30:48.167698Z
+  modified_at: 2026-11-24T00:30:48.167698Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20b6e-bb71-7ec2-8b69-dfec9aabe05e
   author: aida-auto-bump
-  content: '[aida:refs-landing] e5e3711c9f9f
-
-    A reference merge (commit e5e3711c9f9f, `(Refs STORY-2839)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
-  created_at: 2026-11-24 02:42:16.049902+00:00
-  modified_at: 2026-11-24 02:42:16.049902+00:00
+  content: |-
+    [aida:refs-landing] e5e3711c9f9f
+    A reference merge (commit e5e3711c9f9f, `(Refs STORY-2839)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-24T02:42:16.049902Z
+  modified_at: 2026-11-24T02:42:16.049902Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a20b98-40a9-7ae3-8466-218a95baeca2
   author: lane-recovery
   content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-24 03:27:37.129835+00:00
-  modified_at: 2026-11-24 03:27:37.129835+00:00
+  created_at: 2026-11-24T03:27:37.129835Z
+  modified_at: 2026-11-24T03:27:37.129835Z
 - id: 01a21381-d7dc-7ee0-b949-60b5bbab2ad3
   author: joe
   content: 'REFERENCE IMPLEMENTATION (Joe 2026-11-25 09:19): commit b5826a0f949 on branch story-3120-ci-review (37 files, +4159): recovered Nov 15 showcase topbar dropdown submenus (How it works / Governance / Operations / Reference), site-wide Light/Dark toggle (localStorage aida-theme), Markdown table renderer in docs/showcase/build.py, docs/getting-started.md, Multi-Seat Workflow + 8 SVGs (docs/product-workflow.md, docs/operator-setup.md); build.py --check and all 17 tests in tests/test_showcase_build.py pass. Port it in <=300-line slices (small-PR rule): (a) build.py table renderer + tests, (b) topbar dropdowns + theme toggle, (c) getting-started.md, (d) multi-seat workflow docs + SVGs (STORY-2852), (e) the terminology field guide (STORY-2839).'
-  created_at: 2026-11-25 16:20:06.236172+00:00
-  modified_at: 2026-11-25 16:20:06.236172+00:00
+  created_at: 2026-11-25T16:20:06.236172Z
+  modified_at: 2026-11-25T16:20:06.236172Z
 - id: 01a21395-ead7-7283-864a-7bce9295d8b5
   author: joe
-  content: "GROOMING (integration-30, 2026-11-25 09:45): how to port reference commit b5826a0f949 to integration, for p39/p40. This is a suggested slice plan, not a lane instruction.\n\nThe commit is +4159 lines, but most of it is mechanical. docs/showcase/*.html pages (except code-review.html, workflow.html and getting-started.html, which have hand-written bodies) are GENERATED from page-template.html by build.py; that's the +137 lines per page. So, for the <=300 rule, count the hand-written lines (template, js, css, build.py, md, tests) and list the regenerated pages separately in the PR body. CI checks them with `build.py --check`.\n\n(a) build.py Markdown table renderer + tests/test_showcase_build.py (+129/+16). Security lens: the renderer must HTML-escape every cell (cell text comes from docs; a stray <script> must stay inert). Add a test for a cell containing `<b>` and `|` escaping.\n(b) Topbar dropdown submenus + Light/Dark toggle: page-template.html, app.js (+48), styles.css (+33),\
-    \ guide.css (+24), index.html, search-data.js, plus the regenerated pages. The toggle should only read and write the 'aida-theme' key, whitelisted to light/dark. No innerHTML from search data.\n(c) docs/getting-started.md (+88) + getting-started.html. Docs only.\n(d) Multi-seat workflow: docs/product-workflow.md (+342), operator-setup.md (+24) and 8 SVGs (~1100 lines of assets). Too big for one PR. Split it:\n    d1: product-workflow.md plus the swimlane, lanes-leases, merge-train and post-train-sync SVGs;\n    d2: enums-state, exception-paths, gates-review and human-journeys SVGs plus operator-setup.md.\n    STORY-2852 is still DRAFT, and its description is about tracked verbs (`aida lane relay`), not docs. Either promote STORY-2852 (advisor disposition first) or attach d1/d2 as Refs STORY-2839 and leave STORY-2852 open. Don't let a docs slice complete STORY-2852.\n(e) Terminology field guide: workflow.html (+321 hand-written) + workflow.svg (+165) + authority-mandate.svg. Right at\
-    \ the line limit; it may need e1 (html) and e2 (svg).\nOrder: a → b (b regenerates every page, so it should land early to avoid churn) → c, d1, d2, e in parallel. Each slice is docs/tests only, so it qualifies for integration self-approve. Exceptions: a and b touch build.py/app.js, which still needs the escaping check above in pre-check.\nTitle rule: Refs-only on every slice, except the final slice of STORY-2839, which carries (STORY-2839) as its completing group."
-  created_at: 2026-11-25 16:41:43.864039+00:00
-  modified_at: 2026-11-25 16:41:43.864039+00:00
+  content: |-
+    GROOMING (integration-30, 2026-11-25 09:45): how to port reference commit b5826a0f949 to integration, for p39/p40. This is a suggested slice plan, not a lane instruction.
+
+    The commit is +4159 lines, but most of it is mechanical. docs/showcase/*.html pages (except code-review.html, workflow.html and getting-started.html, which have hand-written bodies) are GENERATED from page-template.html by build.py; that's the +137 lines per page. So, for the <=300 rule, count the hand-written lines (template, js, css, build.py, md, tests) and list the regenerated pages separately in the PR body. CI checks them with `build.py --check`.
+
+    (a) build.py Markdown table renderer + tests/test_showcase_build.py (+129/+16). Security lens: the renderer must HTML-escape every cell (cell text comes from docs; a stray <script> must stay inert). Add a test for a cell containing `<b>` and `|` escaping.
+    (b) Topbar dropdown submenus + Light/Dark toggle: page-template.html, app.js (+48), styles.css (+33), guide.css (+24), index.html, search-data.js, plus the regenerated pages. The toggle should only read and write the 'aida-theme' key, whitelisted to light/dark. No innerHTML from search data.
+    (c) docs/getting-started.md (+88) + getting-started.html. Docs only.
+    (d) Multi-seat workflow: docs/product-workflow.md (+342), operator-setup.md (+24) and 8 SVGs (~1100 lines of assets). Too big for one PR. Split it:
+        d1: product-workflow.md plus the swimlane, lanes-leases, merge-train and post-train-sync SVGs;
+        d2: enums-state, exception-paths, gates-review and human-journeys SVGs plus operator-setup.md.
+        STORY-2852 is still DRAFT, and its description is about tracked verbs (`aida lane relay`), not docs. Either promote STORY-2852 (advisor disposition first) or attach d1/d2 as Refs STORY-2839 and leave STORY-2852 open. Don't let a docs slice complete STORY-2852.
+    (e) Terminology field guide: workflow.html (+321 hand-written) + workflow.svg (+165) + authority-mandate.svg. Right at the line limit; it may need e1 (html) and e2 (svg).
+    Order: a → b (b regenerates every page, so it should land early to avoid churn) → c, d1, d2, e in parallel. Each slice is docs/tests only, so it qualifies for integration self-approve. Exceptions: a and b touch build.py/app.js, which still needs the escaping check above in pre-check.
+    Title rule: Refs-only on every slice, except the final slice of STORY-2839, which carries (STORY-2839) as its completing group.
+  created_at: 2026-11-25T16:41:43.864039Z
+  modified_at: 2026-11-25T16:41:43.864039Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21404-e042-7122-9f60-8e96afbc1223
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:42):
-
-    # STORY-2839 slice (a): Markdown table renderer in docs/showcase/build.py + tests (integration-30 grooming, the latest STORY-2839 comment; Joe''s reference commit b5826a0f949 on branch story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-story-2839-a (cut from the integration tip). Title "(Refs STORY-2839)". <=300 hand-written lines.
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:42):
+    # STORY-2839 slice (a): Markdown table renderer in docs/showcase/build.py + tests (integration-30 grooming, the latest STORY-2839 comment; Joe's reference commit b5826a0f949 on branch story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-story-2839-a (cut from the integration tip). Title "(Refs STORY-2839)". <=300 hand-written lines.
     PORT from b5826a0f949 ONLY: the build.py Markdown table renderer and its tests in tests/test_showcase_build.py (about +129/+16). Do NOT port dropdowns, theme, docs pages or SVGs (later slices).
-
     SECURITY: the renderer must HTML-ESCAPE every cell (cell text comes from docs; a stray <script> must stay inert). Add a test for a cell containing `<b>`, plus escaped `\|` handling.
-
     If any generated page changes, regenerate with `python3 docs/showcase/build.py` and list the regenerated pages in the PR body; `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass.
-
-    make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.'
-  created_at: 2026-11-25 18:42:58.912562+00:00
-  modified_at: 2026-11-25 18:42:58.912562+00:00
+    make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-25T18:42:58.912562Z
+  modified_at: 2026-11-25T18:42:58.912562Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21412-7234-7333-aaf6-ad5f2361d343
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: e22768ff97 (slice a, Refs STORY-2839: Markdown table renderer in docs/showcase/build.py + tests; ported from b5826a0f949, renderer only — no nav dropdowns, theme, pages or SVGs).
-
 
     Acceptance evidence (brief): [evidence: behavioral-test] tests/test_showcase_build.py — test_markdown_tables_render_headers_cells_and_links (thead/tbody, code + link cells, short rows padded, search text without pipes/separator), test_table_cells_are_html_escaped (`<b>` and `<script>` cells render as &lt;…&gt;), test_escaped_pipe_stays_inside_one_cell (`\|` in code span and prose), test_pipe_lines_without_a_separator_stay_paragraphs (no separator / width-mismatched separator ⇒ no table). All 20 tests in the file pass under python3 -m unittest (pytest is not installed on this host). python3 docs/showcase/build.py --check passes; no published source contains a table, so no generated page changed.
 
-
     Probes: (1) row/cell parsing shared by render and search_text (same is_table_row/parse_table_row). (2) GFM: separator must match the header cell count; `\|` is literal; extra cells are truncated, missing cells padded (GFM behaviour). (3) 0 body rows renders a header-only table; table at EOF closes. (4) Cells go through inline(), which html.escape()s first, so HTML stays inert. Departures from the reference: separator accepts 1+ dashes (GFM) instead of 3+, and search_text strips pipes only on table rows, not globally (prose like `a | b` keeps its search text).
 
-
-    Residual risks: rows need leading and trailing pipes (pipe-less GFM rows aren''t detected); a row ending in an escaped backslash followed by a pipe (`\\\\|`) is read as an escaped pipe, so it isn''t treated as a row.'
-  created_at: 2026-11-25 18:58:02.932615+00:00
-  modified_at: 2026-11-25 18:58:02.932615+00:00
+    Residual risks: rows need leading and trailing pipes (pipe-less GFM rows aren't detected); a row ending in an escaped backslash followed by a pipe (`\\\\|`) is read as an escaped pipe, so it isn't treated as a row.
+  created_at: 2026-11-25T18:58:02.932615Z
+  modified_at: 2026-11-25T18:58:02.932615Z
   session_id: 01a214073970
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21421-b04d-78d1-8815-27724ea58b4c
   author: joe
-  content: 'AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4588 @ e22768ff97 (STORY-2839 slice a: Markdown pipe-table renderer in docs/showcase/build.py; Refs-only; +99/-4).
-
-    Result: PASS. It''s docs tooling plus tests, so it''s within integration self-approve limits.
-
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4588 @ e22768ff97 (STORY-2839 slice a: Markdown pipe-table renderer in docs/showcase/build.py; Refs-only; +99/-4).
+    Result: PASS. It's docs tooling plus tests, so it's within integration self-approve limits.
     Verified locally on the PR tree: build.py --check exit 0 (no drift in generated pages; no existing source page has a pipe table yet), and python3 -m unittest tests.test_showcase_build: 20 tests OK.
-
     Checks:
-
     - Security lens from the grooming: every cell goes through inline(), which HTML-escapes. The test asserts that <b> and <script> come out as &lt;…&gt; in both th and td. Links in cells use the same inline() link handling as paragraphs, so this adds no new URL path.
-
     - Parsing: a table needs a header row, then a separator with the same cell count matching :?-+:?. An escaped \| stays inside a cell. Lines with pipes but no separator stay as paragraphs (tested). Code fences and the end of input close the table.
-
     - The search index drops separators and pipes, and keeps the cell text (tested).
-
     Nits, not blocking:
-
-    (1) A row with MORE cells than the header is silently truncated. GFM does the same, so that''s acceptable.
-
+    (1) A row with MORE cells than the header is silently truncated. GFM does the same, so that's acceptable.
     (2) The .table-wrap class has no CSS yet; slice b (styles.css/guide.css) should style it, and should mind horizontal overflow.
-
-    Merge-tree with integration: CLEAN.'
-  created_at: 2026-11-25 19:14:26.762764+00:00
-  modified_at: 2026-11-25 19:14:26.762764+00:00
+    Merge-tree with integration: CLEAN.
+  created_at: 2026-11-25T19:14:26.762764Z
+  modified_at: 2026-11-25T19:14:26.762764Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2143c-ebf8-7470-8bf6-9e0829dd4948
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int40-story-2839-a` at head `e22768ff976e2142ba594a5073857c7cf58c77ef`.'
-  created_at: 2026-11-25 19:44:26.616968+00:00
-  modified_at: 2026-11-25 19:44:26.616968+00:00
+  created_at: 2026-11-25T19:44:26.616968Z
+  modified_at: 2026-11-25T19:44:26.616968Z
   session_id: 01a214073970
 - id: 01a2143d-1ed7-7393-b187-0c121e38809a
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `int40-story-2839-a` at head `e22768ff976e2142ba594a5073857c7cf58c77ef`.'
-  created_at: 2026-11-25 19:44:39.639434+00:00
-  modified_at: 2026-11-25 19:44:39.639434+00:00
+  created_at: 2026-11-25T19:44:39.639434Z
+  modified_at: 2026-11-25T19:44:39.639434Z
   session_id: 01a214073970
 - id: 01a21441-c3d6-7a41-b680-4b38b955277e
   author: lane-recovery
   content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-25 19:49:44.022509+00:00
-  modified_at: 2026-11-25 19:49:44.022509+00:00
+  created_at: 2026-11-25T19:49:44.022509Z
+  modified_at: 2026-11-25T19:49:44.022509Z
 - id: 01a21442-6cf6-7232-b903-1e314f72cab8
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:50):
-
-    # STORY-2839 slice (b): topbar dropdown submenus + Light/Dark theme toggle (integration-30 grooming, latest STORY-2839 comments; Joe''s reference commit b5826a0f949 on branch story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-story-2839-b, cut from the integration tip AFTER slice (a) #4588 has merged. Title "(Refs STORY-2839)". <=300 HAND-WRITTEN lines. Regenerated pages don''t count, but list them in the PR body.
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:50):
+    # STORY-2839 slice (b): topbar dropdown submenus + Light/Dark theme toggle (integration-30 grooming, latest STORY-2839 comments; Joe's reference commit b5826a0f949 on branch story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int40-story-2839-b, cut from the integration tip AFTER slice (a) #4588 has merged. Title "(Refs STORY-2839)". <=300 HAND-WRITTEN lines. Regenerated pages don't count, but list them in the PR body.
     PORT from b5826a0f949 ONLY: page-template.html dropdowns (How it works ▾, Governance ▾, Operations ▾, Reference ▾), app.js (+48), styles.css (+33), guide.css (+24), index.html, search-data.js; then regenerate the pages with `python3 docs/showcase/build.py`. Put Code review (code-review.html) in the How it works ▾ menu ONLY if code-review.html already exists on integration; otherwise leave that entry out.
-
     ALSO: style .table-wrap (overflow-x: auto) in styles.css/guide.css; slice (a) left it unstyled.
-
-    SECURITY: the toggle only reads and writes localStorage key ''aida-theme'', whitelisted to "light"/"dark" (anything else → the default). No innerHTML from search data (use textContent / DOM nodes).
-
-    `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.'
-  created_at: 2026-11-25 19:50:12.209394+00:00
-  modified_at: 2026-11-25 19:50:12.209394+00:00
+    SECURITY: the toggle only reads and writes localStorage key 'aida-theme', whitelisted to "light"/"dark" (anything else → the default). No innerHTML from search data (use textContent / DOM nodes).
+    `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-25T19:50:12.209394Z
+  modified_at: 2026-11-25T19:50:12.209394Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21450-ee34-7ef0-beb9-fcf3ed47ac26
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 0aae887f62 (slice b: topbar dropdowns + Light/Dark toggle, Refs-only).
-
     Acceptance evidence: [behavioral-test] tests/test_showcase_build.py::test_header_groups_pages_into_dropdowns_and_marks_the_current_one (grouping, aria-current, nav-group-active, empty groups omitted, extra pages only when on disk, label escaping); [configuration-validation] test_theme_preference_only_honours_the_dark_value + python3 docs/showcase/build.py --check clean; unittest run 22 OK (2 skipped: node absent; pytest not installed here, ran via python3 -m unittest).
-
-    Probes: storage whitelist—head script honours only ''dark'' (anything else → default light), toggle writes only ''light''/''dark''; no innerHTML added (textContent only); glossary-tooltip code from the reference commit deliberately NOT ported (out of slice scope, used innerHTML). app.js logic wrapped in a block so it shares no globals with library.js now that app.js loads on every guide page. Escape closes menus and returns focus to the trigger; outside click closes.
-
-    Residual risks: hand-written pages (code-review, engineering-audit, features, executive-brief) keep their own headers and do not read the persisted preference; landing nav drops the #factory/#capabilities in-page anchors per the reference design.'
-  created_at: 2026-11-25 20:06:17.908921+00:00
-  modified_at: 2026-11-25 20:06:17.908921+00:00
+    Probes: storage whitelist—head script honours only 'dark' (anything else → default light), toggle writes only 'light'/'dark'; no innerHTML added (textContent only); glossary-tooltip code from the reference commit deliberately NOT ported (out of slice scope, used innerHTML). app.js logic wrapped in a block so it shares no globals with library.js now that app.js loads on every guide page. Escape closes menus and returns focus to the trigger; outside click closes.
+    Residual risks: hand-written pages (code-review, engineering-audit, features, executive-brief) keep their own headers and do not read the persisted preference; landing nav drops the #factory/#capabilities in-page anchors per the reference design.
+  created_at: 2026-11-25T20:06:17.908921Z
+  modified_at: 2026-11-25T20:06:17.908921Z
   session_id: 01a214459c68
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21460-cdde-7ce0-b490-0d54e79e0dd6
   author: joe
-  content: 'AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4591 @ 0aae887f (STORY-2839 slice b: topbar dropdowns plus a persisted Light/Dark toggle; Refs-only; +219/-33). About 175 lines are hand-written; the rest are 14 regenerated pages, each a 2-6 line header change.
-
-    Result: PASS. It''s static docs, so it''s within integration self-approve limits.
-
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4591 @ 0aae887f (STORY-2839 slice b: topbar dropdowns plus a persisted Light/Dark toggle; Refs-only; +219/-33). About 175 lines are hand-written; the rest are 14 regenerated pages, each a 2-6 line header change.
+    Result: PASS. It's static docs, so it's within integration self-approve limits.
     Verified locally on the PR tree: build.py --check exits 0 (the regenerated pages match the template), and python3 -m unittest tests.test_showcase_build passes (OK).
-
     Lens items:
-
-    - ''aida-theme'': the inline head script honours ONLY the exact value ''dark'' (strict ===) and ignores anything else. app.js writes only ''light'' or ''dark'', from a two-way ternary. Both are wrapped in try/catch for when storage is disabled. Tested.
-
+    - 'aida-theme': the inline head script honours ONLY the exact value 'dark' (strict ===) and ignores anything else. app.js writes only 'light' or 'dark', from a two-way ternary. Both are wrapped in try/catch for when storage is disabled. Tested.
     - No innerHTML anywhere in app.js (tested). Icon and label updates use textContent. Dropdowns toggle attributes only, and Escape returns focus to the trigger. aria-expanded and aria-pressed are kept in sync.
-
     - .table-wrap gets overflow-x:auto (the slice-a nit is closed), plus dark-theme table, code and library styles.
-
-    - Nav labels go through html.escape (tested with ''Trust & evidence''). Extra hand-written pages are linked only when the file exists. There''s no CSP meta on the site, so the inline preload script isn''t blocked.
-
-    - Global-scope check: app.js is now loaded on every page alongside library.js. Their top-level const/function names don''t collide (app: modes, tabs, chooseMode; library: cards, category, form, query, records, filterGuides). app.js''s mode tabs are a no-op on pages without them.
-
+    - Nav labels go through html.escape (tested with 'Trust & evidence'). Extra hand-written pages are linked only when the file exists. There's no CSP meta on the site, so the inline preload script isn't blocked.
+    - Global-scope check: app.js is now loaded on every page alongside library.js. Their top-level const/function names don't collide (app: modes, tabs, chooseMode; library: cards, category, form, query, records, filterGuides). app.js's mode tabs are a no-op on pages without them.
     Nits, not blocking:
-
-    (1) The hand-written pages (code-review, features, engineering-audit, executive-brief) aren''t regenerated, so they keep the old header without the toggle or preload. A dark-theme reader sees those pages in light. Slice e, or a follow-up, can add the header.
-
+    (1) The hand-written pages (code-review, features, engineering-audit, executive-brief) aren't regenerated, so they keep the old header without the toggle or preload. A dark-theme reader sees those pages in light. Slice e, or a follow-up, can add the header.
     (2) index.html hard-links executive-brief.html, which exists today.
-
-    Merge-tree with integration: CLEAN.'
-  created_at: 2026-11-25 20:23:14.289265+00:00
-  modified_at: 2026-11-25 20:23:14.289265+00:00
+    Merge-tree with integration: CLEAN.
+  created_at: 2026-11-25T20:23:14.289265Z
+  modified_at: 2026-11-25T20:23:14.289265Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21473-afed-7762-b4a4-468c62019ee1
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int40-story-2839-b` at head `0aae887f622f0804431839a295fe8055e5f8d8f6`.'
-  created_at: 2026-11-25 20:44:15.725580+00:00
-  modified_at: 2026-11-25 20:44:15.725580+00:00
+  created_at: 2026-11-25T20:44:15.725580Z
+  modified_at: 2026-11-25T20:44:15.725580Z
   session_id: 01a214459c68
 - id: 01a21473-f3ae-7f02-b3f7-e0657b52b5a4
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `int40-story-2839-b` at head `0aae887f622f0804431839a295fe8055e5f8d8f6`.'
-  created_at: 2026-11-25 20:44:33.070490+00:00
-  modified_at: 2026-11-25 20:44:33.070490+00:00
+  created_at: 2026-11-25T20:44:33.070490Z
+  modified_at: 2026-11-25T20:44:33.070490Z
   session_id: 01a214459c68
 - id: 01a2147a-a3eb-7eb2-9650-ec95c6325071
   author: lane-recovery
   content: Reference merge `e5e3711c9f9fdd4617a00cefb897e8b493269c47` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-25 20:51:51.403663+00:00
-  modified_at: 2026-11-25 20:51:51.403663+00:00
+  created_at: 2026-11-25T20:51:51.403663Z
+  modified_at: 2026-11-25T20:51:51.403663Z
 - id: 01a214e2-5513-7851-8f5a-cb593a51f273
   author: aida-auto-bump
-  content: '[aida:refs-landing] a387b7e87b96
-
-    A reference merge (commit a387b7e87b96, `(Refs STORY-2839)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
-  created_at: 2026-11-25 22:45:06.963254+00:00
-  modified_at: 2026-11-25 22:45:06.963254+00:00
+  content: |-
+    [aida:refs-landing] a387b7e87b96
+    A reference merge (commit a387b7e87b96, `(Refs STORY-2839)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-25T22:45:06.963254Z
+  modified_at: 2026-11-25T22:45:06.963254Z
 - id: 01a216b7-21c6-7803-8b75-d4ff5b087062
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:16):
-
-    # STORY-2839 slice (c): docs/getting-started.md + getting-started.html (integration-30 grooming on STORY-2839; Joe''s reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int44-story-2839-c. Title "(Refs STORY-2839)". Docs only, <=300 hand-written lines.
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:16):
+    # STORY-2839 slice (c): docs/getting-started.md + getting-started.html (integration-30 grooming on STORY-2839; Joe's reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int44-story-2839-c. Title "(Refs STORY-2839)". Docs only, <=300 hand-written lines.
     PORT from b5826a0f949 ONLY: docs/getting-started.md (+88) and its generated docs/showcase/getting-started.html (via `python3 docs/showcase/build.py`). Check every command it shows still exists in the current CLI (`aida <cmd> --help`); fix or drop stale ones. List the regenerated pages in the PR body.
-
-    `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.'
-  created_at: 2026-11-26 07:16:53.877851+00:00
-  modified_at: 2026-11-26 07:16:53.877851+00:00
+    `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T07:16:53.877851Z
+  modified_at: 2026-11-26T07:16:53.877851Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a216da-e8a5-7eb2-a079-430f4594be05
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:55):
-
-    # STORY-2839 slice (c): docs/getting-started.md + getting-started.html (integration-30 grooming on STORY-2839; Joe''s reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int44-story-2839-c. Title "(Refs STORY-2839)". Docs only, <=300 hand-written lines.
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:55):
+    # STORY-2839 slice (c): docs/getting-started.md + getting-started.html (integration-30 grooming on STORY-2839; Joe's reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int44-story-2839-c. Title "(Refs STORY-2839)". Docs only, <=300 hand-written lines.
     PORT from b5826a0f949 ONLY: docs/getting-started.md (+88) and its generated docs/showcase/getting-started.html (via `python3 docs/showcase/build.py`). Check every command it shows still exists in the current CLI (`aida <cmd> --help`); fix or drop stale ones. List the regenerated pages in the PR body.
-
     `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
-
-    Do NOT rebase onto main or merge main into this branch (integration-30 00:19): the int44 branch targets integration; any post-p43 re-sync is handled on the integration side.'
-  created_at: 2026-11-26 07:55:59.318283+00:00
-  modified_at: 2026-11-26 07:55:59.318283+00:00
+    Do NOT rebase onto main or merge main into this branch (integration-30 00:19): the int44 branch targets integration; any post-p43 re-sync is handled on the integration side.
+  created_at: 2026-11-26T07:55:59.318283Z
+  modified_at: 2026-11-26T07:55:59.318283Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a216e4-3b60-7291-af9b-84e1ffba0955
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: adb8306883 (slice c, Refs-only, docs only).
-
     Evidence [documentation-inspection]: docs/getting-started.md ported from b5826a0f949 (sections 1-6: install options A/B/C, init/join, conversational flow) plus the regenerated docs/showcase/getting-started.html and search-data.js. Checked every command against the current CLI: aida init / node acquire / upgrade / --version all exist. Checked against scripts/install.sh: --version, --prefix, --host gitlab, AIDA_RELEASE_HOST, the aida-linux-{x86_64,arm64}.tar.gz assets, and installation of aida, aida-server, aida-porcelain and aida-flow. Checked the Makefile install-cli/install targets and protox in Cargo.toml. README anchors #install and #cloning-an-existing-aida-project exist.
-
     Fix: the reference commit traced to a lane ID (STORY-b6b...-762); replaced with a separate trace:STORY-2839 | ai:claude line.
-
     Checks: build.py --check passes; python3 -m unittest tests/test_showcase_build.py: 22 ran, OK (2 skipped). The docs link gate in check-ci-fast passed.
-
-    Residual risk: the curl install URLs point at GitHub main and cannot be verified offline.'
-  created_at: 2026-11-26 08:06:25.888091+00:00
-  modified_at: 2026-11-26 08:06:25.888091+00:00
+    Residual risk: the curl install URLs point at GitHub main and cannot be verified offline.
+  created_at: 2026-11-26T08:06:25.888091Z
+  modified_at: 2026-11-26T08:06:25.888091Z
   session_id: 01a216d8e38e
   harness_version: 2.1.319 (Claude Code)
 - id: 01a216f6-f422-7de3-ab3c-62e9a8f20ef0
   author: joe
-  content: 'Integration pre-check: PR #4637 @adb83068 (STORY-2839 slice c, getting-started.md + showcase html + search-data; Refs) — PASS
-
+  content: |-
+    Integration pre-check: PR #4637 @adb83068 (STORY-2839 slice c, getting-started.md + showcase html + search-data; Refs) — PASS
     Each shown command was checked against the current tree/CLI:
-
     - install.sh: --version, --prefix, --host and AIDA_RELEASE_HOST exist; arm64/aarch64 → arm64; it installs aida, aida-server (when present), aida-porcelain and the aida-flow symlink. The v0.16.0 release assets are aida-linux-{x86_64,arm64}.tar.gz, matching the doc.
-
     - make install-cli (aida-cli + aida-porcelain + aida-flow) and make install (adds aida-server) match the Makefile; the cargo install --path crates exist; the protox claim is true (aida-cli-lib remote feature); aida upgrade exists; aida init / --with-mcp / aida node acquire are unchanged text.
-
     - Restructure: numbered 1–6 (install, init/join, then the existing conversational sections); "journey above" → "below" is updated correctly. search-data.js text + sha256 regenerated.
-
-    Nit (non-blocking): the doc''s direct `ln -sfn` differs from the Makefile''s `ln -sfnT`; both work for a fresh install.'
-  created_at: 2026-11-26 08:26:36.381571+00:00
-  modified_at: 2026-11-26 08:26:36.381571+00:00
+    Nit (non-blocking): the doc's direct `ln -sfn` differs from the Makefile's `ln -sfnT`; both work for a fresh install.
+  created_at: 2026-11-26T08:26:36.381571Z
+  modified_at: 2026-11-26T08:26:36.381571Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21702-50a9-7813-a82c-46d5d1ea11d8
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int44-story-2839-c` at head `adb8306883ac3753c8aff81d9b8e52618e089334`.'
-  created_at: 2026-11-26 08:39:17.417542+00:00
-  modified_at: 2026-11-26 08:39:17.417542+00:00
+  created_at: 2026-11-26T08:39:17.417542Z
+  modified_at: 2026-11-26T08:39:17.417542Z
   session_id: 01a216d8e38e
 - id: 01a21706-3886-7100-98fe-55b65f449234
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int44-story-2839-c` at head `unavailable`.'
-  created_at: 2026-11-26 08:43:33.382761+00:00
-  modified_at: 2026-11-26 08:43:33.382761+00:00
+  created_at: 2026-11-26T08:43:33.382761Z
+  modified_at: 2026-11-26T08:43:33.382761Z
 - id: 01a21708-ec96-7523-8f54-da1f556c6ed4
   author: lane-recovery
   content: Reference merge `a387b7e87b96e611ba9da42e196f44f36b538739` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-26 08:46:30.550555+00:00
-  modified_at: 2026-11-26 08:46:30.550555+00:00
+  created_at: 2026-11-26T08:46:30.550555Z
+  modified_at: 2026-11-26T08:46:30.550555Z
 - id: 01a2170d-6c41-77c2-9267-8d832ea81abd
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:51):
-
-    # STORY-2839 slice (d1): multi-seat workflow doc + 4 SVGs (integration-30 grooming on STORY-2839; Joe''s reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int44-story-2839-d1 (cut from the integration tip after slice (c) #4637 merged). Title "(Refs STORY-2839)" (do NOT complete STORY-2852). Docs and assets only, <=300 hand-written lines (the SVG assets are listed separately in the PR body).
-
-    PORT from b5826a0f949 ONLY: docs/product-workflow.md, plus the swimlane, lanes-leases, merge-train and post-train-sync SVGs. Check every command and term shown against the current CLI/docs; fix or drop stale ones. Do NOT port enums-state / exception-paths / gates-review / human-journeys or operator-setup.md (that''s slice d2).
-
-    SVG safety: no <script>, no event handlers, no external hrefs. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. Do NOT rebase onto main. COMMIT your work.'
-  created_at: 2026-11-26 08:51:10.073237+00:00
-  modified_at: 2026-11-26 08:51:10.073237+00:00
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:51):
+    # STORY-2839 slice (d1): multi-seat workflow doc + 4 SVGs (integration-30 grooming on STORY-2839; Joe's reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int44-story-2839-d1 (cut from the integration tip after slice (c) #4637 merged). Title "(Refs STORY-2839)" (do NOT complete STORY-2852). Docs and assets only, <=300 hand-written lines (the SVG assets are listed separately in the PR body).
+    PORT from b5826a0f949 ONLY: docs/product-workflow.md, plus the swimlane, lanes-leases, merge-train and post-train-sync SVGs. Check every command and term shown against the current CLI/docs; fix or drop stale ones. Do NOT port enums-state / exception-paths / gates-review / human-journeys or operator-setup.md (that's slice d2).
+    SVG safety: no <script>, no event handlers, no external hrefs. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. Do NOT rebase onto main. COMMIT your work.
+  created_at: 2026-11-26T08:51:10.073237Z
+  modified_at: 2026-11-26T08:51:10.073237Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2172b-a447-77d3-85ee-a4789e9f6282
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 061293cf07 (slice d1, Refs-only, docs + assets only). Diff vs origin/integration: docs/product-workflow.md (+76 hand-written), 4 SVGs ported from b5826a0f949 (swimlane, lanes-leases, merge-train, post-train-sync; 487 asset lines), regenerated docs/showcase/workflow.html + search-data.js.
-
-    Evidence [documentation-inspection]: every command shown was checked against the live CLI help. Fixed stale ones: `aida req`/`aida approve --mode drain` (do not exist) -> `aida add` / `aida edit --status approved --mode drain`; `aida session handoff` is a probe, the brief is written by /aida-handoff; direct ship does not require ci:full (train does). Dropped unverifiable pull internals (invocation-private fetch ref, OS-handle pinning, ''pull fix'') in favour of what store_push_pull.rs does (fetch+ff merge avoiding FETCH_HEAD, store writer lock, index-lock skip). Dropped watchdog and lane-cap claims; standing-orders path not present, omitted. Gates table, enums, exception paths, human journeys and operator-setup left for d2.
-
+    Evidence [documentation-inspection]: every command shown was checked against the live CLI help. Fixed stale ones: `aida req`/`aida approve --mode drain` (do not exist) -> `aida add` / `aida edit --status approved --mode drain`; `aida session handoff` is a probe, the brief is written by /aida-handoff; direct ship does not require ci:full (train does). Dropped unverifiable pull internals (invocation-private fetch ref, OS-handle pinning, 'pull fix') in favour of what store_push_pull.rs does (fetch+ff merge avoiding FETCH_HEAD, store writer lock, index-lock skip). Dropped watchdog and lane-cap claims; standing-orders path not present, omitted. Gates table, enums, exception paths, human journeys and operator-setup left for d2.
     Evidence [configuration-validation]: SVG scan shows no <script>, event handlers, or external hrefs (only internal url(#marker)). build.py --check clean; python3 -m unittest tests/test_showcase_build.py (22 OK, 2 skipped) and test_showcase_publish.py (7 OK) — pytest is not installed on this host, CI runs these via unittest. All 17 glossary anchors resolve in glossary.html. make check-ci-fast via lane job: exit 0.
-
-    Probes: SVG act numbering (1/3/4) matches the doc''s Act headings; replaced SVG labels sized to fit their boxes (no renderer on host to visually confirm — residual risk: minor text overflow).
-
-    Residual: SVG visual rendering not inspected.'
-  created_at: 2026-11-26 09:24:25.799565+00:00
-  modified_at: 2026-11-26 09:24:25.799565+00:00
+    Probes: SVG act numbering (1/3/4) matches the doc's Act headings; replaced SVG labels sized to fit their boxes (no renderer on host to visually confirm — residual risk: minor text overflow).
+    Residual: SVG visual rendering not inspected.
+  created_at: 2026-11-26T09:24:25.799565Z
+  modified_at: 2026-11-26T09:24:25.799565Z
   session_id: 01a2170f49db
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21730-2df4-78f0-93cf-0a5fb0bdbe84
   author: joe
-  content: 'Integration pre-check: PR #4642 @061293cf (STORY-2839 slice d1, product-workflow.md + workflow.html + 4 SVGs; Refs) — PASS with one SHOULD-FIX before merge (rendering)
-
+  content: |-
+    Integration pre-check: PR #4642 @061293cf (STORY-2839 slice d1, product-workflow.md + workflow.html + 4 SVGs; Refs) — PASS with one SHOULD-FIX before merge (rendering)
 
     Verified:
-
     - SVG safety: all four SVGs carry no <script>, no on*= handlers, no href/xlink:href, no <foreignObject>/<image>/<use>, and no external url(); the only url() uses are internal marker refs (#arr, #arrow, …). Each has role=img + title/desc and a prefers-color-scheme block (dual theme). The HTML embeds them via <img>, so no script context applies.
-
     - Commands: every command shown exists in the current CLI (mailbox send/inbox, session leases/reap/hygiene/end/handoff, worktree gc, land run/status, integration merge/promotion-check, pr ship/train, rework, review record, role enter, queue work/list, pull). Flags verified: mailbox send --to seat:<name> / --intent fyi|request / --in-reply-to; pr train --check --all-open --all-ready --dry-run.
-
     - All 17 glossary anchors exist in both product-glossary.md and glossary.html.
 
-
     SHOULD-FIX (visible on the showcase page): docs/showcase/build.py supports neither nested lists nor *italics*. In workflow.html:
-
     1. The Path B sub-bullets (Green / Red / Autoland) collapse into one <p> with literal "  - " text. Flatten them into top-level bullets (e.g. "- **Path B, green:** …") and regenerate.
-
     2. *"add jittered retry backoff…"* renders with literal asterisks; drop the asterisks (or use plain quotes).
-
-    Then rerun the showcase build so search-data.js stays in sync.'
-  created_at: 2026-11-26 09:29:07.086374+00:00
-  modified_at: 2026-11-26 09:29:07.086374+00:00
+    Then rerun the showcase build so search-data.js stays in sync.
+  created_at: 2026-11-26T09:29:07.086374Z
+  modified_at: 2026-11-26T09:29:07.086374Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21732-d775-7aa1-8258-6856fc39d01a
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:32):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:32):
     # STORY-2839 (d1) r1 on #4642 (integration-30 pre-check 2026-11-26 02:35: PASS + one SHOULD-FIX before merge; details on STORY-2839; product-15). Lane: CLAUDE. INTEGRATION, existing branch int44-story-2839-d1 / PR #4642. Docs only, small. Keep the "(Refs STORY-2839)" title. Do NOT rebase onto main.
-
     docs/showcase/build.py renders neither nested lists nor *italics*. In workflow.html, the Path B sub-bullets (Green/Red/Autoland) collapse into one <p> with a literal "  - ", and *"add jittered…"* shows its asterisks.
-
     FIX: flatten those sub-bullets into top-level bullets, drop the asterisks (plain text or **bold** if the renderer supports it), then rebuild the showcase (`python3 docs/showcase/build.py`, which regenerates search-data.js). Check the generated HTML has no literal "  - " or stray asterisks. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass.
-
-    make check-ci-fast, then push to #4642. COMMIT your work.'
-  created_at: 2026-11-26 09:32:02.284508+00:00
-  modified_at: 2026-11-26 09:32:02.284508+00:00
+    make check-ci-fast, then push to #4642. COMMIT your work.
+  created_at: 2026-11-26T09:32:02.284508Z
+  modified_at: 2026-11-26T09:32:02.284508Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21735-4105-7270-b797-f97091338817
   author: joe
   content: 'SLICE (e) ADDENDUM (integration-30 2026-11-26 02:37, from the #4642 d1 pre-check; findings-as-comments): docs/showcase/build.py either RENDERS nested "  - " lists and *em*, or (cheaper and fail-closed) REFUSES to build when a source line has an indented list marker or an unmatched single-asterisk emphasis, naming file:line. One test fixture per case. If (e) would go over ~300 lines with this, cut it as (e2).'
-  created_at: 2026-11-26 09:34:55.748638+00:00
-  modified_at: 2026-11-26 09:34:55.748638+00:00
+  created_at: 2026-11-26T09:34:55.748638Z
+  modified_at: 2026-11-26T09:34:55.748638Z
 - id: 01a21739-4234-7180-a7b9-d80c2468e51b
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int44-story-2839-d1` at head `061293cf07a66ff3332fe3eeba01a9b94e086109`.'
-  created_at: 2026-11-26 09:39:18.196298+00:00
-  modified_at: 2026-11-26 09:39:18.196298+00:00
+  created_at: 2026-11-26T09:39:18.196298Z
+  modified_at: 2026-11-26T09:39:18.196298Z
   session_id: 01a2170f49db
 - id: 01a21756-3aa8-7392-98ea-5f5cee210e8a
   author: dirtlab
-  content: '## Implementer self-review
-
-    Reviewed HEAD: 56b2638956 (PR #4642 r1). Fix for the integration-30 SHOULD-FIX: docs/product-workflow.md Path B sub-bullets (Green/Red/Autoland) flattened to top-level bullets (''Path B, green train'', ''Path B, red train'', ''Autoland''); the italic *"add jittered…"* example changed to plain quotes. Showcase rebuilt (workflow.html, search-data.js).
-
-    Evidence [documentation-inspection]: workflow.html now renders them as three <li> items (lines 65-67). A grep finds no literal ''  - '' and no single-asterisk emphasis in workflow.html. build.py --check passes. tests/test_showcase_build.py: 22 tests OK, 2 skipped (run via unittest because pytest is not installed on this host). make check-ci-fast exit 0.
-
-    Residual risk: none known; docs only.'
-  created_at: 2026-11-26 10:10:56.808308+00:00
-  modified_at: 2026-11-26 10:10:56.808308+00:00
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 56b2638956 (PR #4642 r1). Fix for the integration-30 SHOULD-FIX: docs/product-workflow.md Path B sub-bullets (Green/Red/Autoland) flattened to top-level bullets ('Path B, green train', 'Path B, red train', 'Autoland'); the italic *"add jittered…"* example changed to plain quotes. Showcase rebuilt (workflow.html, search-data.js).
+    Evidence [documentation-inspection]: workflow.html now renders them as three <li> items (lines 65-67). A grep finds no literal '  - ' and no single-asterisk emphasis in workflow.html. build.py --check passes. tests/test_showcase_build.py: 22 tests OK, 2 skipped (run via unittest because pytest is not installed on this host). make check-ci-fast exit 0.
+    Residual risk: none known; docs only.
+  created_at: 2026-11-26T10:10:56.808308Z
+  modified_at: 2026-11-26T10:10:56.808308Z
   session_id: 01a2173e13ac
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21757-e1ad-7263-b673-f14419e64a09
   author: joe
   content: 'Integration re-check: PR #4642 @56b26389 (d1 rework) — PASS. The delta (56b2638956b, 10 lines) flattens the Path B Green/Red/Autoland sub-bullets into top-level <li>, drops the *…* asterisks, and regenerates search-data.js. workflow.html has no literal ''  - '' paragraph and no stray *emphasis*. SVGs are unchanged and still clean (no script, handlers, hrefs, foreignObject, image or use). The should-fix is resolved.'
-  created_at: 2026-11-26 10:12:29.424325+00:00
-  modified_at: 2026-11-26 10:12:29.424325+00:00
+  created_at: 2026-11-26T10:12:29.424325Z
+  modified_at: 2026-11-26T10:12:29.424325Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21761-decd-76d1-b25b-c084ec3b8c0e
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int44-story-2839-d1` at head `56b2638956bf085dcec8bb0a1a2df669e0b89029`.'
-  created_at: 2026-11-26 10:23:39.725486+00:00
-  modified_at: 2026-11-26 10:23:39.725486+00:00
+  created_at: 2026-11-26T10:23:39.725486Z
+  modified_at: 2026-11-26T10:23:39.725486Z
   session_id: 01a2173e13ac
 - id: 01a21778-3f49-78c1-8616-87dc4405227b
   author: lane-recovery
   content: Reference merge `a387b7e87b96e611ba9da42e196f44f36b538739` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-26 10:48:06.217694+00:00
-  modified_at: 2026-11-26 10:48:06.217694+00:00
+  created_at: 2026-11-26T10:48:06.217694Z
+  modified_at: 2026-11-26T10:48:06.217694Z
 - id: 01a21779-6735-7a90-9652-641ee60827c8
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:49):
-
-    # STORY-2839 slice (d2): the remaining 4 SVGs + operator-setup.md (integration-30 grooming on STORY-2839; Joe''s reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int45-story-2839-d2 (cut from the integration tip after (d1) #4642 merged). Title "(Refs STORY-2839)" (do NOT complete STORY-2852). Docs and assets only, <=300 hand-written lines (list the SVG assets separately in the PR body). Do NOT rebase onto main.
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:49):
+    # STORY-2839 slice (d2): the remaining 4 SVGs + operator-setup.md (integration-30 grooming on STORY-2839; Joe's reference commit b5826a0f949 on story-3120-ci-review; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int45-story-2839-d2 (cut from the integration tip after (d1) #4642 merged). Title "(Refs STORY-2839)" (do NOT complete STORY-2852). Docs and assets only, <=300 hand-written lines (list the SVG assets separately in the PR body). Do NOT rebase onto main.
     PORT from b5826a0f949 ONLY: the enums-state, exception-paths, gates-review and human-journeys SVGs plus docs/operator-setup.md (+24). Check every command and term against the current CLI/docs. operator-setup.md must document that lane-admission knobs live in the HOST file /etc/aida/lanes.toml (root-owned, [lanes], deny_unknown_fields): max_concurrent_cold_starts, min_memory_headroom_gib, max_compile_concurrency, cargo_build_jobs, min_job_memory_headroom_gib (the TASK-3911 doc gap; see the TASK-3911 comment).
-
-    Avoid nested lists and *italics* (build.py renders neither; slice (e) fixes that). SVG safety: no <script>, no event handlers, no external hrefs. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.'
-  created_at: 2026-11-26 10:49:02.617308+00:00
-  modified_at: 2026-11-26 10:49:02.617308+00:00
+    Avoid nested lists and *italics* (build.py renders neither; slice (e) fixes that). SVG safety: no <script>, no event handlers, no external hrefs. `python3 docs/showcase/build.py --check` and `python3 -m pytest tests/test_showcase_build.py` must pass. make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-26T10:49:02.617308Z
+  modified_at: 2026-11-26T10:49:02.617308Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21794-858a-7200-b7a4-4ce9ae25bf73
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 2fa3df9ef8 (slice d2, git diff HEAD~1; base integration).
-
     Scope: ported workflow-{enums-state,exception-paths,gates-review,human-journeys}.svg from b5826a0f949, embedded them in docs/product-workflow.md (steering, Act 5 gates, detours, Act 6 enums), and added scheduled jobs/deputies/mandates, lane admission and not-yet-in-init sections to docs/operator-setup.md. 89 hand-written lines.
-
-    [evidence: documentation-inspection] Commands were checked against --help: aida approve does not exist (now aida edit --status approved), and neither does aida clarify (now aida decide). worktree gc only reports clean trees, so ''Preserves dirty diffs'' became ''Skips dirty trees''. The reference said ci:full was required for direct ship, which full_tier.rs does not support; it now says it is required at each train rider''s head. Enum names, order, ladder --force rule, pickability precedence and the 7 CI shards were checked against models.rs, pickability.rs, lock.rs and ci.yml.
-
+    [evidence: documentation-inspection] Commands were checked against --help: aida approve does not exist (now aida edit --status approved), and neither does aida clarify (now aida decide). worktree gc only reports clean trees, so 'Preserves dirty diffs' became 'Skips dirty trees'. The reference said ci:full was required for direct ship, which full_tier.rs does not support; it now says it is required at each train rider's head. Enum names, order, ladder --force rule, pickability precedence and the 7 CI shards were checked against models.rs, pickability.rs, lock.rs and ci.yml.
     [evidence: documentation-inspection] Lane admission: all five knobs, their defaults, fail-closed invalid-file behaviour and the /etc/aida/lanes.toml location match lane_admission.rs Settings::load and admit_job (TASK-3911 doc gap).
-
     SVG safety: no script, event handlers or hrefs; only internal url(#marker) refs; each parses as XML. build.py --check OK; unittest tests/test_showcase_build.py + test_showcase_publish.py OK (29, 2 skipped); make check-ci-fast exit 0.
-
-    Residual: the aida doctor hint for effective lane-admission values (TASK-3911 comment) is code and not in this docs slice. The gates SVG was renumbered Act 2 to Act 5 to fit d1''s acts. Done in the enums SVG is labelled closed, as in the reference.'
-  created_at: 2026-11-26 11:18:59.210920+00:00
-  modified_at: 2026-11-26 11:18:59.210920+00:00
+    Residual: the aida doctor hint for effective lane-admission values (TASK-3911 comment) is code and not in this docs slice. The gates SVG was renumbered Act 2 to Act 5 to fit d1's acts. Done in the enums SVG is labelled closed, as in the reference.
+  created_at: 2026-11-26T11:18:59.210920Z
+  modified_at: 2026-11-26T11:18:59.210920Z
   session_id: 01a2177c5fc8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21798-c408-71d1-9a48-f204e4b1c72b
   author: joe
-  content: 'Integration pre-check: PR #4648 @2fa3df9e (STORY-2839 slice d2: Acts 5–6, steering modes, detours, four SVGs, operator-setup lane-admission + scheduled jobs; Refs) — PASS
-
+  content: |-
+    Integration pre-check: PR #4648 @2fa3df9e (STORY-2839 slice d2: Acts 5–6, steering modes, detours, four SVGs, operator-setup lane-admission + scheduled jobs; Refs) — PASS
     - SVG safety: all four new SVGs have no script, on* handlers, href/xlink:href, foreignObject, image, use, @import or javascript:; url() is used only for internal markers; each has a prefers-color-scheme block.
-
     - Rendering: workflow.html has no literal "  - " paragraphs and no stray *emphasis* (the d1 lesson held).
-
     - Facts checked against source/CLI: /etc/aida/lanes.toml [lanes] keys, defaults (2 / 4 / unset×3), deny_unknown_fields + range checks fail-closed, missing file → defaults (lane_admission.rs); AIDA_OVER_HOST_LIMIT exists; RequirementStatus has exactly the 9 listed states; the locking posture is context-aware by default with off/warn/enforce. Commands exist: schedule status/install-cron/install-systemd/tick, mandate start --ship-held --ttl --reason --drive, doctor --lane-host, session handoff --seat --standing-orders, decide, do, punt (design-fork), queue work --auto-complete/--resume, merge-hold clear, lane job run.
-
-    - Security-lens note (non-blocking): operator-setup advises adding `Bash(aida deputy shell submit *)` to the Claude Code allow-list. That is accurate about the prefix-match behaviour, but it widens what a seat can run without a prompt; the deputy and its classifier then become the only gate. Suggest one sentence saying so ("the deputy still screens and records each job; only add this where the deputy runner is trusted"). Can ride a later slice.'
-  created_at: 2026-11-26 11:23:21.769203+00:00
-  modified_at: 2026-11-26 11:23:21.769203+00:00
+    - Security-lens note (non-blocking): operator-setup advises adding `Bash(aida deputy shell submit *)` to the Claude Code allow-list. That is accurate about the prefix-match behaviour, but it widens what a seat can run without a prompt; the deputy and its classifier then become the only gate. Suggest one sentence saying so ("the deputy still screens and records each job; only add this where the deputy runner is trusted"). Can ride a later slice.
+  created_at: 2026-11-26T11:23:21.769203Z
+  modified_at: 2026-11-26T11:23:21.769203Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a2179d-7650-7b20-8595-1667ac5fd0f4
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:28):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:28):
     # STORY-2839 (d2) r1 docs fix on #4648 (advisor-122 2026-11-26 04:27, required BEFORE merge; integration-30 04:30; product-15). Lane: CLAUDE. INTEGRATION, existing branch int45-story-2839-d2 / PR #4648. <=10 lines, docs only. Keep the "(Refs STORY-2839)" title. Do NOT rebase onto main.
-
-    The operator-setup page recommends allow-listing `Bash(aida deputy shell submit *)`. Right after that recommendation, state plainly: allow-listing it lets ANY agent in that session run arbitrary scripts at the operator''s TTY with OPERATOR authority, so the deputy runner (and the operator''s review of each submitted script) becomes the ONLY gate on those jobs. Recommend it only for a supervised advisor seat whose deputy runner is trusted, NEVER for implementer/reviewer lanes.
-
-    Rebuild the showcase (`python3 docs/showcase/build.py`) if the page is generated; `--check` and `pytest tests/test_showcase_build.py` must pass. Avoid nested lists and *italics*. make check-ci-fast, then push to #4648. COMMIT your work.'
-  created_at: 2026-11-26 11:28:29.720148+00:00
-  modified_at: 2026-11-26 11:28:29.720148+00:00
+    The operator-setup page recommends allow-listing `Bash(aida deputy shell submit *)`. Right after that recommendation, state plainly: allow-listing it lets ANY agent in that session run arbitrary scripts at the operator's TTY with OPERATOR authority, so the deputy runner (and the operator's review of each submitted script) becomes the ONLY gate on those jobs. Recommend it only for a supervised advisor seat whose deputy runner is trusted, NEVER for implementer/reviewer lanes.
+    Rebuild the showcase (`python3 docs/showcase/build.py`) if the page is generated; `--check` and `pytest tests/test_showcase_build.py` must pass. Avoid nested lists and *italics*. make check-ci-fast, then push to #4648. COMMIT your work.
+  created_at: 2026-11-26T11:28:29.720148Z
+  modified_at: 2026-11-26T11:28:29.720148Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a217ac-4a78-79e0-b67c-0827773d4ae4
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int45-story-2839-d2` at head `2fa3df9ef8c6f0f259e868846f9a264fc81fd792`.'
-  created_at: 2026-11-26 11:44:56.952630+00:00
-  modified_at: 2026-11-26 11:44:56.952630+00:00
+  created_at: 2026-11-26T11:44:56.952630Z
+  modified_at: 2026-11-26T11:44:56.952630Z
   session_id: 01a2177c5fc8
 - id: 01a217cb-0e36-75b3-824a-17fe57536eb2
   author: dirtlab
-  content: '## Implementer self-review
-
-    Reviewed HEAD: 6b05209c72 (PR #4648, r1 docs fix). docs/operator-setup.md:88 now states, right after the Bash(aida deputy shell submit *) recommendation, that allow-listing it lets any agent in the session run arbitrary scripts at the operator''s terminal with operator authority, which leaves the deputy runner and the operator''s per-script review as the only gate. It recommends the entry only for a supervised advisor seat with a trusted runner (preferably in that seat''s settings.local.json) and never for implementer or reviewer lanes. AC [evidence: documentation-inspection]: claim checked against the advisor-122 wording. The showcase was rebuilt (setup.html, search-data.js); build.py --check passes, tests/test_showcase_build.py passes under unittest (22 tests, 2 skipped), and make check-ci-fast exit 0. Probes: no nested lists or italics added. Residual risk: none beyond prose.'
-  created_at: 2026-11-26 12:18:33.141998+00:00
-  modified_at: 2026-11-26 12:18:33.141998+00:00
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6b05209c72 (PR #4648, r1 docs fix). docs/operator-setup.md:88 now states, right after the Bash(aida deputy shell submit *) recommendation, that allow-listing it lets any agent in the session run arbitrary scripts at the operator's terminal with operator authority, which leaves the deputy runner and the operator's per-script review as the only gate. It recommends the entry only for a supervised advisor seat with a trusted runner (preferably in that seat's settings.local.json) and never for implementer or reviewer lanes. AC [evidence: documentation-inspection]: claim checked against the advisor-122 wording. The showcase was rebuilt (setup.html, search-data.js); build.py --check passes, tests/test_showcase_build.py passes under unittest (22 tests, 2 skipped), and make check-ci-fast exit 0. Probes: no nested lists or italics added. Residual risk: none beyond prose.
+  created_at: 2026-11-26T12:18:33.141998Z
+  modified_at: 2026-11-26T12:18:33.141998Z
   session_id: 01a217b285d1
   harness_version: 2.1.319 (Claude Code)
 - id: 01a217cc-30ee-77b0-a15f-d840c04d3c63
   author: joe
   content: 'Integration re-check: PR #4648 @6b05209c (d2 r1) — PASS. The delta is the deputy allow-list warning in operator-setup.md, setup.html and search-data.js: allow-listing Bash(aida deputy shell submit *) lets any agent in that session run arbitrary scripts at the operator''s terminal with operator authority; the deputy runner and the operator''s review of each script become the only gate; add it only for a supervised advisor seat with a trusted runner, preferably settings.local.json, never implementer or reviewer lanes. It matches the advisor''s MUST. b90b3ac701c merges integration 04fb4458ed7; diff vs integration is still only the 9 d2 docs/SVG files, and the SVGs are unchanged and clean.'
-  created_at: 2026-11-26 12:19:31.695582+00:00
-  modified_at: 2026-11-26 12:19:31.695582+00:00
+  created_at: 2026-11-26T12:19:31.695582Z
+  modified_at: 2026-11-26T12:19:31.695582Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a217e1-0c0c-7d93-96a3-f0fe97ba3267
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int45-story-2839-d2` at head `6b05209c7237f0a78230c99d53de9b0e58434694`.'
+  created_at: 2026-11-26T12:42:34.380287724Z
+  modified_at: 2026-11-26T12:42:34.380287724Z
+  session_id: 01a217b285d1
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
-  timestamp: 2026-11-15 20:49:49.519798+00:00
+  timestamp: 2026-11-15T20:49:49.519798Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
 - id: 01a1e0f9-3c65-7c62-ad41-91226e9a707c
   author: joe
-  timestamp: 2026-11-15 20:49:52.741928+00:00
+  timestamp: 2026-11-15T20:49:52.741928Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -559,25 +492,25 @@ history:
     new_value: Approved
 - id: 01a209ff-a269-7c90-84e8-663080f40889
   author: joe
-  timestamp: 2026-11-23 20:01:17.929326+00:00
+  timestamp: 2026-11-23T20:01:17.929326Z
   changes:
   - field_name: tags
     old_value: docs, glossary, showcase, ux
     new_value: docs, glossary, showcase, track:integration, ux
 - id: 01a209ff-ad40-78e0-926d-21e80d51f4e0
   author: joe
-  timestamp: 2026-11-23 20:01:20.704712+00:00
+  timestamp: 2026-11-23T20:01:20.704712Z
   changes: []
 - id: 01a20a04-c074-7290-bc76-d4c699425b0e
   author: aida-session-start
-  timestamp: 2026-11-23 20:06:53.300102+00:00
+  timestamp: 2026-11-23T20:06:53.300102Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a20a0d-157e-7371-afd7-7d7479604a8f
   author: aida-session-start
-  timestamp: 2026-11-23 20:15:59.358839+00:00
+  timestamp: 2026-11-23T20:15:59.358839Z
   session_id: 01a20a046800
   changes:
   - field_name: status
@@ -585,142 +518,142 @@ history:
     new_value: Approved
 - id: 01a20ab5-1744-7c71-8a7f-4188836920da
   author: joe
-  timestamp: 2026-11-23 23:19:29.860988+00:00
+  timestamp: 2026-11-23T23:19:29.860988Z
   changes: []
 - id: 01a20ab9-cea9-76a1-a576-5556ddeb15b1
   author: aida-session-start
-  timestamp: 2026-11-23 23:24:38.953969+00:00
+  timestamp: 2026-11-23T23:24:38.953969Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a20b98-40a9-7ae3-8466-21978f1c02d2
   author: lane-recovery
-  timestamp: 2026-11-24 03:27:37.129842+00:00
+  timestamp: 2026-11-24T03:27:37.129842Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21407-6c4b-78a1-82f8-0b6c2effdff7
   author: aida-session-start
-  timestamp: 2026-11-25 18:46:00.523714+00:00
+  timestamp: 2026-11-25T18:46:00.523714Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2143f-190d-77d1-a089-2ec2671dee2d
   author: lane-recovery
-  timestamp: 2026-11-25 19:46:49.229753+00:00
+  timestamp: 2026-11-25T19:46:49.229753Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21440-051a-7242-be59-7f507c767388
   author: joe
-  timestamp: 2026-11-25 19:47:49.658675+00:00
+  timestamp: 2026-11-25T19:47:49.658675Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21441-c3d6-7a41-b680-4b48dbb59e4b
   author: lane-recovery
-  timestamp: 2026-11-25 19:49:44.022514+00:00
+  timestamp: 2026-11-25T19:49:44.022514Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21445-cddb-7c42-8f07-e2e283e9ae35
   author: aida-session-start
-  timestamp: 2026-11-25 19:54:08.731883+00:00
+  timestamp: 2026-11-25T19:54:08.731883Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21476-ac75-7ee0-8698-f7e23840ec49
   author: lane-recovery
-  timestamp: 2026-11-25 20:47:31.445572+00:00
+  timestamp: 2026-11-25T20:47:31.445572Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a2147a-a3eb-7eb2-9650-eca9236b914e
   author: lane-recovery
-  timestamp: 2026-11-25 20:51:51.403670+00:00
+  timestamp: 2026-11-25T20:51:51.403670Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a216b3-a89b-7032-a5fa-10461e27e28f
   author: joe
-  timestamp: 2026-11-26 07:13:22.587646+00:00
+  timestamp: 2026-11-26T07:13:22.587646Z
   changes: []
 - id: 01a216c6-a388-7a32-b9bf-6bf0e4420c69
   author: joe
-  timestamp: 2026-11-26 07:34:06.472960+00:00
+  timestamp: 2026-11-26T07:34:06.472960Z
   changes: []
 - id: 01a216d9-1ba6-75b0-84bb-ef0a1a67ecc1
   author: aida-session-start
-  timestamp: 2026-11-26 07:54:16.870110+00:00
+  timestamp: 2026-11-26T07:54:16.870110Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21708-ec96-7523-8f54-da2439bb1e21
   author: lane-recovery
-  timestamp: 2026-11-26 08:46:30.550566+00:00
+  timestamp: 2026-11-26T08:46:30.550566Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a2170b-399d-7433-8e86-7f4f70fb4ff4
   author: joe
-  timestamp: 2026-11-26 08:49:01.341691+00:00
+  timestamp: 2026-11-26T08:49:01.341691Z
   changes: []
 - id: 01a2170f-7b06-7ee2-bbd2-7e50d1c069c1
   author: aida-session-start
-  timestamp: 2026-11-26 08:53:40.230469+00:00
+  timestamp: 2026-11-26T08:53:40.230469Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21730-eaba-79e3-85a8-cec24ebb2fc7
   author: joe
-  timestamp: 2026-11-26 09:30:11.514314+00:00
+  timestamp: 2026-11-26T09:30:11.514314Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a2173e-4ebc-7881-a05c-48b68f8fc612
   author: aida-session-start
-  timestamp: 2026-11-26 09:44:49.084212+00:00
+  timestamp: 2026-11-26T09:44:49.084212Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21778-3f49-78c1-8616-87e27e4ea44f
   author: lane-recovery
-  timestamp: 2026-11-26 10:48:06.217705+00:00
+  timestamp: 2026-11-26T10:48:06.217705Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a2177c-9365-79b3-88f5-728b2f118a5c
   author: aida-session-start
-  timestamp: 2026-11-26 10:52:49.893036+00:00
+  timestamp: 2026-11-26T10:52:49.893036Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2179b-3f13-7253-a4cd-a99509fcbd93
   author: joe
-  timestamp: 2026-11-26 11:26:19.923087+00:00
+  timestamp: 2026-11-26T11:26:19.923087Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a217b2-edcd-78f1-964e-ef497acff5a0
   author: aida-session-start
-  timestamp: 2026-11-26 11:52:11.981194+00:00
+  timestamp: 2026-11-26T11:52:11.981194Z
   changes:
   - field_name: status
     old_value: Approved
