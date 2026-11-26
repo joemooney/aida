@@ -1,0 +1,100 @@
+id: 01a21989-7b81-7eb2-a9da-414dc7e53451
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-371
+title: 'Review PR-4685: [AI:claude] chore(store-writers): inventory the stacked-diff-drift hold writer (BUG-2777)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21953`) for branch `bug-2777-ejection-routing`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4685>
+  - Branch: `bug-2777-ejection-routing` → `main`
+
+  ## Covers
+
+  - BUG-2777
+  - BUG-2776
+  - BUG-2772
+  - TASK-3912
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4685` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T20:26:10.177683711Z
+modified_at: 2026-11-26T20:26:54.992384694Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a21923-0137-7800-b20b-147dfab06724
+  created_at: 2026-11-26T20:26:14.328255245Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a218da-0841-7962-b2ba-dc30177303de
+  created_at: 2026-11-26T20:26:21.805251888Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a21837-b568-7403-8cd2-306cdf771adb
+  created_at: 2026-11-26T20:26:29.237968418Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a215a5-1661-7d81-984f-eca5198e20e1
+  created_at: 2026-11-26T20:26:47.361065488Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-26T20:26:54.992346545Z
+  created_by: dirtlab
+history:
+- id: 01a21989-9433-71a1-8519-9704feed4efe
+  author: dirtlab
+  timestamp: 2026-11-26T20:26:16.499355133Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21989-b161-7c20-8d6e-141e4c694f36
+  author: dirtlab
+  timestamp: 2026-11-26T20:26:23.969802985Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21989-ce5e-77c0-8afd-c08709209f31
+  author: dirtlab
+  timestamp: 2026-11-26T20:26:31.390597150Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2198a-151b-7e83-8161-0047b062d1a8
+  author: dirtlab
+  timestamp: 2026-11-26T20:26:49.499714509Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a2198a-3369-7df0-89ca-51eece43c688
+  author: dirtlab
+  timestamp: 2026-11-26T20:26:57.257632006Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
+  branch: bug-2777-ejection-routing
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5a74f31ac
+  vendor: claude
+  session: 01a219535435
+  harness_version: 2.1.319 (Claude Code)

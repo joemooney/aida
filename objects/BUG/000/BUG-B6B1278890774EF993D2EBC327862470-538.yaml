@@ -15,12 +15,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T20:25:43.655963055Z
+modified_at: 2026-11-26T20:26:18.147144256Z
 req_type: Bug
 tags:
 - landing
 - throughput
 - train
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21989-7b81-7eb2-a9da-414dc7e53451
+  created_at: 2026-11-26T20:26:18.147089332Z
+  created_by: dirtlab
 comments:
 - id: 01a21929-0689-7b92-9d1e-d3dc5a24ac39
   author: joe
@@ -111,6 +117,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21989-a31d-7f60-8882-d98f71d12b6e
+  author: dirtlab
+  timestamp: 2026-11-26T20:26:20.317031556Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
