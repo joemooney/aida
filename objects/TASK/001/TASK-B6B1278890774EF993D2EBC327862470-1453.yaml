@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-26T04:25:13.843830534Z
+modified_at: 2026-11-26T04:58:25.013184076Z
 req_type: Task
 tags:
 - dell1
@@ -39,6 +39,20 @@ comments:
   modified_at: 2026-11-26T04:20:04.103837253Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21638-1975-7dd1-a7ce-1e29889afb55
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dcc174ec7b (git diff origin/main...HEAD, 280 lines).
+    - AC1 [behavioral-test]: [lanes] max_compile_concurrency in /etc/aida/lanes.toml (the existing per-host lane policy file, where the cold-start cap lives); unset = no cap. Applied in lane_job::run_one_authorized (lane-job runner, covers seat jobs + host fast gate), not the launcher. Test: task_3911_unset_knobs_admit_at_once_and_set_ones_parse.
+    - AC2 [behavioral-test]: cargo_build_jobs -> CARGO_BUILD_JOBS in the job env (job env cannot set it itself; not in ALLOWED_ENV). Test asserts admission carries it; the env insert is a one-line path in run_one_authorized.
+    - AC3 [behavioral-test]: min_job_memory_headroom_gib waits at job start; slot released while waiting on memory; unreadable meminfo under a set floor refuses. Test: task_3911_job_waits_below_memory_floor.
+    - AC4 [behavioral-test]: task_3911_third_compile_job_waits_for_a_slot (cap=2, third waits until first drops).
+    Probes: slots are abstract unix sockets (CLOEXEC, kernel-released on crash), same as cold-start slots; lane stop while queued refuses the job; invalid config refuses the job (fail-closed, same as launch). Residual: a queued job shows as running to the seat with no .out file until admitted (reason is in jobs.log); host fast gate cannot be stopped while queued (it waits for slots to free). Tests: lane_admission:: 9/9 pass; make check-ci-fast exit 0.
+  created_at: 2026-11-26T04:58:25.013184076Z
+  modified_at: 2026-11-26T04:58:25.013184076Z
+  session_id: 01a216198508
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a214b7-0985-7a31-bf46-c7f9bea6c072
   author: joe
