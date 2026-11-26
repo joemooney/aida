@@ -9,12 +9,12 @@ description: |
   - AC1: check pause AND the pickup retry cap BEFORE any reclaim; a paused or capped watcher NEVER ends a checkout.
   - AC2: when the cap is hit, the PR goes to the BUG-2776 AC3 doctor surface with a named next step, never a silent hold; a successful reclaim followed by a successful pickup RESETS the cap.
   - AC3: ONE test of the REAL reclaim path with a fake `aida` on PATH: assert the argv `session end <lease> --yes --skip-ci`, and handle a NON-ZERO exit (no dispatch, the hold kept, a named cause). No network. Plus tests: paused → no reclaim; capped → no reclaim + surfaced; reclaim + pickup → cap reset.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:50:49.914099231Z
-modified_at: 2026-11-26T21:55:04.633901835Z
+modified_at: 2026-11-26T23:34:49.224424537Z
 req_type: Task
 tags:
 - review-watch
@@ -115,6 +115,20 @@ history:
   session_id: 01a2198cd2c9
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21a36-321a-7482-b55a-4c328b969da8
+  author: aida-auto-bump
+  timestamp: 2026-11-26T23:34:49.114296042Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21a36-3288-7da2-99d4-c98199d52138
+  timestamp: 2026-11-26T23:34:49.224420531Z
+  agent: aida
+  commit_sha: 89acd521142b9de2acd992baa319e9c7b11acc96
+  summary: 'TASK-3921 all ACs met; CI pending at review time. AC1 verified by bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass: select_with_probes (review_watch.rs ~1976) reads pause::current and pickup_retries>=3 before reclaim_tree and skips the reclaim when either holds; the test''s reclaim closure panics if called during the paused and capped passes. AC2 verified by the same test plus advisor_loop_service loop_tests: a capped held tree becomes Admission::Held{retained:true, why:''pickup retry cap reached''}, which goes on the pass retained list. retained_blocks surfaces a PICKUP_RETRY_CAP cause at once, with a fix line naming `aida session end --branch` and `aida review watch --release PR-N`. The new RetainedReview::Reclaimed makes the retry due in that pass and the dispatched attempt carries pickup_retries 0 with setup_retry true. The cap string is a single shared const, so the refusal and the filter cannot drift. AC3 verified by task_3921_real_reclaim_runs_session_end_and_keeps_the_tree_on_refusal: it runs the real reclaim_retained_review_tree with a recording fake aida that exits 3 and a fake gh (no network). It asserts the argv `session end <lease> --yes --skip-ci`, Kept(''reclaim check failed: session end refused: ...''), and that the tree and lease file survive. The fake goes in through the aida_exe_path seam rather than PATH, because aida_exe_path never consults PATH; that is equivalent. Select-level no-dispatch on Kept is covered by the existing BUG-2776 dirty case. Observations, not defects: while paused, a kept checkout''s reason is no longer classified, so its retained block stops aging until resume; the cap resets when the retry dispatches rather than after the new reviewer confirms pickup. Both are consistent with the ACs. No existing test was weakened: the BUG-2776 assertion moved Free->Reclaimed and still checks Free on the second call.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
@@ -123,3 +137,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 52ac09e8a4d
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T23:34:49.114286883Z
+  completion_sha: 89acd521142b9de2acd992baa319e9c7b11acc96
