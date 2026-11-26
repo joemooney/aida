@@ -3,7 +3,7 @@
 // trace:STORY-3134 | ai:claude
 use crate::session::HeadlessVendor;
 use crate::vendor_outage::Outage;
-use chrono::{Local, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDateTime, TimeZone, Utc};
 use serde_json::Value;
 
 /// The usage-limit outage `vendor`'s headless `log` ends with, if any.
@@ -29,7 +29,7 @@ fn from_event(vendor: HeadlessVendor, event: &Value) -> Option<Outage> {
                 _ => return None,
             };
             let hit = message.to_ascii_lowercase().contains("usage limit");
-            hit.then(|| Outage::new(name, codex_reset_time(message), message.into()))
+            hit.then(|| Outage::new(name, codex_reset_time(message, Utc::now()), message.into()))
         }
         // `{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":<unix>}}`
         HeadlessVendor::Claude => {
@@ -47,33 +47,60 @@ fn from_event(vendor: HeadlessVendor, event: &Value) -> Option<Outage> {
     }
 }
 
-/// Parse codex's `try again at Nov 29th, 2026 10:41 AM.` as a local
-/// wall-clock time; an unparseable time is `None` (the default hold).
-pub(crate) fn codex_reset_time(message: &str) -> Option<chrono::DateTime<Utc>> {
-    let (_, rest) = message.split_once("try again at ")?;
-    // `Nov 29th, 2026 10:41 AM.` -> `Nov 29, 2026 10:41 AM`, text after it ignored.
-    let words: Vec<&str> = rest.split_whitespace().take(5).collect();
-    let mut when = words.join(" ");
-    for ordinal in ["st,", "nd,", "rd,", "th,"] {
-        when = when.replace(ordinal, ",");
+/// Parse codex's `try again at Nov 29th[,] [2026] 10:41 AM[ UTC].` as the next
+/// such time in the stated zone (UTC/GMT, else local). A time in the past or
+/// more than 14 days out is unparsed (the default hold) and logged.
+pub(crate) fn codex_reset_time(message: &str, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    let rest = message.split_once("try again at ")?.1;
+    let resolved = resolve_reset(rest, now).filter(|t| *t > now && *t <= now + Duration::days(14));
+    if resolved.is_none() {
+        eprintln!("warning: unresolved usage-limit reset time {rest:?}; holding for the default");
     }
-    let when = when.trim_end_matches('.');
-    let naive = NaiveDateTime::parse_from_str(when, "%b %d, %Y %I:%M %p").ok()?;
-    let local = Local.from_local_datetime(&naive).earliest()?;
-    Some(local.with_timezone(&Utc))
+    resolved
 }
 
-/// Record the usage-limit outage a failed run's `log` ends with, if any, and
-/// return its description for the lane's failure message.
+fn resolve_reset(rest: &str, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    let words = rest.replace([',', '.'], " ");
+    let mut words = words.split_whitespace();
+    let month = words.next()?;
+    let day = words.next()?.trim_end_matches(char::is_alphabetic);
+    let mut next = words.next()?;
+    let year = next.parse::<i32>().ok().filter(|_| next.len() == 4);
+    if year.is_some() {
+        next = words.next()?;
+    }
+    let (time, meridiem) = (next, words.next()?);
+    let utc = matches!(words.next(), Some("UTC" | "GMT"));
+    let at = |y: i32| {
+        let when = format!("{month} {day} {y} {time} {meridiem}");
+        let naive = NaiveDateTime::parse_from_str(&when, "%b %d %Y %I:%M %p").ok()?;
+        let local = || Local.from_local_datetime(&naive).earliest();
+        Some(naive.and_utc())
+            .filter(|_| utc)
+            .or_else(|| Some(local()?.to_utc()))
+    };
+    let y = now.year();
+    let years = year.map_or(y - 1..=y + 1, |y| y..=y);
+    years.filter_map(at).find(|t| *t > now)
+}
+
+/// Record the usage-limit outage of a run that failed without a PR, so later
+/// launches on its vendor are refused until the reset, and describe it for
+/// the lane's failure message. A success, punt or hold records none.
 pub(crate) fn note_failed_run(
     main: &std::path::Path,
     vendor: HeadlessVendor,
     log: &std::path::Path,
+    success: bool,
+    outcome: &crate::standalone_implementer::Outcome,
 ) -> Option<String> {
+    if success || !matches!(outcome, crate::standalone_implementer::Outcome::NoPr) {
+        return None;
+    }
     let outage = detect_log(vendor, log)?;
-    let recorded = crate::vendor_outage::record(main, &outage);
-    let failed = recorded
-        .map_err(|e| format!("; could not record it: {e:#}"))
-        .err();
-    Some(outage.describe() + &failed.unwrap_or_default())
+    let failed = match crate::vendor_outage::record(main, &outage) {
+        Ok(()) => String::new(),
+        Err(e) => format!("; could not record it: {e:#}"),
+    };
+    Some(format!("agent usage limit: {}{failed}", outage.describe()))
 }

@@ -35,11 +35,8 @@ impl Outage {
 
     pub(crate) fn describe(&self) -> String {
         let until = self.until.with_timezone(&Local).format("%Y-%m-%d %H:%M %Z");
-        let hold = if self.until_known {
-            ""
-        } else {
-            " (no reset time given)"
-        };
+        let hold = (!self.until_known).then_some(" (no reset time given)");
+        let hold = hold.unwrap_or_default();
         let (vendor, message) = (&self.vendor, &self.message);
         format!("`{vendor}` is unavailable until {until}{hold} ({message})")
     }
