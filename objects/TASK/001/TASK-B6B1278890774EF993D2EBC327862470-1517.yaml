@@ -1,0 +1,31 @@
+id: 01a21857-97b6-7ff0-907a-cde9621008f1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1517
+title: 'Review follow-up: AC3 names ''[train]'' titles as a train signal; only the head_branch train/ prefix is checke'
+description: |-
+  From BUG-2766
+  Reviewed sha: 58740fb4ce96577f40a2083d55173230f23da94a
+
+  AC3 names '[train]' titles as a train signal; only the head_branch train/ prefix is checked (discovery does not fetch titles). ci.yml uses the same train/ prefix, so this is equivalent in practice; a title-only train PR would still be considered. Follow-up: either fetch the title or reword AC3.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-26T14:52:03.382993271Z
+modified_at: 2026-11-26T14:52:03.382993271Z
+req_type: Task
+tags:
+- carried-from:BUG-2766
+- finding-hash:7851683d
+- from-review:BUG-2766
+relationships:
+- rel_type: References
+  target_id: 01a21509-d29d-75f2-9eb0-fdf1204a9fd0
+  created_at: 2026-11-26T14:52:03.383029911Z
+filed_at:
+  code_sha: 58740fb4ce96577f40a2083d55173230f23da94a
+  branch: pr-4606
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fd10cfd3049
+  vendor: claude
+  session: 01a218549f6c
