@@ -608,7 +608,8 @@ fn batch_prompt(
 }
 
 /// Run each batch prompt; any runner error, unparsable output, finding outside
-/// the inventory or ledger row outside its batch refuses the whole run. The
+/// the inventory or its batch, or ledger row outside its batch refuses the
+/// whole run. The
 /// returned ledger keeps only files the runner reports `reviewed`, so a skip
 /// or silence leaves the file unaccounted when the caller verifies coverage.
 // trace:STORY-3120 | ai:claude
@@ -627,6 +628,15 @@ fn review_batches(
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("review batch {} output", i + 1))?;
         ensure_in_inventory(inventory, &rows)?;
+        // A batch's runner saw only its own files. trace:STORY-3120 | ai:claude
+        for row in &rows {
+            anyhow::ensure!(
+                batch.files.contains(&row.path),
+                "review batch {} cites a finding outside its batch: {:?}",
+                i + 1,
+                row.path
+            );
+        }
         for entry in &files.files {
             anyhow::ensure!(
                 batch.files.contains(&entry.path),
@@ -735,8 +745,15 @@ fn git_env_kept(key: &std::ffi::OsStr) -> bool {
     ["PATH", "HOME", "LANG", "XDG_CONFIG_HOME"].contains(&&*key) || key.starts_with("LC_")
 }
 
+/// Host git (seat-clone refusal, fsmonitor off, store pins) with only the
+/// `git_env_kept` part of the caller's environment. trace:STORY-3120 | ai:claude
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
-    let mut cmd = Command::new("git");
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    // The builder's own pins survive the clear; inherited variables do not.
+    let pins: Vec<_> = cmd
+        .get_envs()
+        .filter_map(|(k, v)| Some((k.to_owned(), v?.to_owned())))
+        .collect();
     cmd.env_clear()
         .envs(
             Environment::capture()
@@ -744,6 +761,7 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
                 .into_iter()
                 .filter(|(k, _)| git_env_kept(k)),
         )
+        .envs(pins)
         .env("GIT_NO_REPLACE_OBJECTS", "1")
         .current_dir(root);
     // No textconv driver from the reviewed tree's attributes ever runs.
@@ -1285,6 +1303,42 @@ mod tests {
         );
     }
 
+    /// git_text goes through the host builder: a reviewed repo's
+    /// core.fsmonitor hook, which raw git runs, never runs.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s3fu_git_text_uses_host_git_hardening() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, hook) = (temp.path().join("repo"), temp.path().join("fsmonitor"));
+        let hit = temp.path().join("hit");
+        std::fs::create_dir(&root).unwrap();
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "x\n").unwrap();
+        git_text(&root, &["add", "a.rs"]).unwrap();
+        let src = temp.path().join("src");
+        std::fs::write(&src, format!("#!/bin/sh\ntouch '{}'\n", hit.display())).unwrap();
+        let installed = Command::new("install")
+            .arg("-m755")
+            .args([&src, &hook])
+            .status();
+        assert!(installed.unwrap().success());
+        git_text(&root, &["config", "core.fsmonitor", hook.to_str().unwrap()]).unwrap();
+        let raw = Command::new("git")
+            .current_dir(&root)
+            .args(["status", "--porcelain"])
+            .output();
+        assert!(raw.unwrap().status.success());
+        assert!(hit.exists(), "control: raw git runs the fsmonitor hook");
+        std::fs::remove_file(&hit).unwrap();
+        assert!(git_text(&root, &["status", "--porcelain"])
+            .unwrap()
+            .contains("a.rs"));
+        assert!(
+            !hit.exists(),
+            "git_text ran the reviewed repo's fsmonitor hook"
+        );
+    }
+
     #[test]
     fn root_commit_preserves_unusual_git_paths() {
         let temp = tempfile::tempdir().unwrap();
@@ -1454,8 +1508,13 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         };
         let registry = PlaybookRegistry::new(Vec::new()).unwrap();
         let budget = DEFAULT_BATCH_TOKEN_BUDGET;
-        let inventory =
-            classify_with_exclusions(&[entry("a.rs")], &registry, &[], budget, |_| false);
+        let inventory = classify_with_exclusions(
+            &[entry("a.rs"), entry("b.rs")],
+            &registry,
+            &[],
+            budget,
+            |_| false,
+        );
         let finding = |path: &str| {
             let row =
                 serde_json::json!({"path":path,"severity":"high","category":"bug","message":"m"});
@@ -1505,7 +1564,10 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(run(files("a.rs", "skipped")).unwrap().1.files.is_empty());
         let err = run(files("b.rs", "reviewed")).unwrap_err().to_string();
         assert!(err.contains("coverage for a file outside it"), "{err}");
-        for outside in ["b.rs", "../a.rs", "/etc/passwd", "A.rs"] {
+        // b.rs is in the inventory but not in this batch.
+        let err = run(finding("b.rs")).unwrap_err().to_string();
+        assert!(err.contains("finding outside its batch"), "{err}");
+        for outside in ["c.rs", "../a.rs", "/etc/passwd", "A.rs"] {
             let err = run(finding(outside)).unwrap_err().to_string();
             assert!(
                 err.contains("outside reviewable inventory"),
