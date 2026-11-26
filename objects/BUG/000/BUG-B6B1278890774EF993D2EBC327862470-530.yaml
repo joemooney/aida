@@ -10,12 +10,12 @@ description: |
   - AC2: a manual `aida pr train N` waiting on an idle auto-train is admitted within one auto-train poll interval.
   - AC3: a test: an idle auto-train loop does not hold admission across polls, and a contending manual train is admitted.
   - AC4: a log/status line names the holder and the phase whenever the auto-train holds admission for more than N seconds.
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:27:48.000434994Z
+modified_at: 2026-11-26T09:33:31.656986361Z
 req_type: Bug
 tags:
 - admission
@@ -140,6 +140,12 @@ comments:
   modified_at: 2026-11-26T09:27:48.000434994Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21733-f888-7052-84a7-1961de0bf2d1
+  author: aida-publication-done
+  content: Implementer push 0f9abd22eab1 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T09:33:31.656985410Z
+  modified_at: 2026-11-26T09:33:31.656985410Z
+  session_id: 01a216fd8162
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
@@ -192,6 +198,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21733-f888-7052-84a7-1953b532c4f2
+  author: aida-publication-done
+  timestamp: 2026-11-26T09:33:31.656979381Z
+  session_id: 01a216fd8162
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
