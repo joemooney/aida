@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T21:51:12.958542531Z
+modified_at: 2026-11-26T22:10:58.320264411Z
 req_type: Bug
 tags:
 - lanes
@@ -52,6 +52,15 @@ comments:
   modified_at: 2026-11-26T21:51:12.958542531Z
   session_id: 01a219ab9ccf
   harness_version: 2.1.319 (Claude Code)
+- id: 01a219e9-6e90-7713-a09f-c0952a5716e6
+  author: joe
+  content: |-
+    DEFERRED (#4693 approval @70b9880a, 2026-11-26; product-15):
+    - Test gap (deferred): the new tests exercise retry_transient_admission_with with synthetic outcomes and admission_gap directly, but nothing exercises the wiring: retire_with's mapping of WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core/src/mailbox_lifecycle/guard.rs:214-224), nor the two call-site predicates (aida-cli-lib/src/dispatch.rs:
+    - Duplicate salvage on retry: in reclaim_exited_branch_clone (aida-cli-lib/src/queue_cmd/work.rs:4251) each retry re-runs seat_clone::destroy. For a clone whose only unpublished state is checkpoint refs (not unshipped), destroy_inner salvages before it reaches the retention gate (seat_clone.rs, 'facts.unshipped() || checkpoints' branch), so a transient refusal that retries writes
+    - Wording: when the retries are spent on writers that run a deleted binary, the final error still says they 'should exit on their own' (retire.rs WriterAdmissionUnknown Display). Its only next step is the dry run. A long-lived old-binary MCP or server process does not exit by itself, so the final refusal should say how to stop or restart the named pid.
+  created_at: 2026-11-26T22:10:58.320264411Z
+  modified_at: 2026-11-26T22:10:58.320264411Z
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
