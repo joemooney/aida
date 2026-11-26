@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T14:46:30.868297020Z
+modified_at: 2026-11-26T14:47:50.263899009Z
 req_type: Bug
 tags:
 - admission
@@ -26,6 +26,18 @@ relationships:
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T14:46:30.868251175Z
   created_by: joe
+comments:
+- id: 01a21853-f6f4-7283-b9f5-8589df780877
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:47):
+    # BUG-2774: auto-train recovery holds admission while blocked on a deputy job (advisor-122 07:46; product-15). Lane: CLAUDE. MAIN, NEW branch autotrain-recovery-release. STRICT (admission + deputy). <=250 lines. Completing (BUG-2774) trailer.
+    READ: `aida show BUG-2774` (train-status evidence + AC1-AC3). It builds on BUG-2769 (#4640: the auto-train holds admission only while a train runs; the AC4 phase line) and TASK-3917 (#4656). AC1: in the RECOVERY phase, release admission while waiting on a deputy (or any external) job, and re-take it only to decide. AC2: detect a deputy runner whose binary is stale or deleted (the /proc/<pid>/exe '(deleted)' marker or a sha mismatch with live) and report it in train-status and aida doctor with the fix. AC3: tests.
+    Keep the pr_train and admission tests green. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T14:47:50.263899009Z
+  modified_at: 2026-11-26T14:47:50.263899009Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe
