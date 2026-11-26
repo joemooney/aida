@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-26T23:26:17.322312937Z
+modified_at: 2026-11-26T23:31:03.439544502Z
 req_type: Story
 tags:
 - containment
@@ -30,6 +30,44 @@ tags:
 - lanes
 - strict
 - vendors
+comments:
+- id: 01a21a33-1026-7a40-bd74-aa93d57650d4
+  author: joe
+  content: |-
+    ADVISOR DISPOSITION (2026-11-26 16:40): APPROVED, NARROWED. Its AC1 + AC2 (the agy containment posture + canary lane) DUPLICATE STORY-2460 (Contained agy implementer lanes), which already has the design fork, 14 comments of rulings and TASK-3048's AIDA-boundary conformance path. That work stays there; do not re-sketch it here. STORY-3202 scope is now: (AC-A) agy as an # AIDA Deterministic Review Preparation
+
+    - **Mode**: `workspace`
+    - **Inventory SHA-256**: `80e8361d0f123f579d3cf904fad9dc9587b9485618bf89a92ab75ae982baa045`
+    - **Reviewable files**: 3 | **Excluded files**: 1 | **Batches**: 1
+
+    ## Reviewable File Inventory (100% Accountability Required)
+
+    - ` docs/plans/2026-11-24-codex-advisor-lab.md ` (untracked, +90 / -0, ~2173 tok, playbook:` general `, trace:no)
+    - ` docs/plans/2026-11-24-review-followup-triage.md ` (untracked, +171 / -0, ~4205 tok, playbook:` general `, trace:yes)
+    - ` docs/plans/2026-11-26-morning-list.md ` (untracked, +8 / -0, ~342 tok, playbook:` general `, trace:no)
+
+    ## Token-Budgeted Semantic Review Batches
+
+    ### Batch 1 — ` playbook:general ` (~6720 tokens, playbooks: ` general `)
+      - ` docs/plans/2026-11-24-codex-advisor-lab.md `
+      - ` docs/plans/2026-11-24-review-followup-triage.md `
+      - ` docs/plans/2026-11-26-morning-list.md `
+
+    ## Active Path-Scoped Review Playbooks
+
+    ### Playbook ` general ` — ` General Correctness, Security & AIDA Acceptance Review ` (` **/* `)
+
+    - **Behavioral correctness**: Verify edge cases, boundary conditions, and backward compatibility for existing callers.
+    - **Security**: Check for path traversal, command injection, and unintended authority bypasses.
+    - **AIDA acceptance**: Confirm every linked requirement acceptance criterion touched by this file is satisfied.
+
+    ## Excluded Files
+
+    - ` docs/plans/2026-11-21-draft-backlog-review.md ` (untracked) -> ` oversize: 24586 estimated tokens > cap 12000 ` vendor through the S3a hardened spawn helper (empty cwd, a per-vendor env allowlist incl. the proxy vars, stdin prompt, the effort allowlist mapped to agy's flags, setsid). This is NOT a contained lane, so it doesn't wait on STORY-2460, and it gives a real opposite-vendor challenger while codex is limited. (AC-B) a non-interactive agy auth probe in the lane-host doctor, naming the keyring-only token problem and the fix. (AC-C) tests with a fake agy. STRICT, ≤300 lines; sketch not required for this narrowed scope (it reuses the S3a helper). Parent: STORY-3120 for AC-A; STORY-2460 for AC-B context.
+  created_at: 2026-11-26T23:31:03.439544502Z
+  modified_at: 2026-11-26T23:31:03.439544502Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
   branch: main
