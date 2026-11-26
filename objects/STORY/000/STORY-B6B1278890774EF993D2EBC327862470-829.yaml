@@ -975,6 +975,13 @@ comments:
   modified_at: 2026-11-26T08:05:36.872475958Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a216fe-00d2-7372-9781-919778f66d2d
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] b4c61d1f69f2
+    A reference merge (commit b4c61d1f69f2, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T08:34:34.834810794Z
+  modified_at: 2026-11-26T08:34:34.834810794Z
 - id: 01a216fe-8d8c-7033-abc3-1525c84be6d5
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int44-story-3120-s3fu` at head `5c870e4aaf61da370b7208f34979f650ae4128ac`.'
