@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-26T15:36:54.543054879Z
+modified_at: 2026-11-26T15:40:03.149312119Z
 req_type: Bug
 tags:
 - leases
@@ -170,6 +170,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T15:37:41.735751793Z
   modified_at: 2026-11-26T15:37:41.735751793Z
+- id: 01a21883-c99d-7612-89e9-6661c54ff503
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 08:40):
+    # BUG-2738 r1 on #4663 (advisor-122 ruling 2026-11-26 08:33 at 5a1122ae: a LEGIT request-changes, no override; product-15). Lane: CLAUDE. MAIN, existing branch bug-2738-shelve-completed / PR #4663. <=120 lines. Keep the title "(BUG-2738)".
+    MUST:
+     (a) AC1/AC2 END-TO-END tests through `aida review record`, asserting the gate-ledger entry and the posted comment, not just calls to the helper.
+     (b) The merged/closed check goes through the forge abstraction (forge_for(root).change_metadata), not a raw `gh pr view`, and fails SAFE when the forge is unknown: treat the change as NOT landed and shelve normally, with a logged note, never skip silently.
+     (c) trace:BUG-2738.AC1 / .AC2 markers.
+     (d) SCOPE CLARIFICATION (product-15 from the live incident): protect ONLY Completed specs or specs whose PR is MERGED. A spec in "Done" status with an OPEN PR (Done = published and awaiting review) MUST still be shelved by a request-changes verdict. Today, BUG-2738's own CR at 5a1122ae shelved it and then something flipped it back to Done (its history shows InProgress→Done at 08:10 on publish, and the advisor's `queue rework` was refused with "moved from Needs Attention to Done while this command ran"). Find what re-asserted Done over the CR (likely the publication-done path), and make a CR verdict at the current head win over a publish-done transition. Add a test: publish → CR at the same head → the spec stays NeedsAttention and is reworkable.
+    OPTIONAL: recheck inside the atomic closure.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4663. COMMIT your work.
+  created_at: 2026-11-26T15:40:03.149312119Z
+  modified_at: 2026-11-26T15:40:03.149312119Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
