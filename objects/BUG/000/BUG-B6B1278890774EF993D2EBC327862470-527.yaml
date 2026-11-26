@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T23:28:15.005813754Z
-modified_at: 2026-11-26T00:15:38.328108746Z
+modified_at: 2026-11-26T00:18:23.056260675Z
 req_type: Bug
 tags:
 - ci
@@ -41,6 +41,26 @@ comments:
   modified_at: 2026-11-25T23:31:27.688095648Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21537-b8d0-77f2-8d9b-6e9d51656b39
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 (unit, review_watch.rs): `bug2766_override_approval_after_refusal_promotes`. Diagnosis: the PR's own verdict at its head (the reviewer's request-changes) always won over a spec-keyed approval at the same head, so an advisor override recorded under the spec key afterward was silently dropped (Ok(None), no line). Fix: when the PR's own verdict at the head does not approve, a later-recorded spec-keyed approval at that exact head wins. Spec-keyed approvals without an attestation are now listed and reported as skipped instead of being absent. The newest one is kept per head.
+    - AC2 (unit): `bug2766_label_event_runs_and_full_runs`, using new stub states. A pending label-event run (jobs named `label event ...`) is ignored, so FAST is judged from the real fast-tier run. A FULL-tier run at the head reports `ci:full already applied: FULL run in progress|finished`.
+    - AC3 (unit): `bug2766_train_prs_skipped_and_busy_lock`. A train/* head is never considered, and a held PR-N.full-ci.lock reports `skipped (busy ...)` with an Ok exit.
+
+    ### Expected files
+    - aida-cli-lib/src/review_watch.rs
+
+    ### Ambiguities / conflicts as questions
+    - Discovery does not fetch PR titles, and the exact gh field list is pinned by a fixture test. Train detection uses the head branch `train/` (the same signal ci.yml uses). Is the `[train]` title check redundant with that?
+    - I could not read #4600's live verdict records from this host. The override mechanism above is inferred from the code paths, since the PR is absent rather than skipped.
+  created_at: 2026-11-26T00:18:23.056260675Z
+  modified_at: 2026-11-26T00:18:23.056260675Z
+  session_id: 01a21533dd09
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2150a-c5ca-7f63-8878-e8a8add13a31
   author: joe
