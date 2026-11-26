@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:14:39.280089639Z
-modified_at: 2026-11-18T17:31:51.888818528Z
+modified_at: 2026-11-26T19:52:28.218676786Z
 req_type: Bug
 tags:
 - advisor-loops
@@ -253,6 +253,13 @@ comments:
   content: 'Auto-completion warning: BUG-2645 was In Progress when merge c934bda1cc34e065b8539fce2ae71850a7d86df0 completed it; verify that no active round remains.'
   created_at: 2026-11-18T17:31:51.292503099Z
   modified_at: 2026-11-18T17:31:51.292503099Z
+- id: 01a2196a-a13a-7773-b65a-56052b8cd971
+  author: dirtlab
+  content: Commit 51fa960c9f references this requirement
+  created_at: 2026-11-26T19:52:28.218676786Z
+  modified_at: 2026-11-26T19:52:28.218676786Z
+  session_id: 01a218eed076
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e7b7-0259-75a1-b06c-c16f62340ef0
   author: joe
