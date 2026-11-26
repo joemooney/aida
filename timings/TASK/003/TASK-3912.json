@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3912",
+  "publishes": [
+    {
+      "at": "2026-11-26T19:42:11.505389522Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T11:05:18.561828529Z",
+      "spec": "TASK-3912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4616,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2a68c0ff5333fe0e907b842538af467d6cb7314b"
+      }
+    },
+    {
+      "ts": "2026-11-26T11:06:49.907415822Z",
+      "spec": "TASK-3912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4616,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2a68c0ff5333fe0e907b842538af467d6cb7314b"
+      }
+    },
+    {
+      "ts": "2026-11-26T16:30:46.239741149Z",
+      "spec": "TASK-3912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4668,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1b57806527742ec4fddd3979fb37f6eb5e87368d"
+      }
+    },
+    {
+      "ts": "2026-11-26T17:31:49.840626725Z",
+      "spec": "TASK-3912",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4668
+      }
+    },
+    {
+      "ts": "2026-11-26T18:40:23.568027675Z",
+      "spec": "TASK-3912",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4677,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2b55db7ed31a700d190dc934055bf65bb75943d3"
+      }
+    },
+    {
+      "ts": "2026-11-26T19:37:57.076319836Z",
+      "spec": "TASK-3912",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4677
+      }
+    },
+    {
+      "ts": "2026-11-26T19:41:56.893397841Z",
+      "spec": "TASK-3912",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b8aa6af117d0a2f86b3ba84e5687491105dd3a01",
+        "pr": 4677,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
