@@ -13,17 +13,25 @@ description: |
   ## Acceptance
   - AC1: every first-{/last-} (or similar) extraction of untrusted runner/challenger output checks start <= end and otherwise returns a typed parse error (the challenge fails closed; no panic). Tests: "} sorry {", "done} {", "}" alone, empty output, and a fenced block with trailing text.
   - AC2: `review prepare`'s top-level error prints the full cause chain (e.g. "write SARIF /tmp/x.sarif: --write outside repository: paths must be inside the project root"). Test.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T22:51:37.391070504Z
-modified_at: 2026-11-26T22:51:37.391070504Z
+modified_at: 2026-11-26T22:55:42.379954835Z
 req_type: Bug
 tags:
 - STORY-3120
 - review
 - security
+history:
+- id: 01a21a12-632b-7fd1-8ace-6d3a575c7e9f
+  author: joe
+  timestamp: 2026-11-26T22:55:42.379951753Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
   branch: main
