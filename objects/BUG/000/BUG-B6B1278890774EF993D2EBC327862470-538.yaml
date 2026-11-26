@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561Z
-modified_at: 2026-11-26T22:45:43.050427945Z
+modified_at: 2026-11-26T23:23:49.705178008Z
 req_type: Bug
 tags:
 - landing
@@ -221,6 +221,19 @@ comments:
   created_at: 2026-11-26T22:43:19.936179Z
   modified_at: 2026-11-26T22:43:19.936179Z
   session_id: 01a219b01ddd
+- id: 01a21a2c-2249-72a3-89da-7cd150811238
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7f1fa7dfed (r3, #4685)
+    Acceptance evidence: [behavioral-test] bug2777_live_router_holds_without_dispatch_authority (LiveDriftRouter over LiveTrainForge with a gh shim that records any call; abort=Some("lease expired"); two drift ejections: no gh call, a warning per PR naming the reason, each hold reads 'not routed: lease expired', so the cached abort refuses every PR). [behavioral-test] bug2777_member_induced_drift_requeues_without_update_review_or_hold (a real repo: member_induced_drift returns the head's own patch-id vs main when the head contains main, and None once main moves; routing then makes no update, no re-review, no authority check, no hold, no escalation). All 8 bug2777 tests pass; make check-ci-fast passes.
+    Probes: multiplicity (2 PRs under abort) covered. Authority: member-induced routing makes no forge call, so it runs before the authority check.
+    Fixes: added a store-writers inventory row for the member_induced_drift patch_id sink.
+    Residual risks: (1) A failing dispatch_check() is still not exercised, because building a revoking DispatchExecutionContext in this module is non-trivial. The abort-already-set path is covered. (2) Classification compares against the main the train was built on. If an earlier member landed in this run, the PR is re-queued once and re-ejected next train, then routed to a branch update. (3) If the earlier member stays unlanded and boards every train, the member-induced PR is re-ejected each train with no hold.
+  created_at: 2026-11-26T23:23:49.705178008Z
+  modified_at: 2026-11-26T23:23:49.705178008Z
+  session_id: 01a21a0a4dcd
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
