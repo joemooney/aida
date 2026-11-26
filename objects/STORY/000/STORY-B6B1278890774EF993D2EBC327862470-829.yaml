@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T12:07:08.020060099Z
+modified_at: 2026-11-26T12:07:35.163162702Z
 req_type: Story
 tags:
 - integration
@@ -1061,6 +1061,19 @@ comments:
        - S8 CodeGraph AST Blast-Radius & v4 Enhancements (071afd81467, 41a11958d87, bbdb34898dd): Automatic .codegraph/codegraph.db file fan-in and touched-symbol caller/callee enrichment (--no-codegraph opt-out) with 35-line untouched caller/callee body slicing (screened via classify_exclusion), nearest package-manifest reference context (collect_batch_dependency_manifests), bounded 4-thread parallel batch execution (std::thread::scope), cross-batch doc/code finding consolidation (consolidate_cross_batch_findings), deterministic omission/doc line-anchor fallback (infer_doc_or_omission_anchor), and inner-quote JSON repair (sanitize_unescaped_json_inner_quotes).
   created_at: 2026-11-26T12:07:08.020060099Z
   modified_at: 2026-11-26T12:07:08.020060099Z
+- id: 01a217c1-409c-76f3-aaf1-065785509060
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:07):
+    # STORY-3120 S4 r1 on #4650 (advisor-122 ruling 2026-11-26 05:09, on integration-30's pre-check; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int45-story-3120-s4 / PR #4650. Keep the "(Refs STORY-3120)" title. Do NOT rebase onto main.
+    (S1, MUST) The challenger takes ONLY the challenger vendor's OWN seat tuning (model/effort from the trusted base, [agents.<vendor>.seats.reviewer], plus the --challenger-effort chain), NEVER the finder's AIDA_REVIEW_MODEL / AIDA_REVIEW_EFFORT / review-rules default_model / default_effort. TEST: a cross-vendor pair → the challenger argv carries only its own model/effort (e.g. AIDA_REVIEW_EFFORT=max with a codex challenger plus --challenger-effort high → no error, and the claude model never goes to codex as -m).
+    (D1, MUST, fail-closed) In the CI gate, a challenger "refuted" verdict must NOT remove a finding from --fail-on: --fail-on counts EVERY finder finding at or above the threshold. In SARIF, refuted findings are emitted as SUPPRESSED results (suppressions kind "external", with the challenger's justification), not dropped. A prompt-injected or wrong challenger must never turn a red gate green. TEST: a refuted high finding still fails --fail-on high, and appears in SARIF as suppressed. (An opt-in --trust-challenger is a later spec; do NOT add it.)
+    SIZE: the PR is 639 lines against the <=300 rule. If over half is tests, keep it as one PR and say so in the body; otherwise split into S4a (challenger + S1) and S4b (gating/SARIF semantics), and say which you did.
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4650. COMMIT your work.
+  created_at: 2026-11-26T12:07:35.163162702Z
+  modified_at: 2026-11-26T12:07:35.163162702Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
