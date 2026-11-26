@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561Z
-modified_at: 2026-11-26T23:50:56.946218179Z
+modified_at: 2026-11-26T23:51:58.143348008Z
 req_type: Bug
 tags:
 - landing
@@ -239,6 +239,12 @@ comments:
   content: Implementer push 7f1fa7dfed0e declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T23:50:56.946217397Z
   modified_at: 2026-11-26T23:50:56.946217397Z
+  session_id: 01a21a0a4dcd
+- id: 01a21a45-e5bf-7903-936d-3341283e2e57
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2777-ejection-routing` at head `7f1fa7dfed0edf8dc9313469364795b5f3f05194`.'
+  created_at: 2026-11-26T23:51:58.143342097Z
+  modified_at: 2026-11-26T23:51:58.143342097Z
   session_id: 01a21a0a4dcd
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
