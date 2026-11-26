@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-26T04:17:46.512469758Z
+modified_at: 2026-11-26T04:28:49.180153937Z
 req_type: Story
 tags:
 - dev
@@ -31,6 +31,23 @@ comments:
   content: 'ADVISOR DISPOSITION (advisor-122 21:20, Joe-requested): APPROVED HIGH, STRICT (it swaps the live binary and rebinds the loops), drive. Binding notes: (a) STRICT because a provisional binary runs every gate; the default refusal of permissiveness diffs is a real check: classify by touched paths (the gate/approval/admission/containment strict paths), not by commit message. (b) The PROVISIONAL marker also blocks dev build promotes from main unless --replace-provisional, and the auto-revert path is tested. (c) Per today''s finding, the route is an integration-style promote, never a hand copy into live/. (d) Slices: S1 build+promote+marker+rollback (at most 300); S2 loop rebind/restart + autobuild interplay + TTL; S3 docs.'
   created_at: 2026-11-26T04:17:40.939402324Z
   modified_at: 2026-11-26T04:17:40.939402324Z
+- id: 01a2161d-3bd0-7f21-9622-d7c0a644ae85
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:28):
+    # STORY-3148 S1: `aida dev provisional` build + promote + PROVISIONAL marker + rollback (advisor-122 approved 2026-11-25 21:21; strict; drive gates only landing; product-15). Lane: CLAUDE. STRICT. MAIN, NEW branch dev-provisional-s1. Title "(Refs STORY-3148)". <=300 lines.
+    READ: `aida show STORY-3148 --comments` (ACs + the advisor's notes). Start from the existing `aida dev build` / `aida dev rollback` / `aida dev status` code (the live pair under ~/.local/share/aida/live, prev/ kept).
+    S1 SCOPE = AC1 + AC5 (+ the AC2 operator gate):
+     - `aida dev provisional <branch|PR>`: resolve the head SHA, build + smoke-test it in a FRESH worktree (never the PR checkout's tracked config), then promote it as live, keeping the old pair in prev/, and write a PROVISIONAL marker {pr, branch, head, operator, reason, at}.
+     - `aida dev status` shows the marker prominently.
+     - `aida dev rollback` restores the previous pair and CLEARS the marker.
+     - AC2 minimum: refuse unless run from a TTY or the operator deputy; record who and why (--reason required).
+    OUT OF SCOPE (later slices): service rebind (AC3), autobuild guard / auto-revert / TTL (AC4), the permissive-diff refusal, and the doc playbook.
+    TESTS: a promote writes the marker and keeps prev; rollback clears it; a non-operator is refused. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T04:28:49.180153937Z
+  modified_at: 2026-11-26T04:28:49.180153937Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
