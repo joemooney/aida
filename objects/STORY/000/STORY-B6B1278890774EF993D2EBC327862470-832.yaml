@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T06:24:53.641689632Z
+modified_at: 2026-11-26T07:09:19.583772625Z
 req_type: Story
 tags:
 - agents
@@ -99,6 +99,22 @@ comments:
   created_at: 2026-11-26T06:18:38.475109170Z
   modified_at: 2026-11-26T06:18:38.475109170Z
   session_id: 01a2161aa788
+- id: 01a216af-f35f-7bd2-b38a-2be0de55a76f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4296a44c00 (PR #4627, S1 r1).
+    - F1: preserve_seat no longer runs raw git. A seat clone (seat_clone_root) takes the sanctioned seat transport: seat_clone::commit_pending (AIDA bwrap commit sandbox, hooks off, host identity), seat_clone::bundle_branch (probe sandbox), ship_from_seat::stage_bundle (host verify + quarantine in main), then push from main. An unrecorded clone is refused and its lease kept. A plain worktree uses aida_core::git_ops::host_git_command, which refuses seat clones itself. Test: ac1_a_seat_clone_is_never_touched_by_host_git (planted pre-push/pre-commit hooks never run; lease kept).
+    - F2: the side-branch push goes through host_git_command(...).remote_credentials(repo, "origin") (push_side).
+    - F3: detect_log classifies only the last JSON event. Claude's terminal error result counts only when the newest rate_limit_event before it is a rejection. Test: ac1_only_the_terminal_event_is_classified.
+    - F4: ac2_lane_host_preflight_refuses_a_vendor_in_outage calls lane_host::preflight, the gate queue work --no-human runs.
+    - Self-review fix: a seat with nothing past its pinned base would have failed bundle create and kept its lease. It now ends without a push (has_commits_beyond_base).
+    Evidence: aida lane job cargo test -p aida-cli-lib --lib story_3134: 10 passed at HEAD. make check-ci-fast: exit 0. A store-writers.toml row was added for the stage_bundle sink.
+    Residual risks: the seat-clone happy path (commit, bundle, quarantine, push) has no end-to-end test here; it needs a host-recorded clone and bwrap. It reuses ship --from-seat's tested pieces. The non-seat diff is ~95 lines, over the 80-line budget. Deferred per brief: fast-fix child ordering, codex reset-time timezone.
+  created_at: 2026-11-26T07:09:19.583772625Z
+  modified_at: 2026-11-26T07:09:19.583772625Z
+  session_id: 01a216870960
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
