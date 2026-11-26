@@ -3202,7 +3202,12 @@ pub(crate) fn run_with_program(
             idle_yielding(&root, &store, args.interval, &mut admission)?;
             continue;
         }
-        sweep_on_first_claim(&root, admission.is_some(), &mut swept);
+        // Synchronization, discovery and every per-change forge read run
+        // without the claim; it is retaken only for each dispatch decision.
+        // trace:BUG-2765 | ai:claude
+        let mut claim = PassClaim::new(&root, &mut admission);
+        sweep_on_first_claim(&root, claim.claim.is_some(), &mut swept);
+        claim.release("pass setup");
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             idle_yielding(&root, &store, args.interval, &mut admission)?;
@@ -3224,6 +3229,7 @@ pub(crate) fn run_with_program(
             }
             Err(error) => return Err(error),
         };
+        claim.observed = std::time::Instant::now();
         let open: BTreeSet<String> = changes.iter().map(forge::Change::key).collect();
         match store.prune(&open) {
             Ok(_) => {}
@@ -3255,52 +3261,33 @@ pub(crate) fn run_with_program(
             ..Default::default()
         };
         let mut watched = Watched::default();
-        let result = watch_changes_into(&store, reviewable, &mut watched, |change| {
-            // A pass can contain many bounded forge probes. Reap between
-            // changes as well as between passes so finished children do not
-            // sit as zombies throughout a large discovery batch.
-            // trace:BUG-2640 | ai:codex
-            for outcome in reap_dispatchers(&store, &mut children) {
-                service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
-            }
-            let result = admit_change(
-                &root,
-                &repo,
-                &store,
-                args,
-                &mut children,
-                &authors,
-                change.clone(),
-                program,
-            );
-            let result = match result {
-                Ok(Admission::Admitted) => {
-                    pass.dispatched += 1;
-                    Ok(())
+        let result = watch_pass(
+            &store,
+            &mut claim,
+            reviewable,
+            &mut pass,
+            &mut watched,
+            |change, claim| {
+                // A pass can contain many bounded forge probes. Reap between
+                // changes as well as between passes so finished children do not
+                // sit as zombies throughout a large discovery batch.
+                // trace:BUG-2640 | ai:codex
+                for outcome in reap_dispatchers(&store, &mut children) {
+                    service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
                 }
-                Ok(Admission::Unadmitted(cause)) => {
-                    pass.unadmitted.push(service::Unadmitted {
-                        key: change.key(),
-                        head: change.head.clone(),
-                        cause,
-                    });
-                    Ok(())
-                }
-                Ok(outcome) => {
-                    let category = match outcome {
-                        Admission::Skipped(category) => category,
-                        _ => "skipped",
-                    };
-                    pass.skipped
-                        .entry(category.to_string())
-                        .or_default()
-                        .push(change.key());
-                    Ok(())
-                }
-                Err(error) => Err(error),
-            };
-            observe_dispatch_result(&root, result)
-        });
+                admit_change(
+                    &root,
+                    &repo,
+                    &store,
+                    args,
+                    &mut children,
+                    &authors,
+                    change,
+                    program,
+                    Some(claim),
+                )
+            },
+        );
         // Every pass leaves a timestamped report, including one stopped by a
         // whole-watcher failure, so status can tell an idle healthy watcher
         // from one that refuses work or no longer completes passes.
@@ -3313,6 +3300,9 @@ pub(crate) fn run_with_program(
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
+        // Idle holds the claim as before: it yields within a second of any
+        // waiting land, ship or drain. trace:BUG-2765 | ai:claude
+        hold_admission(&root, &mut admission, false)?;
         idle_yielding(&root, &store, args.interval, &mut admission)?;
     }
 }
@@ -3415,6 +3405,157 @@ fn hold_admission(
         }
     }
     Ok(None)
+}
+
+/// A claim held longer than this within a pass is logged with its phase.
+// trace:BUG-2765 | ai:claude
+const HOLD_WARN: std::time::Duration = std::time::Duration::from_secs(30);
+/// A forge snapshot older than this is re-read, without the claim, before
+/// a dispatch decision rests on it.
+const SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The watcher's shared claim within one pass. Forge reads (synchronization,
+/// discovery, each change's head re-read, base probe and readiness report)
+/// run without it; it is retaken only for a dispatch decision and released
+/// after, so a slow forge never keeps a land, ship or train waiting.
+// trace:BUG-2765 | ai:claude
+struct PassClaim<'a> {
+    root: &'a Path,
+    claim: &'a mut Option<crate::admission_owner::Claim>,
+    since: Option<std::time::Instant>,
+    /// When the pass's discovery snapshot was read.
+    observed: std::time::Instant,
+}
+
+impl<'a> PassClaim<'a> {
+    fn new(root: &'a Path, claim: &'a mut Option<crate::admission_owner::Claim>) -> Self {
+        let now = std::time::Instant::now();
+        let since = claim.is_some().then_some(now);
+        Self {
+            root,
+            claim,
+            since,
+            observed: now,
+        }
+    }
+
+    /// Take the claim unless held. `Some(reason)` when admission yielded to a
+    /// waiting land, ship or drain: the caller defers, never fails, so a
+    /// `--once` pass yields mid-pass instead of erroring.
+    // trace:BUG-2765 | ai:claude
+    fn acquire(&mut self) -> Result<Option<String>> {
+        if self.claim.is_none() {
+            if let Some(reason) = hold_admission(self.root, self.claim, false)? {
+                return Ok(Some(format!(
+                    "admission yielded: {reason}; retrying next pass"
+                )));
+            }
+            self.since = Some(std::time::Instant::now());
+        }
+        Ok(None)
+    }
+
+    /// Give the claim up. A hold longer than [`HOLD_WARN`] is logged naming
+    /// `phase`, and returned.
+    fn release(&mut self, phase: &str) -> Option<String> {
+        let since = self.since.take();
+        self.claim.take()?;
+        let held = since?.elapsed();
+        (held > HOLD_WARN).then(|| {
+            let warning = format!(
+                "review-watch: admission held {}s during {phase} (warning bound {}s)",
+                held.as_secs(),
+                HOLD_WARN.as_secs()
+            );
+            eprintln!("{warning}");
+            warning
+        })
+    }
+
+    /// Take the claim for a decision on `change`. Under it, recheck that the
+    /// snapshot is current; a stale one is re-read with the claim released,
+    /// then the claim is retaken. `Some(reason)` means decide nothing now.
+    fn decide(
+        &mut self,
+        change: &forge::Change,
+        reread: impl FnOnce() -> Result<forge::Change>,
+    ) -> Result<Option<String>> {
+        let mut reread = Some(reread);
+        let mut observed = self.observed;
+        loop {
+            if let Some(reason) = self.acquire()? {
+                return Ok(Some(reason));
+            }
+            if observed.elapsed() <= SNAPSHOT_TTL {
+                return Ok(None);
+            }
+            let Some(reread) = reread.take() else {
+                return Ok(Some("forge snapshot went stale; retrying next pass".into()));
+            };
+            self.release(&format!("staleness recheck for {}", change.key()));
+            match reread() {
+                Ok(current) if current.head == change.head && current.base == change.base => {
+                    observed = std::time::Instant::now();
+                }
+                Ok(_) => {
+                    return Ok(Some(
+                        "change moved during the forge scan; retrying next pass".into(),
+                    ))
+                }
+                Err(error) => {
+                    return Ok(Some(format!(
+                        "forge re-read refused: {error:#}; retrying next pass"
+                    )))
+                }
+            }
+        }
+    }
+}
+
+/// One pass over the discovered changes. `admit` reads the forge without
+/// the claim and takes it through [`PassClaim::decide`]; the claim is given
+/// up after every change.
+// trace:BUG-2765 | ai:claude
+fn watch_pass(
+    store: &Store,
+    claim: &mut PassClaim<'_>,
+    changes: Vec<forge::Change>,
+    pass: &mut service::PassCounts,
+    watched: &mut Watched,
+    mut admit: impl FnMut(forge::Change, &mut PassClaim<'_>) -> Result<Admission>,
+) -> Result<()> {
+    watch_changes_into(store, changes, watched, |change| {
+        let key = change.key();
+        let result = admit(change.clone(), claim);
+        claim.release(&format!("dispatch decision for {key}"));
+        let result = match result {
+            Ok(Admission::Admitted) => {
+                pass.dispatched += 1;
+                Ok(())
+            }
+            Ok(Admission::Unadmitted(cause)) => {
+                pass.unadmitted.push(service::Unadmitted {
+                    key,
+                    head: change.head.clone(),
+                    cause,
+                });
+                Ok(())
+            }
+            Ok(outcome) => {
+                let category = match outcome {
+                    Admission::Skipped(category) => category,
+                    _ => "skipped",
+                };
+                pass.skipped
+                    .entry(category.to_string())
+                    .or_default()
+                    .push(key);
+                Ok(())
+            }
+            Err(error) => Err(error),
+        };
+        observe_dispatch_result(claim.root, result)
+    })
 }
 
 /// How often an idle watcher settles prior attempts, whatever its discovery
@@ -3783,7 +3924,10 @@ fn watch_change(
     change: forge::Change,
     program: Option<&Path>,
 ) -> Result<()> {
-    admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
+    admit_change(
+        root, repo, store, args, children, authors, change, program, None,
+    )
+    .map(|_| ())
 }
 
 // trace:TASK-3877 | ai:codex
@@ -4232,6 +4376,7 @@ fn admit_change(
     authors: &update::AuthorLiveness,
     mut change: forge::Change,
     program: Option<&Path>,
+    claim: Option<&mut PassClaim<'_>>,
 ) -> Result<Admission> {
     service::check_controller(root)?;
     service::validate_controller_delegation(root)?;
@@ -4299,20 +4444,36 @@ fn admit_change(
     // Which heads this covers follows the project's `[review] stale_base`
     // policy (see `stale_follow_up`), fast freshness or not.
     // trace:STORY-2821 | ai:claude
-    let follow_up = |change: &forge::Change, probed: bool| {
-        stale_follow_up(
+    // Its branch update is a forge write, so the follow-up runs under the
+    // claim, given up before the report reads the forge. trace:BUG-2765 | ai:claude
+    let claim = std::cell::RefCell::new(claim);
+    let follow_up = |change: &forge::Change, probed: bool| -> Result<Option<Admission>> {
+        let mut held = claim.borrow_mut();
+        let yielded = held.as_deref_mut().map(PassClaim::acquire).transpose()?;
+        if let Some(reason) = yielded.flatten() {
+            eprintln!("{key}: {reason}");
+            return Ok(Some(Admission::Skipped("deferred")));
+        }
+        let reason = stale_follow_up(
             root,
             store,
             change,
             probed,
             &|c| authors.author_live(root, c),
             &|c| update::forge_update(root, repo, c),
-        )
-    };
-    if let Some(reason) = follow_up(&change, false)? {
+        );
+        if let Some(held) = held.as_deref_mut() {
+            held.release(&format!("stale follow-up for {key}"));
+        }
+        let Some(reason) = reason? else {
+            return Ok(None);
+        };
         eprintln!("{key}: {reason}");
-        record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| Admission::Settled);
+        record_skip(store, change, Some(&reason))?;
+        report(root, store, change, &live).map(|_| Some(Admission::Settled))
+    };
+    if let Some(admission) = follow_up(&change, false)? {
+        return Ok(admission);
     }
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
@@ -4334,12 +4495,20 @@ fn admit_change(
         )?;
         return Ok(Admission::Settled);
     }
-    if let Some(reason) = follow_up(&change, true)? {
-        eprintln!("{key}: {reason}");
-        record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live).map(|_| Admission::Settled);
+    if let Some(admission) = follow_up(&change, true)? {
+        return Ok(admission);
     }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
+    // Every forge read above ran without the claim; only the decision, the
+    // reservation and the launch below run under it. trace:BUG-2765 | ai:claude
+    let mut claim = claim.into_inner();
+    if let Some(claim) = claim.as_deref_mut() {
+        let id = change.id;
+        if let Some(reason) = claim.decide(&change, || repo.change(root, id))? {
+            eprintln!("{key}: {reason}");
+            return Ok(Admission::Skipped("deferred"));
+        }
+    }
     let (action, outcome) = select_with_coverage(
         store,
         &change,
@@ -4356,6 +4525,13 @@ fn admit_change(
             _ => None,
         },
     )?;
+    // Only a launch needs the claim past the decision: the readiness report
+    // below reads the forge. trace:BUG-2765 | ai:claude
+    if !matches!(action, Action::Dispatch(_)) {
+        if let Some(claim) = claim {
+            claim.release(&format!("dispatch decision for {key}"));
+        }
+    }
     match action {
         Action::Skip(reason) => {
             eprintln!("{key}: {reason}");
