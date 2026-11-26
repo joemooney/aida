@@ -770,6 +770,18 @@ comments:
   modified_at: 2026-11-26T03:16:40.172756496Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a215ee-9c2d-7780-847d-afb35d0596e0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a73b2c2f04 (S3a-2 port, branch int40-story-3120-s3a2b, replaces #4614).
+    Acceptance evidence: ported origin/integration...origin/int40-story-3120-s3a2 verbatim; the only conflict was review_prepare.rs, where #4604's inline credential and inventory loop now goes through ensure_in_inventory. That function checks is_credential_path first, so --anchor-findings and --run-review both refuse credential paths. Tests: root_credential_dirs_excluded_reported_and_refused_as_findings (anchor path, kept) and s3a2_run_review_refuses_findings_outside_the_inventory (now also asserts .netrc, .aws/credentials and nested/.docker/config.json are refused as 'credential path' on the run-review path). The custom-runner effort is re-validated against BASE_EFFORTS (review_runner.rs; the test asserts that 'max' is refused for AIDA_REVIEW_RUNNER_CMD). 16/16 targeted review_prepare:: + launch::review_runner:: tests pass.
+    Probes: the credential check runs before the inventory check, so a credential path gets the specific error. Matching is case-insensitive in is_credential_path, while the inventory check is exact-case (the A.rs test), and both refuse.
+    Residual: the diff is 431 insertions, over the 300 budget. That is the inherited #4614 size (pre-check passed at 69bd3b98) plus 33 golden-snapshot lines; this port adds no new scope.
+  created_at: 2026-11-26T03:38:08.813338968Z
+  modified_at: 2026-11-26T03:38:08.813338968Z
+  session_id: 01a215ddf67d
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a215f6-6162-7060-b942-5d647c2d1016
   author: joe
   content: |-
@@ -940,6 +952,13 @@ history:
   author: joe
   timestamp: 2026-11-26T03:13:55.868085846Z
   changes: []
+- id: 01a215de-2905-7602-bf19-936c7558d477
+  author: aida-session-start
+  timestamp: 2026-11-26T03:20:10.757267628Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
