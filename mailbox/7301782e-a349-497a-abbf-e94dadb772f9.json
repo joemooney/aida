@@ -1,0 +1,18 @@
+{
+  "id": "7301782e-a349-497a-abbf-e94dadb772f9",
+  "thread_id": "7301782e-a349-497a-abbf-e94dadb772f9",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795702605157,
+  "body": "- [STUCK-MERGE] #4656 is approved at 02ed97be and has not landed for 22 min (approved at 02ed97be57e0)\n  -> land #4656 (the reconciler shows STALE-CI-BASE: update branch from base)\n\n7 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 1 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
