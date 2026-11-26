@@ -9,12 +9,12 @@ description: |
   - AC1: port #4569's approved change onto current main (reference: origin/story-2897-fresh).
   - AC2: fix the lib-0 slowdown it introduced: two_node_ship_watch_rework_and_train_entry_points (155.9s vs 128.4s on main) and bug_2398_final_spawn_boundary_ratchet (33.7s vs under the SLOW threshold), with no test-budget changes; before/after timings in the PR body.
   - AC3: the PR title carries "(Refs STORY-2897 TASK-N)" form, or completes this task and refs STORY-2897.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T11:35:34.469183420Z
-modified_at: 2026-11-26T12:19:19.744184200Z
+modified_at: 2026-11-26T12:43:38.274556316Z
 req_type: Task
 tags:
 - landing
@@ -63,6 +63,25 @@ comments:
   modified_at: 2026-11-26T12:19:19.744184200Z
   session_id: 01a217ab36b6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a217e1-c3ac-7600-9764-da2cffa046d3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f3220a04d87ea755d43d2254d76e3b3d01d33785 (git diff origin/main...HEAD).
+    Acceptance evidence: AC1 the port is byte-identical to origin/story-2897-fresh's merge-base diff except the lazy-policy closure (checked with an interdiff of the two patches). help_surface_matches_golden_snapshot passes on this base, so the --needs golden plus the --pr reorder is correct here. AC2 isolated timings (lane runner, agent profile, host load 3-17): two_node_ship_watch_rework_and_train_entry_points main 109.6/112.7/143.6s vs branch 90.5/94.7/89.5s; bug_2398_final_spawn_boundary_ratchet main 7.49/7.40/7.37s vs branch 3.64/7.53/7.41s. In isolation the port is not slower, so the CI deltas look like shared-runner contention. The fix still removes the one avoidable cost: review record now reads the landing policy (3 git spawns) only for a WAITING verdict. AC3 title ends (TASK-3916); Refs STORY-2897 is in the body.
+    Probes: P1/P2 n/a (no new parsing). P3 the needs empty/1/N cases are covered by the existing story_2897 tests. P5 refusal paths unchanged: WAITING still loads and enforces the policy, every non-waiting verdict refuses non-empty needs without it, and story_2897_needs_only_on_waiting_verdicts and story_2897_submit_draft_validates_needs_under_the_launch_landing_policy still cover them. No test weakened.
+    Residual risk: readiness evaluate still loads the landing policy once per change report (3 git calls). I did not cache it per pass, because forge::Repository outlives the watch loop and caching there would freeze policy changes. make check-ci-fast exit 0.
+  created_at: 2026-11-26T12:43:21.388402437Z
+  modified_at: 2026-11-26T12:43:21.388402437Z
+  session_id: 01a217ab36b6
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a217e2-05a2-7361-b4af-8be589cc0069
+  author: aida-publication-done
+  content: Implementer push cfd2885e3a9b declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T12:43:38.274555113Z
+  modified_at: 2026-11-26T12:43:38.274555113Z
+  session_id: 01a217ab36b6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217a6-589a-7891-b915-54bdff4ed45d
   author: joe
@@ -79,6 +98,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a217e2-05a2-7361-b4af-8bd2f916ead0
+  author: aida-publication-done
+  timestamp: 2026-11-26T12:43:38.274553358Z
+  session_id: 01a217ab36b6
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 2d89ef450561e39de69593890f3ab7765146154b
