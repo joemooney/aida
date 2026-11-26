@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T16:58:24.284570996Z
+modified_at: 2026-11-26T17:05:56.003071171Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -86,6 +86,13 @@ comments:
   content: Commit 13d6554ba7 references this requirement
   created_at: 2026-11-26T16:58:24.284570996Z
   modified_at: 2026-11-26T16:58:24.284570996Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a218d2-2923-7ff1-9ad6-0c7115e0160a
+  author: dirtlab
+  content: Commit 76c2bcff3c references this requirement
+  created_at: 2026-11-26T17:05:56.003071171Z
+  modified_at: 2026-11-26T17:05:56.003071171Z
   session_id: 01a218a9014e
   harness_version: 2.1.319 (Claude Code)
 history:
