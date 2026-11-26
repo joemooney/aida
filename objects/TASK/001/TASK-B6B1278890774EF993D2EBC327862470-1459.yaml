@@ -1,5 +1,6 @@
 id: 01a214d6-d92d-7e63-a63f-6e3b5981d425
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1459
+agreed_id: TASK-3458
 title: 'Review follow-up: Test gap: no test drives ci_cache_findings / disk_headroom_light_report to an above-cap fi'
 description: |-
   From TASK-3910
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a21458-08a8-7ff0-8c95-48caa33bbb0d
   created_at: 2026-11-25T22:33:02.135172408Z
+history:
+- id: 01a21532-a539-7033-ba1c-9bea728d120b
+  author: joe
+  timestamp: 2026-11-26T00:12:50.361735490Z
+  changes: []
 filed_at:
   code_sha: 9a05bbe93970190e13a9f010fd8e9d0d78128a91
   branch: pr-4596

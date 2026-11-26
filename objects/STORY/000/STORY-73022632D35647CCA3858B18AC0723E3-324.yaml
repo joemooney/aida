@@ -1,5 +1,6 @@
 id: 01a214f3-87aa-7ea1-88bf-37aba2f409f9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-324
+agreed_id: STORY-3147
 title: 'Review PR-4598: [AI:claude] fix(train): resolve promotion specs from patch-new commits; linear promotion review boundary (BUG-2733)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2149c`) for branch `bug-2733-linear-promotion-specs`.
@@ -33,6 +34,10 @@ history:
 - id: 01a214f3-a98a-7622-9905-57c47b7dcaf1
   author: dirtlab
   timestamp: 2026-11-25T23:04:02.698426461Z
+  changes: []
+- id: 01a21532-aa66-7712-85ae-e33cc88f6cd7
+  author: joe
+  timestamp: 2026-11-26T00:12:51.686603024Z
   changes: []
 filed_at:
   code_sha: f03f5255aae977b47ceb09666ba5e0dc2024de6d

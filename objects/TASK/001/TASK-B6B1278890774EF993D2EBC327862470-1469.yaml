@@ -1,5 +1,6 @@
 id: 01a214f1-c635-7af0-893c-2d25749f06fb
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1469
+agreed_id: TASK-3449
 title: 'Review follow-up: STORY-3120 S3a (aida-cli-lib/src/launch/review_runner.rs RunnerCall::run): the deadline an'
 description: |-
   From TASK-3882
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20f19-b0f7-7b60-8ff2-b117b95009d5
   created_at: 2026-11-25T23:02:37.805256736Z
+history:
+- id: 01a21532-a253-7950-aa49-035903a85653
+  author: joe
+  timestamp: 2026-11-26T00:12:49.619932879Z
+  changes: []
 filed_at:
   code_sha: a8592b5a3072acda740c69bd9ace9ceb35884674
   branch: pr-4599

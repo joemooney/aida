@@ -1,5 +1,6 @@
 id: 01a214ce-ec70-7720-9d1f-725549e16ef9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-321
+agreed_id: STORY-3144
 title: 'Review PR-4597: [AI:claude] fix(review-watch): release admission during forge reads (BUG-2765)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21476`) for branch `fix-review-watch-forge-admission`.
@@ -71,6 +72,10 @@ history:
   timestamp: 2026-11-25T22:24:42.219709296Z
   session_id: 01a2147671bd
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21532-a872-7ab2-bda7-636851239930
+  author: joe
+  timestamp: 2026-11-26T00:12:51.186834619Z
   changes: []
 filed_at:
   code_sha: 5f2421b51c8220f2ba2035bb3bf7140b1e493b03

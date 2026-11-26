@@ -1,5 +1,6 @@
 id: 01a21524-f80f-7041-b4b6-7c8ca5716f6b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1471
+agreed_id: TASK-3440
 title: 'Review follow-up: PassClaim::decide''s staleness recheck (aida-cli-lib/src/review_watch.rs, decide) compares '
 description: |-
   From BUG-2765
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a21471-4e55-7201-be4e-604408724146
   created_at: 2026-11-25T23:57:54.063624233Z
+history:
+- id: 01a21532-a041-7e80-8ba7-b2ef28403a29
+  author: joe
+  timestamp: 2026-11-26T00:12:49.089842794Z
+  changes: []
 filed_at:
   code_sha: 6657fe56512ef5c5774381433b10bfe2c18168d9
   branch: pr-4597

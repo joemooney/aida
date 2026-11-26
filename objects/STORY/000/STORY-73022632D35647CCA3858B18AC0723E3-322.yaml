@@ -1,5 +1,6 @@
 id: 01a214ea-0050-7592-bb02-14303f16cf1c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-322
+agreed_id: STORY-3146
 title: 'Review PR-4600: [AI:claude] feat(train): complete landed trailer specs at merge (STORY-3006)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2149c`) for branch `story-3006-complete-at-merge`.
@@ -65,6 +66,10 @@ history:
   timestamp: 2026-11-25T22:53:49.288183035Z
   session_id: 01a2149cfd85
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21532-a957-7be2-9ab0-cb42c9e0eab2
+  author: joe
+  timestamp: 2026-11-26T00:12:51.415166125Z
   changes: []
 filed_at:
   code_sha: f24ccdbb0c97dd1418c92a4fc6f034d228770ccb

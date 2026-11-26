@@ -1,5 +1,6 @@
 id: 01a214f6-bed4-7e82-8bc1-8a6b8462760e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1470
+agreed_id: TASK-3453
 title: 'Review follow-up: complete_landed_specs (pr_train.rs ~5470) discards the scan''s second tuple element and aut'
 description: |-
   From STORY-3006
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a2050a-58ee-7470-a810-e7b93d9a7867
   created_at: 2026-11-25T23:07:24.756075635Z
+history:
+- id: 01a21532-a372-75a3-b245-8c594365ef69
+  author: joe
+  timestamp: 2026-11-26T00:12:49.906976030Z
+  changes: []
 filed_at:
   code_sha: f24ccdbb0c97dd1418c92a4fc6f034d228770ccb
   branch: pr-4600
