@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:17:13.832602291Z
-modified_at: 2026-11-26T18:38:11.233951496Z
+modified_at: 2026-11-26T19:05:38.485835571Z
 req_type: Bug
 tags:
 - lanes
@@ -86,6 +86,12 @@ comments:
     - BUG-2772 AC1's second clause (a pin protecting a commit on no remote is refused with the salvage hint) and AC3's matching unique-commit refusal test are not implemented: the advisor's authoritative brief on the spec (comment 0) superseded the remote-reachability rule with a no-clone + no-lease predicate, and the implementer flagged the divergence (comments 1-2). In practice no data is at risk: a s
   created_at: 2026-11-26T18:38:11.233951496Z
   modified_at: 2026-11-26T18:38:11.233951496Z
+- id: 01a2193f-c1b5-72e3-8a67-0007bf52eeee
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2772-seat-pin-ref` at head `b9e84bdb3a766f206e375922b64ab031c5f13a5f`.'
+  created_at: 2026-11-26T19:05:38.485830102Z
+  modified_at: 2026-11-26T19:05:38.485830102Z
+  session_id: 01a218e76317
 history:
 - id: 01a218e0-ea73-7a92-9d85-2f50a6c28366
   author: joe
