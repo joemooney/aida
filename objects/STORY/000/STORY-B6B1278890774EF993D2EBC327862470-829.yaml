@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T20:34:40.716469326Z
+modified_at: 2026-11-26T21:33:23.124953239Z
 req_type: Story
 tags:
 - integration
@@ -1434,6 +1434,27 @@ comments:
   modified_at: 2026-11-26T20:34:40.716469326Z
   session_id: 01a21959d98a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a219c7-46cd-7a03-b837-eee5d289c9ad
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR #4690 (S5c, head e5db545308): PASS (security lens). Strict tier, so it waits for the independent verdict and the advisor merge.
+    - C, --challenger-agent:
+      - The override goes through review_vendor (the allowlist) before any argv is built.
+      - challenger_call takes `forced` ahead of pick_challenger, so forged [AI:*] tags cannot steer it. The test covers a forged [AI:codex].
+      - A missing vendor gets an ensure! refusal, and the finder's vendor is never swapped in. Under AIDA_REVIEW_RUNNER_CMD it bails.
+      - The binary is still resolved by RunnerCall::program(): absolute, canonical, outside the checkout.
+      - A failed challenge returns a context error naming the vendor and --challenger-agent. It fails closed, and the test covers "rate limit exceeded".
+    - D: rename_sources applies classify_path_exclusion (secret, substrate, generated/lockfile, user glob) to the old paths, not only is_credential_path. The test cross-checks that inventory classification drops the same renames.
+    - H1: acceptance_markdown and the playbook checklist now go through fenced(). The inert test is extended to head_ref, excluded_files, challenger_agent and note.
+    - H2/I/J2: a gh failure without reading stdin now carries its stderr. After the timeout kill, ps confirms gh and its sleep child are gone (zombies count as gone; 5s settle). The ENOENT and EACCES errnos are kept via command_output_with_timeout_io, which never returns SpawnFailed in Ok.
+    - Nits, non-blocking (S5d may take them):
+      - n1: with --challenger-agent and neither --agent nor AIDA_REVIEW_RUNNER_CMD set, the refusal names AIDA_REVIEW_RUNNER_CMD. The real cause is that --agent is missing. Suggest bailing with "--challenger-agent needs --agent" when finder.agent is None.
+      - n2: the EACCES assertion assumes tests do not run as root (the PR says so).
+    - Carried to S5d: F docs, including literal pathspecs for --scan --path.
+  created_at: 2026-11-26T21:33:23.124953239Z
+  modified_at: 2026-11-26T21:33:23.124953239Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
