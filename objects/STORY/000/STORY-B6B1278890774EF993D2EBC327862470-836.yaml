@@ -26,6 +26,17 @@ feature: Uncategorized
 created_at: 2026-11-26T15:20:40.004099676Z
 modified_at: 2026-11-26T15:20:40.004099676Z
 req_type: Story
+relationships:
+- rel_type: Child
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-26T15:20:52.126126529Z
+history:
+- id: 01a21872-4482-70c2-adeb-85e10a5821e5
+  author: joe
+  timestamp: 2026-11-26T15:21:11.554171776Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cb26bf94b379497686eaaaae5ad1e1e4b2ab18a0
   branch: main
