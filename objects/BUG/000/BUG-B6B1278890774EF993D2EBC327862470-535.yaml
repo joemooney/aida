@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:42:55.537871310Z
-modified_at: 2026-11-26T14:51:44.214590887Z
+modified_at: 2026-11-26T14:56:46.778922487Z
 req_type: Bug
 tags:
 - admission
@@ -38,6 +38,26 @@ comments:
   modified_at: 2026-11-26T14:47:50.263899009Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2185b-eaba-7b20-9155-532a67d657fc
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC2 (unit):** `bug2774_*` tests in `advisor_loop_service.rs` (included by both services) prove a deputy host whose `/proc/<pid>/exe` is not the live image, or carries the `(deleted)` marker, is projected into `train-status` JSON (`deputy_binary`: name, pid, path, binary age, stale, deleted) and a human line naming the fix (restart with the binding reset, docs/cli/06-roles-sessions.md#review-watch-service-recovery); a live-image deputy reports nothing. `aida doctor check deputy-binary` reuses the same probe (unit test over the finding builder).
+    - **AC1:** see question below — punted as a design fork, not implemented in this slice.
+    - **AC3:** covered for AC2 only.
+
+    ### Expected files
+    - `aida-cli-lib/src/advisor_loop_service.rs`
+    - `aida-cli-lib/src/doctor_cmd.rs`, `aida-cli-lib/src/doctor_root.rs`
+
+    ### Ambiguities / conflicts as questions
+    - AC1: recovery holds the train journal `run.lock` for its whole CI wait. If the auto-train drops its admission claim during that wait, `admission_owner::acquire_mode` refuses every contender with "prior train is not quiescent" (`admission_train_running`), INCLUDING review-watch controllers that today join the auto-train's live receipt (`joining_train`). So a plain release regresses review-watch, a waiting manual train still cannot run (its intent still blocks review-watch for wait_secs), and the re-take for the decision itself yields to that manual train's intent. Which shape is wanted: (A) a parked-recovery marker that `acquire_mode` treats as a joinable live train and that lets the re-take bypass train intents, or (B) restructure recovery to drop the run.lock too while waiting (journal re-read under lock to decide)? Both change admission authority (strict tier) and need an advisor sketch.
+  created_at: 2026-11-26T14:56:46.778922487Z
+  modified_at: 2026-11-26T14:56:46.778922487Z
+  session_id: 01a21856ec44
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21852-7ad4-71d0-b20d-03db8605d6fd
   author: joe

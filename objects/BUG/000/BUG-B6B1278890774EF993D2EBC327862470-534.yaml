@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-26T14:45:14.898182228Z
+modified_at: 2026-11-26T14:54:51.442114723Z
 req_type: Bug
 tags:
 - admission
@@ -54,6 +54,24 @@ comments:
     - BUG-2697 test pinned `lease_id = None` as refused; this brief reverses that. Keeping the clone-present guard for unbound claims. A reused PID with a legacy `linux-starttime:` identity stays not-dead (unchanged proc identity rules).
   created_at: 2026-11-26T14:45:14.898182228Z
   modified_at: 2026-11-26T14:45:14.898182228Z
+  session_id: 01a2184e943e
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2185a-2832-7f13-a87a-cf679d69c367
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fca639500a
+
+    Acceptance evidence:
+    - AC1: coordination.rs exited_holder_is_dead — when lease_id is None, eligible once the existing same-host / non-process-backed / non-review / dead-creator / expired-heartbeat checks pass and the clone's .aida exists. salvage_exited_claim no longer errors for unbound (it has no seat). Test bug2773_unbound_claim_with_dead_creator_is_listed_and_healed: collect_doctor_findings_at lists shared-7e3e3d5a-…, targeted_stale_finding accepts it, heal_exited_claim deletes it. Passed (lane job, 23/23 coordination::tests::bug2*).
+    - AC2: coordination::shared_heal_id is the single predicate for doctor_root::shared_stale_finding (check + targeted heal) and implementer_refusal; the refusal names the heal only when Some, otherwise it says not eligible (same host) or check on host X (other host). bug2655_force_refuses_fresh_or_live_creator now asserts no heal command for fresh/live holders.
+    - AC3: the test above uses the dell1 shape (lease=unbound, launcher=unbound, legacy linux-starttime:6708816 creator identity on a dead pid, heartbeat 2026-11-15T14:47Z).
+
+    Probes: (5, authority) callers of exited_holder_is_dead: doctor finding, targeted heal (re-checked under the store lock), admission --force-claim. Unbound claims now also become --force-claim reclaimable on the same evidence, which is intended. Fail-open check: a missing clone still refuses (asserted for bound and unbound). Lanes register only with a lease, so no worker record can bind an unbound claim.
+    Test changes: the BUG-2697 assertion that unbound is always refused is replaced by an assertion that unbound with an absent clone is refused; the BUG-2655 assertion that pinned the hint for an ineligible holder is inverted, as AC2 requires.
+    Residual risk: a pid that was reused, with only a legacy linux-starttime identity, still counts as not dead (proc identity rules unchanged). If the dell1 pid were reused rather than absent, the claim would still be held.
+  created_at: 2026-11-26T14:54:51.442114723Z
+  modified_at: 2026-11-26T14:54:51.442114723Z
   session_id: 01a2184e943e
   harness_version: 2.1.319 (Claude Code)
 history:

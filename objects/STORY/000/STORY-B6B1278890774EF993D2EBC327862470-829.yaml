@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T14:30:35.560499017Z
+modified_at: 2026-11-26T14:58:34.414273294Z
 req_type: Story
 tags:
 - integration
@@ -1143,6 +1143,25 @@ comments:
   modified_at: 2026-11-26T14:26:43.468124717Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2185d-8f2e-7043-9fb1-2c7a8cd6b933
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 88005ae48d (S5a, branch int46-story-3120-s5; items (1)-(3) of the S5 brief; Refs-only)
+
+    Acceptance evidence:
+    - (1) [evidence: behavioral-test] --post-comment is opt-in: off by default, refused without --pr by clap (requires) AND by an early handler check, since clap let '--from X --post-comment' through. Test s5_post_comment_is_opt_in_and_requires_pr (default false; clap refusal; handler refusal before any forge resolves). It is a CLI flag only: no env var, review-rules key or seat config reads it.
+    - (2) [evidence: behavioral-test] render_bundle_markdown now renders anchored findings (it did not before) and fences every runner-supplied string. Messages and challenger reasons go in indented fenced blocks whose fence outruns any backtick run; paths, severity, category and coverage lists are code spans with control chars flattened. Test s5_posted_comment_renders_agent_text_inert posts @mentions, <img onerror>, **bold**, links, headings and nested fences through RecordingForge, then checks that nothing live survives outside code.
+    - (3) [evidence: manual-inspection] Posting goes through Forge::comment on pr_forge(), the same client the --pr metadata read uses. Self-review fix: GitHubForge::comment now passes -R <pinned origin repo> when metadata_repo is set (only for_review sets it), so a gh default-repo mismatch cannot post onto another repo's PR N.
+    - The post happens before the --fail-on and coverage bails, so a failing review still publishes. A post failure is a non-zero exit, never a silent pass.
+
+    Probes: fence breakout (backtick runs, CR/LF, unindented lines ending a list item) is covered by the run-length fence and the 2-space indent on every body line. Linked-spec acceptance and playbook text are trusted-base or store content and are not fenced.
+
+    Residual / remaining for S5b: (4) full docs (showcase slide 07, --run-review/--adversarial/--effort/--challenger-effort resolution order, --fail-on with refuted findings). Only a --post-comment section went into docs/review-process.md here. (5) --challenger-agent override plus unauthenticated/rate-limited fallback. (6) rename old-path filter applying all exclusions. Note on (6): classify_compiled already excludes a renamed entry whose old path matches any exclusion, so today the credential-only filter in handle_review_prepare is defence in depth. S5b should still switch it to classify_compiled for the old path. A comment over GitHub's 65,536-char body limit fails loudly (gh error); it is not truncated.
+  created_at: 2026-11-26T14:58:34.414273294Z
+  modified_at: 2026-11-26T14:58:34.414273294Z
+  session_id: 01a2184399d3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
