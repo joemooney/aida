@@ -25,12 +25,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4631` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T07:11:32.189755576Z
-modified_at: 2026-11-26T07:11:40.483300965Z
+modified_at: 2026-11-26T09:15:24.138931268Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,12 @@ relationships:
   target_id: 01a215cd-369e-74e1-9f9b-d98fc2cc144f
   created_at: 2026-11-26T07:11:40.483234574Z
   created_by: dirtlab
+comments:
+- id: 01a21723-606a-71d2-a531-e4590f8a7ef5
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4631 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-11-26T09:15:24.138930096Z
+  modified_at: 2026-11-26T09:15:24.138930096Z
 history:
 - id: 01a216b2-2940-7c11-bb90-d54fc147f8a1
   author: dirtlab
@@ -51,6 +57,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21723-606a-71d2-a531-e44d00915409
+  author: aida-auto-bump
+  timestamp: 2026-11-26T09:15:24.138919021Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: f581c7122990913411cdfa9104546a6ae698104c
   branch: train-bisect-drop-moved
@@ -60,3 +73,7 @@ filed_at:
   vendor: claude
   session: 01a21688f171
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T09:15:24.138913681Z
+  completion_sha: 852cb9c4a4da3e6f5c235f2b99d184c7a759a0ab
