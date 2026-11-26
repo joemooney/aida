@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4688` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T21:25:17.697573700Z
-modified_at: 2026-11-26T21:25:21.957092882Z
+modified_at: 2026-11-26T23:31:22.216429593Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,12 @@ relationships:
   target_id: 01a21969-213a-70f3-8fb4-861980bfdfb9
   created_at: 2026-11-26T21:25:21.957057095Z
   created_by: dirtlab
+comments:
+- id: 01a21a33-09e8-7b90-a92f-a67f014af6ab
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4688 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-26T23:31:22.216550740Z
+  modified_at: 2026-11-26T23:31:22.216550740Z
 history:
 - id: 01a219bf-b612-7d52-ab56-1e1db63474ef
   author: dirtlab
@@ -43,6 +49,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21a33-09e8-7b90-a92f-a680039ba487
+  author: aida-auto-bump
+  timestamp: 2026-11-26T23:31:22.216554570Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 34653344c1e77b4260ca91a7b493588aae96dd19
   branch: task-3921-rw-reclaim-guard
@@ -52,3 +65,6 @@ filed_at:
   vendor: claude
   session: 01a2198cd2c9
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T23:31:22.216549352Z
