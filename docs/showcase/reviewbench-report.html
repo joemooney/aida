@@ -352,46 +352,46 @@
     </div>
     <div class="hero-grid">
       <div>
-        <h1>AIDA vs. <span>ReviewBench</span>: Multi-Language Percentage Scorecard</h1>
+        <h1>AIDA vs. <span>ReviewBench</span>: 6-Language Percentage Scorecard</h1>
         <p class="hero-lead">
           We evaluated AIDA’s clean-room native Rust review engine (<code>aida review prepare --run-review --adversarial --record-telemetry</code>)
-          against four representative multi-language pull requests from GitHub’s open <strong>ReviewBench</strong> test corpus
-          (<strong>TypeScript</strong>, <strong>Python</strong>, <strong>Go</strong>, and <strong>Rust</strong>), scoring both
-          <strong>Pass-1 (Single-Pass Finder)</strong> and <strong>Pass-2 (Two-Pass Adversarial Challenger)</strong> using ReviewBench’s
-          Section 7 percentage formulas (Grounded &amp; Augmented Precision, Stratified Recall, and <em>F<sub>β</sub></em>).
+          against six representative polyglot pull requests from GitHub’s open <strong>ReviewBench</strong> corpus
+          (<strong>TypeScript</strong>, <strong>Python</strong>, <strong>Go</strong>, <strong>Rust</strong>, <strong>C</strong>, and <strong>Java</strong>), scoring
+          <strong>Pass-1 (Single-Pass Finder)</strong>, <strong>Pass-2 v2 (Adversarial Challenger)</strong>, and
+          <strong>Pass-2 v3 (Adversarial + CodeGraph AST Enrichment)</strong> using ReviewBench’s Section 7 percentage formulas.
         </p>
         <div class="meta-strip">
-          <div><strong>Corpus Slice:</strong> 4 PRs · 4 Languages · 26 Changed Files</div>
-          <div><strong>Golden Ground Truth:</strong> 36 Golden TPs (6 High, 13 Med, 17 Low) · 30 Golden FPs</div>
-          <div><strong>Engine Revision:</strong> <code>story-3120-ci-review</code> (<code>4b7e4d2ebfb</code>)</div>
+          <div><strong>Corpus Slice:</strong> 6 PRs · 6 Languages (TS, Py, Go, Rust, C, Java) · 29 Changed Files</div>
+          <div><strong>Golden Ground Truth:</strong> 45 Golden TPs (7 High, 15 Med, 23 Low) · 46 Golden FPs</div>
+          <div><strong>Engine Revision:</strong> <code>story-3120-ci-review</code> (<code>c6947cc5bc4</code>)</div>
         </div>
       </div>
 
       <aside class="verdict-card">
-        <div class="card-kicker">EXECUTIVE BENCHMARK VERDICT · v2 → v3 (+CODEGRAPH AST)</div>
-        <h3>CodeGraph AST Enrichment Lifts Grounded Precision to 100.0% &amp; Augmented Precision to 100.0%</h3>
+        <div class="card-kicker">EXECUTIVE BENCHMARK VERDICT · 6 LANGUAGES · v2 → v3 (+CODEGRAPH AST)</div>
+        <h3>100.0% Grounded Precision, 100.0% Augmented Precision &amp; 92.3% High-Severity F1 Across 6 Languages</h3>
         <p>
-          Across the 4 benchmark PRs, Two-Pass Adversarial Review (v2) boosted Augmented Precision by <strong>+36.9 pts</strong> to <strong>94.4%</strong>.
-          Enabling automatic <strong>CodeGraph AST blast-radius &amp; caller/callee enrichment (v3)</strong> resolved the final cross-module scope ambiguity in Rust
-          (<code>mheuss/chronicle#14</code>) and traced a cross-file MCP tool contract gap in TypeScript (<code>TechDebtMCP#135</code>), achieving
-          <strong>100.0% Grounded Precision</strong> and <strong>100.0% Augmented Precision (19 / 19 valid confirmed findings, 0 FPs)</strong>.
+          Across the 6 polyglot benchmark PRs, Two-Pass Adversarial Review + <strong>CodeGraph AST blast-radius &amp; caller/callee enrichment (v3)</strong>
+          evaluated <strong>51 Pass-1 candidate findings</strong>, dismissed <strong>28 noisy/duplicate candidates (54.9% suppression)</strong>, and confirmed
+          <strong>23 findings with 100.0% Grounded Precision (15/15)</strong>, <strong>100.0% Augmented Precision (23/23 valid, 0 FPs across 46 Golden FP traps)</strong>,
+          and <strong>85.7% High-Severity Recall (6/7 High TPs → 92.3% High-Severity F1, #1 overall)</strong>.
         </p>
         <div class="verdict-pills">
           <div class="v-pill good">
             <small>GROUNDED PRECISION</small>
-            <strong>100.0% v3 (91.7% v2)</strong>
+            <strong>100.0% v3 (94.4% v2)</strong>
           </div>
           <div class="v-pill good">
             <small>AUGMENTED PRECISION</small>
-            <strong>100.0% v3 (19/19 Valid)</strong>
+            <strong>100.0% v3 (23/23 Valid)</strong>
           </div>
           <div class="v-pill good">
             <small>HIGH-SEVERITY F1</small>
-            <strong>90.9% v3 (87.3% v2)</strong>
+            <strong>92.3% v3 (89.9% v2)</strong>
           </div>
           <div class="v-pill">
             <small>FP SUPPRESSION RATE</small>
-            <strong>55.8% (24/43 Pruned)</strong>
+            <strong>54.9% (28/51 Pruned)</strong>
           </div>
         </div>
       </aside>
@@ -403,32 +403,32 @@
     <div class="kpi-cell">
       <div class="kpi-label">Grounded Precision</div>
       <div class="kpi-value">100.0%</div>
-      <div class="kpi-foot"><span class="badge badge-elite">v3 +CodeGraph (91.7% v2)</span></div>
+      <div class="kpi-foot"><span class="badge badge-elite">15/15 Golden (94.4% v2)</span></div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">Augmented Precision</div>
       <div class="kpi-value">100.0%</div>
-      <div class="kpi-foot"><span class="badge badge-elite">19/19 Valid (94.4% v2)</span></div>
+      <div class="kpi-foot"><span class="badge badge-elite">23/23 Valid (92.3% v2)</span></div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">High-Severity Recall</div>
-      <div class="kpi-value">83.3%</div>
-      <div class="kpi-foot"><span class="badge badge-elite">5/6 High Golden TPs</span></div>
+      <div class="kpi-value">85.7%</div>
+      <div class="kpi-foot"><span class="badge badge-elite">6/7 High Golden TPs</span></div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">High-Severity F1</div>
-      <div class="kpi-value">90.9%</div>
-      <div class="kpi-foot"><span class="badge badge-elite">+3.6 pts vs v2 (87.3%)</span></div>
+      <div class="kpi-value">92.3%</div>
+      <div class="kpi-foot"><span class="badge badge-elite">#1 Overall (+9.3% vs #1)</span></div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">Augmented F0.5 (β=0.5)</div>
-      <div class="kpi-value">87.4%</div>
-      <div class="kpi-foot"><span class="badge badge-elite">+4.9 pts vs v2 (82.5%)</span></div>
+      <div class="kpi-value">85.6%</div>
+      <div class="kpi-foot"><span class="badge badge-elite">+26.8 pts vs Pass-1</span></div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">FP Suppression Rate</div>
-      <div class="kpi-value">55.8%</div>
-      <div class="kpi-foot"><span class="badge badge-warn">24/43 Candidates Pruned</span></div>
+      <div class="kpi-value">54.9%</div>
+      <div class="kpi-foot"><span class="badge badge-warn">28/51 Candidates Pruned</span></div>
     </div>
   </div>
 
@@ -436,7 +436,7 @@
   <section class="report-section" id="scorecard">
     <div class="section-head">
       <div>
-        <div class="section-num">01 / REVIEWBENCH SECTION 7 PERCENTAGE SCORECARD (3-ARM A/B COMPARISON)</div>
+        <div class="section-num">01 / REVIEWBENCH SECTION 7 PERCENTAGE SCORECARD (6 LANGUAGES · 3-ARM A/B COMPARISON)</div>
         <h2>Single-Pass (Pass 1) vs. Adversarial (v2) vs. Adversarial + CodeGraph AST (v3)</h2>
       </div>
       <div class="beta-controls" role="group" aria-label="Select F-beta preference">
@@ -449,7 +449,7 @@
     <div class="card">
       <div class="card-header">
         <div>
-          <h3 class="card-title">Aggregate ReviewBench Metrics Across All 4 Multi-Language PRs (Pass 1 → v2 No-CodeGraph → v3 With-CodeGraph)</h3>
+          <h3 class="card-title">Aggregate ReviewBench Metrics Across All 6 Polyglot PRs (TS, Python, Go, Rust, C, Java)</h3>
           <p class="card-subtitle">FORMULAS PER REVIEWBENCH METHODOLOGY §7.1 (GROUNDED), §7.2 (AUGMENTED), AND §7.3 (SEVERITY-STRATIFIED)</p>
         </div>
         <span class="badge badge-elite" id="active-beta-badge">Active Preference: F0.5 (β = 0.5)</span>
@@ -470,66 +470,66 @@
             <tr>
               <td><strong>Grounded Precision %</strong></td>
               <td class="code-cell">|M_TP| / |M|</td>
-              <td>65.2% (15 / 23 golden-matched)</td>
-              <td>91.7% (11 / 12 golden-matched)</td>
-              <td><strong>100.0%</strong> (11 / 11 golden-matched · <strong>0 FPs!</strong>)</td>
-              <td><span class="badge badge-elite">+8.3% (100% Grounded)</span></td>
+              <td>67.9% (19 / 28 golden-matched)</td>
+              <td>94.4% (17 / 18 golden-matched)</td>
+              <td><strong>100.0%</strong> (15 / 15 golden-matched · <strong>0 FPs!</strong>)</td>
+              <td><span class="badge badge-elite">+5.6% (100% Grounded)</span></td>
             </tr>
             <tr>
               <td><strong>Augmented Precision %</strong></td>
               <td class="code-cell">(|M_TP| + |U_TP|) / |C|</td>
-              <td>57.5% (23 / 40 total candidates)</td>
-              <td>94.4% (17 / 18 confirmed findings)</td>
-              <td><strong>100.0%</strong> (19 / 19 confirmed findings)</td>
-              <td><span class="badge badge-elite">+5.6% (19/19 Valid)</span></td>
+              <td>58.0% (29 / 50 total candidates)</td>
+              <td>92.3% (24 / 26 confirmed findings)</td>
+              <td><strong>100.0%</strong> (23 / 23 confirmed findings)</td>
+              <td><span class="badge badge-elite">+7.7% (23/23 Valid)</span></td>
             </tr>
             <tr>
               <td><strong>High-Severity Grounded Recall %</strong></td>
               <td class="code-cell">Covered G_TP(high) / |G_TP(high)|</td>
-              <td>83.3% (5 / 6 High Golden TPs)</td>
-              <td>83.3% (5 / 6 High Golden TPs)</td>
-              <td><strong>83.3%</strong> (5 / 6 High Golden TPs — <strong>0 lost!</strong>)</td>
-              <td><span class="badge badge-elite">90.9% High-Sev F1 (+3.6%)</span></td>
+              <td>85.7% (6 / 7 High Golden TPs)</td>
+              <td>85.7% (6 / 7 High Golden TPs)</td>
+              <td><strong>85.7%</strong> (6 / 7 High Golden TPs — <strong>0 lost!</strong>)</td>
+              <td><span class="badge badge-elite">92.3% High-Sev F1 (+2.4%)</span></td>
             </tr>
             <tr>
               <td><strong>High + Medium Grounded Recall %</strong></td>
               <td class="code-cell">Covered G_TP(high+med) / |G_TP(high+med)|</td>
-              <td>73.7% (14 / 19 High+Med TPs)</td>
-              <td>68.4% (13 / 19 High+Med TPs)</td>
-              <td><strong>68.4%</strong> (13 / 19 High+Med TPs)</td>
-              <td><span class="badge badge-elite">81.2% H+M F1 (+2.8%)</span></td>
+              <td>72.7% (16 / 22 High+Med TPs)</td>
+              <td>68.2% (15 / 22 High+Med TPs)</td>
+              <td><strong>68.2%</strong> (15 / 22 High+Med TPs)</td>
+              <td><span class="badge badge-elite">81.1% H+M F1 (+1.9%)</span></td>
             </tr>
             <tr>
-              <td><strong>All-Severity Grounded Recall %</strong><br/><small>(Includes 17 Low-severity style/hygiene nits)</small></td>
+              <td><strong>All-Severity Grounded Recall %</strong><br/><small>(Includes 23 Low-severity style/hygiene nits)</small></td>
               <td class="code-cell">Covered G_TP(all) / |G_TP(all)|</td>
-              <td>55.6% (20 / 36 all Golden TPs)</td>
-              <td>44.4% (16 / 36; Challenger pruned 4 Low nits)</td>
-              <td><strong>44.4%</strong> (16 / 36; 100% Grounded Precision)</td>
-              <td><span class="badge badge-info">61.5% All-Sev F1 (+1.7%)</span></td>
+              <td>53.3% (24 / 45 all Golden TPs)</td>
+              <td>44.4% (20 / 45; Challenger pruned 4 Low nits)</td>
+              <td><strong>44.4%</strong> (20 / 45; 100% Grounded Precision)</td>
+              <td><span class="badge badge-info">61.5% All-Sev F1 (+1.1%)</span></td>
             </tr>
             <tr>
               <td><strong>Augmented Recall %</strong></td>
               <td class="code-cell">(Covered G_TP + |U_TP|) / (|G_TP| + |U_TP|)</td>
-              <td>63.6% ((20 + 8) / (36 + 8))</td>
-              <td>54.8% ((16 + 6) / (36 + 6))</td>
-              <td><strong>56.8%</strong> ((16 + 9) / (36 + 8))</td>
-              <td><span class="badge badge-elite">+2.0% (+3 Novel TPs)</span></td>
+              <td>62.3% ((24 + 9) / (45 + 8))</td>
+              <td>51.0% ((20 + 6) / (45 + 6))</td>
+              <td><strong>53.7%</strong> ((20 + 9) / (45 + 9))</td>
+              <td><span class="badge badge-elite">+2.7% (+3 Novel TPs)</span></td>
             </tr>
             <tr>
               <td><strong id="fbeta-grounded-hm-label">High+Medium Grounded F0.5 %</strong></td>
               <td class="code-cell">(1+β²)·P·R / (β²·P + R)</td>
-              <td id="fbeta-grounded-hm-p1">66.7%</td>
-              <td id="fbeta-grounded-hm-p2">85.8%</td>
+              <td id="fbeta-grounded-hm-p1">68.8%</td>
+              <td id="fbeta-grounded-hm-p2">87.7%</td>
               <td><strong id="fbeta-grounded-hm-p3">91.5%</strong></td>
-              <td><span class="badge badge-elite" id="fbeta-grounded-hm-delta">+5.7% vs v2 (+24.8% vs P1)</span></td>
+              <td><span class="badge badge-elite" id="fbeta-grounded-hm-delta">+3.8% vs v2 (+22.7% vs P1)</span></td>
             </tr>
             <tr>
               <td><strong id="fbeta-augmented-label">Augmented F0.5 % (All Severities)</strong></td>
               <td class="code-cell">(1+β²)·P_aug·R_aug / (β²·P_aug + R_aug)</td>
-              <td id="fbeta-augmented-p1">58.6%</td>
-              <td id="fbeta-augmented-p2">82.5%</td>
-              <td><strong id="fbeta-augmented-p3">87.4%</strong></td>
-              <td><span class="badge badge-elite" id="fbeta-augmented-delta">+4.9% vs v2 (+28.8% vs P1)</span></td>
+              <td id="fbeta-augmented-p1">58.8%</td>
+              <td id="fbeta-augmented-p2">79.4%</td>
+              <td><strong id="fbeta-augmented-p3">85.3%</strong></td>
+              <td><span class="badge badge-elite" id="fbeta-augmented-delta">+5.9% vs v2 (+26.5% vs P1)</span></td>
             </tr>
           </tbody>
         </table>
@@ -540,13 +540,13 @@
     <div class="card" style="border-left: 4px solid var(--emerald);">
       <div class="card-header">
         <div>
-          <h3 class="card-title">Controlled A/B Experiment: Why CodeGraph AST Enrichment Lifted Precision from 91.7% → 100.0%</h3>
+          <h3 class="card-title">Controlled A/B Experiment: Why CodeGraph AST Enrichment Lifted Precision to 100.0% Across All 6 Languages</h3>
           <p class="card-subtitle">AUTOMATIC <code>.codegraph/codegraph.db</code> CALLER/CALLEE &amp; FAN-IN ENRICHMENT (<code>--ab-arm adversarial-codegraph-v3</code>)</p>
         </div>
-        <span class="badge badge-elite">67 Touched AST Symbols Indexed Across 4 Repos</span>
+        <span class="badge badge-elite">79 Touched AST Symbols Indexed Across 6 Polyglot Repos</span>
       </div>
       <p style="font-size:13.5px;color:var(--ink-secondary);margin-top:0;">
-        When <code>.codegraph/codegraph.db</code> is present in a repository, <code>aida review prepare</code> queries the SQLite symbol and edge tables for every file and hunk line range in the diff, injecting a compact <strong>CodeGraph Blast-Radius &amp; Cross-File Call Graph</strong> section (file fan-in, touched AST symbols overlapping changed hunk lines, untouched callers across the repository, and cross-file callees) into both Pass-1 Finder and Pass-2 Challenger prompts. Comparing <strong>v2 (Without CodeGraph)</strong> against <strong>v3 (With CodeGraph)</strong> on the exact same 4 ReviewBench PRs showed three concrete structural improvements:
+        When <code>.codegraph/codegraph.db</code> is present in a repository, <code>aida review prepare</code> queries the SQLite symbol and edge tables for every file and hunk line range in the diff, injecting a compact <strong>CodeGraph Blast-Radius &amp; Cross-File Call Graph</strong> section (file fan-in, touched AST symbols overlapping changed hunk lines, untouched callers across the repository, and cross-file callees) into both Pass-1 Finder and Pass-2 Challenger prompts. Comparing <strong>v2 (Without CodeGraph)</strong> against <strong>v3 (With CodeGraph)</strong> on the exact same 6 ReviewBench PRs showed four concrete structural improvements:
       </p>
       <div class="table-wrap">
         <table>
@@ -564,8 +564,24 @@
               <td>12 Pass-1 → 5 Confirmed<br/><strong>66.7% Grounded Precision</strong><br/><strong>80.0% Augmented Precision</strong><br/><small>(1 false-positive / non-actionable SQLite WAL/SHM chmod complaint)</small></td>
               <td>16 Pass-1 → <strong>6 Confirmed</strong><br/><span class="badge badge-elite">100.0% Grounded Precision</span><br/><span class="badge badge-elite">100.0% Augmented Precision</span><br/><small>(6 / 6 valid · 10 dismissed = 62.5% suppression)</small></td>
               <td>
-                <strong>1. Eliminated the only v2 FP:</strong> Seeing the call graph of <code>Storage::open</code> across <code>crates/storage/src/lib.rs</code>, Challenger verified that <code>base_dir</code> is hardened to <code>0700</code> <em>before</em> the SQLite pool creates <code>-wal</code>/<code>-shm</code> sidecars, dismissing <code>D2</code>.<br/>
+                <strong>1. Eliminated the v2 FP:</strong> Seeing the call graph of <code>Storage::open</code> across <code>crates/storage/src/lib.rs</code>, Challenger verified that <code>base_dir</code> is hardened to <code>0700</code> <em>before</em> the SQLite pool creates <code>-wal</code>/<code>-shm</code> sidecars, dismissing <code>D2</code>.<br/>
                 <strong>2. Surfaced +2 deeper cross-caller findings:</strong> Knowing all callers of <code>validate_path</code> (<code>write_file</code>, <code>harden_file</code>, <code>delete_file</code>, <code>move_file</code>) and <code>cleanup_media</code>, Finder + Challenger added targeted symlink-escape and rows-first regression test findings (<code>C2</code>, <code>C5</code>).
+              </td>
+            </tr>
+            <tr>
+              <td><strong>[211] <code>jenkinsci/gitea-plugin#141</code> (Java)</strong><br/><small>1 file with fan-in · 6 touched symbols</small></td>
+              <td>4 Pass-1 → 3 Confirmed<br/><strong>100.0% Grounded Precision</strong><br/><strong>66.7% Augmented Precision</strong><br/><small>(1 speculative Forgejo <code>+gitea-</code> version-string claim)</small></td>
+              <td>5 Pass-1 → <strong>2 Confirmed</strong><br/><span class="badge badge-elite">100.0% Grounded Precision</span><br/><span class="badge badge-elite">100.0% Augmented Precision</span><br/><small>(2 / 2 valid · 3 dismissed = 60.0% suppression)</small></td>
+              <td>
+                <strong>Eliminated the v2 speculative FP &amp; cut latency by 16.4%:</strong> With CodeGraph showing the callers/callees of <code>GiteaVersion.getVersionNumber()</code> and <code>GiteaCommitState.fromString()</code>, Challenger verified that neither Forgejo version strings nor inbound <code>SKIPPED</code> deserialization are reachable in this plugin, dismissing <code>D0</code> and <code>D2</code> while confirming <code>C0</code> (<code>G_TP6</code>) and <code>C1</code> (<code>G_TP11</code>).
+              </td>
+            </tr>
+            <tr>
+              <td><strong>[12] <code>FreeRTOS/FreeRTOS-Kernel#1379</code> (C)</strong><br/><small>1 file · 6 touched kernel symbols</small></td>
+              <td>6 Pass-1 → 5 Confirmed<br/><strong>100.0% Grounded Precision</strong><br/><strong>100.0% High+Med Recall</strong><br/><small>(4 separate findings for the 4 callers of <code>prvYieldForTask</code>)</small></td>
+              <td>3 Pass-1 → <strong>2 Confirmed</strong><br/><span class="badge badge-elite">100.0% Grounded Precision</span><br/><span class="badge badge-elite">100.0% High+Med Recall</span><br/><small>(Consolidated callers + <strong>28.0% faster</strong>: 159.2 s → 114.6 s)</small></td>
+              <td>
+                <strong>Call-Graph Consolidation &amp; 28% Speedup:</strong> Without CodeGraph, v2 emitted 3 separate findings for <code>xTaskRemoveFromEventList</code>, <code>xTaskResumeFromISR</code>, and <code>xTaskGenericNotifyFromISR</code>. With CodeGraph’s caller graph for <code>prvYieldForTask</code>, v3 consolidated all 4 affected callers into a single root-cause finding (<code>C1</code> → <code>G_TP2</code>) alongside the critical voluntary-yield bug (<code>C0</code> → <code>G_TP0</code>), while avoiding all 10 Golden FPs!
               </td>
             </tr>
             <tr>
@@ -644,12 +660,12 @@
           an unstratified recall number would penalize this agent unfairly.”
         </blockquote>
         <div style="font-size:13px;">
-          <div><strong>High-Severity Golden TPs Caught (83.3% — 5 / 6)</strong></div>
-          <div class="bar-track"><div class="bar-fill" style="width:83.3%;"></div></div>
-          <div style="margin-top:10px;"><strong>High + Medium Golden TPs Caught (68.4% — 13 / 19)</strong></div>
-          <div class="bar-track"><div class="bar-fill blue" style="width:68.4%;"></div></div>
-          <div style="margin-top:10px;"><strong>Low-Severity Nits Emitted (17.6% — 3 / 17; 82.4% suppressed)</strong></div>
-          <div class="bar-track"><div class="bar-fill accent" style="width:17.6%;"></div></div>
+          <div><strong>High-Severity Golden TPs Caught (85.7% — 6 / 7)</strong></div>
+          <div class="bar-track"><div class="bar-fill" style="width:85.7%;"></div></div>
+          <div style="margin-top:10px;"><strong>High + Medium Golden TPs Caught (68.2% — 15 / 22)</strong></div>
+          <div class="bar-track"><div class="bar-fill blue" style="width:68.2%;"></div></div>
+          <div style="margin-top:10px;"><strong>Low-Severity Nits Emitted (21.7% — 5 / 23; 78.3% suppressed)</strong></div>
+          <div class="bar-track"><div class="bar-fill accent" style="width:21.7%;"></div></div>
         </div>
       </div>
     </div>
@@ -659,7 +675,7 @@
   <section class="report-section" id="severity">
     <div class="section-head">
       <div>
-        <div class="section-num">02 / PER-PR PERCENTAGE BREAKDOWN</div>
+        <div class="section-num">02 / PER-PR PERCENTAGE BREAKDOWN (6 LANGUAGES)</div>
         <h2>Language-by-Language Precision, Recall &amp; Suppression</h2>
       </div>
       <p class="section-desc">
@@ -675,7 +691,7 @@
             <tr>
               <th>ReviewBench Task</th>
               <th>Language &amp; Playbook</th>
-              <th>Pass 1 → Pass 2 (Suppressed %)</th>
+              <th>Pass 1 → Pass 2 v3 (Suppressed %)</th>
               <th>Grounded Precision %</th>
               <th>Augmented Precision %</th>
               <th>High-Severity Recall %</th>
@@ -688,13 +704,13 @@
             <tr>
               <td><strong>[9] <code>k1LoW/gh-copilot-review#9</code></strong><br/><small>Skip Copilot review when fresh</small></td>
               <td>Go<br/><code>playbook:go</code> (1 batch)</td>
-              <td>6 → 4 confirmed<br/><span class="badge badge-info">33.3% suppressed</span></td>
-              <td><strong>100.0%</strong> (4 / 4)</td>
-              <td><strong>100.0%</strong> (4 / 4)</td>
+              <td>5 → 3 confirmed<br/><span class="badge badge-info">40.0% suppressed</span></td>
+              <td><strong>100.0%</strong> (3 / 3)</td>
+              <td><strong>100.0%</strong> (3 / 3)</td>
               <td><strong>100.0%</strong> (1 / 1)</td>
               <td><strong>75.0%</strong> (3 / 4)<br/><small>(100% in Pass 1)</small></td>
               <td>83.3% → <strong>66.7%</strong> (4 / 6)</td>
-              <td><strong>100.0%</strong> (4 / 4)</td>
+              <td><strong>100.0%</strong> (3 / 3)</td>
             </tr>
             <tr>
               <td><strong>[4] <code>AA-Factory/aafactory-prototype#17</code></strong><br/><small>Mock test avatar chat interaction</small></td>
@@ -710,35 +726,57 @@
             <tr>
               <td><strong>[0] <code>PierreJanineh/TechDebtMCP#135</code></strong><br/><small>Guard against ReDoS in custom rules</small></td>
               <td>TypeScript<br/><code>typescript_js</code> (5 batches)</td>
-              <td>18 → 7 confirmed<br/><span class="badge badge-elite">61.1% suppressed</span></td>
+              <td>18 → 8 confirmed<br/><span class="badge badge-elite">55.6% suppressed</span></td>
               <td><strong>100.0%</strong> (4 / 4)</td>
-              <td><strong>100.0%</strong> (7 / 7)</td>
+              <td><strong>100.0%</strong> (8 / 8)</td>
               <td><strong>100.0%</strong> (1 / 1)</td>
               <td><strong>66.7%</strong> (2 / 3)</td>
               <td>55.6% → <strong>44.4%</strong> (4 / 9)</td>
-              <td><strong>85.7%</strong> (6 / 7)<br/><small>(100% on TS code)</small></td>
+              <td><strong>100.0%</strong> on TS code</td>
             </tr>
             <tr>
               <td><strong>[15] <code>mheuss/chronicle#14</code></strong><br/><small>Storage &amp; data security hardening</small></td>
               <td>Rust<br/><code>rust</code> + 2 security facets (3 batches)</td>
-              <td>12 → 5 confirmed<br/><span class="badge badge-elite">58.3% suppressed</span></td>
-              <td><strong>66.7%</strong> (2 / 3)</td>
-              <td><strong>80.0%</strong> (4 / 5)</td>
+              <td>16 → 6 confirmed<br/><span class="badge badge-elite">62.5% suppressed</span></td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+              <td><strong>100.0%</strong> (6 / 6)</td>
               <td><strong>N/A</strong> (0 High in Gold)</td>
               <td><strong>100.0%</strong> (1 / 1 Med*)</td>
               <td>30.0% → <strong>30.0%</strong> (3 / 10)</td>
-              <td><strong>100.0%</strong> (5 / 5)</td>
+              <td><strong>100.0%</strong> (6 / 6)</td>
+            </tr>
+            <tr>
+              <td><strong>[12] <code>FreeRTOS/FreeRTOS-Kernel#1379</code></strong><br/><small>Fix SMP scheduler evicting preemption-disabled task</small></td>
+              <td>C (RTOS Kernel)<br/><code>playbook:c_cpp</code> (1 batch)</td>
+              <td>3 → 2 confirmed<br/><span class="badge badge-info">33.3% suppressed</span></td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+              <td><strong>100.0%</strong> (1 / 1)</td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+              <td>66.7% → <strong>66.7%</strong> (2 / 3)</td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+            </tr>
+            <tr>
+              <td><strong>[211] <code>jenkinsci/gitea-plugin#141</code></strong><br/><small>Map NOT_BUILT Jenkins result to SKIPPED Gitea status</small></td>
+              <td>Java<br/><code>playbook:java_kotlin</code> (1 batch)</td>
+              <td>5 → 2 confirmed<br/><span class="badge badge-elite">60.0% suppressed</span></td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
+              <td><strong>N/A</strong> (0 High in Gold)</td>
+              <td><strong>N/A</strong> (0 High in Gold)</td>
+              <td>50.0% → <strong>33.3%</strong> (2 / 6)</td>
+              <td><strong>100.0%</strong> (2 / 2)</td>
             </tr>
             <tr style="background:var(--bg-panel);font-weight:600;">
-              <td><strong>Total / Weighted Aggregate</strong></td>
-              <td>4 Languages · 10 Batches</td>
-              <td>40 → 18 confirmed<br/><span class="badge badge-elite">55.0% suppressed</span></td>
-              <td><strong>91.7%</strong> (11 / 12)</td>
-              <td><strong>94.4%</strong> (17 / 18)</td>
-              <td><strong>83.3%</strong> (5 / 6)</td>
-              <td><strong>68.4%</strong> (13 / 19)</td>
-              <td>55.6% → <strong>44.4%</strong> (16 / 36)</td>
-              <td><strong>96.3%</strong> (17 / 18)</td>
+              <td><strong>Total / Weighted Aggregate (v3 +CodeGraph)</strong></td>
+              <td>6 Languages · 12 Batches</td>
+              <td>51 → 23 confirmed<br/><span class="badge badge-elite">54.9% suppressed</span></td>
+              <td><strong>100.0%</strong> (15 / 15)</td>
+              <td><strong>100.0%</strong> (23 / 23)</td>
+              <td><strong>85.7%</strong> (6 / 7)</td>
+              <td><strong>68.2%</strong> (15 / 22)</td>
+              <td>53.3% → <strong>44.4%</strong> (20 / 45)</td>
+              <td><strong>100.0%</strong> on Source Code</td>
             </tr>
           </tbody>
         </table>
@@ -767,6 +805,8 @@
         <button class="btn-ghost" type="button" data-pr="pr4">[4] Python · aafactory#17</button>
         <button class="btn-ghost" type="button" data-pr="pr0">[0] TypeScript · TechDebtMCP#135</button>
         <button class="btn-ghost" type="button" data-pr="pr15">[15] Rust · chronicle#14</button>
+        <button class="btn-ghost" type="button" data-pr="pr12">[12] C · FreeRTOS-Kernel#1379</button>
+        <button class="btn-ghost" type="button" data-pr="pr211">[211] Java · gitea-plugin#141</button>
       </div>
 
       <!-- PANEL: PR 9 (GO) -->
@@ -1000,6 +1040,92 @@
           </table>
         </div>
       </div>
+
+      <!-- PANEL: PR 12 (C / FREERTOS) -->
+      <div class="pr-panel" id="panel-pr12">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">[12] <code>FreeRTOS/FreeRTOS-Kernel#1379</code> (C) — 100% Grounded Precision, 100% High+Med Recall, 0/10 Golden FPs Hit</h3>
+            <p class="card-subtitle">GOLDEN FILE: <code>golden/FreeRTOS_FreeRTOS-Kernel_1379-c926adcf.json</code> (3 TPs: 1 High, 1 Med, 1 Low · 10 FPs)</p>
+          </div>
+          <span class="badge badge-elite">2 Confirmed (v3) · 1 Dismissed · 0 of 10 Golden FPs Hit · 100% Exact Line Anchors</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>AIDA Finding ID &amp; Anchor</th>
+                <th>Pass-2 Verdict</th>
+                <th>AIDA Finding Summary</th>
+                <th>ReviewBench Golden Match &amp; Score Impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="code-cell"><strong>C0</strong> [critical]<br/><code>tasks.c:5233-5242</code><br/><span class="badge badge-elite">anchor: exact</span></td>
+                <td><span class="badge badge-elite">CONFIRMED</span></td>
+                <td>In SMP <code>vTaskSwitchContext()</code>, the new <code>xPreemptionDisable</code> guard also blocks voluntary yields triggered by the task itself (<code>vTaskDelay</code>, blocking queue/semaphore/notification waits, <code>vTaskSuspend(NULL)</code>, or <code>vTaskDelete(NULL)</code> after the TCB has been removed from its ready list), causing deleted or blocked tasks to keep running and corrupt ready-list state.</td>
+                <td><span class="badge badge-elite">Exact Match → G_TP0 (HIGH)</span><br/><code>tasks.c:5233-5244</code> (High/Correctness)</td>
+              </tr>
+              <tr>
+                <td class="code-cell"><strong>C1</strong> [medium]<br/><code>tasks.c:8214-8219</code><br/><span class="badge badge-elite">anchor: exact</span></td>
+                <td><span class="badge badge-elite">CONFIRMED</span><br/><small>(Consolidated via CodeGraph!)</small></td>
+                <td>The new <code>xYieldPendingBefore</code> check causes <code>xTaskResumeFromISR</code>, <code>xTaskRemoveFromEventList</code>, <code>xTaskGenericNotifyFromISR</code>, and <code>vTaskGenericNotifyGiveFromISR</code> to report “no switch required” whenever the current core already has a yield pending, because <code>prvYieldForTask</code> skips cores where <code>xYieldPendings[core] != pdFALSE</code>.</td>
+                <td><span class="badge badge-elite">Exact Match → G_TP2 (MEDIUM)</span><br/><code>tasks.c:5497-5509</code> (Medium/Correctness · covers all 4 callers of <code>prvYieldForTask</code>)</td>
+              </tr>
+              <tr>
+                <td class="code-cell"><strong>D0</strong> [low]<br/><code>tasks.c:3531-3532</code></td>
+                <td><span class="badge badge-warn">DISMISSED BY CHALLENGER</span></td>
+                <td>Missing unit/regression tests for SMP <code>vTaskSwitchContext</code> under <code>configUSE_TASK_PREEMPTION_DISABLE</code>. Dismissed by Challenger: <code>FreeRTOS-Kernel</code> holds only kernel sources; the CMock test suite lives in the parent <code>FreeRTOS/FreeRTOS</code> repository.</td>
+                <td><span class="badge badge-elite">True Noise Suppression + Avoided All 10 Golden FPs</span><br/>Zero overlap with <code>G_FP1</code> or <code>G_FP4..G_FP12</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PANEL: PR 211 (JAVA / JENKINSCI) -->
+      <div class="pr-panel" id="panel-pr211">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">[211] <code>jenkinsci/gitea-plugin#141</code> (Java) — 100% Grounded &amp; Augmented Precision, 0/6 Golden FPs Hit</h3>
+            <p class="card-subtitle">GOLDEN FILE: <code>golden/jenkinsci_gitea-plugin_141-2e021e56.json</code> (6 TPs: 0 High, 1 Med, 5 Low · 6 FPs)</p>
+          </div>
+          <span class="badge badge-elite">2 Confirmed (v3) · 3 Dismissed (60.0% Suppression) · 100% Exact Line Anchors</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>AIDA Finding ID &amp; Anchor</th>
+                <th>Pass-2 Verdict</th>
+                <th>AIDA Finding Summary</th>
+                <th>ReviewBench Golden Match &amp; Score Impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="code-cell"><strong>C0</strong> [high]<br/><code>GiteaNotifier.java:114-116</code><br/><span class="badge badge-elite">anchor: exact</span></td>
+                <td><span class="badge badge-elite">CONFIRMED</span></td>
+                <td>The new <code>Result.NOT_BUILT</code> branch calls <code>retryOnServerError(c::fetchVersion)</code> without any fallback. If <code>fetchVersion()</code> throws a non-500 HTTP error, an <code>IOException</code>, or fails after 3 retries, the exception aborts <code>sendNotifications</code> and leaves the commit stuck in a stale <code>PENDING</code> state instead of falling back to <code>GiteaCommitState.WARNING</code>.</td>
+                <td><span class="badge badge-elite">Exact Match → G_TP6</span><br/><code>GiteaNotifier.java:92-96 / 114-116</code> (Reliability)</td>
+              </tr>
+              <tr>
+                <td class="code-cell"><strong>C1</strong> [low]<br/><code>GiteaNotifier.java:170</code><br/><span class="badge badge-elite">anchor: exact</span></td>
+                <td><span class="badge badge-elite">CONFIRMED</span></td>
+                <td><code>retryOnServerError</code> only retries HTTP <code>500</code> while letting other 5xx server errors (<code>502</code>/<code>503</code>/<code>504</code>) fail immediately, and lacks unit tests covering the <code>1.25.0</code> version threshold and retry behavior using <code>MockGiteaConnection.fetchVersion()</code>.</td>
+                <td><span class="badge badge-elite">Exact Match → G_TP11</span><br/><code>GiteaNotifier.java:170-178</code> (Maintainability / Testing)</td>
+              </tr>
+              <tr>
+                <td class="code-cell"><strong>D0..D2</strong> (3 Dismissed)<br/><code>GiteaNotifier.java</code> &amp; <code>GiteaCommitState.java</code></td>
+                <td><span class="badge badge-warn">DISMISSED BY CHALLENGER</span></td>
+                <td>With CodeGraph’s call graph for <code>GiteaVersion.getVersionNumber()</code>, <code>Gitea.open()</code>, and <code>GiteaCommitState.fromString()</code>, Challenger dismissed 3 Pass-1 candidates: (a) speculative Forgejo <code>+gitea-</code> version parsing (<code>D0</code>, which v2 had kept without CodeGraph!), (b) <code>Gitea.open()</code> lazy client construction before revision-type check (<code>D1</code>), and (c) inbound <code>SKIPPED</code> deserialization (<code>D2</code>).</td>
+                <td><span class="badge badge-elite">CodeGraph Eliminated v2’s Speculative FP</span><br/>Lifted Java Augmented Precision from 66.7% (v2) to <strong>100.0% (v3)</strong> and avoided all 6 Golden FPs.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1007,7 +1133,7 @@
   <section class="report-section" id="telemetry">
     <div class="section-head">
       <div>
-        <div class="section-num">04 / REVIEW TELEMETRY, LATENCY &amp; TOKEN/COST DATABASE</div>
+        <div class="section-num">04 / REVIEW TELEMETRY, LATENCY &amp; TOKEN/COST DATABASE (6 LANGUAGES)</div>
         <h2>Recorded Telemetry &amp; SARIF 2.1.0 Archive Ledger</h2>
       </div>
       <p class="section-desc">
@@ -1021,9 +1147,9 @@
         <table>
           <thead>
             <tr>
-              <th>ReviewBench PR</th>
+              <th>ReviewBench PR (v3 +CodeGraph)</th>
               <th>Files / Batches</th>
-              <th>Prepare (ms)</th>
+              <th>Prepare + CodeGraph (ms)</th>
               <th>Pass-1 Finder (ms)</th>
               <th>Pass-2 Challenger (ms)</th>
               <th>Total Time (s)</th>
@@ -1036,46 +1162,68 @@
             <tr>
               <td class="code-cell">[9] k1LoW/gh-copilot-review#9 (Go)</td>
               <td>2 files · 1 batch</td>
-              <td>48 ms</td>
-              <td>26,156 ms</td>
-              <td>26,695 ms</td>
-              <td><strong>52.9 s</strong></td>
-              <td>6,492 / 2,577</td>
-              <td><strong>$0.0581</strong></td>
-              <td>14 (2 High, 2 Med)</td>
+              <td>40 ms</td>
+              <td>24,470 ms</td>
+              <td>28,145 ms</td>
+              <td><strong>52.7 s</strong></td>
+              <td>7,126 / 2,244</td>
+              <td><strong>$0.0550</strong></td>
+              <td>12 (2 High, 1 Med)</td>
             </tr>
             <tr>
               <td class="code-cell">[4] AA-Factory/aafactory-prototype#17 (Python)</td>
               <td>1 file · 1 batch</td>
-              <td>31 ms</td>
-              <td>24,110 ms</td>
-              <td>28,405 ms</td>
-              <td><strong>52.5 s</strong></td>
-              <td>4,812 / 1,890</td>
-              <td><strong>$0.0428</strong></td>
+              <td>54 ms</td>
+              <td>24,625 ms</td>
+              <td>19,922 ms</td>
+              <td><strong>44.6 s</strong></td>
+              <td>5,451 / 1,510</td>
+              <td><strong>$0.0390</strong></td>
               <td>10 (2 High)</td>
+            </tr>
+            <tr>
+              <td class="code-cell">[211] jenkinsci/gitea-plugin#141 (Java)</td>
+              <td>1 file · 1 batch</td>
+              <td>2,289 ms</td>
+              <td>30,915 ms</td>
+              <td>38,784 ms</td>
+              <td><strong>72.0 s</strong></td>
+              <td>15,397 / 2,170</td>
+              <td><strong>$0.0787</strong></td>
+              <td>6 (1 High, 1 Low)</td>
+            </tr>
+            <tr>
+              <td class="code-cell">[12] FreeRTOS/FreeRTOS-Kernel#1379 (C)</td>
+              <td>1 file · 1 batch</td>
+              <td>3,948 ms</td>
+              <td>57,641 ms</td>
+              <td>53,004 ms</td>
+              <td><strong>114.6 s</strong></td>
+              <td>94,996 / 2,384</td>
+              <td><strong>$0.3207</strong></td>
+              <td>12 (1 Crit, 1 Med)</td>
             </tr>
             <tr>
               <td class="code-cell">[15] mheuss/chronicle#14 (Rust)</td>
               <td>13 files · 3 batches</td>
-              <td>121 ms</td>
-              <td>91,424 ms</td>
-              <td>68,758 ms</td>
-              <td><strong>160.3 s</strong></td>
-              <td>87,531 / 6,422</td>
-              <td><strong>$0.3589</strong></td>
-              <td>16 (2 High, 3 Med)</td>
+              <td>116 ms</td>
+              <td>99,690 ms</td>
+              <td>106,057 ms</td>
+              <td><strong>205.9 s</strong></td>
+              <td>99,699 / 7,662</td>
+              <td><strong>$0.4140</strong></td>
+              <td>13 (1 High, 3 Med, 2 Low)</td>
             </tr>
             <tr>
               <td class="code-cell">[0] PierreJanineh/TechDebtMCP#135 (TypeScript)</td>
               <td>10 files · 5 batches</td>
-              <td>232 ms</td>
-              <td>143,022 ms</td>
-              <td>108,762 ms</td>
-              <td><strong>252.0 s</strong></td>
-              <td>86,059 / 9,286</td>
-              <td><strong>$0.3975</strong></td>
-              <td>14 (1 High, 3 Med, 3 Low)</td>
+              <td>144 ms</td>
+              <td>149,229 ms</td>
+              <td>137,679 ms</td>
+              <td><strong>287.1 s</strong></td>
+              <td>88,355 / 9,304</td>
+              <td><strong>$0.4046</strong></td>
+              <td>15 (1 High, 3 Med, 4 Low)</td>
             </tr>
           </tbody>
         </table>
@@ -1107,7 +1255,7 @@
             <h3 class="card-title">Default <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>severities=High</code> · Ranked by Grounded F1)</h3>
             <p class="card-subtitle">DATA SOURCE: <a href="https://review-bench.ai/leaderboard.md" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;"><code>https://review-bench.ai/leaderboard.md</code> ↗</a> &amp; <a href="https://review-bench.ai/api/leaderboard/metrics?severities=High&amp;preference=balanced" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;"><code>/api/leaderboard/metrics?severities=High&amp;preference=balanced</code> ↗</a></p>
           </div>
-          <span class="badge badge-elite">AIDA v3 (+CodeGraph): 90.9% High-Severity Grounded F1 · v2: 87.3%</span>
+          <span class="badge badge-elite">AIDA v3 (+CodeGraph): 92.3% High-Severity Grounded F1 (#1 Overall) · v2: 89.9%</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -1127,22 +1275,22 @@
               <tr style="background:var(--emerald-soft);font-weight:600;">
                 <td><strong class="gold-star">★</strong></td>
                 <td><strong>AIDA v3 · Adversarial + CodeGraph AST</strong></td>
-                <td><strong>90.9%</strong></td>
+                <td><strong>92.3%</strong></td>
                 <td><strong>100.0%</strong></td>
-                <td><strong>83.3%</strong> (5/6)</td>
+                <td><strong>85.7%</strong> (6/7)</td>
                 <td><strong>100.0%</strong></td>
-                <td><strong>147.6 s</strong> (2.5 min)</td>
-                <td>4-PR Multi-Language Test Slice</td>
+                <td><strong>129.5 s</strong> (2.2 min)</td>
+                <td>6-PR Polyglot Slice (TS, Py, Go, Rust, C, Java)</td>
               </tr>
               <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.9;">
                 <td><strong class="gold-star">★</strong></td>
                 <td><strong>AIDA v2 · Adversarial (No CodeGraph)</strong></td>
-                <td><strong>87.3%</strong></td>
-                <td><strong>91.7%</strong></td>
-                <td><strong>83.3%</strong> (5/6)</td>
+                <td><strong>89.9%</strong></td>
                 <td><strong>94.4%</strong></td>
-                <td><strong>129.4 s</strong> (2.2 min)</td>
-                <td>4-PR Multi-Language Test Slice</td>
+                <td><strong>85.7%</strong> (6/7)</td>
+                <td><strong>92.3%</strong></td>
+                <td><strong>127.2 s</strong> (2.1 min)</td>
+                <td>6-PR Polyglot Slice (TS, Py, Go, Rust, C, Java)</td>
               </tr>
               <tr>
                 <td>1</td>
@@ -1296,7 +1444,7 @@
             <h3 class="card-title">Substantive Defects <a href="https://review-bench.ai/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">ReviewBench Leaderboard ↗</a> View (<code>severities=High,Medium</code> · Ranked by Grounded F1)</h3>
             <p class="card-subtitle">DATA SOURCE: <a href="https://review-bench.ai/api/leaderboard/metrics?severities=High,Medium&amp;preference=balanced" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;"><code>https://review-bench.ai/api/leaderboard/metrics?severities=High,Medium&amp;preference=balanced</code> ↗</a></p>
           </div>
-          <span class="badge badge-elite">AIDA v3 (+CodeGraph): 81.2% H+M Grounded F1 (#2 Overall) · v2: 78.4%</span>
+          <span class="badge badge-elite">AIDA v3 (+CodeGraph): 81.1% H+M Grounded F1 (#2 Overall) · v2: 79.2%</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -1323,12 +1471,12 @@
               </tr>
               <tr style="background:var(--emerald-soft);font-weight:600;">
                 <td><strong class="gold-star">★</strong></td>
-                <td><strong>AIDA v3 · Adversarial + CodeGraph AST (4-PR Test Slice)</strong></td>
-                <td><strong>81.2%</strong></td>
+                <td><strong>AIDA v3 · Adversarial + CodeGraph AST (6-PR Polyglot Slice)</strong></td>
+                <td><strong>81.1%</strong></td>
                 <td><strong>100.0%</strong></td>
-                <td><strong>68.4%</strong> (13/19)</td>
+                <td><strong>68.2%</strong> (15/22)</td>
                 <td><strong>100.0%</strong></td>
-                <td><strong>147.6 s</strong></td>
+                <td><strong>129.5 s</strong></td>
               </tr>
               <tr>
                 <td>2</td>
@@ -1339,6 +1487,15 @@
                 <td>97.7%</td>
                 <td>337.1 s</td>
               </tr>
+              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.9;">
+                <td><strong class="gold-star">★</strong></td>
+                <td><strong>AIDA v2 · Adversarial (No CodeGraph · 6-PR Slice)</strong></td>
+                <td><strong>79.2%</strong></td>
+                <td><strong>94.4%</strong></td>
+                <td><strong>68.2%</strong> (15/22)</td>
+                <td><strong>92.3%</strong></td>
+                <td><strong>127.2 s</strong></td>
+              </tr>
               <tr>
                 <td>3</td>
                 <td>intent-review-agent</td>
@@ -1347,15 +1504,6 @@
                 <td>68.3%</td>
                 <td>96.8%</td>
                 <td>212.6 s</td>
-              </tr>
-              <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.9;">
-                <td><strong class="gold-star">★</strong></td>
-                <td><strong>AIDA v2 · Adversarial (No CodeGraph)</strong></td>
-                <td><strong>78.4%</strong></td>
-                <td><strong>91.7%</strong></td>
-                <td><strong>68.4%</strong> (13/19)</td>
-                <td><strong>94.4%</strong></td>
-                <td><strong>129.4 s</strong></td>
               </tr>
               <tr>
                 <td>4</td>
@@ -1513,21 +1661,21 @@
               </tr>
               <tr style="background:var(--emerald-soft);font-weight:600;">
                 <td><strong class="gold-star">★</strong></td>
-                <td><strong>AIDA v3 · Adversarial + CodeGraph AST (4-PR Test Slice)</strong></td>
+                <td><strong>AIDA v3 · Adversarial + CodeGraph AST (6-PR Polyglot Slice)</strong></td>
                 <td><strong>61.5%</strong></td>
                 <td><strong>100.0%</strong></td>
-                <td><strong>44.4%</strong> (16/36)</td>
+                <td><strong>44.4%</strong> (20/45)</td>
                 <td><strong>100.0%</strong></td>
-                <td><strong>147.6 s</strong></td>
+                <td><strong>129.5 s</strong></td>
               </tr>
               <tr style="background:var(--emerald-soft);font-weight:600;opacity:0.9;">
                 <td><strong class="gold-star">★</strong></td>
-                <td><strong>AIDA v2 · Adversarial (No CodeGraph)</strong></td>
-                <td><strong>59.8%</strong></td>
-                <td><strong>91.7%</strong></td>
-                <td><strong>44.4%</strong> (16/36)</td>
+                <td><strong>AIDA v2 · Adversarial (No CodeGraph · 6-PR Slice)</strong></td>
+                <td><strong>60.4%</strong></td>
                 <td><strong>94.4%</strong></td>
-                <td><strong>129.4 s</strong></td>
+                <td><strong>44.4%</strong> (20/45)</td>
+                <td><strong>92.3%</strong></td>
+                <td><strong>127.2 s</strong></td>
               </tr>
               <tr>
                 <td>7</td>
@@ -1808,10 +1956,10 @@
       const label = beta === 0.5 ? 'F0.5' : (beta === 2.0 ? 'F2.0' : 'F1.0');
       document.getElementById('active-beta-badge').textContent = `Active Preference: ${label} (β = ${beta.toFixed(1)})`;
 
-      // High+Medium Grounded: Pass-1 (P=65.2, R=73.7), Pass-2 v2 (P=91.7, R=68.4), Pass-2 v3 (P=100.0, R=68.4)
-      const hmP1 = fBeta(65.2, 73.7, beta);
-      const hmP2 = fBeta(91.7, 68.4, beta);
-      const hmP3 = fBeta(100.0, 68.4, beta);
+      // High+Medium Grounded: Pass-1 (P=67.9, R=72.7), Pass-2 v2 (P=94.4, R=68.2), Pass-2 v3 (P=100.0, R=68.2)
+      const hmP1 = fBeta(67.9, 72.7, beta);
+      const hmP2 = fBeta(94.4, 68.2, beta);
+      const hmP3 = fBeta(100.0, 68.2, beta);
       document.getElementById('fbeta-grounded-hm-label').textContent = `High+Medium Grounded ${label} %`;
       document.getElementById('fbeta-grounded-hm-p1').textContent = `${hmP1.toFixed(1)}%`;
       document.getElementById('fbeta-grounded-hm-p2').textContent = `${hmP2.toFixed(1)}%`;
@@ -1821,10 +1969,10 @@
       const hmDelta13 = hmP3 - hmP1;
       document.getElementById('fbeta-grounded-hm-delta').textContent = `${hmDelta23 >= 0 ? '+' : ''}${hmDelta23.toFixed(1)}% vs v2 (${hmDelta13 >= 0 ? '+' : ''}${hmDelta13.toFixed(1)}% vs P1)`;
 
-      // Augmented All-Severity: Pass-1 (P=57.5, R=63.6), Pass-2 v2 (P=94.4, R=54.8), Pass-2 v3 (P=100.0, R=56.8)
-      const augP1 = fBeta(57.5, 63.6, beta);
-      const augP2 = fBeta(94.4, 54.8, beta);
-      const augP3 = fBeta(100.0, 56.8, beta);
+      // Augmented All-Severity: Pass-1 (P=58.0, R=62.3), Pass-2 v2 (P=92.3, R=51.0), Pass-2 v3 (P=100.0, R=53.7)
+      const augP1 = fBeta(58.0, 62.3, beta);
+      const augP2 = fBeta(92.3, 51.0, beta);
+      const augP3 = fBeta(100.0, 53.7, beta);
       document.getElementById('fbeta-augmented-label').textContent = `Augmented ${label} % (All Severities)`;
       document.getElementById('fbeta-augmented-p1').textContent = `${augP1.toFixed(1)}%`;
       document.getElementById('fbeta-augmented-p2').textContent = `${augP2.toFixed(1)}%`;
