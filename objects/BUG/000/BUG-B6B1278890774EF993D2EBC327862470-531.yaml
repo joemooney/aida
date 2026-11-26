@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-26T10:33:12.247665319Z
+modified_at: 2026-11-26T10:58:50.461782426Z
 req_type: Bug
 tags:
 - agents
@@ -93,6 +93,12 @@ comments:
   modified_at: 2026-11-26T10:32:44.753757661Z
   session_id: 01a21744104a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21782-13dd-70f1-bcdd-4ccb61b99d5b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2770-gc-scope` at head `820435a1f67ddeb186c7d21b0615ceaefe079160`.'
+  created_at: 2026-11-26T10:58:50.461777124Z
+  modified_at: 2026-11-26T10:58:50.461777124Z
+  session_id: 01a21744104a
 history:
 - id: 01a2173e-e582-7153-b482-a9c2c1f63d41
   author: joe
