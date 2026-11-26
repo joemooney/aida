@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-506
 agreed_id: BUG-2745
 title: Train refuses PR-4487 with 'hold marker missing without a recorded clearance (tampering suspected)' although the gate ledger records release-authorized + hold-release
 description: '2026-11-24 00:23 MST: `aida pr train 4487 --dry-run` (advisor seat, primary checkout) refuses: ''the PR''s merge-hold marker is missing without a recorded clearance (hold marker missing without a recorded clearance (tampering suspected)); a human must run aida merge-hold clear''. But .aida/gate-ledger/PR-4487.jsonl ends with release-authorized 06:35:01Z, hold-release 06:35:18Z and an approved verdict 06:35:20Z at head 05a17b1e, and the PR carries labels aida:merge-hold-recorded + aida:merge-hold-cleared. The hold had been auto-released by the recorded reviewer verdict (.aida/review-verdicts/BUG-2742.json). Likely the train''s clearance check reads a different source (marker file in the reviewer worktree vs primary, cf. BUG-2176) than the ledger. AC1: a ledger-recorded hold-release counts as a recorded clearance for the train; regression with a reviewer-worktree auto-release. Impact: a false tampering alarm forces a human merge-hold clear at night.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T07:24:10.635879426Z
-modified_at: 2026-11-26T00:21:54.616485880Z
+modified_at: 2026-11-26T06:25:53.164438517Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-26T00:21:56.740996124Z
   changes: []
+- id: 01a21688-2db6-7982-9d70-1cf79a92fcdd
+  author: aida-auto-bump
+  timestamp: 2026-11-26T06:25:53.078120029Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21688-2e0c-7332-8025-a95fceced4b3
+  timestamp: 2026-11-26T06:25:53.164433246Z
+  agent: aida
+  commit_sha: 5962a790a08f9dd1ac5cfc34d2619d3a59a582dd
+  summary: 'BUG-2745 AC1 verified by bug_2745_verdict_release_tests::a_reviewer_worktree_verdict_auto_release_counts_as_a_recorded_clearance: a rework hold that a reviewer worktree auto-releases is read from the shared primary ledger (hold::state resolves the store root) and now counts as a recorded clearance, so the PR is admitted as SupervisedByMode instead of being refused as MarkerMissing. Mandate and approval checks still apply. Type protocol checklist: BUG-2745 (bug protocol) ''the PR touches at least one test file'' is met (new aida-cli-lib/src/tests/bug_2745_verdict_release_tests.rs). Authority/gate deep pass (strict tier): the only widened path is unheld_supervised_facts. It admits only when the ledger itself released a non-legacy Rework hold (the fold now keeps the released record in HoldState.released, and the kind is judged from that record, not from the clearance''s claim), the clearance principal is auto-released:verdict with released_by_verdict present, no hold is open since, there is no missing-marker reason, and the forge labels show an open PR with no hold label and recorded==cleared. Every other recorded clearance, a legacy clearance file (on_ledger false), a release with no open ledger hold, a marker newer than the ledger (released reset), unreadable labels and a closed PR all fail closed. Refusal-path tests cover the wrong kind, the wrong principal, a missing verdict, a forged rework claim over a supervision hold, a live hold label, mismatched labels, a closed PR, a forge error and a missing-marker reason; the BUG-2663 never-held shapes are unchanged. No test was weakened. The only other change is making the PRINCIPAL const pub(crate). Observation, not a defect: the release''s verdict head is not compared with the current head, but the mandate''s approval-at-head check covers a moved head. CI pending at review time (fast gates pass, fast compile pending, merge-hold-gate pass). No findings.'
+  review_verdict: approved
 filed_at:
   code_sha: f0d3a0ae222f59d9d5c33af4fbc899aa23c9197c
   branch: main
@@ -121,3 +135,7 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-26T06:25:53.078111558Z
+  completion_sha: 5962a790a08f9dd1ac5cfc34d2619d3a59a582dd
