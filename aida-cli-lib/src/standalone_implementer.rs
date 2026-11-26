@@ -1835,6 +1835,11 @@ fn run(
     } = finished;
     reconcile_signals(&main_root, &worktree, launch.spec)?;
     store_commit.commit();
+    // A usage limit is a typed outage: record it so later launches on this
+    // vendor are refused until its reset. trace:STORY-3134 | ai:claude
+    let outage_note = (!status.success() && matches!(outcome, Outcome::NoPr))
+        .then(|| crate::vendors::usage_limit::note_failed_run(&main_root, launch.vendor, &run_log))
+        .flatten();
 
     // Publish before reading the final seat state or ending its lease. A punt
     // or manual hold is an explicit instruction to leave publication alone.
@@ -2130,6 +2135,11 @@ fn run(
                 run_log.display()
             ),
         }
+    };
+    // trace:STORY-3134 | ai:claude
+    let message = match &outage_note {
+        Some(note) => format!("agent usage limit: {note}; {message}"),
+        None => message,
     };
     Err(anyhow::Error::new(StandaloneImplementerExit {
         vendor_exit: matches!(outcome, Outcome::NoPr) && code != NO_PR_EXIT_CODE,
