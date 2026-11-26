@@ -13456,7 +13456,8 @@ Options:
           Heal only this exact finding ID (as shown by doctor check)
 
       --attest <ATTEST>
-          Operator's reason for releasing one conflict repair reservation
+          Operator's reason for releasing a repair reservation or salvaging an unverified stale
+          clone
 
   -y, --yes
           Skip confirmation prompts
@@ -23416,7 +23417,9 @@ Classify open specs and rank areas by hotness (read-only)
 
 Each open spec gets an area, a size (S/M/L/XL), its priority and status, and a noise flag for
 review-finding specs. Areas are ranked by a weighted blend of open and high-priority specs, change
-requests in the last 7 days, open PRs and 14-day file churn. The area map and weights live under
+requests in the last 7 days, open PRs and 14-day file churn. A flow section shows landings per day,
+open-to-landed time, change-request rounds, rework sinks and stale claims; recommendations list
+commands to run, and the report runs none. The area map, weights and `stale_days` live under
 `[report.backlog]` in `.aida/config.toml`.
 
 Usage: aida report backlog [OPTIONS]
@@ -46685,7 +46688,7 @@ Working on aida itself
       {
         "name": "attest",
         "takes_value": true,
-        "help": "Operator's reason for releasing one conflict repair reservation"
+        "help": "Operator's reason for releasing a repair reservation or salvaging an unverified stale clone"
       },
       {
         "name": "canonical-ids",

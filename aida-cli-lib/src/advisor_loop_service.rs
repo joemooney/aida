@@ -516,6 +516,8 @@ fn status_value(
         if let Some(line) = crate::gate::landing_merge::train_stand_down_line(root) {
             value["standing_down"] = serde_json::json!(line);
         }
+        // A long auto-train hold, live, with its phase. trace:BUG-2769 | ai:claude
+        value["admission_hold"] = serde_json::json!(super::train::live_hold_line(root));
     }
     // trace:BUG-2703 | ai:claude
     let admission = admission_status(root, state, Utc::now());
@@ -540,6 +542,9 @@ fn status_lines(
         lines.push(format!("{NAME}: {line}"));
     }
     lines.push(format!("{NAME}: {}", admission_line(value))); // trace:BUG-2703 | ai:claude
+    if let Some(line) = value["admission_hold"].as_str() {
+        lines.push(line.to_string()); // trace:BUG-2769 | ai:claude
+    }
     // trace:BUG-2674 | ai:claude
     if let Some(pass) = pass {
         lines.push(format!(

@@ -25,6 +25,12 @@ pub(crate) fn doctor_lease_liveness(
     (state, dead)
 }
 
+// trace:BUG-2755 | ai:codex
+pub(crate) fn current_lease_state(lease: &crate::leases::SessionLease) -> crate::LeaseState {
+    let live = crate::process_probe::probe_live_claude_sessions();
+    crate::leases::lease_state_for(lease, &live, Utc::now())
+}
+
 /// Compatibility death observation for shared-claim creators and headless
 /// workers. Callers bind the recorded process to a local-host claim or a child
 /// they launched; a foreign/unknown PID view cannot supply death evidence.

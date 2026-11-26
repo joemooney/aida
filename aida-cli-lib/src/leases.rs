@@ -328,6 +328,13 @@ pub(crate) fn read_exact_lease(
     root: &std::path::Path,
     id: &str,
 ) -> anyhow::Result<Option<SessionLease>> {
+    Ok(crate::leases::read_exact_lease_snapshot(root, id)?.map(|(lease, _)| lease))
+}
+
+pub(crate) fn read_exact_lease_snapshot(
+    root: &std::path::Path,
+    id: &str,
+) -> anyhow::Result<Option<(SessionLease, String)>> {
     anyhow::ensure!(
         !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
         "invalid lease id"
@@ -349,7 +356,7 @@ pub(crate) fn read_exact_lease(
     file.read_to_string(&mut raw)?;
     let lease: SessionLease = toml::from_str(&raw)?;
     anyhow::ensure!(lease.id == id, "lease identity mismatch");
-    Ok(Some(lease))
+    Ok(Some((lease, raw)))
 }
 
 /// The lease's last sign of life: the later of `started_at` and its lease

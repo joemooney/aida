@@ -175,9 +175,14 @@ pub(crate) fn fetch_pr_info_via_gh_bin(
 pub(crate) type ShipGateSpecRecord = (String, Vec<String>, crate::gate::unset_mode::EffectiveMode);
 pub(crate) fn ship_gate_spec_records(project_root: &std::path::Path) -> Vec<ShipGateSpecRecord> {
     let range = resolve_gate_range(project_root, None);
-    let Ok(commits) = read_commits_in_range(project_root, &range) else {
+    let Ok(mut commits) = read_commits_in_range(project_root, &range) else {
         return Vec::new();
     };
+    // Skip commits already on the base by patch-id. trace:BUG-2733 | ai:claude
+    if let Some((base, head)) = range.split_once("..") {
+        use crate::base_patch_equivalents::retain_new;
+        retain_new(project_root, base, head, &mut commits, |(sha, _)| sha);
+    }
     let mut ids: Vec<String> = Vec::new();
     for (_sha, subject) in &commits {
         ids.extend(pr_ship::extract_trailing_spec_ids_from_subject(subject));

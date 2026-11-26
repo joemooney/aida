@@ -67,6 +67,8 @@ mod autopilot_audit;
 mod autopilot_intake;
 mod awaiting_you;
 mod backlog;
+// trace:BUG-2733 | ai:claude
+mod base_patch_equivalents;
 mod brief;
 mod brief_cmd;
 mod burndown;

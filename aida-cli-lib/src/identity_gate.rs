@@ -822,19 +822,24 @@ fn branch_commit_identities(
     base_branch: &str,
     head: &str,
 ) -> Result<Vec<CommitIdentity>> {
-    let range = format!("origin/{base_branch}..{head}");
-    let commits = match git_log_identities(repo, &[&range]) {
-        Ok(c) => c,
+    let remote_base = format!("origin/{base_branch}");
+    let range = format!("{remote_base}..{head}");
+    let (base, mut commits) = match git_log_identities(repo, &[&range]) {
+        Ok(c) => (remote_base, c),
         // No origin/<base> locally — fall back to the plain base name.
-        Err(_) => {
+        Err(_) => (
+            base_branch.to_string(),
             git_log_identities(repo, &[&format!("{base_branch}..{head}")]).with_context(|| {
                 format!(
                     "identity gate: could not inspect commits {base_branch}..{head} to \
                      build the squash body — fetch the base branch and retry"
                 )
-            })?
-        }
+            })?,
+        ),
     };
+    // A commit already on the base by patch-id is not what this branch
+    // delivers; keep its trailers out of the squash body. trace:BUG-2733 | ai:claude
+    crate::base_patch_equivalents::retain_new(repo, &base, head, &mut commits, |c| &c.sha);
     Ok(commits)
 }
 
