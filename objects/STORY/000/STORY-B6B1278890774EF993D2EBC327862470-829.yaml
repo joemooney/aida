@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T00:27:45.522120263Z
+modified_at: 2026-11-26T00:55:21.990407155Z
 req_type: Story
 tags:
 - integration
@@ -581,6 +581,21 @@ comments:
   modified_at: 2026-11-26T00:27:45.522120263Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21559-9486-7803-8032-eba1d38f32ac
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 19880c11cc (PR #4603, S3b round 3)
+    - B1 fixed: the reviewer seat's effort and model now come from the base revision's .aida/config.toml and .aida/agents.toml blobs plus the operator's global ~/.aida/agents.toml (trusted_review_base -> TrustedBase.seat_files -> resolve_agent_tuning_from on scratch copies in a TempDir). The diff guard refuses when the change modifies review-rules.toml, config.toml or agents.toml. The checkout's copies, tracked or untracked, are never read. Test s3b_review_rules_come_from_the_trusted_base: a working-tree edit and a committed head that lower the codex reviewer effort in .aida/config.toml both refuse; an untracked .aida/agents.toml with effort=low leaves the resolved effort at the base value 'high'.
+    - Hardening: git() passes --no-replace-objects on every trusted-base read.
+    - Item 3: documented on trusted_review_base that base must be the merge-base of the forge target and the reviewed head SHA, never the moving target tip and never PR-supplied. The S3a-2 caller must honour this.
+    - Probes: a non-regular base blob refuses (fails closed). An unparsable base config.toml falls through to the global file; that is existing resolve_agent_tuning_from behaviour, and the file comes from the base, so it is not PR-controllable.
+    - Residual: behaviour change — a reviewer's local untracked .aida/agents.toml no longer tunes reviews; the global ~/.aida/agents.toml still does. New TempDir scratch write is classified lane_private in scripts/store-writers.toml.
+    - Evidence: cargo test -p aida-cli-lib --lib review_tuning: 2 passed.
+  created_at: 2026-11-26T00:55:21.990407155Z
+  modified_at: 2026-11-26T00:55:21.990407155Z
+  session_id: 01a21542873b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe

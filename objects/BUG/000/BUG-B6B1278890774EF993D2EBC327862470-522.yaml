@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T03:20:26.761872Z
-modified_at: 2026-11-26T00:24:35.283638769Z
+modified_at: 2026-11-26T00:59:38.355115895Z
 req_type: Bug
 tags:
 - lanes
@@ -618,6 +618,18 @@ comments:
   modified_at: 2026-11-26T00:19:58.560101403Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2155d-7df3-76f3-b60a-4647b74877f8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 24a1c3d87e (PR #4607, replaces conflicted #4583)
+    Acceptance evidence: [behavioral-test] route-before-reserve: seat_clone::rework_merge_tests::bug_2761_refused_route_reserves_nothing_and_headless_retry_reserves (an interactive route is refused with no journal, no MERGE_HEAD and the index unchanged; a headless retry then reserves). Attempt-scoped rollback: repair_journal::tests::bug_2761_attempt_rollback_retires_only_its_own_reservation, plus the F1 end-to-end run_pickup_launch test pickup_launch_rollback_tests::bug_2761_pickup_rollback_retires_only_an_unspawned_attempts_reservation (failed spawn: reservation and tree retired; surviving tree: kept; spawned child: kept; another PR's entry survives every case). F2: seat_clone.rs error text now states the journal truthfully. All 4 targeted tests passed and make check-ci-fast passed.
+    Probe findings: the only main drift was BUG-2756's snapshot_deferred field (added None to the new literals) and its adjacent test (both kept). The rollback can only retire an entry when the spawn is Unknown, the identity matches exactly and the tree is absent, so every other case keeps the reservation (it fails closed). The doctor hint category repair-reservations exists.
+    Residual risks: the diff is about 490 lines (same as the approved #4583), over the 300-line target, mostly tests. The kept-reservation path only prints a note to stderr.
+  created_at: 2026-11-26T00:59:38.355115895Z
+  modified_at: 2026-11-26T00:59:38.355115895Z
+  session_id: 01a2153d0255
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a210b8-a656-7dd2-bfcc-59cd83c440e5
   author: joe
