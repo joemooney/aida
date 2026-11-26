@@ -2204,8 +2204,10 @@ fn normalize_review_agent(raw: &str) -> Result<String> {
         "codex" => Ok("codex".to_string()),
         "antigravity" | "agy" => Ok("agy".to_string()),
         "gemini" => Ok("gemini".to_string()),
+        "opencode" => Ok("opencode".to_string()),
+        "pi" => Ok("pi".to_string()),
         other => anyhow::bail!(
-            "unsupported review agent `{other}` (expected `claude`, `codex`, `antigravity`/`agy`, or `gemini`)"
+            "unsupported review agent `{other}` (expected `claude`, `codex`, `antigravity`/`agy`, `gemini`, `opencode`, or `pi`)"
         ),
     }
 }
@@ -2361,10 +2363,33 @@ fn resolve_challenger_target(
     } else if challenger_agent != finder_agent {
         challenger_tuning.effort
     } else {
-        finder_effort.map(str::to_string)
+        // Single-vendor opposition fallback (e.g. Codex-only work environments):
+        // when the Challenger shares the Finder's vendor and no explicit challenger effort
+        // was set, automatically step up reasoning effort by one tier (`low`->`medium`,
+        // `medium`->`high`, `high`->`xhigh` on codex) so Pass 2 challenges Pass 1 with
+        // deeper reasoning depth.
+        Some(step_up_challenger_effort(
+            &challenger_agent,
+            finder_effort.or(challenger_tuning.effort.as_deref()),
+        ))
     };
 
     Ok((challenger_agent, challenger_model, challenger_effort))
+}
+
+/// Step up reasoning effort by one tier when Finder and Challenger run on the same vendor
+/// (single-vendor opposition fallback).
+// trace:STORY-3120 | ai:antigravity
+fn step_up_challenger_effort(agent: &str, finder_effort: Option<&str>) -> String {
+    match finder_effort
+        .map(|e| e.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("low") => "medium".to_string(),
+        Some("medium") | None => "high".to_string(),
+        Some("high") if agent == "codex" => "xhigh".to_string(),
+        Some(other) => other.to_string(),
+    }
 }
 
 fn auto_opposing_agent(project_root: &Path, finder_agent: &str) -> String {
@@ -2895,6 +2920,26 @@ fn invoke_review_runner(
             args.push("-p".to_string());
             args.push(prompt.to_string());
             ("gemini", args, false)
+        }
+        "opencode" => {
+            let mut args = vec!["run".to_string()];
+            if let Some(model) = effective_model {
+                args.push("--model".to_string());
+                args.push(model);
+            }
+            ("opencode", args, true)
+        }
+        "pi" => {
+            let mut args = vec!["--print".to_string()];
+            if let Some(model) = effective_model {
+                args.push("--model".to_string());
+                args.push(model);
+            }
+            if let Some(effort) = effective_effort {
+                args.push("--thinking".to_string());
+                args.push(effort);
+            }
+            ("pi", args, true)
         }
         _ => {
             let mut args = vec!["--print".to_string()];
@@ -3487,7 +3532,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 .unwrap(),
             "gemini"
         );
-        // 3. Explicit `--agent` flag overrides project config.
+        // 3. Explicit `--agent` flag overrides project config (including `opencode` and `pi`).
         let args_with_flag = ReviewPrepareArgs {
             agent: Some("antigravity".into()),
             ..Default::default()
@@ -3496,5 +3541,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             resolve_review_runner_agent(root, &args_with_flag, &rules_with_gemini).unwrap(),
             "agy"
         );
+        assert_eq!(normalize_review_agent("opencode").unwrap(), "opencode");
+        assert_eq!(normalize_review_agent("pi").unwrap(), "pi");
+        // 4. Single-vendor opposition fallback steps up Challenger effort by one tier
+        //    (`low`->`medium`, `medium`->`high`, `high`->`xhigh` on codex):
+        assert_eq!(step_up_challenger_effort("codex", Some("low")), "medium");
+        assert_eq!(step_up_challenger_effort("codex", Some("medium")), "high");
+        assert_eq!(step_up_challenger_effort("codex", Some("high")), "xhigh");
     }
 }
