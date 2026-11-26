@@ -56,8 +56,11 @@ pub enum ReportCommand {
     /// Each open spec gets an area, a size (S/M/L/XL), its priority and status,
     /// and a noise flag for review-finding specs. Areas are ranked by a weighted
     /// blend of open and high-priority specs, change requests in the last 7
-    /// days, open PRs and 14-day file churn. The area map and weights live
-    /// under `[report.backlog]` in `.aida/config.toml`.
+    /// days, open PRs and 14-day file churn. A flow section shows landings per
+    /// day, open-to-landed time, change-request rounds, rework sinks and stale
+    /// claims; recommendations list commands to run, and the report runs none.
+    /// The area map, weights and `stale_days` live under `[report.backlog]` in
+    /// `.aida/config.toml`.
     // trace:STORY-3143 | ai:claude
     Backlog {
         /// Emit JSON (same as the global `--format json`).
