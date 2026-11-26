@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T08:22:16.035522754Z
+modified_at: 2026-11-26T09:20:21.940071960Z
 req_type: Story
 tags:
 - planning
@@ -100,6 +100,23 @@ comments:
   modified_at: 2026-11-26T08:18:11.172372197Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21727-ebb4-7ed1-8f72-9eba67cbf1a6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: aeb2552859 (S2, completing STORY-3143; PR #4641).
+
+    AC3 [evidence: behavioral-test]: flow section in aida-cli-lib/src/backlog_report.rs. Functions: parse_landings ((#N) subjects on origin/main + origin/integration, deduped), flow (per-day landings, open->landed median/p90 from Forge::landing_opened_since, CR rounds before landing from the ledger, 7d rework sinks) and stale_claims (InProgress, modified_at >= stale_days old, no lease or open PR). Tests: story_3143_landings_parse_pr_numbers_from_subjects, story_3143_flow_metrics_from_fixture_ledger, story_3143_stale_claims_and_recommendations.
+    AC4 [evidence: behavioral-test]: recommendations() prints fold (superseded-by or defer), release (edit --status approved) and park (defer, open sinks only) commands and runs none. Test: story_3143_stale_claims_and_recommendations.
+    S1 deferred: the code areas now have default path prefixes; the longest prefix wins; a multi-spec PR counts toward each area it names; ledger CR-by-area has a fixture test (cr_by_area). Test: story_3143_default_areas_map_code_paths.
+
+    Probe findings fixed: (1) leases or open PRs that cannot be read made every claim look unheld, which is fail-open. Stale claims are now None (shown as unknown) and no release is prescribed. (2) A rework sink that had already landed got a park command; parking now applies only to open specs. (3) Vec::truncate tripped the store-writer ratchet, so it uses take(10). (4) A raw gh read outside forge tripped the forge-read ratchet, so it moved to a Forge trait method.
+    Validation: targeted story_3143 tests 8/8, help golden test, make check-ci-fast pass.
+    Residual risks: idle driver is approximated by modified_at; gather_signals IO is not unit-tested; about 270 production + 260 test lines, over the 300-line budget; not smoke-run against the live store from this seat.
+  created_at: 2026-11-26T09:20:21.940071960Z
+  modified_at: 2026-11-26T09:20:21.940071960Z
+  session_id: 01a216f25e3b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
