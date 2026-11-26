@@ -10,12 +10,12 @@ description: |
   - AC2: per-area HOTNESS = a weighted blend of open count, high-priority count, the 7-day change-request rate (gate ledger), open PRs and 14-day churn of the area paths; weights live in config.
   - AC3: flow section: landings per day (main + integration, matching train-landed PRs by commit subject), median/p90 open→landed, CR rounds before landing, rework sinks (specs by CR count in 7d), and stale claims (InProgress with an idle driver ≥ N days and no lease or PR).
   - AC4: a recommendations section with prescribed commands (fold noise, release stale claims, park rework sinks), never acting on its own.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-26T10:50:41.255180765Z
+modified_at: 2026-11-26T10:55:27.603072006Z
 req_type: Story
 tags:
 - planning
@@ -147,6 +147,11 @@ comments:
     A reference merge (commit 0bafa23523b8, `(Refs STORY-3143)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-26T10:50:41.255175798Z
   modified_at: 2026-11-26T10:50:41.255175798Z
+- id: 01a2177e-fb73-7f93-8224-14b01eb5b19f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3143 S2 (completing). AC2 verified by story_3143_hotness_blends_weighted_signals, story_3143_default_areas_map_code_paths and cr_by_area in story_3143_flow_metrics_from_fixture_ledger. AC3 verified by story_3143_landings_parse_pr_numbers_from_subjects, story_3143_flow_metrics_from_fixture_ledger and story_3143_stale_claims_and_recommendations; it fails closed on an unknown holder set. AC4 verified by story_3143_stale_claims_and_recommendations; the prescribed `aida edit --superseded-by`, `aida defer --until manual:` and `--status approved` flags exist and nothing is executed. AC1 is unmet: the AC requires --format table|json|html and HTML is not implemented, yet the PR claims completion. Blocking: unmet-claimed-ac. The p3/test-gap items are follow-ups. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-26T10:55:27.603063802Z
+  modified_at: 2026-11-26T10:55:27.603063802Z
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
@@ -196,6 +201,13 @@ history:
   author: dirtlab
   timestamp: 2026-11-26T09:41:55.586028689Z
   changes: []
+- id: 01a2177e-fb73-7f93-8224-14a342340d8d
+  author: joe
+  timestamp: 2026-11-26T10:55:27.603053521Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ea1b3c35df8f86104baae344cab32fb4c84ce600
@@ -204,11 +216,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ea1b3c35df8
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STORY-3143 S2 (completing). AC2 verified by story_3143_hotness_blends_weighted_signals, story_3143_default_areas_map_code_paths and cr_by_area in story_3143_flow_metrics_from_fixture_ledger. AC3 verified by story_3143_landings_parse_pr_numbers_from_subjects, story_3143_flow_metrics_from_fixture_ledger and story_3143_stale_claims_and_recommendations; it fails closed on an unknown holder set. AC4 verified by story_3143_stale_claims_and_recommendations; the prescribed `aida edit --superseded-by`, `aida defer --until manual:` and `--status approved` flags exist and nothing is executed. AC1 is unmet: the AC requires --format table|json|html and HTML is not implemented, yet the PR claims completion. Blocking: unmet-claimed-ac. The p3/test-gap items are follow-ups. CI pending at review time.'
-  recovery_hint: address the review findings, move STORY-3143 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-26T09:32:47.372058371Z
