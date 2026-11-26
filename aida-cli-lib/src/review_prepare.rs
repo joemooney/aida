@@ -431,7 +431,10 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     // review is still published. trace:STORY-3120 | ai:claude
     if args.post_comment {
         let pr = args.pr.context("--post-comment needs --pr")?;
-        post_review_comment(pr_forge(&project_root)?.as_ref(), pr, &bundle)?;
+        let full_report = (args.write.as_ref().or(args.sarif.as_ref()))
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| format!("aida review prepare --pr {pr} --write <file>"));
+        post_review_comment(pr_forge(&project_root)?.as_ref(), pr, &bundle, &full_report)?;
     }
     if let (Some(threshold), Some(matches)) = (&args.fail_on, exceeded) {
         anyhow::ensure!(
@@ -597,12 +600,14 @@ fn pr_forge(project_root: &Path) -> Result<Box<dyn crate::forge::Forge>> {
     })
 }
 
-/// Post the rendered bundle on change `pr` through `forge`.
+/// Post the bundle on change `pr` through `forge`, capped by
+/// [`comment_markdown`]; `full_report` names where the whole report is.
 // trace:STORY-3120 | ai:claude
 fn post_review_comment(
     forge: &dyn crate::forge::Forge,
     pr: u64,
     bundle: &ReviewPreparationBundle,
+    full_report: &str,
 ) -> Result<()> {
     let change = crate::forge::ChangeRef {
         id: pr,
@@ -612,7 +617,7 @@ fn post_review_comment(
         title: None,
     };
     forge
-        .comment(&change, &render_bundle_markdown(bundle))
+        .comment(&change, &comment_markdown(bundle, full_report))
         .with_context(|| format!("post review comment on change {pr}"))
 }
 
@@ -1071,6 +1076,23 @@ fn resolve_linked_specs(
 }
 
 fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
+    report_pieces(bundle).into_iter().map(|p| p.text).collect()
+}
+
+/// A slice of the rendered report with balanced fences, and how many
+/// findings it carries.
+// trace:STORY-3120 | ai:claude
+struct ReportPiece {
+    text: String,
+    findings: usize,
+}
+
+/// The report in priority order: summary and coverage, then findings, then
+/// the inventory, so a capped comment trims the inventory first.
+// trace:STORY-3120 | ai:claude
+fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
+    let mut pieces = Vec::new();
+    let mut push = |text: String, findings: usize| pieces.push(ReportPiece { text, findings });
     let mut out = String::new();
     out.push_str("# AIDA Deterministic Review Preparation\n\n");
     out.push_str(&format!("- **Mode**: `{}`\n", bundle.mode));
@@ -1091,83 +1113,6 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         bundle.batches.len()
     ));
 
-    if !bundle.linked_specs.is_empty() {
-        out.push_str("## Linked AIDA Requirement Acceptance Criteria\n\n");
-        for spec in &bundle.linked_specs {
-            out.push_str(&format!(
-                "### {} — {} (`{}`)\n\n{}\n\n",
-                aida_core::node_alias::display_spec_id(&spec.spec_id),
-                spec.title,
-                spec.status,
-                spec.acceptance_markdown
-            ));
-        }
-    }
-
-    out.push_str("## Reviewable File Inventory (100% Accountability Required)\n\n");
-    if bundle.inventory.reviewable_files.is_empty() {
-        out.push_str("_No reviewable files in scope._\n\n");
-    } else {
-        for f in &bundle.inventory.reviewable_files {
-            let trace_badge = if f.has_trace_comment {
-                "trace:yes"
-            } else {
-                "trace:no"
-            };
-            out.push_str(&format!(
-                "- {} ({}, +{} / -{}, ~{} tok, playbook:`{}`, {})\n",
-                code_span(&f.path),
-                f.kind.as_str(),
-                f.additions,
-                f.deletions,
-                f.estimated_tokens,
-                f.playbook_id,
-                trace_badge
-            ));
-        }
-        out.push('\n');
-    }
-
-    if !bundle.batches.is_empty() {
-        out.push_str("## Token-Budgeted Semantic Review Batches\n\n");
-        for b in &bundle.batches {
-            out.push_str(&format!(
-                "### Batch {} — `{}` (~{} tokens, playbooks: `{}`)\n",
-                b.batch_index,
-                b.label,
-                b.estimated_tokens,
-                b.playbook_ids.join(", ")
-            ));
-            for path in &b.files {
-                out.push_str(&format!("  - {}\n", code_span(path)));
-            }
-            out.push('\n');
-        }
-    }
-
-    if !bundle.playbooks.is_empty() {
-        out.push_str("## Active Path-Scoped Review Playbooks\n\n");
-        for pb in &bundle.playbooks {
-            out.push_str(&format!(
-                "### Playbook `{}` — {} (`{}`)\n\n{}\n\n",
-                pb.id, pb.title, pb.pattern, pb.checklist
-            ));
-        }
-    }
-
-    if !bundle.inventory.excluded_files.is_empty() {
-        out.push_str("## Excluded Files\n\n");
-        for ex in &bundle.inventory.excluded_files {
-            out.push_str(&format!(
-                "- {} ({}) -> `{}`\n",
-                code_span(&ex.path),
-                ex.kind.as_str(),
-                ex.reason
-            ));
-        }
-        out.push('\n');
-    }
-
     if let Some(cov) = &bundle.coverage_verification {
         out.push_str("## File Coverage Verification\n\n");
         out.push_str(&format!(
@@ -1181,34 +1126,27 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
                 fenced(&file.reason)
             ));
         }
-        if !cov.ambiguous_files.is_empty() {
-            out.push_str(&format!(
-                "- **Ambiguous ledger rows**: {}\n",
-                code_span(&cov.ambiguous_files.join(", "))
-            ));
-        }
-        if !cov.unaccounted_files.is_empty() {
-            out.push_str(&format!(
-                "- **Unaccounted files**: {}\n",
-                code_span(&cov.unaccounted_files.join(", "))
-            ));
-        }
-        if !cov.skipped_without_reason.is_empty() {
-            out.push_str(&format!(
-                "- **Skipped without reason**: {}\n",
-                code_span(&cov.skipped_without_reason.join(", "))
-            ));
+        for (label, files) in [
+            ("Ambiguous ledger rows", &cov.ambiguous_files),
+            ("Unaccounted files", &cov.unaccounted_files),
+            ("Skipped without reason", &cov.skipped_without_reason),
+        ] {
+            if !files.is_empty() {
+                let list = code_span(&files.join(", "));
+                out.push_str(&format!("- **{label}**: {list}\n"));
+            }
         }
         out.push('\n');
     }
+    push(std::mem::take(&mut out), 0);
 
     // Every runner-supplied string is fenced. trace:STORY-3120 | ai:claude
     if let Some(found) = &bundle.anchored_findings {
-        out.push_str(&format!("## Findings ({})\n\n", found.len()));
+        push(format!("## Findings ({})\n\n", found.len()), 0);
         for f in found {
-            out.push_str(&finding_markdown("-", f));
+            push(finding_markdown("-", f), 1);
         }
-        out.push('\n');
+        push("\n".into(), 0);
     }
     if let Some(adv) = &bundle.adversarial {
         let agent = adv.challenger_agent.as_deref().unwrap_or("custom runner");
@@ -1218,14 +1156,177 @@ fn render_bundle_markdown(bundle: &ReviewPreparationBundle) -> String {
         if let Some(note) = &adv.note {
             out.push_str(&format!("- **Note**: {note}\n"));
         }
+        push(std::mem::take(&mut out), 0);
         for r in &adv.refuted {
-            out.push_str(&finding_markdown("- **Refuted**", &r.finding));
-            out.push_str(&format!("  Challenger reason:\n{}", fenced(&r.reason)));
+            let mut text = finding_markdown("- **Refuted**", &r.finding);
+            text.push_str(&format!("  Challenger reason:\n{}", fenced(&r.reason)));
+            push(text, 1);
         }
-        out.push('\n');
+        push("\n".into(), 0);
     }
 
-    out
+    if !bundle.linked_specs.is_empty() {
+        push(
+            "## Linked AIDA Requirement Acceptance Criteria\n\n".into(),
+            0,
+        );
+        for spec in &bundle.linked_specs {
+            push(
+                format!(
+                    "### {} — {} (`{}`)\n\n{}\n\n",
+                    code_span(&aida_core::node_alias::display_spec_id(&spec.spec_id)),
+                    spec.title,
+                    spec.status,
+                    spec.acceptance_markdown
+                ),
+                0,
+            );
+        }
+    }
+
+    push(
+        "## Reviewable File Inventory (100% Accountability Required)\n\n".into(),
+        0,
+    );
+    if bundle.inventory.reviewable_files.is_empty() {
+        push("_No reviewable files in scope._\n\n".into(), 0);
+    } else {
+        for f in &bundle.inventory.reviewable_files {
+            let trace_badge = if f.has_trace_comment {
+                "trace:yes"
+            } else {
+                "trace:no"
+            };
+            push(
+                format!(
+                    "- {} ({}, +{} / -{}, ~{} tok, playbook:`{}`, {})\n",
+                    code_span(&f.path),
+                    f.kind.as_str(),
+                    f.additions,
+                    f.deletions,
+                    f.estimated_tokens,
+                    f.playbook_id,
+                    trace_badge
+                ),
+                0,
+            );
+        }
+        push("\n".into(), 0);
+    }
+
+    if !bundle.batches.is_empty() {
+        push("## Token-Budgeted Semantic Review Batches\n\n".into(), 0);
+        for b in &bundle.batches {
+            let mut text = format!(
+                "### Batch {} — `{}` (~{} tokens, playbooks: `{}`)\n",
+                b.batch_index,
+                b.label,
+                b.estimated_tokens,
+                b.playbook_ids.join(", ")
+            );
+            for path in &b.files {
+                text.push_str(&format!("  - {}\n", code_span(path)));
+            }
+            text.push('\n');
+            push(text, 0);
+        }
+    }
+
+    if !bundle.playbooks.is_empty() {
+        push("## Active Path-Scoped Review Playbooks\n\n".into(), 0);
+        for pb in &bundle.playbooks {
+            push(
+                format!(
+                    "### Playbook `{}` — {} (`{}`)\n\n{}\n\n",
+                    pb.id,
+                    code_span(&pb.title),
+                    pb.pattern,
+                    pb.checklist
+                ),
+                0,
+            );
+        }
+    }
+
+    if !bundle.inventory.excluded_files.is_empty() {
+        push("## Excluded Files\n\n".into(), 0);
+        for ex in &bundle.inventory.excluded_files {
+            push(
+                format!(
+                    "- {} ({}) -> `{}`\n",
+                    code_span(&ex.path),
+                    ex.kind.as_str(),
+                    ex.reason
+                ),
+                0,
+            );
+        }
+        push("\n".into(), 0);
+    }
+    pieces
+}
+
+/// GitHub rejects a comment over 65,536 characters; this many bytes (so at
+/// most this many characters) leaves room for the truncation note.
+// trace:STORY-3120 | ai:claude
+const COMMENT_CAP: usize = 60_000;
+
+/// The report as a comment of at most [`COMMENT_CAP`] bytes. Pieces are kept
+/// whole in priority order; the first that does not fit is cut on a line
+/// boundary with any open fence closed, and everything after it is dropped
+/// behind a note naming the omitted findings and where the full report is.
+// trace:STORY-3120 | ai:claude
+fn comment_markdown(bundle: &ReviewPreparationBundle, full_report: &str) -> String {
+    let pieces = report_pieces(bundle);
+    if pieces.iter().map(|p| p.text.len()).sum::<usize>() <= COMMENT_CAP {
+        return pieces.into_iter().map(|p| p.text).collect();
+    }
+    let total: usize = pieces.iter().map(|p| p.findings).sum();
+    let note = |kept: usize| {
+        format!(
+            "\n---\n\ntruncated: {} findings omitted; full report at {}\n",
+            total - kept,
+            code_span(full_report)
+        )
+    };
+    let room = COMMENT_CAP.saturating_sub(note(0).len() + 20);
+    let (mut out, mut kept) = (String::new(), 0);
+    for piece in &pieces {
+        if out.len() + piece.text.len() <= room {
+            out.push_str(&piece.text);
+            kept += piece.findings;
+            continue;
+        }
+        out.push_str(&cut_balanced(&piece.text, room - out.len()));
+        break;
+    }
+    out + &note(kept)
+}
+
+/// The longest whole-line prefix of `text` that, with any fence it leaves
+/// open closed, fits in `room` bytes. Line cuts keep code spans whole.
+// trace:STORY-3120 | ai:claude
+fn cut_balanced(text: &str, room: usize) -> String {
+    let (mut out, mut open) = (String::new(), None::<String>);
+    for line in text.split_inclusive('\n') {
+        let trimmed = line.trim();
+        let ticks: String = trimmed.chars().take_while(|&c| c == '`').collect();
+        let after = match &open {
+            Some(fence) if trimmed == fence => None,
+            None if ticks.len() >= 3 => Some(ticks),
+            other => other.clone(),
+        };
+        let closer = after.as_ref().map_or(0, |f| f.len() + 4);
+        if !line.ends_with('\n') || out.len() + line.len() + closer > room {
+            break;
+        }
+        out.push_str(line);
+        open = after;
+    }
+    match open {
+        Some(fence) => format!("{out}  {fence}\n"),
+        None => out,
+    }
 }
 
 /// One finding: severity, category and location as code spans, the message
@@ -2095,26 +2196,14 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             }),
         };
         let forge = crate::forge::fake::RecordingForge::new();
-        post_review_comment(&forge, 42, &bundle).unwrap();
+        post_review_comment(&forge, 42, &bundle, "out.md").unwrap();
         let posted = forge.commented();
         assert_eq!(posted.len(), 1);
         let (pr, body) = &posted[0];
         assert_eq!(*pr, 42);
         // Outside code, no agent text survives: strip every code span and
         // fenced block and check what Markdown would still render.
-        let mut prose = String::new();
-        let mut fence: Option<String> = None;
-        for line in body.lines() {
-            let trimmed = line.trim_start();
-            let ticks: String = trimmed.chars().take_while(|&c| c == '`').collect();
-            match &fence {
-                Some(open) if trimmed.trim_end() == open => fence = None,
-                Some(_) => {}
-                None if ticks.len() >= 3 => fence = Some(ticks),
-                None => prose.push_str(&strip_code_spans(line)),
-            }
-        }
-        assert!(fence.is_none(), "unclosed fence:\n{body}");
+        let prose = prose_outside_code(body);
         for live in [
             "@octocat",
             "@team",
@@ -2133,6 +2222,107 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(
             body.contains("@octocat <img src=x onerror=alert(1)>"),
             "{body}"
+        );
+    }
+
+    /// `body` outside fenced blocks and code spans; panics on an unclosed fence.
+    fn prose_outside_code(body: &str) -> String {
+        let mut prose = String::new();
+        let mut fence: Option<String> = None;
+        for line in body.lines() {
+            let trimmed = line.trim_start();
+            let ticks: String = trimmed.chars().take_while(|&c| c == '`').collect();
+            match &fence {
+                Some(open) if trimmed.trim_end() == open => fence = None,
+                Some(_) => {}
+                None if ticks.len() >= 3 => fence = Some(ticks),
+                None => prose.push_str(&strip_code_spans(line)),
+            }
+        }
+        assert!(fence.is_none(), "unclosed fence:\n{body}");
+        prose
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced() {
+        let finding = |i: usize, message: String| -> RawReviewFinding {
+            serde_json::from_value(serde_json::json!({"path": format!("src/f{i}.rs"),
+                "severity": "high", "category": "bug", "message": message}))
+            .unwrap()
+        };
+        // Multibyte text and backtick runs inside every finding message.
+        let message = |i: usize| format!("é ``` ü {i}\n{}", "ñ`x".repeat(120));
+        let file = |i: usize| aida_core::review_engine::ReviewableFile {
+            path: format!("src/very/long/path/to/inventory/file_{i:05}.rs"),
+            old_path: None,
+            kind: FileChangeKind::Modified,
+            additions: 1,
+            deletions: 1,
+            estimated_tokens: 10,
+            playbook_id: "default".into(),
+            has_trace_comment: false,
+        };
+        let mut bundle = ReviewPreparationBundle {
+            mode: "range".into(),
+            base_ref: None,
+            head_ref: None,
+            merge_base: Some("b".repeat(40)),
+            inventory: ClassifiedInventory {
+                reviewable_files: (0..1500).map(file).collect(),
+                excluded_files: Vec::new(),
+                inventory_sha256: String::new(),
+            },
+            batches: Vec::new(),
+            playbooks: Vec::new(),
+            linked_specs: Vec::new(),
+            coverage_verification: None,
+            anchored_findings: Some((0..150).map(|i| finding(i, message(i))).collect()),
+            adversarial: None,
+        };
+        let full = render_bundle_markdown(&bundle);
+        assert!(full.chars().count() > 70_000, "{}", full.len());
+        // Posted through the real GitHub client to a fake gh: body on stdin.
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::EnvVarsGuard::set(&[]);
+        let gh = root.join("gh");
+        crate::test_exec::write_executable(
+            &gh,
+            &format!(
+                "#!/bin/sh\necho \"$@\" > '{0}/argv'\ncat > '{0}/body'\n",
+                root.display()
+            ),
+        );
+        env.set_key("AIDA_TEST_GH_BINARY", &gh);
+        let forge = crate::forge::GitHubForge::new(root);
+        post_review_comment(&forge, 7, &bundle, "report.md").unwrap();
+        let argv = std::fs::read_to_string(root.join("argv")).unwrap();
+        assert_eq!(argv.trim(), "pr comment 7 --body-file -");
+        let body = String::from_utf8(std::fs::read(root.join("body")).unwrap()).unwrap();
+        assert!(body.len() <= COMMENT_CAP, "{}", body.len());
+        prose_outside_code(&body);
+        assert!(body.starts_with("# AIDA Deterministic Review Preparation"));
+        assert!(
+            body.contains("## Findings (150)"),
+            "summary and findings first"
+        );
+        assert!(!body.contains("file_01499.rs"), "inventory trimmed first");
+        let note = "findings omitted; full report at ` report.md `";
+        assert!(
+            body.trim_end().ends_with(note),
+            "{}",
+            &body[body.len() - 300..]
+        );
+        // One finding past the cap is cut inside its fence, which is closed.
+        bundle.inventory.reviewable_files.clear();
+        bundle.anchored_findings = Some(vec![finding(0, "``ü\n".repeat(30_000))]);
+        let body = comment_markdown(&bundle, "report.md");
+        assert!(body.len() <= COMMENT_CAP, "{}", body.len());
+        prose_outside_code(&body);
+        assert!(
+            body.contains("truncated: 1 findings omitted"),
+            "{body:.300}"
         );
     }
 

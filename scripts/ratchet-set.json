@@ -64,6 +64,7 @@
         "s4_adversarial_run_suppresses_but_gates_refuted_findings",
         "s5_post_comment_is_opt_in_and_requires_pr",
         "s5_posted_comment_renders_agent_text_inert",
+        "s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",

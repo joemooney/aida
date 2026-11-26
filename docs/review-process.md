@@ -311,6 +311,8 @@ The comment goes through AIDA's forge client for the origin, the same one that r
 
 Agent text in the report never renders as Markdown. Each finding's message and each challenger reason sits in a code block whose fence is longer than any backtick run in the text. Paths, severities and categories are code spans. Mentions, HTML, links and headings in that text show up as literal characters.
 
+On GitHub the body goes to `gh` on standard input, not the command line, so a large report cannot overflow the argument limit. A comment is capped at 60,000 characters, under GitHub's 65,536 limit. The summary, coverage and findings come first and the file inventory last, so the inventory is trimmed first. A cut falls on a line boundary, any open code block is closed, and a closing note says how many findings were left out and where the full report is: the `--write` file, else the `--sarif` file.
+
 The comment is posted before the `--fail-on` and coverage checks, so a run that fails still publishes its findings.
 <!-- trace:STORY-3120 | ai:claude -->
 

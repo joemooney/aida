@@ -2389,6 +2389,37 @@ impl GitHubForge {
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 
+    /// [`Self::gh`] with `input` written to its stdin from a writer thread,
+    /// so a child that fills its output pipes before reading cannot deadlock.
+    // trace:STORY-3120 | ai:claude
+    fn gh_stdin(&self, args: &[&str], input: &str) -> Result<std::process::Output> {
+        use std::io::Write;
+        crate::pr_train::before_train_forge_call("GitHub command")?;
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let mut child = Command::new(&gh)
+            .current_dir(&self.project_root)
+            .args(args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn_retrying_etxtbsy()
+            .context("could not invoke `gh` — is the GitHub CLI installed?")?;
+        let mut stdin = child.stdin.take().context("no stdin for `gh`")?;
+        let body = input.to_owned();
+        let writer = std::thread::spawn(move || stdin.write_all(body.as_bytes()));
+        let out = child.wait_with_output().context("wait for `gh`")?;
+        let written = writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("gh stdin writer panicked"))?;
+        // A child that exits without reading reports through its status.
+        if out.status.success() {
+            written.context("write `gh` stdin")?;
+        }
+        Ok(out)
+    }
+
     // trace:BUG-2492 | ai:codex — retain hold labels for coarse pending classification.
     fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
         let out = self.gh(&[
@@ -3543,10 +3574,11 @@ impl Forge for GitHubForge {
 
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
         let id = c.id.to_string();
-        let mut args = vec!["pr", "comment", &id, "--body", body];
+        // The body goes on stdin: a large review in argv fails with E2BIG.
+        let mut args = vec!["pr", "comment", &id, "--body-file", "-"];
         // A pinned client posts to the repository it read. trace:STORY-3120 | ai:claude
         args.extend(self.metadata_repo.iter().flat_map(|r| ["-R", r.as_str()]));
-        let out = self.gh(&args)?;
+        let out = self.gh_stdin(&args, body)?;
         anyhow::ensure!(out.status.success(), "gh pr comment failed for #{}", c.id);
         Ok(())
     }
