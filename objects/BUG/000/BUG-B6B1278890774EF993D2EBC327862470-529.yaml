@@ -9,12 +9,12 @@ description: |
   - AC1: confirm or refute the memory cause from the evidence (e.g. a lib-1 run with `/usr/bin/time -v` or memory sampling around the build, or the hosted runner diagnostics), recorded on the spec.
   - AC2: if memory: bound lib-1's peak (e.g. CARGO_BUILD_JOBS for that shard, codegen-units/debuginfo trimming for the test profile, or split lib-1 further by module) so lib-1 completes under the hosted limits in 3 consecutive runs.
   - AC3: a clear, early failure in place of the silent shutdown: if the shard approaches its memory budget or the deadline, fail with a message naming the shard and the cause.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T05:19:07.125681109Z
+modified_at: 2026-11-26T05:21:11.241123969Z
 req_type: Bug
 tags:
 - ci
@@ -90,6 +90,12 @@ comments:
   created_at: 2026-11-26T05:19:07.125676681Z
   modified_at: 2026-11-26T05:19:07.125676681Z
   session_id: 01a216104e2c
+- id: 01a2164c-f333-7060-9d0d-bcb177900bad
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-26T05:21:11.475521678Z
+  modified_at: 2026-11-26T05:21:11.475521678Z
+  session_id: 01a216486046
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
@@ -117,6 +123,14 @@ history:
   session_id: 01a216104e2c
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a2164c-f333-7060-9d0d-bcaf17064e33
+  author: aida-orchestrator
+  timestamp: 2026-11-26T05:21:11.475519125Z
+  session_id: 01a216486046
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
@@ -125,3 +139,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 68ecbd82409
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2768 (completing trailer; head is 2 commits behind main, and no finding depends on the base change). AC3 [behavioral] verified: test_resource_watch_names_shard_and_cause (floor strikes, reset on recovery, deadline, unset disables) and test_breach_kills_the_lane_and_main_fails_with_the_cause (a real child is killed and main returns 1 with the shard named). The existing main() tests were moved to the run_watched seam. Bug protocol ''the PR touches at least one test file'': met (tests/test_ci_test_shards.py). AC1 unverified: no confirm/refute is recorded on the spec. AC2 unverified: there are no 3 consecutive green hosted lib-1 runs, and this head''s lib-1 is still running (CI pending at review time; fast, compile and build jobs are green). The code and workflow changes look correct: the profile override is consistent between build and test, it is hosted lib lanes only, the cache key is split, and the dell1 floor is disabled. Rework: record the AC1/AC2 CI evidence on the spec, or switch the trailer to Refs. Three p3 follow-ups are noted.'
+  recovery_hint: address the review findings, move BUG-2768 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-26T05:21:11.241123969Z
