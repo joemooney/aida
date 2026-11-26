@@ -4,3 +4,19 @@
 .guide-graphic{width:100%;height:auto}.guide figure{margin:0 0 36px}
 /* trace:TASK-B6B1278890774EF993D2EBC327862470-111 | ai:codex */
 .library-search{display:grid;grid-template-columns:2fr 1fr;gap:16px;padding:24px;background:#e9e5da;border:1px solid var(--line);margin:32px 0}.library-search label{display:block;font-weight:600;margin-bottom:8px}.library-search input,.library-search select,.library-search button{font:inherit;min-width:0;max-width:100%;width:100%;padding:12px;border:1px solid #7b826f;background:var(--paper);color:var(--ink)}.library-search button{width:auto;cursor:pointer}.library-search input:focus-visible,.library-search select:focus-visible,.library-search button:focus-visible{outline:3px solid var(--orange);outline-offset:3px}.library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.library-card{padding:24px;border:1px solid var(--line);overflow-wrap:anywhere}.library-card[hidden]{display:none}.library-card h2{font-size:29px;margin-top:18px}.library-card .eyebrow{font-size:12px;text-transform:uppercase}.library-card .excerpt{font-size:15px}@media(max-width:600px){.library-grid,.library-search{grid-template-columns:1fr}}@media print{.library-search,#search-status{display:none}.library-grid{display:block}.library-card{break-inside:avoid;margin-bottom:16px}}
+/* trace:STORY-2839 | ai:claude — wide pipe tables scroll inside their wrapper; dark-theme guide surfaces */
+.table-wrap{overflow-x:auto;max-width:100%;margin:24px 0 36px;border:1px solid var(--line);background:#eeebe2}
+.guide table{width:100%;border-collapse:collapse;font-size:14.5px;line-height:1.6}
+.guide th,.guide td{padding:12px 15px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+.guide th:last-child,.guide td:last-child{border-right:0}
+.guide tr:last-child td{border-bottom:0}
+.guide th{background:#e3dfd3;font:600 11px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.8px;color:var(--ink)}
+.guide tbody tr:nth-child(even) td{background:var(--paper)}
+.guide td code,.guide th code{font-size:12px;background:#e4e0d4;padding:2px 5px;border-radius:3px}
+html[data-theme="terminal"] .guide pre{background:#181d1a;color:#ece9e0}
+html[data-theme="terminal"] .table-wrap{background:#161b18}
+html[data-theme="terminal"] .guide th{background:#1e2521;color:#ece9e0}
+html[data-theme="terminal"] .guide td code,html[data-theme="terminal"] .guide th code{background:#232b26;color:#ece9e0}
+html[data-theme="terminal"] .library-search{background:#181d1a}
+html[data-theme="terminal"] .library-search input,html[data-theme="terminal"] .library-search select,html[data-theme="terminal"] .library-search button{background:#111513;border-color:#3a453e;color:#ece9e0}
+html[data-theme="terminal"] .library-card{background:#151a17}
