@@ -312,6 +312,7 @@ fn a_refused_retirement_revokes_the_grant_and_a_second_stamp_keeps_it_revoked() 
         checkout: "/w".into(),
         reason: "canonical preservation not verified".into(),
         needs_activation: false,
+        transient_admission: false,
         retained_dir: None,
     };
     crate::mail_retention::keep_ending_retained(&file, &refusal);

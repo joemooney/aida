@@ -58,6 +58,8 @@ pub mod leftovers;
 pub(crate) mod retire;
 
 #[cfg(test)]
+mod bug_2778_admission_retry_tests;
+#[cfg(test)]
 mod canonical_tests;
 #[cfg(test)]
 mod guard_tests;
