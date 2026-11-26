@@ -12,12 +12,12 @@ description: |
   - AC1: `--run-review` errors print the FULL cause chain (e.g. {:#} / chain()), naming the vendor, pass (finder/challenger), batch, and the concrete cause (deadline exceeded after Ns, output cap, spawn refused: <why>, exit code + stderr tail, parse error).
   - AC2: the "AIDA_REVIEW_RUNNER_CMD runs both passes" note appears ONLY when that variable is actually set; with no --agent, the default vendor resolution is stated ("using <vendor> from [agents] / seat config").
   - AC3: find and fix why a claude runner batch on a ~560-line PR hits the 15-min deadline (e.g. the claude CLI waiting on a prompt or auth in the cleared env, or a missing non-interactive flag); a test with a stub runner for each of the AC1 causes.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T19:55:28.768402965Z
+modified_at: 2026-11-26T20:25:17.533785464Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -31,6 +31,11 @@ relationships:
     custom: implemented-by
   target_id: 01a218e4-5641-79c3-9fb1-0f6bb00b1cbb
   created_at: 2026-11-26T17:25:54.375348229Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21987-e488-7d11-8e37-9e1f1aec6bc3
+  created_at: 2026-11-26T20:24:37.827192078Z
   created_by: dirtlab
 comments:
 - id: 01a218a6-9c3b-76d0-9c19-736c102f04da
@@ -200,6 +205,13 @@ comments:
   modified_at: 2026-11-26T19:55:28.768402965Z
   session_id: 01a21945a85f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21987-95ac-7cf3-ba38-87d21dc5ac96
+  author: aida-publication-done
+  content: Implementer push 4c6c4a8a4988 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T20:24:05.804820578Z
+  modified_at: 2026-11-26T20:24:05.804820578Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
@@ -251,6 +263,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21987-95ac-7cf3-ba38-87cf4f0fbf93
+  author: aida-publication-done
+  timestamp: 2026-11-26T20:24:05.804816862Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21988-21c2-70d3-bcf6-f6a4e998a024
+  author: dirtlab
+  timestamp: 2026-11-26T20:24:41.666689795Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21988-b691-7a73-bb31-bdb49da32286
+  author: dirtlab
+  timestamp: 2026-11-26T20:25:19.761631556Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f

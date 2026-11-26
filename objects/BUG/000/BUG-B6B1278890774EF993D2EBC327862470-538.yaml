@@ -10,12 +10,12 @@ description: |
   - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
   - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
   - AC4: tests for each AC.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T19:31:22.311624599Z
+modified_at: 2026-11-26T20:25:43.655963055Z
 req_type: Bug
 tags:
 - landing
@@ -55,6 +55,41 @@ comments:
   modified_at: 2026-11-26T19:31:22.311624599Z
   session_id: 01a219535435
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21988-b6fa-7510-9530-aff652fb5f94
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 000ed109fe (git diff origin/main...HEAD, 2 commits).
+
+    Acceptance evidence
+    - AC1 [behavioral-test]: typed row `kind: stacked-diff-drift` in .aida/train-culprits.json (pr_train_culprit.rs record_drift; test bug2777_drift_row_is_typed_and_naming_does_not_clear_it). Same-pass routing after drive (pr_train.rs handler, route_drift): update_change_branch pinned to the ejected head, then try_auto_queue_pr_review on the PR branch; a refused update becomes an advisor request naming conflict repair or a fresh slice (test bug2777_drift_routes_to_update_and_review_or_conflict_repair covers both branches and a failed escalation). The ejection reason is a shared STACKED_DRIFT prefix, asserted in build_drops_a_member_whose_diff_changes_when_stacked_even_without_a_conflict.
+    - AC2 [behavioral-test]: culprit_admission checks drift_hold before naming can clear anything, so `aida pr train N` and --all-ready both refuse the same head and print the route. A new head rides (bug2777_a_drifted_head_is_refused_even_when_named). clear() never clears a drift row.
+    - AC3 [behavioral-test]: landing_drought Ready.drift is read from the record; a drift older than 30 min is its own cause, with the route as the fix, even inside the ready dwell; drifted heads do not count as landable (bug2777_stacked_diff_drift_over_30m_is_its_own_cause).
+    - AC4: 18/18 targeted tests pass (lane job: bug2777 bug2767 story_3131 build_drops). make check-ci-fast exit 0.
+
+    Probe findings and fixes
+    - Probe 5 (authority): the branch update first ran without the train's dispatch re-check. Fixed: routing now runs after the rails release the ports and calls ports.dispatch_check() per PR, and skips once authority is lost. It is live trains only, never dry-run or --local-ci.
+    - Probe 3 (multiplicity): a PR ejected by several bisect sub-trains would have been routed N times. Fixed with a routed set.
+    - Probe 1: head matching is case-insensitive in drift, drift_hold and hold. The test that caught a case echo was fixed.
+    - Probe 2: a new serde field with a default reads old rows as Red. An older binary ignores the field, so it treats a drift row as a red culprit (naming clears it there).
+    - Fail-closed: an unreadable record refuses in drift_hold, as hold does.
+    - Store-writer inventory: added a row for record_drift (same run lock as record).
+
+    Residual risks
+    - The TASK-1960 carry-over gate is untouched. If the drift came from an earlier train member rather than from main, the updated head's patch-id could still match and the approval could carry. This needs a gate-side follow-up if it matters.
+    - update-branch is pinned to the ejected head but does not check for a live author lease (the review watcher does). An author pushing at the same time makes the update fail, and the PR is then routed to the advisor.
+    - A no-op update-branch (already up to date) is reported as 'does not update cleanly', with the forge error.
+  created_at: 2026-11-26T20:25:19.866801491Z
+  modified_at: 2026-11-26T20:25:19.866801491Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21989-13e7-7f60-9898-bafb10c2a81d
+  author: aida-publication-done
+  content: Implementer push 36ffea9bc517 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T20:25:43.655962476Z
+  modified_at: 2026-11-26T20:25:43.655962476Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
@@ -67,6 +102,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21989-13e7-7f60-9898-bae4e4fff416
+  author: aida-publication-done
+  timestamp: 2026-11-26T20:25:43.655960519Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b

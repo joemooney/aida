@@ -24,12 +24,6 @@
   added_at: 2026-11-26T18:48:21.238395911Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a218a1-7f9e-7fd0-b7e4-e96e3921122f
-  position: -1346000
-  added_by: role:implementer
-  added_at: 2026-11-26T18:20:43.899686687Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   position: -1345000
   added_by: role:implementer

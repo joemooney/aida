@@ -1,0 +1,67 @@
+id: 01a21987-e488-7d11-8e37-9e1f1aec6bc3
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-370
+title: 'Review PR-4684: [AI:claude] fix(review): default review vendor lives in the vendor table (BUG-2775)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21945`) for branch `bug-2775-fresh`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4684>
+  - Branch: `bug-2775-fresh` → `main`
+
+  ## Covers
+
+  - BUG-2775
+  - BUG-2776
+  - BUG-2772
+  - TASK-3912
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4684` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T20:24:25.992765600Z
+modified_at: 2026-11-26T20:24:44.136204555Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a218a1-7f9e-7fd0-b7e4-e96e3921122f
+  created_at: 2026-11-26T20:24:30.721612149Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a218da-0841-7962-b2ba-dc30177303de
+  created_at: 2026-11-26T20:24:44.136132203Z
+  created_by: dirtlab
+history:
+- id: 01a21988-0741-78b0-a44d-df5b3fde1819
+  author: dirtlab
+  timestamp: 2026-11-26T20:24:34.881722925Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21988-39fe-79b1-89b0-7a023b37d11a
+  author: dirtlab
+  timestamp: 2026-11-26T20:24:47.871005606Z
+  session_id: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 4c6c4a8a4988f0da8b06ebf06f57066c638aa589
+  branch: bug-2775-fresh
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d5a74f31ac
+  vendor: claude
+  session: 01a21945a85f
+  harness_version: 2.1.319 (Claude Code)
