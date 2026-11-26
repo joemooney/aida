@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T04:24:11.001564090Z
+modified_at: 2026-11-26T04:25:51.874785683Z
 req_type: Story
 tags:
 - integration
@@ -841,6 +841,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-26T04:24:10.842691023Z
   modified_at: 2026-11-26T04:24:10.842691023Z
+- id: 01a2161a-8696-7f23-b1da-d206298dd3eb
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:25):
+    # STORY-3120 S3a-2 r1 on #4619 (advisor-122 ruling 2026-11-25 21:21 at a73b2c2f; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int40-story-3120-s3a2b / PR #4619. <=60 lines. Keep the "(Refs STORY-3120)" title.
+    (F1, p2, treat as MUST: it fails open for a CI gate) Use the runner's COVERAGE LEDGER. If it does not cover every reviewable file in the inventory, the --run-review result is INCOMPLETE: a non-zero exit under --fail-on, never a clean pass. TEST: a runner returning {"findings":[]} with no coverage → fails.
+    (F3) One END-TO-END test through handle_review_prepare --run-review proving the trusted-base rules are used, not the worktree's.
+    DEFERRED (do NOT do): F2 (rename context) and F4 (signal the escaped descendant).
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4619. COMMIT your work.
+  created_at: 2026-11-26T04:25:51.874785683Z
+  modified_at: 2026-11-26T04:25:51.874785683Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
