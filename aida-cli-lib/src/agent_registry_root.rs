@@ -348,7 +348,16 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
     // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
     #[cfg(unix)]
     {
-        let leftovers = aida_core::mailbox_lifecycle::leftovers::scan(&project_root, !dry_run);
+        // Only a provably dead owner's leftovers go, and `--older-than`
+        // scopes them too. trace:BUG-2770 | ai:claude
+        let owners = LeftoverOwners::probe(&project_root);
+        let judge = |owner: &leftovers::Owner| owners.judge(owner);
+        let scope = leftovers::Scope {
+            min_age: older_than
+                .map(|days| std::time::Duration::from_secs(days.saturating_mul(86_400))),
+            owner: &judge,
+        };
+        let leftovers = leftovers::scan_scoped(&project_root, !dry_run, &scope);
         for line in gc_leftover_lines(&leftovers, dry_run) {
             println!("{line}");
         }
@@ -425,15 +434,23 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 // trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
 #[cfg(unix)]
-pub(crate) fn gc_leftover_lines(
-    leftovers: &aida_core::mailbox_lifecycle::leftovers::Leftovers,
-    dry_run: bool,
-) -> Vec<String> {
+pub(crate) fn gc_leftover_lines(leftovers: &leftovers::Leftovers, dry_run: bool) -> Vec<String> {
     let verb = if dry_run { "would remove" } else { "removed" };
+    // trace:BUG-2770 | ai:claude
     let removed = leftovers
         .reapable
         .iter()
-        .map(|path| format!("Mailbox leftover: {verb} {}", path.display()));
+        .map(|path| format!("Mailbox leftover: {verb} {} (owner dead)", path.display()));
+    let held = leftovers.held.iter().map(|held| match held.owner {
+        leftovers::OwnerLiveness::Live => format!(
+            "Mailbox leftover kept: {} (owner live: a session or lease still holds its checkout)",
+            held.path.display()
+        ),
+        _ => format!(
+            "Mailbox leftover kept: {} (owner unknown: cannot prove its session ended)",
+            held.path.display()
+        ),
+    });
     let kept = leftovers.stranded_tombs.iter().map(|tomb| {
         format!(
             "Mailbox tomb kept: {} holds entries written after a retirement; move them out by \
@@ -449,7 +466,94 @@ pub(crate) fn gc_leftover_lines(
             aside.display()
         )
     });
-    removed.chain(kept).chain(damaged).collect()
+    removed.chain(held).chain(kept).chain(damaged).collect()
+}
+
+#[cfg(unix)]
+use aida_core::mailbox_lifecycle::leftovers;
+
+/// What `aida agent gc` knows about who holds which checkout: each session
+/// lease's worktree and state, and the working directories of live agent
+/// processes. `complete` is false when a lease could not be read or this
+/// process cannot observe agent processes, so an absent holder proves nothing.
+// trace:BUG-2770 | ai:claude
+#[cfg(unix)]
+pub(crate) struct LeftoverOwners {
+    pub leases: Vec<(std::path::PathBuf, aida_core::liveness::LeaseState)>,
+    pub session_cwds: Vec<std::path::PathBuf>,
+    pub complete: bool,
+}
+
+#[cfg(unix)]
+impl LeftoverOwners {
+    fn probe(project_root: &std::path::Path) -> Self {
+        // Any unreadable lease could hold the checkout being judged.
+        let leases = crate::leases::list_leases_strict_all(project_root);
+        let claude = std::cell::OnceCell::new();
+        let now = chrono::Utc::now();
+        Self {
+            complete: leases.is_ok() && !agent_registry::PidObserver::current().isolated,
+            leases: leases
+                .unwrap_or_default()
+                .iter()
+                .map(|lease| {
+                    let state =
+                        crate::ownership::reader::doctor_lease_liveness(lease, &claude, now);
+                    (canonical(&lease.worktree_path), state.0)
+                })
+                .collect(),
+            session_cwds: aida_core::liveness::probe_live_agent_sessions()
+                .into_iter()
+                .map(|s| canonical(&s.cwd))
+                .collect(),
+        }
+    }
+
+    /// Live when a live or dormant lease, or a live agent process, holds the
+    /// owner's checkout; Unknown when the owner is unattributed, a matching
+    /// lease is unjudgeable or the view is incomplete; otherwise Dead.
+    pub(crate) fn judge(&self, owner: &leftovers::Owner) -> leftovers::OwnerLiveness {
+        use aida_core::liveness::LeaseState;
+        use leftovers::{Owner, OwnerLiveness};
+        let root = match owner {
+            Owner::Checkout(root) => Some(canonical(root)),
+            Owner::Worktree(_) => None,
+            Owner::Unattributed => return OwnerLiveness::Unknown,
+        };
+        let named = |path: &std::path::Path| match owner {
+            Owner::Worktree(name) => path.file_name().is_some_and(|n| n == name.as_str()),
+            _ => false,
+        };
+        // A lease names its worktree root; a process may sit below it.
+        let leased = |path: &std::path::Path| root.as_deref() == Some(path) || named(path);
+        let held_by = |path: &std::path::Path| {
+            root.as_deref().is_some_and(|r| path.starts_with(r)) || path.ancestors().any(named)
+        };
+        let mut unknown = !self.complete;
+        for (worktree, state) in &self.leases {
+            if worktree.as_os_str().is_empty() || !leased(worktree) {
+                continue;
+            }
+            match state {
+                LeaseState::Live | LeaseState::Dormant => return OwnerLiveness::Live,
+                LeaseState::Unknown => unknown = true,
+                LeaseState::Stale => {}
+            }
+        }
+        if self.session_cwds.iter().any(|cwd| held_by(cwd)) {
+            return OwnerLiveness::Live;
+        }
+        if unknown {
+            OwnerLiveness::Unknown
+        } else {
+            OwnerLiveness::Dead
+        }
+    }
+}
+
+#[cfg(unix)]
+fn canonical(path: &std::path::Path) -> std::path::PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 // trace:TASK-542 | ai:antigravity
