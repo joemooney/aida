@@ -1,0 +1,33 @@
+id: 01a2187f-1425-7fb1-8919-4a3d87f01e44
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-360
+title: 'Review PR-4665: [AI:claude] feat(review): --post-comment posts the report through the pinned forge client with agent text fenced inert (Refs STORY-3120)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21843`) for branch `int46-story-3120-s5`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4665>
+  - Branch: `int46-story-3120-s5` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4665` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T15:35:11.141886495Z
+modified_at: 2026-11-26T15:35:11.141886495Z
+req_type: Story
+filed_at:
+  code_sha: cb26bf94b379497686eaaaae5ad1e1e4b2ab18a0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cb26bf94b3
