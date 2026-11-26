@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T10:35:19.871980918Z
+modified_at: 2026-11-26T11:47:48.704116205Z
 req_type: Bug
 tags:
 - admission
@@ -171,6 +171,11 @@ comments:
   created_at: 2026-11-26T10:35:19.871977943Z
   modified_at: 2026-11-26T10:35:19.871977943Z
   session_id: 01a21737c782
+- id: 01a217ae-e960-7ca0-ab88-7c9ff03f4000
+  author: joe
+  content: 'DEFERRED (advisor-122 2026-11-26 04:50, approval of #4640 @ 9b9aa8a6): (1, p2, EARLY follow-up) the pre-scan train_wanted uses the legacy eligible gate while the real pass uses typed_gate_member_with + ownership; they can disagree (the worst case is an extra empty poll, not a wrong landing). Align them to ONE predicate. (2) A test for the running-train and recovery AC4 phases. (3) Reset TEST_HOLD_WARN_MS after the bug2769 tests (a test-isolation leak). Also still open from the 02:27 ruling: dedupe or cache the pre-scan forge reads (the shared gh budget).'
+  created_at: 2026-11-26T11:47:48.704116205Z
+  modified_at: 2026-11-26T11:47:48.704116205Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
