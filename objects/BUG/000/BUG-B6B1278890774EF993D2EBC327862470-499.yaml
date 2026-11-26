@@ -226,6 +226,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21881-2eb0-7e00-ab53-53119065cbdd
+  author: joe
+  timestamp: 2026-11-26T15:37:29.008495261Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ac22ab7f548b4d4088ad68fd66dbf68f17880b81
