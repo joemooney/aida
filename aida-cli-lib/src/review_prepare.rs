@@ -18,6 +18,7 @@ use aida_core::review_engine::{
 };
 use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
 use aida_core::review_engine::{FileCoverageEntry, FileCoverageStatus};
+use aida_core::vendors::LaunchVendor;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -696,7 +697,10 @@ fn run_review_agent(
     }
     let (name, from) = match aida_core::agents_config::resolve_default_vendor(root) {
         Some(name) => (name, "[agents] vendor"),
-        None => ("claude".into(), "the built-in default (no [agents] vendor)"),
+        None => (
+            LaunchVendor::Claude.as_str().into(),
+            "the built-in default (no [agents] vendor)",
+        ),
     };
     let vendor = review_vendor(&name)?;
     eprintln!("run review: using {} from {from}", vendor.program);
