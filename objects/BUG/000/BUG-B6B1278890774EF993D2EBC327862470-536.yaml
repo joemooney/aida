@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T20:25:17.533785464Z
+modified_at: 2026-11-26T20:37:21.160967441Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -212,6 +212,14 @@ comments:
   modified_at: 2026-11-26T20:24:05.804820578Z
   session_id: 01a21945a85f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21993-b889-7372-af5e-58d2d5429d87
+  author: joe
+  content: |-
+    DEFERRED (#4684 approval @4c6c4a8a, 2026-11-26; product-15):
+    - Test gap (reporting, non-gate): the challenger-pass branch of runner_failure ('<vendor> challenger pass, challenge batch N: ...', review_prepare.rs review_batches) is not exercised by a test; bug2775_runner_errors_name_runner_pass_batch_and_cause only drives the finder pass. Also, bug2775_run_review_agent_resolves_and_states_the_default does not assert the stated 'run review: using <vendor> from <source>' stderr line
+    - Style: run_review_agent (review_prepare.rs) matches the literal "AIDA_REVIEW_RUNNER_CMD" rather than sharing the RUNNER_CMD constant or RunnerCall's var()/runner_cmd_set() logic, so the two 'is the runner command set' checks could drift.
+  created_at: 2026-11-26T20:37:21.160967441Z
+  modified_at: 2026-11-26T20:37:21.160967441Z
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
