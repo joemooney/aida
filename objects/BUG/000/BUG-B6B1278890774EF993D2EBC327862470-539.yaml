@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T21:03:41.677447514Z
+modified_at: 2026-11-26T21:51:12.958542531Z
 req_type: Bug
 tags:
 - lanes
@@ -40,6 +40,18 @@ comments:
   modified_at: 2026-11-26T19:25:12.061197557Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a219d7-583e-7d02-b5a8-0dd234202b69
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 70b9880abb (git diff origin/main...HEAD).
+    Acceptance: AC1 retry at the pre-start retention sites (lane reuse in dispatch.rs, rework reclaim in queue_cmd/work.rs) via guard::retry_transient_admission: 3 tries, waits 100s/150s +/-20% jitter (about 4-5 min). AC2 RefusalReason::WriterAdmissionUnknown now names each unverified writer (pid, comm, exe path or '(deleted)', short sha) and whether it is on a deleted/stale binary. AC3 tests in aida-core mailbox_lifecycle::bug_2778_admission_retry_tests (6, pass; 196/196 mailbox_lifecycle tests pass); make check-ci-fast exit 0.
+    Probes: fail-closed preserved, since the retry only delays and the final outcome is still the refusal. A live writer on a present other-build binary, an unreadable exe, an incomplete scan or no self identity all set transient=false and are never retried. The new serde fields are #[serde(default)], so old journal reasons still deserialize. The stale check reads the exe path's current inode, so an exe path that has vanished counts as stale (transient).
+    Residual risks: only the two pre-start sites retry, and the incident's exact path isn't confirmed; other pre-start retention callers (seat_clone failed-clone cleanup) still refuse once. The retry blocks the launching thread for up to ~5 min.
+  created_at: 2026-11-26T21:51:12.958542531Z
+  modified_at: 2026-11-26T21:51:12.958542531Z
+  session_id: 01a219ab9ccf
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
