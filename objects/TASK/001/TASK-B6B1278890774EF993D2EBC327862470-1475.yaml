@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-26T16:20:49.624688509Z
+modified_at: 2026-11-26T16:31:56.828645535Z
 req_type: Task
 tags:
 - landing
@@ -143,6 +143,11 @@ comments:
   modified_at: 2026-11-26T16:05:56.326657577Z
   session_id: 01a2188c2c68
   harness_version: 2.1.319 (Claude Code)
+- id: 01a218b3-0b9c-7cc3-90cc-e4af8dfb7023
+  author: joe
+  content: 'DEFERRED (#4668 approval @1b578065, 2026-11-26; product-15): (1) a test gap: no test asserts that advisor_train_handler (pr_train.rs ~5724) passes landing_policy::load_reporting(..).auto_train_max() into TrainOptions.max; a regression back to a hard-coded max would go unnoticed (also noted on #4616). (2) cosmetic: the waiting-members line (pr_train.rs ~5501) prints "(--max N)" even when the cap came from [landing] max_prs_per_train; it should name the knob.'
+  created_at: 2026-11-26T16:31:56.828645535Z
+  modified_at: 2026-11-26T16:31:56.828645535Z
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
