@@ -10,12 +10,12 @@ description: |
   - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
   - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
   - AC4: tests for each AC.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T21:40:30.344968913Z
+modified_at: 2026-11-26T22:18:46.849337472Z
 req_type: Bug
 tags:
 - landing
@@ -167,6 +167,12 @@ comments:
   modified_at: 2026-11-26T21:40:30.344968913Z
   session_id: 01a219b01ddd
   harness_version: 2.1.319 (Claude Code)
+- id: 01a219f0-95af-7010-92cd-7681729c2291
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-26T22:18:47.087403610Z
+  modified_at: 2026-11-26T22:18:47.087403610Z
+  session_id: 01a219eba530
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
@@ -223,6 +229,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a219f0-95af-7010-92cd-7677d92046be
+  author: aida-orchestrator
+  timestamp: 2026-11-26T22:18:47.087401240Z
+  session_id: 01a219eba530
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
@@ -235,3 +249,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T20:27:55.536518317Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2777 round 2 at 4cbdf727. Most of round 1 is resolved. Advisor binding (2): the drift hold is written even when authority is lost, tested in bug2777_train_routes_and_records_a_drift_ejection_only_under_authority. Binding (3): the route text is accurate, and the TASK-1960 gate is untouched. Binding (4): landing_drought::scan reads train state from the main worktree via main_worktree_root_from, tested from a git-worktree seat in bug2777_scan_reads_train_state_from_the_main_worktree. Binding (5): a drift row and a red row at the same head have an explicit, tested precedence. AC2 is met by bug2777_a_drifted_head_is_refused_even_when_named: the head is refused even when named and the route is printed. AC3 is met by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC1 is met at the extracted-loop level: route_drift_ejections, fed by a real build() drift ejection through a fake DriftRouter, checks routing, the typed row, per-PR dedupe and that a red ejection is not routed. One blocking gap remains on the strict train/authority path, which ADR-76 treats as blocking. The live authority adapter LiveDriftRouter::authority has no test: neither its dispatch_abort short-circuit nor its mapping of a dispatch_check failure. Neither does the handler call site that feeds it. A mutation that makes authority() always return Ok, or that drops the route_drift_ejections call, passes every test in this PR, and round 1 named this gap (items b and d). The implementer''s self-review says the abort caching is covered by inspection only. The tests module is a child of pr_train, and existing tests build LiveTrainForge with dispatch_ctx None and a fake forge, so the missing test is cheap to write. The base moved by one commit (BUG-2775, review vendor table); it touches none of these files, so no finding depends on it. CI was pending at review time: fast gates pass, fast compile pending, and merge-hold-gate is awaiting clearance.'
+  recovery_hint: address the review findings, move BUG-2777 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-26T22:18:46.849337472Z
