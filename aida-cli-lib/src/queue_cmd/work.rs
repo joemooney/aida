@@ -4072,8 +4072,11 @@ fn review_worktree_retirement(
 // trace:BUG-2776 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RetainedReview {
-    /// No checkout holds the branch, or the one that did was ended.
+    /// No checkout holds the branch.
     Free,
+    /// The leftover checkout's lease was ended and the checkout is gone.
+    /// trace:TASK-3921 | ai:claude
+    Reclaimed,
     /// A checkout is kept; the text says why (dirty, live pid N, merge-hold, lock, ...).
     Kept(String),
 }
@@ -4117,7 +4120,14 @@ pub(crate) fn reclaim_retained_review_tree_with(
     pr_head: &str,
     end: impl FnOnce(&SessionLease) -> Result<()>,
 ) -> RetainedReview {
-    match retained_review_tree(root, forge, n, pr_head, end) {
+    // trace:TASK-3921 | ai:claude
+    let mut ended = false;
+    let result = retained_review_tree(root, forge, n, pr_head, |lease| {
+        ended = true;
+        end(lease)
+    });
+    match result {
+        Ok(None) if ended => RetainedReview::Reclaimed,
         Ok(None) => RetainedReview::Free,
         Ok(Some(why)) => RetainedReview::Kept(why),
         Err(error) => RetainedReview::Kept(format!("reclaim check failed: {error:#}")),
