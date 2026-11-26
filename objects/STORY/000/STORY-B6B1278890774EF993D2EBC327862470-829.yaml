@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T01:49:34.185640502Z
+modified_at: 2026-11-26T02:46:35.195753894Z
 req_type: Story
 tags:
 - integration
@@ -673,6 +673,50 @@ comments:
   created_at: 2026-11-26T01:45:52.970952697Z
   modified_at: 2026-11-26T01:45:52.970952697Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a215bf-a292-73b2-8c57-45f46352ab20
+  author: joe
+  content: |-
+    AUDIT VERDICT (not a lane instruction): integration-30 pre-check of PR #4614 @ 69bd3b98056 (STORY-3120 S3a-2: --run-review wired onto the hardened runner; Refs-only; +420/-34, of which about 190 are tests).
+
+    Result: PASS. STRICT tier, so it needs an INDEPENDENT review at the final head. This is the first slice that spawns an agent from a CLI flag.
+
+    Comment-26 binding items:
+    (1) Bounded joins.
+    - After kill(-group) and wait, the code polls writer, out and err with is_finished for JOIN_GRACE = 5s, then fails with "review runner left descendants holding its pipes" and leaks the threads.
+    - Test: the runner launches `setsid sh -c '...; exec sleep 12'`, which inherits stdin/stdout. A marker file makes sure the descendant is already in its own session before the runner exits. The test asserts the error comes back in under 10s. ✔
+    (2) Item 11.
+    - review_batches runs every batch and refuses the whole run on any runner error, unparseable output, or finding outside the reviewable inventory.
+    - Test: b.rs, ../a.rs, /etc/passwd, A.rs (case) and non-JSON output all refuse; the in-inventory case passes. ✔
+    (3) git_text.
+    - env_clear, then only PATH/HOME/LANG/XDG_CONFIG_HOME/LC_* are kept, so GIT_DIR, GIT_CONFIG*, GIT_INDEX_FILE and GH_TOKEN are dropped (tested). GIT_NO_REPLACE_OBJECTS=1 is kept.
+    - --no-textconv goes on diff/show/log. Test: a repo-config textconv driver with .gitattributes doesn't run (marker absent).
+    - batch_prompt makes a failed diff an error (tested with a missing head) and never falls back to the whole file. ✔
+    (4) parent_env is Environment::capture().to_pairs(), i.e. the vars_os snapshot, unchanged. ✔
+
+    Trust boundary (my 18:40 note):
+    - run_review_base accepts only "range" mode with a computed merge base. With --pr that is merge-base(forge baseRefName, forge headRefOid). With --from it is merge-base(operator --from, --to/HEAD resolved to a SHA).
+    - Workspace, scan and commit modes refuse, and clap also conflicts --run-review with --scan and --commit.
+    - `head` is always the resolved SHA, so the worktree is never consulted.
+    - Test: when the target advanced its review-rules.toml after the branch point, the merge base gives the base's "medium" and the target tip refuses.
+    - Trusted-base rules now also drive exclusions and playbooks for the run, so a PR can't add an exclude rule to hide its own files. ✔
+
+    Runner:
+    - --agent goes through review_vendor, which refuses unknown agents. There is no default agent: with no --agent and no AIDA_REVIEW_RUNNER_CMD, program() refuses.
+    - Tuning is resolved against call.vendor(), so with a custom command the base effort set applies, re-checked in run() (tested: max is refused, xhigh passes).
+    - Per-batch deadline is 15 min, with the 4 MiB / 64 KiB caps.
+    - Runner output is only parsed, never executed.
+    - --sarif/--fail-on now require either findings source (clap group).
+    - The help golden is updated.
+
+    Should-fix (non-blocking):
+    (a) git_text still uses raw Command::new("git"), not host_git_command, so it doesn't get the BUG-2169 seat-clone refusal. With env scrubbed, --no-ext-diff and --no-textconv, and committed-range reads only, the remaining exposure is seat-controlled repo config for an operator who runs `review prepare` inside a seat clone. That's pre-existing for all of review prepare, so it's a follow-up, not a blocker here.
+    (b) There's no overall bound across batches (N × 15 min). Fine for now. S5's CI docs should tell users to set a job timeout.
+
+    MERGE CONFLICT with #4604 (TASK-3320), review_prepare.rs: #4604 adds the is_credential_path refusal inside the inline inventory loop, which this PR moves into ensure_in_inventory. Whichever merges second needs a conflict repair: put the credential check inside ensure_in_inventory, so --run-review findings get it too, and keep both tests. Merge-tree against origin/integration alone: CLEAN.
+  created_at: 2026-11-26T02:46:35.195753894Z
+  modified_at: 2026-11-26T02:46:35.195753894Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
