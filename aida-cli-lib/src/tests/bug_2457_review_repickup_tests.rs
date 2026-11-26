@@ -1234,7 +1234,7 @@ fn bug_2776_review_watch_reclaims_only_a_clean_exited_leftover_on_a_moved_head()
     };
     let kept = |head: &str| match reclaim(head) {
         RetainedReview::Kept(why) => why,
-        RetainedReview::Free => panic!("checkout was reclaimed"),
+        other => panic!("checkout was not kept: {other:?}"),
     };
     // A lease neither stale nor ending-retained still owns the checkout.
     assert!(kept(&pr_head).starts_with(&format!("lease {}", lease.id)));
@@ -1295,9 +1295,75 @@ fn bug_2776_review_watch_reclaims_only_a_clean_exited_leftover_on_a_moved_head()
     std::fs::remove_file(markers.join("PR-9999")).unwrap();
     // The exact shape: this PR's marker is collected first, then the lease ends.
     std::fs::write(markers.join("PR-2457"), "needs human review\n").unwrap();
-    assert_eq!(reclaim(&pr_head), RetainedReview::Free);
+    // trace:TASK-3921 | ai:claude
+    assert_eq!(reclaim(&pr_head), RetainedReview::Reclaimed);
     assert_eq!(*ended.borrow(), [lease.id.clone()]);
     assert!(crate::gate::merge_hold_core::read_hold(&fx.main, 2457).is_some());
     assert!(!tree.exists());
     assert_eq!(reclaim(&pr_head), RetainedReview::Free);
+}
+
+/// The real reclaim shells out to `aida session end <lease> --yes --skip-ci`;
+/// a refusal keeps the checkout and names the cause, so nothing dispatches.
+/// The fake is installed through the `aida_exe_path` seam the reclaim
+/// resolves `aida` with (it never consults PATH). No network.
+// trace:TASK-3921 | ai:claude
+#[test]
+fn task_3921_real_reclaim_runs_session_end_and_keeps_the_tree_on_refusal() {
+    use crate::queue_cmd::{reclaim_retained_review_tree, RetainedReview};
+    use crate::session_start::ReviewForge;
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let store_root = fx.main.join(".aida-store");
+    git_ok(&store_root, &["config", "user.email", "test@example.com"]);
+    git_ok(&store_root, &["config", "user.name", "AIDA Test"]);
+    let (storage, _status) = review_story(&fx.main);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path.clone();
+    // The reviewer exited at the head it recorded; the PR moved on.
+    lease.pr_head_sha = Some(git_ok(&tree, &["rev-parse", "HEAD"]));
+    lease.ending_retained_at = Some(chrono::Utc::now());
+    lease.active_pid = Some(u32::MAX);
+    lease.creator_pid = Some(u32::MAX);
+    lease.active_pid_start_time = None;
+    lease.creator_pid_start_time = None;
+    lease.holder_record = None;
+    let lease_file = crate::lease_path(&fx.main, &lease.id);
+    std::fs::write(&lease_file, toml::to_string(&lease).unwrap()).unwrap();
+    std::fs::write(fx.main.join("README.md"), "moved PR head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "moved PR head"]);
+    let pr_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    let argv = fx.root.join("aida-argv");
+    let aida = fx.root.join("fake-aida");
+    crate::test_exec::write_executable(
+        &aida,
+        &format!(
+            "#!/bin/sh\nprintf '%s ' \"$@\" > '{}'\necho 'seat busy: lease in use' >&2\nexit 3\n",
+            argv.display()
+        ),
+    );
+    let _aida = crate::kernel::test_aida_exe::set(aida);
+    let result = reclaim_retained_review_tree(&fx.main, ReviewForge::GitHub, 2457, &pr_head);
+    assert_eq!(
+        std::fs::read_to_string(&argv).unwrap().trim_end(),
+        format!("session end {} --yes --skip-ci", lease.id)
+    );
+    assert_eq!(
+        result,
+        RetainedReview::Kept(
+            "reclaim check failed: session end refused: seat busy: lease in use".into()
+        )
+    );
+    assert!(tree.exists() && lease_file.exists());
 }

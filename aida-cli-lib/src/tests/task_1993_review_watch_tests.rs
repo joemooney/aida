@@ -5916,23 +5916,60 @@ fn bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass() {
         }
     );
     due();
+    // Paused, then capped: the reclaim is never run, and the cap surfaces as
+    // a retained-checkout block. trace:TASK-3921 | ai:claude
+    let never = || -> RetainedReview { panic!("a paused or capped watcher reclaimed") };
+    let probe = |b: &str| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some(b));
+    let now = chrono::Utc::now();
+    pause::fixture_change(&store, &pause_for("cutover", "1h"), "advisor-a", now).unwrap();
+    due();
+    let (action, _) = select_with_probes(&store, &c, None, 1, || None, never, probe).unwrap();
+    assert!(
+        matches!(&action, Action::Skip(r) if r.contains("is held by worktree")),
+        "{action:?}"
+    );
+    pause::fixture_change(&store, &pause::Control::Resume, "advisor-a", now).unwrap();
+    let capped = |retries: u8| {
+        store
+            .transaction("PR-1", |state| {
+                state.entries.get_mut("PR-1").unwrap().attempts[0].pickup_retries = retries;
+                Ok(())
+            })
+            .unwrap()
+    };
+    capped(3);
+    let (action, outcome) = select_with_probes(&store, &c, None, 1, || None, never, probe).unwrap();
+    assert!(
+        matches!(&action, Action::Skip(r) if r.contains("pickup retry cap reached")),
+        "{action:?}"
+    );
+    assert_eq!(
+        outcome,
+        Admission::Held {
+            why: "pickup retry cap reached".into(),
+            retained: true
+        }
+    );
+    // A reclaim, even inside the backoff, makes the retry due; its pickup
+    // resets the cap. trace:TASK-3921 | ai:claude
+    capped(2);
+    store
+        .transaction("PR-1", |state| {
+            state.entries.get_mut("PR-1").unwrap().attempts[0].pickup_retry_at =
+                Some(chrono::Utc::now() + chrono::Duration::hours(1));
+            Ok(())
+        })
+        .unwrap();
     let reclaimed = || {
         git(&["worktree", "remove", "aida-pr-1"]);
-        RetainedReview::Free
+        RetainedReview::Reclaimed
     };
-    let (action, outcome) = select_with_probes(
-        &store,
-        &c,
-        None,
-        1,
-        || None,
-        reclaimed,
-        |b| crate::queue_cmd::preflight_queue_work_branch(temp.path(), Some(b)),
-    )
-    .unwrap();
+    let (action, outcome) =
+        select_with_probes(&store, &c, None, 1, || None, reclaimed, probe).unwrap();
     let retry = dispatch(action);
     assert_eq!(retry.head, c.head);
-    assert_eq!(retry.pickup_retries, 1);
+    assert_eq!(retry.pickup_retries, 0);
+    assert!(retry.setup_retry);
     assert_eq!(outcome, Admission::Settled);
 }
 

@@ -1636,6 +1636,14 @@ mod loop_tests {
         let findings = crate::landing_drought::retained_findings(blocks);
         assert_eq!(findings[0].id, "PR-4638");
         assert!(findings[0].action.starts_with("inspect the `pr-4638` checkout"));
+        // A capped retry surfaces at once, with the next step. trace:TASK-3921 | ai:claude
+        let cause = crate::review_watch::PICKUP_RETRY_CAP.to_string();
+        let capped = Unadmitted { key: "PR-4639".into(), head: "e0".into(), cause };
+        let capped = PassCounts { retained: vec![capped], ..Default::default() };
+        let blocks = retained_blocks(&next_pass_report(None, &capped, &[], now), now);
+        assert_eq!(blocks.len(), 1, "{blocks:?}");
+        assert!(blocks[0].1.contains("held 0 min (pickup retry cap reached)"), "{}", blocks[0].1);
+        assert!(blocks[0].1.contains("aida review watch --release PR-4639"), "{}", blocks[0].1);
         let cleared = next_pass_report(Some(&later), &PassCounts::default(), &[], now);
         assert!(cleared.retained.is_empty());
     }
@@ -3924,7 +3932,11 @@ fn retained_blocks(report: &PassReport, now: DateTime<Utc>) -> Vec<(String, Stri
     report
         .retained
         .iter()
-        .filter(|h| now.signed_duration_since(h.since).num_minutes() >= RETAINED_STALE_MINUTES)
+        // A capped retry will not try again: surface it now. trace:TASK-3921 | ai:claude
+        .filter(|h| {
+            now.signed_duration_since(h.since).num_minutes() >= RETAINED_STALE_MINUTES
+                || h.cause.starts_with(crate::review_watch::PICKUP_RETRY_CAP)
+        })
         .map(|h| {
             let branch = h.key.to_ascii_lowercase();
             let line = format!(
