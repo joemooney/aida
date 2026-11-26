@@ -27,6 +27,39 @@ PAGES = [(p['source'], p['output'], p['label']) for p in MANIFEST['pages']]
 # docs/. Every other selected source must live under docs/.
 GLOSSARY_SOURCE_DIR = ROOT / 'aida-core/templates/.aida/discipline'
 
+# trace:STORY-2839 | ai:claude
+# Guide headers group pages into dropdown menus; unlisted pages stay direct links.
+NAV_GROUPS = {
+    'How it works': ('workflow.html', 'autonomy.html', 'capabilities.html', 'code-review.html'),
+    'Governance': ('authority.html', 'trust.html', 'metrics.html', 'engineering-audit.html'),
+    'Operations': ('setup.html', 'configuration.html', 'integrations.html', 'air-gapped.html'),
+    'Reference': ('library.html', 'glossary.html', 'features.html', 'executive-brief.html'),
+}
+# Hand-written pages outside the manifest; linked only when present on disk.
+EXTRA_NAV_PAGES = (('code-review.html', 'Code review'), ('engineering-audit.html', 'Engineering audit'),
+                   ('features.html', 'All features'), ('executive-brief.html', 'Executive brief'))
+
+
+def nav_link(dest, label, current):
+    return f'<a href="{dest}"' + (' aria-current="page"' if dest == current else '') + f'>{html.escape(label)}</a>'
+
+
+def build_nav(current):
+    """Render direct links, then one dropdown per non-empty NAV_GROUPS entry."""
+    labels = {'library.html': 'Library', **{dest: label for _, dest, label in PAGES}}
+    labels.update((dest, label) for dest, label in EXTRA_NAV_PAGES if (SITE / dest).is_file())
+    grouped = {dest for dests in NAV_GROUPS.values() for dest in dests}
+    parts = [nav_link(dest, label, current) for dest, label in labels.items() if dest not in grouped]
+    for group, dests in NAV_GROUPS.items():
+        links = ''.join(nav_link(dest, labels[dest], current) for dest in dests if dest in labels)
+        if not links:
+            continue
+        active = ' nav-group-active' if current in dests else ''
+        parts.append(f'<div class="nav-group{active}"><button type="button" class="nav-trigger" aria-expanded="false">'
+                     f'{html.escape(group)} <span class="nav-caret" aria-hidden="true">▾</span></button>'
+                     f'<div class="nav-menu">{links}</div></div>')
+    return ''.join(parts)
+
 
 def slug(title):
     return re.sub(r'[^a-z0-9 -]', '', title.lower()).replace(' ', '-')
@@ -246,7 +279,7 @@ def render_outputs():
         entries.append({'title': content.splitlines()[0].removeprefix('# '), 'url': output, 'source': '../' + source, 'category': metadata['category'], 'text': search_text(content), 'sha256': hashlib.sha256(content.encode()).hexdigest()})
         if is_glossary:
             terms.extend(glossary_terms(content, output, source, metadata['category']))
-        nav = '<a href="library.html">Library</a>' + ''.join(f'<a href="{dest}"' + (' aria-current="page"' if dest == output else '') + f'>{html.escape(label)}</a>' for _, dest, label in PAGES)
+        nav = build_nav(output)
         graphic_path = SITE / 'assets' / (Path(output).stem + '.svg')
         graphic = ''
         if graphic_path.exists():
@@ -257,7 +290,6 @@ def render_outputs():
         if output == 'autonomy.html':
             landing = (SITE / 'index.html').read_text()
             interactive = re.search(r'<section class="autonomy shell" id="autonomy">.*?</section>', landing, re.S).group(0)
-            scripts = '<script src="app.js" defer></script>'
         # trace:TASK-B6B1278890774EF993D2EBC327862470-113 | ai:codex
         heading, separator, body = render(content, posixpath.dirname(source) or '.').partition('</h1>')
         if not separator or not heading.startswith('<h1 '):
@@ -279,7 +311,7 @@ def render_library(template, entries, terms=()):
         cards.append(f'<article class="library-card term-card" data-url="{term["url"]}" data-category="{term["category"]}" data-term hidden><p class="eyebrow">glossary term</p><h2><a href="{term["url"]}">{html.escape(term["title"])}</a></h2><p class="excerpt">{html.escape(term["text"][:180])}…</p></article>')
     entries = list(entries) + list(terms)
     content = (SITE / 'library-template.html').read_text().replace('{{cards}}', '\n'.join(cards))
-    nav = '<a href="library.html" aria-current="page">Library</a>' + ''.join(f'<a href="{output}">{html.escape(title)}</a>' for _, output, title in PAGES)
+    nav = build_nav('library.html')
     scripts = '<script src="search-data.js" defer></script><script src="library.js" defer></script>'
     page = template.replace('{{heading}}', '').replace('{{title}}', 'Documentation library').replace('{{nav}}', nav).replace('{{source}}', 'publication.json').replace('{{content}}', content).replace('{{graphic}}', '').replace('{{interactive}}', '').replace('{{scripts}}', scripts)
     page = page.replace('{{provenance}}', 'the publication manifest')

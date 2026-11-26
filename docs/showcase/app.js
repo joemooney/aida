@@ -20,3 +20,48 @@ tabs.forEach((tab, index) => {
   tab.addEventListener('click', () => chooseMode(tab.dataset.mode));
   tab.addEventListener('keydown', event => { let next; if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;event.preventDefault();chooseMode(tabs[next].dataset.mode,true); });
 });
+// trace:STORY-2839 | ai:claude
+// Light/Dark toggle and header dropdowns. Only the localStorage key 'aida-theme'
+// is read or written, and only "light" or "dark" is ever stored.
+{
+  const root = document.documentElement;
+  const themeButton = document.getElementById('theme-toggle');
+  const isDark = () => root.getAttribute('data-theme') === 'terminal';
+  const syncTheme = () => {
+    const icon = document.getElementById('theme-icon');
+    const label = document.getElementById('theme-label');
+    if (icon) icon.textContent = isDark() ? '☀' : '☾';
+    if (label) label.textContent = isDark() ? 'Light' : 'Dark';
+    if (themeButton) themeButton.setAttribute('aria-pressed', String(isDark()));
+  };
+  if (themeButton) themeButton.addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next === 'dark' ? 'terminal' : 'paper');
+    try { localStorage.setItem('aida-theme', next); } catch (_) { /* storage disabled: theme lasts this page only */ }
+    syncTheme();
+  });
+  syncTheme();
+  const groups = Array.from(document.querySelectorAll('.nav-group'));
+  const setOpen = (group, open) => {
+    group.toggleAttribute('data-open', open);
+    const trigger = group.querySelector('.nav-trigger');
+    if (trigger) trigger.setAttribute('aria-expanded', String(open));
+  };
+  const closeAll = except => groups.forEach(group => { if (group !== except) setOpen(group, false); });
+  groups.forEach(group => {
+    const trigger = group.querySelector('.nav-trigger');
+    if (!trigger) return;
+    trigger.addEventListener('click', event => {
+      event.stopPropagation();
+      closeAll(group);
+      setOpen(group, !group.hasAttribute('data-open'));
+    });
+  });
+  document.addEventListener('click', event => { if (!event.target.closest('.nav-group')) closeAll(null); });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const open = groups.find(group => group.hasAttribute('data-open'));
+    closeAll(null);
+    if (open && open.contains(document.activeElement)) open.querySelector('.nav-trigger').focus();
+  });
+}

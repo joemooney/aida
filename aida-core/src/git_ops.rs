@@ -4921,17 +4921,21 @@ fn porcelain_unquote(field: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// `path` quoted as porcelain v1 prints it under the default
-/// `core.quotePath=true`: bare unless it holds a control byte, `"`, `\\` or
-/// a non-ASCII byte.
+/// `path` (raw bytes) quoted as porcelain v1 prints it under the default
+/// `core.quotePath=true`: bare unless it holds a space, a control byte, `"`,
+/// `\\` or a non-ASCII byte, so a trailing space or a non-UTF-8 name reads
+/// unambiguously.
 // trace:TASK-1952 | trace:TASK-1943 | ai:claude
-fn porcelain_quote(path: &str) -> String {
+// trace:TASK-3882 | ai:claude
+pub fn porcelain_quote(path: impl AsRef<[u8]>) -> String {
+    let path = path.as_ref();
     let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
-    if !path.bytes().any(needs) {
-        return path.to_string();
+    if !path.iter().any(|&b| b == b' ' || needs(b)) {
+        // Every byte is printable ASCII here.
+        return String::from_utf8_lossy(path).into_owned();
     }
     let mut out = String::from("\"");
-    for b in path.bytes() {
+    for &b in path {
         match b {
             7 => out.push_str("\\a"),
             8 => out.push_str("\\b"),
@@ -5055,8 +5059,11 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
     let raw = if contained_code_tree(worktree_path) {
         contained_safety_scan(worktree_path)?.0
     } else {
+        // Pin quoting so a `core.quotePath=false` user setting cannot let
+        // distinct non-UTF-8 names collapse in the lossy text conversion.
+        // trace:TASK-3882 | ai:claude
         let out = host_git_command(worktree_path)
-            .arg("--no-optional-locks")
+            .args(["-c", "core.quotePath=true", "--no-optional-locks"])
             .args(["status", "--porcelain", "--ignore-submodules=none"])
             .output()
             .context("run git status")?;
@@ -5073,6 +5080,76 @@ pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<Strin
         .filter(|l| !l.trim().is_empty())
         .map(str::to_string)
         .collect())
+}
+
+/// Dirty paths for a refusal message only, never a safety decision: every
+/// untracked file is listed on its own (`--untracked-files=all`), read as raw
+/// NUL-separated porcelain v2 and rendered as porcelain v1 lines with each
+/// path quoted exactly once by [`porcelain_quote`], whatever
+/// `core.quotePath` says. Submodules are never entered; the safety readers
+/// above report them.
+// trace:TASK-3882 | ai:claude
+pub fn refusal_status_lines(worktree_path: &Path) -> Result<Vec<String>> {
+    let out = host_git_command(worktree_path)
+        .arg("--no-optional-locks")
+        .args(["status", "--porcelain=v2", "-z", "--untracked-files=all"])
+        .arg("--ignore-submodules=all")
+        .output()
+        .context("run git status")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git status failed in {}",
+        worktree_path.display()
+    );
+    Ok(porcelain_v2_z_lines(&out.stdout, true, |_| false))
+}
+
+/// `git status --porcelain=v2 -z` records as one line each, every path quoted
+/// once by [`porcelain_quote`] from its raw bytes: as porcelain v1 (`XY path`,
+/// `XY from -> to`) when `v1`, else as v2 lines (a rename is `... to\tfrom`;
+/// a quoted path never holds a raw tab). Untracked records `skip` accepts
+/// (given the raw `? <path>` record, when it is UTF-8) are dropped.
+// trace:TASK-3882 | ai:claude
+pub fn porcelain_v2_z_lines(raw: &[u8], v1: bool, skip: impl Fn(&str) -> bool) -> Vec<String> {
+    let mut records = raw.split(|b| *b == 0).filter(|r| !r.is_empty());
+    let mut lines = Vec::new();
+    while let Some(record) = records.next() {
+        let fields = match record.first() {
+            Some(b'?') if std::str::from_utf8(record).is_ok_and(&skip) => continue,
+            Some(b'?' | b'!') => 1,
+            Some(b'1') => 8,
+            Some(b'2') => 9,
+            Some(b'u') => 10,
+            _ => 0,
+        };
+        let path = (fields > 0)
+            .then(|| record.splitn(fields + 1, |b| *b == b' ').nth(fields))
+            .flatten();
+        let Some(path) = path else {
+            lines.push(String::from_utf8_lossy(record).into_owned());
+            continue;
+        };
+        let prefix = String::from_utf8_lossy(&record[..record.len() - path.len()]);
+        let from = (record[0] == b'2').then(|| porcelain_quote(records.next().unwrap_or_default()));
+        let path = porcelain_quote(path);
+        lines.push(if v1 {
+            let xy = match record[0] {
+                b'?' => "??".to_string(),
+                b'!' => "!!".to_string(),
+                _ => prefix.split(' ').nth(1).unwrap_or("").replace('.', " "),
+            };
+            match from {
+                Some(from) => format!("{xy} {from} -> {path}"),
+                None => format!("{xy} {path}"),
+            }
+        } else {
+            match from {
+                Some(from) => format!("{prefix}{path}\t{from}"),
+                None => format!("{prefix}{path}"),
+            }
+        });
+    }
+    lines
 }
 
 /// True when a worktree has uncommitted changes (tracked or untracked,
