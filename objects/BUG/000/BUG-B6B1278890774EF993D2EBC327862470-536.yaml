@@ -12,12 +12,12 @@ description: |
   - AC1: `--run-review` errors print the FULL cause chain (e.g. {:#} / chain()), naming the vendor, pass (finder/challenger), batch, and the concrete cause (deadline exceeded after Ns, output cap, spawn refused: <why>, exit code + stderr tail, parse error).
   - AC2: the "AIDA_REVIEW_RUNNER_CMD runs both passes" note appears ONLY when that variable is actually set; with no --agent, the default vendor resolution is stated ("using <vendor> from [agents] / seat config").
   - AC3: find and fix why a claude runner batch on a ~560-line PR hits the 15-min deadline (e.g. the claude CLI waiting on a prompt or auth in the cleared env, or a missing non-interactive flag); a test with a stub runner for each of the AC1 causes.
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T17:57:45.402662983Z
+modified_at: 2026-11-26T18:20:27.789610829Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -170,6 +170,13 @@ history:
   session_id: 01a218a9014e
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21916-650d-7f81-a7b6-9844cede1f51
+  author: joe
+  timestamp: 2026-11-26T18:20:27.789604852Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
@@ -182,3 +189,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-26T17:26:33.187817941Z
   implemented_by: dirtlab
+  reopened_at_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
