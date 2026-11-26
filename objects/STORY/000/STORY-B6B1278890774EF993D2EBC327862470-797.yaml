@@ -17,12 +17,12 @@ description: |
   4. Live-binary guard: in review-gated mode, `aida dev build` promotion refuses a main SHA without green CI and names the last green SHA. Activation in a worktree is unaffected.
   5. Docs: the two-seat protocol and the landing docs describe both modes and when to choose each.
   6. Tests: the ship gate in each mode, the required-check reconcile (forge mocked), the red-main alert routing, and the promotion refusal.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-26T01:19:19.480263168Z
+modified_at: 2026-11-26T01:40:59.675766999Z
 req_type: Story
 tags:
 - landing
@@ -1533,6 +1533,22 @@ comments:
   modified_at: 2026-11-26T00:35:44.873255565Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21583-5a9b-7c00-842b-00c36390640a
+  author: dirtlab
+  content: |-
+    ## lib-1 hang hunt (#4569 @ a6f5aba4)
+    #4569 lib-1 "hang": no hang from this PR. Runner trouble; no code changed. The round-2 findings 1-4 (and the open_episode part of 5) were already fixed in 638611daca on the PR; the rest of 5 is the follow-up the reviewer allowed.
+    Evidence:
+    1. The same head a6f5aba4 passed lib-1 in run 45727992381 (job 139603179612): Run tests 00:30:18-00:44:49Z (14.5 min), 18m33s for the whole job, on a hosted ubuntu-latest runner. All other shards were green and ci-tier:full passed.
+    2. Both timeouts were run 45711696055 on hosted runners (1000083606, 1000083749). In attempt 1, Run tests ended as "failure" after 3m46s (22:19:03-22:22:49Z). A normal run takes about 14 min. After that, no step reported again until the 40-min cap, and the step it was stuck on (Live bwrap) is skipped on lib-1. In attempt 2, Run tests never reported a step result in 37 min. The runner stopped reporting each time.
+    3. A test hang could not do that. nextest's ci profile kills a test at 180s (slow-timeout 10s x terminate-after 18, .config/nextest.toml) and runs each test in its own process.
+    4. Locally, the PR's tests (story_2897, review_draft::, main_watch) ran 114 tests in 14.35s, all passing. lib-1 at this split (242 filters, identical to main's apart from the 2 new root tests; it holds review_draft:: and story_2897_needs_only_on_waiting_verdicts) does stall under single-process cargo test in the lane sandbox. The stall is the pre-existing forwarded_signals::tests::sigint_to_the_parent_reaches_a_grandchild_in_its_own_group, last changed 2026-10-27 (#2968), which this PR does not touch. It holds GATE.write(), so 12 tests that install Forwarding (pr_emergency_land gitlab x9, pr_cmd::bug_2535 x3) block behind it. This is local to the sandbox and libtest; CI runs it under nextest and passed at this head.
+    5. 68 lib-1 tests also fail locally in the sandbox (status_sections reviewer launches, session_end, pr_cmd and others, mostly subprocess-heavy). The same tests pass on CI at a6f5aba4, and none of them are in review_draft or story_2897. They are unverified as PR-caused, and the local tree also carries an unpushed main merge (17543ebfc4).
+    Recommendation: re-run lib-1 or accept run 45727992381. Keep the approval at a6f5aba4. Nothing pushed.
+  created_at: 2026-11-26T01:40:59.675766999Z
+  modified_at: 2026-11-26T01:40:59.675766999Z
+  session_id: 01a2156f34c2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
@@ -1971,6 +1987,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21583-2b21-7971-ac4c-020547b01cd0
+  author: dirtlab
+  timestamp: 2026-11-26T01:40:47.521938903Z
+  session_id: 01a2156f34c2
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -1980,3 +2005,17 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: other
+  detail: |-
+    #4569 lib-1 "hang": no hang from this PR. Runner trouble; no code changed. The round-2 findings 1-4 (and the open_episode part of 5) were already fixed in 638611daca on the PR; the rest of 5 is the follow-up the reviewer allowed.
+    Evidence:
+    1. The same head a6f5aba4 passed lib-1 in run 45727992381 (job 139603179612): Run tests 00:30:18-00:44:49Z (14.5 min), 18m33s for the whole job, on a hosted ubuntu-latest runner. All other shards were green and ci-tier:full passed.
+    2. Both timeouts were run 45711696055 on hosted runners (1000083606, 1000083749). In attempt 1, Run tests ended as "failure" after 3m46s (22:19:03-22:22:49Z). A normal run takes about 14 min. After that, no step reported again until the 40-min cap, and the step it was stuck on (Live bwrap) is skipped on lib-1. In attempt 2, Run tests never reported a step result in 37 min. The runner stopped reporting each time.
+    3. A test hang could not do that. nextest's ci profile kills a test at 180s (slow-timeout 10s x terminate-after 18, .config/nextest.toml) and runs each test in its own process.
+    4. Locally, the PR's tests (story_2897, review_draft::, main_watch) ran 114 tests in 14.35s, all passing. lib-1 at this split (242 filters, identical to main's apart from the 2 new root tests; it holds review_draft:: and story_2897_needs_only_on_waiting_verdicts) does stall under single-process cargo test in the lane sandbox. The stall is the pre-existing forwarded_signals::tests::sigint_to_the_parent_reaches_a_grandchild_in_its_own_group, last changed 2026-10-27 (#2968), which this PR does not touch. It holds GATE.write(), so 12 tests that install Forwarding (pr_emergency_land gitlab x9, pr_cmd::bug_2535 x3) block behind it. This is local to the sandbox and libtest; CI runs it under nextest and passed at this head.
+    5. 68 lib-1 tests also fail locally in the sandbox (status_sections reviewer launches, session_end, pr_cmd and others, mostly subprocess-heavy). The same tests pass on CI at a6f5aba4, and none of them are in review_draft or story_2897. They are unverified as PR-caused, and the local tree also carries an unpushed main merge (17543ebfc4).
+    Recommendation: re-run lib-1 or accept run 45727992381. Keep the approval at a6f5aba4. Nothing pushed.
+  lean: 'runner trouble: accept run 45727992381 (lib-1 green at a6f5aba4); no code change'
+  raised_by: implementer
+  raised_at: 2026-11-26T01:40:47.521897702Z
