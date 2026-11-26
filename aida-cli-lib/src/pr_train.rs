@@ -35,6 +35,9 @@ mod overlap;
 #[path = "pr_train_status.rs"]
 mod status;
 pub(crate) use status::{train_status, TrainStatusExit, NO_TRAIN_EXIT_CODE, ORPHANED_EXIT_CODE};
+// trace:BUG-2750 | ai:codex
+#[path = "pr_train_store_refresh.rs"]
+mod store_refresh;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -5127,6 +5130,10 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let kind = crate::forge::resolve_forge_kind(&project_root);
     if let Some(why) = forge_refusal(kind) {
         anyhow::bail!(why);
+    }
+    // trace:BUG-2750 | ai:codex
+    if !opts.dry_run {
+        store_refresh::pre_pass(&main_worktree);
     }
     let forge = crate::forge::forge_for(&project_root);
     let base = crate::gate::review_carryover::protected_base(&main_worktree)

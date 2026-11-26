@@ -886,7 +886,7 @@
     "aida-core/src/git_ops.rs:contained_seat_git_command:var_os:059a23a812a9a7261ad3": 1,
     "aida-core/src/git_ops.rs:contained_seat_git_command:var_os:c59b53ea2b38e08cf245": 1,
     "aida-core/src/git_ops.rs:gc_auto:var:5e78c37f1d5e3cfe6e49": 1,
-    "aida-core/src/git_ops.rs:host_git_command:var_os:dd727c4b59933866a12a": 2,
+    "aida-core/src/git_ops.rs:build_host_git_command:var_os:dd727c4b59933866a12a": 2,
     "aida-core/src/git_ops.rs:is_git_repo:var_os:dd727c4b59933866a12a": 1,
     "aida-core/src/git_ops.rs:opportunistic_store_gc:var:e39dbb4d2952dbe54dc8": 1,
     "aida-core/src/git_ops.rs:read_public_identity:var_os:a68801ef1e0e74e746cc": 1,

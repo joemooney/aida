@@ -12,6 +12,27 @@ const HOOKS: &[(&str, &str)] = &[
     ("pre-push", "hooks/aida-store-pre-push.sh"),
 ];
 
+// trace:BUG-2750.AC1 | ai:codex
+pub(crate) fn probe_output(
+    mut cmd: std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    #[cfg(all(unix, feature = "native"))]
+    if let Some(deadline) = crate::git_ops::CONFIG_READ_DEADLINE.with(std::cell::Cell::get) {
+        if std::time::Instant::now() >= deadline {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        let (status, stdout, stderr) =
+            crate::transport_policy::bounded_with_stderr(cmd, &[], 1 << 20, deadline)
+                .map_err(std::io::Error::other)?;
+        return Ok(std::process::Output {
+            status,
+            stdout,
+            stderr,
+        });
+    }
+    cmd.output()
+}
+
 /// Strip cwd-dependent executable lookup, including absolute paths into the store.
 pub(crate) fn safe_path(store: &Path, path: &std::ffi::OsStr) -> std::ffi::OsString {
     let store = std::fs::canonicalize(store).unwrap_or_else(|_| store.to_path_buf());
@@ -452,20 +473,28 @@ fn host_git_version(store: &Path) -> String {
         return fake;
     }
     static VERSION: GitVersionCache = std::sync::Mutex::new(None);
-    cached_git_version(&VERSION, std::time::Instant::now(), || {
+    let read = || {
         // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
-        std::process::Command::new("git")
-            .env(
-                "PATH",
-                safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
-            )
-            .arg("--version")
-            .output()
+        let mut cmd = std::process::Command::new("git");
+        cmd.env(
+            "PATH",
+            safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+        )
+        .arg("--version");
+        probe_output(cmd)
             .ok()
             .filter(|out| out.status.success())
             .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
             .unwrap_or_default()
-    })
+    };
+    #[cfg(all(unix, feature = "native"))]
+    if crate::git_ops::CONFIG_READ_DEADLINE
+        .with(std::cell::Cell::get)
+        .is_some()
+    {
+        return read();
+    }
+    cached_git_version(&VERSION, std::time::Instant::now(), read)
 }
 
 /// Whether host git honours `GIT_ATTR_SOURCE` (git 2.40+).
@@ -514,17 +543,15 @@ pub(crate) const CONTAINED_MARKER: &str = "aida-contained-store";
 pub(crate) fn git_common_dir(store: &Path) -> Option<PathBuf> {
     // Read-only lookup the hardened builder depends on (BUG-2131).
     // raw-git-ok(BUG-1929): read-only rev-parse with sanitized PATH.
-    let out = std::process::Command::new("git")
-        .env(
-            "PATH",
-            safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
-        )
-        .current_dir(store)
-        .args(["-c", "core.fsmonitor=false"])
-        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
-        .output()
-        .ok()
-        .filter(|out| out.status.success())?;
+    let mut cmd = std::process::Command::new("git");
+    cmd.env(
+        "PATH",
+        safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+    )
+    .current_dir(store)
+    .args(["-c", "core.fsmonitor=false"])
+    .args(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    let out = probe_output(cmd).ok().filter(|out| out.status.success())?;
     let dir = String::from_utf8_lossy(&out.stdout)
         .trim_end_matches(['\n', '\r'])
         .to_string();
@@ -617,6 +644,13 @@ pub(crate) enum AttrSourceVerdict {
 // trace:BUG-2131 | ai:claude
 pub(crate) fn attr_source_verdict(store: &Path) -> AttrSourceVerdict {
     let output = host_git_version(store);
+    #[cfg(all(unix, feature = "native"))]
+    if crate::git_ops::CONFIG_READ_DEADLINE
+        .with(std::cell::Cell::get)
+        .is_some_and(|deadline| std::time::Instant::now() >= deadline)
+    {
+        return AttrSourceVerdict::Refuse("store git version probe deadline expired".into());
+    }
     if attr_source_supported_by(&output) {
         return AttrSourceVerdict::Supported;
     }
