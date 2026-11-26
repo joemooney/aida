@@ -244,3 +244,11 @@
   added_at: 2026-11-26T00:21:58.237082145Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a2153d-a7ab-7602-b49f-1edbd76c94a3
+  position: 1406000
+  added_by: dirtlab
+  note: auto-queued by `session end` (01a214f2); covers 0 specs
+  added_at: 2026-11-26T00:25:10.392911388Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
