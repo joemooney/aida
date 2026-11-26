@@ -33,10 +33,11 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-22T21:25:40.781887720Z
+modified_at: 2026-11-26T07:34:12.009714141Z
 req_type: Story
 tags:
 - area:ci
+- batch:shift-20261126-0733
 - needs-sketch-signoff
 relationships:
 - rel_type: Supersedes
@@ -865,6 +866,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a216c6-b9c6-73c0-84fb-9f7644a0161d
+  author: joe
+  timestamp: 2026-11-26T07:34:12.166172988Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
