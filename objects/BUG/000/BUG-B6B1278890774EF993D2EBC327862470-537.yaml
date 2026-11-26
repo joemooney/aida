@@ -9,12 +9,12 @@ description: |
   - AC1: when a PR's current head differs from the head checked out in a leftover reviewer worktree that is CLEAN, holds no merge-hold marker, has no live process, and whose lease is stale or ending-retained, review-watch reclaims it itself: it copies any merge-hold marker to the primary first (BUG-2176), runs the same path as `aida session end --yes`, and dispatches the new head in the SAME pass. A test drives the exact shape above.
   - AC2: a dirty, locked, merge-held or process-held leftover is still kept, and the pass line names WHY for each held PR (dirty / live pid N / merge-hold / lock), not just "held by exited attempt".
   - AC3: a held-PR count above 0 for longer than 30 min surfaces in `aida doctor` and in the landing-drought watchdog (STORY-3131) as "review blocked by a retained reviewer worktree", with the exact fix.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T17:19:44.587475168Z
+modified_at: 2026-11-26T17:24:05.061454845Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -38,6 +38,13 @@ history:
   author: joe
   timestamp: 2026-11-26T17:17:58.662182199Z
   changes: []
+- id: 01a218e2-c745-7963-9d57-8cb36cffa2d2
+  author: aida-session-start
+  timestamp: 2026-11-26T17:24:05.061453793Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
