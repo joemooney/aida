@@ -10,12 +10,12 @@ description: |
   - AC2: the same ejection never loops. A second train attempt at the same head with the same ejection reason is refused with the routed next step named, and `aida pr train N` prints it instead of retrying silently.
   - AC3: the landing-drought watchdog (STORY-3131) reports a PR ejected for stacked-diff drift for more than 30 min as its own cause, with the fix.
   - AC4: tests for each AC.
-status: Approved
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T20:44:59.485130591Z
+modified_at: 2026-11-26T21:01:33.445675261Z
 req_type: Bug
 tags:
 - landing
@@ -139,6 +139,12 @@ comments:
   modified_at: 2026-11-26T20:44:59.485130591Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a219a9-e185-73f2-a05c-5a158f668d60
+  author: aida-publication-done
+  content: Implementer push 36ffea9bc517 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T21:01:33.445672206Z
+  modified_at: 2026-11-26T21:01:33.445672206Z
+  session_id: 01a219535435
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
@@ -187,6 +193,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a219a9-e185-73f2-a05c-5a0a76037598
+  author: aida-publication-done
+  timestamp: 2026-11-26T21:01:33.445670226Z
+  session_id: 01a219535435
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 4af2602e90edd4e09d68b998d4acc5364fdc223b
