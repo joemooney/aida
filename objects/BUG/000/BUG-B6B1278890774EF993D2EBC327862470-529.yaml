@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T05:34:37.427594839Z
+modified_at: 2026-11-26T05:36:36.832229476Z
 req_type: Bug
 tags:
 - ci
@@ -116,6 +116,16 @@ comments:
     Verdict: see the numbers. MemAvailable staying well above zero with no swap means memory is REFUTED as the cause; a near-zero MemAvailable or a memory-exhausted line CONFIRMS it. AC2 count: this run is #1 of 3 consecutive green lib-1 runs if lib-1 passed.
   created_at: 2026-11-26T05:34:37.427594839Z
   modified_at: 2026-11-26T05:34:37.427594839Z
+- id: 01a2165b-11e0-7052-8724-25f2a5b00e55
+  author: joe
+  content: |-
+    AC1 EVIDENCE, corrected (product-15 22:45; the earlier automated comment found no lines because it used the wrong log endpoint). #4623 @ e430c0ba, full CI run 45760225097, WITH this PR's memory bound:
+    - lib-0: success, 05:14:05Z → 05:32:31Z (863s watched); min MemAvailable 2493 MiB; peak swap 2 MiB.
+    - lib-1: success, 05:14:05Z → 05:30:55Z (799s watched); min MemAvailable 2714 MiB; peak swap 1 MiB.
+    Verdict: memory pressure CONFIRMED as the likely cause. Even with the bound, both lib shards drop to about 2.5–2.7 GiB available on a ~16 GiB hosted VM, so without the bound (more parallel rustc/test processes, 5–14 GiB each as seen on dell1) exhaustion is plausible and matches the earlier shutdown signals and 45-min cancels. With the bound there is about 2.5 GiB of headroom and no swap pressure.
+    AC2 count: this run is GREEN lib-1 #1 of 3. #2 and #3 will be the next two trains' lib-1 runs after #4623 lands.
+  created_at: 2026-11-26T05:36:36.832229476Z
+  modified_at: 2026-11-26T05:36:36.832229476Z
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
