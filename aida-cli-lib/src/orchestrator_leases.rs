@@ -893,7 +893,7 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
     ),
     (
         auto_complete::DRIVE_EXIT_HARD_FAIL,
-        "`--auto-complete` drive hard failure",
+        "`--auto-complete` drive hard failure; review prepare: partial, challenger unavailable",
     ),
     (drain_next_n::DRAIN_CAP_EXIT_CODE, "drain cap reached"),
     (pr_rebase::REBASE_EXIT_CODE_CONFLICT, "pr rebase conflict"),
@@ -1005,6 +1005,13 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     // trace:STORY-2823 | ai:claude
     if let Some(exit) = err.downcast_ref::<crate::pr_train::TrainStatusExit>() {
         return named_exit_code(exit.0);
+    }
+    // trace:STORY-3120 | ai:claude
+    if err
+        .downcast_ref::<crate::review_prepare::PartialReviewExit>()
+        .is_some()
+    {
+        return named_exit_code(crate::review_prepare::PARTIAL_REVIEW_EXIT_CODE);
     }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| named_exit_code(sig.code))

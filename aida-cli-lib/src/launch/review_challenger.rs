@@ -35,6 +35,13 @@ pub(crate) struct AdversarialSummary {
     pub refuted: Vec<RefutedFinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// Why the challenger could not run; set, the report is partial.
+    /// trace:STORY-3120 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_unavailable: Option<String>,
+    /// Finder findings the challenger never judged. They still gate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unchallenged: Vec<RawReviewFinding>,
 }
 
 /// Review vendors named by `[AI:<tool>]` tags (`+` joins several) in commit
@@ -108,6 +115,10 @@ pub(crate) fn challenger_call<'a>(
                 Some(v),
                 Some(format!("--challenger-agent picked {}", v.program)),
             )
+        }
+        // trace:STORY-3120 | ai:claude
+        Some(_) if finder.agent.is_none() && finder.var("AIDA_REVIEW_RUNNER_CMD").is_none() => {
+            bail!("--challenger-agent needs --agent")
         }
         Some(_) => bail!("--challenger-agent does not apply to AIDA_REVIEW_RUNNER_CMD"),
         None => pick_challenger(finder, authors),
@@ -401,6 +412,16 @@ mod tests {
             panic!("accepted")
         };
         assert!(err.to_string().contains("AIDA_REVIEW_RUNNER_CMD"), "{err}");
+        // Without --agent the refusal names the missing flag.
+        let env = vec![path(only_claude.path())];
+        let call = RunnerCall {
+            agent: None,
+            ..finder("claude", checkout.path(), &env)
+        };
+        let Err(err) = challenger_call(&call, &forged, codex, None, &base) else {
+            panic!("accepted")
+        };
+        assert_eq!(err.to_string(), "--challenger-agent needs --agent");
         // Outside the allowlist: refused before anything runs.
         assert!(review_vendor("gemini").is_err() && review_vendor("sh").is_err());
     }

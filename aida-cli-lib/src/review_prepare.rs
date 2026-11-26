@@ -361,14 +361,21 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             None
         };
         let pass = challenge.as_ref().map(|(pass, _)| pass);
-        let (found, ledger, refuted) = review_batches(&call, pass, &batches, prompt, &inventory)?;
+        let (found, ledger, refuted, unchallenged) =
+            review_batches(&call, pass, &batches, prompt, &inventory)?;
         let read = |path: &str| content_cache.get(path).cloned();
-        // Refuted findings are anchored too: they still gate and reach SARIF.
+        // Refuted and unchallenged findings are anchored too: they still
+        // gate and reach SARIF.
         let rows: Vec<_> = refuted.iter().map(|r| r.finding.clone()).collect();
         let refuted = (refuted.into_iter().zip(anchor_findings_with(&rows, read)))
             .map(|(r, finding)| RefutedFinding { finding, ..r })
             .collect();
-        adversarial = challenge.map(|(_, summary)| AdversarialSummary { refuted, ..summary });
+        adversarial = challenge.map(|(_, summary)| AdversarialSummary {
+            refuted,
+            challenger_unavailable: unchallenged.cause,
+            unchallenged: anchor_findings_with(&unchallenged.rows, read),
+            ..summary
+        });
         // A runner that does not report every reviewable file is incomplete.
         coverage_verification = Some(verify_coverage_ledger(&inventory, &ledger));
         Some(anchor_findings_with(&found, read))
@@ -409,7 +416,12 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
             )
         })
         .collect();
-    let gated: Vec<_> = (findings.iter().cloned())
+    let unchallenged = bundle
+        .adversarial
+        .as_ref()
+        .map_or(&[][..], |a| &a.unchallenged);
+    let reported: Vec<_> = findings.iter().chain(unchallenged).cloned().collect();
+    let gated: Vec<_> = (reported.iter().cloned())
         .chain(suppressed.iter().map(|(f, _)| f.clone()))
         .collect();
     let exceeded = args
@@ -428,8 +440,16 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     }
 
     if let Some(path) = &args.sarif {
-        let report =
-            aida_core::review_engine::findings_to_sarif_json_with_suppressed(findings, &suppressed);
+        let mut report = aida_core::review_engine::findings_to_sarif_json_with_suppressed(
+            &reported,
+            &suppressed,
+        );
+        // Results follow `reported`'s order, so these are the unchallenged.
+        let results = report["runs"][0]["results"].as_array_mut();
+        let marked = results.into_iter().flatten().skip(findings.len());
+        for result in marked.take(unchallenged.len()) {
+            result["properties"] = serde_json::json!({ "unchallenged": true });
+        }
         write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
             .with_context(|| format!("write SARIF {}", path.display()))?;
     }
@@ -460,6 +480,10 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
                 cov.skipped_without_reason
             );
         }
+    }
+    // After every gate above, so `--fail-on` (exit 1) wins. trace:STORY-3120 | ai:claude
+    if let Some(cause) = bundle.adversarial.and_then(|a| a.challenger_unavailable) {
+        return Err(PartialReviewExit(cause).into());
     }
 
     Ok(())
@@ -748,7 +772,9 @@ fn batch_prompt(
 /// returned ledger keeps only files the runner reports `reviewed`, so a skip
 /// or silence leaves the file unaccounted when the caller verifies coverage.
 /// With a `challenger`, each batch's findings must then be reproduced (kept)
-/// or refuted (returned apart) by it.
+/// or refuted (returned apart) by it. A challenger that fails or answers
+/// unparsably is not asked again: its cause and every finding from that batch
+/// on come back unchallenged, so the finder's work is never discarded.
 // trace:STORY-3120 | ai:claude
 fn review_batches(
     call: &RunnerCall<'_>,
@@ -756,8 +782,9 @@ fn review_batches(
     batches: &[ReviewBatch],
     mut prompt: impl FnMut(&ReviewBatch) -> Result<String>,
     inventory: &ClassifiedInventory,
-) -> Result<(Vec<RawReviewFinding>, CoverageLedger, Vec<RefutedFinding>)> {
+) -> Result<BatchesOutcome> {
     let (mut found, mut ledger, mut refuted) = (Vec::new(), CoverageLedger::default(), Vec::new());
+    let mut unchallenged = Unchallenged::default();
     for (i, batch) in batches.iter().enumerate() {
         let context = prompt(batch)?;
         let out = call
@@ -785,12 +812,16 @@ fn review_batches(
             );
         }
         let rows = match challenge {
+            Some(_) if unchallenged.cause.is_some() => {
+                unchallenged.rows.extend(rows);
+                Vec::new()
+            }
             Some(pass) if !rows.is_empty() => {
-                // Fail closed with the cause: an unauthenticated or
-                // rate-limited challenger never lets findings through
-                // unchallenged. trace:STORY-3120 | ai:claude
+                // Never report an adversarial pass the challenger did not
+                // make: keep the finder's rows, unchallenged, with the
+                // cause. trace:STORY-3120 | ai:claude
                 let who = pass.vendor().map_or("the custom runner", |v| v.program);
-                let out = pass
+                let verdicts = pass
                     .run(&challenger::challenge_prompt(&rows, &context)?)
                     .with_context(|| {
                         format!(
@@ -798,11 +829,24 @@ fn review_batches(
                              signed in or is rate-limited, pick another with --challenger-agent",
                             i + 1
                         )
-                    })?;
-                let (kept, dropped) = challenger::apply_verdicts(rows, &out)
-                    .with_context(|| format!("challenge batch {} output", i + 1))?;
-                refuted.extend(dropped);
-                kept
+                    })
+                    .and_then(|out| {
+                        challenger::apply_verdicts(rows.clone(), &out)
+                            .with_context(|| format!("challenge batch {} output", i + 1))
+                    });
+                match verdicts {
+                    Ok((kept, dropped)) => {
+                        refuted.extend(dropped);
+                        kept
+                    }
+                    Err(err) => {
+                        // Bounded: the cause can carry the agent's stderr.
+                        let cause = format!("{err:#}").chars().take(2000).collect();
+                        unchallenged.cause = Some(cause);
+                        unchallenged.rows.extend(rows);
+                        Vec::new()
+                    }
+                }
             }
             _ => rows,
         };
@@ -812,8 +856,37 @@ fn review_batches(
             .files
             .extend(files.files.into_iter().filter(reviewed));
     }
-    Ok((found, ledger, refuted))
+    Ok((found, ledger, refuted, unchallenged))
 }
+
+/// Findings, the coverage ledger, refuted findings and unchallenged ones.
+type BatchesOutcome = (
+    Vec<RawReviewFinding>,
+    CoverageLedger,
+    Vec<RefutedFinding>,
+    Unchallenged,
+);
+
+/// Finder rows the challenger never judged, and why it could not.
+#[derive(Debug, Default)]
+struct Unchallenged {
+    rows: Vec<RawReviewFinding>,
+    cause: Option<String>,
+}
+
+/// `aida review prepare` exits 3 when the challenger was unavailable: the
+/// report is the finder's alone. trace:STORY-3120 | ai:claude
+pub(crate) const PARTIAL_REVIEW_EXIT_CODE: i32 = 3;
+
+/// Carries [`PARTIAL_REVIEW_EXIT_CODE`] past the top-level error printer.
+#[derive(Debug)]
+pub(crate) struct PartialReviewExit(String);
+impl std::fmt::Display for PartialReviewExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "partial: challenger unavailable ({})", self.0)
+    }
+}
+impl std::error::Error for PartialReviewExit {}
 
 // trace:TASK-3862 | ai:codex
 fn git_rev_parse(root: &Path, rev: &str) -> Result<String> {
@@ -1192,11 +1265,19 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         if let Some(note) = &adv.note {
             out.push_str(&format!("- **Note**: {}\n", code_span(note)));
         }
+        // The cause is agent stderr, so inert. trace:STORY-3120 | ai:claude
+        if let Some(cause) = &adv.challenger_unavailable {
+            let cause = code_span(cause);
+            out.push_str(&format!("- **challenger: unavailable** ({cause})\n"));
+        }
         push(std::mem::take(&mut out), 0);
         for r in &adv.refuted {
             let mut text = finding_markdown("- **Refuted**", &r.finding);
             text.push_str(&format!("  Challenger reason:\n{}", fenced(&r.reason)));
             push(text, 1);
+        }
+        for f in &adv.unchallenged {
+            push(finding_markdown("- **Unchallenged**", f), 1);
         }
         push("\n".into(), 0);
     }
@@ -2021,24 +2102,95 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             sent.contains("rename from old.rs") && sent.contains("+fn c() { x }"),
             "{sent}"
         );
-        // A challenger that is signed out or rate-limited refuses the run,
-        // naming its cause and the override. trace:STORY-3120 | ai:claude
+        // A rate-limited challenger no longer refuses the run: see
+        // s5d_unavailable_challenger_keeps_finder_report_and_exits_partial.
+    }
+
+    /// A rate-limited challenger keeps the finder's report: every finding is
+    /// unchallenged in the bundle, Markdown and SARIF, the challenger is asked
+    /// once, `--fail-on` gates (exit 1, winning), and otherwise exit 3.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5d_unavailable_challenger_keeps_finder_report_and_exits_partial() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, runner) = (temp.path().join("repo"), temp.path().join("runner"));
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let extra = [("AIDA_REVIEW_RUNNER_CMD", runner.to_str())];
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &extra);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(&root, &["init", "-q"]).unwrap();
+        let rules = root.join(".aida/review-rules.toml");
+        std::fs::write(rules, "max_files_per_batch = 1\n").unwrap();
+        std::fs::write(root.join("a.rs"), "fn a() {}\n").unwrap();
+        std::fs::write(root.join("b.rs"), "fn b() {}\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        std::fs::write(root.join("a.rs"), "fn a() { x }\n").unwrap();
+        std::fs::write(root.join("b.rs"), "fn b() { y }\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        crate::test_git::commit_fixture(&root);
+        let count = temp.path().join("challenges");
         let body = format!(
-            "#!/bin/sh\ncat >/dev/null\nif [ \"$AIDA_REVIEW_PASS\" = challenger ]; then \
-             echo 'rate limit exceeded' >&2; exit 1; else echo '{finder}'; fi\n"
+            "#!/bin/sh\np=$(cat)\nif [ \"$AIDA_REVIEW_PASS\" = challenger ]; then \
+             echo x >>{}; echo 'rate limit exceeded' >&2; exit 1; fi\n\
+             case \"$p\" in *'File: `a.rs`'*) f=a.rs; s=high;; *) f=b.rs; s=low;; esac\n\
+             echo \"{{\\\"findings\\\":[{{\\\"path\\\":\\\"$f\\\",\\\"severity\\\":\\\"$s\\\",\
+             \\\"category\\\":\\\"bug\\\",\\\"message\\\":\\\"m-$f\\\"}}],\
+             \\\"files\\\":[{{\\\"path\\\":\\\"$f\\\",\\\"status\\\":\\\"reviewed\\\"}}]}}\"\n",
+            count.display()
         );
+        let src = temp.path().join("src");
         std::fs::write(&src, body).unwrap();
-        let mut install = Command::new("install");
-        let status = install.arg("-m755").args([&src, &runner]).status();
+        let status = Command::new("install")
+            .arg("-m755")
+            .args([&src, &runner])
+            .status();
         assert!(status.unwrap().success());
-        let err = format!("{:#}", handle_review_prepare(&args, &store).unwrap_err());
-        for want in [
-            "challenger the custom runner failed",
-            "--challenger-agent",
-            "rate limit",
-        ] {
-            assert!(err.contains(want), "{want}: {err}");
+        let mut args = ReviewPrepareArgs {
+            from: Some(base),
+            run_review: true,
+            adversarial: true,
+            json: true,
+            write: Some("out.json".into()),
+            sarif: Some("out.sarif".into()),
+            fail_on: Some("high".into()),
+            ..Default::default()
+        };
+        let challenges = || std::fs::read_to_string(&count).unwrap().lines().count();
+        // --fail-on wins over the partial exit.
+        let err = handle_review_prepare(&args, &store).unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&err), 1, "{err:#}");
+        assert!(err
+            .to_string()
+            .contains("1 findings meet or exceed --fail-on high"));
+        assert_eq!(challenges(), 1, "no challenge after the first failure");
+        args.fail_on = None;
+        let err = handle_review_prepare(&args, &store).unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&err), 3, "{err:#}");
+        assert!(err.to_string().contains("partial: challenger unavailable"));
+        assert_eq!(challenges(), 2);
+        let read = |name: &str| std::fs::read_to_string(root.join(name)).unwrap();
+        let out: serde_json::Value = serde_json::from_str(&read("out.json")).unwrap();
+        let adv = &out["adversarial"];
+        assert!(adv["challenger_unavailable"]
+            .as_str()
+            .unwrap()
+            .contains("rate limit exceeded"));
+        assert_eq!(adv["unchallenged"].as_array().unwrap().len(), 2);
+        assert_eq!(out["anchored_findings"], serde_json::json!([]));
+        let sarif: serde_json::Value = serde_json::from_str(&read("out.sarif")).unwrap();
+        let results = sarif["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2);
+        for result in results {
+            assert_eq!(result["properties"]["unchallenged"], true, "{result}");
+            assert!(result.get("suppressions").is_none());
         }
+        args.json = false;
+        args.write = Some("out.md".into());
+        assert!(handle_review_prepare(&args, &store).is_err());
+        let md = read("out.md");
+        assert!(md.contains("**challenger: unavailable** (`"), "{md}");
+        assert_eq!(md.matches("**Unchallenged**").count(), 2, "{md}");
     }
 
     /// A rename's old path reaches the runner's diff only when it passes
@@ -2607,7 +2759,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             "{:#}",
             post_review_comment(&forge, 9, &bundle, "r.md").unwrap_err()
         );
-        assert!(err.contains("os error 13"), "EACCES: {err}");
+        // Root's DAC override can bypass mode bits on some filesystems, so
+        // the errno is asserted only for other users. trace:STORY-3120 | ai:claude
+        // SAFETY: geteuid has no preconditions and cannot fail.
+        if unsafe { libc::geteuid() } != 0 {
+            assert!(err.contains("os error 13"), "EACCES: {err}");
+        }
         env.set_key("AIDA_TEST_GH_BINARY", &root.join("missing-gh"));
         let err = format!(
             "{:#}",

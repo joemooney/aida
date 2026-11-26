@@ -69,6 +69,7 @@
         "s5b_cut_balanced_tracks_tilde_fences_and_inline_spans",
         "s5b_pinned_post_names_repo_and_hung_gh_times_out",
         "s5c_rename_old_paths_apply_every_inventory_exclusion",
+        "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
