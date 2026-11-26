@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: the credential-path screen also covers .npmrc, .cargo/credentials and .cargo/credentials.toml, .vault-token, terraform tokens (.terraformrc, terraform.rc, .terraform.d/credentials.tfrc.json), and similar well-known token files, at the repo root and nested.
   - AC2: a test per new pattern; existing TASK-3320 tests stay green.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:09:19.840024994Z
-modified_at: 2026-11-26T08:25:00.018343562Z
+modified_at: 2026-11-26T08:37:07.970252207Z
 req_type: Task
 tags:
 - review
@@ -79,6 +79,12 @@ comments:
   modified_at: 2026-11-26T08:25:00.018343562Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21700-5702-7f81-9eb0-31e8e5ff4412
+  author: aida-publication-done
+  content: Implementer push 2912cd16b5ca declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T08:37:07.970250224Z
+  modified_at: 2026-11-26T08:37:07.970250224Z
+  session_id: 01a216cf8f0e
 history:
 - id: 01a216b3-3ac2-73f2-9348-b88cea4c9520
   author: joe
@@ -100,6 +106,14 @@ history:
   timestamp: 2026-11-26T08:22:55.918422361Z
   session_id: 01a216cf8f0e
   harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21700-5702-7f81-9eb0-31d42fe4f9d8
+  author: aida-publication-done
+  timestamp: 2026-11-26T08:37:07.970242398Z
+  session_id: 01a216cf8f0e
   changes:
   - field_name: status
     old_value: InProgress
