@@ -1076,6 +1076,25 @@ Use the same host network namespace for all managed launchers on the machine.
 Let existing startup reservations drain and stop queued launch commands before
 changing the host settings. New launch commands read the updated policy.
 
+<!-- trace:TASK-3911 | ai:claude -->
+The same `[lanes]` table also limits delegated lane jobs (`aida lane job run`
+and the host fast gate) when each job starts. Every key is optional; when a
+key is unset, jobs start the same way as before:
+
+```toml
+[lanes]
+max_compile_concurrency = 4      # lane jobs compiling at once on this host
+cargo_build_jobs = 4             # CARGO_BUILD_JOBS for each lane job
+min_job_memory_headroom_gib = 8  # wait for this much RAM + free swap
+```
+
+A job that finds every compile slot in use, or memory below the job floor,
+waits in its lane and starts once a slot frees up or memory recovers. A job
+waiting on memory gives its slot back while it waits. When a floor is set and
+memory cannot be measured, the job is refused. Each job reads the file
+when it starts, so a change applies from the next job on. For dell1, set `max_compile_concurrency` and
+`cargo_build_jobs` to four.
+
 <!-- trace:BUG-2519 | ai:codex -->
 The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
 directories, then retries in the first directory if reuse fails. It distinguishes

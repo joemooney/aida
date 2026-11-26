@@ -1785,7 +1785,7 @@ fn run_one_authorized(
         Ok(job) => job,
         Err(why) => return refuse(&why),
     };
-    let env = lane.job_env(&job);
+    let mut env = lane.job_env(&job);
     let Some(cargo) = resolve_program(
         if fast_gate_job(&job) {
             &job.argv[0]
@@ -1887,6 +1887,23 @@ fn run_one_authorized(
         #[cfg(test)]
         Sandbox::TestUnwrapped => (job_program, args, "unwrapped (test fixture)"),
     };
+    // Host compile admission at job start, not only at lane launch: a cap
+    // on concurrent lane compiles, a memory floor, and CARGO_BUILD_JOBS.
+    // Held until this job ends. trace:TASK-3911 | ai:claude
+    let mut queued = false;
+    let admission = match crate::lane_admission::admit_lane_job(stop, |why| {
+        if !queued {
+            queued = true;
+            lane.log(&format!("{id} queued: {why}"));
+        }
+    }) {
+        Ok(Some(admission)) => admission,
+        Ok(None) => return refuse("the lane ended while the job was queued"),
+        Err(e) => return refuse(&format!("host lane-job admission: {e:#}")),
+    };
+    if let Some(jobs) = admission.cargo_build_jobs {
+        env.insert("CARGO_BUILD_JOBS".into(), jobs.to_string());
+    }
     let mut out = match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
