@@ -324,7 +324,7 @@ fn append_git_config_env(cmd: &mut Command, key: &str, value: &str) {
 }
 
 thread_local! {
-    static CONFIG_READ_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
+    pub(crate) static CONFIG_READ_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
         const { std::cell::Cell::new(None) };
 }
 
@@ -359,7 +359,7 @@ pub fn with_config_read_deadline<T>(
 // remote-creds-ok(TASK-2001): `git config --get-regexp` reads the local
 // configuration only; it never contacts the remote.
 fn configured_remote_urls(dir: &Path, remote: &str) -> Option<Vec<String>> {
-    let mut cmd = super::host_git_command(dir);
+    let mut cmd = super::host_fetch_git_command(dir);
     cmd.args([
         "config",
         "--get-regexp",

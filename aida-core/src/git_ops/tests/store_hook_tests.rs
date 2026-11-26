@@ -1050,6 +1050,14 @@ fn bug_2192_host_git_command_resolves_store_hooks_once() {
         let cmd = host_git_command(cwd);
         (STORE_HOOKS_RESOLVES.with(std::cell::Cell::get), cmd)
     };
+    // trace:BUG-2750.AC1 | ai:codex
+    STORE_HOOKS_RESOLVES.with(|n| n.set(0));
+    let mut fetch = host_fetch_git_command(&store);
+    configure_remote_credentials(&mut fetch, &store, "origin");
+    assert_eq!(STORE_HOOKS_RESOLVES.with(std::cell::Cell::get), 0);
+    assert!(fetch
+        .get_args()
+        .any(|arg| arg == "core.hooksPath=/dev/null"));
     let (n, mut cmd) = resolves(&store);
     assert_eq!(n, 1, "one store git command must resolve the hooks once");
     assert!(cmd.args(["status", "--short"]).status().unwrap().success());
