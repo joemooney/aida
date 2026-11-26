@@ -12,12 +12,12 @@ description: |
   - AC1: `--run-review` errors print the FULL cause chain (e.g. {:#} / chain()), naming the vendor, pass (finder/challenger), batch, and the concrete cause (deadline exceeded after Ns, output cap, spawn refused: <why>, exit code + stderr tail, parse error).
   - AC2: the "AIDA_REVIEW_RUNNER_CMD runs both passes" note appears ONLY when that variable is actually set; with no --agent, the default vendor resolution is stated ("using <vendor> from [agents] / seat config").
   - AC3: find and fix why a claude runner batch on a ~560-line PR hits the 15-min deadline (e.g. the claude CLI waiting on a prompt or auth in the cleared env, or a missing non-interactive flag); a test with a stub runner for each of the AC1 causes.
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-26T17:05:56.003071171Z
+modified_at: 2026-11-26T17:26:33.187817941Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -27,6 +27,11 @@ relationships:
   target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   created_at: 2026-11-26T16:16:20.273338350Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a218e4-5641-79c3-9fb1-0f6bb00b1cbb
+  created_at: 2026-11-26T17:25:54.375348229Z
+  created_by: dirtlab
 comments:
 - id: 01a218a6-9c3b-76d0-9c19-736c102f04da
   author: joe
@@ -95,6 +100,33 @@ comments:
   modified_at: 2026-11-26T17:05:56.003071171Z
   session_id: 01a218a9014e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a218e3-8a59-7602-aae2-bcf2f45ac39d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 76c2bcff3c (git diff origin/main...HEAD, 5 files).
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: review_prepare.rs runner_failure builds one line, '<vendor|AIDA_REVIEW_RUNNER_CMD> <pass> pass, <review|challenge> batch N: <chain {:#}>', at both the finder and challenger sites. It is one line because agent mode keeps only the first line, which is the root cause of the bare 'review batch 1'. Test bug2775_runner_errors_name_runner_pass_batch_and_cause uses stub runners for: deadline (2s), output cap (64 bytes), exit code + one-line stderr tail, unparsable output, a refused relative runner command, and a custom runner exiting 4.
+    - AC2 [behavioral-test]: the note fires only when runner_cmd_set() (bug2775_runner_cmd_note_only_when_the_variable_is_set). Without --agent, run_review_agent resolves [agents] vendor, else DEFAULT_REVIEW_VENDOR (claude), and prints 'run review: using <vendor> from <source>' (bug2775_run_review_agent_resolves_and_states_the_default).
+    - AC3 [behavioral-test]: root cause reproduced on this seat. The hardened claude argv in a cleared env hangs; even bare 'claude --print' with env -i is killed at 45s. With only HTTPS_PROXY/HTTP_PROXY/NO_PROXY (+ lowercase) added, the same argv answers OK in seconds. env_clear() dropped the proxy route, so claude retried until 900s. Fix: PROXY_ENV allowlist (8 names). s3a_runner_spawn_contract now asserts that proxy vars pass and that GH_TOKEN, the seat grant and the other vendor's key stay stripped. Empty cwd, no project settings and the vendor argv are unchanged.
+
+    **Validation:** lane job cargo test -p aida-cli-lib --lib (bug2775 s3a s4): 46 passed, 0 failed. aida-ci-guards story_2539 vendor ratchet passed. make check-ci-fast exit 0.
+
+    **Probe findings / fixes:** the vendor-literal ratchet refused a 'claude' literal and LaunchVendor::Claude in review_prepare, so the default moved into vendors/review_runner.rs. The ratchet-set needed the three new tests listed. Consistency: an empty AIDA_REVIEW_RUNNER_CMD counts as unset in both run_review_agent and RunnerCall::var.
+
+    **Residual risks:** (1) A proxy URL can embed proxy credentials. They now reach the vendor binary; this is the operator's own network route, not a vendor or forge secret. (2) No live 15-min reproduction on product-15's host. The cause is inferred from this seat's identical hang; a host with direct network would have hit a different cause, which AC1 now surfaces. (3) A genuinely slow claude batch can still hit the 900s deadline, and it is now reported as such.
+  created_at: 2026-11-26T17:24:55.001430681Z
+  modified_at: 2026-11-26T17:24:55.001430681Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a218e3-f3a7-7641-b1f9-b4807c7806aa
+  author: aida-publication-done
+  content: Implementer push 46793d2c72c8 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T17:25:21.959734471Z
+  modified_at: 2026-11-26T17:25:21.959734471Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
@@ -111,6 +143,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a218e3-f3a7-7641-b1f9-b476d19ef366
+  author: aida-publication-done
+  timestamp: 2026-11-26T17:25:21.959732799Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
+- id: 01a218e4-7a37-7aa1-9283-b29e3e5a7d2d
+  author: dirtlab
+  timestamp: 2026-11-26T17:25:56.407245425Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a218e5-0e13-7e02-938f-4e8a7f790c1d
+  author: dirtlab
+  timestamp: 2026-11-26T17:26:34.259663866Z
+  session_id: 01a218a9014e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 6192912152aabb6401ef23caec3748605cf61b7f
@@ -119,3 +172,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6192912152a
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-26T17:26:33.187817941Z
+  implemented_by: dirtlab

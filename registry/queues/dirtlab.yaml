@@ -171,12 +171,6 @@
   added_at: 2026-11-26T15:52:15.277605347Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a218a1-7f9e-7fd0-b7e4-e96e3921122f
-  position: 1466000
-  added_by: dirtlab
-  added_at: 2026-11-26T16:20:20.254834940Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a218c6-513f-7a31-b1d3-0e92b629a9e3
   position: 1467000
   added_by: dirtlab
@@ -206,3 +200,11 @@
   added_by: dirtlab
   added_at: 2026-11-26T17:22:17.542008259Z
   for_role: implementer
+- user_id: dirtlab
+  requirement_id: 01a218e4-5641-79c3-9fb1-0f6bb00b1cbb
+  position: 1471000
+  added_by: dirtlab
+  note: auto-queued by `aida pr` (01a218a9); covers 1 spec
+  added_at: 2026-11-26T17:26:01.061676386Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
