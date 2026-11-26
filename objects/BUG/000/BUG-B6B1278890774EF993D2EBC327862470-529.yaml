@@ -1,0 +1,29 @@
+id: 01a21609-e1b7-7091-8146-ab61403671d1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-529
+agreed_id: BUG-2768
+title: 'CI lib-1 shard dies on GitHub-hosted runners (shutdown signal mid-build, 45-min cancels): likely memory exhaustion of the 16G VM'
+description: |
+  advisor-122 2026-11-25 21:10 (filed by product-15). CI (lib-1) on GitHub-HOSTED ubuntu-latest runners dies or stalls: train #4617 (run 45747748433, job 139667847339) "The runner has received a shutdown signal" 7 min in, during `cargo test --list`; #4569 (STORY-2897) hit the 45-min timeout on lib-1 twice. Every other shard passes. Verified (product-15): lib-0/1 and cli-0/1 have run on hosted runners on Nov 19, Nov 24 and today, NOT on the aida-dell1 JIT runner (ci.yml:187 routes them to dell1 only when needs.tier.outputs.dell1 says so), so this is not a dell1 restart issue. Leading hypothesis: the aida-cli-lib test build/run in lib-1 exhausts the ~16G hosted VM (on dell1 today one aida_cli_lib rustc peaked at 5-14G), and GitHub reclaims the VM, which shows up as a shutdown signal or a hang.
+
+  ## Acceptance
+  - AC1: confirm or refute the memory cause from the evidence (e.g. a lib-1 run with `/usr/bin/time -v` or memory sampling around the build, or the hosted runner diagnostics), recorded on the spec.
+  - AC2: if memory: bound lib-1's peak (e.g. CARGO_BUILD_JOBS for that shard, codegen-units/debuginfo trimming for the test profile, or split lib-1 further by module) so lib-1 completes under the hosted limits in 3 consecutive runs.
+  - AC3: a clear, early failure in place of the silent shutdown: if the shard approaches its memory budget or the deadline, fail with a message naming the shard and the cause.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-26T04:07:56.087585344Z
+modified_at: 2026-11-26T04:07:56.087585344Z
+req_type: Bug
+tags:
+- ci
+- landing
+- throughput
+filed_at:
+  code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 68ecbd82409
+  vendor: claude
