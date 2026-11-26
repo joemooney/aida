@@ -2463,12 +2463,12 @@ fn watcher_repo(root: &Path, gh: &Path) -> Option<String> {
             return Some(repo.to_owned());
         }
     }
-    // Let gh select its base repository. With no selector, browse hands its
-    // repository URL to the browser. Echo it locally without an API request.
+    // Let gh select its base repository and print its URL. With several
+    // remotes and no default set, gh's resolution may issue a GraphQL
+    // repo-network query; that does not draw on the core REST budget.
+    // trace:BUG-2735 | ai:claude
     let mut cmd = Command::new(gh);
-    cmd.current_dir(root)
-        .env("GH_BROWSER", "/bin/echo")
-        .arg("browse");
+    cmd.current_dir(root).args(["browse", "--no-browser"]);
     let out = crate::forge_lookup::deadline_output(cmd, Command::output_retrying_etxtbsy).ok()?;
     let url = std::str::from_utf8(&out.stdout)
         .ok()?

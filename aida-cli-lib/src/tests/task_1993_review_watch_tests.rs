@@ -5750,7 +5750,7 @@ fn bug2735_watchers_yield_core_budget_to_train_ci() {
         r#"#!/bin/sh
 [ "$1" = --version ] || echo "$*" >> calls
 case "$*" in
-    browse) git remote get-url upstream ;;
+    'browse --no-browser') git remote get-url upstream ;;
     'api rate_limit --cache 60s')
         case "$GH_HOST" in
             github.com) /bin/cat origin-budget ;;

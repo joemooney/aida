@@ -6834,3 +6834,31 @@ fn max_prs_per_train_admits_three_now_and_the_next_three_next_pass() {
     let mut one = vec![1u64, 2];
     assert_eq!(split_bounded_train(&mut one, 0), [2]);
 }
+
+// A low budget backs the automatic train off; it must not widen recovery to a
+// stale retained journal whose member set the pass never requested.
+// trace:BUG-2735 | ai:claude
+#[test]
+fn bug2735_low_budget_backoff_never_resumes_a_stale_retained_journal() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut entry = journal::Entry::new(train_of("main", &fms(&[3902])), "train/stale-1".into());
+    entry.step = journal::Step::Open;
+    journal::activate(dir.path(), entry).unwrap();
+    journal::clear();
+    assert!(journal::recovery_needed(dir.path()).unwrap());
+    // Backed off: recovery is skipped outright.
+    assert_eq!(recovery_request(true, &[]), None);
+    assert_eq!(recovery_request(true, &[3902]), None);
+    // Not backed off: the BUG-2547 set match still decides, and an empty or
+    // different request resumes nothing.
+    for requested in [&[][..], &[3887][..]] {
+        let asked = recovery_request(false, requested).expect("recovery runs");
+        let mut forge = FakeForge::mains(&["main"]);
+        let mut rails = ForgeRails::new(&mut forge, "fresh".into()).with_journal(dir.path());
+        let out = rails.resume_for(Some(asked)).unwrap();
+        assert!(out.landed.is_empty() && out.ejected.is_empty());
+        drop(rails);
+        assert!(forge.merged.is_empty());
+    }
+    assert_eq!(journal::entries(dir.path()).unwrap().len(), 1);
+}
