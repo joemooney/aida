@@ -1,5 +1,6 @@
 id: 01a2157b-8b5b-7d32-a35f-7ed587864ed8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-329
+agreed_id: STORY-3152
 title: 'Review PR-4607: [AI:claude] fix(repair): route before reserve and retire only the attempt''s own reservation (Refs BUG-2761)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2153d`) for branch `bug-2761-s3-fresh`.
@@ -49,6 +50,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21644-6620-7243-9809-a744b9993f3b
+  author: joe
+  timestamp: 2026-11-26T05:11:51.072949413Z
+  changes: []
 filed_at:
   code_sha: fa7028b4df8d8ce2aa0e3f270a743cca265b957e
   branch: main

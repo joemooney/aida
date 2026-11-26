@@ -1,5 +1,6 @@
 id: 01a215c4-d886-7572-8c91-68d3334b6534
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-330
+agreed_id: STORY-3149
 title: 'Review PR-4615: [AI:claude] fix(train): hold a red train''s culprit at its head and start no bisect train under a drain (BUG-2767)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21592`) for branch `fix-train-culprit-readmit`.
@@ -47,6 +48,10 @@ history:
   timestamp: 2026-11-26T02:53:08.148684535Z
   session_id: 01a215928946
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21644-65af-73d0-8032-d288d4dfca17
+  author: joe
+  timestamp: 2026-11-26T05:11:50.959515641Z
   changes: []
 filed_at:
   code_sha: f7538e24f20a874b18dea010f8fb2bc85be59679

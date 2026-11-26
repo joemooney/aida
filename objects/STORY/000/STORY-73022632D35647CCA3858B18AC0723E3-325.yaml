@@ -1,5 +1,6 @@
 id: 01a21539-fe89-7a30-9274-01ddc829c17c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-325
+agreed_id: STORY-3150
 title: 'Review PR-4604: [AI:claude] fix(review): screen root and nested credential paths, refuse findings citing them (TASK-3320)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21509`) for branch `int40-task-3320`.
@@ -47,6 +48,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21644-65e7-7692-a94f-788933336843
+  author: joe
+  timestamp: 2026-11-26T05:11:51.015482029Z
+  changes: []
 filed_at:
   code_sha: a387b7e87b96e611ba9da42e196f44f36b538739
   branch: main

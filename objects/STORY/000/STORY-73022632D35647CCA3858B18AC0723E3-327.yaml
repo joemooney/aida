@@ -1,5 +1,6 @@
 id: 01a2153d-a7ab-7602-b49f-1edbd76c94a3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-327
+agreed_id: STORY-3156
 title: 'Review PR-4603: [AI:claude] feat(review): validated --effort/--model tuning and trusted-base review rules (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a214f2`) for branch `int40-story-3120-s3b`.
@@ -49,6 +50,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21644-66e7-7821-abb1-48ceb39f9227
+  author: joe
+  timestamp: 2026-11-26T05:11:51.271445802Z
+  changes: []
 filed_at:
   code_sha: a387b7e87b96e611ba9da42e196f44f36b538739
   branch: main

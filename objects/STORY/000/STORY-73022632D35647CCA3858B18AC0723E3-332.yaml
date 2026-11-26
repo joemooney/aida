@@ -1,5 +1,6 @@
 id: 01a215d4-cbe9-7aa2-951e-0ea1b32cb585
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-332
+agreed_id: STORY-3151
 title: 'Review PR-4616: [AI:claude] feat(landing): max_prs_per_train caps the automatic train (TASK-3912)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a215aa`) for branch `landing-max-prs-per-train`.
@@ -36,6 +37,10 @@ history:
   timestamp: 2026-11-26T03:10:04.822450695Z
   session_id: 01a215aaf8ca
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21644-65f0-7513-9cd6-91012afaa0ea
+  author: joe
+  timestamp: 2026-11-26T05:11:51.024477445Z
   changes: []
 filed_at:
   code_sha: 2a68c0ff5333fe0e907b842538af467d6cb7314b

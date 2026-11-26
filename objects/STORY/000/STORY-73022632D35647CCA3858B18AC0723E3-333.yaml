@@ -1,5 +1,6 @@
 id: 01a21608-81f4-78b1-8fd2-0a3b06d5e782
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-333
+agreed_id: STORY-3154
 title: 'Review PR-4619: [AI:claude] feat(review): wire --run-review onto the hardened runner (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a215dd`) for branch `int40-story-3120-s3a2b`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21608-a874-7e32-971c-772f11f7ec21
   author: dirtlab
   timestamp: 2026-11-26T04:06:35.892508359Z
+  changes: []
+- id: 01a21644-6693-7a13-b1f8-76a6a1a97457
+  author: joe
+  timestamp: 2026-11-26T05:11:51.187720367Z
   changes: []
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558

@@ -1,5 +1,6 @@
 id: 01a2153a-c9c1-7550-94d4-97a00a744dd3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-326
+agreed_id: STORY-3155
 title: 'Review PR-4602: [AI:claude] fix(mandate): count a ledger-recorded verdict auto-release as a recorded clearance (BUG-2745)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a214ed`) for branch `bug-2745-hold-marker-refusal`.
@@ -33,6 +34,10 @@ history:
 - id: 01a2153a-ebac-7c53-8426-6a07642c2b5f
   author: dirtlab
   timestamp: 2026-11-26T00:21:52.684365508Z
+  changes: []
+- id: 01a21644-66c1-7753-b8a8-556b29c4b806
+  author: joe
+  timestamp: 2026-11-26T05:11:51.233626900Z
   changes: []
 filed_at:
   code_sha: a387b7e87b96e611ba9da42e196f44f36b538739
