@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561031Z
-modified_at: 2026-11-26T19:27:20.088748074Z
+modified_at: 2026-11-26T19:31:22.311624599Z
 req_type: Bug
 tags:
 - landing
@@ -33,6 +33,28 @@ comments:
   modified_at: 2026-11-26T18:40:32.691554246Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21957-5047-74b1-90ef-87a7647d551d
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + command-level helper):** extend the BUG-2767 culprit record (`.aida/train-culprits.json`) with a typed `kind: stacked-diff-drift` row plus the routed next step. After `drive`, every member ejected with the stacked-diff reason is recorded at its ejected head and routed: `Forge::update_change_branch` pinned to that head, then `try_auto_queue_pr_review` on its branch (the new head carries no verdict, so it is reviewed independently); on refusal (conflict) an advisor mailbox request names conflict repair / a fresh slice. Test: `bug2777_*` in `pr_train_culprit.rs` (record/hold/route) and a routing test with a fake forge.
+    - **AC2 (unit):** the drift hold refuses the same head even when the PR is named on `aida pr train N` (naming clears only a red-culprit hold), worded with the routed next step; a new head rides. Test in `pr_train_culprit.rs` + `culprit_admission`.
+    - **AC3 (unit):** `landing_drought::Ready` gains the drift row; a PR held for stacked-diff drift > 30 min is its own cause with the route as the fix. Test in `story_3131_landing_drought_tests.rs`.
+    - **AC4:** the tests above.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_train_culprit.rs`
+    - `aida-cli-lib/src/pr_train.rs` (reason const, post-drive routing, admission)
+    - `aida-cli-lib/src/landing_drought.rs` + its tests
+
+    ### Ambiguities / conflicts as questions
+    - TASK-1960 carry-over is gate policy and untouched: after update-branch the drifted diff no longer matches the approved patch-id, so the approval does not carry; for drift caused by an earlier train member (not main) carry-over could still apply. Is a gate-side refusal for that case wanted as a follow-up?
+  created_at: 2026-11-26T19:31:22.311624599Z
+  modified_at: 2026-11-26T19:31:22.311624599Z
+  session_id: 01a219535435
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
