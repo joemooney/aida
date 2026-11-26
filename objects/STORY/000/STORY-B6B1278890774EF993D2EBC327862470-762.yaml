@@ -14,12 +14,12 @@ description: |
   - (e) #4655: the terminology field guide (docs/showcase/workflow.html), workflow.svg and authority-mandate.svg, and a build.py guard that refuses unrenderable nested lists / single-asterisk emphasis, naming file:line.
 
   Done when (replaces the 11-23 check, which named field-guide.html, field-guide-act1..5.svg and autonomy.html, all superseded by the files above): every page and SVG above is on integration and passes `python3 docs/showcase/build.py --check` and `pytest tests/test_showcase_build.py`; every SVG renders in both themes and contains no script, event handler or external href; every term listed in the first paragraph is defined in docs/showcase/glossary.html or the workflow.html field guide; make check-ci-fast passes. STORY-2852 (tracked verbs) is NOT completed by this story.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782Z
-modified_at: 2026-11-26T13:26:50.728669614Z
+modified_at: 2026-11-26T13:51:52.659448887Z
 req_type: Story
 tags:
 - batch:shift-20261126-0733
@@ -553,6 +553,12 @@ comments:
   content: 'SPEC RECONCILED (product-15 2026-11-26 06:45, integration-30 06:40 flag): the done check now names the files the shipped slices a/b/c/d1/d2/e actually delivered (workflow.html field guide, the 10 workflow/authority SVGs, product-workflow.md, operator-setup.md, getting-started.md, the build.py table renderer and guard, the dropdowns and theme toggle) instead of the 11-23 targets field-guide.html, field-guide-act1..5.svg and autonomy.html. The glossary-coverage criterion is kept: every listed term defined in glossary.html or the workflow.html field guide. Reviewer of #4655: please verify that coverage.'
   created_at: 2026-11-26T13:26:50.728669614Z
   modified_at: 2026-11-26T13:26:50.728669614Z
+- id: 01a21820-7f53-72e1-a1a7-4f23e9dbb654
+  author: aida-publication-done
+  content: Implementer push 307d221dbde2 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-26T13:51:52.659447630Z
+  modified_at: 2026-11-26T13:51:52.659447630Z
+  session_id: 01a217e981c6
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
@@ -779,6 +785,14 @@ history:
       - (e) #4655: the terminology field guide (docs/showcase/workflow.html), workflow.svg and authority-mandate.svg, and a build.py guard that refuses unrenderable nested lists / single-asterisk emphasis, naming file:line.
 
       Done when (replaces the 11-23 check, which named field-guide.html, field-guide-act1..5.svg and autonomy.html, all superseded by the files above): every page and SVG above is on integration and passes `python3 docs/showcase/build.py --check` and `pytest tests/test_showcase_build.py`; every SVG renders in both themes and contains no script, event handler or external href; every term listed in the first paragraph is defined in docs/showcase/glossary.html or the workflow.html field guide; make check-ci-fast passes. STORY-2852 (tracked verbs) is NOT completed by this story.
+- id: 01a21820-7f53-72e1-a1a7-4f18dbeebfa7
+  author: aida-publication-done
+  timestamp: 2026-11-26T13:51:52.659435659Z
+  session_id: 01a217e981c6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
