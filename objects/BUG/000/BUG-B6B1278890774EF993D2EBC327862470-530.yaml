@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T09:33:31.656986361Z
+modified_at: 2026-11-26T09:33:59.197984958Z
 req_type: Bug
 tags:
 - admission
@@ -145,6 +145,12 @@ comments:
   content: Implementer push 0f9abd22eab1 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-26T09:33:31.656985410Z
   modified_at: 2026-11-26T09:33:31.656985410Z
+  session_id: 01a216fd8162
+- id: 01a21734-641d-7bf3-b762-43d98cbc1aa0
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `fix-autotrain-idle-admission` at head `0f9abd22eab158ed35fc58e668c10ddc5f5c96c0`.'
+  created_at: 2026-11-26T09:33:59.197981523Z
+  modified_at: 2026-11-26T09:33:59.197981523Z
   session_id: 01a216fd8162
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
