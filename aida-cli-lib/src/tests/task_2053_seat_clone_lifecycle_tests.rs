@@ -340,6 +340,65 @@ fn reap_enumerates_orphan_pins_and_releases_only_those_whose_clone_is_gone() {
     assert!(scan.orphan_pins[0].clone_exists);
 }
 
+/// BUG-2772: a pin that outlived its clone (no directory, no lease) no longer
+/// blocks a fresh clone at that path; it is replaced by the new base pin.
+// trace:BUG-2772 | ai:claude
+#[test]
+fn bug_2772_a_stale_pin_with_no_clone_or_lease_is_replaced() {
+    let fx = fixture();
+    let dest = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-relaunch"));
+    let first = create(&fx.main, &dest, "feat", "origin/main").unwrap();
+    std::fs::remove_dir_all(&dest).unwrap();
+    let pin = pin_ref(&dest).unwrap();
+    // Point the leftover pin somewhere else, as an older launch would have.
+    git_ok(
+        &fx.main,
+        &["update-ref", &pin, &format!("{}^{{tree}}", first.base_sha)],
+    );
+    let again = create(&fx.main, &dest, "feat", "origin/main").unwrap();
+    assert!(dest.join(".git").is_dir());
+    assert_eq!(
+        git_ok(&fx.main, &["rev-parse", &pin]).trim(),
+        again.base_sha
+    );
+}
+
+/// BUG-2772 negatives: a pin a clone lease still names, or whose clone
+/// directory still exists, is never touched and the launch refuses.
+// trace:BUG-2772 | ai:claude
+#[test]
+fn bug_2772_a_pin_held_by_a_lease_or_a_live_clone_refuses() {
+    let fx = fixture();
+    let leased = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-held"));
+    create(&fx.main, &leased, "feat", "origin/main").unwrap();
+    write_clone_lease(&fx.main, &leased, "c0ffee002772");
+    std::fs::remove_dir_all(&leased).unwrap();
+    let pin = pin_ref(&leased).unwrap();
+    let before = git_ok(&fx.main, &["rev-parse", &pin]);
+    let msg = format!(
+        "{:#}",
+        create(&fx.main, &leased, "feat", "origin/main").unwrap_err()
+    );
+    assert!(
+        msg.contains("still held") && msg.contains("never falls back"),
+        "{msg}"
+    );
+    assert!(!leased.exists());
+    assert_eq!(git_ok(&fx.main, &["rev-parse", &pin]), before);
+
+    let live = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-live"));
+    create(&fx.main, &live, "feat", "origin/main").unwrap();
+    let pin = pin_ref(&live).unwrap();
+    let before = git_ok(&fx.main, &["rev-parse", &pin]);
+    let msg = format!(
+        "{:#}",
+        create(&fx.main, &live, "feat", "origin/main").unwrap_err()
+    );
+    assert!(msg.contains("already exists"), "{msg}");
+    assert!(live.join(".git").is_dir());
+    assert_eq!(git_ok(&fx.main, &["rev-parse", &pin]), before);
+}
+
 /// T6, stale-lock variant: a leftover lock on the base pin makes clone
 /// creation refuse loudly, before any directory exists. There is never a
 /// worktree in its place.
