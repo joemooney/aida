@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T15:09:49.599692200Z
-modified_at: 2026-11-26T23:02:21.766205529Z
+modified_at: 2026-11-26T23:03:55.420918187Z
 req_type: Story
 relationships:
 - rel_type:
@@ -51,6 +51,11 @@ comments:
     RECOMMENDATION: shadow claude/claude now (after S5d + BUG-2779), then compare opposite-vendor once codex returns.
   created_at: 2026-11-26T23:02:21.766205529Z
   modified_at: 2026-11-26T23:02:21.766205529Z
+- id: 01a21a19-e91d-7d50-afeb-b7d0cd75b5e8
+  author: joe
+  content: 'BINDING (advisor-122 2026-11-26 16:06): shadow with claude/claude NOW, gated on STORY-3120 S5d (partial-exit path) and BUG-2779 (no panic) landing. Record the vendor PAIR (finder/challenger) in each shadow row, so the Nov 29+ codex pairing can be compared. A same-vendor challenger must be labelled "same-vendor" in the bundle and the report.'
+  created_at: 2026-11-26T23:03:55.420918187Z
+  modified_at: 2026-11-26T23:03:55.420918187Z
 history:
 - id: 01a21869-37e3-7e72-a909-63aee48d0ebf
   author: dirtlab
