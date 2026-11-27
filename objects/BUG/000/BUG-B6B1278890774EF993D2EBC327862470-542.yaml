@@ -15,18 +15,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877077Z
-modified_at: 2026-11-27T02:31:12.578091954Z
+modified_at: 2026-11-27T02:31:10.673940646Z
 req_type: Bug
 tags:
 - lanes
 - salvage
 - throughput
+comments:
+- id: 01a21ad7-fc77-7213-8d1e-25489a05c8a2
+  author: joe
+  content: 'ADVISOR RULING (2026-11-26 19:40): STRICT (it pushes on the lane''s behalf). Binding for AC1: the host salvage-push targets a SALVAGE ref (refs/heads/salvage/<lane-id>) unless the branch already has an open PR (then it updates that PR branch, fast-forward only). It is announced on the spec and PR as ''salvaged, unverified: final gate incomplete (signal X)'', and a salvaged head is never auto-train eligible until a fresh CI + independent review at that head. AC2 (push before the final gate) is the PREFERRED fix; do it first, and AC1 becomes the backstop. AC3: also record the final-gate wall time and whether the target was overlay-stale (today''s gate took 21 min vs ~90s; that may be the real trigger). Tests for each.'
+  created_at: 2026-11-27T02:31:10.673940646Z
+  modified_at: 2026-11-27T02:31:10.673940646Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
   timestamp: 2026-11-27T02:31:12.732231864Z
   changes: []
-execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
   branch: main
