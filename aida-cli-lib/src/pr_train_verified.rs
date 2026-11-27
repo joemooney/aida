@@ -379,7 +379,8 @@ fn collect(
                 "train release mandate expired, was revoked, or was narrowed by a renewal"
             );
         }
-        let phase = FinalGatePhase::start(format!("{pass}: member #{} gate", car.member.pr));
+        let phase =
+            FinalGatePhase::start_member_gate(format!("{pass}: member #{} gate", car.member.pr));
         // trace:BUG-2666 | ai:codex
         let released_member = car
             .member
