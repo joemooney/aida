@@ -1,0 +1,31 @@
+id: 01a21e92-e96a-74a2-9acf-1288e23eee87
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-060
+title: BUG-2785 gate admits an approved rework when the change conflicts or CI failed; queue work honours a recorded override instead of its own flag
+description: |
+  Two calls made in aida-cli-lib/src/rework_approval_gate.rs (PR #4753):
+  1. The landing reconciler (land.rs: Conflict / CiFailed -> DispatchRework -> `queue work --force-claim`) reworks APPROVED changes that cannot land. A literal reading of AC1 would refuse those and stall landing, so forge_head() reads mergeability (change_status) and CI at the head commit, and a known conflict or failed CI admits the round.
+  2. `queue work` has no --despite-approval flag (handle_queue_work has 13 call sites). Its refusal names `aida queue rework <SPEC> --despite-approval "<reason>"`; the launch gate honours the recorded `[despite-approval] PR-N@<head>` comment for that exact change and head.
+  The gate also fails open when the forge head cannot be read.
+
+  Raised by the implementer while working BUG-2785.
+  Branch: bug-2785-stale-rework-refusal  ·  Commit: 3d7f80b08c
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T19:54:34.218606778Z
+modified_at: 2026-11-27T19:54:34.218606778Z
+req_type: Task
+tags:
+- from-implementer:BUG-2785
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 3d7f80b08c8bb1c37284131b4705a0ec06decbac
+  branch: bug-2785-stale-rework-refusal
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac4
+  vendor: claude
+  session: 01a21e6d2fde
+  harness_version: 2.1.319 (Claude Code)
