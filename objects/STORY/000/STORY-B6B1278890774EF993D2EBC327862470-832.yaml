@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-27T17:11:06.679597539Z
+modified_at: 2026-11-27T23:45:16.947031751Z
 req_type: Story
 tags:
 - agents
@@ -213,6 +213,20 @@ comments:
     A reference merge (commit 00ed0d188a99, `(Refs STORY-3134)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-27T17:11:06.679589135Z
   modified_at: 2026-11-27T17:11:06.679589135Z
+- id: 01a21f66-2293-7781-8935-c3a7186069cf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 926296dae0 (S1b, Refs STORY-3134). 284 changed lines.
+    (1) [evidence: behavioral-test] A classified usage-limit stop salvages committed work through lane_salvage with FailedExit.side_branch_only, so the target is always salvage/<lane>: never the PR branch, never forced (the existing fast-forward-only push). Test story_3134_usage_limit_stop_salvages_to_the_side_branch_only: a launch PR exists, salvage/<id> gets the tip, the PR branch is unchanged, nothing is posted on the PR. Then vendor_outage::end_lane runs session end, whose guard refuses commits no remote has. Uncommitted edits or an unreadable seat keep the lease, so nothing is discarded (s1b_usage_limit_stop_releases_its_lease_only_when_nothing_is_uncommitted). The exit leads with 'agent usage limit: <vendor> until <reset>' and adds 'lease released' or 'lease kept: <why>'.
+    (2) [evidence: behavioral-test] Records now carry their source lane. vendor_outage::doctor_findings feeds collect_doctor_findings_at, which both aida doctor and aida status use. It uses category vendor-outage (aliases vendor-outages, usage-limit) and shows the vendor, the reset time, 'clears on its own', and the path to remove. Expired records are not listed (s1b_doctor_lists_active_outages_with_reset_and_lane).
+    (3) [evidence: behavioral-test] The retained-merge early return and the ordinary failure both build their message with vendor_outage::exit_message, so a usage-limit stop always names itself (s1b_every_usage_limit_exit_names_itself). The test covers the shared helper, not the run() early return itself.
+    Validation: lane job cargo test -p aida-cli-lib --lib story_3134: 10 passed. make check-ci-fast: exit 0.
+    Residual: uncommitted edits in a stopped seat keep the lease (no host commit_pending: it needs [validation].repair_check). Host-published (native) lanes still run publish_queue_exit before the outage handling, and the fast-fix-child ordering is still deferred. Still open: AC3 fallback_vendor + the one operator notification, and the AC4 recovery event.
+  created_at: 2026-11-27T23:45:16.947031751Z
+  modified_at: 2026-11-27T23:45:16.947031751Z
+  session_id: 01a21f52b41c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
