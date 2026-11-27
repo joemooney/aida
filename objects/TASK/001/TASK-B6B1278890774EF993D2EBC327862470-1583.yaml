@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: a test drives pr_train_handler_with_dispatch_ctx under a low core budget (below 20%) with a stale retained journal and asserts no recovery/resume happens.
   - AC2: mutation-checked: the two rewirings named above each make the test FAIL (report it).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:42:56.745961954Z
-modified_at: 2026-11-27T21:42:56.745961954Z
+modified_at: 2026-11-27T21:46:28.411918351Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-27T21:43:06.539584379Z
   changes: []
+- id: 01a21ef9-5cbb-7eb1-bf21-d60b70043592
+  author: aida-session-start
+  timestamp: 2026-11-27T21:46:28.411916671Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
