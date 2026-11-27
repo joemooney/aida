@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877077Z
-modified_at: 2026-11-27T04:11:34.734064451Z
+modified_at: 2026-11-27T04:11:37.839030277Z
 req_type: Bug
 tags:
 - lanes
@@ -66,6 +66,22 @@ comments:
   created_at: 2026-11-27T04:10:47.165081249Z
   modified_at: 2026-11-27T04:10:47.165081249Z
   session_id: 01a21b2e0719
+- id: 01a21b33-9f22-7b20-abc9-77eba1c09fb7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2781):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1d373bcd65e4
+    Recorded: 2026-11-27T04:10:39.920441410+00:00
+    Findings:
+    1. [p1] Required CI is red at the reviewed head 1d373bcd65e4. Three jobs fail: 'CI (fast gates)' (the check-ci-source step exits 2), 'CI (fast compile)' (step 'Ratchet set', scripts/check-ratchets.py --profile dev, exits 1) and Build ('Require every CI lane'). Runs on other branches in the same window are green, so the failure belongs to this PR. The job logs could not be fetched from the review sandbox, so diagnose with `make check-ci-fast` and fix. Likely contributor: scripts/store-writers.toml has no entries for aida-cli-lib/src/lane_salvage.rs. Its new writer sites are push() calling ship_from_seat::stage_bundle (an inventoried fs::write/write_all writer, so a wrapper sink), push() running git update-ref -d through git_text, and announce() calling comment_cmd::add_comment_cli. standalone_implementer::run also gains a new wrapper edge through lane_salvage::on_failed_exit. Regenerate and review the inventory as scripts/check-store-writers.py requires. Also confirm the Ratchet set compiles and passes with the new seat_clone test module.
+    2. [unmet-claimed-ac] BUG-2781 AC3 requires the lane log to record the signal 'and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator)'. lane_salvage::exit_cause (aida-cli-lib/src/lane_salvage.rs:125-153) never determines a source; every branch prints 'not recorded by the launcher' and a SIGKILL only says to check `journalctl -k`. It does not try the knowable case the AC names: an oom-kill line in the kernel log (journalctl -k / dmesg) for the agent's pid or process group during the lane's window. Nor does it correlate a lane-job timeout or stop with the end. Probe the kernel log when it is readable, name the OOM killer when it matches, and keep the current fallback text when it is unreadable. Add a test with an injected log reader.
+    3. [untested-path, file aida-cli-lib/src/standalone_implementer.rs] This code pushes on the operator's behalf (advisor ruling: STRICT), yet the new failed-exit block in run() (standalone_implementer.rs:1945-1985) has no test. The untested parts are: the open_pr derivation (Outcome::PrOpened, else launch_seat.pr), passing launch_seat.head as launch_head, reading the real seat with bg::SeatState::read, and folding the salvage note into leftover_note so persist_exit_notes writes 'salvaged, unverified' to the attempt. The AC4 tests call lane_salvage::on_failed_exit directly with a hand-built SeatState, so a wrong open_pr or launch_head mapping in run() would get through. Two refusal paths of lane_salvage::push have no salvage-specific test either: a branch the lease does not own (require_publication_branch) and a publication veto (refuse_publication_veto). Add a test that runs the run()-level decision through an extracted helper, plus refusal tests for those two paths.
+    4. [p3] aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:383 widens seat_with_commit to pub(crate), but its parameter type Fixture is pub(super) (bug_2169_seat_clone_tests.rs), which triggers the private_interfaces lint. The only new caller is a sibling module under seat_clone, so pub(super) is enough.
+    5. [style] aida-cli-lib/src/lib.rs:310-312: rustfmt turned the existing `// trace:STORY-2844 | ai:codex` comment into a trailing continuation of the new `mod lane_salvage;` line, so it no longer sits directly above `pub(crate) mod landing_gaps;`, the line it traces. Put the lane_salvage trace on its own line above the mod (the file's convention) and restore the STORY-2844 comment above landing_gaps.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T04:11:37.634761489Z
+  modified_at: 2026-11-27T04:11:37.634761489Z
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
