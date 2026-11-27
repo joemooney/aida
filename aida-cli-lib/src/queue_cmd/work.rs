@@ -4406,6 +4406,16 @@ pub(crate) fn check_exited_branch_clone(
     Ok(leases.into_iter().next().unwrap())
 }
 
+/// Whether a reclaim teardown kept the clone only for a transient writer
+/// admission, so [`reclaim_exited_branch_clone`] retries it.
+// trace:TASK-3922 | ai:claude
+pub(crate) fn kept_for_transient_admission(
+    out: &anyhow::Result<crate::seat_clone::Destroyed>,
+) -> bool {
+    matches!(out, Ok(crate::seat_clone::Destroyed::Kept { retention: Some(r), .. })
+        if r.transient_admission)
+}
+
 /// Reuse the PR relaunch evidence and conservative clone teardown. Unlike
 /// --steal, force-claim never removes a clone holding unpublished work.
 // trace:BUG-2455 | ai:codex
@@ -4428,10 +4438,7 @@ pub(crate) fn reclaim_exited_branch_clone(
                 None,
             )
         },
-        |out| {
-            matches!(out, Ok(crate::seat_clone::Destroyed::Kept { retention: Some(r), .. })
-                if r.transient_admission)
-        },
+        kept_for_transient_admission,
     )?;
     match destroyed {
         crate::seat_clone::Destroyed::Removed { .. } => {
