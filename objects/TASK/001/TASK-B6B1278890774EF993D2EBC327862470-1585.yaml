@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: merge_publication_head runs its git merge with the same union-merge env (json_union_merge_config / sandbox_git_config_env) that rework prep applies, if it does not already; a test proves a disjoint ratchet-set.json addition merges cleanly through merge_publication_head.
   - AC2: a doc note (docs, not code unless trivial) records the read_allowlist visibility residual: if main's scripts/json-union-merge.py is absent or unreadable inside the sandbox, the wrapper falls back to a text merge (markers on conflict; a clean text merge passes as git's default).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:46:26.200731475Z
-modified_at: 2026-11-27T21:46:26.200731475Z
+modified_at: 2026-11-27T21:53:22.301718513Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-27T21:47:11.272006586Z
   changes: []
+- id: 01a21eff-ad7d-7a72-8243-0cbdded3c195
+  author: aida-session-start
+  timestamp: 2026-11-27T21:53:22.301716930Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
