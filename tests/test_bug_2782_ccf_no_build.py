@@ -168,7 +168,7 @@ class StallWatchdog(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         started = time.monotonic()
         with redirect_stdout(out), redirect_stderr(err):
-            passed, _, _ = self.gates.run_gate(ROOT, 'fixture step', command, dict(os.environ), stall_secs)
+            passed, _, _ = self.gates.run_gate(ROOT, 'fixture step', command, {'PATH': os.defpath, 'LC_ALL': 'C'}, stall_secs)
         return passed, time.monotonic() - started, err.getvalue()
 
     def test_blocked_step_fails_fast_naming_step_and_wait(self):
