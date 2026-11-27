@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T07:04:08.408134981Z
+modified_at: 2026-11-27T07:07:23.166312301Z
 req_type: Bug
 tags:
 - lanes
@@ -236,6 +236,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T07:05:58.527342284Z
   modified_at: 2026-11-27T07:05:58.527342284Z
+- id: 01a21bd4-debb-71c3-accd-4e7dfeb15de8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:07):
+    # BUG-2781 r3 on #4718 (advisor-122 ruling 2026-11-27 00:08 at b75b306e: a VALID request-changes; ONE round; product-15). Lane: CLAUDE. STRICT. MAIN, existing branch bug-2781-salvage-push / PR #4718. Keep the title.
+    BINDING (this round's ONLY job; list each with file:line in the PR body):
+     (1) The salvage push to an OPEN PR BRANCH goes through crate::pr_head_guard::check_branch (BUG-2618): it NEVER moves a PR head that has a recorded APPROVAL at that head, or that is PINNED by a train or journal. When refused, fall back to the salvage/<lane> ref and say so in the lane output and attempt record. TEST both: approved-at-head → refused → salvage ref; unapproved → ff push to the PR branch. (Tonight a redundant lane pushed over a final approval; (1) prevents exactly that.)
+     (2) Fold in the deferred seat-trailer check on the IMPORTED range too (same path, small): every commit imported for a salvage push carries the expected seat trailer, else refuse. Test it.
+    One targeted cargo test run (lane_salvage), make check-ci-fast, then push to #4718. COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T07:07:23.166312301Z
+  modified_at: 2026-11-27T07:07:23.166312301Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
