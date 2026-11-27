@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T00:42:25.860120538Z
+modified_at: 2026-11-27T00:44:36.923956263Z
 req_type: Story
 tags:
 - integration
@@ -1599,6 +1599,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T00:42:25.697638749Z
   modified_at: 2026-11-27T00:42:25.697638749Z
+- id: 01a21a76-5b44-73d0-a65d-dce244a7558b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:44):
+    # STORY-3120 S5d r1 on #4699 (integration-30 pre-check 17:10 + advisor-122 17:16; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-story-3120-s5d / PR #4699. Keep the "(Refs STORY-3120)" title. Do NOT rebase.
+    The AC1/AC3 content PASSED the security lens; keep it. What's MISSING is the reconcile merge with main: head 6fb95e670a is one commit on 24f1c9e7353, origin/main is not an ancestor, and merge-tree with main conflicts in review_prepare.rs and scripts/ratchet-set.json.
+    DO, in order:
+     (1) `git fetch origin main && git merge origin/main` (>= 8bdf384adf4; use the current tip) as a MERGE COMMIT. Resolutions: KEEP main's run_review_agent() and fail()/runner_failure; ADD the --challenger-agent hint INSIDE runner_failure for the challenger pass only (never under AIDA_REVIEW_RUNNER_CMD); S5d's new Err arm (the one recording the cause as unchallenged) must WRAP main's runner_failure text; update S5c's test to main's wording; UNION both sides of scripts/ratchet-set.json.
+     (2) Recheck whether n1's "needs --agent" arm is still REACHABLE with main's default-vendor resolution (BUG-2775: the default is claude from [agents] or built-in). If not, DROP the arm and its test.
+     (3) BINDING (advisor 17:16; STORY-3120 MUST-2): "partial: challenger unavailable" gets its OWN exit code 4, which no other review-prepare path uses (4 is free on main's EXIT_CODES). Add a dedicated EXIT_CODES row for it and RESTORE code 3's label to the --auto-complete hard fail only. TEST: partial exits 4, distinct from 3 (--auto-complete hard fail) and 1 (fail-on), and fail-on still WINS over 4. The docs list all three codes (S5e if docs are split out).
+    Then rerun the targeted review_prepare + review_challenger tests and make check-ci-fast, and push to #4699. The PR body gets a "Reconcile with main" section listing each resolution. `aida show STORY-3120 --comments` has "PRE-CHECK PR #4699" with the full verdict. COMMIT your work.
+  created_at: 2026-11-27T00:44:36.923956263Z
+  modified_at: 2026-11-27T00:44:36.923956263Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
