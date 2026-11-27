@@ -1,5 +1,6 @@
 id: 01a21a37-a81f-7b80-b118-5c6f7644d295
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1541
+agreed_id: TASK-3527
 title: 'Review follow-up: Member-induced drift has no hold or ordering change (aida-cli-lib/src/pr_train.rs route_dr'
 description: |-
   From BUG-2777
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21923-0137-7800-b20b-147dfab06724
   created_at: 2026-11-26T23:36:42.698292184Z
+history:
+- id: 01a21a69-3bb8-7f13-8d2d-6964ec4f2c86
+  author: joe
+  timestamp: 2026-11-27T00:30:33.912599753Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7f1fa7dfed0edf8dc9313469364795b5f3f05194
   branch: pr-4685
