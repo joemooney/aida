@@ -546,13 +546,26 @@ fn spawn_vendor_headless_forking(
     // trace:TASK-3225 | ai:codex — refuse before issuing a grant or spawning natively.
     crate::containment::launch::require_store_service_surface(&cmd, wrapper)?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let child_grant = crate::launch::issue_launch_child(
-        &headless_worktree_root(),
-        seat.as_str(),
-        &crate::current_user_id(None),
-        // trace:TASK-2708 | ai:claude
-        sandboxed_child_grant(vendor, contained)?,
-    )?;
+    // trace:TASK-2708 | ai:claude
+    let sandboxed = sandboxed_child_grant(vendor, contained)?;
+    // A child whose env is reduced to the contained allowlist is told the
+    // subject it presents, by the issuer shared with conformance-launch.
+    // trace:TASK-3933 | ai:claude
+    let child_grant = if vendor == HeadlessVendor::Codex || wrapper {
+        crate::launch::issue_contained_child(
+            &headless_worktree_root(),
+            seat.as_str(),
+            sandboxed,
+            &mut cmd,
+        )?
+    } else {
+        crate::launch::issue_launch_child(
+            &headless_worktree_root(),
+            seat.as_str(),
+            &crate::current_user_id(None),
+            sandboxed,
+        )?
+    };
     // trace:BUG-2187 | ai:codex
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
@@ -570,8 +583,7 @@ fn spawn_vendor_headless_forking(
         },
     )?;
     if vendor == HeadlessVendor::Codex || wrapper {
-        cmd.env("AIDA_USER", crate::current_user_id(None))
-            .env("AIDA_PROJECT_ROOT", headless_worktree_root());
+        cmd.env("AIDA_PROJECT_ROOT", headless_worktree_root());
     }
     if vendor == HeadlessVendor::Codex && posture != ContainmentPosture::Aida {
         if let Err(error) = crate::vendors::profile::finalize_codex(&mut cmd) {

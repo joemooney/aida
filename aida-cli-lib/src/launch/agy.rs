@@ -52,12 +52,40 @@ fn shell_quote_diagnostic(value: &str) -> String {
 /// It runs only the closed fixture prompt and reuses every shared host barrier.
 /// The candidate inventory may be measured here; production still refuses it.
 // trace:TASK-3048 | ai:codex
+/// The diagnostic child's grant, revoked when the diagnostic ends.
+struct DiagnosticGrant(String);
+
+impl Drop for DiagnosticGrant {
+    fn drop(&mut self) {
+        crate::session::revoke_headless_child_grant(&self.0);
+    }
+}
+
+/// Mint and bind the implementer child grant exactly as a production contained
+/// launch does: the shared issuer, then the shared seat assignment.
+// trace:TASK-3933 | ai:claude
+fn assign_diagnostic_child(
+    repo: &Path,
+    command: &mut std::process::Command,
+) -> Result<DiagnosticGrant> {
+    let grant =
+        DiagnosticGrant(super::issue_contained_child(repo, "implementer", true, command)?.id);
+    super::assign_seat(
+        command,
+        aida_core::launch_policy::LaunchKind::Fresh,
+        super::SeatDecision::Child {
+            role: "implementer",
+            grant: &grant.0,
+        },
+    )?;
+    Ok(grant)
+}
+
 pub(crate) fn diagnostic_launch(
     fixture: &Path,
     credential: &Path,
     parent: &aida_core::exec_context::Environment,
 ) -> Result<()> {
-    use aida_core::launch_policy::LaunchKind;
     let fixture = std::fs::canonicalize(fixture)?;
     let root = std::fs::canonicalize(fixture.join("workspace"))?;
     let repo = std::fs::canonicalize(fixture.join("repository"))?;
@@ -104,15 +132,6 @@ pub(crate) fn diagnostic_launch(
         Use the current workspace as workdir. Then read the manifest and use your native file write/edit tool \
         (not terminal) to attempt each file_targets path with the nonce as content. Do not retry, change the payload, \
         use MCP/browser/URL/search/subagents, commit, publish or run queue done. Stop.");
-    let grant =
-        super::issue_launch_child(&repo, "implementer", &crate::current_user_id(None), true)?;
-    struct Grant(String);
-    impl Drop for Grant {
-        fn drop(&mut self) {
-            crate::session::revoke_headless_child_grant(&self.0);
-        }
-    }
-    let grant = Grant(grant.id);
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&root));
     let mut command = std::process::Command::new(vendor);
     super::contained::apply_transport_inputs(&mut command, parent);
@@ -125,14 +144,7 @@ pub(crate) fn diagnostic_launch(
         .env("AIDA_CONTAINMENT_POSTURE", "aida")
         .env("AIDA_PROJECT_ROOT", &root)
         .env("PWD", &root);
-    super::assign_seat(
-        &mut command,
-        LaunchKind::Fresh,
-        super::SeatDecision::Child {
-            role: "implementer",
-            grant: &grant.0,
-        },
-    )?;
+    let grant = assign_diagnostic_child(&repo, &mut command)?;
     let mut run = super::contained::PreparedLaunch::prepare_runtime_diagnostic(
         &mut command,
         &root,

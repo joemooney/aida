@@ -1087,6 +1087,14 @@ fn handle_role_seat_probe(
         GrantCheck::Rejected { reason, .. } => {
             // Debug's discriminant name gives a cause without the record's
             // subject, binding, timestamps or selector values.
+            // A subject mismatch also names both subjects, redacted, on its
+            // own line so the exact cause line below stays machine-matchable.
+            // trace:TASK-3933 | ai:claude
+            if let Some(evidence) =
+                reason.subject_mismatch_evidence(&aida_core::exec_context::Environment::capture())
+            {
+                eprintln!("{evidence}");
+            }
             let detail = format!("{reason:?}");
             let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
             anyhow::bail!("seat_grant_valid=false cause={cause}")

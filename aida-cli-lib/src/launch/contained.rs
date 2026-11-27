@@ -412,7 +412,7 @@ fn relay_environment(port: u16) -> BTreeMap<String, String> {
         })
         .collect()
 }
-fn selected_environment(child: &Command) -> BTreeMap<String, String> {
+pub(super) fn selected_environment(child: &Command) -> BTreeMap<String, String> {
     ENV.iter()
         .filter_map(|name| explicit(child, name).map(|v| ((*name).into(), v)))
         .collect()

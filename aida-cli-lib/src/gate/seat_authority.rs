@@ -682,7 +682,53 @@ pub(crate) enum GrantRejection {
     },
 }
 
+/// Where this process's presented subject came from, in
+/// [`crate::current_user_id`]'s order. Names the source, never its value.
+// trace:TASK-3933 | ai:claude
+fn presented_subject_source(env: &aida_core::exec_context::Environment) -> &'static str {
+    ["AIDA_USER", "USER", "USERNAME"]
+        .into_iter()
+        .find(|key| env.var(key).is_ok())
+        .unwrap_or("fallback")
+}
+
+/// A subject as `kind`, a short SHA-256 fingerprint and its length: enough to
+/// compare two subjects (`printf %s <id> | sha256sum`), never the id itself.
+fn redacted_subject(subject: &str) -> String {
+    use sha2::Digest;
+    let digest = sha2::Sha256::digest(subject.as_bytes());
+    let fingerprint: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
+    let kind = if subject == "default" {
+        "fallback"
+    } else {
+        "named"
+    };
+    format!("kind={kind} sha256={fingerprint} len={}", subject.len())
+}
+
 impl GrantRejection {
+    /// AC1: a probe-safe line naming both subjects of a SubjectMismatch,
+    /// expected (the grant's) and presented (this process's), redacted.
+    // trace:TASK-3933 | ai:claude
+    pub(crate) fn subject_mismatch_evidence(
+        &self,
+        env: &aida_core::exec_context::Environment,
+    ) -> Option<String> {
+        let Self::SubjectMismatch {
+            grant_subject,
+            caller,
+        } = self
+        else {
+            return None;
+        };
+        Some(format!(
+            "subject_mismatch expected=[{}] presented=[{} source={}]",
+            redacted_subject(grant_subject),
+            redacted_subject(caller),
+            presented_subject_source(env)
+        ))
+    }
+
     pub(crate) fn expired_at(&self) -> Option<DateTime<Utc>> {
         match self {
             Self::Expired { at } => Some(*at),

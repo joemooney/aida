@@ -21,7 +21,8 @@ pub(crate) mod control;
 mod grant;
 pub(crate) use control::control_child;
 pub(crate) use grant::{
-    assign_advisor_child, issue_launch_child, issue_launch_child_with_delegation,
+    assign_advisor_child, issue_contained_child, issue_launch_child,
+    issue_launch_child_with_delegation,
     review_watch_controller, review_watch_controller_command,
 };
 pub(crate) mod parent;
