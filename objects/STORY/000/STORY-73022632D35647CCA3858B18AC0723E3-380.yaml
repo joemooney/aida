@@ -18,12 +18,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4702` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T00:56:19.251583245Z
-modified_at: 2026-11-27T00:56:44.675101933Z
+modified_at: 2026-11-27T03:49:28.132021541Z
 req_type: Story
 relationships:
 - rel_type:
@@ -36,6 +36,12 @@ relationships:
   target_id: 01a218e5-49c1-7770-a7ef-a048f0d79ca9
   created_at: 2026-11-27T00:56:44.675072331Z
   created_by: dirtlab
+comments:
+- id: 01a21b1f-55c4-72d2-8abe-39936ed7fae6
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4702 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-27T03:49:28.132174103Z
+  modified_at: 2026-11-27T03:49:28.132174103Z
 history:
 - id: 01a21a80-ea10-7670-8ef7-7657d15affcc
   author: dirtlab
@@ -55,6 +61,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21b1f-55c4-72d2-8abe-39a38a046ca7
+  author: aida-auto-bump
+  timestamp: 2026-11-27T03:49:28.132178345Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 1e0b7323fcaa8ba2928dea62a3589b5640e0177a
   branch: task-3922-salvage-idempotent
@@ -64,3 +77,6 @@ filed_at:
   vendor: claude
   session: 01a21a5d2760
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T03:49:28.132172501Z
