@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T05:45:05.840116329Z
+modified_at: 2026-11-27T05:59:11.117239816Z
 req_type: Story
 tags:
 - integration
@@ -1866,6 +1866,20 @@ comments:
   created_at: 2026-11-27T05:45:05.840116329Z
   modified_at: 2026-11-27T05:45:05.840116329Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b96-5be6-7670-a621-fc445c88091d
+  author: joe
+  content: |-
+    PROMOTION PLAN UPDATE (advisor 23:02):
+    - p53 = S6 (#4723, FULL running).
+    - p54 = TASK-3869 #4727 alone.
+    - p55 = S5e #4721 + STORY-3202 #4716 r3 together.
+    Order constraints:
+    - S5e and STORY-3202 stay out of integration until p54 is built, so p54 is TASK-3869 only.
+    - p54 is built only after p53 lands, because TASK-3869 and S6 both touch review_engine.rs and building p54 earlier would stack it on p53.
+  created_at: 2026-11-27T05:59:11.117239816Z
+  modified_at: 2026-11-27T05:59:11.117239816Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
