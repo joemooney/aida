@@ -47,7 +47,8 @@
         "test_diff_triggered_rust_content_facets_zero_overhead_when_absent",
         "test_glob_matches_with_braces_and_doublestar",
         "test_verify_coverage_ledger_enforces_100_percent_accountability",
-        "test_verify_observation_citations"
+        "test_verify_observation_citations",
+        "t3869_path_text_form_is_lossless_and_injective"
       ]
     },
     {
@@ -81,6 +82,7 @@
         "bug2779_top_level_error_keeps_its_cause",
         "t3869_excluded_paths_are_classified_before_any_open",
         "t3869_non_regular_entries_skipped_with_named_reason",
+        "t3869_non_utf8_path_round_trips_to_sarif",
         "t3869_pinned_root_survives_concurrent_symlink_swap",
         "t3869_specs_resolve_only_through_store_and_refuse_unknown",
         "bug2783_unconfined_runner_review_is_never_posted",
