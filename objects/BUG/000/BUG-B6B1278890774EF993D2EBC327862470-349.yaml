@@ -2,267 +2,264 @@ id: 01a1dafe-c029-7763-b956-eea7f5f8eb09
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-349
 agreed_id: BUG-2584
 title: aida pr train spends 7.5 minutes CPU-bound between 'train PR is green' and the merge
-description: "Train PR #4045 (#3924 + #4034 + #4035), 2026-11-14, default deputy job 01a1dab6, process 'aida pr train 4034 3924 4035' (pid 807156):\n\n  09:50:05 MST  transcript: 'train PR #4045 is green'  (last line the job printed)\n  09:50-09:57   main thread in R state at about 45% of a core (221 utime ticks in a 5 s sample), 6 other threads asleep, no child processes, only open project file .aida/train/run.lock\n  journal .aida/train/c0866273-...-1.json during that time: step 'Merge', call 'GitHub metadata attempt', rewritten every few seconds\n  09:57:5x      PR merged; journal moves to step 'Members', call 'GitHub command'\n\nSo the final verified-train gate between green and merge took 7.5 minutes on a 3-member train, on a track where a whole train cycle is 15-30 minutes. Nothing is printed during it, so an advisor cannot tell it from a hang. GitHub rate limits were not exhausted (core 4992, graphql 4105 remaining). Suspects, not verified: the per-member final audit re-reading review/gate\
-  \ history (#3924 has six review rounds; see bug2538 'long review history trains with compact audit'), or the same cache.db scan that makes the post-train 'aida pull' spin (BUG-2551).\n\nWanted: (1) find what the CPU is spent on (a profile or timing log around the final gate) and make the green-to-merge step take seconds; (2) print one line per phase of the final gate so progress is visible.\n\nAcceptance: on a 3-member train, time from 'train PR is green' to the merge call is under 30 seconds, and each final-gate phase logs a line with its duration."
+description: |-
+  Train PR #4045 (#3924 + #4034 + #4035), 2026-11-14, default deputy job 01a1dab6, process 'aida pr train 4034 3924 4035' (pid 807156):
+
+    09:50:05 MST  transcript: 'train PR #4045 is green'  (last line the job printed)
+    09:50-09:57   main thread in R state at about 45% of a core (221 utime ticks in a 5 s sample), 6 other threads asleep, no child processes, only open project file .aida/train/run.lock
+    journal .aida/train/c0866273-...-1.json during that time: step 'Merge', call 'GitHub metadata attempt', rewritten every few seconds
+    09:57:5x      PR merged; journal moves to step 'Members', call 'GitHub command'
+
+  So the final verified-train gate between green and merge took 7.5 minutes on a 3-member train, on a track where a whole train cycle is 15-30 minutes. Nothing is printed during it, so an advisor cannot tell it from a hang. GitHub rate limits were not exhausted (core 4992, graphql 4105 remaining). Suspects, not verified: the per-member final audit re-reading review/gate history (#3924 has six review rounds; see bug2538 'long review history trains with compact audit'), or the same cache.db scan that makes the post-train 'aida pull' spin (BUG-2551).
+
+  Wanted: (1) find what the CPU is spent on (a profile or timing log around the final gate) and make the green-to-merge step take seconds; (2) print one line per phase of the final gate so progress is visible.
+
+  Acceptance: on a 3-member train, time from 'train PR is green' to the merge call is under 30 seconds, and each final-gate phase logs a line with its duration.
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-14 16:58:10.857853+00:00
-modified_at: 2026-11-27 03:33:22.110737+00:00
+created_at: 2026-11-14T16:58:10.857853786Z
+modified_at: 2026-11-27T03:36:28.116958146Z
 req_type: Bug
 tags:
 - landing
 relationships:
 - rel_type: Supersedes
   target_id: 01a1db14-fdb8-76a1-9bf9-cd9e2a9c19eb
-  created_at: 2026-11-15 20:46:03.834807+00:00
+  created_at: 2026-11-15T20:46:03.834807299Z
   created_by: joe
 - rel_type: BlockedBy
   target_id: 01a21845-df97-7211-84c2-b64cd9b68d42
-  created_at: 2026-11-26 14:37:05.963685+00:00
+  created_at: 2026-11-26T14:37:05.963685749Z
   created_by: joe
 comments:
 - id: 01a1db14-d3dc-7330-acc2-432936081381
   author: dirtlab
-  content: '## Implementer note: timing log shipped, speed-up not yet (partial, Refs)
-
+  content: |-
+    ## Implementer note: timing log shipped, speed-up not yet (partial, Refs)
 
     Shipped on branch bug-b6b1278890774ef993d2ebc327862470-349 (commit d2aeabea3d): one line per final-gate phase with its duration, printed when the phase ends whether it passed or refused. Phases: main fetches, each member re-gate, hold release, and inside the verified merge the structure check, train PR state, exact-tip CI, each member gate and evidence, the audit write, the corpus recheck. Proof pass and pre-attempt recheck are labelled apart. Each line also says how many whole-store reads the phase made and their time.
 
-
     Not done: the green-to-merge time is unchanged. The slow phase could not be identified from this lane (the gate ledger and train journal are not readable here, and no train can be run). What the code shows:
-
     - The full member gate runs three times per member between green and merge: once in land, once in the proof collect, once in the recheck before the first merge attempt.
-
     - Every `load_store_for_lookup` re-reads the whole store: 0.8s measured on this store (7,739 objects, 58 MB), at least 7 per member per collect pass by reading the code, so 40s or more on a 3-member train from store reads alone. That is above the 30s target but far short of 7.5 minutes, so something else dominates.
-
     - The journal label `GitHub metadata attempt` is written only by `change_metadata`; the long CPU stretch follows one of those calls, which fits the per-member evidence phase in `collect` (no forge call until the next member).
 
-
-    Next: read the phase lines from the next train, then fix the phase they name.'
-  created_at: 2026-11-14 17:22:17.692364+00:00
-  modified_at: 2026-11-14 17:22:17.692364+00:00
+    Next: read the phase lines from the next train, then fix the phase they name.
+  created_at: 2026-11-14T17:22:17.692364789Z
+  modified_at: 2026-11-14T17:22:17.692364789Z
   session_id: 01a1db044047
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1db73-fcb4-73e3-aaac-1ea2ff74f0d7
   author: lane-recovery
   content: Reference merge `91d3b85f92bf72f288b7c9a939283a6bf5d29f34` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-14 19:06:14.068707+00:00
-  modified_at: 2026-11-14 19:06:14.068707+00:00
+  created_at: 2026-11-14T19:06:14.068707210Z
+  modified_at: 2026-11-14T19:06:14.068707210Z
 - id: 01a1dfa8-a58e-75d2-9fa4-5df7663a0fa9
   author: joe
   content: 'Lane brief (advisor 07:45): profile and remove the CPU-bound phase between ''train PR is green'' and the merge (7.5 min observed; see the samples on this spec and BUG-2551/BUG-2589). Find what runs in that window (likely store/cache recompute, gate-ledger discovery or a per-member ancestry walk) with timing output, fix the dominant cost, and keep the train''s admission and merge semantics unchanged. Target: under 60 s on the primary for a one-member train. Gate: lane pre-push gate plus a targeted cargo test -p aida-cli-lib train. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
-  created_at: 2026-11-15 14:42:14.030557+00:00
-  modified_at: 2026-11-15 14:42:14.030557+00:00
+  created_at: 2026-11-15T14:42:14.030557932Z
+  modified_at: 2026-11-15T14:42:14.030557932Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1dfab-aa16-7cc2-99a2-253d3e3e0c61
   author: joe
-  content: 'Lane brief v2 (advisor 07:50; replaces 07:45). #4048 (first slice, phase timing lines) is already on main. Promotion 12 train (#4083, 05:53-06:09) timings, deputy transcript 01a1df28: re-gate member 159.3 s, proof member gate 156.1 s, proof member evidence 191.1 s, recheck member gate 150.9 s, recheck member evidence 191.0 s, recheck train review corpus 81.1 s. Verify-and-merge took 797.6 s with only 24.4 s in 23 store reads; 958.6 s from merge lease to end of merge. So the cost is CPU work, repeated 3x per member, not I/O. Fix: (1) profile one ''member gate'' evaluation and remove its dominant cost (likely gate-ledger/verdict-history discovery or the review corpus scan, not store reads); (2) evaluate each member''s gate and evidence once per (member head, store head, main tip) and reuse the result across re-gate/proof/recheck while those are unchanged; any change still forces a recompute, so admission semantics stay identical. Target: final gate under 60 s for a one-member train;
-    show before/after timing lines in the PR body. New branch bug-2584-train-gate-reuse (the old slug branch belongs to the merged #4048). Track integration: PR base integration. Gate: lane pre-push gate plus cargo test -p aida-cli-lib train. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
-  created_at: 2026-11-15 14:45:31.798315+00:00
-  modified_at: 2026-11-15 14:45:31.798315+00:00
+  content: 'Lane brief v2 (advisor 07:50; replaces 07:45). #4048 (first slice, phase timing lines) is already on main. Promotion 12 train (#4083, 05:53-06:09) timings, deputy transcript 01a1df28: re-gate member 159.3 s, proof member gate 156.1 s, proof member evidence 191.1 s, recheck member gate 150.9 s, recheck member evidence 191.0 s, recheck train review corpus 81.1 s. Verify-and-merge took 797.6 s with only 24.4 s in 23 store reads; 958.6 s from merge lease to end of merge. So the cost is CPU work, repeated 3x per member, not I/O. Fix: (1) profile one ''member gate'' evaluation and remove its dominant cost (likely gate-ledger/verdict-history discovery or the review corpus scan, not store reads); (2) evaluate each member''s gate and evidence once per (member head, store head, main tip) and reuse the result across re-gate/proof/recheck while those are unchanged; any change still forces a recompute, so admission semantics stay identical. Target: final gate under 60 s for a one-member train; show before/after timing lines in the PR body. New branch bug-2584-train-gate-reuse (the old slug branch belongs to the merged #4048). Track integration: PR base integration. Gate: lane pre-push gate plus cargo test -p aida-cli-lib train. Tool rules: allowed_domains only on sandboxed calls; never retry a classifier-denied kill; never sleep in a foreground Bash call.'
+  created_at: 2026-11-15T14:45:31.798315939Z
+  modified_at: 2026-11-15T14:45:31.798315939Z
   session_id: 01a1de7f-09f6-7f22-a833-c094b4ed8e83
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1dfc4-319d-76b1-a99e-b9427524133d
   author: dirtlab
-  content: 'Reduce repeated final-train gate ledger discovery without caching live admission decisions.
-
+  content: |
+    Reduce repeated final-train gate ledger discovery without caching live admission decisions.
 
     The final landing operation now enters the existing validated discovery scope, and standalone member gates enter a nested scope. Strict readers can fork a shared ownership/binding inventory after checking every change-ledger identity. Each reader still selects payloads under its own budget, reads current spec indexes/unbound evidence through a fresh pinned directory, and preserves fresh live gate checks. Changes to ledger identity invalidate reuse; failed discovery is never cached.
 
-
     Regression coverage compares shared and fresh answers, counts one ownership scan across gate/proof/retry reads, verifies append invalidation and independent selection budgets, and checks replacement of the by-spec directory.
-
 
     This is a partial performance fix. The supplied primary transcript reported member gates around 150s and evidence passes around 191s, but this lane cannot run the live train to measure the new green-to-merge duration. Full member-result memoization is deliberately not added: forge labels/holds, grants and local evidence can change while (member head, store head, main tip) remain equal. The validated inventory cache avoids repeated global JSON parsing without skipping these checks. Follow up with the existing final-gate timing lines on the primary before completing the performance acceptance.
 
-
     Validation on the final source:
-
     - Complete launcher-run make check-ci-fast: passed (all source gates, application ratchets, freshly built CLI/manual verification).
-
     - cargo test --profile agent -p aida-cli-lib --lib -- bug_2543_shared_discovery --nocapture: 5 passed, 1 optional benchmark ignored.
-
     - Python ratchet/structural/store-writer/manual fixtures: 86 passed; store writer inventory reconciled.
-
     - Broad train filter: a relay integration fixture requires CARGO_TARGET_DIR/debug/aida or AIDA_TEST_BIN. The runner builds the agent profile and does not transport AIDA_TEST_BIN, so that fixture fails before exercising the code. An agent-profile CLI build itself passed.
-
     - Final broad train run: 311 passed, 1 failed, 0 ignored (91.62s). The sole failure is the missing CLI fixture path described above.
 
-
     The live primary before/after timing is not available from this native implementation seat. Keep this publication non-completing and retain the bug for that acceptance run and any additional optimization it identifies.
-
-    '
-  created_at: 2026-11-15 15:12:19.357179+00:00
-  modified_at: 2026-11-15 15:12:19.357179+00:00
+  created_at: 2026-11-15T15:12:19.357179925Z
+  modified_at: 2026-11-15T15:12:19.357179925Z
   session_id: 01a1dfad5d97
   harness_version: codex-cli 0.167.0
 - id: 01a1dfd3-0646-7c23-b07d-2f083852e9e1
   author: joe
   content: 'Advisor ruling 08:45: BUG-2584 moves to the MAIN track (tag track:integration removed). Its lane published #4091 as one commit (bd416da) on top of main, touching pr_train.rs and gate/ledger. The fix is train speed, which the main track needs in order to land, so per the 2026-11-12 23:20 order it goes straight to main rather than through a promotion. One track per spec: nothing for BUG-2584 is on integration. Next: ci:full now, review when the full run is green. Lane note: one broad train-filter fixture failed only because AIDA_TEST_BIN is not transported in the runner (environment, not the change).'
-  created_at: 2026-11-15 15:28:31.302994+00:00
-  modified_at: 2026-11-15 15:28:31.302994+00:00
+  created_at: 2026-11-15T15:28:31.302994500Z
+  modified_at: 2026-11-15T15:28:31.302994500Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1e0f5-9db9-7600-b505-f57d0fc4c94a
   author: joe
   content: 'Advisor 13:50: absorbs TASK-3107 (product seat burndown batch). Carries TASK-3107''s unmet criterion: green to merge under 30 s.'
-  created_at: 2026-11-15 20:45:55.513516+00:00
-  modified_at: 2026-11-15 20:45:55.513516+00:00
+  created_at: 2026-11-15T20:45:55.513516573Z
+  modified_at: 2026-11-15T20:45:55.513516573Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1e130-9e61-79d0-8bb8-39e19ec3b911
   author: dirtlab
   content: Commit a70daaff3a references this requirement
-  created_at: 2026-11-15 21:50:22.305766+00:00
-  modified_at: 2026-11-15 21:50:22.305766+00:00
+  created_at: 2026-11-15T21:50:22.305766285Z
+  modified_at: 2026-11-15T21:50:22.305766285Z
   session_id: 01a1e12dc57d
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f590-f261-7fa2-98d3-5df0eae023fc
   author: joe
   content: 'advisor-121 2026-11-19 13:52: still live. Train #4331 (2 members) went green at 13:26:51, then the final gate spent 717.5 s re-gating member #4305 (14 store reads, 23.9 s) plus 237.7 s on its proof gate, so ~18 min from green to merge readiness, which read as a stuck train to the product seat.'
-  created_at: 2026-11-19 20:47:47.220233+00:00
-  modified_at: 2026-11-19 20:47:47.220233+00:00
+  created_at: 2026-11-19T20:47:47.220233861Z
+  modified_at: 2026-11-19T20:47:47.220233861Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a21482-d8f8-7b33-be50-ccffaff1c6df
   author: joe
   content: 'STALE CLAIM RELEASED (product-15, 2026-11-25 14:05, under Joe''s full authorization; advisor-122 pre-read 14:02): InProgress with an idle driver for 2 or more days, and no open PR or live lease on the imac or dell1, so reset to Approved so it no longer blocks dispatch or counts as in flight. Epics stay Approved; only their children run.'
-  created_at: 2026-11-25 21:00:49.271904+00:00
-  modified_at: 2026-11-25 21:00:49.271904+00:00
+  created_at: 2026-11-25T21:00:49.271904144Z
+  modified_at: 2026-11-25T21:00:49.271904144Z
 - id: 01a2182b-fcba-7980-8e1a-914f07ccbcc4
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:04):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:04):
     # BUG-2584 (approved; product-15 2026-11-26 07:10, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch bug-2584-train-merge-cpu. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2584) and say what remains. Otherwise use the completing (BUG-2584) trailer.
-
-    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between ''train PR is green'' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
-
-    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.'
-  created_at: 2026-11-26 14:04:08.321872+00:00
-  modified_at: 2026-11-26 14:04:08.321872+00:00
+    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between 'train PR is green' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T14:04:08.321872532Z
+  modified_at: 2026-11-26T14:04:08.321872532Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21835-3618-7741-bb73-40089a2732d1
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:14):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:14):
     # BUG-2584 (approved; product-15 2026-11-26 07:10, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch bug-2584-train-merge-cpu. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2584) and say what remains. Otherwise use the completing (BUG-2584) trailer.
-
-    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between ''train PR is green'' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
-
-    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.'
-  created_at: 2026-11-26 14:14:14.273751+00:00
-  modified_at: 2026-11-26 14:14:14.273751+00:00
+    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between 'train PR is green' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T14:14:14.273751279Z
+  modified_at: 2026-11-26T14:14:14.273751279Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21932-7637-7e42-8bbd-3e47767a5e71
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:50):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:50):
     # BUG-2584 (approved; product-15 2026-11-26 07:10, filling idle dell1). Lane: CLAUDE. MAIN, NEW branch bug-2584-train-merge-cpu. <=300 changed lines; if larger, ship a first slice with (Refs BUG-2584) and say what remains. Otherwise use the completing (BUG-2584) trailer.
-
-    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between ''train PR is green'' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
-
-    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.'
-  created_at: 2026-11-26 18:50:50.500989+00:00
-  modified_at: 2026-11-26 18:50:50.500989+00:00
+    READ FIRST: `aida show BUG-2584 --comments` (evidence, ACs, rulings). STRICT (train path). PROFILE first: reproduce the CPU-bound gap between 'train PR is green' and the merge (a profiler or timed phases), name the hot loop in the PR body, then fix it. Keep the pr_train tests (incl. task_3792) green.
+    Add tests for each AC. One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-26T18:50:50.500989187Z
+  modified_at: 2026-11-26T18:50:50.500989187Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a219b1-42d1-7c32-bda2-fc6fc05f395e
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: e76658fcef (branch bug-2584-train-merge-cpu, Refs slice).
 
+    Profile (bug2538 long-history fixture, 110 verdict events x 41 rounds, temporary timers, not shipped): member #11 evidence pass = 3.5-7.9 s, of which ship_approval_policy was called 226x per pass (2.1 s of a 2.4 s verdict loop); the member gate called it once. Hot loop: pr_train_verified.rs collect() per-body approval authority check. Each call re-reads the authorship ledger (twice), every lease and session manifest (twice), solo mode, and the reviewed commit date (git fetch when absent), so on the primary's larger lease/authorship data it scales with history length x 3 passes.
 
-    Profile (bug2538 long-history fixture, 110 verdict events x 41 rounds, temporary timers, not shipped): member #11 evidence pass = 3.5-7.9 s, of which ship_approval_policy was called 226x per pass (2.1 s of a 2.4 s verdict loop); the member gate called it once. Hot loop: pr_train_verified.rs collect() per-body approval authority check. Each call re-reads the authorship ledger (twice), every lease and session manifest (twice), solo mode, and the reviewed commit date (git fetch when absent), so on the primary''s larger lease/authorship data it scales with history length x 3 passes.
-
-
-    Fix: AuthorityAnswers keeps one answer per distinct RecordedVerdict per car per pass (the policy''s only verdict input), refusal remembered as refusal; next pass asks afresh.
-
+    Fix: AuthorityAnswers keeps one answer per distinct RecordedVerdict per car per pass (the policy's only verdict input), refusal remembered as refusal; next pass asks afresh.
 
     Evidence: [behavioral-test] bug2584_authority_asked_once_per_distinct_verdict, bug2584_remembered_refusal_still_refuses; bug2538_long_review_history_trains_with_compact_audit and task_3792 train tests green (11 passed, lane job j20261126T204842432-4-0).
 
-
     Probes: equality is on the full parsed verdict, so no field the policy reads is ignored; memo scoped inside the per-car loop (ids/branch fixed); no fail-open (policy infallible, refusal sticky); no tests weakened.
 
-
-    Residual / not done: AC (3-member train green->merge < 30 s) is NOT verified: the gate ledger is hidden from this seat, so no live-data profile. The production member gate phase (150-717 s) is not reproduced by the fixture (1.6 s); suspected repeated parse of large PR/spec ledger files (read_file 17x per gate) but unproven. Next: read the final-gate phase lines from the next primary train.'
-  created_at: 2026-11-26 21:09:37.105131+00:00
-  modified_at: 2026-11-26 21:09:37.105131+00:00
+    Residual / not done: AC (3-member train green->merge < 30 s) is NOT verified: the gate ledger is hidden from this seat, so no live-data profile. The production member gate phase (150-717 s) is not reproduced by the fixture (1.6 s); suspected repeated parse of large PR/spec ledger files (read_file 17x per gate) but unproven. Next: read the final-gate phase lines from the next primary train.
+  created_at: 2026-11-26T21:09:37.105131299Z
+  modified_at: 2026-11-26T21:09:37.105131299Z
   session_id: 01a219653ac2
   harness_version: 2.1.319 (Claude Code)
 - id: 01a219d2-bdd9-7b13-9b8b-7338708d5e3f
   author: dirtlab
   content: 'PR #4691 (Refs BUG-2584) opened to main: final-gate evidence asks the approval policy once per distinct verdict (226 -> 1 per member per pass on the long-history fixture). Remaining: production member-gate phase (150-717 s) unreproduced here; read the final-gate phase lines from the next primary train.'
-  created_at: 2026-11-26 21:46:11.289302+00:00
-  modified_at: 2026-11-26 21:46:11.289302+00:00
+  created_at: 2026-11-26T21:46:11.289302380Z
+  modified_at: 2026-11-26T21:46:11.289302380Z
   session_id: 01a219653ac2
   harness_version: 2.1.319 (Claude Code)
 - id: 01a219f1-100f-7e41-895e-cf7992933e2e
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-2584-train-merge-cpu` at head `e76658fcef8518ce8f719a5de853fd938e081e86`.'
-  created_at: 2026-11-26 22:19:18.415903+00:00
-  modified_at: 2026-11-26 22:19:18.415903+00:00
+  created_at: 2026-11-26T22:19:18.415903006Z
+  modified_at: 2026-11-26T22:19:18.415903006Z
   session_id: 01a219653ac2
 - id: 01a21a11-7eab-7b61-89f5-ba8f8cff248e
   author: lane-recovery
   content: Reference merge `52825e81d1c3fbab8e5bf382ef81641956f0e559` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-26 22:54:43.883997+00:00
-  modified_at: 2026-11-26 22:54:43.883997+00:00
+  created_at: 2026-11-26T22:54:43.883997860Z
+  modified_at: 2026-11-26T22:54:43.883997860Z
 - id: 01a21a11-8c93-7822-a75d-21143f35a4f8
   author: aida-auto-bump
-  content: '[aida:refs-landing] 52825e81d1c3
-
-    A reference merge (commit 52825e81d1c3, `(Refs BUG-2584)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
-  created_at: 2026-11-26 22:54:47.443632+00:00
-  modified_at: 2026-11-26 22:54:47.443632+00:00
+  content: |-
+    [aida:refs-landing] 52825e81d1c3
+    A reference merge (commit 52825e81d1c3, `(Refs BUG-2584)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T22:54:47.443632249Z
+  modified_at: 2026-11-26T22:54:47.443632249Z
 - id: 01a21a12-a0f1-75e2-a06d-ea69be30bb53
   author: aida-auto-bump
-  content: '[aida:refs-landing] 788660cb0bfd
-
-    A reference merge (commit 788660cb0bfd, `(Refs BUG-2584)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
-  created_at: 2026-11-26 22:55:58.193345+00:00
-  modified_at: 2026-11-26 22:55:58.193345+00:00
+  content: |-
+    [aida:refs-landing] 788660cb0bfd
+    A reference merge (commit 788660cb0bfd, `(Refs BUG-2584)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-26T22:55:58.193345562Z
+  modified_at: 2026-11-26T22:55:58.193345562Z
 - id: 01a21a88-6fcf-78b0-ac65-a642971648f7
   author: joe
-  content: "AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:04):\n# BUG-2584 SLICE 2: the train MEMBER GATE phase (S1 #4691 landed 52825e81d1c: evidence 226→1 policy calls; product-15 2026-11-26 18:05). Lane: CLAUDE. STRICT (train path). MAIN, NEW branch bug-2584-s2-member-gate. <=300 lines. Completing (BUG-2584) trailer only if the AC is met; otherwise (Refs BUG-2584).\nLIVE PHASE DATA from the primary's auto-train log (.aida/auto-train/service.log, 2026-11-25 19:2x/19:5x; implementer seats can't read it, so here it is):\n  final gate: re-gate member #4475 took 75.9s (12 store reads, 17.4s)\n  final gate: proof: member #4475 gate took 75.4s (12 store reads, 19.0s)\n  final gate: recheck: member #4475 gate took 74.0s (12 store reads, 18.8s)\n  final gate: proof/recheck: member #4475 evidence took 11.5s / 11.7s   <- what S1 fixed\n  final gate: verify and merge took 207.4s; 285.5s from the merge lease to the end of the merge call\nSo the MEMBER GATE is ~75s × 3 passes per member,\
-    \ and only ~17-19s of it is store reads: ~55s is CPU elsewhere.\nPrimary-scale facts for a fixture: the member's OWN ledger is small (PR-4475.jsonl 72 KB / 6 lines; PR-4600 40 KB). BUT .aida/gate-ledger/ holds 1,836 files / 90 MB (the largest are PR-3870 6.2 MB with 2 lines, PR-3830 4.3 MB with 185 lines, PR-3846 2.3 MB); .aida/review-verdicts/ is 22 MB; .aida/sessions has 295 entries (1.3 MB).\nLEAD: the member gate's cost does NOT scale with the member's own ledger, so it likely scans or parses the WHOLE gate-ledger dir (or review-verdicts / sessions / the spec store) per member per pass. That matches S1's note that `read_file` runs 17× per gate.\nDO: (1) build a fixture at that scale (many large sibling ledgers, a small member ledger) and time the member gate; name the hot loop in the PR body. (2) Fix it with the S1 pattern (compute once per pass, or index or cache by path + mtime within ONE pass, never persisted across passes), keeping every gate check identical: a refused verdict\
-    \ can never become admitted, and keys include the reviewed_sha. (3) A test: the member gate does O(1) parses of sibling ledgers per member, and its results equal the uncached gate across the fixture.\nAC (from the spec): a 3-member train goes from green to the merge call in <30s on the primary. If you can't verify that from the seat, use (Refs BUG-2584) and state the fixture numbers before and after.\nOne targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work."
-  created_at: 2026-11-27 01:04:22.184595+00:00
-  modified_at: 2026-11-27 01:04:22.184595+00:00
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:04):
+    # BUG-2584 SLICE 2: the train MEMBER GATE phase (S1 #4691 landed 52825e81d1c: evidence 226→1 policy calls; product-15 2026-11-26 18:05). Lane: CLAUDE. STRICT (train path). MAIN, NEW branch bug-2584-s2-member-gate. <=300 lines. Completing (BUG-2584) trailer only if the AC is met; otherwise (Refs BUG-2584).
+    LIVE PHASE DATA from the primary's auto-train log (.aida/auto-train/service.log, 2026-11-25 19:2x/19:5x; implementer seats can't read it, so here it is):
+      final gate: re-gate member #4475 took 75.9s (12 store reads, 17.4s)
+      final gate: proof: member #4475 gate took 75.4s (12 store reads, 19.0s)
+      final gate: recheck: member #4475 gate took 74.0s (12 store reads, 18.8s)
+      final gate: proof/recheck: member #4475 evidence took 11.5s / 11.7s   <- what S1 fixed
+      final gate: verify and merge took 207.4s; 285.5s from the merge lease to the end of the merge call
+    So the MEMBER GATE is ~75s × 3 passes per member, and only ~17-19s of it is store reads: ~55s is CPU elsewhere.
+    Primary-scale facts for a fixture: the member's OWN ledger is small (PR-4475.jsonl 72 KB / 6 lines; PR-4600 40 KB). BUT .aida/gate-ledger/ holds 1,836 files / 90 MB (the largest are PR-3870 6.2 MB with 2 lines, PR-3830 4.3 MB with 185 lines, PR-3846 2.3 MB); .aida/review-verdicts/ is 22 MB; .aida/sessions has 295 entries (1.3 MB).
+    LEAD: the member gate's cost does NOT scale with the member's own ledger, so it likely scans or parses the WHOLE gate-ledger dir (or review-verdicts / sessions / the spec store) per member per pass. That matches S1's note that `read_file` runs 17× per gate.
+    DO: (1) build a fixture at that scale (many large sibling ledgers, a small member ledger) and time the member gate; name the hot loop in the PR body. (2) Fix it with the S1 pattern (compute once per pass, or index or cache by path + mtime within ONE pass, never persisted across passes), keeping every gate check identical: a refused verdict can never become admitted, and keys include the reviewed_sha. (3) A test: the member gate does O(1) parses of sibling ledgers per member, and its results equal the uncached gate across the fixture.
+    AC (from the spec): a 3-member train goes from green to the merge call in <30s on the primary. If you can't verify that from the seat, use (Refs BUG-2584) and state the fixture numbers before and after.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-27T01:04:22.184595204Z
+  modified_at: 2026-11-27T01:04:22.184595204Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21ae3-86d2-7053-9d3f-6caa2a1ed95c
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 3d6dc1e2a6 (slice 2, Refs).
-
-    Hot loop named: member gate Corpus step -> corpus_gate_bodies_at -> newest_verdict_event_for_merge -> standing_refusal_in_head re-read+re-parsed the bound change''s WHOLE ledger (verdict_events) once per spec-keyed event on it, plus one git merge-base per event: O(events x ledger size). Fix: per-selection memo of ''bound change superseded'' keyed by ChangeKey; per-decision memo of commit_in_head keyed by sha (head fixed). Neither outlives one corpus decision; refusal answers memoized as refusals.
-
+    Hot loop named: member gate Corpus step -> corpus_gate_bodies_at -> newest_verdict_event_for_merge -> standing_refusal_in_head re-read+re-parsed the bound change's WHOLE ledger (verdict_events) once per spec-keyed event on it, plus one git merge-base per event: O(events x ledger size). Fix: per-selection memo of 'bound change superseded' keyed by ChangeKey; per-decision memo of commit_in_head keyed by sha (head fixed). Neither outlives one corpus decision; refusal answers memoized as refusals.
     Evidence [behavioral-test]: bug2584_member_gate_parses_each_sibling_ledger_boundedly (100 unrelated ledgers never read; 8 same-spec ledgers x 40 refusals = 5.3 MB: 236 MB read before, 22.6 MB after; member result equals the sibling-free gate); bug2584_judged_change_still_refuses_at_a_contained_commit (memo hit on a refused change still refuses). Step timing: the member gate phase now prints steps >=1s.
-
     Probes: keys normalized (ChangeKey parse) on both sides; 0/1/N events per change covered; no fail-open (no new error paths; memo stores computed bool only); no tests weakened.
-
-    Residual: AC (<30s green-to-merge on the primary) not verified from the seat. Store loads (7 per gate in fixture, 12 on primary ~1.5s each) remain and alone exceed the AC across 9 gates; remaining fixture Corpus time is one git ancestry subprocess per distinct sibling refusal sha.'
-  created_at: 2026-11-27 02:44:08.530862+00:00
-  modified_at: 2026-11-27 02:44:08.530862+00:00
+    Residual: AC (<30s green-to-merge on the primary) not verified from the seat. Store loads (7 per gate in fixture, 12 on primary ~1.5s each) remain and alone exceed the AC across 9 gates; remaining fixture Corpus time is one git ancestry subprocess per distinct sibling refusal sha.
+  created_at: 2026-11-27T02:44:08.530862351Z
+  modified_at: 2026-11-27T02:44:08.530862351Z
   session_id: 01a21a8b45de
   harness_version: 2.1.319 (Claude Code)
-- id: 01a21b12-0ea9-72f1-91d6-6bc1b46d0f78
-  author: lane-recovery
-  content: 'Lane exit evidence: retained branch `bug-2584-s2-member-gate` at head `3d6dc1e2a69a9c3cee9328fb4c991a137422cc66`.'
-  created_at: 2026-11-27 03:34:57.961381+00:00
-  modified_at: 2026-11-27 03:34:57.961381+00:00
-  session_id: 01a21a8b45de
+- id: 01a21b13-c168-72c1-84ef-1b974c838f38
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:36):
+    # BUG-2584 S2 r1 on #4712 (advisor-122 20:40; product-15). Lane: CLAUDE. MAIN, existing branch bug-2584-s2-member-gate / PR #4712. Keep the title. <=60 lines.
+    CAUSE (CI run 45933144737, job 140290165303, lib-1, "Test time budget"): `test-timings: BUDGET: aida-cli-lib pr_train::verified::bug2406::bug2584_member_gate_parses_each_sibling_ledger_boundedly: 85.1s with no budget entry (limit 30s for an unbudgeted test)`. It is THIS PR's NEW test.
+    FIX: SHRINK the fixture. Fewer sibling ledgers and events still prove the bound: assert parses are O(1) per sibling (e.g. count parses with a counter or injected reader) on a small fixture (e.g. 3-5 siblings × a few events) instead of timing a large one. Target well under 10s. NO budget entry (the time is not pre-existing).
+    One targeted cargo test run of that test on this host (report its time in the PR body), make check-ci-source, then push to #4712. COMMIT and PUSH. It needs a fresh independent review (no carry-over).
+  created_at: 2026-11-27T03:36:28.116958146Z
+  modified_at: 2026-11-27T03:36:28.116958146Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
-  timestamp: 2026-11-14 16:59:25.301751+00:00
+  timestamp: 2026-11-14T16:59:25.301751566Z
   session_id: 01a1dab1-9447-7d22-b5ff-0c9084e122ea
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -271,98 +268,98 @@ history:
     new_value: Approved
 - id: 01a1db04-46aa-7211-b916-c353980ddf59
   author: aida-session-start
-  timestamp: 2026-11-14 17:04:12.970830+00:00
+  timestamp: 2026-11-14T17:04:12.970830774Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1db04-c186-76d2-9671-b8ddbbbded62
   author: dirtlab
-  timestamp: 2026-11-14 17:04:44.422769+00:00
+  timestamp: 2026-11-14T17:04:44.422769232Z
   session_id: 01a1db044047
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1db73-fcb4-73e3-aaac-1ebb8af7a00c
   author: lane-recovery
-  timestamp: 2026-11-14 19:06:14.068715+00:00
+  timestamp: 2026-11-14T19:06:14.068715922Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a1dfad-63eb-7b40-8027-fb12d2cbf762
   author: aida-session-start
-  timestamp: 2026-11-15 14:47:24.907608+00:00
+  timestamp: 2026-11-15T14:47:24.907608574Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1dfad-d378-7f40-b394-2460c31218fd
   author: dirtlab
-  timestamp: 2026-11-15 14:47:53.464152+00:00
+  timestamp: 2026-11-15T14:47:53.464152737Z
   session_id: 01a1dfad5d97
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1dfd2-ff66-7f61-84d3-e6d29cf718aa
   author: joe
-  timestamp: 2026-11-15 15:28:29.542882+00:00
+  timestamp: 2026-11-15T15:28:29.542882874Z
   session_id: 01a1dfb4-d9c9-7983-b095-3818d6fa2f68
   harness_version: 2.1.325 (Claude Code)
   changes: []
 - id: 01a1e0f5-c37f-77d2-a137-f4dfa315c432
   author: joe
-  timestamp: 2026-11-15 20:46:05.183788+00:00
+  timestamp: 2026-11-15T20:46:05.183788271Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
 - id: 01a21482-e685-75f1-a7c3-814e9c8b16e6
   author: joe
-  timestamp: 2026-11-25 21:00:52.741434+00:00
+  timestamp: 2026-11-25T21:00:52.741434672Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21829-efd9-7e52-aa5a-2d851021f360
   author: joe
-  timestamp: 2026-11-26 14:02:11.289219+00:00
+  timestamp: 2026-11-26T14:02:11.289219509Z
   changes: []
 - id: 01a21833-846d-7f33-b90e-b7803f143718
   author: joe
-  timestamp: 2026-11-26 14:12:39.149039+00:00
+  timestamp: 2026-11-26T14:12:39.149039755Z
   changes: []
 - id: 01a21849-eca5-7b13-b348-eabc9e52c09c
   author: joe
-  timestamp: 2026-11-26 14:37:07.621680+00:00
+  timestamp: 2026-11-26T14:37:07.621680982Z
   changes: []
 - id: 01a21965-a7da-7403-b71a-52c867f5244d
   author: aida-session-start
-  timestamp: 2026-11-26 19:47:02.234919+00:00
+  timestamp: 2026-11-26T19:47:02.234919271Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21a11-7eac-78b0-a86f-98f1a7d07c8c
   author: lane-recovery
-  timestamp: 2026-11-26 22:54:43.884007+00:00
+  timestamp: 2026-11-26T22:54:43.884007142Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a21a8b-a241-7c73-8622-665e6f7c638c
   author: aida-session-start
-  timestamp: 2026-11-27 01:08:08.385284+00:00
+  timestamp: 2026-11-27T01:08:08.385284707Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21a8e-0ac3-73e3-a82b-526f65d0fb84
   author: dirtlab
-  timestamp: 2026-11-27 01:10:46.211855+00:00
+  timestamp: 2026-11-27T01:10:46.211855039Z
   session_id: 01a21a8b45de
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a21b10-983e-7f11-b3e3-e2ee13560ca5
   author: joe
-  timestamp: 2026-11-27 03:33:22.110733+00:00
+  timestamp: 2026-11-27T03:33:22.110733781Z
   changes:
   - field_name: status
     old_value: InProgress
