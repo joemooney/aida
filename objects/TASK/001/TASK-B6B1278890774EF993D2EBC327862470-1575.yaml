@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T20:24:52.501796622Z
+modified_at: 2026-11-27T20:32:51.510318735Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -68,6 +68,12 @@ comments:
   modified_at: 2026-11-27T20:24:12.296378078Z
   session_id: 01a21e9e1a91
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21eb5-f736-7e01-8416-0b5b805fadec
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3928-salvage-red-gate` at head `7ba7fc3512b200ca1bfed3d6a56f31b75e78d42e`.'
+  created_at: 2026-11-27T20:32:51.510312631Z
+  modified_at: 2026-11-27T20:32:51.510312631Z
+  session_id: 01a21e9e1a91
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe
