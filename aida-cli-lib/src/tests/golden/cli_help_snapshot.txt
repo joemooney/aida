@@ -27041,13 +27041,10 @@ Options:
           Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling,
           so a relaunched lane works from it rather than from the description alone
 
-      --resume
-          Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
-          cold-launching. Implies `--work`
-
-      --force
-          Bypass the terminal-status guard (Completed/Rejected) and the "already in progress" guard.
-          Mirrors `queue add --force`
+      --despite-approval <REASON>
+          Rework although the spec's open PR is already approved at its current head. Without it
+          such a rework is refused, because its push would void the approval. The reason is recorded
+          on the spec
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -27059,9 +27056,17 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --resume
+          Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
+          cold-launching. Implies `--work`
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --force
+          Bypass the terminal-status guard (Completed/Rejected) and the "already in progress" guard.
+          Mirrors `queue add --force`
 
       --steal
           Retired. Refuses explicitly when chaining `--work`; ownership handles proven-dead reclaim
@@ -27744,11 +27749,9 @@ Options:
       --ruling <TEXT>
           Record an advisor ruling the next pickup prompt leads with
 
-      --resume
-          Chain `aida queue work --resume`
-
-      --force
-          Bypass terminal-status / already-in-progress guards
+      --despite-approval <REASON>
+          Rework although the open PR is already approved at its current head. The reason is
+          recorded on the spec
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -27760,9 +27763,15 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --resume
+          Chain `aida queue work --resume`
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --force
+          Bypass terminal-status / already-in-progress guards
 
       --steal
           Retired. Refuses explicitly; ownership handles proven-dead reclaim automatically
@@ -60626,6 +60635,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "despite-approval",
+        "takes_value": true,
+        "help": "Rework although the spec's open PR is already approved at its current head. Without it such a rework is refused, because its push would void the approval. The reason is recorded on the spec"
+      },
+      {
         "name": "for",
         "takes_value": true,
         "help": "Override the routing role. Default: existing queue route, falling back to implementer"
@@ -61341,6 +61355,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "despite-approval",
+        "takes_value": true,
+        "help": "Rework although the open PR is already approved at its current head. The reason is recorded on the spec"
       },
       {
         "name": "for",
