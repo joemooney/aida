@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T20:51:13.695742038Z
+modified_at: 2026-11-27T20:51:16.721981020Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -85,6 +85,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3928: AC1 verified by bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref (a red receipt leaves the PR branch at its head, pushes to salvage/<id>, and the note and PR comment name the receipt path). AC2 verified by that test plus bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch (pass and absent receipts fast-forward the PR branch, no salvage ref). The veto sits before the PR-head guard in guarded_push, and require_publication_branch still runs before the push. failed_receipt matches refuse_failed_gate''s semantics: fail-closed on a read error, disk-full fails reclassified as skipped. The one blocking finding is that the fail-closed unreadable-receipt path in the gate has no test (ADR-76 untested-path); there is also a wording nit. The head is 1 commit behind main, and that base commit (python tests, store mutation) does not touch the reviewed code. CI was pending at review time.. No triage reason was given.'
   created_at: 2026-11-27T20:51:13.695739505Z
   modified_at: 2026-11-27T20:51:13.695739505Z
+- id: 01a21ec6-d3c3-7440-bb40-cce572b4f203
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3928):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7ba7fc3512b2
+    Recorded: 2026-11-27T20:49:56.220162960+00:00
+    Findings:
+    1. lane_fast_gate::failed_receipt returns Some (routing the salvage to salvage/<lane>) when the receipt cannot be read (e.g. corrupt JSON or a permission error), mirroring refuse_failed_gate's fail-closed read, but no test covers that path. Mutating the `_ =>` arm so a read error returns None would let a lane with an unreadable receipt fast-forward the open PR branch, and both new tests (bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref, bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch) would still pass. Add a test that writes an unparsable .aida/fast-gates/<sha>.json for the branch and asserts the PR branch is untouched and the work lands on salvage/<lane>. This is gate code, so under ADR-76 the gap blocks.
+    2. aida-cli-lib/src/lane_salvage.rs guarded_push: the veto message always says "red fast-gate receipt <path> for <branch> reads fail", including when failed_receipt returned Some because the receipt could not be read. The salvage note and PR comment then misstate why the PR branch was not moved. Distinguish an unreadable receipt from one that reads fail, either in the message or by having failed_receipt return the reason with the path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T20:51:16.547267059Z
+  modified_at: 2026-11-27T20:51:16.547267059Z
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe
