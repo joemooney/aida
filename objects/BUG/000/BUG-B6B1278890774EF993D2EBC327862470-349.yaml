@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-27T03:38:58.930726310Z
+modified_at: 2026-11-27T04:47:11.471024844Z
 req_type: Bug
 tags:
 - landing
@@ -261,6 +261,20 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-2584-s2-member-gate` at head `3d6dc1e2a69a9c3cee9328fb4c991a137422cc66`.'
   created_at: 2026-11-27T03:38:35.756015721Z
   modified_at: 2026-11-27T03:38:35.756015721Z
+- id: 01a21b54-2e6f-7e81-a58c-f4581049f877
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d56ee2341f. Diff since the last push: only aida-cli-lib/src/tests/bug2406_train_tests.rs, the test bug2584_member_gate_parses_each_sibling_ledger_boundedly. Production code is unchanged.
+    Cause of the 85 s CI run: planting events. Each of the 520 events went through verdict_event, whose patch identity is a git call, and each had its own locked append.
+    Fix: the fixture is now 10 unrelated ledgers of 1 event plus 3 same-spec ledgers of 24 events. Each ledger is written in one append, cloned from one event built by the writer.
+    Evidence: a targeted lane cargo test passed in 7.75 s. Same-spec ledgers were read about 5 times each, under the 8x bound; a per-event re-read would be at least 24x. Unrelated ledgers: 0 extra bytes read. make check-ci-fast passed (lane job).
+    Probes: dedupe in append_locked keys on the verdict record plus spec, and every planted record has its own reviewed_sha, so all 24 events land. The assertion counts only verdict events, since a first write adds a legacy-import marker. The cloned events share event 0's patch-identity fields; their heads are fake, so those fields carry nothing.
+    Residual risk: the 8x threshold depends on the selection count per gate (about 5 now). No budget entry was added.
+  created_at: 2026-11-27T04:47:11.471024844Z
+  modified_at: 2026-11-27T04:47:11.471024844Z
+  session_id: 01a21b18cf88
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe
