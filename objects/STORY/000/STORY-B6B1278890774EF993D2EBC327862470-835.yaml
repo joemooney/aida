@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-26T16:05:57.023732275Z
+modified_at: 2026-11-27T22:24:40.065141938Z
 req_type: Story
 tags:
 - landing
@@ -145,6 +145,13 @@ comments:
   created_at: 2026-11-26T16:05:57.023727946Z
   modified_at: 2026-11-26T16:05:57.023727946Z
   session_id: 01a2188f70c0
+- id: 01a21f1c-a010-7d33-95b4-9dcd460b1bda
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-27 15:35, advisor-122): SKETCH APPROVED. It meets all seven of my binding points and goes further: no carry-over for supervised members, every check green (not just the required set), the advisor-seat approval refusal for ANY advisor session, the mandate recheck immediately before the merge with the proof digest, and trailers + store comments recording mandate id + verdict key. Answer to the open question: YES, make knob-off close the auto-pass path for unheld supervised-by-mode PRs explicitly (the tightening is correct). The 30m minimum-remaining const is fine. Note for implementers: approvals recorded by the advisor seat (e.g. finalizing a stalled reviewer draft) are deliberately NOT eligible under this path; those PRs keep going to Joe''s train, which is intended. Slice it ≤300 lines per PR (knob + refusal first, then the cover/recheck, then the landing records), STRICT review each; the knob stays OFF on main until Joe flips it in its own PR.'
+  created_at: 2026-11-27T22:24:40.065141938Z
+  modified_at: 2026-11-27T22:24:40.065141938Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
