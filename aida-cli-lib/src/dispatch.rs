@@ -2507,6 +2507,13 @@ fn git_ref_exists(repo: &Path, git_ref: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether a lane-reuse retention gate refused only for a transient writer
+/// admission, so [`prepare_lane_worktree`] retries it.
+// trace:TASK-3922 | ai:claude
+pub(crate) fn reuse_refusal_is_transient(gate: &aida_core::mailbox_lifecycle::guard::Gate) -> bool {
+    matches!(gate, Err(refusal) if refusal.transient_admission)
+}
+
 /// Prepare or reuse a worktree at `wt_path` on `branch` tracking `start_ref`
 /// (e.g. `origin/<branch>` for `take`, or `origin/main` for `impl`) without
 /// ever force-pushing. Refuses if `wt_path` or `branch` is currently occupied
@@ -2547,7 +2554,7 @@ pub(crate) fn prepare_lane_worktree(
         // A transient writer-admission refusal retries first. trace:BUG-2778 | ai:claude
         let retirement = aida_core::mailbox_lifecycle::guard::retry_transient_admission(
             || aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse"),
-            |gate| matches!(gate, Err(refusal) if refusal.transient_admission),
+            reuse_refusal_is_transient,
         )
         .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
         // The quiet re-check runs right before the checkout. trace:STORY-1843 | ai:claude
