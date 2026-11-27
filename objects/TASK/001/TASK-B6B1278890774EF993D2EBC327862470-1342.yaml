@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T07:57:34.997069989Z
+modified_at: 2026-11-27T08:22:29.077878962Z
 req_type: Task
 tags:
 - review
@@ -309,6 +309,20 @@ comments:
   created_at: 2026-11-27T07:57:34.997069989Z
   modified_at: 2026-11-27T07:57:34.997069989Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21c19-8e20-7ac3-839c-b93622327ea0
+  author: joe
+  content: |-
+    INTEGRATION RE-PRE-CHECK PR #4727 r1 (head 0d6e795c8a): PASS. The advisor's final CR is resolved. Strict tier, so the independent review is still needed.
+    - Classify before open: worktree_entries now runs classify_compiled first. An excluded path (secret, substrate, generated, user glob) gets only locate_confined, which is an O_NOFOLLOW walk of the parent directories plus an lstat of the leaf; the leaf is never opened. It is kept as excluded unless it is Missing, and an lstat error keeps it excluded rather than failing the scan. open_confined is reached only for reviewable paths.
+    - Proof: a cfg(test) LEAF_OPENS recorder logs every leaf open. The new test uses a FIFO .env.local (opening it would block) and a chmod-000 .env.prod. Both are excluded as secret_sensitive_path and neither appears in LEAF_OPENS.
+    - review_engine classify_compiled: a path reason now outranks NonRegular via .or(...). Every branch still returns Some for a non-regular entry (binary, deleted, a path reason, or finally NonRegular), so no non-regular entry can come back reviewable.
+    - The swap test is bounded by a deadline and heals the ENOTEMPTY state a confined write can leave.
+    - Merge: 33621d09b7e merges integration 3d05dfcc1ff. It merges cleanly with the current tip 83dacdb43d8 (STORY-3202).
+    - It ships as p55, after p54 (S5e + STORY-3202).
+  created_at: 2026-11-27T08:22:29.077878962Z
+  modified_at: 2026-11-27T08:22:29.077878962Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
