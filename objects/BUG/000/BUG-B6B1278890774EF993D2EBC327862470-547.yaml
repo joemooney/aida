@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T20:24:36.982886849Z
+modified_at: 2026-11-27T20:43:18.370931867Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -111,6 +111,18 @@ comments:
   content: 'DEFERRED (#4752 final CR @980a2699, p3; product-15; supersedes the empty DEFERRED comment just above): BUG-2786 (p3): reviewer_session_ended() reads leases only under `start` (read_exact_lease(root, id)). review_authority::visible_leases() consults both the main worktree root and the project root. If the watcher root is not where the reviewer''s lease lives, an absent lease (Ok(None)) is treated as proof the reviewer ended, so a live reviewer''s barrier could be expired. Resolve the lease against the main worktree root as well, or treat ''not found in the root'' as unknown.'
   created_at: 2026-11-27T20:10:00.617053233Z
   modified_at: 2026-11-27T20:10:00.617053233Z
+- id: 01a21ebf-87e2-76b1-85e9-007c68201eeb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b08482d39a (PR #4752, r2).
+    Fixes: (1) p1 effective_recordings_for_sha accepts a sweep_abandoned recording as a recognised act: it displaces its barrier in the append chain and is dropped from the effective set, so the abandoned record alone reconciles to no verdict (merge gate: 'do not approve its current head', not 'cannot be reconciled'), and a fresh approval at the same or a later head clears. rework_hold_release skips abandoned rounds as it skips delivery_pending ones (arming scan and archived history). (2) Lease-backed tests: live, stale, one-live-one-stale and both-stale; mutants '== Stale -> !=' and 'Ok(Some(_)) => true' both FAIL registered_leases_decide_liveness_for_every_named_session (run by hand). (3) complete_approval re-decides stored findings via redecide_replay_record under the held policy (effective_warned at the watcher); a policy that now blocks abandons instead (test: invalid blocking_tiers).
+    Evidence: 9/9 abandoned_sweep+bug_2786 tests pass; 325/326 review_verdict/rework_hold_release/merge_hold_core/pr_train_verified tests pass, 1 env failure (process fixture needs built CLI).
+    Probes: multiplicity of named sessions covered by all(); abandoned record copies the barrier's recorded_by, so retained-round provenance holds. Residual: finding 4 (lease root: start only) deferred per brief, product files it; finalize still does not match the launch draft (the re-decision is the policy guard).
+  created_at: 2026-11-27T20:43:18.370931867Z
+  modified_at: 2026-11-27T20:43:18.370931867Z
+  session_id: 01a21eae0c44
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21d95-9bce-7210-a003-d78cbc07dd29
   author: joe
