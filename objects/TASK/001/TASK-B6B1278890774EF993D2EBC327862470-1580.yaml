@@ -1,0 +1,31 @@
+id: 01a21ec1-ba05-7be2-8fa4-1d14fc0d24d0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1580
+title: 'Review follow-up: [test-gap, follow-up] lane_host.rs autobuild_check/inspect wiring (the `aida doctor --lane'
+description: |-
+  From BUG-2787
+  Reviewed sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24
+
+  [test-gap, follow-up] lane_host.rs autobuild_check/inspect wiring (the `aida doctor --lane-host` half of AC1) has no test. Only the dev_fresh helpers are exercised. A test that drives inspect() or autobuild_check() with a behind built sha and a fake AIDA_AUTOBUILD_LOG would pin the advisory row's detail and hint.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T20:45:42.277811359Z
+modified_at: 2026-11-27T20:45:42.277811359Z
+req_type: Task
+tags:
+- carried-from:BUG-2787
+- finding-hash:542c13cc
+- from-review:BUG-2787
+relationships:
+- rel_type: References
+  target_id: 01a21e60-60a7-7e40-8794-3f57fe6d6d2a
+  created_at: 2026-11-27T20:46:00.557966462Z
+filed_at:
+  code_sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24
+  branch: pr-4758
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac48
+  vendor: claude
+  session: 01a21ebefb3e
