@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-10T13:22:04.913823957Z
+modified_at: 2026-11-27T17:47:24.217356047Z
 req_type: Task
 tags:
 - area:containment
@@ -880,6 +880,11 @@ comments:
   modified_at: 2026-11-10T13:22:04.913823957Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a21e1e-7cb9-7840-ae2a-2af513a9558c
+  author: joe
+  content: 'LOW nicety (advisor 10:58): scripts/containment/conformance.py should refuse up front when stdin or stderr is not a TTY. The seat-grant stages (team allow-seat, role enter) need both (require_direct_tty), so a no-TTY run currently produces an all-"unknown" report (fixture-roster-allow-seat-refused) instead of saying "run this from a terminal". Seen 2026-11-26 23:44 from a deputy run.'
+  created_at: 2026-11-27T17:47:24.217356047Z
+  modified_at: 2026-11-27T17:47:24.217356047Z
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
