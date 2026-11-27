@@ -9,12 +9,12 @@ description: |
   - AC1: release a manual-train waiter when its manual train PROCESS EXITS (record pid + start time; a dead or recycled pid releases it), plus an explicit release command surfaced in `aida advisor loops train-status` (which also names the waiter file and its expiry).
   - AC2: a FIFO waiter QUEUE (not a single slot): each manual train that gives up enqueues itself; admission clears ONLY the waiter it admits; the auto-train yields while any live waiter is queued.
   - AC3: tests asserting the waiter line in `aida advisor loops train-status` (status_lines) and in `aida pr train --check` text/JSON (check_report); pid exit releases; two waiters are both kept and admitted in order.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T07:06:29.317939151Z
+modified_at: 2026-11-27T07:28:04.895283998Z
 req_type: Task
 tags:
 - admission
@@ -123,6 +123,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T07:06:33.482397315Z
   changes: []
+- id: 01a21be7-7ad8-75e2-a273-dec5a310f1be
+  author: aida-auto-bump
+  timestamp: 2026-11-27T07:28:04.824985116Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21be7-7b1f-70f3-9734-eec83366b78b
+  timestamp: 2026-11-27T07:28:04.895281270Z
+  agent: aida
+  commit_sha: 67e29d580e339148adcbf9dd77e3df6f9a3b167b
+  summary: 'TASK-3924 PASS. The head is 4 commits behind main; the overlapping base changes are store-writers.toml and the golden help snapshot, both regenerated inventory and snapshot content with no finding depending on them. AC1 verified by admission_owner::tests::task3924_waiter_released_when_its_retrier_exits (a dead retrier releases the waiter, and the auto-train stops yielding) and advisor_loop_service task3924_train_status_lists_each_waiter_with_its_release_command (the line names the waiter id, the manual-train.waiters file, the expiry and `aida advisor loops release-waiter <id>`; release removes the line, and a second release errors). The owner recorded is the retrier (parent) ProcIdentity with its start time, an adaptation documented in the code because the train itself exits when it gives up. AC2 verified by task3924_two_waiters_kept_and_admitted_in_order: both waiters are kept, B is refused behind A and keeps its place, each admission clears only its own waiter, in FIFO order. The auto-train yields to the queue head via yield_reason. Queue read-modify-write runs under lock_serial. AC3 verified by the status_lines test, task3924_check_report_shows_waiters_in_text_and_json (render_check text and JSON, and nothing added when the queue is empty) and the two admission tests. The existing bug2769/bug2771 tests were migrated to manual_waiters, with none weakened. The CLI subcommand was added through the module args, and the help snapshot and JSON audit were updated. Waiters grant no authority, and an unreadable queue fails toward ending the yield. CI pending at review time (fast gates green, fast compile pending). Two non-blocking follow-ups (p2 and test-gap).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
@@ -135,3 +149,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T06:09:18.926802822Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T07:28:04.824978026Z
+  completion_sha: 67e29d580e339148adcbf9dd77e3df6f9a3b167b
