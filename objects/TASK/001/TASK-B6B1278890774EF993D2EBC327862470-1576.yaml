@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: the test selects the specific member-selection alert (by kind/subject), or waits boundedly for the holder line, instead of taking the first alert; no sleep-based timing.
   - AC2: the fix is test-only unless the alert ordering is a real product bug (then say so in the PR).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:03:47.207632415Z
-modified_at: 2026-11-27T20:43:38.342338810Z
+modified_at: 2026-11-27T22:35:40.318100272Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -91,6 +91,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T20:43:40.470039211Z
   changes: []
+- id: 01a21f26-6758-7650-94dc-7f0ab05eb19f
+  author: aida-auto-bump
+  timestamp: 2026-11-27T22:35:40.248347256Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21f26-679e-7ce0-b5d4-ac7d71502891
+  timestamp: 2026-11-27T22:35:40.318095833Z
+  agent: aida
+  commit_sha: bac0ed6b440cc966686bddfd452560c8b9f56b43
+  summary: 'TASK-3929 (completing). Test-only change to bug2746_train_member_selection_alert in aida-cli-lib/src/review_watch_train_service.rs. AC1 [behavioral-test]: verified by the diff. Each of the three recorded failures is now the first of up to 10 select_train_members refusals whose message contains the holder line ''review-watch updating PR-4502, age ''. That is a bounded wait for the holder line with no sleep; each attempt''s only delay is lock()''s own 50x20ms retry window in review_watch.rs:676-690. Root cause checked: the alert body is built from the reason of the failure that crosses count>=3 (advisor_loop_service.rs:1547-1552). The holder summary appears only when a /proc/locks read shows exactly this PID on the inode (review_watch.rs:701-711). /proc/locks is a non-snapshot seq_file (see the cache_refresh.rs:195 note), so lock churn from parallel tests can make one read miss the holder; the message then degrades to ''activity and age unknown'' and split_once returns None, which is the reported panic. Recording only refusals that carry the holder line removes that race. The age assertion is unchanged. Worst case is about 30 attempts of roughly 1s. AC2 [manual-inspection]: verified. The diff touches only the #[test] body. A missed best-effort read falling back to ''activity and age unknown'' is the documented diagnostic behaviour, not a product bug, so a test-only fix is correct. Stale base: the head is 1 commit behind main; nothing in the finding-free judgment depends on code main has changed since. CI pending at review time (5 jobs running at c8d3152d2b9a). No findings.'
+  review_verdict: approved
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
@@ -98,3 +112,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8e06142ac48
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T22:35:40.248339952Z
+  completion_sha: bac0ed6b440cc966686bddfd452560c8b9f56b43
