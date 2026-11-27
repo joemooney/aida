@@ -14,11 +14,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T04:27:07.824052929Z
+modified_at: 2026-11-27T04:29:18.194798843Z
 req_type: Task
 tags:
 - admission
 - auto-train
+comments:
+- id: 01a21b44-174c-73e0-a5ad-dc8e6a3a9858
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:29):
+    # TASK-3924: the BUG-2771 follow-up (advisor-122 binding 20:28; product-15). Lane: CLAUDE. STRICT (admission). MAIN, NEW branch task-3924-train-waiters (cut from main AFTER #4711 BUG-2771 landed). <=250 lines. Completing (TASK-3924) trailer.
+    READ: `aida show TASK-3924` (AC1-AC3) and the landed BUG-2771 change (`git log --grep BUG-2771 origin/main`; admission_owner.rs record_waiter / manual_train_admission, advisor_loop_service.rs status_lines, pr_train_check.rs check_report).
+    One targeted cargo test run on this host, make check-ci-source, then publish a NEW PR to main. COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T04:29:18.194798843Z
+  modified_at: 2026-11-27T04:29:18.194798843Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21b41-dd2f-7263-af2a-f110d621552d
   author: joe
