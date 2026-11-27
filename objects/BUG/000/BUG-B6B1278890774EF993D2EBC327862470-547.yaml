@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T19:23:06.443268962Z
+modified_at: 2026-11-27T19:53:25.620419001Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -71,6 +71,13 @@ comments:
     - Diff is ~440 lines vs the 300 budget: ~200 are tests.
   created_at: 2026-11-27T19:23:06.443268962Z
   modified_at: 2026-11-27T19:23:06.443268962Z
+  session_id: 01a21e6517d0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21e91-dd74-7a72-9ef0-d6aa10a971cf
+  author: dirtlab
+  content: 'Slice 1 published: PR #4752 (head 980a269932). Self-review HEAD moved from 6acf5cb to 980a269 for three gate fixes: liveness now goes through ownership::reader::current_lease_state, the containment check moved to the review-watch caller (outside gate/), and store-writer inventory rows were added. make check-ci-fast passes; targeted tests 6/6.'
+  created_at: 2026-11-27T19:53:25.620419001Z
+  modified_at: 2026-11-27T19:53:25.620419001Z
   session_id: 01a21e6517d0
   harness_version: 2.1.319 (Claude Code)
 history:
