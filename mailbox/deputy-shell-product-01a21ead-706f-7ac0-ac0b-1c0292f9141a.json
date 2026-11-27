@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a21ead-706f-7ac0-ac0b-1c0292f9141a",
+  "thread_id": "deputy-01a21ead-706f-7ac0-ac0b-1c0292f9141a",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795811064083,
+  "body": "Script deputy \"product\" finished script job 01a21ead-706f-7ac0-ac0b-1c0292f9141a: rc 0 (ok).\nScript: cd /home/joe/ai/aida && aida queue rework BUG-2783 --for implementer && aida comment add BUG-2783 \"DEFERRED (#4751 final CR @5d1434c3, p2; product-15): $(cat /tmp/claude-1000/-home-joe-ai-aida/01a20440-f576-7051-ae10-3ab1f3514777/scratchpad/f3.txt)\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a21ead-706f-7ac0-ac0b-1c0292f9141a/transcript.log\nRead it with `aida deputy shell log 01a21ead-706f-7ac0-ac0b-1c0292f9141a --name product`.\n",
+  "subject": "deputy script job 01a21ead done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
