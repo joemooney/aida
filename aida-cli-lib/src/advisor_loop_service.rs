@@ -269,6 +269,10 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
             println!("{}", crate::admission_drain::resume(&root)?);
             Ok(())
         }
+        // trace:TASK-3924 | ai:claude
+        AdvisorLoopsCommand::ReleaseWaiter { id } => {
+            crate::admission_owner::release_waiter(&root, id)
+        }
         AdvisorLoopsCommand::Worker | AdvisorLoopsCommand::TrainWorker => worker(&root),
     }
 }
@@ -517,9 +521,8 @@ fn status_value(
         // A long auto-train hold, live, with its phase. trace:BUG-2769 | ai:claude
         value["admission_hold"] = serde_json::json!(super::train::live_hold_line(root));
         // A manual train the auto-train yields its next train to. trace:BUG-2771 | ai:claude
-        value["manual_waiter"] = serde_json::json!(
-            crate::admission_owner::manual_waiter(root).map(|w| w.describe())
-        );
+        // Every queued waiter, first in line first. trace:TASK-3924 | ai:claude
+        value["manual_waiters"] = serde_json::json!(crate::admission_owner::waiter_lines(root));
     }
     // trace:BUG-2703 | ai:claude
     let admission = admission_status(root, state, Utc::now());
@@ -550,8 +553,8 @@ fn status_lines(
     if let Some(line) = value["admission_hold"].as_str() {
         lines.push(line.to_string()); // trace:BUG-2769 | ai:claude
     }
-    if let Some(line) = value["manual_waiter"].as_str() {
-        lines.push(format!("{NAME}: {line}")); // trace:BUG-2771 | ai:claude
+    for line in value["manual_waiters"].as_array().into_iter().flatten() {
+        lines.push(format!("{NAME}: {}", line.as_str().unwrap_or_default())); // trace:BUG-2771 TASK-3924 | ai:claude
     }
     // trace:BUG-2674 | ai:claude
     if let Some(pass) = pass {
@@ -4005,4 +4008,40 @@ pub(super) fn controller_dispatch(root: &Path, failure: Option<&str>, success: b
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod task3924_waiter_status_tests {
+    use super::*;
+
+    /// TASK-3924 AC3: `train-status` shows one line per queued manual train,
+    /// with its id, record file, expiry and release command; released, the
+    /// line goes. trace:TASK-3924 trace:TASK-3924.AC1 trace:TASK-3924.AC3 | ai:claude
+    #[test]
+    fn task3924_train_status_lists_each_waiter_with_its_release_command() {
+        if !TRAIN {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(root, "advisor", &["advisor"]);
+        let first = crate::admission_owner::record_test_waiter(root, &[4464]);
+        crate::admission_owner::record_test_waiter(root, &[]);
+        let value = status_value(root, "running", None, &[], None, &[]).unwrap();
+        let lines = status_lines("running", &value, None, &[]);
+        let waiting: Vec<_> = lines.iter().filter(|l| l.contains("waiting since")).collect();
+        assert_eq!(waiting.len(), 2, "{lines:?}");
+        assert!(waiting[0].starts_with(&format!("{NAME}: operator train for #4464 waiting since ")));
+        assert!(waiting[1].contains("operator train for all ready PRs"), "{lines:?}");
+        assert!(waiting[0].contains("manual-train.waiters, expires "), "{lines:?}");
+        assert!(
+            waiting[0].ends_with(&format!("release: aida advisor loops release-waiter {first})")),
+            "{lines:?}"
+        );
+        crate::admission_owner::release_waiter(root, &first).unwrap();
+        let value = status_value(root, "running", None, &[], None, &[]).unwrap();
+        let lines = status_lines("running", &value, None, &[]);
+        assert_eq!(lines.iter().filter(|l| l.contains("waiting since")).count(), 1);
+        assert!(crate::admission_owner::release_waiter(root, &first).is_err());
+    }
 }
