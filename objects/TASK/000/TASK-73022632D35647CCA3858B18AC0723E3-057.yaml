@@ -1,5 +1,6 @@
 id: 01a21a4f-9bb8-7d00-8c20-a0d815312e69
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-057
+agreed_id: TASK-3525
 title: 'TASK-3869 AC4: lossless non-UTF-8 path round trip in review prepare'
 description: |
   TASK-3869 shipped AC1-AC3 as a Refs slice because the full change passed the brief's 300-line cap. AC4 is still to do.
@@ -27,6 +28,13 @@ tags:
 - severity:minor
 - story-3076
 - track:integration
+history:
+- id: 01a21a5e-7f0c-7082-95c2-5ba23c1e909b
+  author: joe
+  timestamp: 2026-11-27T00:18:50.252400032Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e015710e8d557d96e65bf714d5cf44b875862cdc
   branch: int-task-3869-hardening
