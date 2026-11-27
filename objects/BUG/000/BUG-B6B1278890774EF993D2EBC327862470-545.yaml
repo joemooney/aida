@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T08:24:26.955280352Z
+modified_at: 2026-11-27T08:26:02.741913653Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -209,6 +209,17 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T08:24:26.799900581Z
   modified_at: 2026-11-27T08:24:26.799900581Z
+- id: 01a21c1c-d21f-7293-9869-0fa81336a915
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:26):
+    # BUG-2784 r2 on #4733 (advisor-122 01:26: a mechanical, VALID CR; product-15). Lane: CLAUDE. MAIN, existing branch bug-2784-ratchet-union-merge / PR #4733. Keep the title. ONE job, a tiny diff:
+    Two new test fn names contain the structural marker "ratchet", which trips the ratchet-set registry. RENAME them so they no longer contain "ratchet" (e.g. bug_2784_rework_unions_list_additions_in_sandbox_without_seat_hooks and bug_2784_publication_merge_unions_list_additions), or, ONLY if they really are ratchets, register them in scripts/ratchet-set.json.
+    Validate: `python3 -m unittest tests.test_ratchet_set` + the renamed tests + make check-ci-fast. COMMIT and PUSH to #4733.
+  created_at: 2026-11-27T08:26:02.741913653Z
+  modified_at: 2026-11-27T08:26:02.741913653Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
