@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T06:57:26.795679215Z
+modified_at: 2026-11-27T06:57:42.799966895Z
 req_type: Bug
 comments:
 - id: 01a21b43-1a62-7921-9b1a-11e036f97be5
@@ -73,6 +73,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2784 at 9afeaa25 (5 commits behind main; store-writers.toml also changed on base, landed tree applies cleanly). AC1 acc6fc44 is verified for the driver: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly covers the union, sorted order and valid JSON, and the round-trip keeps ratchet-set.json formatting byte-identical. .gitattributes is registered. The rework-prep wiring at seat_clone.rs:3484 is present but untested through the real execute path (finding 2). AC2 ac5d1d65 is unmet: the conflict exit is tested, but a failed driver leaves no conflict markers, which defeats the existing marker gating (finding 1). Protocol ''PR touches at least one test file'': met. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-27T06:57:26.795672555Z
   modified_at: 2026-11-27T06:57:26.795672555Z
+- id: 01a21bcb-ace9-72c3-b173-664fc0642146
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2784):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9afeaa251dea
+    Recorded: 2026-11-27T06:56:04.506067421+00:00
+    Findings:
+    1. AC2 (ac5d1d65) not met: when the aida-json-union driver reports a conflict (exit 1 on a same-key edit, duplicates, invalid JSON), and also when the Rust fallback driver is `false` (quoted path) or the trusted script is missing or unreadable (python exits 2), git leaves %A as the unmodified OURS file with NO conflict markers (gitattributes: a failing driver's %A content becomes the worktree result). Before this PR a plain text merge wrote <<<<<<< markers. The existing rework gating is refuse_pending_conflict_markers (seat_clone.rs ~6288, a `git grep '^<<<<<<<'` over the journaled paths), so a marker-free conflicted scripts/ratchet-set.json passes the gate. A lane that stages the file as-is publishes only its own side, which silently drops main's ratchet entries (a gate manifest). Fix: on conflict, have the driver fall back to `git merge-file -L ours -L base -L theirs %A %O %B` before exiting non-zero, and do the same for the `false`/missing-script fallback. Add a test asserting the conflicted worktree file carries markers. tests/test_json_union_merge.py::test_same_key_edited_differently_stays_a_conflict asserts only 'CONFLICT' on stdout.
+    2. Untested sandbox wiring (seat_clone.rs, ADR-76). json_union_merge_config restates core.hooksPath=/dev/null and core.fsmonitor=false because its GIT_CONFIG_COUNT=3 --setenv replaces sandbox_args' own GIT_CONFIG_COUNT=2 block. Nothing pins this: bug_2784_rework_git_unions_disjoint_json_list_additions calls json_union_merge_config directly through host `git merge-tree` and never exercises prepare_rework_merge_with_base or run_commit_sandboxed. Two mutations would survive: (a) dropping the hook/fsmonitor restatement, which re-enables the seat-writable clone .git/hooks (for example post-merge, which --no-verify does not skip) during the host-identity rework merge; (b) removing `.chain(json_union_merge_config(main))` from merge_env. Add a test that runs the rework merge through the real execute path with a planted seat hook and asserts it does not run, and that the union happens. Also assert that the restated keys match sandbox_args' overrides, so a future key added there is not silently dropped.
+    3. Under a configured [contained] read_allowlist, sandbox_args binds only the essential paths, the allowlist, the clone and main/.git. MAIN's checkout scripts/json-union-merge.py is then not visible inside the commit sandbox, so the driver always fails and every concurrent ratchet-set.json change becomes a (marker-free, see finding 1) conflict. That config is not set today. Either bind the script read-only or document the limitation.
+    4. The AC names 'rework prep / sync', but the other lane merge path, merge_publication_head (seat_clone.rs ~3664, TASK-2879), still runs run_commit_sandboxed with the bare identity, so a disjoint ratchet-set.json addition there still aborts publication. Extend merge_env to that path or record the scope decision.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T06:57:42.633397173Z
+  modified_at: 2026-11-27T06:57:42.633397173Z
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
