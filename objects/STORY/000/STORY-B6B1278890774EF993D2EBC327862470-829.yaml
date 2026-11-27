@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T01:25:48.048865423Z
+modified_at: 2026-11-27T01:42:36.291808471Z
 req_type: Story
 tags:
 - integration
@@ -1642,6 +1642,19 @@ comments:
     p52 = S5c + S5d after the merge, built as a single tree-equal commit on main.
   created_at: 2026-11-27T01:25:48.048865423Z
   modified_at: 2026-11-27T01:25:48.048865423Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21aab-738b-75b1-a45d-e6aca1264e14
+  author: joe
+  content: |-
+    FINDING for S5e (p52 build, not blocking). S5c and S5d put 'trace:STORY-3120 | ai:claude' on /// doc comments of internal items:
+    - bounded_process.rs: command_output_with_timeout_io
+    - review_challenger.rs: challenger_call, plus two test docs
+    - review_prepare.rs: rename_sources, runner_failure, PARTIAL_REVIEW_EXIT_CODE
+    - review_engine.rs: classify_path_exclusion
+    The local pre-commit hook (user-facing-text conventions) refuses them, so p52 #4706 was committed with --no-verify to stay byte-identical to the reviewed tree. None of them reaches --help: the golden snapshot has 0 'trace:'. S5e should demote each to a plain // line above the item.
+  created_at: 2026-11-27T01:42:36.291808471Z
+  modified_at: 2026-11-27T01:42:36.291808471Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
