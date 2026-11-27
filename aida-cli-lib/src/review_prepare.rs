@@ -2727,6 +2727,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
     /// trace:STORY-3202 | ai:claude
     #[test]
     fn story3202_post_comment_refuses_unverified_agy_before_any_run() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let temp = tempfile::tempdir().unwrap();
         let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
         std::fs::create_dir_all(&bin).unwrap();
