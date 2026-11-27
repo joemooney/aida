@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-27T22:24:40.065141938Z
+modified_at: 2026-11-27T23:10:52.095596716Z
 req_type: Story
 tags:
 - landing
@@ -152,6 +152,19 @@ comments:
   modified_at: 2026-11-27T22:24:40.065141938Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21f46-a0bf-7c71-9d87-8ca3a4c84107
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f41e9898dc (slice 1 of the signed sketch; Refs only).
+    Acceptance evidence (S1 scope): [behavioral-test] knob default off → the automatic pass and its read-only pre-scan both refuse a supervised PR with a typed Refused naming `[landing] auto_train_supervised_under_mandate` (story_3181_auto_train_knob_tests::story3181_knob_off_by_default_refuses_the_automatic_pass_and_prescan); a worktree-only edit turning it on is ignored, since only the committed default branch config is read (story3181_a_local_only_edit_does_not_turn_the_knob_on); knob on is not yet a landing path and still refuses (story3181_knob_on_is_not_yet_a_landing_path); policy_change_refusal names a knob flip both ways (landing_policy::story3181_a_knob_flip_during_the_wait_refuses_the_merge); a non-bool value is invalid and stays false. The refusal reaches the member gate as a settled spec-policy refusal (ejects, does not retain).
+    Probes: the refusal runs only under ADVISOR_LOOP, before any mandate read, so a manual train and `aida pr ship` are unchanged. It fails closed: an unreadable or unparsable policy is the default, which is off and refuses. Unsupervised members never reach mandate_cover, so they are unaffected. The advisor's tightening is applied: unheld supervised-by-mode PRs are now explicitly closed in the auto pass.
+    Fix during review: the ratchet flagged a raw `git commit` in the fixture, so the test now spawns git through test_git::git_command.
+    Residual: policy_change_refusal compares the policy captured at proof collection with the one in force at the merge, not the one at admission. Admission-time capture belongs with S3/S4. The advisor_loop_train Refusals cache (10m) can delay a knob flip by one re-judge window; S3 will key it. Validation: 6/6 story3181 tests pass, 64 config_cmd+landing_policy tests pass, and make check-ci-fast exits 0.
+  created_at: 2026-11-27T23:10:52.095596716Z
+  modified_at: 2026-11-27T23:10:52.095596716Z
+  session_id: 01a21f2a5f6d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
