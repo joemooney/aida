@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T20:07:28.982776346Z
+modified_at: 2026-11-27T20:09:08.237652145Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -86,6 +86,21 @@ comments:
   created_at: 2026-11-27T20:00:14.407241384Z
   modified_at: 2026-11-27T20:00:14.407241384Z
   session_id: 01a21e6517d0
+- id: 01a21ea0-30f0-7cc2-9390-c53ea9aa3ea4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4752):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 980a2699329e
+    Recorded: 2026-11-27T20:03:27.610811879+00:00
+    Findings:
+    1. BUG-2786 AC1 (p1): an expired barrier wedges the merge gate permanently. abandoned() writes verdict word `sweep-abandoned` with sweep_abandoned:true, and disposition_verdict() now returns VerdictKind::Unknown for it. But effective_recordings_for_sha() (aida-cli-lib/src/gate/review_verdict.rs:1286-1289) returns Err("review recording has unrecognised verdict ...") for ANY recording or retained round whose kind is Unknown, and it does so before the reviewed-sha filter. bodies_with_ledger_history() (review_verdict.rs:1168-1235) folds every prior verdict event of the change into `rounds`, so once a PR's ledger holds an abandoned event, every later reconcile errors. That includes a fresh APPROVED review at the same head and reviews at later heads. corpus_merge_gate_carrying (merge_hold_core.rs:1315/1386) turns that Err into CorpusMergeGate::Refuse, and pr_train_verified.rs:94/535/627 reads the same history. Failure scenario: reviewer exits with a pending barrier, the watcher abandons it after 20 min, a new reviewer approves the head, and the merge gate refuses with an integrity error forever (only store surgery clears it). The abandoned record alone also surfaces as an integrity refusal, not as 'needs review'. rework_hold_release.rs:319-330 likewise skips delivery_pending rounds but errors 'ambiguous retained verdict provenance' on an abandoned round. Fix: make every reconciliation and round reader skip sweep_abandoned records the way they skip delivery_pending ones. Add a test that records a fresh approval after abandonment and asserts that reconcile_artifacts_for_sha / the corpus merge gate clears.
+    2. BUG-2786 (untested-path, gate code aida-cli-lib/src/gate/ledger/abandoned_sweep.rs): the refusal path that keeps a LIVE reviewer's barrier untouched is only tested through an injected `ended` closure (live_or_recent_reviewer_sweeps_are_untouched passes `&|_| ended`). reviewer_session_ended() is tested only for an absent lease (ended), an unreadable lease (not ended) and no named session. No test registers a live, parseable lease for the barrier's reviewer and asserts reviewer_session_ended == false. No test registers a stale lease and asserts true. No test covers the `all()` semantics where one named session is live and the other is gone. Mutating `== LeaseState::Stale` to `!=`, or `Ok(Some(_)) => true`, survives the suite. Add lease-backed tests for live, stale and mixed sessions.
+    3. BUG-2786 (p3): complete_approval() + finalize_via_writer() finalize an approval from the barrier alone, under the watcher's process. They do not re-decide the stored findings under the currently held blocking policy, which the same-launch replay path does via redecide_replay_record (review_verdict.rs:3464ff), and they do not match against the launch draft, which restore_pending_handoff requires. A policy change in the 20+ minutes before expiry can therefore finalize an approval that the current policy would block. Either re-decide under the current policy before finalizing or abandon instead. The spec text says to finalize 'from the draft'.
+    4. BUG-2786 (p3): reviewer_session_ended() reads leases only under `start` (read_exact_lease(root, id)). review_authority::visible_leases() consults both the main worktree root and the project root. If the watcher root is not where the reviewer's lease lives, an absent lease (Ok(None)) is treated as proof the reviewer ended, so a live reviewer's barrier could be expired. Resolve the lease against the main worktree root as well, or treat 'not found in the root' as unknown.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T20:09:04.496810381Z
+  modified_at: 2026-11-27T20:09:04.496810381Z
 history:
 - id: 01a21d95-9bce-7210-a003-d78cbc07dd29
   author: joe
