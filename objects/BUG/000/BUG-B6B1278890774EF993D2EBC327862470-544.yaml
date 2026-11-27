@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T19:09:40.641666463Z
+modified_at: 2026-11-27T19:53:07.400158751Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -218,6 +218,26 @@ comments:
   content: 'RESIDUAL (accepted by advisor aida-d3 2026-11-27 12:06, relayed by product-15): with S2''s bwrap confinement, a vendor''s own auth file stays readable by its own runner (it needs the token), so a prompt injection could still echo that one token into the local report. Mitigation: local reports are written 0600, and --post-comment stays refused for codex/agy even when confined, until a later slice adds token-pattern redaction of runner output. S2 system mounts are minimal and explicit (/usr, /lib*, /bin, and only /etc/ssl, /etc/ca-certificates, /etc/resolv.conf, /etc/hosts, /etc/nsswitch.conf).'
   created_at: 2026-11-27T18:59:20.887372847Z
   modified_at: 2026-11-27T18:59:20.887372847Z
+- id: 01a21e91-9648-77f1-94cb-daa6760732a3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5d1434c3e3 (PR #4751, git diff origin/main...HEAD, 6 files).
+
+    Round-2 findings from #4731: both were already fixed on main by #4744 (the docs refusal sentence; --anchor-findings counts as an unverified producer). This PR updates that docs paragraph for the confinement.
+
+    Acceptance evidence (Refs slice 2):
+    - AC1 [behavioral-test]: codex and agy spawn through bwrap (launch/review_runner.rs RunnerCall::confined). The view is: tmpfs HOME; empty /review cwd; --unshare-all --share-net; ro-bind-try of /usr, /bin, /lib*, /etc/{ssl,ca-certificates,resolv.conf,hosts,nsswitch.conf} only; the vendor auth files (ConfinedAuth table) read-only; the vendor binary. s3a_runner_spawn_contract pins the exact wrapper argv (no /etc, no /, no --bind; claude unwrapped). bug2783_confined_runner_fails_closed_without_bwrap covers a missing bwrap and an empty, / or relative HOME (the runner never runs).
+    - AC2 report half [behavioral-test]: bug2783_unconfined_runner_review_is_never_posted runs a fake codex through the real bwrap. It asserts the canary is absent from the report and the SARIF, the report is 0600, and posting is refused. It skips with a printed reason where bwrap cannot run, which most likely applies in this lane (nested user namespaces are denied).
+    - AC3: posting gates on may_post = no_read && post_allowed (claude only).
+    Tests: 56 targeted tests pass; make check-ci-fast exit 0.
+
+    Probes: (2) a relative CODEX_HOME source resolves inside the empty cwd, so it is skipped, not opened up. (5) every refusal returns before spawn; a bwrap that cannot create namespaces fails the run with its stderr; no test was weakened (claude/custom-runner assertions unchanged; the agy and codex tests got HOME and a bwrap stand-in).
+    Residual risks: the vendor's own token stays readable by its runner (accepted 12:06; posting refused, reports 0600). --share-net exposes abstract AF_UNIX sockets. Only the vendor binary is bound, so a script-launcher install fails closed. The up-front --post-comment refusal (comment 15) is deferred. The agy auth probe stays unconfined because it sends no prompt.
+  created_at: 2026-11-27T19:53:07.400158751Z
+  modified_at: 2026-11-27T19:53:07.400158751Z
+  session_id: 01a21e699afd
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe

@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-27T19:22:20.817903800Z
+modified_at: 2026-11-27T19:49:15.339360342Z
 req_type: Bug
 tags:
 - lanes
@@ -42,6 +42,32 @@ comments:
     - Override at launch: `queue work` does not get its own flag (13 call sites of `handle_queue_work`); its refusal names `aida queue rework <SPEC> --despite-approval <reason>`, whose recorded comment the launch gate honors for that exact PR+head. Acceptable?
   created_at: 2026-11-27T19:22:20.817903800Z
   modified_at: 2026-11-27T19:22:20.817903800Z
+  session_id: 01a21e6d2fde
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21e8e-0bcb-79d3-906d-532e88c7b760
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3d7f80b08c (diff origin/main...HEAD: new `aida-cli-lib/src/rework_approval_gate.rs`, wiring in `queue_cmd/rework.rs`, `queue_cmd/work.rs`, `queue_cmd_args.rs`, `lib.rs`, help golden, store-writer inventory row).
+
+    ### Acceptance evidence
+    - AC1 [behavioral-test]: `rework_approval_gate::tests::approved_at_head_is_refused_naming_the_approval_and_override` checks that the refusal names PR-N, head sha, reviewer, recorded_at and `--despite-approval`. `check_rework` runs in `handle_rework_entry` before the ruling or any other write (covers `aida queue rework` and `aida rework`).
+    - AC2 [behavioral-test + wiring]: `check_launch` runs in `handle_queue_work` right after the BUG-2500 waiting gate whenever the pickup resolves an open rework change (`--force-claim` on a PR branch). Only an override comment bound to that exact `PR-N@head` admits it (`despite_approval_admits_records_and_binds_to_the_head` asserts `Gate::Overridden` from the recorded comments and that a moved head is not overridden).
+    - AC3 [behavioral-test]: older head admits, sweep-pending admits, override admits and records (all in the 3 module tests). Targeted run: 4 passed (3 gate tests + help_surface_matches_golden_snapshot).
+
+    ### Probe findings and fixes
+    - Deep-pass found a regression risk: the landing reconciler (`land.rs` Conflict / CiFailed → DispatchRework → `queue work --force-claim`) reworks APPROVED changes that cannot land. Fixed: the forge head read also reports mergeability (`change_status`) and CI at the head commit; a known conflict or failed CI admits the round (tested).
+    - sha comparison is case-insensitive and accepts a ≥7-char abbreviation; `unverifiable` records carry no sha and never refuse.
+    - Conflicting evidence at the same head: the newest wins, and on a timestamp tie a non-approval wins, so ambiguity never refuses.
+    - The store-writer ratchet flagged the new comment writer; the inventory row was added.
+
+    ### Residual risks
+    - Fails open when the forge head cannot be read (warning printed). This matches the status quo and never blocks a lane on a forge outage.
+    - `queue work` has no flag of its own; its refusal points at `aida queue rework <SPEC> --despite-approval "<reason>"`, and the launch gate honours that recorded comment. This keeps the 13 `handle_queue_work` call sites unchanged.
+    - `queue rework` now does one extra open-change lookup, but only when some approval exists does it make the head/CI forge calls.
+    - Changed lines (~520) exceed the brief's 300 budget, mostly tests and the module doc. The help golden accounts for 43 of them.
+  created_at: 2026-11-27T19:49:15.339360342Z
+  modified_at: 2026-11-27T19:49:15.339360342Z
   session_id: 01a21e6d2fde
   harness_version: 2.1.319 (Claude Code)
 history:
