@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T03:58:46.370805147Z
+modified_at: 2026-11-27T04:44:01.953809540Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -66,6 +66,22 @@ comments:
     - agy has no review runner today, so nothing to flag for it.
   created_at: 2026-11-27T03:58:46.370805147Z
   modified_at: 2026-11-27T03:58:46.370805147Z
+  session_id: 01a21b24f112
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b51-4a21-7c53-83e3-eccad84d4730
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cf3e1770fe (git diff origin/main...HEAD; 5 files).
+
+    Acceptance evidence (Refs slice: AC3 + AC2's outward half; AC1 deferred):
+    - AC3 [behavioral-test]: `ReviewVendor.no_read` (vendors/review_runner.rs: claude true, codex false); `RunnerCall::no_read` is false for AIDA_REVIEW_RUNNER_CMD. review_prepare.rs collects every unconfined finder/challenger label after the runs, and `ensure_no_read_runners` refuses before `pr_forge`/`post_review_comment`, after --write and --sarif. Tests: review_prepare::tests::bug2783_unconfined_runner_review_is_never_posted (end to end through handle_review_prepare + a fake glab: refusal, no note posted, report and SARIF written; claude run posts) and launch::review_runner::tests::s3a_runner_spawn_contract (flag values). Both pass on this host (lane jobs, 30/30 and 1/1).
+    - AC2 [behavioral-test]: same e2e test plants $HOME/.ssh/id_test, a diff telling the reviewer to quote it (asserted present in the prompt), and a runner that reads it. Canary is absent from the forge and the error. NOT met yet: canary absent from the local report/SARIF. That needs AC1, and the test pins the gap (report contains canary) so AC1 flips it.
+
+    Probes: (1) labels compared exactly, deduped across passes. (3) 0/1/2 runners: no-run paths (--anchor-findings, plain prepare) leave the list empty and post as before. (5) fail-open: an error in any runner returns before posting; no existing test weakened; the refusal path is tested.
+    Residual risks: the refusal fires before --fail-on/coverage errors, so it replaces their message (exit stays non-zero). Findings imported via --anchor-findings are not provenance-checked. --adversarial with a claude finder usually picks codex as challenger, so it now can't post. claude's no-read rests on --tools "" and has no live probe.
+  created_at: 2026-11-27T04:44:01.953809540Z
+  modified_at: 2026-11-27T04:44:01.953809540Z
   session_id: 01a21b24f112
   harness_version: 2.1.319 (Claude Code)
 history:
