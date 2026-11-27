@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: when the lane's fast-gate receipt for the branch reads fail, salvage pushes to salvage/<lane> (never the PR branch) and the salvage note/comment says why (red fast-gate receipt, naming it).
   - AC2: tests: red receipt -> salvage/<lane> and PR branch untouched; green or absent receipt -> PR branch as before.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T20:32:51.510318735Z
+modified_at: 2026-11-27T20:50:40.934231792Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -74,6 +74,12 @@ comments:
   created_at: 2026-11-27T20:32:51.510312631Z
   modified_at: 2026-11-27T20:32:51.510312631Z
   session_id: 01a21e9e1a91
+- id: 01a21ec6-497f-71f2-9043-0078e30bee0d
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-27T20:50:41.151259231Z
+  modified_at: 2026-11-27T20:50:41.151259231Z
+  session_id: 01a21ec400d1
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe
@@ -101,6 +107,14 @@ history:
   session_id: 01a21e9e1a91
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21ec6-497f-71f2-9043-006958ecde21
+  author: aida-orchestrator
+  timestamp: 2026-11-27T20:50:41.151256438Z
+  session_id: 01a21ec400d1
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
@@ -108,3 +122,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8e06142ac48
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'TASK-3928: AC1 verified by bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref (a red receipt leaves the PR branch at its head, pushes to salvage/<id>, and the note and PR comment name the receipt path). AC2 verified by that test plus bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch (pass and absent receipts fast-forward the PR branch, no salvage ref). The veto sits before the PR-head guard in guarded_push, and require_publication_branch still runs before the push. failed_receipt matches refuse_failed_gate''s semantics: fail-closed on a read error, disk-full fails reclassified as skipped. The one blocking finding is that the fail-closed unreadable-receipt path in the gate has no test (ADR-76 untested-path); there is also a wording nit. The head is 1 commit behind main, and that base commit (python tests, store mutation) does not touch the reviewed code. CI was pending at review time.'
+  recovery_hint: address the review findings, move TASK-3928 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-27T20:50:40.934231792Z
