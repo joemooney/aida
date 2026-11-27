@@ -63,7 +63,8 @@ pub(crate) fn command_output_with_timeout_capped(
 
 /// [`command_output_with_timeout_detail`] with the spawn error kept: `Err`
 /// carries its errno (ENOENT, EACCES); `Ok` never holds
-/// [`BoundedCommandOutput::SpawnFailed`]. trace:STORY-3120 | ai:claude
+/// [`BoundedCommandOutput::SpawnFailed`].
+// trace:STORY-3120 | ai:claude
 pub(crate) fn command_output_with_timeout_io(
     cmd: std::process::Command,
     timeout: std::time::Duration,

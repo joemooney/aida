@@ -22891,8 +22891,8 @@ Options:
           Reasoning effort for the `--adversarial` challenger
 
       --challenger-agent <AGENT>
-          Challenger agent for `--adversarial`: `claude` or `codex`. Overrides the automatic pick,
-          which commit `[AI:<tool>]` tags steer
+          Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic
+          pick, which commit `[AI:<tool>]` tags steer and which never chooses agy
 
       --sarif <PATH>
           Write a SARIF 2.1.0 report inside the repository
@@ -56379,7 +56379,7 @@ Working on aida itself
       {
         "name": "challenger-agent",
         "takes_value": true,
-        "help": "Challenger agent for `--adversarial`: `claude` or `codex`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer"
+        "help": "Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never chooses agy"
       },
       {
         "name": "challenger-effort",

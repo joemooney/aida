@@ -303,9 +303,74 @@ The optional CLI ledger check accounts for each reviewable file as reviewed or s
    - Resolves quoted `existing_code` snippets to exact 1-based `(start_line, end_line)` spans against the pinned target git revision (`git show <sha>:<path>`). A separate library-only verifier checks `[[obs-NNNNNN]]` evidence citations.
    - Also supports full-directory audits without a git diff via `aida review prepare --scan --path <dir>` for `/aida-code-review`.
 
+### Running the review with an agent (`--run-review`)
+
+`aida review prepare --pr <N> --run-review` (or `--from <REF> --run-review`) sends each batch to a review agent, then anchors its findings to exact lines. It needs a range: `--pr` or `--from`. Workspace, commit and scan modes are refused. `.aida/review-rules.toml` and the project's `[agents]` reviewer seat are read from the merge base, never from the change under review, so a change cannot loosen its own review. Your global `~/.aida/agents.toml` also applies to the seat.
+
+The finder agent is chosen in this order:
+
+1. `--agent claude` or `--agent codex`.
+2. `AIDA_REVIEW_RUNNER_CMD`, when set and non-empty: your own command runs both passes, with `AIDA_REVIEW_PASS` set to `review` or `challenger`.
+3. `vendor` in `[agents]`: the project's `.aida/agents.toml`, then `.aida/config.toml`, then your `~/.aida/agents.toml` (claude or codex only).
+4. claude, the built-in default.
+
+The command prints the agent it picked and where the choice came from, for example `run review: using claude from [agents] vendor`.
+
+A finding outside the inventory, a finding or coverage row outside its batch, unparsable agent output or a failed finder run refuses the whole run. A file the agent does not report as reviewed stays unaccounted, so coverage verification fails.
+
+### Reasoning effort (`--effort`, `--challenger-effort`)
+
+The finder's effort is the first of these that is set:
+
+1. `--effort <LEVEL>`.
+2. `AIDA_REVIEW_EFFORT`.
+3. `default_effort` in `.aida/review-rules.toml` at the merge base.
+4. The effort of the `[agents]` reviewer seat for that vendor.
+
+The model follows the same order with `--model`, `AIDA_REVIEW_MODEL` and `default_model`.
+
+Every level, from every source, is checked against an allowlist before any agent starts. A bad value refuses the run even when a higher source overrides it. claude accepts `low`, `medium`, `high`, `xhigh` and `max`. codex and a custom `AIDA_REVIEW_RUNNER_CMD` accept `low`, `medium`, `high` and `xhigh`. A model name is up to 128 characters of letters, digits and `._:/-`, and cannot start with `-`.
+
+The challenger's effort uses its own order: `--challenger-effort`, `AIDA_REVIEW_CHALLENGER_EFFORT`, `challenger_effort` in `.aida/review-rules.toml`, then the challenger vendor's reviewer seat. It is checked against the challenger vendor's allowlist. The finder's flags, variables and defaults never reach the challenger, so one vendor's model is never passed to another.
+
+### Adversarial challenge (`--adversarial`, `--challenger-agent`)
+
+With `--adversarial`, a second agent tries to reproduce each finding and refutes the ones the code does not have. Refuted findings are listed apart with the challenger's reason and marked suppressed in SARIF.
+
+AIDA picks the challenger from the installed vendors. It prefers a vendor that is not named in the change's `[AI:<tool>]` commit tags and is not the finder's vendor. When no installed vendor qualifies, the finder's own vendor challenges, and the report's Note says so: a same-vendor challenge is weaker evidence than a cross-vendor one. Under `AIDA_REVIEW_RUNNER_CMD`, your command runs the challenger pass too.
+
+`--challenger-agent claude|codex` is the operator's override. It wins over the automatic pick, so no commit tag in the change can steer it. The report's Note records the override. When the override is the finder's own vendor, the Note, the bundle and the progress message label it `same-vendor challenger (<vendor>)`, the weaker evidence described above. It is refused when that vendor is not on PATH, and it does not apply under `AIDA_REVIEW_RUNNER_CMD`.
+
+### Partial review: challenger unavailable
+
+When the challenger cannot run (signed out, rate-limited, not installed) or answers with output that cannot be parsed, the finder's work is kept. AIDA does not call the challenger again for the later batches. Every finding it did not judge is marked unchallenged: the report lists it as Unchallenged, and SARIF gives it the property `unchallenged: true`. The report also shows `challenger: unavailable (<cause>)`, with the cause as inert text.
+
+The `--write` report, the SARIF file and any `--post-comment` are still written. The run then exits with code 4, so a partial review never reads as a clean adversarial pass. The error names the challenger, and for claude or codex it suggests `--challenger-agent` to pick another vendor.
+
+### Gating (`--fail-on`) and exit codes
+
+`--fail-on <critical|high|medium|low>` fails the run when any finding meets or exceeds that severity. It needs `--run-review` or `--anchor-findings`. Refuted and unchallenged findings still count: a challenger can explain a finding but cannot silently clear a gate. A finding with an unknown or empty severity counts as `critical`.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | The review completed and no gate failed. |
+| 1 | `--fail-on` matched, coverage verification failed, or the run was refused. |
+| 3 | Not used by `aida review prepare`. It is the `--auto-complete` drive's hard failure. |
+| 4 | Partial review: the challenger was unavailable. The finder report and SARIF are still written. |
+
+When `--fail-on` matches and the challenger was also unavailable, exit code 1 wins. No other `aida review prepare` path exits 4.
+
+### Output paths and scan paths
+
+`--write` and `--sarif` must point inside the repository. A relative path starts at the project root. An absolute path outside the repository, a path with `..`, and a path into `.git` are refused, and no symlink is followed.
+
+`--scan --path <DIR_OR_FILE>` takes relative paths inside the repository. A path that starts with `-`, contains `..` or is absolute is refused. Paths are passed to git as literal pathspecs, so `*`, `?`, `[` and `:(...)` match only files with those characters in their names and are never treated as globs or pathspec magic.
+
 ### Posting the report (`--post-comment`)
 
 `aida review prepare --pr <N> --post-comment` posts the Markdown report as a comment on change N. Posting is outward-facing, so it happens only when you pass the flag. It is refused without `--pr`, and no environment variable, review-rules setting, seat or CI default turns it on.
+
+It is also refused when agy is the finder or the challenger. agy's tool confinement in print mode has not been verified, and it may read files outside the review, so its output is not published. For the same reason the automatic challenger pick never chooses agy; name it with `--challenger-agent agy`.
 
 The comment goes through AIDA's forge client for the origin, the same one that reads the `--pr` metadata. AIDA makes no separate forge CLI or HTTP call for it.
 
