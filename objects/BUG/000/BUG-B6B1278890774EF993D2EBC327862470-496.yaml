@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-26T21:28:35.773477802Z
+modified_at: 2026-11-27T15:21:59.954960091Z
 req_type: Bug
 tags:
 - forge
@@ -294,6 +294,11 @@ comments:
   created_at: 2026-11-26T21:28:35.773474504Z
   modified_at: 2026-11-26T21:28:35.773474504Z
   session_id: 01a2195b4efd
+- id: 01a21d99-5d93-7750-9dd4-27a333cbdc68
+  author: joe
+  content: 'DEFERRED FOLLOW-UP from #4464 r1 review (approved @5966f423; test gap): bug2735_low_budget_backoff_never_resumes_a_stale_retained_journal (story_1690_train_tests.rs:6660) tests recovery_request and ForgeRails::resume_for directly, not pr_train_handler_with_dispatch_ctx (pr_train.rs:5324-5389). Rewiring the handler (passing &candidates instead of `requested`, or dropping the `else Outcome::default()` arm) would still pass. The behaviour at head fails safe. Add a handler-level test.'
+  created_at: 2026-11-27T15:21:59.954960091Z
+  modified_at: 2026-11-27T15:21:59.954960091Z
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
