@@ -148,6 +148,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2759 slice 2 (completing). Base main 956b13f4, 1 commit, 2 files (remote_create.rs incl. inline #[cfg(test)] module; store-writers.toml). CI pending at review time. AC walk: AC1 PARTIAL — merge-refusal reason text verified by reconcile_refusal_displays_merge_validation_cause (slice 1) and bug_2759_consent_gate_skips_emails_every_hub_already_has (names the new email and the hubs that lack it); push-race reason text UNVERIFIED: no test asserts the race-exhausted message (remote_create.rs:2974) or the retry warning (:2650). AC2 verified by bug_2759_reconcile_retries_once_after_a_concurrent_push (a real second-clone push between union and push; both writes land on both hubs, raced==1); the 2-attempt bound itself (every attempt raced) has no test. Comment-7 slice ACs: (1) gate flags only emails the receiving hub lacks — verified by the consent test (known email on both hubs passes after scrub; new email refused); (2) message no longer says ''one hub only'' — verified (same test); (3) agent-mode cause chain — verified by bug_2759_agent_error_block_keeps_every_cause, which renders through agent_error_block with the same {:?} msg cli_entry.rs:213 builds. Deep pass: the gate stays fail-closed (git grep failure or no match leaves hub_has empty; both sides use emails_in on ''+''-stripped lines so the tokens agree); only NonFastForward is retried; the retry re-runs the full lock, merge and validate path including the consent gate; dry-run never returns Raced. The store-writers inventory follows the moved sinks. Type protocol: BUG-2759 bug protocol ''PR touches at least one test file'' — met (inline test module in remote_create.rs, three new tests). Verdict request-changes: AC1 is claimed (completing trailer) but its push-race reason text has no asserting test.. No triage reason was given.'
   created_at: 2026-11-27T02:18:56.055753729Z
   modified_at: 2026-11-27T02:18:56.055753729Z
+- id: 01a21acc-9f51-7040-96f2-e74eb956e152
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2759):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2b87920bb9e1
+    Recorded: 2026-11-27T02:17:55.388830998+00:00
+    Findings:
+    1. AC1 unmet: the spec requires 'a test asserts the reason text for at least the push-race and merge-refusal paths'. No test asserts the push-race reason text. bug_2759_reconcile_retries_once_after_a_concurrent_push covers only the successful retry. Neither the race-exhausted failure line (remote_create.rs:2974, 'rejected — a concurrent push moved it again after 2 reconcile attempts') nor the retry warning (:2650) is checked. Fix: add a test whose push closure races origin on every call. Assert that reconcile_with_push errs after exactly RECONCILE_ATTEMPTS passes, that the reported failure names origin and the concurrent-push cause, and that the push seam was called twice for origin. The same test also covers AC2's bound.
+    2. The returned error on push failure (remote_create.rs:3016) says only 'the union is committed locally but N hub(s) did not receive it — re-run ... once they are reachable'. It names no hub and no cause, and for a race that 'once they are reachable' wording is misleading. Per-hub causes reach only stderr or the JSON push_failures. Folding push_failures (joined with ' | ') into the bail message would keep the cause in the agent-mode error block too. Follow-up acceptable.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T02:19:07.473302213Z
+  modified_at: 2026-11-27T02:19:07.473302213Z
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
