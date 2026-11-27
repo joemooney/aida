@@ -8,13 +8,19 @@ description: |
   ## Acceptance
   - AC1: `aida doctor --lane-host` (and the lane-run STALE refusal) report "live binary N hours / M changes behind main; autobuild skipping since <time>: <reason from the autobuild log>" with the one command that clears it.
   - AC2: a test with a fake autobuild log showing consecutive skips and a stale live sha.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T20:19:35.870145030Z
+modified_at: 2026-11-27T20:34:04.208128773Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21eb6-f532-7aa2-b707-64d57cab2a57
+  created_at: 2026-11-27T20:34:04.208084385Z
+  created_by: dirtlab
 comments:
 - id: 01a21e9f-4084-7dc3-b559-eaaa585d367d
   author: dirtlab
@@ -51,6 +57,13 @@ comments:
   modified_at: 2026-11-27T20:19:35.870145030Z
   session_id: 01a21e9d26a1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21eb5-ce2b-7e32-8851-fc3d13cf4d7b
+  author: aida-publication-done
+  content: Implementer push c8a4fbf642a1 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T20:32:41.003635072Z
+  modified_at: 2026-11-27T20:32:41.003635072Z
+  session_id: 01a21e9d26a1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e61-052d-7350-9e36-a62f92671537
   author: joe
@@ -66,6 +79,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21eb5-ce2b-7e32-8851-fc2447af557d
+  author: aida-publication-done
+  timestamp: 2026-11-27T20:32:41.003631602Z
+  session_id: 01a21e9d26a1
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21eb6-e034-78b3-8fae-18df7ca000da
+  author: dirtlab
+  timestamp: 2026-11-27T20:33:51.156832082Z
+  session_id: 01a21e9d26a1
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21eb7-1be0-7de0-9dc1-9e0e7b88c700
+  author: dirtlab
+  timestamp: 2026-11-27T20:34:06.432479503Z
+  session_id: 01a21e9d26a1
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
@@ -73,3 +107,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8e06142ac48
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T20:33:50.065881285Z
+  implemented_by: dirtlab
