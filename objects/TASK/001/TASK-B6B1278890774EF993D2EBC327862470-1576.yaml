@@ -1,0 +1,24 @@
+id: 01a21e9b-5987-79c3-89aa-427cb45e1112
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1576
+agreed_id: TASK-3929
+title: 'Flake: bug2746_train_member_selection_alert asserts the first alert instead of the specific member-selection alert'
+description: |-
+  Advisor flake note 2026-11-27 02:35 (filed by product-15 13:10 per advisor 13:08). review_watch::train_service::bug2746_train_member_selection_alert panicked at review_watch_train_service.rs:32 (split_once on the alert body returned None; body lacked 'review-watch updating PR-4502, age ') in CI lib-0 for #4736 (run 45968999152, job 140404575504); passed on rerun.
+
+  ## Acceptance
+  - AC1: the test selects the specific member-selection alert (by kind/subject), or waits boundedly for the holder line, instead of taking the first alert; no sleep-based timing.
+  - AC2: the fix is test-only unless the alert ordering is a real product bug (then say so in the PR).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T20:03:47.207632415Z
+modified_at: 2026-11-27T20:03:47.207632415Z
+req_type: Task
+filed_at:
+  code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac48
+  vendor: claude
