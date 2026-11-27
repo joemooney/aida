@@ -14,11 +14,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T00:11:01.401467663Z
+modified_at: 2026-11-27T00:13:04.036399217Z
 req_type: Task
 tags:
 - lanes
 - mailbox
+comments:
+- id: 01a21a59-798e-7761-93cc-a156d5673f6d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:13):
+    # TASK-3922: the BUG-2778 follow-up (advisor-122 binding 15:16; product-15). Lane: CLAUDE. MAIN, NEW branch task-3922-salvage-idempotent (cut from main AFTER #4693 BUG-2778 landed). <=200 lines. Completing (TASK-3922) trailer.
+    READ: `aida show TASK-3922` (AC1-AC3) and the landed BUG-2778 change (`git log --grep BUG-2778 origin/main`). AC1 idempotent salvage per clone+head; AC2 the refusal names the stop/restart command per pid; AC3 wiring tests (guard.rs mapping + both dispatch.rs call sites).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-27T00:13:04.036399217Z
+  modified_at: 2026-11-27T00:13:04.036399217Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
