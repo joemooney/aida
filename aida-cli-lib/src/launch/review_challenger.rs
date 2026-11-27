@@ -36,7 +36,7 @@ pub(crate) struct AdversarialSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     /// Why the challenger could not run; set, the report is partial.
-    /// trace:STORY-3120 | ai:claude
+    // trace:STORY-3120 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub challenger_unavailable: Option<String>,
     /// Finder findings the challenger never judged. They still gate.
@@ -102,7 +102,8 @@ fn pick_challenger(
 /// deadline and caps, with its own vendor, pass name and validated tuning.
 /// `forced` is the operator's `--challenger-agent`: it wins over the pick,
 /// so no `[AI:<tool>]` tag in the change can steer it, and is refused when
-/// it is not installed. trace:STORY-3120 | ai:claude
+/// it is not installed.
+// trace:STORY-3120 | ai:claude
 pub(crate) fn challenger_call<'a>(
     finder: &RunnerCall<'a>,
     authors: &BTreeSet<&str>,
@@ -169,7 +170,8 @@ struct Verdicts {
 
 /// The one verdict object in untrusted challenger output, found by running a
 /// JSON parser from each `{` (no slicing, so stray braces cannot panic).
-/// None, or a second one, is an error. trace:BUG-2779 | ai:claude
+/// None, or a second one, is an error.
+// trace:BUG-2779 | ai:claude
 fn find_verdicts(raw: &str) -> Result<Verdicts> {
     let parse_at = |at: usize| {
         let mut stream = serde_json::Deserializer::from_str(&raw[at..]).into_iter::<Verdicts>();
@@ -305,7 +307,8 @@ mod tests {
 
     /// Untrusted challenger output never panics: stray, reversed or missing
     /// braces refuse the challenge, and braces inside strings or prose around a
-    /// fenced block still parse. trace:BUG-2779 | ai:claude
+    /// fenced block still parse.
+    // trace:BUG-2779 | ai:claude
     #[test]
     fn bug2779_untrusted_challenger_output_fails_closed() {
         let one = || vec![finding("real")];
@@ -454,7 +457,8 @@ mod tests {
 
     /// `--challenger-agent` beats the pick whatever the commit tags claim,
     /// and an override that is not installed, or under a custom runner, is
-    /// refused instead of silently replaced. trace:STORY-3120 | ai:claude
+    /// refused instead of silently replaced.
+    // trace:STORY-3120 | ai:claude
     #[test]
     fn s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());

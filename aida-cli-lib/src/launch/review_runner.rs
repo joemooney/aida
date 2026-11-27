@@ -22,9 +22,9 @@ pub(crate) const STDERR_CAP: usize = 64 << 10;
 const RUNNER_CMD: &str = "AIDA_REVIEW_RUNNER_CMD";
 const BASE_ENV: [&str; 4] = ["PATH", "HOME", "LANG", "TERM"];
 /// The network route only: a proxied or sandboxed seat reaches its vendor API
-/// solely through these, and without them claude retries until the deadline
-/// (BUG-2775). trace:BUG-2775 | ai:claude
+/// solely through these, and without them claude retries until the deadline.
 /// Matched in either case, as curl and the vendor CLIs read both.
+// trace:BUG-2775 | ai:claude
 const PROXY_ENV: [&str; 4] = ["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY"];
 /// How much of a failed runner's stderr its error quotes.
 const STDERR_TAIL: usize = 600;
@@ -53,7 +53,8 @@ impl RunnerCall<'_> {
         found.map(|(_, v)| v.as_os_str())
     }
 
-    /// Whether `AIDA_REVIEW_RUNNER_CMD` replaces the vendor. trace:BUG-2775 | ai:claude
+    /// Whether `AIDA_REVIEW_RUNNER_CMD` replaces the vendor.
+    // trace:BUG-2775 | ai:claude
     pub(crate) fn runner_cmd_set(&self) -> bool {
         self.var(RUNNER_CMD).is_some()
     }
@@ -262,7 +263,8 @@ impl RunnerCall<'_> {
 }
 
 /// The last `STDERR_TAIL` bytes of `stderr` on one line, so an agent-mode
-/// error summary (its first line) keeps the cause. trace:BUG-2775 | ai:claude
+/// error summary (its first line) keeps the cause.
+// trace:BUG-2775 | ai:claude
 fn stderr_tail(stderr: &[u8]) -> String {
     let text = String::from_utf8_lossy(stderr);
     let lines: Vec<_> = text
@@ -578,7 +580,8 @@ mod tests {
 
     /// A runner that reads stdin to EOF and then waits on an answer gets EOF at
     /// once; one that prompts on the terminal fails at once naming the cause,
-    /// both far inside the deadline. trace:BUG-2775 | ai:claude
+    /// both far inside the deadline.
+    // trace:BUG-2775 | ai:claude
     #[test]
     fn bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());

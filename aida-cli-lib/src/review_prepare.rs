@@ -699,7 +699,8 @@ fn run_review_base<'a>(mode: &str, merge_base: Option<&'a str>) -> Result<&'a st
 /// Reviewable renames whose old path passes every inventory exclusion
 /// (secret, substrate, generated, user pattern); only those old paths reach
 /// a runner's diff. Inventory already drops such renames; this keeps the
-/// prompt safe on its own. trace:STORY-3120 | ai:claude
+/// prompt safe on its own.
+// trace:STORY-3120 | ai:claude
 fn rename_sources<'a>(
     inventory: &'a ClassifiedInventory,
     excludes: &[(&str, CompiledGlob)],
@@ -781,10 +782,12 @@ fn batch_prompt(
 }
 
 /// One-line runner error naming who ran, the pass, the batch and the whole
-/// cause chain: agent-mode errors keep only the first line. trace:BUG-2775 | ai:claude
+/// cause chain: agent-mode errors keep only the first line.
 /// A vendor challenger's failure also names the way out: it may be signed
 /// out or rate-limited, and `--challenger-agent` picks another vendor. Never
-/// under `AIDA_REVIEW_RUNNER_CMD`, where the flag does not apply. trace:STORY-3120 | ai:claude
+/// under `AIDA_REVIEW_RUNNER_CMD`, where the flag does not apply.
+// trace:BUG-2775 | ai:claude
+// trace:STORY-3120 | ai:claude
 fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyhow::Error {
     let (who, pass) = (call.label(), call.pass);
     let hint = if pass == "challenger" && call.vendor().is_some() {
@@ -796,7 +799,8 @@ fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyho
 }
 
 /// The finder's vendor: `--agent`, else none under `AIDA_REVIEW_RUNNER_CMD`,
-/// else `[agents] vendor` (claude or codex only), else claude, stated on stderr. trace:BUG-2775 | ai:claude
+/// else `[agents] vendor` (claude or codex only), else claude, stated on stderr.
+// trace:BUG-2775 | ai:claude
 fn run_review_agent(
     flag: Option<&str>,
     root: &Path,
@@ -933,7 +937,7 @@ struct Unchallenged {
 /// `aida review prepare` exits 4 when the challenger was unavailable: the
 /// report is the finder's alone. No other review-prepare path uses 4, so it
 /// never reads as `--fail-on` (1) or an `--auto-complete` hard failure (3).
-/// trace:STORY-3120 | ai:claude
+// trace:STORY-3120 | ai:claude
 pub(crate) const PARTIAL_REVIEW_EXIT_CODE: i32 = 4;
 
 /// Carries [`PARTIAL_REVIEW_EXIT_CODE`] past the top-level error printer.
@@ -1031,14 +1035,16 @@ fn collect_git_diff_entries(
 }
 
 /// Variables `git_text` keeps; GIT_DIR, GIT_CONFIG*, GIT_INDEX_FILE and the
-/// rest of the caller's environment never reach git. trace:STORY-3120 | ai:claude
+/// rest of the caller's environment never reach git.
+// trace:STORY-3120 | ai:claude
 fn git_env_kept(key: &std::ffi::OsStr) -> bool {
     let key = key.to_string_lossy();
     ["PATH", "HOME", "LANG", "XDG_CONFIG_HOME"].contains(&&*key) || key.starts_with("LC_")
 }
 
 /// Host git (seat-clone refusal, fsmonitor off, store pins) with only the
-/// `git_env_kept` part of the caller's environment. trace:STORY-3120 | ai:claude
+/// `git_env_kept` part of the caller's environment.
+// trace:STORY-3120 | ai:claude
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     let mut cmd = aida_core::git_ops::host_git_command(root);
     // The builder's own pins survive the clear; inherited variables do not.

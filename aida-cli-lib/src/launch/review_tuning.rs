@@ -164,7 +164,8 @@ fn seat_sources(
 /// challenger vendor's base reviewer seat; model only from that seat. The
 /// finder's `--effort`/`--model`, `AIDA_REVIEW_EFFORT`/`AIDA_REVIEW_MODEL` and
 /// `default_effort`/`default_model` belong to the finder's vendor and are never
-/// read, so one vendor's model never reaches another. trace:STORY-3120 | ai:claude
+/// read, so one vendor's model never reaches another.
+// trace:STORY-3120 | ai:claude
 pub(crate) fn resolve_challenger(
     agent: Option<&ReviewVendor>,
     parent_env: &[(OsString, OsString)],

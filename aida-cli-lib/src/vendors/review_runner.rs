@@ -11,7 +11,8 @@ pub(crate) struct ReviewVendor {
     pub program: &'static str,
     pub argv: &'static [&'static str],
     pub auth: &'static [&'static str],
-    /// Reasoning-effort levels this vendor accepts. trace:STORY-3120 | ai:claude
+    /// Reasoning-effort levels this vendor accepts.
+    // trace:STORY-3120 | ai:claude
     pub efforts: &'static [&'static str],
     /// Codex takes effort as a `-c` config override; the rest take `--effort`.
     pub effort_as_config: bool,
@@ -85,10 +86,11 @@ const CODEX: ReviewVendor = ReviewVendor {
 };
 
 /// The finder when neither `--agent` nor `[agents] vendor` names one.
-/// trace:BUG-2775 | ai:claude
+// trace:BUG-2775 | ai:claude
 pub(crate) const DEFAULT_REVIEW_VENDOR: &ReviewVendor = &CLAUDE;
 
-/// Every vendor with a hardened review contract. trace:STORY-3120 | ai:claude
+/// Every vendor with a hardened review contract.
+// trace:STORY-3120 | ai:claude
 pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 2] = [&CLAUDE, &CODEX];
 
 /// The review contract for `raw`. Unknown names, and vendors without a

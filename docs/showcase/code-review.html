@@ -287,7 +287,7 @@
 <div class="pres-dock" role="region" aria-label="Slide Deck Navigation Controls">
   <button class="pres-btn" type="button" onclick="stepSlide(-1)" title="Previous Slide (Left Arrow)">◀ Prev</button>
   <div class="pres-dots" id="pres-dots-container"></div>
-  <div class="pres-status" id="pres-status-label">01 / 06 · Overview &amp; Problem</div>
+  <div class="pres-status" id="pres-status-label">01 / 07 · Overview &amp; Problem</div>
   <button class="pres-btn" type="button" onclick="stepSlide(1)" title="Next Slide (Right Arrow)">Next ▶</button>
   <span style="color:#454d47;">|</span>
   <button class="pres-btn" id="dock-deck-btn" type="button" onclick="toggleDeckMode()" title="Toggle Single-Slide Presentation Mode (Shortcut: D)">▣ Slide Deck Mode</button>
@@ -308,6 +308,7 @@
       <a href="#slide-dogfood" onclick="goToSlide(3)">04. Self-Review Case Study</a>
       <a href="#slide-comparison" onclick="goToSlide(4)">05. Architecture Matrix</a>
       <a href="#slide-cli" onclick="goToSlide(5)">06. CLI &amp; Integration</a>
+      <a href="#slide-agent-run" onclick="goToSlide(6)">07. Agent Run &amp; Exit Codes</a>
     </nav>
     <div class="top-actions">
       <button class="btn-ghost" id="top-deck-btn" type="button" onclick="toggleDeckMode()" title="Present Slide-by-Slide (Shortcut: D)">▣ Present</button>
@@ -322,7 +323,7 @@
 <main id="top" class="shell">
 
   <!-- SLIDE 1: HERO & THE PROBLEM WITH RAW LLM CODE REVIEW -->
-  <div class="slide-section active-slide" id="slide-overview" data-slide-title="01 / 06 · Overview &amp; Problem">
+  <div class="slide-section active-slide" id="slide-overview" data-slide-title="01 / 07 · Overview &amp; Problem">
     <section class="hero">
       <div class="eyebrow">
         <span class="pulse-dot"></span>
@@ -447,7 +448,7 @@
   </div>
 
   <!-- SLIDE 2: THE FOUR DETERMINISTIC RUST PILLARS -->
-  <div class="slide-section" id="slide-pillars" data-slide-title="02 / 06 · Four Rust Pillars">
+  <div class="slide-section" id="slide-pillars" data-slide-title="02 / 07 · Four Rust Pillars">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -524,7 +525,7 @@
   </div>
 
   <!-- SLIDE 3: MODULAR PLAYBOOKS & WHOLE-FILE SUBSTRING FACETS -->
-  <div class="slide-section" id="slide-playbooks" data-slide-title="03 / 06 · Playbooks &amp; Facets">
+  <div class="slide-section" id="slide-playbooks" data-slide-title="03 / 07 · Playbooks &amp; Facets">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -613,7 +614,7 @@
   </div>
 
   <!-- SLIDE 4: DOGFOOD CASE STUDY — REVIEWING ITSELF -->
-  <div class="slide-section" id="slide-dogfood" data-slide-title="04 / 06 · Self-Review Case Study">
+  <div class="slide-section" id="slide-dogfood" data-slide-title="04 / 07 · Self-Review Case Study">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -703,7 +704,7 @@
   </div>
 
   <!-- SLIDE 5: ARCHITECTURAL COMPARISON MATRIX -->
-  <div class="slide-section" id="slide-comparison" data-slide-title="05 / 06 · Architecture Matrix">
+  <div class="slide-section" id="slide-comparison" data-slide-title="05 / 07 · Architecture Matrix">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -777,7 +778,7 @@
   </div>
 
   <!-- SLIDE 6: CLI REFERENCE & WORKFLOW INTEGRATION -->
-  <div class="slide-section" id="slide-cli" data-slide-title="06 / 06 · CLI &amp; Integration">
+  <div class="slide-section" id="slide-cli" data-slide-title="06 / 07 · CLI &amp; Integration">
     <section class="report-section">
       <div class="section-head">
         <div>
@@ -839,6 +840,73 @@ checklist = """
 - Verify every authority or lease check fails closed on missing files.
 - Require a negative unit test proving unauthorized callers are refused.
 """</code></pre>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SLIDE 7: AGENT-RUN REVIEW, ADVERSARIAL CHALLENGE & EXIT CODES -->
+  <!-- trace:STORY-3120 | ai:claude -->
+  <div class="slide-section" id="slide-agent-run" data-slide-title="07 / 07 · Agent Run &amp; Exit Codes">
+    <section class="report-section">
+      <div class="section-head">
+        <div>
+          <div class="section-num">07 / AGENT RUN, CHALLENGE &amp; GATES</div>
+          <h2>Running the Review: <code>--run-review</code>, <code>--adversarial</code> &amp; Exit Codes</h2>
+        </div>
+        <p class="section-desc">
+          <code>--run-review</code> sends each batch to a review agent and anchors its findings. <code>--adversarial</code> has a second agent reproduce or refute each one. Review settings come from the merge base, never from the change under review.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Agent Run &amp; Challenge</h3>
+              <p class="card-subtitle">NEEDS --PR OR --FROM</p>
+            </div>
+            <span class="badge badge-info">--run-review</span>
+          </div>
+<pre><code># Finder + challenger, gate on high, publish SARIF and a PR comment
+aida review prepare --pr 42 --run-review --adversarial \
+  --effort high --challenger-effort medium \
+  --fail-on high --sarif .aida/review.sarif \
+  --write .aida/review-pr-42.md --post-comment
+
+# Operator override of the challenger vendor
+aida review prepare --pr 42 --run-review --adversarial \
+  --challenger-agent codex</code></pre>
+          <table>
+            <tr><th>Setting</th><th>Resolution</th></tr>
+            <tr><td>Finder agent</td><td><code>--agent</code>, then <code>AIDA_REVIEW_RUNNER_CMD</code>, then <code>[agents] vendor</code>, then claude. The pick is printed on stderr.</td></tr>
+            <tr><td>Effort</td><td><code>--effort</code>, then <code>AIDA_REVIEW_EFFORT</code>, then <code>default_effort</code>, then the <code>[agents]</code> reviewer seat. claude: low to max; codex and custom runners: low to xhigh. Every source is validated.</td></tr>
+            <tr><td>Challenger effort</td><td><code>--challenger-effort</code>, then <code>AIDA_REVIEW_CHALLENGER_EFFORT</code>, then <code>challenger_effort</code>, then the challenger's seat.</td></tr>
+            <tr><td>Challenger agent</td><td>An installed vendor outside the change's <code>[AI:&lt;tool&gt;]</code> tags, preferring one other than the finder's. A same-vendor challenge is noted in the report. <code>--challenger-agent</code> is the operator's override.</td></tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Gates, Exit Codes &amp; Output</h3>
+              <p class="card-subtitle">REFUTED AND UNCHALLENGED FINDINGS STILL GATE</p>
+            </div>
+            <span class="badge badge-elite">--fail-on</span>
+          </div>
+          <table>
+            <tr><th>Exit</th><th>Meaning</th></tr>
+            <tr><td><code>0</code></td><td>Review completed, no gate failed.</td></tr>
+            <tr><td><code>1</code></td><td><code>--fail-on</code> matched, coverage failed, or the run was refused. Wins over 4.</td></tr>
+            <tr><td><code>3</code></td><td>Not used by review prepare: the <code>--auto-complete</code> drive hard failure.</td></tr>
+            <tr><td><code>4</code></td><td>Partial: challenger unavailable. The finder report and SARIF are still written, and its findings are marked unchallenged.</td></tr>
+          </table>
+          <p class="card-subtitle" style="margin-top:14px;">OUTPUT RULES</p>
+          <table>
+            <tr><td><code>--post-comment</code></td><td>Opt-in only and needs <code>--pr</code>. Capped at 60,000 characters with a truncation note naming the full report. Agent text is fenced, so it renders inert.</td></tr>
+            <tr><td><code>--write</code>, <code>--sarif</code></td><td>Paths must be inside the repository.</td></tr>
+            <tr><td><code>--scan --path</code></td><td>Literal pathspecs: no globs or pathspec magic.</td></tr>
+          </table>
         </div>
       </div>
     </section>
