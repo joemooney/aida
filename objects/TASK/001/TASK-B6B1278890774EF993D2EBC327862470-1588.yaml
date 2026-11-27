@@ -9,12 +9,12 @@ description: |-
   - AC1: reclaim_exited_branch_clone (queue_cmd/work.rs ~4251) retries do not write duplicate salvage: seat_clone salvage is idempotent per clone + head (skip when an identical salvage already exists).
   - AC2: when retries are spent on writers running a deleted/stale binary, the WriterAdmissionUnknown refusal names the exact stop/restart command for each pid instead of saying they 'should exit on their own'.
   - AC3: wiring tests: retire_with maps WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core mailbox_lifecycle/guard.rs ~214-224), and the two call-site predicates (dispatch.rs lane reuse, queue_cmd/work.rs rework reclaim) retry on it.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:17:10.601015886Z
-modified_at: 2026-11-27T23:17:10.601015886Z
+modified_at: 2026-11-27T23:25:31.734516700Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -25,6 +25,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:17:38.420329592Z
   changes: []
+- id: 01a21f54-0cd6-7df1-911d-5e8af3843263
+  author: aida-session-start
+  timestamp: 2026-11-27T23:25:31.734515886Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
   branch: main
