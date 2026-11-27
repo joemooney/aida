@@ -1,0 +1,31 @@
+id: 01a21ab0-5230-7d61-ad4c-687b24fd2e52
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1545
+title: 'Review follow-up: Doc drift: the unbound_claim_blocker doc comment (aida-cli-lib/src/coordination.rs ~line 7'
+description: |-
+  From BUG-2780
+  Reviewed sha: b6870d4561a3f7da48db859858bf9bf0bac64a7b
+
+  Doc drift: the unbound_claim_blocker doc comment (aida-cli-lib/src/coordination.rs ~line 703, condition 3) still says 'no lane record naming its claim id'; after this change a legacy claim (no or blank claim_id) is retained by any lane record whose spec or captured claim scope matches. Update the comment to name the scope match.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T01:48:12.720583685Z
+modified_at: 2026-11-27T01:48:12.720583685Z
+req_type: Task
+tags:
+- carried-from:BUG-2780
+- finding-hash:245070af
+- from-review:BUG-2780
+relationships:
+- rel_type: References
+  target_id: 01a21a12-17a9-7df3-8c1c-56f32be1995c
+  created_at: 2026-11-27T01:48:29.975248973Z
+filed_at:
+  code_sha: b6870d4561a3f7da48db859858bf9bf0bac64a7b
+  branch: pr-4705
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461b694e01
+  vendor: claude
+  session: 01a21aae3c30
