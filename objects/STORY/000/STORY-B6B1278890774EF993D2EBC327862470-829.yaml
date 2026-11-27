@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T07:18:25.780393869Z
+modified_at: 2026-11-27T07:56:21.722955657Z
 req_type: Story
 tags:
 - integration
@@ -1921,6 +1921,16 @@ comments:
   created_at: 2026-11-27T07:18:25.780385921Z
   modified_at: 2026-11-27T07:18:25.780385921Z
   session_id: 01a21bbb7a7d
+- id: 01a21c01-a57f-7982-9098-cb234612d177
+  author: joe
+  content: |-
+    PROMOTION PLAN SWAP (advisor 01:05):
+    - p54 = S5e #4721 + STORY-3202 #4716 r3. The advisor merges both into integration, then pings 'both in'.
+    - p55 = TASK-3869 #4727 after its rework (the advisor's final CR: open-before-classify, plus the flaky swap test).
+  created_at: 2026-11-27T07:56:21.722955657Z
+  modified_at: 2026-11-27T07:56:21.722955657Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
