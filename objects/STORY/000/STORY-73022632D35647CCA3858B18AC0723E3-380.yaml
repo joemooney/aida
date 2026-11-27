@@ -1,5 +1,6 @@
 id: 01a21a80-d033-7d03-94b9-54988efa4837
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-380
+agreed_id: STORY-3205
 title: 'Review PR-4702: [AI:claude] fix(mailbox): writer-admission retries reuse an identical salvage and name each writer''s stop/restart command (TASK-3922)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21a5d`) for branch `task-3922-salvage-idempotent`.
@@ -47,6 +48,12 @@ history:
   timestamp: 2026-11-27T00:56:46.860335413Z
   session_id: 01a21a5d2760
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21ac2-35f8-7fc1-ada4-cbab67163652
+  author: joe
+  timestamp: 2026-11-27T02:07:45.144477269Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 1e0b7323fcaa8ba2928dea62a3589b5640e0177a
