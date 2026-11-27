@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T04:28:09.456980053Z
+modified_at: 2026-11-27T04:32:43.140080470Z
 req_type: Story
 tags:
 - integration
@@ -1745,6 +1745,30 @@ comments:
   modified_at: 2026-11-27T04:28:09.456980053Z
   session_id: 01a21b3a8040
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21b47-614a-7a93-b5a3-c7f2fee7719f
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR #4721 (S5e docs, head 7d20434c4b): PASS on content. One open binding item needs an advisor decision.
+    - (B) Every .rs change is comment-only: 27 '/// … trace:' lines are demoted to a '// trace:' line after the doc block, and no code token changed (checked by grepping the diff for non-comment lines). The provenance hook passed without --no-verify, so promotions of this code no longer need the bypass.
+    - (A) Docs, spot-checked against the code:
+      - finder order: --agent, RUNNER_CMD, [agents] vendor, claude;
+      - effort and model order and the per-vendor allowlists;
+      - challenger effort isolation;
+      - the challenger pick, and the --challenger-agent override with its refusals;
+      - partial review: unchallenged marks, SARIF property, exit 4 after the outputs;
+      - the exit table 0/1/3/4, with fail-on winning;
+      - fail-on counting refuted and unchallenged findings;
+      - --write/--sarif inside the repo, and literal pathspecs.
+      These all match. No nested lists or italics.
+    - OPEN, binding: the 'unlabelled same-vendor --challenger-agent' finding (deferred from the #4690 review as binding in S5d) is still undelivered.
+      - challenger_call's forced note is '--challenger-agent picked X' even when X is the finder's vendor. The new docs say so honestly ('treat a challenger of the finder's own vendor as same-vendor'), but the label itself is missing.
+      - The lane calls it a behaviour change, out of scope for a docs slice.
+      - Suggested fix, about 5 lines plus a test: when forced.program == finder vendor, the note reads '--challenger-agent picked X (same vendor as the finder: weaker evidence)'.
+      - Advisor to rule: fold it into S5e (which makes it more than docs-only), or a small S5f.
+  created_at: 2026-11-27T04:32:43.140080470Z
+  modified_at: 2026-11-27T04:32:43.140080470Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
