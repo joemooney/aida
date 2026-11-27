@@ -236,7 +236,8 @@ SECRET_RUN = re.compile(r'[A-Za-z0-9+/_=-]{32,}')
 
 
 def redact_secrets(line):
-    line = ''.join(ch if ch.isprintable() else '?' for ch in line)
+    # Keep the code span intact and terminal escapes off the operator's tty.
+    line = ''.join("'" if ch == '`' else ch if ch.isprintable() else '?' for ch in line)
     line = SECRET_BEARER.sub(r'\1 [REDACTED]', line)
     line = SECRET_ASSIGNMENT.sub(r'\1[REDACTED]', line)
     return SECRET_RUN.sub('[REDACTED]', line)
@@ -248,7 +249,7 @@ def preflight_refusal(returncode, lines, limit=20):
     text = 'contained requested-seat preflight refused (exit %s)' % returncode
     if tail:
         text += '; last %d probe output lines:\n' % len(tail) + '\n'.join(
-            '  `%s`' % redact_secrets(ln).replace('`', "'") for ln in tail)
+            '  `%s`' % redact_secrets(ln) for ln in tail)
     else:
         text += '; probe printed no output'
     return text[:LIMIT]
