@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T00:01:58.984252191Z
+modified_at: 2026-11-27T00:14:20.873574001Z
 req_type: Story
 tags:
 - integration
@@ -1564,6 +1564,20 @@ comments:
     - AC2 docs are deferred to S5e, which is acceptable: about 255 lines, under the 300-line cap.
   created_at: 2026-11-27T00:12:49.977603956Z
   modified_at: 2026-11-27T00:12:49.977603956Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21a5a-b110-7812-8b3d-d587a8ba15d0
+  author: joe
+  content: |-
+    ADVISOR RULING 17:16, binding in the S5d #4699 rework (in addition to MUST-1, the reconcile merge):
+    MUST-2: 'partial: challenger unavailable' gets its OWN exit code, 4.
+    - Add a dedicated EXIT_CODES row for it, labelled 'review prepare: partial, challenger unavailable'. No other review-prepare path may use 4.
+    - Restore code 3's label to '--auto-complete drive hard failure' only.
+    - Test: the partial path exits 4, and that code is distinct from the --auto-complete hard fail (3) and from --fail-on (1). --fail-on (1) still wins when both apply.
+    - The docs (S5e, AC2) list all three codes.
+    I checked origin/main's EXIT_CODES: 4 is unused. The codes in use are 0, 1, 2, 3, 7, 17, 18, the ship refusals from 20, 30–36, 40, 41, 124 and 143.
+  created_at: 2026-11-27T00:14:20.873574001Z
+  modified_at: 2026-11-27T00:14:20.873574001Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
