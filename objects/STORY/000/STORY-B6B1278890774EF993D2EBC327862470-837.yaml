@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T06:42:21.734540683Z
+modified_at: 2026-11-27T07:14:40.507002910Z
 req_type: Story
 tags:
 - containment
@@ -332,6 +332,19 @@ comments:
   content: 'dell1 agy HEADLESS AUTH FIXED (product-15 2026-11-26 23:42): agy chooses token storage by session type: a desktop (Remmina/Wayland) session uses the GNOME keyring; an SSH session uses FILE-based storage (cli.log: "Using file-based token storage because SSH session detected"). Joe''s first sign-in was in a desktop terminal (keyring only), so every lane / ssh run failed ("authentication required", later "authentication timed out" after a 60s OAuth wait). Joe then signed in from an ssh -t session, which wrote ~/.gemini/antigravity-cli/antigravity-oauth-token. VERIFIED: `ssh -n dell1 ''agy -p "Reply with exactly: OK" < /dev/null''` → OK in 7s. For STORY-3202 AC(B) (the lane-host doctor auth probe): detect this exact split and name the fix ("sign in once from an ssh session: ssh -t <host> agy").'
   created_at: 2026-11-27T06:42:21.734540683Z
   modified_at: 2026-11-27T06:42:21.734540683Z
+- id: 01a21bdb-34fb-7bc0-a3ca-be8326f61e1c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 85cf214599 (r3, security ruling 22:19)
+    Fixes: (1) review_prepare.rs:331 passes the TrustedBase, not &project_root; run_review_agent (review_prepare.rs:826) resolves the default via review_tuning.rs:138 trusted_default_vendor = base-revision .aida/config.toml + .aida/agents.toml blobs + ~/.aida/agents.toml. The checkout under review is never read. (2) agy is never a default: aida-core KNOWN_VENDORS already drops it; review_prepare.rs:840-854 also filters any resolved vendor with confinement_verified=false and prints a stderr note when trusted config names agy. Only --agent agy runs it. (3) Tests: story3202_pr_checkout_vendor_never_picks_the_finder (checkout vendor=agy and vendor=codex leave the finder on claude, no agy note, committing the file refuses the review), story3202_unverified_vendor_is_refused_as_a_default (agy in base config.toml, base agents.toml or global -> claude + note; --agent agy still works), bug2775 updated (trusted codex is honoured). All are PATH/HOME isolated.
+    Probes: precedence agrees with aida-core (agents.toml > config.toml > global). Fail-closed: a trusted vendor that isn't recognised errors through review_vendor. Behaviour change: a gitignored per-clone .aida/agents.toml in the reviewing checkout no longer picks the finder for --run-review; use ~/.aida/agents.toml or --agent.
+    Evidence: 36 passed / 0 failed for the filter story3202 bug2775 review_prepare:: review_tuning:: (lane job j20261127T070910006-25-0).
+    Residual: other resolve_default_vendor callers (doctor, tui) still read the project root, which is fine for operator surfaces that aren't reviewing a PR.
+  created_at: 2026-11-27T07:14:40.507002910Z
+  modified_at: 2026-11-27T07:14:40.507002910Z
+  session_id: 01a21bbb7626
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
