@@ -277,8 +277,8 @@ pub(crate) struct Pushed {
 }
 
 /// Push the seat's committed `branch` as a fast-forward, from host git only:
-/// to the open PR's branch when there is one and the PR head guard allows
-/// moving it, otherwise to `salvage/<lane>`. Refuses a seat this checkout did
+/// to the open PR's branch when there is one, its fast-gate receipt is not
+/// red and the PR head guard allows moving it, otherwise to `salvage/<lane>`. Refuses a seat this checkout did
 /// not record, a branch its lease does not own, a punt or hold, an imported
 /// commit without a resolvable spec trailer, and a push that is not a
 /// fast-forward. The host import ref is always dropped.
@@ -313,8 +313,11 @@ fn guarded_push(
 ) -> Result<Pushed> {
     imported_trailers(main, staged, lane.spec, host.store)?;
     let mut pr_refused = None;
+    // A red or unreadable fast-gate receipt vetoes the PR branch as ship --from-seat does
+    // (BUG-2596), so the work goes to the salvage ref. trace:TASK-3928 | ai:claude
+    let red = crate::lane_fast_gate::failed_receipt(main, lane.branch).map(anyhow::Error::msg);
     let target = match lane.open_pr {
-        Some(pr) => match (host.pr_head)(main, lane.branch) {
+        Some(pr) => match red.map_or_else(|| (host.pr_head)(main, lane.branch), Err) {
             Ok(()) => lane.branch.to_owned(),
             Err(e) => {
                 let why = format!("PR #{pr} head not moved: {e:#}");
