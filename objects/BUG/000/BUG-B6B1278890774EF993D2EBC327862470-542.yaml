@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877077Z
-modified_at: 2026-11-27T03:30:50.156641846Z
+modified_at: 2026-11-27T03:56:22.016710482Z
 req_type: Bug
 tags:
 - lanes
@@ -41,6 +41,25 @@ comments:
   modified_at: 2026-11-27T02:34:05.542953720Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b25-a680-7f61-a2d8-cc507846621e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1d373bcd65 (git diff origin/main...HEAD, 10 files +625/-13)
+
+    Acceptance evidence:
+    - AC2 [behavioral-test]: LANE_JOB_CONTRACT (standalone_implementer.rs) now says commit+push BEFORE the final gate and re-push after a fix; implementer_prompt_names_the_sanctioned_path asserts the order. Dogfooded: this branch was pushed before the gate ran.
+    - AC1 [behavioral-test]: lane_salvage.rs. On a non-zero exit of a self-publishing seat-clone lane with committed, unpushed work (HEAD moved, origin not at HEAD, head_has_unpushed==Some(true); unknown means no), the host checks the seat is recorded, the lease owns the branch, and no punt/hold veto applies. It then bundles only the claimed branch through the seat sandbox and quarantines it in refs/aida/seat-import/<branch>. It verifies a fast-forward against a pinned remote head (merge-base --is-ancestor), pushes with no force to the open PR's branch or to salvage/<lease-id> when there is no PR, and always drops the host ref. Announced on the spec and PR as 'salvaged, unverified: final gate incomplete (<signal>)'. The attempt still finishes FailedAfterStart and mark_done refuses a non-clean exit, so it is never completed. Train eligibility stays head-bound (fresh CI + review at that head).
+    - AC3 [behavioral-test]: exit_cause names the signal (also 128+N wrapper codes) and what the launcher knows of its source; it is logged and appended to the attempt detail and result line. lane_job end line = '<id> <how> rc=N after Ns; target overlay-stale|overlay fresh'.
+    - AC4 [behavioral-test]: seat_clone::bug_2781_lane_salvage_tests: SIGTERM after commit leads to a push to salvage/<lane>; with an open PR the branch is fast-forwarded; uncommitted-only work pushes nothing and is retained; a non-fast-forward is refused and the commits are retained, with no import refs left. 9/9 targeted tests pass (lane job j20261127T034826097-25-0).
+
+    Probes: (5 authority) push requires recorded seat + owning lease + no veto + ff check, and git push has no '+', so a race is refused by origin. Fail-closed: unreadable seat state, origin Unknown or a bundle/fetch error means nothing is pushed. No existing test weakened. Only change to an existing test: seat_with_commit made pub(crate).
+
+    Residual risks: (1) salvage covers seat-clone lanes only; a plain-worktree self-publishing lane that is killed is still not salvaged. (2) The signal's source is not observed (no dmesg/OOM probe); the line says 'not recorded by the launcher' and points to journalctl -k for SIGKILL. (3) A salvaged PR head runs the host fast gate path like any self-pushed head. (4) Production lines are about 310, over the 250 budget, mostly doc comments. (5) make check-ci-source could not complete here: the lane runner accepts only cargo, a direct run dies at the 60s tool cap, and test_lane_autobuild fails on the sandbox's read-only /tmp (environmental). CI is the gate evidence.
+  created_at: 2026-11-27T03:56:22.016710482Z
+  modified_at: 2026-11-27T03:56:22.016710482Z
+  session_id: 01a21b0de4d7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
