@@ -324,14 +324,28 @@ fn check_report(
     opts: &CheckOptions<'_>,
     roots: impl FnOnce() -> Result<(PathBuf, PathBuf)>,
 ) -> Result<()> {
-    let (base, rows) = collect_report(opts, roots)?;
+    let mut main = None;
+    let (base, rows) = collect_report(opts, || {
+        let roots = roots()?;
+        main = Some(roots.1.clone());
+        Ok(roots)
+    })?;
+    // A manual train the auto-train yields its next train to. trace:BUG-2771 | ai:claude
+    let waiter = main
+        .as_deref()
+        .and_then(crate::admission_owner::manual_waiter)
+        .map(|w| w.describe());
     if opts.json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&render_json(base.as_deref(), &rows))?
-        );
+        let mut value = render_json(base.as_deref(), &rows);
+        if let Some(line) = waiter {
+            value["manual_waiter"] = serde_json::json!(line);
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
         print!("{}", render_text(base.as_deref(), &rows));
+        if let Some(line) = waiter {
+            println!("admission: {line}");
+        }
     }
     let not_eligible = rows.iter().filter(|r| !r.eligible).count();
     anyhow::ensure!(
