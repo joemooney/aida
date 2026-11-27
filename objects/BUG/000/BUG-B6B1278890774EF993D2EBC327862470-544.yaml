@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T10:04:50.182247879Z
+modified_at: 2026-11-27T10:05:32.367452785Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -152,6 +152,19 @@ comments:
   created_at: 2026-11-27T06:40:59.019172618Z
   modified_at: 2026-11-27T06:40:59.019172618Z
   session_id: 01a21b9e6990
+- id: 01a21c77-a29f-72d1-b9ad-2eb332f459aa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4731):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d6c58b648728
+    Recorded: 2026-11-27T06:49:40.793524825+00:00
+    Findings:
+    1. docs/review-process.md '### Posting the report (--post-comment)' still says the comment is refused only without --pr and that 'a run that fails still publishes its findings'; it does not mention the new refusal when the finder or challenger (codex, or AIDA_REVIEW_RUNNER_CMD) lacks verified no-read confinement. Add a sentence naming the refusal and that the local report and SARIF are still written.
+    2. aida-cli-lib/src/review_prepare.rs: the --anchor-findings path leaves `unconfined` empty, so findings produced out-of-band by an unconfined runner (e.g. a manual codex run on the injected diff) can be imported and posted with --post-comment without the refusal. This needs a deliberate operator two-step, not a diff-only bypass, and the implementer listed it as a residual risk; track it with AC1 (provenance of imported findings, or refuse --post-comment with --anchor-findings until confinement lands).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T10:05:32.191536985Z
+  modified_at: 2026-11-27T10:05:32.191536985Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
