@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:20:40.004099676Z
-modified_at: 2026-11-27T05:32:04.125094472Z
+modified_at: 2026-11-27T05:35:05.981084912Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -71,6 +71,25 @@ comments:
   modified_at: 2026-11-27T04:59:04.333254355Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b80-0afd-74b3-a319-c888185cfd03
+  author: dirtlab
+  content: |-
+    ## Implementer approach (slice 1, AC1)
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, aida-cli-lib `review_shadow::tests`)**: knob parse (default off, bool-only); knob off → no shadow spawned; knob on → a stub `aida` program receives exactly `review prepare --pr N --run-review --adversarial --agent claude --challenger-agent claude --json` (never `--post-comment`), and a whole-tree snapshot of the project before/after shows the ONLY new file is `.aida/review-shadow/runs.jsonl` (0600) — so nothing in `.aida/gate-ledger`, the store, merge holds; no forge write since `--post-comment` is never passed; cap of 2 (and real+shadow < max_concurrent) respected; a failing/exit-4 stub is logged as a row and never errors; finding text capped at 500 chars.
+    - AC2 (report) is slice 2 — not in this PR.
+
+    ### Expected files
+    - `aida-cli-lib/src/review_shadow.rs` (new), `aida-cli-lib/src/lib.rs` (mod), `aida-cli-lib/src/review_watch.rs` (one hook in the dispatch arm, skipped under `--once`), `docs/cli/07-project-setup.md` (knob doc).
+
+    ### Ambiguities / conflicts as questions
+    - "Counted inside the budget, never starve real reviews": I read this as shadows only use SPARE capacity (launch only when real active + shadow active < max_concurrent, and shadow < 2); real admission is unchanged so a shadow never delays a real review. A real review admitted later can briefly push the total over the cap while a shadow finishes.
+    - Shadow runs are threads of the long-running watcher; a `--once` pass launches none (it would exit before the row is written).
+  created_at: 2026-11-27T05:35:05.981084912Z
+  modified_at: 2026-11-27T05:35:05.981084912Z
+  session_id: 01a21b7cc357
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21872-4482-70c2-adeb-85e10a5821e5
   author: joe
