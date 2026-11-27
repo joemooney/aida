@@ -1,0 +1,31 @@
+id: 01a21f5c-d716-7110-8215-8117a7977b97
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-414
+title: 'Review PR-4769: [AI:claude] feat(review): aida review rule --fix-first records the rework verdict in one step (TASK-3923)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21f2b`) for branch `task-3923-rule-fix-first`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4769>
+  - Branch: `task-3923-rule-fix-first` → `main`
+
+  ## Covers
+
+  - TASK-3923
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4769` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T23:35:07.798217585Z
+modified_at: 2026-11-27T23:35:07.798217585Z
+req_type: Story
+filed_at:
+  code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee
