@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T22:34:34.306654965Z
+modified_at: 2026-11-27T22:58:24.551344040Z
 req_type: Task
 tags:
 - review
@@ -388,6 +388,25 @@ comments:
     - Valid UTF-8 names containing a backslash now display escaped (`a\\b`); required for injectivity. Acceptable?
   created_at: 2026-11-27T22:34:34.306654965Z
   modified_at: 2026-11-27T22:34:34.306654965Z
+  session_id: 01a21f22df4b
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21f3b-38a7-7622-824b-a4698d47fbb7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1ff82d81e3 (diff origin/main...HEAD: review_prepare.rs +176/-46, review_engine.rs +58/-2, ratchet-set.json +3/-1).
+
+    Acceptance evidence (AC4, behavioral): review_prepare::tests::t3869_non_utf8_path_round_trips_to_sarif — repo with b"caf\xe9.rs" + naïve.rs changed; --run-review inventories and batches both (prompt has File headers + added lines), anchoring reads the Latin-1 file at the revision (startLine 2, not the fallback 1), the Markdown report names it escaped (caf\xE9.rs), and the SARIF uri caf%E9.rs percent-decodes to the exact bytes; naïve.rs is unchanged. review_engine::tests::t3869_path_text_form_is_lossless_and_injective proves round trip + injectivity (incl. a literal backslash-x name vs the Latin-1 byte). Lane runs: review_prepare:: 35/35, review_engine:: 39/39. On origin/main the e2e test fails: git_text's from_utf8 rejects the -z diff output.
+
+    Design: path identity is an injective String encoding of raw bytes (valid UTF-8 verbatim, \ -> \\, invalid byte -> \xHH), not an OsString through aida-core's serde types and agent JSON (agents must name files in JSON strings anyway). Every git argument (batch diff, rename old path, rev:path show), confined open/lstat and SARIF uri use decoded bytes; git output carrying paths is parsed as bytes.
+
+    Probes: (1) keys/comparisons (stats map, inventory, batch membership, ensure_in_inventory) all compare the same encoded form; agent paths with lowercase hex fail closed as outside-inventory. (2) git -z output: no quoting; numstat/raw parsed on bytes. (3) rename old+new paths both decoded. (4) a valid name containing a backslash now displays doubled (needed for injectivity); a hand-written a\b decodes leniently to its own bytes, so the existing SARIF a%5Cb test holds. path_matches_any_scope now compares decoded bytes so an escape's backslash is never a separator. Remaining lossy calls are display-only: the batch patch text, git stderr, subcommand name in errors, and the pre-existing env key filter.
+
+    Fixes during review: registered the two new tests in scripts/ratchet-set.json (gate caught it); replaced a lossy decode I had first put in the scope matcher with a byte comparison.
+
+    Residual risks: diff exceeds the brief's 150-line budget (~280 changed incl. ~100 test lines); non-UTF-8 file CONTENT at a revision still errors as before (unchanged behavior, out of AC4 scope); rename with non-UTF-8 old path has code but no dedicated test.
+  created_at: 2026-11-27T22:58:24.551344040Z
+  modified_at: 2026-11-27T22:58:24.551344040Z
   session_id: 01a21f22df4b
   harness_version: 2.1.319 (Claude Code)
 history:

@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-27T22:30:49.821975212Z
+modified_at: 2026-11-27T22:56:38.194629438Z
 req_type: Task
 tags:
 - admission
@@ -143,6 +143,20 @@ comments:
   modified_at: 2026-11-27T22:24:14.455004128Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21f39-9932-7353-aa04-2b09bc31110e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (S1)
+    Reviewed HEAD: eb7b4c7038 (branch task-3920-s1-parked).
+    Scope: Parked type + parked/park(unpark) in pr_train_journal.rs; parked_recovery/park_recovery/parked_line in pr_train.rs; parked predicate + token ticket in acquire_mode, resume_train, yield_reason_before in admission_owner.rs; parked line in train-status (JSON parked_recovery + text) and pr train --check (text admission: line).
+    Evidence: task3920_review_watch_admits_while_recovery_parked (T1 admission half: review-watch admitted; manual train, land, ship, other auto-train refused naming the parked train; owner ticket passes an intent+waiter newer than position, not an older intent; forged ticket gets nothing), task3920_stale_parked_records_never_withhold (T5: dead, expired, future-dated, malformed after grace; live refuses; unreadable record refuses trains but never review-watch), task3920_parked_matches_exact_cars_and_unparks_by_token (Q1 exact car set; journal readers ignore the file; token-checked unpark). Neighbor suites admission_owner/task3924/pr_train_check/advisor_loop_service pass.
+    Probe fix: an unreadable record first refused/yielded review-watch too; now only train modes read it (fail closed for trains only).
+    Design notes: the ticket is the record token only; position is read from the live record (cannot be supplied by the caller) and only when the owner is this process. joining_train NOT widened for parked_live (run.lock is free in the gap, so review-watch is admitted without it; widening would let it join an unknown run.lock holder).
+    Residuals: park/resume_train/serialized/matches are dead in non-test builds until S2 (cfg_attr allow). Diff is ~410 changed lines (~260 production, ~150 tests), over the 300 target.
+  created_at: 2026-11-27T22:56:38.194629438Z
+  modified_at: 2026-11-27T22:56:38.194629438Z
+  session_id: 01a21f21a198
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe

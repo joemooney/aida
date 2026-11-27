@@ -15,12 +15,35 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:05:03.817488762Z
-modified_at: 2026-11-27T22:41:07.971700386Z
+modified_at: 2026-11-27T22:48:10.158483283Z
 req_type: Task
 tags:
 - advisor
 - review
 - train
+comments:
+- id: 01a21f31-d8ae-7173-a019-fceef7b00230
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 (behavioral): new `aida review rule <PR> --fix-first --reason TEXT` records a head-scoped FIX-FIRST row (who ruled + reason) in the train culprit record (`.aida/train-culprits.json` in the main worktree) at the PR's current forge head, and adds the ruling as a comment on each spec the PR covers. Re-running at the same head is a no-op. Refused under the standalone-implementer marker, with a rejected grant, or from any seat other than advisor/operator. Unit test in `review_rule.rs` (idempotency + refusal) — unit layer.
+    - AC2 (behavioral): `culprit::hold` / `check_one` report gate `fix-first` with the reason text and the ruler; naming the PR on `aida pr train` does not clear it. Tests: `story_2824_train_check_tests` (approved head -> ineligible, --check prints cause), `story_1690_train_tests` (culprit_admission refuses even when named) — unit layer with FakeChecks.
+    - AC3 (behavioral): the row is bound to the head; a new head is admitted (subject to normal review). Same tests assert a new head is eligible.
+    - AC4: the tests above.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_train_culprit.rs`, `pr_train.rs` (culprit_admission), `pr_train_check.rs`
+    - `aida-cli-lib/src/review_rule.rs` (new), `review_cmd_args.rs`, `review_cmd.rs`, module registration
+    - tests in `tests/story_2824_train_check_tests.rs`, `tests/story_1690_train_tests.rs`; help golden
+
+    ### Ambiguities / conflicts as questions
+    - AC1 allows verdict OR hold; I chose the head-scoped train hold because a request-changes verdict runs the rework/hold machinery and its text does not reach --check. Train-status (lock-only today) is not changed; --check carries the cause.
+  created_at: 2026-11-27T22:48:10.158483283Z
+  modified_at: 2026-11-27T22:48:10.158483283Z
+  session_id: 01a21f2b2fc0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21f2b-6783-7aa3-b3e1-2629a817ce3f
   author: aida-session-start
