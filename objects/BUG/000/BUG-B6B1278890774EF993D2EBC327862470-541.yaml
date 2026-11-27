@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:55:23.049530615Z
-modified_at: 2026-11-27T01:00:30.480850698Z
+modified_at: 2026-11-27T01:25:06.475228659Z
 req_type: Bug
 comments:
 - id: 01a21a15-9400-74a3-87c6-bf99b4c09def
@@ -50,6 +50,20 @@ comments:
   modified_at: 2026-11-27T00:55:26.674886622Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a9b-2b2b-7d03-8937-25053336489a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 45a5967022
+    AC1 [behavioral-test]: new aida_core::git_ops::worktree_dirty_state returns Clean/Dirty/Unknown(cause). Unknown covers git errors, an untrusted-gitlink refusal and a directory that is not its own worktree root. unbound_claim_blocker retains the claim on Unknown and the hint names the cause. Test bug2780_unbound_release_fails_closed_on_unreadable_state_and_legacy_claims corrupts .git/index.
+    Finding: the old bool probe already read git errors as dirty, so the fail-open in the description did not reproduce exactly. The real fail-open was a clone with no .git of its own inside a parent repo: git found the parent, where an ignored path reads clean. The worktree-root check now refuses it (nested-dir case in the test).
+    AC2 [behavioral-test]: VERIFIED that the challenger was only partly right. The absent-clone early return is safe, because lane records live in the clone (test: remove clone → released). With the clone present, though, a legacy claim (no or blank claim_id) never matched any lane record. That was a real widening, so it is fixed: lane_record_names_claim now matches legacy claims by scope (lane spec or captured claim scope). Test covers spec-match retention, the blank-id case, and the absent-clone release.
+    AC3 [behavioral-test]: clone_path must be absolute with no ./.. components (tested with a relative and a ..-bearing path). It is then canonicalized, and every probe reads the canonical path. Residual risk: no fixed lane-root containment check. Claims legitimately name primary checkouts, sibling worktrees and seat clones, so there is no single root to check against. Symlinked leaves are already refused as not a directory.
+    Validation: 8 targeted coordination tests passed (bug2780/bug2773/bug2697). Probe 5: every new branch fails closed, and no existing test was weakened.
+  created_at: 2026-11-27T01:25:06.475228659Z
+  modified_at: 2026-11-27T01:25:06.475228659Z
+  session_id: 01a21a83cee5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a12-6c3f-7730-9c6f-499787b1b8e0
   author: joe
