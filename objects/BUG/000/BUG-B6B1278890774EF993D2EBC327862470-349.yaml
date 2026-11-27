@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-27T01:10:44.972166530Z
+modified_at: 2026-11-27T02:44:08.530862351Z
 req_type: Bug
 tags:
 - landing
@@ -231,6 +231,19 @@ comments:
   modified_at: 2026-11-27T01:04:22.184595204Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21ae3-86d2-7053-9d3f-6caa2a1ed95c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3d6dc1e2a6 (slice 2, Refs).
+    Hot loop named: member gate Corpus step -> corpus_gate_bodies_at -> newest_verdict_event_for_merge -> standing_refusal_in_head re-read+re-parsed the bound change's WHOLE ledger (verdict_events) once per spec-keyed event on it, plus one git merge-base per event: O(events x ledger size). Fix: per-selection memo of 'bound change superseded' keyed by ChangeKey; per-decision memo of commit_in_head keyed by sha (head fixed). Neither outlives one corpus decision; refusal answers memoized as refusals.
+    Evidence [behavioral-test]: bug2584_member_gate_parses_each_sibling_ledger_boundedly (100 unrelated ledgers never read; 8 same-spec ledgers x 40 refusals = 5.3 MB: 236 MB read before, 22.6 MB after; member result equals the sibling-free gate); bug2584_judged_change_still_refuses_at_a_contained_commit (memo hit on a refused change still refuses). Step timing: the member gate phase now prints steps >=1s.
+    Probes: keys normalized (ChangeKey parse) on both sides; 0/1/N events per change covered; no fail-open (no new error paths; memo stores computed bool only); no tests weakened.
+    Residual: AC (<30s green-to-merge on the primary) not verified from the seat. Store loads (7 per gate in fixture, 12 on primary ~1.5s each) remain and alone exceed the AC across 9 gates; remaining fixture Corpus time is one git ancestry subprocess per distinct sibling refusal sha.
+  created_at: 2026-11-27T02:44:08.530862351Z
+  modified_at: 2026-11-27T02:44:08.530862351Z
+  session_id: 01a21a8b45de
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1daff-e2f5-7ce1-9f15-a0d8c0c25a15
   author: joe

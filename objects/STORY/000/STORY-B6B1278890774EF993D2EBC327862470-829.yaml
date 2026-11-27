@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T02:24:09.965265551Z
+modified_at: 2026-11-27T02:44:05.690149112Z
 req_type: Story
 tags:
 - integration
@@ -1680,6 +1680,15 @@ comments:
   modified_at: 2026-11-27T02:05:51.546673669Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21ae3-7bba-7df2-9b52-f0e66f65aa13
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fbac63c73c (S6, branch int-story-3120-s6). Acceptance evidence: [evidence: behavioral-test] s6_polyglot_and_hdl_playbooks_match_and_carry_checklists checks that each new playbook (c_cpp, java_kotlin, matlab, hdl_rtl) matches every extension and carries its checklist terms, that lookalike extensions (.mk .vue .svg .hs) do not match, and that content facets stay Rust-only. s6_junit_and_testbench_companions_share_a_stem checks FooTest/FooTests, src/test vs src/main mirroring, foo_tb/tb_foo, and module batching. review_engine: 38 passed (aida-core --lib). Adaptations from 32a7ebd9915: java became java_kotlin (.java .kt .kts, per the S6 addenda). The integration stem is directory-scoped (TASK-3880), so Maven src/test/<lang> is mirrored to src/main/<lang>; the reference's lowercase dir-less stem was not ported. Probe fix: the camel strip needs an alphanumeric boundary, so Foo_Test still maps to foo (it was foo_ before the fix; tested). Residual risks: .m also covers Objective-C, and .v covers Coq. These only pick the checklist, which is advisory. HDL tb/ vs rtl/ in separate dirs is not paired; only same-dir testbenches are. No runner, spawn or forge changes.
+  created_at: 2026-11-27T02:44:05.690149112Z
+  modified_at: 2026-11-27T02:44:05.690149112Z
+  session_id: 01a21ad0e211
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
