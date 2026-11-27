@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T06:09:18.926802822Z
+modified_at: 2026-11-27T06:24:10.227070Z
 req_type: Task
 tags:
 - admission
@@ -71,6 +71,14 @@ comments:
   modified_at: 2026-11-27T05:15:10.923880283Z
   session_id: 01a21b4b58e3
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21bac-f7f3-7393-9124-09d71d422a49
+  author: joe
+  content: |-
+    DEFERRED (#4728 approval @a4f7da72, final, 2026-11-26; product-15):
+    - Waiter identity is (exact PR list, parent-process identity) (admission_owner.rs queued_train_admission `mine`, retrier()). A retry of the same train from a DIFFERENT parent (another terminal, a deputy-submitted script, or the same PRs in a different order) counts as a new waiter and is refused "queued behind" its own earlier waiter until that parent exits or the 15-min TTL ends. Follow-up: key waiter identity on the normalized (sorted) PR set, and let an identical retry adopt its own waiter.
+    - AC1 says a recycled pid releases the waiter, but the tests cover only an exited child; add a same-pid, different-start-time (forged start time) owner case.
+  created_at: 2026-11-27T06:24:10.227070Z
+  modified_at: 2026-11-27T06:24:10.227070Z
 history:
 - id: 01a21b41-dd2f-7263-af2a-f110d621552d
   author: joe
