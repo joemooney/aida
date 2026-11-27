@@ -3397,6 +3397,27 @@ fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, 
     Ok((resolve(base)?, resolve(branch)?))
 }
 
+/// Environment config registering the `aida-json-union` merge driver (see
+/// `.gitattributes`) from MAIN's trusted checkout, restating the sandbox's
+/// hook and fsmonitor overrides because `GIT_CONFIG_COUNT` replaces them.
+// trace:BUG-2784 | ai:claude
+fn json_union_merge_config(main: &Path) -> [(&'static str, std::ffi::OsString); 7] {
+    let script = main.join("scripts/json-union-merge.py");
+    let quoted = format!("'{}'", script.to_string_lossy().replace('\'', r"'\''"));
+    [
+        ("GIT_CONFIG_COUNT", "3".into()),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath".into()),
+        ("GIT_CONFIG_VALUE_0", "/dev/null".into()),
+        ("GIT_CONFIG_KEY_1", "core.fsmonitor".into()),
+        ("GIT_CONFIG_VALUE_1", "false".into()),
+        ("GIT_CONFIG_KEY_2", "merge.aida-json-union.driver".into()),
+        (
+            "GIT_CONFIG_VALUE_2",
+            format!("python3 -I {quoted} %O %A %B").into(),
+        ),
+    ]
+}
+
 /// Host preparation of a rework. Clone Git runs only in AIDA's writable
 /// sandbox with the host identity; ordinary linked worktrees use host Git.
 /// Conflicts retain MERGE_HEAD and journaled paths; the lane edits files only.
@@ -3454,6 +3475,14 @@ fn prepare_rework_merge_with_base(
         ("GIT_COMMITTER_NAME", name.into()),
         ("GIT_COMMITTER_EMAIL", email.into()),
     ];
+    // Rework Git merges append-only JSON lists with the primary checkout's
+    // driver, never the seat's copy; a missing driver fails into a conflict.
+    // trace:BUG-2784 | ai:claude
+    let merge_env: Vec<(&'static str, OsString)> = identity
+        .iter()
+        .cloned()
+        .chain(json_union_merge_config(main))
+        .collect();
     let decode = |args: &[&str], bytes: Vec<u8>| -> Result<String> {
         let text = String::from_utf8(bytes).context("rework Git returned non-UTF-8 evidence")?;
         Ok(if args.contains(&"-z") {
@@ -3466,7 +3495,7 @@ fn prepare_rework_merge_with_base(
         ensure_dir_identity(tree, pinned)?;
         if clone.is_some() {
             let os_args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
-            run_commit_sandboxed(tree, main, &os_args, &identity)
+            run_commit_sandboxed(tree, main, &os_args, &merge_env)
                 .map_err(|why| anyhow::anyhow!("rework Git failed: {why}"))
                 .and_then(|out| decode(args, out))
         } else {
@@ -3478,7 +3507,7 @@ fn prepare_rework_merge_with_base(
                 "core.fsmonitor=false",
             ])
             .args(args)
-            .envs(identity.iter().map(|(key, value)| (*key, value)))
+            .envs(merge_env.iter().map(|(key, value)| (*key, value)))
             .stdin(std::process::Stdio::null());
             match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(30))
             {
@@ -5650,6 +5679,53 @@ mod rework_merge_tests {
             "base"
         )
         .is_err());
+    }
+
+    // Rework observation merges disjoint ratchet additions with MAIN's driver;
+    // without that trusted script the same merge stays a conflict.
+    // trace:BUG-2784 | ai:claude
+    #[test]
+    fn bug_2784_rework_git_unions_disjoint_ratchet_additions() {
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        std::fs::create_dir_all(fx.main.join("scripts")).unwrap();
+        for file in [".gitattributes", "scripts/json-union-merge.py"] {
+            std::fs::copy(repo.join(file), fx.main.join(file)).unwrap();
+        }
+        let manifest = |tests: &str| {
+            let body = format!("{{\n  \"groups\": [\n    {{\n      \"filter\": \"f\",\n      \"tests\": [\n        \"a\"{tests}\n      ]\n    }}\n  ]\n}}\n");
+            std::fs::write(fx.main.join("scripts/ratchet-set.json"), body).unwrap();
+            g(&["add", "-A"]);
+            g(&["commit", "-qm", "manifest"]);
+        };
+        manifest("");
+        g(&["checkout", "-qb", "left"]);
+        manifest(",\n        \"left\"");
+        g(&["checkout", "-qb", "right", "main"]);
+        manifest(",\n        \"right\"");
+        let observe = |main: &Path| {
+            crate::test_git::git_command()
+                .arg("-C")
+                .arg(&fx.main)
+                .envs(json_union_merge_config(main))
+                .args(["merge-tree", "--write-tree", "left", "right"])
+                .output()
+                .unwrap()
+        };
+        let merged = observe(&fx.main);
+        assert!(
+            merged.status.success(),
+            "{}",
+            String::from_utf8_lossy(&merged.stdout)
+        );
+        let tree = String::from_utf8(merged.stdout).unwrap();
+        let blob = g(&["show", &format!("{}:scripts/ratchet-set.json", tree.trim())]);
+        assert!(
+            blob.contains("\"left\"") && blob.contains("\"right\""),
+            "{blob}"
+        );
+        assert_eq!(observe(&fx.main.join("missing")).status.code(), Some(1));
     }
 }
 
