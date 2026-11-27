@@ -549,21 +549,61 @@ pub(crate) fn manual_train_admission(
     if automatic {
         return train_mode(root, true, Mode::CooperativeTrain, Duration::ZERO);
     }
+    queued_train_admission(root, prs, retrier(), || {
+        train_mode(root, false, Mode::CooperativeTrain, wait_bound(root)?)
+    })
+}
+
+/// The process that launched this manual train (the operator's retry loop or
+/// shell). The train itself exits when it gives up, so its waiter lives as
+/// long as whoever retries it. None when unknown or orphaned (TTL only).
+// trace:TASK-3924 | ai:claude
+fn retrier() -> Option<ProcIdentity> {
+    let parent = unsafe { libc::getppid() } as u32;
+    (parent > 1)
+        .then(|| ProcIdentity::capture(parent).ok())
+        .flatten()
+}
+
+/// A manual train's admission in FIFO order among waiting manual trains: one
+/// queued behind an earlier live waiter refuses and keeps its place; one that
+/// gives up waiting enqueues (or refreshes) itself; admitted, it removes only
+/// its own waiter. trace:TASK-3924 trace:BUG-2771 | ai:claude
+fn queued_train_admission(
+    root: &Path,
+    prs: &[u64],
+    owner: Option<ProcIdentity>,
+    admit: impl FnOnce() -> Result<Option<Claim>>,
+) -> Result<Option<Claim>> {
+    let mine = |w: &ManualWaiter| w.prs == prs && w.owner == owner;
     let started = Utc::now();
-    let result = train_mode(root, false, Mode::CooperativeTrain, wait_bound(root)?);
-    // A manual train that gave up waiting stays recorded, so the auto-train
-    // yields before its next train; admitted, the record goes.
-    // trace:BUG-2771 | ai:claude
-    match &result {
-        Ok(_) => {
-            let _ = std::fs::remove_file(waiter_file(root));
+    let result = match manual_waiters(root).into_iter().next() {
+        Some(head) if !mine(&head) => {
+            Err(AdmissionBusy(format!("queued behind the {}", head.describe())).into())
         }
+        _ => admit(),
+    };
+    let update = match &result {
+        Ok(_) => update_waiters(root, |rows| rows.retain(|w| !mine(w))),
         Err(error) if error.downcast_ref::<AdmissionBusy>().is_some() => {
-            if let Err(why) = record_waiter(root, prs, started) {
-                eprintln!("admission: could not record the waiting manual train: {why:#}");
-            }
+            update_waiters(root, |rows| {
+                let expires_at = Utc::now() + chrono::Duration::seconds(WAITER_TTL_SECS);
+                match rows.iter_mut().find(|w| mine(w)) {
+                    Some(row) => row.expires_at = expires_at,
+                    None => rows.push(ManualWaiter {
+                        id: uuid::Uuid::new_v4().simple().to_string()[..8].to_string(),
+                        prs: prs.to_vec(),
+                        since: started,
+                        expires_at,
+                        owner: owner.clone(),
+                    }),
+                }
+            })
         }
-        Err(_) => {}
+        Err(_) => Ok(()),
+    };
+    if let Err(why) = update {
+        eprintln!("admission: could not update the waiting manual trains: {why:#}");
     }
     result
 }
@@ -578,11 +618,42 @@ const WAITER_TTL_SECS: i64 = 15 * 60;
 // trace:BUG-2771 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ManualWaiter {
+    /// Short handle for `aida advisor loops release-waiter`. trace:TASK-3924 | ai:claude
+    pub(crate) id: String,
     pub(crate) prs: Vec<u64>,
     pub(crate) since: DateTime<Utc>,
     pub(crate) expires_at: DateTime<Utc>,
+    /// The process retrying this train; its exit (or PID reuse) releases it.
+    pub(crate) owner: Option<ProcIdentity>,
 }
 impl ManualWaiter {
+    /// Unexpired (and not forged far ahead), and its retrier not gone.
+    // trace:TASK-3924 | ai:claude
+    fn live(&self, now: DateTime<Utc>) -> bool {
+        let remaining = self.expires_at.signed_duration_since(now);
+        remaining > chrono::Duration::zero()
+            && remaining <= chrono::Duration::seconds(WAITER_TTL_SECS)
+            && !self.owner.as_ref().is_some_and(|owner| {
+                matches!(
+                    aida_core::proc_identity::observe(owner, true),
+                    Verdict::Dead(_)
+                )
+            })
+    }
+    /// The status line: [`Self::describe`] plus its id, record file, expiry
+    /// and release command. trace:TASK-3924 | ai:claude
+    pub(crate) fn status_line(&self, root: &Path) -> String {
+        format!(
+            "{} (waiter {} in {}, expires {}; release: aida advisor loops release-waiter {})",
+            self.describe(),
+            self.id,
+            waiter_file(root).display(),
+            self.expires_at
+                .with_timezone(&chrono::Local)
+                .format("%H:%M"),
+            self.id
+        )
+    }
     /// `operator train for #N waiting since HH:MM; auto-train yields next`.
     pub(crate) fn describe(&self) -> String {
         let prs = if self.prs.is_empty() {
@@ -602,35 +673,77 @@ impl ManualWaiter {
 }
 
 fn waiter_file(root: &Path) -> PathBuf {
-    directory(root).join("manual-train.waiter")
+    directory(root).join("manual-train.waiters")
 }
 
-/// Record (or refresh) the waiting manual train, keeping the earliest time
-/// it has been waiting. trace:BUG-2771 | ai:claude
-fn record_waiter(root: &Path, prs: &[u64], started: DateTime<Utc>) -> Result<()> {
+/// Every recorded waiter, in queue order. An unreadable record is an empty
+/// queue: waiters grant nothing, so losing them only ends a yield.
+// trace:TASK-3924 | ai:claude
+fn read_waiters(root: &Path) -> Vec<ManualWaiter> {
+    std::fs::read_to_string(waiter_file(root))
+        .ok()
+        .and_then(|body| serde_json::from_str(&body).ok())
+        .unwrap_or_default()
+}
+
+/// Read-modify-write the queue under the receipt serializer, dropping
+/// waiters no longer live. trace:TASK-3924 | ai:claude
+fn update_waiters(root: &Path, change: impl FnOnce(&mut Vec<ManualWaiter>)) -> Result<()> {
     let dir = directory(root);
     std::fs::create_dir_all(&dir)?;
-    let since = manual_waiter(root)
-        .filter(|w| w.prs == prs)
-        .map_or(started, |w| w.since.min(started));
-    let row = ManualWaiter {
-        prs: prs.to_vec(),
-        since,
-        expires_at: Utc::now() + chrono::Duration::seconds(WAITER_TTL_SECS),
-    };
-    write_atomic(&waiter_file(root), &serde_json::to_vec(&row)?)
+    let _serial = lock_serial(&dir, std::time::Instant::now() + SERIAL_GRACE)?;
+    let now = Utc::now();
+    let mut rows = read_waiters(root);
+    rows.retain(|w| w.live(now));
+    change(&mut rows);
+    write_atomic(&waiter_file(root), &serde_json::to_vec(&rows)?)
 }
 
-/// The recorded manual train still waiting, if one is in effect. Expired or
-/// unparsable records are ignored (they grant nothing either way).
-// trace:BUG-2771 | ai:claude
-pub(crate) fn manual_waiter(root: &Path) -> Option<ManualWaiter> {
-    let body = std::fs::read_to_string(waiter_file(root)).ok()?;
-    let row: ManualWaiter = serde_json::from_str(&body).ok()?;
-    let remaining = row.expires_at.signed_duration_since(Utc::now());
-    (remaining > chrono::Duration::zero()
-        && remaining <= chrono::Duration::seconds(WAITER_TTL_SECS))
-    .then_some(row)
+/// The live waiting manual trains, first in line first.
+// trace:BUG-2771 trace:TASK-3924 | ai:claude
+pub(crate) fn manual_waiters(root: &Path) -> Vec<ManualWaiter> {
+    let now = Utc::now();
+    let mut rows = read_waiters(root);
+    rows.retain(|w| w.live(now));
+    rows
+}
+
+/// One [`ManualWaiter::status_line`] per live waiter, in queue order.
+// trace:TASK-3924 | ai:claude
+pub(crate) fn waiter_lines(root: &Path) -> Vec<String> {
+    manual_waiters(root)
+        .iter()
+        .map(|w| w.status_line(root))
+        .collect()
+}
+
+/// Queue a manual train that gave up, retried by this (live) process; its id.
+// trace:TASK-3924 | ai:claude
+#[cfg(test)]
+pub(crate) fn record_test_waiter(root: &Path, prs: &[u64]) -> String {
+    let owner = ProcIdentity::capture(std::process::id()).ok();
+    let busy = || Err(AdmissionBusy("held".into()).into());
+    assert!(queued_train_admission(root, prs, owner.clone(), busy).is_err());
+    let rows = manual_waiters(root);
+    rows.iter()
+        .find(|w| w.prs == prs && w.owner == owner)
+        .unwrap()
+        .id
+        .clone()
+}
+
+/// Release one waiter by id (`aida advisor loops release-waiter`).
+// trace:TASK-3924 | ai:claude
+pub(crate) fn release_waiter(root: &Path, id: &str) -> Result<()> {
+    let mut found = false;
+    update_waiters(root, |rows| {
+        let before = rows.len();
+        rows.retain(|w| w.id != id);
+        found = rows.len() != before;
+    })?;
+    anyhow::ensure!(found, "no waiting manual train has id {id}");
+    println!("Released waiting manual train {id}.");
+    Ok(())
 }
 
 /// `aida land run`'s exclusive admission, waiting up to the configured bound.
@@ -1044,8 +1157,9 @@ pub(crate) fn yield_reason(root: &Path, purpose: &str) -> Option<String> {
         }
         // A manual train that gave up waiting goes before the auto-train's
         // next train; review controllers coexist with it. trace:BUG-2771 | ai:claude
+        // Any live queued waiter: the head is named. trace:TASK-3924 | ai:claude
         Ok((purpose == "legacy auto-train")
-            .then(|| manual_waiter(root))
+            .then(|| manual_waiters(root).into_iter().next())
             .flatten()
             .map(|waiter| waiter.describe()))
     };
@@ -2273,5 +2387,78 @@ mod tests {
                 .status()
                 .unwrap();
         assert!(status.success());
+    }
+
+    fn exited_child() -> ProcIdentity {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let identity = ProcIdentity::capture_child(&child).unwrap();
+        child.wait().unwrap();
+        identity
+    }
+
+    fn busy() -> Result<Option<Claim>> {
+        Err(AdmissionBusy("held by train A".into()).into())
+    }
+
+    /// TASK-3924 AC1: a waiter whose retrying process has exited (or whose
+    /// PID was reused) is released: not queued, and the auto-train does not
+    /// yield to it. trace:TASK-3924 trace:TASK-3924.AC1 | ai:claude
+    #[test]
+    fn task3924_waiter_released_when_its_retrier_exits() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        assert!(queued_train_admission(root, &[1], Some(exited_child()), busy).is_err());
+        assert!(
+            manual_waiters(root).is_empty(),
+            "a dead retrier releases its waiter"
+        );
+        assert_eq!(yield_reason(root, "legacy auto-train"), None);
+        record_test_waiter(root, &[2]);
+        let reason = yield_reason(root, "legacy auto-train").expect("a live waiter is yielded to");
+        assert!(
+            reason.starts_with("operator train for #2 waiting since "),
+            "{reason}"
+        );
+    }
+
+    /// TASK-3924 AC2: two manual trains that give up are both queued; the
+    /// later one is refused (and kept) while the earlier is live; each
+    /// admission removes only the waiter it admits, in FIFO order.
+    // trace:TASK-3924 trace:TASK-3924.AC2 trace:TASK-3924.AC3 | ai:claude
+    #[test]
+    fn task3924_two_waiters_kept_and_admitted_in_order() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let me = ProcIdentity::capture(std::process::id()).ok();
+        let (a, b) = (&[10_u64][..], &[20_u64][..]);
+        assert!(queued_train_admission(root, a, me.clone(), busy).is_err());
+        assert!(queued_train_admission(root, b, me.clone(), busy).is_err());
+        let queued = |root: &Path| {
+            manual_waiters(root)
+                .into_iter()
+                .map(|w| w.prs)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            queued(root),
+            [a.to_vec(), b.to_vec()],
+            "both waiters are kept"
+        );
+        let admit = || cooperative_train(root, false);
+        let error = queued_train_admission(root, b, me.clone(), admit)
+            .err()
+            .unwrap();
+        assert!(format!("{error}").contains("queued behind the operator train for #10"));
+        assert_eq!(queued(root), [a.to_vec(), b.to_vec()], "B keeps its place");
+        let claim = queued_train_admission(root, a, me.clone(), || cooperative_train(root, false))
+            .unwrap()
+            .expect("A, first in line, is admitted");
+        assert_eq!(queued(root), [b.to_vec()], "admitting A clears only A");
+        drop(claim);
+        let claim = queued_train_admission(root, b, me.clone(), || cooperative_train(root, false))
+            .unwrap()
+            .expect("B is admitted next");
+        assert!(queued(root).is_empty());
+        drop(claim);
     }
 }

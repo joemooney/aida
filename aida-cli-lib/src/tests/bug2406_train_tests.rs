@@ -2727,3 +2727,127 @@ fn bug2584_remembered_refusal_still_refuses() {
         "a fresh pass asks again and keeps refusing"
     );
 }
+
+/// BUG-2584 slice 2: the primary's gate ledger holds ~1,800 change ledgers
+/// (90 MB, some with hundreds of lines), while a member's own ledger is a
+/// few lines. Ledgers on unrelated specs are never read; ledgers on the
+/// member's spec are each parsed a bounded number of times, however many
+/// events they hold, and the member's gate result is unchanged. The bound is
+/// proven by counting ledger bytes read on a small fixture, not by timing a
+/// large one (the 8 x 40 + 100 ledger fixture took 85 s in CI).
+// trace:BUG-2584 | ai:claude
+#[test]
+fn bug2584_member_gate_parses_each_sibling_ledger_boundedly() {
+    use crate::gate::ledger::checked::discovery_work_tests as w;
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        eprintln!("{}", String::from_utf8_lossy(&out.stderr));
+        return;
+    }
+    let f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let measure = |live: &mut LiveTrainForge<'_>, stage: &str| {
+        w::READ_BYTES.with(|n| n.set(0));
+        w::LOSSY_READ_BYTES.with(|n| n.set(0));
+        let started = std::time::Instant::now();
+        let member = live.gate(11).unwrap();
+        let bytes = w::READ_BYTES.with(|n| n.get()) + w::LOSSY_READ_BYTES.with(|n| n.get());
+        eprintln!(
+            "BUG-2584 {stage}: {:?}, ledger bytes {bytes}, steps {:?}",
+            started.elapsed(),
+            crate::pr_train::gate_step_times()
+        );
+        (member, bytes)
+    };
+    // `events` refusals on `spec`, on change `n`, each at a head the member
+    // does not contain; returns the ledger's size. One event is built by the
+    // writer (its patch identity is a git call); the rest copy it with their
+    // own head, and the ledger is appended in one write.
+    // trace:BUG-2584 | ai:claude
+    let plant = |n: u64, spec: &str, events: usize, finding: usize| {
+        let record = |e: usize| {
+            json!({"verdict":"request-changes",
+                "reviewed_sha":format!("{:040x}", n * 1000 + e as u64),
+                "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"sibling reviewer",
+                "findings":vec!["x".repeat(finding)]})
+        };
+        let first = ledger::event::verdict_event(
+            f.root(),
+            ledger::ChangeKey::pr(n),
+            record(0).as_object().unwrap(),
+            Some(&ledger::GateSpec::with_key(spec, None)),
+        );
+        let batch = (0..events)
+            .map(|e| {
+                let mut event = first.clone();
+                let record = record(e);
+                event.head = Some(record["reviewed_sha"].as_str().unwrap().to_string());
+                event.body = ledger::event::EventBody::Verdict {
+                    record: record.as_object().unwrap().clone(),
+                };
+                event
+            })
+            .collect();
+        let written = ledger::store::append(f.root(), ledger::ChangeKey::pr(n), batch).unwrap();
+        assert_eq!(
+            written
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            events,
+            "every planted refusal is on the ledger"
+        );
+        fs::metadata(ledger::store::ledger_file(
+            f.root(),
+            ledger::ChangeKey::pr(n),
+        ))
+        .unwrap()
+        .len()
+    };
+    let (alone, base_bytes) = measure(&mut live, "baseline");
+    let unrelated: u64 = (1000..1010u64)
+        .map(|n| plant(n, &format!("TASK-{n}"), 1, 64 * 1024))
+        .sum();
+    let (_, with_unrelated) = measure(&mut live, "10 unrelated ledgers");
+    assert!(
+        with_unrelated.saturating_sub(base_bytes) < unrelated / 20,
+        "ledgers on unrelated specs were read: {with_unrelated} bytes against {base_bytes}"
+    );
+    // trace:BUG-2584 | ai:claude — 3 ledgers of 24 events: a per-event
+    // re-read costs >= 24 reads of each ledger, the bounded gate ~5.
+    let same: u64 = (2000..2003u64)
+        .map(|n| plant(n, "BUG-b6b1278890774ef993d2ebc327862470-173", 24, 4 * 1024))
+        .sum();
+    let (member, bytes) = measure(&mut live, "3 same-spec ledgers of 24 events");
+    assert_eq!(member, alone, "refusals at other heads change nothing");
+    // Reading every same-spec ledger once per spec-keyed selection is
+    // bounded; re-reading a ledger per event in it is 24 times that.
+    assert!(
+        bytes.saturating_sub(with_unrelated) < 8 * same,
+        "the member gate read {bytes} ledger bytes for {same} bytes of same-spec ledgers"
+    );
+}
+
+/// BUG-2584: whether a bound change stands refused is decided once per
+/// change in a selection. Change 99's first refusal (at a commit outside the
+/// head) is judged first; its later refusal at a commit PR 11's carried head
+/// contains must still stop PR 11 at the gate.
+// trace:BUG-2584 | ai:claude
+#[test]
+fn bug2584_judged_change_still_refuses_at_a_contained_commit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(false, Some(BUG2569_BRANCH), None);
+    bug2569_carried_head(&f, "Merge main into the member (STORY-2220)");
+    let inside = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+    bug2569_refusal(&f, 99, &"c".repeat(40));
+    bug2569_refusal(&f, 99, &inside);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let refused = match live.gate(11) {
+        Ok(_) => panic!("a standing refusal in the member's head was admitted"),
+        Err(why) => format!("{why:#}"),
+    };
+    assert!(refused.contains("do not approve"), "{refused}");
+}

@@ -11,6 +11,8 @@
       "source": "aida-core/src/review_engine.rs",
       "tests": [
         "s1_runner_findings_sarif_and_threshold",
+        "s6_polyglot_and_hdl_playbooks_match_and_carry_checklists",
+        "s6_junit_and_testbench_companions_share_a_stem",
         "config_defaults_only_when_absent",
         "credential_components_at_any_depth",
         "credential_npmrc",
