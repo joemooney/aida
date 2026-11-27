@@ -10,17 +10,25 @@ description: |
   - AC2: `aida pr train --check` (and train-status) names a fix-first ruling as the reason a PR is not admitted, with the reason text and who ruled.
   - AC3: a later push (a new head) clears the hold, so the normal review applies to the new head; the ruling never carries over.
   - AC4: tests: a fix-first ruling on an approved head → excluded from the next train; a new head → eligible for review again; --check prints the cause.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:05:03.817488762Z
-modified_at: 2026-11-27T02:05:03.817488762Z
+modified_at: 2026-11-27T22:41:07.971700386Z
 req_type: Task
 tags:
 - advisor
 - review
 - train
+history:
+- id: 01a21f2b-6783-7aa3-b3e1-2629a817ce3f
+  author: aida-session-start
+  timestamp: 2026-11-27T22:41:07.971699611Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7461b694e0109a4a1ca68401e9bda5e773f03f87
   branch: main
