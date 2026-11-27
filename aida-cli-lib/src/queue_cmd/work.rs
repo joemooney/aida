@@ -7844,6 +7844,7 @@ pub(crate) fn run_standalone_reviewer(
                 pr,
                 head,
                 &crate::gate::kernel_deps::review_blocking::effective_warned(project_root),
+                &crate::landing_policy::load(project_root),
             )?),
             None => {
                 eprintln!(

@@ -631,14 +631,18 @@ fn retrier() -> Option<ProcIdentity> {
 /// A manual train's admission in FIFO order among waiting manual trains: one
 /// queued behind an earlier live waiter refuses and keeps its place; one that
 /// gives up waiting enqueues (or refreshes) itself; admitted, it removes only
-/// its own waiter. trace:TASK-3924 trace:BUG-2771 | ai:claude
+/// its own waiter. A waiter's identity is its PR set (order and duplicates
+/// ignored), so a retry of the same set from any process adopts the live
+/// waiter: its place in line, with this retrier as owner.
+/// trace:TASK-3924 trace:BUG-2771 trace:TASK-3925 | ai:claude
 fn queued_train_admission(
     root: &Path,
     prs: &[u64],
     owner: Option<ProcIdentity>,
     admit: impl FnOnce() -> Result<Option<Claim>>,
 ) -> Result<Option<Claim>> {
-    let mine = |w: &ManualWaiter| w.prs == prs && w.owner == owner;
+    let set = pr_set(prs);
+    let mine = |w: &ManualWaiter| pr_set(&w.prs) == set;
     let started = Utc::now();
     let result = match manual_waiters(root).into_iter().next() {
         Some(head) if !mine(&head) => {
@@ -652,10 +656,15 @@ fn queued_train_admission(
             update_waiters(root, |rows| {
                 let expires_at = Utc::now() + chrono::Duration::seconds(WAITER_TTL_SECS);
                 match rows.iter_mut().find(|w| mine(w)) {
-                    Some(row) => row.expires_at = expires_at,
+                    // Adopt: keep id, `since` and position; this retrier owns it.
+                    Some(row) => {
+                        row.prs = set.clone();
+                        row.owner = owner.clone();
+                        row.expires_at = expires_at;
+                    }
                     None => rows.push(ManualWaiter {
                         id: uuid::Uuid::new_v4().simple().to_string()[..8].to_string(),
-                        prs: prs.to_vec(),
+                        prs: set.clone(),
                         since: started,
                         expires_at,
                         owner: owner.clone(),
@@ -669,6 +678,14 @@ fn queued_train_admission(
         eprintln!("admission: could not update the waiting manual trains: {why:#}");
     }
     result
+}
+
+/// A manual train's PR set: sorted and deduplicated. trace:TASK-3925 | ai:claude
+fn pr_set(prs: &[u64]) -> Vec<u64> {
+    let mut set = prs.to_vec();
+    set.sort_unstable();
+    set.dedup();
+    set
 }
 
 /// How long a manual train that gave up waiting stays recorded after its
@@ -789,7 +806,7 @@ pub(crate) fn record_test_waiter(root: &Path, prs: &[u64]) -> String {
     assert!(queued_train_admission(root, prs, owner.clone(), busy).is_err());
     let rows = manual_waiters(root);
     rows.iter()
-        .find(|w| w.prs == prs && w.owner == owner)
+        .find(|w| w.prs == pr_set(prs))
         .unwrap()
         .id
         .clone()
@@ -2646,5 +2663,100 @@ mod tests {
         drop(acquire(root, "legacy review-watch", true).unwrap());
         assert_eq!(yield_reason(root, "legacy review-watch"), None);
         assert!(manual_train_admission(root, false, &[]).is_err());
+    }
+
+    /// `(id, prs, since, owner)` of each live waiter, in queue order.
+    fn waiter_rows(root: &Path) -> Vec<(String, Vec<u64>, DateTime<Utc>, Option<ProcIdentity>)> {
+        manual_waiters(root)
+            .into_iter()
+            .map(|w| (w.id, w.prs, w.since, w.owner))
+            .collect()
+    }
+
+    /// TASK-3925 AC1/AC3: the same PR set in another order (with a duplicate)
+    /// adopts the live waiter in place; a different set queues FIFO behind it.
+    // trace:TASK-3925 trace:TASK-3925.AC1 trace:TASK-3925.AC3 | ai:claude
+    #[test]
+    fn task3925_same_set_in_another_order_adopts_its_waiter() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let me = ProcIdentity::capture(std::process::id()).ok();
+        assert!(queued_train_admission(root, &[10], me.clone(), busy).is_err());
+        assert!(queued_train_admission(root, &[2, 1], me.clone(), busy).is_err());
+        let before = waiter_rows(root);
+        assert_eq!(before[1].1, [1, 2], "stored as the sorted set");
+        assert!(queued_train_admission(root, &[1, 2, 1], me.clone(), busy).is_err());
+        assert_eq!(waiter_rows(root), before, "adopted in place, no new row");
+        assert!(queued_train_admission(root, &[30], me.clone(), busy).is_err());
+        let order: Vec<_> = waiter_rows(root).into_iter().map(|r| r.1).collect();
+        assert_eq!(
+            order,
+            [vec![10], vec![1, 2], vec![30]],
+            "a different set queues FIFO"
+        );
+        let admit = || cooperative_train(root, false);
+        drop(queued_train_admission(root, &[10], me.clone(), admit).unwrap());
+        let claim = queued_train_admission(root, &[2, 1, 2], me.clone(), || {
+            cooperative_train(root, false)
+        })
+        .unwrap()
+        .expect("the reordered set is admitted as the head waiter");
+        let order: Vec<_> = waiter_rows(root).into_iter().map(|r| r.1).collect();
+        assert_eq!(order, [vec![30]], "admission removed the adopted waiter");
+        drop(claim);
+    }
+
+    /// TASK-3925 AC2/AC3: a retry of the same set from another (live) parent
+    /// adopts the waiter: same id, `since` and position, owner refreshed.
+    // trace:TASK-3925 trace:TASK-3925.AC2 trace:TASK-3925.AC3 | ai:claude
+    #[test]
+    fn task3925_same_set_from_another_parent_adopts_its_waiter() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let mut other = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let first = ProcIdentity::capture_child(&other).ok();
+        let me = ProcIdentity::capture(std::process::id()).ok();
+        assert_ne!(first, me);
+        assert!(queued_train_admission(root, &[7, 8], first.clone(), busy).is_err());
+        assert!(queued_train_admission(root, &[9], first.clone(), busy).is_err());
+        let before = waiter_rows(root);
+        assert_eq!(before[0].3, first);
+        assert!(queued_train_admission(root, &[8, 7], me.clone(), busy).is_err());
+        let after = waiter_rows(root);
+        assert_eq!(after.len(), 2, "adopted, not queued behind itself");
+        assert_eq!(after[0].0, before[0].0, "keeps its id");
+        assert_eq!(after[0].2, before[0].2, "keeps its place");
+        assert_eq!(after[0].3, me, "the retrier now owns it");
+        other.kill().unwrap();
+        other.wait().unwrap();
+        let order: Vec<_> = waiter_rows(root).into_iter().map(|r| r.1).collect();
+        assert_eq!(
+            order,
+            [vec![7, 8]],
+            "the old parent's exit no longer releases it"
+        );
+    }
+
+    /// TASK-3925 AC3: a recycled pid (same pid, another start time) is a dead
+    /// retrier: its waiter is released and not yielded to.
+    // trace:TASK-3925 trace:TASK-3925.AC3 | ai:claude
+    #[test]
+    fn task3925_recycled_pid_is_dead_and_released() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let me = ProcIdentity::capture(std::process::id()).unwrap();
+        let recycled = ProcIdentity {
+            starttime: me.starttime + 1,
+            ..me
+        };
+        assert!(queued_train_admission(root, &[5], Some(recycled), busy).is_err());
+        assert!(
+            manual_waiters(root).is_empty(),
+            "a recycled pid releases its waiter"
+        );
+        assert_eq!(yield_reason(root, "legacy auto-train"), None);
     }
 }
