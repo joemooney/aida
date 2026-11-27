@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T02:44:05.690149112Z
+modified_at: 2026-11-27T03:29:32.287100983Z
 req_type: Story
 tags:
 - integration
@@ -1689,6 +1689,23 @@ comments:
   modified_at: 2026-11-27T02:44:05.690149112Z
   session_id: 01a21ad0e211
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21b0d-598e-7570-b951-87ccff890070
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR #4715 (S6, head ba4119726d): PASS. Standard tier, pure engine logic.
+    - Playbooks: c_cpp, java_kotlin (with .kt/.kts), matlab, hdl_rtl. Static checklists, ordered after python. Lookalike extensions (.mk .vue .svg .hs .json) stay where they were, and C++ files get no Rust facets. All of this is tested.
+    - Companion stems:
+      - JUnit Foo/FooTest(s): case-sensitive, needs a capital and a camel boundary, applied before lowercasing, so contest/Latest/Foo_Test are unchanged.
+      - HDL foo_tb and tb_foo pair with foo.
+      - src/test mirrors src/main. This applies to every language, but it only affects batch pairing and is harmless.
+      - TASK-3880's directory-scoped, case-sensitive stem is preserved.
+    - Security lens: n/a. Checklist text is static, and nothing is spawned, read or forged.
+    - Overlap: merge-tree is clean with #4713 (re-sync) and with #4710 (TASK-3869).
+    - Merge order (proposed to the advisor): #4713 → build p52 from integration → S6 → #4710. Merging S6 later keeps p52 limited to S5c+S5d+re-sync; p52 already passed FULL and review. S6 then rides p53.
+  created_at: 2026-11-27T03:29:32.287100983Z
+  modified_at: 2026-11-27T03:29:32.287100983Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
