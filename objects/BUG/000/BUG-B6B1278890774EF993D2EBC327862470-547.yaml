@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T23:50:56.900412897Z
+modified_at: 2026-11-27T23:50:59.786685690Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -129,6 +129,18 @@ comments:
   created_at: 2026-11-27T20:59:38.766660399Z
   modified_at: 2026-11-27T20:59:38.766660399Z
   session_id: 01a21eae0c44
+- id: 01a21f6b-5d09-74f3-8ea3-43b850d23689
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4752):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dc0f8cf4e00f
+    Recorded: 2026-11-27T23:49:52.961450656+00:00
+    Findings:
+    1. Security/authority bypass: an expired barrier can finalize a REJECTED verdict as APPROVED. record_collected_verdict (gate/ledger/mod.rs needs_delivery/pending, ~L440-480) runs under tier policy, which is active in this project. It barriers every record in the batch, including a non-approving record that has at least one deferred finding, and it overwrites the verdict word with "request-changes". The original "rejected" is lost. complete_approval (gate/ledger/abandoned_sweep.rs:84-95) then forces verdict="approved" and re-decides only the findings. disposition_verdict keeps Rejected as Rejected only while the word is present, so the forced word removes that protection. Failure scenario: a contained reviewer records rejected with one p2 finding, which the policy marks deferred. The launcher's collection writes the barrier batch and dies during findings delivery. 20 minutes later the reviewer session has no lease, and the watcher's expire_reported calls finalize_via_writer with an approved record. The PR becomes approved. The PR description's guard against request-changes siblings, the non-empty all-deferred findings check, does not cover rejected. A request-changes verdict with all findings deferred already normalizes to approved, so only rejected is exposed. Fix: carry the pre-barrier verdict word on the barrier (for example a barrier_of/original_verdict field set in both barrier writers) and finalize only when it was approved. Otherwise abandon the barrier. Add a test that a rejected-with-deferred-findings barrier is abandoned and never finalized. That test is required under ADR-76 because this is gate code.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T23:50:59.593652261Z
+  modified_at: 2026-11-27T23:50:59.593652261Z
 history:
 - id: 01a21d95-9bce-7210-a003-d78cbc07dd29
   author: joe
