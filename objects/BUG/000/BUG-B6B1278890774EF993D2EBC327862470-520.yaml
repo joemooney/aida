@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: Every reconcile refusal NAMES its cause (which check refused, which hub/ref, and the underlying git/merge error). A test asserts the reason text for at least the push-race and merge-refusal paths.
   - AC2: A BOUNDED retry (e.g. up to 2 attempts with re-fetch + re-union) when a push rejection is a fast-forward race from a concurrent writer. Test with a simulated race.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-27T03:49:20.554485983Z
+modified_at: 2026-11-27T05:40:34.266342666Z
 req_type: Bug
 tags:
 - hubs
@@ -275,6 +275,22 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21b85-0d13-7181-9c1b-eeafbdb58265
+  author: aida-auto-bump
+  timestamp: 2026-11-27T05:40:34.195272152Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21b85-0d5a-7642-8f75-967537fb9336
+  timestamp: 2026-11-27T05:40:34.266339288Z
+  agent: aida
+  commit_sha: 6a72f54777f5c364c1989ef56acdae39604e2f33
+  summary: 'BUG-2759 slice 2 r2 (completing). Reviewed the head as it would land on main 8e59bcd0; the base is 1 commit ahead and changes nothing this review depends on. AC1 PASS: merge-refusal reason text is asserted by reconcile_refusal_displays_merge_validation_cause (slice 1) and by the consent-gate refusal, which names the email and the hubs it is new to. Push-race reason text is asserted by bug_2759_reconcile_reports_the_race_after_its_bounded_retries (''origin: rejected — a concurrent push moved it again after 2 reconcile attempts'', no ''once they are reachable''). The agent-mode one-line chain is checked by bug_2759_agent_error_block_keeps_every_cause. AC2 PASS: bug_2759_reconcile_retries_once_after_a_concurrent_push stages a real non-fast-forward race; the bound is tested by the race-exhausted test (origin_pushes == RECONCILE_ATTEMPTS). Comment-7 ACs PASS: the gate refuses only emails absent from the receiving hub''s registry/; it fails closed when git grep fails or finds nothing (hub_has empty) and for a hub missing the branch; the ''+'' stripping keeps tokenization consistent; ''one hub only'' is gone. Round-1 finding 2 PASS: the bail names each hub and its cause (bug_2759_unreachable_hub_error_names_hub_and_cause). Deep pass: only NonFastForward is retried; each retry re-runs the lock, re-fetch, merge, validation and consent gate; the push still runs outside the store write lock; a raced pass returns before the JSON/human output, so there is no duplicate JSON; store-writers inventory rows follow the moved sinks. CI pending at review time (fast compile and fast gates green; full test shards not yet run). One p3 wording follow-up.'
+  punted:
+  - 'punted: BUG-2759 slice 2 (completing). Base main 956b13f4, 1 commit, 2 files (remote_create.rs incl. inline #[cfg(test)] module; store-writers.toml). CI pending at review time. AC walk: AC1 PARTIAL — merge-refusal reason text verified by reconcile_refusal_displays_merge_validation_cause (slice 1) and bug_2759_consent_gate_skips_emails_every_hub_already_has (names the new email and the hubs that lack it); push-race reason text UNVERIFIED: no test asserts the race-exhausted message (remote_create.rs:2974) or the retry warning (:2650). AC2 verified by bug_2759_reconcile_retries_once_after_a_concurrent_push (a real second-clone push between union and push; both writes land on both hubs, raced==1); the 2-attempt bound itself (every attempt raced) has no test. Comment-7 slice ACs: (1) gate flags only emails the receiving hub lacks — verified by the consent test (known email on both hubs passes after scrub; new email refused); (2) message no longer says ''one hub only'' — verified (same test); (3) agent-mode cause chain — verified by bug_2759_agent_error_block_keeps_every_cause, which renders through agent_error_block with the same {:?} msg cli_entry.rs:213 builds. Deep pass: the gate stays fail-closed (git grep failure or no match leaves hub_has empty; both sides use emails_in on ''+''-stripped lines so the tokens agree); only NonFastForward is retried; the retry re-runs the full lock, merge and validate path including the consent gate; dry-run never returns Raced. The store-writers inventory follows the moved sinks. Type protocol: BUG-2759 bug protocol ''PR touches at least one test file'' — met (inline test module in remote_create.rs, three new tests). Verdict request-changes: AC1 is claimed (completing trailer) but its push-race reason text has no asserting test.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
@@ -287,3 +303,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T02:09:13.664349683Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T05:40:34.195264657Z
+  completion_sha: 6a72f54777f5c364c1989ef56acdae39604e2f33
