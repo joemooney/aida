@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T01:44:24.942766781Z
+modified_at: 2026-11-27T01:46:36.856208970Z
 req_type: Task
 tags:
 - review
@@ -142,6 +142,21 @@ comments:
   created_at: 2026-11-27T00:51:02.898397725Z
   modified_at: 2026-11-27T00:51:02.898397725Z
   session_id: 01a21a34695d
+- id: 01a21aaf-2b43-7791-8158-759df88222f7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:46):
+    # TASK-3869 r1 on #4701 (integration-30 pre-check 17:20: content PASSES, but it conflicts with S5d #4699 and main; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-task-3869-hardening / PR #4701. Keep the title. Do NOT rebase.
+    S5d #4699 (which carries the integration re-sync with main) has now MERGED. Do this:
+     (1) `git fetch origin integration && git merge origin/integration` (>= 85b2fee16d7) as a MERGE COMMIT. Integration ALREADY contains main ed4507ea9e1: do NOT merge main yourself. Resolve against it: keep main's run_review_agent / runner_failure shape, and S5d's exit codes (4 = partial).
+     (2) Rerun the targeted review_prepare tests and make check-ci-fast.
+     (3) Push to #4701, with a "Merge with integration" note in the PR body.
+    Size (~415 lines) and the new AC4 task you filed are pending the advisor's ruling on TASK-3869. If a ruling comment there says to split, follow it.
+    COMMIT your work.
+  created_at: 2026-11-27T01:46:36.856208970Z
+  modified_at: 2026-11-27T01:46:36.856208970Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
