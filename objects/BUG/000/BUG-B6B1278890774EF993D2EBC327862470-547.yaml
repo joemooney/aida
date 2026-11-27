@@ -10,12 +10,12 @@ description: |
   2. `review watch --release PR-N` (or the watcher itself) also ends the exited reviewer session and removes its clean checkout, preserving any unrecorded draft by moving it aside under .aida/, so the next pass can dispatch.
   3. `aida doctor` lists stuck sweeps and retained checkouts with the one command that clears them.
   4. Tests for each.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T23:50:59.786685690Z
+modified_at: 2026-11-27T23:53:41.363625544Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -177,6 +177,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21f6d-d4f3-7b23-b21b-01e0c1796108
+  author: aida-session-start
+  timestamp: 2026-11-27T23:53:41.363623976Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1d956ee6792d6b737c3e17d88ba92f818002348d
   branch: main
