@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T00:02:55.306737894Z
+modified_at: 2026-11-27T00:23:29.742278242Z
 req_type: Task
 tags:
 - review
@@ -104,6 +104,28 @@ comments:
   modified_at: 2026-11-27T00:02:55.306737894Z
   session_id: 01a21a34695d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a63-0314-7572-999a-27b94a51f289
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR #4701 (TASK-3869 narrowed, head e015710e8d): the content PASSES the security lens. MERGE ORDER: HOLD until S5d #4699 has merged into integration.
+    Security lens:
+    - AC1:
+      - `git diff --raw` modes are mapped: 120000 is a symlink, 160000 a gitlink, any other non-100644/100755/100664 mode is other. A deletion is named from its old side. classify_compiled puts NonRegular ahead of every other reason, so these entries are never read.
+      - Workspace and scan use open_confined: a walk one component at a time with O_NOFOLLOW|O_DIRECTORY from /proc/self/fd pins, an lstat of the leaf, then an O_NOFOLLOW|O_NONBLOCK open (a FIFO cannot hang it), then an fstat recheck, so a swap after the lstat is caught.
+      - Linux's ENOTDIR for a symlinked directory is mapped to ELOOP, i.e. Symlink, so it is named, not dropped.
+      - "." and ".." components are refused.
+    - AC2: explicit --specs are resolved only through storage.load(). A missing store or an unknown ID is refused. IDs taken from commit messages keep the lenient skip.
+    - AC3: write_output and the reads share confined_dir. The concurrent symlink-swap proof test is present. store-writers.toml reclassifies the old write_output OpenOptions row as confined_dir and adds open_confined as read_only.
+    Process points for the advisor:
+    - P1, merge order/conflict: it conflicts with S5d #4699 in review_prepare.rs and scripts/ratchet-set.json, and with main. Per product's brief: after S5d (which carries the main reconcile) merges, this lane merges origin/integration, resolves, and re-pushes. I re-pre-check the resolution then.
+    - P2, size: about 415 changed lines against the 300 cap, with AC4 already split out. The confinement change is cohesive, so I'd accept it as-is. Advisor's call.
+    - P3, new task: the lane filed TASK-73022632…-057 for AC4 (non-UTF-8 round trip). Per the "findings are not requirements" ruling, that should be a TASK-3869 comment rather than a new task without an approved spec. Advisor to dispose (keep it as the AC4 slice or fold it back).
+    - Behaviour note, fine: a symlink or special file matching a secret pattern now reports non_regular:*, not secret_sensitive_path. It is excluded either way.
+    Strict tier (file-read confinement), so it needs the independent verdict. Not self-approvable.
+  created_at: 2026-11-27T00:23:29.742278242Z
+  modified_at: 2026-11-27T00:23:29.742278242Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
