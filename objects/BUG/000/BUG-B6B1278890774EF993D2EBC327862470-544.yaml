@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T10:05:32.367452785Z
+modified_at: 2026-11-27T10:05:53.855819323Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -165,6 +165,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T10:05:32.191536985Z
   modified_at: 2026-11-27T10:05:32.191536985Z
+- id: 01a21c77-f663-71b1-bb4b-152566c0e7bf
+  author: joe
+  content: PR-4731 at d6c58b6487282344b050001407ab8f437a949055 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-27T10:05:53.635805110Z
+  modified_at: 2026-11-27T10:05:53.635805110Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
