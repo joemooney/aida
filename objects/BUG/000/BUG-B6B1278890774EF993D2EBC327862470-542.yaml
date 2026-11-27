@@ -223,6 +223,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2781 AC2 (push before the final gate in LANE_JOB_CONTRACT, tested in implementer_prompt_names_the_sanctioned_path), AC3 (exit_cause and end_line with unit tests) and AC4 (real-git salvage tests) are met. AC1''s salvage push has one blocking gap. When the target is an open PR''s branch, lane_salvage::push_fast_forward moves that PR''s head without the BUG-2618 PR-head protection check (pr_head_guard::check_branch). The normal seat publication path (ship_from_seat.rs:2291) and every other head-moving path run that check, and this project enables it ([pr-head] protect = true). So a salvage can move a PR head that is approved or pinned by a train. The 2 commits main gained since this head (train, ledger and review_engine changes) do not touch the salvage path, so the finding stands on the current base. The removed clippy allow from the previous round is confirmed gone. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-27T07:05:46.492222829Z
   modified_at: 2026-11-27T07:05:46.492222829Z
+- id: 01a21bd3-3dff-7e12-b771-9f6e2298c41d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2781):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b75b306e3651
+    Recorded: 2026-11-27T07:04:24.750137741+00:00
+    Findings:
+    1. aida-cli-lib/src/lane_salvage.rs push_fast_forward (called from push, about lines 324-377) pushes the salvaged tip to refs/heads/<claimed branch> whenever an open PR exists (the PR the lane opened or the PR it launched on). It does not call crate::pr_head_guard::check_branch. That BUG-2618 guard refuses to move a PR head that has a recorded approval at that head or is pinned by a merge train. The normal seat publication path runs it just before its push (ship_from_seat.rs:2288-2292), and so do drain_batch, dispatch_flow, pr finish, orchestrator_leases, seat_clone and forge. This repository enables it ([pr-head] protect = true in .aida/config.toml). Failure scenario: a rework or fix-first lane is launched on PR-N whose head is approved, or gets pinned by the auto-train while the lane runs. The lane commits and is then SIGTERMed mid-gate. The salvage fast-forwards PR-N's branch, moving an approved or train-pinned head that every other publisher would refuse to move. Fix: call pr_head_guard::check_branch(main, target) before pushing to a PR branch, re-check require_publication_branch immediately before the push as ship_from_seat does (BUG-2633), and add a refusal test (an approval at head, or a train pin, refuses the salvage and keeps the commits in the seat).
+    2. aida-cli-lib/src/lane_salvage.rs push skips check_staged's seat_trailer_check (ship_from_seat.rs:2533-2572) on the imported range. A salvage onto an open PR branch can therefore add commits with no or unresolvable spec trailers, which normal publication refuses. The impact is limited: the head is announced as unverified and needs a fresh independent review, which would see the commits. Consider running the trailer check (or at least logging its result) before the salvage push.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T07:05:58.527342284Z
+  modified_at: 2026-11-27T07:05:58.527342284Z
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
