@@ -26,3 +26,9 @@ aida-cli-lib/src/tests/golden/** text eol=lf
 # TASK-1800 replay fixture: a git bundle compared by content in CI, never
 # diffed or EOL-converted. trace:TASK-2067 | ai:claude
 tests/fixtures/task-1800-replay/*.bundle binary
+
+# Append-only JSON list files: the `aida-json-union` driver
+# (scripts/json-union-merge.py) unions disjoint additions so parallel PRs do
+# not conflict. Unconfigured, git falls back to its ordinary text merge.
+# trace:BUG-2784 | ai:claude
+scripts/ratchet-set.json merge=aida-json-union
