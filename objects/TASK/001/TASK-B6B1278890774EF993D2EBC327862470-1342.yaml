@@ -13,12 +13,12 @@ description: |
   - AC3 (2)(6): PROOF tests for pinned-root confinement on reads AND writes, including a concurrent re-parent / symlink swap.
   - AC4 (13): a lossless non-UTF-8 path round trip, with escaping, proven by a test.
   <=300 lines; lane after STORY-3120 S5c merges (same files).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T12:46:58.108955775Z
+modified_at: 2026-11-27T21:46:24.605413037Z
 req_type: Task
 tags:
 - review
@@ -360,6 +360,11 @@ comments:
     A reference merge (commit 891e715fcc55, `(Refs TASK-3869)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-27T12:46:58.108952272Z
   modified_at: 2026-11-27T12:46:58.108952272Z
+- id: 01a21ef9-4ddd-7f42-9904-2a1aa1cab918
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.. No triage reason was given.'
+  created_at: 2026-11-27T21:46:24.605409537Z
+  modified_at: 2026-11-27T21:46:24.605409537Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
@@ -488,6 +493,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21ef9-4ddd-7f42-9904-2a0a300b731c
+  author: joe
+  timestamp: 2026-11-27T21:46:24.605403747Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
@@ -496,11 +508,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 91c070eb012
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.'
-  recovery_hint: address the review findings, move TASK-3869 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-27T07:55:11.100507377Z
