@@ -5,6 +5,10 @@
     {
       "at": "2026-11-27T01:46:12.007387925Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-27T01:50:01.105041371Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -14,6 +18,16 @@
       "kind": {
         "event": "SpecCompleted",
         "commit": "",
+        "pr": 4698,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-27T01:50:00.862817752Z",
+      "spec": "STORY-73022632d35647cca3858b18ac0723e3-377",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "51a308a18d7c461a7cc2022ee105412ba5604ac0",
         "pr": 4698,
         "closed_by": "auto-bump"
       }
