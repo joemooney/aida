@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T20:47:56.449703894Z
+modified_at: 2026-11-27T20:48:07.993919968Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -96,6 +96,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T20:47:56.283792031Z
   modified_at: 2026-11-27T20:47:56.283792031Z
+- id: 01a21ec3-f339-76e3-afa1-13338f48446c
+  author: joe
+  content: 'DEFERRED (#4758 CR @c8a4fbf6, p3; advisor 13:50; product-15): the doctor hint should name ONE concrete command (e.g. the autobuild script invocation with its path) instead of the multi-step dirty-primary instruction / generic fix-the-skip-reason hint.'
+  created_at: 2026-11-27T20:48:07.993919968Z
+  modified_at: 2026-11-27T20:48:07.993919968Z
 history:
 - id: 01a21e61-052d-7350-9e36-a62f92671537
   author: joe
