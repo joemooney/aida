@@ -100,8 +100,8 @@ watcher also runs `aida review prepare --pr N --run-review --adversarial --agent
 claude --challenger-agent claude` in the background. A shadow run never records a
 verdict, never sets or clears a merge hold and never posts to the forge. It never
 delays the real review: at most two run at once, and only when the reviewer
-budget (`[review_watch] max_concurrent`) has a free slot. A `--once` pass starts
-none. Failures, timeouts and partial runs are recorded and otherwise ignored.
+budget (`[review_watch] max_concurrent`) has a free slot. A one-shot watcher
+pass starts none. Failures, timeouts and partial runs are recorded and otherwise ignored.
 Each run appends one row to `.aida/review-shadow/runs.jsonl` (mode 0600, not
 tracked by git). A row holds the PR, the head, the finder and challenger
 vendors, a `same_vendor` flag (`vendor_pair` is `same-vendor` or
