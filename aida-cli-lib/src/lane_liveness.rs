@@ -835,12 +835,16 @@ pub(crate) fn exited_claim_seat(claim: &crate::coordination::Claim) -> Option<Pa
 
 /// Whether any headless lane record in `project_root` captured the claim
 /// generation `claim_id`. A record that cannot be read or parsed is an error,
-/// so the caller retains the claim rather than guess.
-// trace:BUG-2773 | ai:claude
+/// so the caller retains the claim rather than guess. A legacy claim with no
+/// `claim_id` has no generation to match, so any record for its `scope`
+/// (by lane spec or captured claim scope) counts as naming it.
+// trace:BUG-2773 trace:BUG-2780 | ai:claude
 pub(crate) fn lane_record_names_claim(
     project_root: &Path,
     claim_id: Option<&str>,
+    scope: &str,
 ) -> Result<bool, String> {
+    let same_scope = |s: &str| s.trim().eq_ignore_ascii_case(scope.trim());
     let dir = lanes_dir(project_root);
     let entries = match std::fs::read_dir(&dir) {
         Ok(entries) => entries,
@@ -860,9 +864,17 @@ pub(crate) fn lane_record_names_claim(
             .map_err(|e| e.to_string())
             .and_then(|raw| serde_json::from_str(&raw).map_err(|e| e.to_string()))
             .map_err(|e| format!("{}: {e}", path.display()))?;
-        if record.claim.as_ref().is_some_and(|captured| {
-            captured.claim_id.is_some() && captured.claim_id.as_deref() == claim_id
-        }) {
+        let names = match claim_id {
+            Some(id) => record
+                .claim
+                .as_ref()
+                .is_some_and(|captured| captured.claim_id.as_deref() == Some(id)),
+            None => {
+                same_scope(&record.spec)
+                    || record.claim.as_ref().is_some_and(|c| same_scope(&c.scope))
+            }
+        };
+        if names {
             return Ok(true);
         }
     }
