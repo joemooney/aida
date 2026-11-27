@@ -26,6 +26,12 @@ feature: Uncategorized
 created_at: 2026-11-27T11:24:32.780781693Z
 modified_at: 2026-11-27T12:47:10.638585152Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a21b19-1245-7440-b9fb-313fdb9f28d0
+  created_at: 2026-11-27T11:24:39.480183511Z
+  created_by: dirtlab
 comments:
 - id: 01a21d0b-9f2e-77a0-8a5b-85dfc5c2417f
   author: aida-auto-bump
@@ -33,6 +39,10 @@ comments:
   created_at: 2026-11-27T12:47:10.638700533Z
   modified_at: 2026-11-27T12:47:10.638700533Z
 history:
+- id: 01a21cc0-1af3-7ff2-b81c-0bd288bea2e4
+  author: dirtlab
+  timestamp: 2026-11-27T11:24:41.587046220Z
+  changes: []
 - id: 01a21d0b-9f2e-77a0-8a5b-85e02c09a77b
   author: aida-auto-bump
   timestamp: 2026-11-27T12:47:10.638706230Z
