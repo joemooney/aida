@@ -15,6 +15,10 @@ pub(crate) struct ReviewVendor {
     pub efforts: &'static [&'static str],
     /// Codex takes effort as a `-c` config override; the rest take `--effort`.
     pub effort_as_config: bool,
+    /// Verified unable to read files beyond the prompt. Only such a vendor may
+    /// publish a PR comment: a prompt-injected diff could otherwise make it
+    /// quote a local secret. trace:BUG-2783 | ai:claude
+    pub no_read: bool,
 }
 
 impl ReviewVendor {
@@ -66,6 +70,8 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     ],
     efforts: &["low", "medium", "high", "xhigh", "max"],
     effort_as_config: false,
+    // `--tools ""` leaves the session with no file-read tool at all.
+    no_read: true,
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -82,6 +88,8 @@ const CODEX: ReviewVendor = ReviewVendor {
     auth: &["OPENAI_API_KEY", "CODEX_HOME"],
     efforts: &["low", "medium", "high", "xhigh"],
     effort_as_config: true,
+    // `--sandbox=read-only` still reads any file the user can.
+    no_read: false,
 };
 
 /// The finder when neither `--agent` nor `[agents] vendor` names one.
