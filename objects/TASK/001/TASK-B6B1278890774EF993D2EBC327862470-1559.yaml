@@ -14,11 +14,31 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:27:07.544697554Z
-modified_at: 2026-11-27T19:56:47.153116659Z
+modified_at: 2026-11-27T19:57:59.755506923Z
 req_type: Task
 tags:
 - admission
 - auto-train
+comments:
+- id: 01a21e96-0c4b-7a93-9a91-708f52473cb1
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** `queued_train_admission` normalizes the PR set (sort + dedup) once; waiter identity and the stored row use it; comparison normalizes legacy rows too. Proven by `task3925_same_set_in_another_order_adopts_its_waiter`.
+    - **AC2 (unit):** identity is the PR set alone (owner dropped from the match): a matching live waiter is adopted — keeps its id/since/queue position; its owner and expiry are refreshed on refusal; removed on admission. Proven by `task3925_same_set_from_another_parent_adopts_its_waiter` and the order test.
+    - **AC3 (unit):** the two tests above, `task3925_different_set_queues_fifo` (assertion inside the adopt test), and `task3925_recycled_pid_is_dead_and_released` (same pid, starttime+1).
+
+    ### Expected files
+    - `aida-cli-lib/src/admission_owner.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None ("start time" read as the owner ProcIdentity starttime; the waiter `since` keeps its queue position).
+  created_at: 2026-11-27T19:57:59.755506923Z
+  modified_at: 2026-11-27T19:57:59.755506923Z
+  session_id: 01a21e94b9b6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e94-f0b1-7662-aeb9-7250525292d7
   author: aida-session-start
