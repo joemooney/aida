@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-27T22:56:38.194629438Z
+modified_at: 2026-11-27T23:12:49.679576608Z
 req_type: Task
 tags:
 - admission
@@ -155,6 +155,13 @@ comments:
     Residuals: park/resume_train/serialized/matches are dead in non-test builds until S2 (cfg_attr allow). Diff is ~410 changed lines (~260 production, ~150 tests), over the 300 target.
   created_at: 2026-11-27T22:56:38.194629438Z
   modified_at: 2026-11-27T22:56:38.194629438Z
+  session_id: 01a21f21a198
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21f48-6c0f-7930-a1c2-cee50424717b
+  author: dirtlab
+  content: 'S1 PR opened: https://github.com/joemooney/aida/pull/4768 (head e0ec67aeab). make check-ci-fast passed (47 gates) after adding the store-writer inventory rows; task3920 tests plus neighbouring admission/check/status suites pass locally.'
+  created_at: 2026-11-27T23:12:49.679576608Z
+  modified_at: 2026-11-27T23:12:49.679576608Z
   session_id: 01a21f21a198
   harness_version: 2.1.319 (Claude Code)
 history:
