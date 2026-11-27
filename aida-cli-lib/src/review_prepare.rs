@@ -2725,7 +2725,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             &format!("#!/bin/sh\ncat >/dev/null\necho '{}'\n", reply("ok")),
         );
         let (glab, posted) = (bin.join("glab"), t.join("posted"));
-        let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+        let path = format!("{}:/usr/bin:/bin", bin.display());
         let guard = |cmd: Option<&str>| {
             let extra = [
                 ("AIDA_REVIEW_RUNNER_CMD", cmd),
