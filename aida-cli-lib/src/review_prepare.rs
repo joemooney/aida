@@ -2685,6 +2685,10 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
     // trace:BUG-2783 | ai:claude
     #[test]
     fn bug2783_unconfined_runner_review_is_never_posted() {
+        // HOME and PATH change, so this runs alone in its own process.
+        if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+            return;
+        }
         let temp = tempfile::tempdir().unwrap();
         let t = temp.path();
         let (root, bin, home) = (t.join("repo"), t.join("bin"), t.join("home"));
@@ -2693,6 +2697,8 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         }
         let canary = "CANARY-2783-never-publish";
         std::fs::write(home.join(".ssh/id_test"), canary).unwrap();
+        let identity = "[user]\nname = AIDA Test\nemail = test@example.invalid\n";
+        std::fs::write(home.join(".gitconfig"), identity).unwrap();
         let install = |name: &str, body: &str| {
             let src = t.join(format!("{name}.src"));
             std::fs::write(&src, body).unwrap();
