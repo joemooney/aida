@@ -1,0 +1,31 @@
+id: 01a21c06-6171-7d50-b38c-1978d3c8a4b8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1563
+title: 'Review follow-up: aida-cli-lib/src/lane_host.rs:396-399 wires agy_lane_probe into inspect(), which init_cmd.'
+description: |-
+  From STORY-3202
+  Reviewed sha: 1783608c2a472560286c5a4445f3bf009084e080
+
+  aida-cli-lib/src/lane_host.rs:396-399 wires agy_lane_probe into inspect(), which init_cmd.rs:2252 also reaches via lane_host::report on `aida init`. On any host with agy on PATH, project setup now runs a networked `agy models` call with a deadline of up to 30s (host_diagnostics.rs agy_lane_probe). Only `aida doctor --lane-host` should make that outward call, or report() should skip it.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T08:01:49.937191598Z
+modified_at: 2026-11-27T08:01:49.937191598Z
+req_type: Task
+tags:
+- carried-from:STORY-3202
+- finding-hash:090d9577
+- from-review:STORY-3202
+relationships:
+- rel_type: References
+  target_id: 01a21a2e-62ea-7e00-8684-13f8ad52587b
+  created_at: 2026-11-27T08:01:49.937259012Z
+filed_at:
+  code_sha: 1783608c2a472560286c5a4445f3bf009084e080
+  branch: pr-4716
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f63339b162e
+  vendor: claude
+  session: 01a21c030d32
