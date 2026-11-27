@@ -2570,12 +2570,13 @@ Supervised advisor services (review-watch and auto-train)
 Usage: aida advisor loops [OPTIONS] <COMMAND>
 
 Commands:
-  status        Show review-watch's persisted binding and controller receipt
-  rebind        Bind review-watch and auto-train to this advisor grant through the deputy
-  train-status  Show the supervised train service and any repeated-failure alert
-  drain         Drain both loops' admission claims for a bounded, audited time
-  resume        End an active drain; the loops take their admission claims again
-  help          Print this message or the help of the given subcommand(s)
+  status          Show review-watch's persisted binding and controller receipt
+  rebind          Bind review-watch and auto-train to this advisor grant through the deputy
+  train-status    Show the supervised train service and any repeated-failure alert
+  drain           Drain both loops' admission claims for a bounded, audited time
+  resume          End an active drain; the loops take their admission claims again
+  release-waiter  Release a waiting manual train, so the auto-train stops yielding to it
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -2707,6 +2708,35 @@ Options:
 End an active drain; the loops take their admission claims again
 
 Usage: aida advisor loops resume [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops release-waiter
+Release a waiting manual train, so the auto-train stops yielding to it.
+
+`aida advisor loops train-status` lists each waiting manual train with its id. A waiter is also
+released when the process that retries it exits, or 15 minutes after its last attempt.
+
+Usage: aida advisor loops release-waiter [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The waiter id shown by `train-status`
 
 Options:
       --format <FORMAT>
@@ -35734,6 +35764,33 @@ Working on aida itself
       "resume"
     ],
     "about": "End an active drain; the loops take their admission claims again",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "release-waiter"
+    ],
+    "about": "Release a waiting manual train, so the auto-train stops yielding to it",
     "flags": [
       {
         "name": "canonical-ids",

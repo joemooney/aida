@@ -847,7 +847,8 @@ mod bug2769_idle_admission_tests {
             .err()
             .expect("train A holds admission past the manual train's bound");
         assert!(format!("{error:#}").contains("gave up"), "{error:#}");
-        let line = crate::admission_owner::manual_waiter(&root)
+        let line = crate::admission_owner::manual_waiters(&root)
+            .first()
             .expect("the manual train stays recorded")
             .describe();
         assert!(
@@ -872,7 +873,7 @@ mod bug2769_idle_admission_tests {
         let manual = crate::admission_owner::manual_train_admission(&root, false, &[4464])
             .unwrap()
             .expect("the manual train is admitted");
-        assert!(crate::admission_owner::manual_waiter(&root).is_none());
+        assert!(crate::admission_owner::manual_waiters(&root).is_empty());
         let during = polls.load(Ordering::SeqCst);
         wait_for("a poll while the manual train runs", || {
             polls.load(Ordering::SeqCst) > during
