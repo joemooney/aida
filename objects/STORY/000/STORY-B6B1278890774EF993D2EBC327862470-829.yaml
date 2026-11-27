@@ -1892,6 +1892,15 @@ comments:
   modified_at: 2026-11-27T06:10:52.232356816Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21bbf-80f3-7b92-91db-06c5a7adc7a2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 72d81cce56 (#4721 r2). Diff vs 35812fa13a: one line in scripts/ratchet-set.json that adds s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report to the review_prepare.rs group's tests list. The group has no count field. Evidence: python3 -m unittest tests.test_ratchet_set passes (7 tests). make check-ci-source did not finish locally: it ran past the 58s tool cap, and tests/test_porcelain_install fails in this sandbox because /tmp is read-only (it fails the same way without this change). Residual risk: none beyond relying on CI for the full source gate. Per the brief, main was not merged.
+  created_at: 2026-11-27T06:44:24.947586033Z
+  modified_at: 2026-11-27T06:44:24.947586033Z
+  session_id: 01a21bbb7a7d
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21bc0-7ca7-7be3-8740-af91d356dccf
   author: aida-auto-bump
   content: |-
