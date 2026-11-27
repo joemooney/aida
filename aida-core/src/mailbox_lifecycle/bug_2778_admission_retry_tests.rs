@@ -174,8 +174,9 @@ fn a_live_unknown_writer_fails_closed_without_retry() {
     assert_eq!(tries, 1);
 }
 
-// TASK-3922 AC2: a writer that is not an MCP server is restarted with its
-// own arguments, a long command line is cut, and an unreadable one is named.
+// TASK-3922 AC2: a recognised deputy is restarted with its allowlisted
+// flags, an unrecognised command line is never echoed, and an unreadable one
+// is named by its executable.
 // trace:TASK-3922 | ai:claude
 #[test]
 fn a_non_mcp_writer_is_restarted_with_its_own_arguments() {
@@ -194,9 +195,10 @@ fn a_non_mcp_writer_is_restarted_with_its_own_arguments() {
         "{gap:?}"
     );
     assert!(
-        gap.writers[1].ends_with("then rerun `aida-server a1 a2 a3 a4 a5 a6 …`"),
+        gap.writers[1].ends_with("then start `aida-server` again as it was started"),
         "{gap:?}"
     );
+    assert!(!gap.writers[1].contains("a1"), "{gap:?}");
     assert!(
         gap.writers[2]
             .ends_with("stop it with `kill 11`, then start `aida` again as it was started"),
@@ -239,4 +241,64 @@ fn retire_with_maps_a_transient_admission_refusal() {
         ))
     });
     assert!(!gate.err().expect("refused").transient_admission);
+}
+
+// TASK-3922 r1: a credential on a writer's command line never reaches the
+// refusal, whether passed as `--flag VALUE`, `--flag=VALUE` or `key=value`,
+// while a recognised script deputy still gets its allowlisted restart hint.
+// trace:TASK-3922 | ai:claude
+#[test]
+fn a_writer_refusal_never_echoes_a_credential_argument() {
+    let argv = |args: &[&str]| args.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+    let mut deputy = writer(21, "/gone/aida (deleted)", (1, 93));
+    deputy.cmdline = argv(&[
+        "/gone/aida",
+        "--session-grant",
+        "XYZ",
+        "deputy",
+        "shell",
+        "run",
+        "--token=ABC",
+        "token=DEF",
+        "--name",
+        "ops",
+        "--loop",
+    ]);
+    let mut other = writer(22, "/gone/aida (deleted)", (1, 92));
+    other.cmdline = argv(&[
+        "/gone/aida",
+        "--Session-Grant",
+        "XYZ",
+        "--token=ABC",
+        "token=DEF",
+    ]);
+    let gap = admission_gap(&[deputy.clone(), other], Some(&me()), 1, None).unwrap();
+    let reason = RefusalReason::WriterAdmissionUnknown {
+        writers: gap.writers.clone(),
+        transient: gap.transient,
+    }
+    .to_string();
+    for secret in ["XYZ", "ABC", "DEF"] {
+        assert!(!reason.contains(secret), "{secret} leaked: {reason}");
+    }
+    assert!(
+        gap.writers[0].ends_with(
+            "stop it with `kill 21`, then rerun `aida deputy shell run --name ops --loop`"
+        ),
+        "{gap:?}"
+    );
+    assert!(
+        gap.writers[1].ends_with("then start `aida` again as it was started"),
+        "{gap:?}"
+    );
+    // The dry-run listing redacts the same values.
+    let listed = super::activation::redacted_command(&deputy.cmdline, 11);
+    for secret in ["XYZ", "ABC", "DEF"] {
+        assert!(!listed.contains(secret), "{secret} leaked: {listed}");
+    }
+    assert!(listed.contains("--session-grant <redacted>"), "{listed}");
+    assert!(
+        listed.contains("--token=<redacted> token=<redacted>"),
+        "{listed}"
+    );
 }
