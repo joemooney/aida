@@ -9,12 +9,12 @@ description: |-
   - AC1: a fixture test over deputy_binary_finding (advisor_loop_service.rs) with a fake deputy receipt on a stale/deleted binary asserts the finding names the deputy, pid, binary and the restart fix.
   - AC2: a doctor_cmd.rs test with two services reporting the same deputy:pid id (the deputy-binary / stale-deputy alias) asserts ONE deduplicated finding.
   - AC3: test-only.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:18:00.049566692Z
-modified_at: 2026-11-27T23:18:00.049566692Z
+modified_at: 2026-11-27T23:33:43.171927832Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -25,6 +25,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:18:10.875047040Z
   changes: []
+- id: 01a21f5b-8c83-7d20-a64a-3bfcbe46e9f8
+  author: aida-session-start
+  timestamp: 2026-11-27T23:33:43.171924930Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
   branch: main
