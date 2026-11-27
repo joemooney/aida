@@ -48,10 +48,6 @@ fn shell_quote_diagnostic(value: &str) -> String {
     }
 }
 
-/// A deliberately named diagnostic entry, separate from queue/agent admission.
-/// It runs only the closed fixture prompt and reuses every shared host barrier.
-/// The candidate inventory may be measured here; production still refuses it.
-// trace:TASK-3048 | ai:codex
 /// The diagnostic child's grant, revoked when the diagnostic ends.
 struct DiagnosticGrant(String);
 
@@ -81,6 +77,10 @@ fn assign_diagnostic_child(
     Ok(grant)
 }
 
+/// A deliberately named diagnostic entry, separate from queue/agent admission.
+/// It runs only the closed fixture prompt and reuses every shared host barrier.
+/// The candidate inventory may be measured here; production still refuses it.
+// trace:TASK-3048 | ai:codex
 pub(crate) fn diagnostic_launch(
     fixture: &Path,
     credential: &Path,
