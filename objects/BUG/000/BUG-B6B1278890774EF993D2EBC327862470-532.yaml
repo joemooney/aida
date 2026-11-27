@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T02:17:09.701670840Z
+modified_at: 2026-11-27T02:51:40.851302375Z
 req_type: Bug
 tags:
 - admission
@@ -209,6 +209,19 @@ comments:
   content: Commit cbaddf4770 references this requirement
   created_at: 2026-11-27T02:17:09.701670840Z
   modified_at: 2026-11-27T02:17:09.701670840Z
+  session_id: 01a21abeb49c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21aea-6db3-7671-b8eb-e2f8c69f55b5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: cbaddf4770 (port of #4679 onto main 956b13f4da).
+    Acceptance evidence: AC1/AC3 [behavioral-test] review_watch::train::bug2769_idle_admission_tests::bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter (advisor_loop_train.rs) - train B waits until the recorded manual train ran and released; AC2 asserted in the same test via ManualWaiter::describe, wired into train-status (advisor_loop_service.rs status_value/status_lines) and pr train --check (pr_train_check.rs check_report). Targeted run: 8 passed (bug2771|bug2769|bug2732); make check-ci-fast exit 0.
+    Port: aida-cli-lib changes are line-identical to #4679; only conflict was scripts/store-writers.toml (kept BUG-2777 member_induced_drift row and the BUG-2771 manual_train_admission row). No new manual_train_admission callers on main; yield_reason still checked between trains (advisor_loop_train.rs:98,404).
+    Probes: P1 none. P3 single waiter file - a second manual train with different PRs overwrites the first's record (auto-train still yields; display names the latest). P4 PR order [1,2] vs [2,1] resets 'since' (cosmetic). P5 the waiter grants nothing; unreadable/expired/future-forged (>TTL) records are ignored, so failure falls back to the prior behavior; starvation of the auto-train is bounded by the 15-min TTL.
+    Residual risks: listed P3/P4 nits; no fixes needed.
+  created_at: 2026-11-27T02:51:40.851302375Z
+  modified_at: 2026-11-27T02:51:40.851302375Z
   session_id: 01a21abeb49c
   harness_version: 2.1.319 (Claude Code)
 history:
