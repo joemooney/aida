@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T05:03:26.070646354Z
+modified_at: 2026-11-27T05:20:38.969325752Z
 req_type: Story
 tags:
 - integration
@@ -1811,6 +1811,17 @@ comments:
   created_at: 2026-11-27T05:03:26.070641694Z
   modified_at: 2026-11-27T05:03:26.070641694Z
   session_id: 01a21b3a8040
+- id: 01a21b73-164d-7c32-876b-e094e90fa65c
+  author: joe
+  content: |-
+    PROMOTION PLAN (advisor 22:24): S5e #4721 and STORY-3202 #4716 r2 ride ONE promotion, p54.
+    - S5e's docs line ('[agents] reviewer seat is read from the merge base, never from the change under review') becomes accurate only with STORY-3202 r2's fix: the default vendor is resolved from trusted config only.
+    - So S5e is not promoted ahead of #4716 r2.
+    - If #4716 stalls past 2026-11-27, either the fix is pulled onto main or S5e's line is reworded before it promotes alone.
+  created_at: 2026-11-27T05:20:38.969325752Z
+  modified_at: 2026-11-27T05:20:38.969325752Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
