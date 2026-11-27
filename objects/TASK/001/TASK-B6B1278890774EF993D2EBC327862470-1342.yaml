@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T01:49:19.571215280Z
+modified_at: 2026-11-27T01:55:29.101838265Z
 req_type: Task
 tags:
 - review
@@ -155,6 +155,17 @@ comments:
     COMMIT your work.
   created_at: 2026-11-27T01:46:36.856208970Z
   modified_at: 2026-11-27T01:46:36.856208970Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21ab7-3b31-73c2-9a5d-7cbbbbbddd88
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:55):
+    # TASK-3869 FRESH (replaces closed #4701; product-15 2026-11-26 18:55). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch int-task-3869-fresh (cut from the integration tip, which already contains main and S5d). Do NOT merge main. Title "[AI:claude] fix(review): skip non-regular entries unread, store-only --specs, pinned-root proofs (Refs TASK-3869)". The ~415-line size is an accepted exception (advisor 17:34).
+    PORT #4701's change onto the integration tip: `git diff origin/integration...origin/int-task-3869-hardening` is the reference; integration-30's pre-check PASSED its content. Resolve against S5d (exit code 4 = partial, main's run_review_agent / runner_failure). AC4 (non-UTF-8) stays out of scope (a TASK-3869 comment). Keep its tests.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration whose body says "Replaces #4701 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-27T01:55:29.101838265Z
+  modified_at: 2026-11-27T01:55:29.101838265Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
