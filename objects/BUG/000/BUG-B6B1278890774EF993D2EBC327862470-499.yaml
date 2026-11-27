@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-27T10:14:43.344358641Z
+modified_at: 2026-11-27T10:16:16.413898565Z
 req_type: Bug
 tags:
 - leases
@@ -216,6 +216,11 @@ comments:
   content: 'AC1 AMENDED (advisor-122 2026-11-26 16:02): a request-changes verdict must not flip the status of a spec that is COMPLETED, or whose PR is MERGED. A CLOSED-unmerged PR''s work did NOT land, so its spec SHOULD stay reworkable (it is shelved normally). This supersedes the earlier "MERGED or CLOSED" wording. #4663''s reviewer should judge against this text. (The legacy centralized-store guard gap, which the finder trial found, may be included if small; otherwise it''s a follow-up comment.)'
   created_at: 2026-11-26T22:56:25.025565356Z
   modified_at: 2026-11-26T22:56:25.025565356Z
+- id: 01a21c81-7648-7093-b9ec-957692d9d576
+  author: joe
+  content: PR-4663 at dcd65eee1d647365fbaf39a88c0cb43d3f17a683 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-27T10:16:16.200345840Z
+  modified_at: 2026-11-27T10:16:16.200345840Z
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
