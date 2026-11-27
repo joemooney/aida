@@ -7215,6 +7215,7 @@ fn task3930_low_budget_handler_never_resumes_a_stale_retained_journal() {
         "#!/bin/sh\n[ \"$1\" = --version ] && { echo 'gh version 2.60.0'; exit 0; }\necho \"$*\" >> \"$(dirname \"$0\")/gh-calls\"\ncase \"$*\" in\n  'api rate_limit --cache 60s') echo '{\"resources\":{\"core\":{\"limit\":5000,\"remaining\":1}}}' ;;\n  *) exit 1 ;;\nesac\n",
     );
     let journal_dir = root.join(".aida/train");
+    std::fs::create_dir_all(&journal_dir).unwrap();
     let mut entry = journal::Entry::new(train_of("main", &fms(&[3902])), "train/stale-1".into());
     entry.step = journal::Step::Open;
     journal::activate(&journal_dir, entry).unwrap();
