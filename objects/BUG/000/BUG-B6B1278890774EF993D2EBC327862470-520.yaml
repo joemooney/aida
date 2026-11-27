@@ -143,6 +143,11 @@ comments:
   created_at: 2026-11-27T02:18:35.035905714Z
   modified_at: 2026-11-27T02:18:35.035905714Z
   session_id: 01a21ac914b2
+- id: 01a21acc-72b7-7b31-8b92-51640a16966e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2759 slice 2 (completing). Base main 956b13f4, 1 commit, 2 files (remote_create.rs incl. inline #[cfg(test)] module; store-writers.toml). CI pending at review time. AC walk: AC1 PARTIAL — merge-refusal reason text verified by reconcile_refusal_displays_merge_validation_cause (slice 1) and bug_2759_consent_gate_skips_emails_every_hub_already_has (names the new email and the hubs that lack it); push-race reason text UNVERIFIED: no test asserts the race-exhausted message (remote_create.rs:2974) or the retry warning (:2650). AC2 verified by bug_2759_reconcile_retries_once_after_a_concurrent_push (a real second-clone push between union and push; both writes land on both hubs, raced==1); the 2-attempt bound itself (every attempt raced) has no test. Comment-7 slice ACs: (1) gate flags only emails the receiving hub lacks — verified by the consent test (known email on both hubs passes after scrub; new email refused); (2) message no longer says ''one hub only'' — verified (same test); (3) agent-mode cause chain — verified by bug_2759_agent_error_block_keeps_every_cause, which renders through agent_error_block with the same {:?} msg cli_entry.rs:213 builds. Deep pass: the gate stays fail-closed (git grep failure or no match leaves hub_has empty; both sides use emails_in on ''+''-stripped lines so the tokens agree); only NonFastForward is retried; the retry re-runs the full lock, merge and validate path including the consent gate; dry-run never returns Raced. The store-writers inventory follows the moved sinks. Type protocol: BUG-2759 bug protocol ''PR touches at least one test file'' — met (inline test module in remote_create.rs, three new tests). Verdict request-changes: AC1 is claimed (completing trailer) but its push-race reason text has no asserting test.. No triage reason was given.'
+  created_at: 2026-11-27T02:18:56.055753729Z
+  modified_at: 2026-11-27T02:18:56.055753729Z
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
@@ -211,6 +216,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21acc-72b7-7b31-8b92-515702e7f656
+  author: joe
+  timestamp: 2026-11-27T02:18:56.055739859Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
