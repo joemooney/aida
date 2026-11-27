@@ -5823,7 +5823,7 @@ mod rework_merge_tests {
             clone,
             main,
             &[],
-            Path::new("/tmp/config"),
+            Path::new("/srv/config"),
             &lane_merge_env(main, &identity),
         )
         .unwrap();
