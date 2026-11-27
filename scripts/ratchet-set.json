@@ -75,6 +75,7 @@
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",
+        "t3869_excluded_paths_are_classified_before_any_open",
         "t3869_non_regular_entries_skipped_with_named_reason",
         "t3869_pinned_root_survives_concurrent_symlink_swap",
         "t3869_specs_resolve_only_through_store_and_refuse_unknown",

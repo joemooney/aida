@@ -1146,11 +1146,20 @@ fn worktree_entries(
             patch_bytes: 0,
             non_regular: None,
         };
-        // trace:TASK-3869 | ai:claude
+        // Classify by path first: an excluded (secret, substrate, generated or
+        // user-excluded) path is never opened. Only an lstat decides whether
+        // it still exists, and an lstat error (an unreadable parent) keeps it
+        // listed as excluded instead of failing the scan. trace:TASK-3869 | ai:claude
+        if classify_compiled(&entry, excludes).is_some() {
+            if !matches!(locate_confined(root, path.as_bytes()), Ok(Located::Missing)) {
+                entries.push(entry);
+            }
+            continue;
+        }
         match open_confined(root, path.as_bytes())? {
             Confined::Missing => continue,
             Confined::NonRegular(kind) => entry.non_regular = Some(kind),
-            Confined::File(mut file) if classify_compiled(&entry, excludes).is_none() => {
+            Confined::File(mut file) => {
                 let mut bytes = Vec::new();
                 file.read_to_end(&mut bytes)?;
                 entry.is_binary = bytes.iter().take(8000).any(|&b| b == 0);
@@ -1159,7 +1168,6 @@ fn worktree_entries(
                 }
                 entry.patch_bytes = bytes.len();
             }
-            Confined::File(_) => {}
         }
         entries.push(entry);
     }
@@ -1233,60 +1241,100 @@ fn confined_dir<'a>(
     Ok(dir)
 }
 
-/// Open the worktree path `rel` without following any symlink on it; a
-/// symlink, directory (gitlink) or special file is reported, never opened
-/// for reading. trace:TASK-3869 | ai:claude
-fn open_confined(root: &Path, rel: &[u8]) -> Result<Confined> {
+/// A worktree path as `locate_confined` found it, by lstat alone.
+enum Located {
+    Missing,
+    NonRegular(aida_core::review_engine::NonRegularKind),
+    /// A regular file: its pinned parent (keeps the `/proc/self/fd` path
+    /// valid) and the leaf path beneath it. Not opened yet.
+    Regular(std::fs::File, PathBuf),
+}
+
+fn non_regular_kind(t: std::fs::FileType) -> aida_core::review_engine::NonRegularKind {
     use aida_core::review_engine::NonRegularKind;
-    use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
+    if t.is_symlink() {
+        NonRegularKind::Symlink
+    } else if t.is_dir() {
+        NonRegularKind::Gitlink
+    } else {
+        NonRegularKind::Other
+    }
+}
+
+fn refused(e: std::io::Error) -> Result<Located> {
+    match e.raw_os_error() {
+        Some(libc::ELOOP) => Ok(Located::NonRegular(
+            aida_core::review_engine::NonRegularKind::Symlink,
+        )),
+        Some(libc::ENOENT | libc::ENOTDIR) => Ok(Located::Missing),
+        _ => Err(anyhow::Error::from(e)),
+    }
+}
+
+/// Walk to the worktree path `rel` without following any symlink and lstat
+/// its leaf; the leaf itself is never opened. trace:TASK-3869 | ai:claude
+fn locate_confined(root: &Path, rel: &[u8]) -> Result<Located> {
+    use std::os::unix::ffi::OsStrExt;
     let mut parts: Vec<&OsStr> = (rel.split(|&b| b == b'/'))
         .filter(|p| !p.is_empty())
         .map(OsStr::from_bytes)
         .collect();
     let Some(leaf) = parts.pop() else {
-        return Ok(Confined::Missing);
+        return Ok(Located::Missing);
     };
     if parts.iter().chain([&leaf]).any(|p| *p == "." || *p == "..") {
-        return Ok(Confined::Missing);
+        return Ok(Located::Missing);
     }
-    let refused = |e: std::io::Error| match e.raw_os_error() {
-        Some(libc::ELOOP) => Ok(Confined::NonRegular(NonRegularKind::Symlink)),
-        Some(libc::ENOENT | libc::ENOTDIR) => Ok(Confined::Missing),
-        _ => Err(anyhow::Error::from(e)),
-    };
-    let kind = |t: std::fs::FileType| {
-        if t.is_symlink() {
-            NonRegularKind::Symlink
-        } else if t.is_dir() {
-            NonRegularKind::Gitlink
-        } else {
-            NonRegularKind::Other
-        }
-    };
     let dir = match confined_dir(root, parts, false) {
         Ok(dir) => dir,
         Err(e) => return refused(e),
     };
     let path = pinned(&dir).join(leaf);
     match path.symlink_metadata() {
-        Ok(meta) if !meta.is_file() => return Ok(Confined::NonRegular(kind(meta.file_type()))),
-        Err(e) => return refused(e),
-        Ok(_) => {}
+        Ok(meta) if !meta.is_file() => Ok(Located::NonRegular(non_regular_kind(meta.file_type()))),
+        Ok(_) => Ok(Located::Regular(dir, path)),
+        Err(e) => refused(e),
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Every leaf `open_confined` opened on this thread, for the
+    /// never-open-an-excluded-path proof.
+    static LEAF_OPENS: std::cell::RefCell<Vec<Vec<u8>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Open the worktree path `rel` without following any symlink on it; a
+/// symlink, directory (gitlink) or special file is reported, never opened
+/// for reading. trace:TASK-3869 | ai:claude
+fn open_confined(root: &Path, rel: &[u8]) -> Result<Confined> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let (_dir, path) = match locate_confined(root, rel)? {
+        Located::Missing => return Ok(Confined::Missing),
+        Located::NonRegular(kind) => return Ok(Confined::NonRegular(kind)),
+        Located::Regular(dir, path) => (dir, path),
+    };
+    #[cfg(test)]
+    LEAF_OPENS.with(|o| o.borrow_mut().push(rel.to_vec()));
     let file = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path);
     let file = match file {
         Ok(file) => file,
-        Err(e) => return refused(e),
+        Err(e) => {
+            return Ok(match refused(e)? {
+                Located::NonRegular(kind) => Confined::NonRegular(kind),
+                _ => Confined::Missing,
+            })
+        }
     };
     // Re-check the opened object: a swap after the lstat lands here.
     let meta = file.metadata()?;
     Ok(if meta.is_file() {
         Confined::File(file)
     } else {
-        Confined::NonRegular(kind(meta.file_type()))
+        Confined::NonRegular(non_regular_kind(meta.file_type()))
     })
 }
 
@@ -2877,15 +2925,26 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         std::fs::write(root.join("d/f"), "INSIDE").unwrap();
         std::fs::write(outside.join("f"), "OUTSIDE").unwrap();
         let stop = AtomicBool::new(false);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let live = || !stop.load(Ordering::Relaxed) && std::time::Instant::now() < deadline;
+        let mut swaps = 0usize;
         std::thread::scope(|scope| {
+            // Bounded by `stop` and the deadline, and self-healing: a write
+            // can recreate a missing `d` as a real directory, which would make
+            // the swap-back rename fail (ENOTEMPTY) forever, so drop it.
             scope.spawn(|| {
                 let (d, real) = (root.join("d"), root.join("d.real"));
-                while !stop.load(Ordering::Relaxed) {
-                    let _ = std::fs::rename(&d, &real);
-                    let _ = std::os::unix::fs::symlink(&outside, &d);
-                    std::thread::yield_now();
-                    let _ = std::fs::remove_file(&d);
-                    let _ = std::fs::rename(&real, &d);
+                while live() {
+                    if std::fs::rename(&d, &real).is_ok() {
+                        let _ = std::os::unix::fs::symlink(&outside, &d);
+                        std::thread::yield_now();
+                        let _ = std::fs::remove_file(&d);
+                        swaps += 1;
+                    }
+                    if real.symlink_metadata().is_ok() && std::fs::rename(&real, &d).is_err() {
+                        let _ = std::fs::remove_dir_all(&d);
+                        let _ = std::fs::rename(&real, &d);
+                    }
                 }
             });
             // Stop the swapper even when an assertion below panics; the scope
@@ -2898,7 +2957,10 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             }
             let _stop = StopOnDrop(&stop);
             let (mut inside, mut writes) = (0, 0);
-            for i in 0..3000 {
+            // At least 3000 reads, and on until both a read and a write got
+            // through, but never past the deadline.
+            let mut i = 0usize;
+            while (i < 3000 || inside == 0 || writes == 0) && live() {
                 match read_workspace_file(&root, "d/f").unwrap().as_deref() {
                     Some(b"INSIDE") => inside += 1,
                     None => {}
@@ -2907,6 +2969,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 if i % 20 == 0 {
                     writes += usize::from(write_output(&root, Path::new("d/w"), "x").is_ok());
                 }
+                i += 1;
             }
             stop.store(true, Ordering::Relaxed);
             assert!(
@@ -2914,11 +2977,69 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 "swap never let a confined op through"
             );
         });
+        assert!(swaps > 0, "the swapper never re-parented `d`");
         let leaked: Vec<_> = std::fs::read_dir(&outside).unwrap().flatten().collect();
         assert_eq!(leaked.len(), 1, "a write landed outside: {leaked:?}");
         assert_eq!(
             std::fs::read_to_string(outside.join("f")).unwrap(),
             "OUTSIDE"
+        );
+    }
+
+    /// Path exclusions are decided before any open: a readable `.env`, a
+    /// FIFO `.env.local` (opening it could block), a chmod-000 `.env.prod`,
+    /// a secret-named symlink, a generated file and a user-excluded file are
+    /// listed as excluded with their path reason, never opened, never
+    /// `non_regular`, and none fails the scan. trace:TASK-3869 | ai:claude
+    #[test]
+    fn t3869_excluded_paths_are_classified_before_any_open() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(root.join(".env"), "TOKEN=3869\n").unwrap();
+        let fifo = Command::new("mkfifo").arg(root.join(".env.local")).status();
+        assert!(fifo.unwrap().success());
+        std::fs::write(root.join(".env.prod"), "TOKEN=3869\n").unwrap();
+        std::fs::set_permissions(root.join(".env.prod"), std::fs::Permissions::from_mode(0))
+            .unwrap();
+        std::os::unix::fs::symlink(root.join(".env"), root.join("id_rsa")).unwrap();
+        std::fs::write(root.join("api.generated.rs"), "gen\n").unwrap();
+        std::fs::write(root.join("skip.rs"), "skip\n").unwrap();
+        std::fs::write(root.join("ok.rs"), "fn ok() {}\n").unwrap();
+        let patterns = ["skip.rs".to_string()];
+        let excludes = compile_exclusions(&patterns).unwrap();
+        let listed = ".env\0.env.local\0.env.prod\0id_rsa\0api.generated.rs\0skip.rs\0ok.rs\0";
+        LEAF_OPENS.with(|o| o.borrow_mut().clear());
+        let entries = worktree_entries(root, listed, FileChangeKind::Scanned, &excludes).unwrap();
+        let opened = LEAF_OPENS.with(|o| o.take());
+        assert_eq!(opened, [b"ok.rs".to_vec()], "an excluded path was opened");
+        let labels: Vec<_> = entries
+            .iter()
+            .map(|e| {
+                assert!((e.non_regular.is_none() && e.patch_bytes == 0) || e.path == "ok.rs");
+                let reason = classify_compiled(e, &excludes).map(|r| r.label());
+                (e.path.as_str(), reason)
+            })
+            .collect();
+        let secret = Some("secret_sensitive_path".to_string());
+        assert_eq!(
+            labels,
+            [
+                (".env", secret.clone()),
+                (".env.local", secret.clone()),
+                (".env.prod", secret.clone()),
+                ("api.generated.rs", Some("generated_or_lockfile".into())),
+                ("id_rsa", secret),
+                ("ok.rs", None),
+                ("skip.rs", Some("user_excluded:skip.rs".into())),
+            ]
+        );
+        // A diff-mode secret-named symlink keeps the path label too.
+        let mut link = entries[4].clone();
+        link.non_regular = Some(aida_core::review_engine::NonRegularKind::Symlink);
+        assert_eq!(
+            classify_compiled(&link, &[]).map(|r| r.label()).as_deref(),
+            Some("secret_sensitive_path")
         );
     }
 

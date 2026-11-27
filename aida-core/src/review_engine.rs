@@ -735,10 +735,6 @@ pub fn classify_compiled(
     entry: &RawDiffEntry,
     user_excludes: &[(&str, CompiledGlob)],
 ) -> Option<ExclusionReason> {
-    // trace:TASK-3869 | ai:claude
-    if let Some(kind) = entry.non_regular {
-        return Some(ExclusionReason::NonRegular(kind));
-    }
     if entry.is_binary {
         return Some(ExclusionReason::BinaryFile);
     }
@@ -747,9 +743,13 @@ pub fn classify_compiled(
     }
 
     // trace:TASK-3866 | ai:codex
+    // A path reason outranks the non-regular label, so a secret-named
+    // symlink or FIFO still reads `secret_sensitive_path`; either way the
+    // entry is excluded and never read. trace:TASK-3869 | ai:claude
     std::iter::once(entry.path.as_str())
         .chain(entry.old_path.as_deref())
         .find_map(|path| classify_path_exclusion(path, user_excludes))
+        .or(entry.non_regular.map(ExclusionReason::NonRegular))
 }
 
 /// The exclusion `path` alone hits: secret, substrate, generated or user
