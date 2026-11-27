@@ -10,12 +10,12 @@ description: |-
   - AC2: conformance-launch reuses the PRODUCTION contained child-grant issuance path verbatim (one shared function); any duplicated issuance in the diagnostic entry is deleted.
   - AC3: SubjectMismatch and the subject check are NEVER relaxed.
   - AC4: a test proves conformance-launch's grant subject equals what a production contained launch presents.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T22:32:03.354673454Z
+modified_at: 2026-11-27T22:39:18.815534203Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -97,6 +97,12 @@ comments:
   created_at: 2026-11-27T22:32:03.354668766Z
   modified_at: 2026-11-27T22:32:03.354668766Z
   session_id: 01a21efef83d
+- id: 01a21f29-bdfd-7611-a139-93ec2a46c814
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-27T22:39:19.037461345Z
+  modified_at: 2026-11-27T22:39:19.037461345Z
+  session_id: 01a21f2585b4
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
@@ -124,6 +130,14 @@ history:
   session_id: 01a21efef83d
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21f29-bdfd-7611-a139-93dec6d4b83f
+  author: aida-orchestrator
+  timestamp: 2026-11-27T22:39:19.037460013Z
+  session_id: 01a21f2585b4
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
@@ -131,3 +145,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b90f128a082
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'TASK-3933 at e53f2b99 (2 commits behind main; none of the findings depend on code main has changed since). The root-cause fix is correct: the contained child env allowlist keeps AIDA_USER and drops USER, and conformance-launch now issues its grant through the shared launch::issue_contained_child, which exports AIDA_USER = grant.subject. The production Codex/wrapper headless path uses the same issuer. Moving the AIDA_USER export ahead of apply_child_agent_identity/assign_seat is safe: nothing in between writes or removes AIDA_USER. prepare_runtime_diagnostic builds the child env from selected_environment, so the AC4 test models the real path. AC1 is verified by task_3933_contained_child_presents_its_grant_subject at the helper level only (the probe emission is untested, see finding 2). AC2 is verified by task_3933_diagnostic_and_production_share_the_contained_issuer plus inspection: agy.rs has no issuance of its own, and headless.rs calls issue_contained_child. AC3 is verified by inspection: grant_check_for and the subject comparison are unchanged, no override was added, and no SubjectMismatch test was weakened. AC4 is verified by task_3933_contained_child_presents_its_grant_subject (Valid with the binding, SubjectMismatch without). Blocking: CI (fast compile) is red at this head in the ''Ratchet set'' step (exit 101). The job log could not be fetched (blob host denied in the sandbox), but source analysis points to story_2539_vendor_literal_ratchet: the PR adds a new HeadlessVendor::Codex comparison inside spawn_vendor_headless_forking, and that ledger may only go down.'
+  recovery_hint: address the review findings, move TASK-3933 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-27T22:39:18.815534203Z
