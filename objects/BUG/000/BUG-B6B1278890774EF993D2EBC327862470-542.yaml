@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877077Z
-modified_at: 2026-11-27T02:31:10.673940646Z
+modified_at: 2026-11-27T02:34:05.542953720Z
 req_type: Bug
 tags:
 - lanes
@@ -29,6 +29,18 @@ comments:
   modified_at: 2026-11-27T02:31:10.673940646Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21ada-a621-7e90-ac23-c6355b1acc66
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:34):
+    # BUG-2781: salvage-push committed fast-forward work when a lane ends non-zero; log the kill cause (advisor-122 19:28; product-15). Lane: CLAUDE. STRICT (it pushes on the operator's behalf). MAIN, NEW branch bug-2781-salvage-push. <=250 lines. Completing (BUG-2781) trailer.
+    READ: `aida show BUG-2781` (the #4702 incident and AC1-AC4) and the lane host post-exit path ("host post-exit commit skipped: the lane exited non-zero" in the standalone implementer / lane runner).
+    AC1: on a non-zero lane end with COMMITTED work on the CLAIMED PR branch that FAST-FORWARDS the remote branch, the HOST pushes it (from the host's trusted git, never the seat clone's config: fetch the seat branch into a host ref, verify the fast-forward, push, drop the temp ref) and records "pushed, unverified: final gate incomplete". It never pushes uncommitted changes, a non-fast-forward, or another branch. AC3: log the terminating signal and its source when knowable. AC4: tests (SIGTERM after a commit → pushed; uncommitted only → nothing pushed, retained; non-fast-forward → refused, retained).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work, and PUSH it before running make check-ci-fast (dogfood AC2).
+  created_at: 2026-11-27T02:34:05.542953720Z
+  modified_at: 2026-11-27T02:34:05.542953720Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
