@@ -10,12 +10,12 @@ description: |-
   - AC2: a test with a fake failing probe asserts the exit code, the tail lines and the redaction appear in the refusal, and that a passing probe is unchanged.
 
   Advisor approval 2026-11-27 11:05 (aida-d3). Standard tier; no change to the seat gate itself. After it lands, Joe reruns .aida/tmp/agy-conformance.sh once.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T17:52:18.836279689Z
-modified_at: 2026-11-27T19:30:56.151494139Z
+modified_at: 2026-11-27T20:38:08.793125018Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -100,6 +100,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T19:31:00.169919171Z
   changes: []
+- id: 01a21eba-ce52-76a3-b2e4-003112c9d24a
+  author: aida-auto-bump
+  timestamp: 2026-11-27T20:38:08.722042619Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21eba-ce99-70a2-9621-8d100d10b8f8
+  timestamp: 2026-11-27T20:38:08.793121152Z
+  agent: aida
+  commit_sha: 78aad2f2d04f0f6fd694901f18de02a3c15c43b3
+  summary: 'TASK-3927 AC1 verified: seat_preflight refusal (contained_lane.py preflight_refusal) names exit code and last <=20 non-empty lines of combined stdout+stderr, code-spanned with backticks/control chars neutralized and secret-looking tokens redacted; a 4 KiB-cut first line is dropped; the gate condition is unchanged (no fail-open). conformance.py continue_aida stores the bounded stderr.txt tail as launch[''diagnostic''] on the failing launch stage, and aida_refuse writes report.json. AC2 verified by tests/test_store_mutation.py SeatPreflightDiagnosticTests (failing probe: exit code, tail, redaction, truncation/control chars; passing probe unchanged; grantless exit-0 still refuses) and tests/test_containment_conformance.py LaunchDiagnosticTests; both suites run in CI. CI pending at review time (lib-0, gates); other jobs green. Four non-blocking p3/style follow-ups.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 3c416dc0f7b8fd75d2dea01c879f50c8f17b8327
@@ -112,3 +126,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T19:18:43.378432547Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T20:38:08.722036728Z
+  completion_sha: 78aad2f2d04f0f6fd694901f18de02a3c15c43b3
