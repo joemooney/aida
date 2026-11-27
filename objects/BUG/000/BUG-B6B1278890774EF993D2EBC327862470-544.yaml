@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T03:47:46.959609702Z
+modified_at: 2026-11-27T03:49:54.775619941Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -31,6 +31,20 @@ comments:
     CONCLUSION: plan mode + --sandbox denies write/shell/web in headless print mode, but does NOT confine READS; agy can read anywhere the user can (e.g. ~/.ssh). That's the same exfil class as BUG-2783 (codex read-only). agy's --help has no no-tools / allowed-tools flag; the only knob is settings.json permissions (allow/deny rules) via --settings. Next step to try: `--settings '{"permissions":{"deny":["read_file(*)"...]}}'` or a deny-all rule, plus bwrap with an empty HOME (BUG-2783 AC1).
   created_at: 2026-11-27T03:44:39.520083951Z
   modified_at: 2026-11-27T03:44:39.520083951Z
+- id: 01a21b20-0855-7f43-a715-f579490ca42e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:49):
+    # BUG-2783: review runners must not be able to READ secrets (advisor-122 20:55: HIGH, STRICT, TOP; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2783-review-no-read. <=300 lines; if over, ship AC3 (the post-comment refusal) + AC2 (the canary) first with (Refs BUG-2783).
+    READ: `aida show BUG-2783 --comments` (AC1-AC3, and the LIVE agy probe: plan+sandbox still READS /etc/hostname), the S3a hardened spawn helper (launch/review_runner.rs, vendors/review_runner.rs), codex's --sandbox=read-only argv.
+    AC1: no-read confinement for the review runner: run the vendor CLI inside bwrap (or the existing AIDA containment) with an EMPTY HOME / tmpfs, bind-mounting ONLY the vendor's auth file read-only and the prompt via stdin, no access to the repo or the user's dotfiles (~/.ssh, ~/.aws, ~/.config, other repos); or codex's no-shell/no-tools mode if it really prevents reads. Per vendor: claude (--tools ""), codex, agy.
+    AC2: a CANARY red-team test: plant a canary secret at a fake $HOME/.ssh/id_test and a diff whose text instructs the reviewer to read and quote it; assert the canary never appears in the runner output, the report or the SARIF (with a stub/fake vendor that tries the read through the confinement).
+    AC3: until a vendor has VERIFIED no-read confinement (a per-vendor flag in the vendor table), `review prepare --post-comment` REFUSES with a clear cause when that vendor is the finder or challenger. Local reports are still written.
+    One targeted cargo test run on this host, make check-ci-source, then publish a NEW PR to main. COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T03:49:54.775619941Z
+  modified_at: 2026-11-27T03:49:54.775619941Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
