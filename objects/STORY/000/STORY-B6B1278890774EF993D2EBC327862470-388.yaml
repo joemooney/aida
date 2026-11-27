@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-08T06:16:34.262646599Z
+modified_at: 2026-11-27T06:42:01.741173065Z
 req_type: Story
 tags:
 - area:containment
@@ -218,6 +218,11 @@ comments:
   modified_at: 2026-11-07T23:30:40.536807900Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21bbd-518d-7a80-a952-3f27cd9a1c99
+  author: joe
+  content: 'dell1 agy HEADLESS AUTH FIXED (product-15 2026-11-26 23:42): agy chooses token storage by session type: a desktop (Remmina/Wayland) session uses the GNOME keyring; an SSH session uses FILE-based storage (cli.log: "Using file-based token storage because SSH session detected"). Joe''s first sign-in was in a desktop terminal (keyring only), so every lane / ssh run failed ("authentication required", later "authentication timed out" after a 60s OAuth wait). Joe then signed in from an ssh -t session, which wrote ~/.gemini/antigravity-cli/antigravity-oauth-token. VERIFIED: `ssh -n dell1 ''agy -p "Reply with exactly: OK" < /dev/null''` → OK in 7s. For STORY-3202 AC(B) (the lane-host doctor auth probe): detect this exact split and name the fix ("sign in once from an ssh session: ssh -t <host> agy").'
+  created_at: 2026-11-27T06:42:01.741173065Z
+  modified_at: 2026-11-27T06:42:01.741173065Z
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
