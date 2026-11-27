@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21eb7-b3a2-7db1-aa62-0e7ae139a601",
+  "thread_id": "deputy-01a21eb7-b3a2-7db1-aa62-0e7ae139a601",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795811687946,
+  "body": "Script deputy \"default\" finished script job 01a21eb7-b3a2-7db1-aa62-0e7ae139a601: rc 2 (exit).\nScript: ssh -n dell1 'bash -lc \"cd ~/ai/aida && aida dev status 2>&1 | head -3; git fetch -q origin main; git merge-base --is-ancestor b90f128a0821d45db1f24420e64de1516fc18698 \\$(aida dev status 2>/dev/null | head -1 | awk \"{print \\\\$3}\") && echo LIVE_HAS_3927 || echo LIVE_LACKS_3927\"'\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21eb7-b3a2-7db1-aa62-0e7ae139a601/transcript.log\nRead it with `aida deputy shell log 01a21eb7-b3a2-7db1-aa62-0e7ae139a601 --name default`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a21eb7-b3a2-7db1-aa62-0e7ae139a601 --name default`.\n",
+  "subject": "deputy script job 01a21eb7 FAILED: rc 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

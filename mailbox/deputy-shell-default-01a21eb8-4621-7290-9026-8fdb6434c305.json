@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21eb8-4621-7290-9026-8fdb6434c305",
+  "thread_id": "deputy-01a21eb8-4621-7290-9026-8fdb6434c305",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795811724432,
+  "body": "Script deputy \"default\" finished script job 01a21eb8-4621-7290-9026-8fdb6434c305: rc 0 (ok).\nScript: ssh dell1 bash -l <<'REMOTE'\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21eb8-4621-7290-9026-8fdb6434c305/transcript.log\nRead it with `aida deputy shell log 01a21eb8-4621-7290-9026-8fdb6434c305 --name default`.\n",
+  "subject": "deputy script job 01a21eb8 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
