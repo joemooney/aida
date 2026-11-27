@@ -9,12 +9,12 @@ description: |
   - AC1: a salvage is IDEMPOTENT per clone + head: reclaim_exited_branch_clone (queue_cmd/work.rs ~4251) / seat_clone destroy_inner skip writing a salvage when an identical one (same clone, same head, same checkpoint refs) already exists, so the transient-admission retries never write duplicate salvage copies. Test.
   - AC2: the final writer-admission refusal names the STOP/RESTART command for each unverified pid (e.g. a deleted-binary MCP/server or deputy), instead of "should exit on their own". Test.
   - AC3: wiring tests: retire_with maps WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core mailbox_lifecycle/guard.rs ~214), and both dispatch.rs call-site predicates route a transient refusal into the retry.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T02:22:23.409956753Z
+modified_at: 2026-11-27T03:53:52.567142386Z
 req_type: Task
 tags:
 - lanes
@@ -185,6 +185,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21b23-5e70-70c2-b5c1-82bd5ed72d7a
+  author: aida-auto-bump
+  timestamp: 2026-11-27T03:53:52.496165865Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a21b23-5eb7-78f2-bc87-18c6c3dde63f
+  timestamp: 2026-11-27T03:53:52.567139068Z
+  agent: aida
+  commit_sha: 275cca828707ad8506b59f5dda2ea6dae8397a1b
+  summary: 'TASK-3922 approved at 95d33632892d with no findings. CI: fast gates passed; fast compile was still pending at review time. AC1 verified: salvage_capped now writes a ''# head: <oid>'' line into the patch and, for a salvage that was not truncated, returns the newest existing salvage when its patch and bundle bytes match exactly (identical_salvage, seat_clone.rs). Because the check sits in salvage_capped, it covers both reclaim_exited_branch_clone and destroy. A missing or damaged bundle, a bundle that is no longer needed, or any change to the body writes a new salvage, so a mismatch can never cause data loss. Tests: seat_clone::task_3922_tests::the_newest_identical_salvage_is_reused and lifecycle_tests::task_2053_bwrap_task_3922_repeated_teardown_writes_one_salvage (needs bwrap). AC2 verified: admission_gap ends each unverified writer''s entry with a per-pid step: ''stop it with `kill <pid>`, then <restart>''. RefusalReason Display drops ''should exit on their own''. Per the r1 binding, the restart hint is built only from an allowlist: comm comes from the exe file name, and only the recognised deputy subcommands are used, with a plain ''--name'' value and ''--loop''. Raw argv is never echoed, and redacted_command hides credential values in the dry-run listing in ''--flag VALUE'', ''--flag=VALUE'' and ''key=value'' form. The stale AdmissionGap doc comment is fixed. Tests: bug_2778 a_deleted_binary_writer_is_named_and_transient, a_live_unknown_writer_is_named_and_never_transient, a_non_mcp_writer_is_restarted_with_its_own_arguments, a_writer_refusal_never_echoes_a_credential_argument (XYZ, ABC and DEF never appear). No AIDA CLI flag gives a credential a short form, so leaving short flags unhandled is not a gap. AC3 verified: retire_with_maps_a_transient_admission_refusal covers both transient values and a non-admission refusal. The two retry predicates are now named functions passed directly at both call sites (dispatch.rs reuse_refusal_is_transient and queue_cmd/work.rs kept_for_transient_admission; the spec''s second ''dispatch.rs'' site actually lives in work.rs). Both are unit-tested for the transient and non-transient cases. The head is 2 commits behind main; no conclusion depends on code changed on main since.'
+  punted:
+  - 'punted: Advisor FIX-FIRST ruling (18:17) recorded as a verdict so trains don''t admit this head: secret-leak class in the refusal text. The r1 lane is in flight.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
@@ -197,12 +213,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T00:57:07.008006484Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T03:53:52.496159776Z
+  completion_sha: 275cca828707ad8506b59f5dda2ea6dae8397a1b
   reopened_at_sha: 7461b694e0109a4a1ca68401e9bda5e773f03f87
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor FIX-FIRST ruling (18:17) recorded as a verdict so trains don''t admit this head: secret-leak class in the refusal text. The r1 lane is in flight.'
-  recovery_hint: address the review findings, move TASK-3922 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-27T02:01:26.963281692Z
