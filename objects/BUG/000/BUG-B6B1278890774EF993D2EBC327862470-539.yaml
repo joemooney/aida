@@ -9,12 +9,12 @@ description: |
   - AC1: a PRE-START mail-retention refusal from the writer-admission scan is RETRYABLE: the launch waits with bounded backoff (e.g. 3 tries over about 5 min), re-runs the fresh scan, and proceeds once every writer is verified; it ends the lane only after the retries are spent, with the unverified writer pids/binaries named in the error.
   - AC2: the error names WHICH writer could not be verified (pid, comm, and binary sha or "(deleted)").
   - AC3: tests: transient unverified → verified on retry → launch proceeds; persistently unverified → a refusal naming the writer.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-26T22:26:16.332180170Z
+modified_at: 2026-11-27T00:12:36.622961334Z
 req_type: Bug
 tags:
 - lanes
@@ -110,6 +110,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-26T22:26:20.603364080Z
   changes: []
+- id: 01a21a58-cb49-7eb3-bdee-1210e80050f3
+  author: aida-auto-bump
+  timestamp: 2026-11-27T00:12:36.553370907Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21a58-cb8e-7ca3-8090-9c9a13fb566e
+  timestamp: 2026-11-27T00:12:36.622958105Z
+  agent: aida
+  commit_sha: 9f98ad8b3bf5fb88721f08ada13b10e0847b4107
+  summary: 'BUG-2778 approved; CI was still pending at review time. AC1 verified: the lane-reuse (dispatch.rs:2547) and rework-reclaim (queue_cmd/work.rs:4251) pre-start sites wrap the retention gate in retry_transient_admission. That is 3 tries with 100s/150s waits jittered by up to 20% (about 3-5 min), and each try re-runs the full fresh scan. Only a refusal whose every unverified writer is on a deleted or stale binary retries. A live other-build writer, an unreadable exe, an incomplete scan or a missing self identity gives transient=false and fails closed at once. The final outcome is always the scan''s own verdict, so nothing can fail open. AC2 verified by a_deleted_binary_writer_is_named_and_transient and a_live_unknown_writer_is_named_and_never_transient: each writer is named by pid, comm, exe path or ''(deleted)'', short sha, and deleted/stale/live kind. AC3 verified at helper level by transient_then_verified_on_retry_lets_the_launch_proceed, persistently_transient_refuses_after_three_bounded_tries and a_live_unknown_writer_fails_closed_without_retry. Serde compatibility holds: the enum is internally tagged (''kind'') and the new fields are #[serde(default)], so old journal entries still parse. Retry is safe: a refused retirement reopens the source, destroy re-probes holders, and the lane-reuse path rechecks occupancy before checkout. Bug protocol: met, the PR touches test files (new bug_2778_admission_retry_tests.rs, plus edited message_state_tests.rs and story_1843_c2_refusal_tests.rs). Stale base: main''s work.rs change (BUG-2776 reclaim_retained_review_tree) does not overlap the touched hunk, and the landed tree is clean. Non-blocking follow-ups: wiring test gap (p3, not authority code), duplicate salvage on retry, final-message wording.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 52ac09e8a4dc29914de5e6bde56d88d019c1c7fc
@@ -118,3 +132,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 52ac09e8a4d
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T00:12:36.553363200Z
+  completion_sha: 9f98ad8b3bf5fb88721f08ada13b10e0847b4107
