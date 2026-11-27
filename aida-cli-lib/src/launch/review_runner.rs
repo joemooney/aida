@@ -5,7 +5,7 @@
 //! with its process group at the deadline or when its output exceeds the caps.
 
 use super::review_tuning::{ReviewTuning, BASE_EFFORTS};
-use crate::vendors::review_runner::{AuthRequired, ReviewVendor};
+use crate::vendors::review_runner::{AuthRequired, ConfinedAuth, ReviewVendor};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
@@ -26,6 +26,24 @@ const BASE_ENV: [&str; 4] = ["PATH", "HOME", "LANG", "TERM"];
 /// Matched in either case, as curl and the vendor CLIs read both.
 // trace:BUG-2775 | ai:claude
 const PROXY_ENV: [&str; 4] = ["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY"];
+/// What a confined runner sees of the host, read-only; absent paths are
+/// skipped. Not all of `/etc`: only TLS roots and name resolution.
+// trace:BUG-2783 | ai:claude
+pub(crate) const CONFINED_SYSTEM: [&str; 11] = [
+    "/usr",
+    "/bin",
+    "/lib",
+    "/lib32",
+    "/lib64",
+    "/libx32",
+    "/etc/ssl",
+    "/etc/ca-certificates",
+    "/etc/resolv.conf",
+    "/etc/hosts",
+    "/etc/nsswitch.conf",
+];
+/// A confined runner's empty working directory.
+const CONFINED_CWD: &str = "/review";
 /// How much of a failed runner's stderr its error quotes.
 const STDERR_TAIL: usize = 600;
 /// How long the pipe threads may outlive the killed group before the run fails.
@@ -76,11 +94,67 @@ impl RunnerCall<'_> {
         self.vendor().is_some_and(|agent| agent.no_read)
     }
 
+    /// Whether this pass may publish a PR comment: no-read, and no readable
+    /// token either (a confined vendor still reads its own auth file).
+    // trace:BUG-2783 | ai:claude
+    pub(crate) fn may_post(&self) -> bool {
+        self.vendor()
+            .is_some_and(|agent| agent.no_read && agent.post_allowed)
+    }
+
     /// `agent`'s binary on the operator's PATH, as `run` would resolve it.
     pub(crate) fn on_path(&self, agent: &ReviewVendor) -> Option<PathBuf> {
+        self.find_on_path(agent.program)
+    }
+
+    fn find_on_path(&self, program: &str) -> Option<PathBuf> {
         std::env::split_paths(self.var("PATH").unwrap_or_default())
-            .map(|dir| dir.join(agent.program))
+            .map(|dir| dir.join(program))
             .find(|p| p.is_absolute() && p.is_file())
+    }
+
+    /// The bubblewrap command that runs `program` with an empty tmpfs HOME
+    /// holding only the vendor's own auth files, an empty cwd, the network,
+    /// and `CONFINED_SYSTEM`: no repo, no dotfiles, no other files under
+    /// /home. Refused (fail closed) when bwrap is not on PATH.
+    // trace:BUG-2783 | ai:claude
+    fn confined(&self, auth: &ConfinedAuth, program: &Path) -> Result<Command> {
+        let label = self.label();
+        let bwrap = self.find_on_path("bwrap").with_context(|| {
+            format!(
+                "bubblewrap (bwrap) not found on PATH: the {label} review runner runs only \
+                 inside it so that it cannot read your files; install bubblewrap, or \
+                 review with claude"
+            )
+        })?;
+        let inside = bwrap.canonicalize()?.starts_with(self.checkout.canonicalize()?);
+        ensure!(!inside, "bwrap must live outside the checkout");
+        let home = (self.var("HOME").map(PathBuf::from))
+            .filter(|h| h.is_absolute() && h.parent().is_some())
+            .with_context(|| format!("the confined {label} review runner needs an absolute HOME"))?;
+        let source = match auth.dir_env.and_then(|key| self.var(key)) {
+            Some(dir) => PathBuf::from(dir),
+            None => home.join(auth.dir),
+        };
+        let target = home.join(auth.dir);
+        let mut cmd = Command::new(bwrap);
+        cmd.args(["--die-with-parent", "--unshare-all", "--share-net"]);
+        for path in CONFINED_SYSTEM {
+            cmd.args(["--ro-bind-try", path, path]);
+        }
+        cmd.args(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs"])
+            .arg(&home)
+            .args(["--dir", CONFINED_CWD, "--chdir", CONFINED_CWD]);
+        for file in auth.files {
+            cmd.arg("--ro-bind-try")
+                .arg(source.join(file))
+                .arg(target.join(file));
+        }
+        if let Some(key) = auth.dir_env {
+            cmd.args(["--setenv", key]).arg(&target);
+        }
+        cmd.arg("--ro-bind").args([program, program]).arg("--").arg(program);
+        Ok(cmd)
     }
 
     /// Absolute runner path; refused when relative, missing, not a regular
@@ -109,7 +183,10 @@ impl RunnerCall<'_> {
         let program = self.program()?;
         let vendor = self.vendor();
         let workdir = tempfile::tempdir()?;
-        let mut cmd = Command::new(&program);
+        let mut cmd = match vendor.and_then(|agent| agent.confined_auth.as_ref()) {
+            Some(auth) => self.confined(auth, &program)?,
+            None => Command::new(&program),
+        };
         cmd.env_clear().current_dir(workdir.path());
         // A new session, so its own process group with no controlling terminal:
         // a vendor CLI that prompts on /dev/tty fails at once instead of
@@ -336,6 +413,24 @@ fn pipe_holders(pipes: &[PathBuf]) -> Vec<libc::pid_t> {
     found
 }
 
+/// Test stand-in for bwrap: records its argv in `<dir>/bwrap.argv`, then runs
+/// what follows `--` unconfined, so spawn tests need no user namespaces.
+// trace:BUG-2783 | ai:claude
+#[cfg(test)]
+pub(crate) fn passthrough_bwrap(dir: &Path) {
+    let body = "#!/bin/sh\nprintf '%s\\n' \"$@\" >\"$0.argv\"\n\
+        for a; do shift; [ \"$a\" = -- ] && break; done\nexec \"$@\"\n";
+    // install(1), not an open write fd: see `tests::script` (ETXTBSY).
+    let src = dir.join("bwrap.src");
+    std::fs::write(&src, body).unwrap();
+    let ok = Command::new("install")
+        .arg("-m755")
+        .arg(&src)
+        .arg(dir.join("bwrap"))
+        .status();
+    assert!(ok.unwrap().success());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,6 +495,7 @@ mod tests {
         script(bin, "claude", DUMP);
         script(bin, "codex", DUMP);
         script(bin, "agy", DUMP);
+        passthrough_bwrap(bin);
         let path = format!("{}:/usr/bin:/bin", bin.display());
         let mut env = vars(&[
             ("PATH", &path),
@@ -446,6 +542,57 @@ mod tests {
                 assert_eq!(argv.remove(0), "--print-timeout=15s");
             }
             assert_eq!(argv, agent.unwrap().argv, "prompt or extra args in argv");
+            // codex and agy run only inside the bubblewrap view: exactly the
+            // system dirs, TLS/DNS files, an empty HOME with the vendor's own
+            // auth files, and the binary. trace:BUG-2783 | ai:claude
+            let wrapper = std::fs::read_to_string(bin.join("bwrap.argv"));
+            let wrapper = wrapper.unwrap_or_default();
+            let _ = std::fs::remove_file(bin.join("bwrap.argv"));
+            let auth = match own {
+                "openai" => [".codex/auth.json", ".codex/config.toml"],
+                "gemini" => [
+                    ".gemini/antigravity-cli/antigravity-oauth-token",
+                    ".gemini/antigravity-cli/settings.json",
+                ],
+                _ => {
+                    assert_eq!(wrapper, "", "claude must not be wrapped");
+                    continue;
+                }
+            };
+            let program = bin.join(agent.unwrap().program).canonicalize().unwrap();
+            let program = program.to_str().unwrap();
+            let mut want = vec!["--die-with-parent", "--unshare-all", "--share-net"];
+            for path in [
+                "/usr",
+                "/bin",
+                "/lib",
+                "/lib32",
+                "/lib64",
+                "/libx32",
+                "/etc/ssl",
+                "/etc/ca-certificates",
+                "/etc/resolv.conf",
+                "/etc/hosts",
+                "/etc/nsswitch.conf",
+            ] {
+                want.extend(["--ro-bind-try", path, path]);
+            }
+            want.extend(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]);
+            want.extend(["--tmpfs", "/nonexistent", "--dir", "/review", "--chdir", "/review"]);
+            let binds: Vec<_> = auth.iter().map(|f| format!("/nonexistent/{f}")).collect();
+            for bind in &binds {
+                want.extend(["--ro-bind-try", bind, bind]);
+            }
+            if own == "openai" {
+                want.extend(["--setenv", "CODEX_HOME", "/nonexistent/.codex"]);
+            }
+            want.extend(["--ro-bind", program, program, "--", program]);
+            want.extend(agent.unwrap().argv.iter().copied());
+            if own == "gemini" {
+                want.insert(want.len() - argv.len(), "--print-timeout=15s");
+            }
+            assert_eq!(wrapper.lines().collect::<Vec<_>>(), want);
+            assert!(!wrapper.lines().any(|a| a == "/etc" || a == "/" || a == "--bind"));
             // agy: sandboxed plan mode, and session settings that deny every
             // tool rule, reads included. trace:STORY-3202 | ai:claude
             if own == "gemini" {
@@ -516,7 +663,44 @@ mod tests {
             }
             .no_read()
         };
-        assert!(confined("claude") && !confined("codex") && !confined("agy"));
+        assert!(confined("claude") && confined("codex") && confined("agy"));
+        // Confined runners still read their own token: only claude posts.
+        let posts = |name| {
+            RunnerCall {
+                agent: vendor(name),
+                ..call(dir, &vars(&[]))
+            }
+            .may_post()
+        };
+        assert!(posts("claude") && !posts("codex") && !posts("agy"));
+        assert!(!call(dir, &env).may_post());
+    }
+
+    /// Without bwrap on PATH, or without an absolute HOME to replace, a
+    /// confined vendor is refused before anything runs.
+    // trace:BUG-2783 | ai:claude
+    #[test]
+    fn bug2783_confined_runner_fails_closed_without_bwrap() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let ran = bin.path().join("ran");
+        script(bin.path(), "codex", &format!("#!/bin/sh\ntouch {}\n", ran.display()));
+        let path = bin.path().display().to_string();
+        let run = |pairs: &[(&str, &str)]| {
+            let env = vars(pairs);
+            let runner = RunnerCall {
+                agent: vendor("codex"),
+                ..call(checkout.path(), &env)
+            };
+            format!("{:#}", runner.run("p").unwrap_err())
+        };
+        let err = run(&[("PATH", &path), ("HOME", "/nonexistent")]);
+        assert!(err.contains("bubblewrap (bwrap) not found on PATH"), "{err}");
+        passthrough_bwrap(bin.path());
+        for home in ["", "/", "relative"] {
+            let err = run(&[("PATH", &path), ("HOME", home)]);
+            assert!(err.contains("needs an absolute HOME"), "{home}: {err}");
+        }
+        assert!(!ran.exists(), "codex ran unconfined");
     }
 
     // trace:STORY-3120 | ai:claude
@@ -524,8 +708,9 @@ mod tests {
     fn s3b_runner_argv_carries_only_validated_tuning() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         script(bin.path(), "codex", DUMP);
+        passthrough_bwrap(bin.path());
         let path = format!("{}:/usr/bin:/bin", bin.path().display());
-        let env = vars(&[("PATH", &path)]);
+        let env = vars(&[("PATH", &path), ("HOME", "/nonexistent")]);
         let tuned = |agent: &str, effort| {
             let sources = [("--effort", Some(effort))];
             let tuning = super::super::review_tuning::resolve(

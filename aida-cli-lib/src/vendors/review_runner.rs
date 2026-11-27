@@ -32,6 +32,30 @@ pub(crate) struct ReviewVendor {
     /// quote a local secret.
     // trace:BUG-2783 | ai:claude
     pub no_read: bool,
+    /// Run inside bubblewrap with an empty HOME holding only these auth files:
+    /// the vendor's own tools can then read nothing else of the user's.
+    // trace:BUG-2783 | ai:claude
+    pub confined_auth: Option<ConfinedAuth>,
+    /// May publish a PR comment. A confined runner can still read its own auth
+    /// token, so only claude (no tools at all) posts until output redaction.
+    // trace:BUG-2783 | ai:claude
+    pub post_allowed: bool,
+}
+
+/// Where a confined vendor's own auth and config live: `dir` under HOME, or
+/// the directory `dir_env` names. Only `files` in it are bound, read-only, at
+/// `$HOME/<dir>/<file>`; an absent file is skipped.
+///
+/// | vendor | dir (or env)                   | files                                 |
+/// |--------|--------------------------------|---------------------------------------|
+/// | codex  | `.codex` (`CODEX_HOME`)        | `auth.json`, `config.toml`            |
+/// | agy    | `.gemini/antigravity-cli`      | `antigravity-oauth-token`, `settings.json` |
+// trace:BUG-2783 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ConfinedAuth {
+    pub dir: &'static str,
+    pub dir_env: Option<&'static str>,
+    pub files: &'static [&'static str],
 }
 
 /// A review runner that exited because it is not signed in for headless use.
@@ -115,6 +139,8 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     confinement_verified: true,
     // `--tools ""` leaves the session with no file-read tool at all.
     no_read: true,
+    confined_auth: None,
+    post_allowed: true,
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -135,8 +161,15 @@ const CODEX: ReviewVendor = ReviewVendor {
     auth_failure: &[],
     // Tool use is confined; its whole-disk read scope is BUG-2783's.
     confinement_verified: true,
-    // `--sandbox=read-only` still reads any file the user can.
-    no_read: false,
+    // `--sandbox=read-only` reads anything visible, so the runner sees only
+    // the bubblewrap view: system dirs, TLS/DNS files and its own auth.
+    no_read: true,
+    confined_auth: Some(ConfinedAuth {
+        dir: ".codex",
+        dir_env: Some("CODEX_HOME"),
+        files: &["auth.json", "config.toml"],
+    }),
+    post_allowed: false,
 };
 
 /// Antigravity: print mode with the empty `--print=` value, so the prompt is
@@ -168,8 +201,14 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         "not logged into antigravity",
     ],
     confinement_verified: false,
-    // Its read deny is unverified, and reads were seen allowed anywhere.
-    no_read: false,
+    // Reads were seen allowed anywhere, so it runs in the bubblewrap view.
+    no_read: true,
+    confined_auth: Some(ConfinedAuth {
+        dir: ".gemini/antigravity-cli",
+        dir_env: None,
+        files: &["antigravity-oauth-token", "settings.json"],
+    }),
+    post_allowed: false,
 };
 
 /// agy's session-only settings: deny every permission rule kind it names
@@ -180,10 +219,12 @@ const AGY_DENY_ALL_SETTINGS: &str = concat!(
     r#""execute_url(*)","download_url(*)"]}}"#
 );
 
-/// `agy models` for the lane-host auth probe: needs sign-in, sends no prompt.
+/// `agy models` for the lane-host auth probe: needs sign-in, sends no prompt,
+/// so it carries no untrusted input to confine.
 pub(crate) const AGY_AUTH_PROBE: ReviewVendor = ReviewVendor {
     argv: &["models"],
     print_timeout: None,
+    confined_auth: None,
     ..AGY
 };
 

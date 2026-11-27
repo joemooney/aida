@@ -392,7 +392,7 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         // Count the challenger even when it gave up partway: it may already
         // have read a file on an earlier batch. trace:BUG-2783 | ai:claude
         for runner in std::iter::once(&call).chain(pass) {
-            if !runner.no_read() && !unconfined.contains(&runner.label()) {
+            if !runner.may_post() && !unconfined.contains(&runner.label()) {
                 unconfined.push(runner.label());
             }
         }
@@ -839,10 +839,10 @@ const IMPORTED_PRODUCER: &str = "the unknown runner behind --anchor-findings";
 fn ensure_no_read_producers(unconfined: &[&str]) -> Result<()> {
     anyhow::ensure!(
         unconfined.is_empty(),
-        "--post-comment refused: {} can read local files, so a diff that \
-         instructs it to quote a secret could publish one; the local report \
-         was still written (only a --run-review whose finder and challenger \
-         are claude, which has no file tools, can post)",
+        "--post-comment refused: {} could quote a local secret (any file it can \
+         read, or its own auth token), so a diff that instructs it to could \
+         publish one; the local report was still written (only a --run-review \
+         whose finder and challenger are claude, which has no tools, can post)",
         unconfined.join(" and ")
     );
     Ok(())
@@ -3681,11 +3681,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
     }
 
     /// Canary red team, end to end: the diff tells the reviewer to quote
-    /// `$HOME/.ssh/id_test` and the runner obeys. Nothing in the spawn path
-    /// stops that read yet, so a runner without verified no-read confinement
-    /// gets its local report written but the PR comment refused, and the canary
-    /// reaches neither the forge nor the error. A claude run still posts;
-    /// imported findings, whose producer is unknown, never do.
+    /// `$HOME/.ssh/id_test` and the runner obeys. A custom runner is not
+    /// confined, so it reads the canary: its local report is written but the PR
+    /// comment refused, and the canary reaches neither the forge nor the error.
+    /// A codex run through bubblewrap finds no canary at all, and still may not
+    /// post. A claude run posts; imported findings, whose producer is unknown,
+    /// never do.
     // trace:BUG-2783 | ai:claude
     #[test]
     fn bug2783_unconfined_runner_review_is_never_posted() {
@@ -3771,14 +3772,14 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         };
         let err = format!("{:#}", handle_review_prepare(&args, &store).unwrap_err());
         assert!(
-            err.contains("--post-comment refused: AIDA_REVIEW_RUNNER_CMD can read local files"),
+            err.contains("--post-comment refused: AIDA_REVIEW_RUNNER_CMD could quote a local secret"),
             "{err}"
         );
         assert!(!err.contains(canary) && !posted.exists(), "{err}");
         let sent = std::fs::read_to_string(t.join("prompt")).unwrap();
         assert!(sent.contains(injected.trim_end()), "{sent}");
-        // The local report is still written. It holds the canary until the
-        // runner itself is confined; this pins that gap.
+        // The local report is still written. A custom runner is never
+        // confined, so it holds the canary; a vendor runner's does not (below).
         let report = std::fs::read_to_string(root.join("out.json")).unwrap();
         assert!(report.contains(canary) && root.join("out.sarif").exists());
         drop(unconfined);
@@ -3793,6 +3794,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         // challenges: the default --adversarial pick) is refused too, after
         // the report. Codex here fails its challenge; it ran, so it counts.
         let challenged = t.join("challenged");
+        crate::launch::review_runner::passthrough_bwrap(&bin);
         install(
             "codex",
             &format!(
@@ -3811,11 +3813,48 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             handle_review_prepare(&adversarial, &store).unwrap_err()
         );
         assert!(
-            err.contains("--post-comment refused: codex can read"),
+            err.contains("--post-comment refused: codex could quote"),
             "{err}"
         );
         assert!(challenged.exists() && !posted.exists(), "{err}");
         assert!(root.join("out.json").exists());
+        // Through the real bubblewrap view, a codex that obeys the injected
+        // diff finds no $HOME/.ssh/id_test: the canary reaches neither the
+        // report nor the SARIF, the report is 0600, and posting stays refused
+        // (codex can still read its own token).
+        std::fs::remove_file(bin.join("bwrap")).unwrap();
+        let probe = Command::new("bwrap")
+            .args(["--unshare-all", "--share-net", "--ro-bind", "/", "/", "true"])
+            .output();
+        match probe {
+            Ok(out) if out.status.success() => {
+                let obey = "leak=$(cat \"$HOME/.ssh/id_test\" 2>/dev/null)";
+                install(
+                    "codex",
+                    &format!(
+                        "#!/bin/sh\ncat >/dev/null\n{obey}\nprintf '%s\\n' '{}' | sed \"s/LEAK/x$leak/\"\n",
+                        reply("LEAK")
+                    ),
+                );
+                for out in ["out.json", "out.sarif"] {
+                    let _ = std::fs::remove_file(root.join(out));
+                }
+                let confined = ReviewPrepareArgs {
+                    agent: Some("codex".into()),
+                    ..args.clone()
+                };
+                let err = format!("{:#}", handle_review_prepare(&confined, &store).unwrap_err());
+                assert!(err.contains("refused: codex could quote") && !err.contains(canary));
+                let report = std::fs::read_to_string(root.join("out.json")).unwrap();
+                let sarif = std::fs::read_to_string(root.join("out.sarif")).unwrap();
+                assert!(report.contains("\"x\"") && !report.contains(canary), "{report}");
+                assert!(!sarif.contains(canary) && !posted.exists(), "{sarif}");
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(root.join("out.json")).unwrap().permissions();
+                assert_eq!(mode.mode() & 0o777, 0o600);
+            }
+            other => eprintln!("SKIP confined canary: bwrap cannot run here ({other:?})"),
+        }
         // Findings an unconfined runner produced out of band (here, the
         // canary-quoting reply) and imported with --anchor-findings carry no
         // verifiable producer, so they are refused too, after the report.
