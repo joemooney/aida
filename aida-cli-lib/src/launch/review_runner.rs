@@ -137,9 +137,11 @@ impl RunnerCall<'_> {
         // (directly, or through a symlinked file) is refused, so the change
         // under review cannot supply the vendor's config.toml.
         // trace:BUG-2783 | ai:claude
+        // No `..`: under a missing ancestor it would escape `resolved`.
+        let plain = !(source.components()).any(|c| c == std::path::Component::ParentDir);
         ensure!(
-            source.is_absolute(),
-            "the confined {label} review runner needs an absolute {} directory",
+            source.is_absolute() && plain,
+            "the confined {label} review runner needs an absolute {} directory without `..`",
             auth.dir_env.unwrap_or(auth.dir)
         );
         let sources =
@@ -765,6 +767,17 @@ mod tests {
             .unwrap_err()
         );
         assert!(err.contains("needs an absolute CODEX_HOME"), "{err}");
+        let dotdot = format!("{}/missing/../x", own.path().display());
+        let err = format!(
+            "{:#}",
+            run(&[
+                ("PATH", &path),
+                ("HOME", "/nonexistent"),
+                ("CODEX_HOME", &dotdot)
+            ])
+            .unwrap_err()
+        );
+        assert!(err.contains("without `..`"), "{err}");
         // A symlinked auth file pointing into the repo is refused too.
         let codex_home = own.path().join(".codex");
         std::fs::create_dir_all(&codex_home).unwrap();
