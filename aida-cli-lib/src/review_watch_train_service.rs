@@ -22,14 +22,22 @@ fn bug2746_train_member_selection_alert() {
             writeln!(file, "{pid} {start} {at} review-watch updating PR-4502")
         })
         .unwrap();
+    // The busy reader names the holder only when its best-effort read of
+    // /proc/locks shows exactly this PID on the inode; parallel tests taking
+    // and dropping flocks can make one read miss it. Record the refusal that
+    // carries the holder line, retrying a bounded number of times (each
+    // attempt already waits out lock()'s retry window, so no sleep).
+    // trace:TASK-3929 | ai:claude
+    let holder = "review-watch updating PR-4502, age ";
     for _ in 0..3 {
-        let error = select_train_members(root, &[1], false).err().unwrap();
+        let error = (0..10)
+            .map(|_| select_train_members(root, &[1], false).err().unwrap())
+            .find(|error| format!("{error:#}").contains(holder))
+            .expect("member selection never reported the holder's activity");
         train::record_pass_failure(root, error).unwrap();
     }
     let body = failure_state(root).unwrap().alert.unwrap().message.body;
-    let (_, age) = body
-        .split_once("review-watch updating PR-4502, age ")
-        .unwrap();
+    let (_, age) = body.split_once(holder).unwrap();
     let age: i64 = age.split_once('s').unwrap().0.parse().unwrap();
     assert!((120..=Utc::now().timestamp() - at).contains(&age));
 }
