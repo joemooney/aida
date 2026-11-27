@@ -1,0 +1,71 @@
+id: 01a21ac2-507f-7580-b25f-e7e086dd48c5
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-382
+title: 'Review PR-4708: [AI:claude] fix(remote): reconcile''s consent gate flags only emails a hub lacks, retries a push race once (BUG-2759)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21a85`) for branch `bug-2759-s2-consent-gate`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4708>
+  - Branch: `bug-2759-s2-consent-gate` → `main`
+
+  ## Covers
+
+  - BUG-2759
+  - BUG-2779
+  - BUG-2777
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4708` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T02:07:51.935302427Z
+modified_at: 2026-11-27T02:08:26.720149539Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a2103b-bf79-7b72-9290-da137ec1563d
+  created_at: 2026-11-27T02:07:56.011979903Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a21a0e-a62f-7412-8eeb-9ba30b2b9a68
+  created_at: 2026-11-27T02:08:05.257418629Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a21923-0137-7800-b20b-147dfab06724
+  created_at: 2026-11-27T02:08:26.720101591Z
+  created_by: dirtlab
+history:
+- id: 01a21ac2-69af-7df2-ad2b-8d7004612015
+  author: dirtlab
+  timestamp: 2026-11-27T02:07:58.383031990Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21ac2-9585-7850-8826-952d105f607c
+  author: dirtlab
+  timestamp: 2026-11-27T02:08:09.605730980Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21ac2-e5ca-7880-8f45-713ee005ee22
+  author: dirtlab
+  timestamp: 2026-11-27T02:08:30.154726632Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 2b87920bb9e1b2aa9ddfe671bf8a9c765f9de551
+  branch: bug-2759-s2-consent-gate
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461b694e0
+  vendor: claude
+  session: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)

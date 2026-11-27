@@ -8,17 +8,23 @@ description: |
   ## Acceptance
   - AC1: Every reconcile refusal NAMES its cause (which check refused, which hub/ref, and the underlying git/merge error). A test asserts the reason text for at least the push-race and merge-refusal paths.
   - AC2: A BOUNDED retry (e.g. up to 2 attempts with re-fetch + re-union) when a push rejection is a fast-forward race from a concurrent writer. Test with a simulated race.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-27T01:03:52.888516239Z
+modified_at: 2026-11-27T02:09:13.664349683Z
 req_type: Bug
 tags:
 - hubs
 - store
 - sync
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21ac2-507f-7580-b25f-e7e086dd48c5
+  created_at: 2026-11-27T02:08:00.123795463Z
+  created_by: dirtlab
 comments:
 - id: 01a21043-fb9c-73d3-a2ef-5ed9baa1c42e
   author: joe
@@ -103,6 +109,34 @@ comments:
   modified_at: 2026-11-27T01:03:52.888516239Z
   session_id: 01a21a852a1c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21ac1-9140-7fc0-9d0b-443f68cb592f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 42d1cc55e8 (git diff origin/main...HEAD: remote_create.rs, scripts/store-writers.toml).
+
+    Acceptance evidence (behavioral-test, executed via lane job, 3/3 pass; the full remote_create::tests module also ran at 70/71 before a test-fixture fix):
+    - Consent gate (comment 7): bug_2759_consent_gate_skips_emails_every_hub_already_has. An email already on every hub passes and is pushed to both. A genuinely new email is still refused, the message names the email and the hubs it is new to, and the text 'one hub only' is gone. The absent-hub refusal path is unchanged (reconcile_refusal_displays_merge_validation_cause still passes).
+    - AC2 bounded retry: bug_2759_reconcile_retries_once_after_a_concurrent_push. Through an injected push seam, a second clone really pushes to origin just before reconcile's push. Attempt 2 re-fetches and re-unions, and both writes land on origin and mirror. RECONCILE_ATTEMPTS=2. Only PushFailure::NonFastForward retries; a declined, protected or unreachable push reports git's stderr instead of the old misleading 'raced' text.
+    - AC1 / comment 4 (agent output mode): bug_2759_agent_error_block_keeps_every_cause. The reconcile error, including a multi-line git cause, is flattened to one ' | '-joined line, and agent_error_block (the path used when stdout is redirected) keeps every cause.
+
+    Probe findings / fixes:
+    - P2: a registry diff line that opens with an email tokenized as '+addr' and never matched the hub's copy, which would have refused a known email (fail-closed, but a false positive). Fixed by stripping the diff marker. The test now uses that line shape.
+    - P5: the gate fails closed. If git grep cannot read a hub's registry, that hub counts as having no emails. Hub tips whose objects cannot be listed were already refused earlier ('cannot list the objects'). No test was weakened.
+    - The store-writer inventory rows moved: handle_remote_reconcile now goes through push_exact_outcome, and the lock moved into reconcile_pass. Only those 3 rows were changed.
+
+    Residual risks: the gate still counts emails new to a hub that is read but not one of this clone's push hubs (pre-existing). Email comparison is case-sensitive, so a mixed-case copy is refused (fail-closed). After a raced attempt 1, the local store keeps union 1 and attempt 2 builds on it. The diff is about 280 lines (about 130 of them tests), slightly over the 250 budget. make check-ci-fast passed (exit 0) at this HEAD.
+  created_at: 2026-11-27T02:07:02.976465670Z
+  modified_at: 2026-11-27T02:07:02.976465670Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21ac1-e8db-7f00-8c37-d5a4065e594f
+  author: aida-publication-done
+  content: Implementer push 2b87920bb9e1 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T02:07:25.403856229Z
+  modified_at: 2026-11-27T02:07:25.403856229Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
@@ -142,6 +176,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21ac1-e8db-7f00-8c37-d59c54e3e536
+  author: aida-publication-done
+  timestamp: 2026-11-27T02:07:25.403851712Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21ac2-7b55-7701-8f31-7bc9fe68e5fe
+  author: dirtlab
+  timestamp: 2026-11-27T02:08:02.901286398Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21ac3-98cc-7772-b996-7f7f8df8b931
+  author: dirtlab
+  timestamp: 2026-11-27T02:09:15.980798932Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
@@ -150,3 +205,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 71bb63b62b3
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T02:09:13.664349683Z
+  implemented_by: dirtlab
