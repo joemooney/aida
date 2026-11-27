@@ -604,7 +604,7 @@ mass_change_expires_at = "2026-11-25T19:10:29Z"
 
 [review_watch]
 # trace:TASK-3472 BUG-2644 | ai:codex
-max_concurrent = 8
+max_concurrent = 4  # Joe 2026-11-26 23:32: moderate Claude token use; re-evaluate in the morning
 required_checks = ["Build (ubuntu-latest)"]
 
 # STORY-1917: execute pending `take` and `impl` dispatch requests outside any
