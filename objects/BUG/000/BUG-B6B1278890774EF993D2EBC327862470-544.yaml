@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T06:10:06.402214564Z
+modified_at: 2026-11-27T06:30:05.693067660Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -127,6 +127,23 @@ comments:
     - agy is not in the vendor table on main; it must default to no_read=false when STORY-3202 adds it (noted in PR body).
   created_at: 2026-11-27T06:10:06.402214564Z
   modified_at: 2026-11-27T06:10:06.402214564Z
+  session_id: 01a21b9e6990
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21bb2-647d-7fa1-abae-4d267769313b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d6c58b6487 (PR #4731, replaces #4725)
+
+    **Acceptance evidence (Refs slice, AC3 only):** `review_prepare.rs` `ensure_no_read_runners` runs after `write_output` and the SARIF write, and before `post_review_comment`. `bug2783_unconfined_runner_review_is_never_posted` passes: the planted canary does not reach the forge or the error, and a claude run posts. `s3a_runner_spawn_contract` pins claude=true, codex=false, and custom runner=false. 7/7 targeted tests pass via the lane runner. `make check-ci-fast` passes (rc 0).
+
+    **Probes:** (1) labels are deduped by `&'static str` from `RunnerCall::label`, so a custom runner in both passes is named once. (3) For 0/1/2 runners: `--anchor-findings` runs no runner, so the list is empty and posting is allowed, which is correct because no model read anything. Finder plus challenger are both checked. (4) A challenger that became unavailable mid-run is still counted. It fails closed, because it may already have read files on earlier batches. (5) Refusal path: the error refusal is tested end to end. Codex refusal is covered at the flag level only; there is no e2e test with a fake codex.
+
+    **Fixes during port:** resolved the conflict with the 4-tuple `review_batches` from #4706.
+
+    **Residual risks:** the local report and SARIF can still contain an exfiltrated secret until AC1 confines codex. The test pins this gap. agy is not on main yet; it must be added with no_read=false.
+  created_at: 2026-11-27T06:30:05.693067660Z
+  modified_at: 2026-11-27T06:30:05.693067660Z
   session_id: 01a21b9e6990
   harness_version: 2.1.319 (Claude Code)
 history:
