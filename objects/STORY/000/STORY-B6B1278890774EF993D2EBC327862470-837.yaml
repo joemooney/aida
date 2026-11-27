@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T07:14:40.507002910Z
+modified_at: 2026-11-27T07:49:38.130751301Z
 req_type: Story
 tags:
 - containment
@@ -343,6 +343,15 @@ comments:
     Residual: other resolve_default_vendor callers (doctor, tui) still read the project root, which is fine for operator surfaces that aren't reviewing a PR.
   created_at: 2026-11-27T07:14:40.507002910Z
   modified_at: 2026-11-27T07:14:40.507002910Z
+  session_id: 01a21bbb7626
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21bfb-36d2-7123-9ec3-b1b7bb4060b4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (final r3 head)
+    Reviewed HEAD: 1783608c2a, pushed to #4716. Supersedes the 85cf214599 comment. Same fix. The gate needed three things: 2 new tests listed in the ratchet set, a renamed store-writers row, and a reworded stderr note (now 'agy (from [agents] vendor) is not used as a default reviewer') because the portability ratchet read 'vendor = {:?}' as hand-built TOML. Targeted tests: 36 passed, 0 failed. make check-ci-fast: exit 0.
+  created_at: 2026-11-27T07:49:38.130751301Z
+  modified_at: 2026-11-27T07:49:38.130751301Z
   session_id: 01a21bbb7626
   harness_version: 2.1.319 (Claude Code)
 history:
