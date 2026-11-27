@@ -281,6 +281,51 @@ impl PlaybookRegistry {
                 ).to_string(),
                 active_facets: Vec::new(),
             },
+            // trace:STORY-3120 | ai:claude
+            ResolvedPlaybook {
+                id: "c_cpp".to_string(),
+                title: "C & C++ Memory Lifetime, Buffer/Integer UB & Thread Safety (CERT / C++ Core Guidelines)".to_string(),
+                pattern: "**/*.{c,cc,cpp,cxx,h,hh,hpp,hxx}".to_string(),
+                checklist: concat!(
+                    "- **Memory lifetime & RAII**: Flag raw owning pointers, missing cleanup on error paths, use-after-free, double-free, and references, iterators or `std::string_view`/`std::span` outliving their storage.\n",
+                    "- **Buffer bounds & integer UB**: Flag unchecked indexing, `memcpy`/`strcpy`/`sprintf` without bounds, signed overflow, shift-by-width, and uninitialized locals or struct fields.\n",
+                    "- **Concurrency & contracts**: Verify lock ordering, atomic memory ordering, `errno`/return-code checks on OS calls, and header/implementation signature and `noexcept` parity."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
+                id: "java_kotlin".to_string(),
+                title: "Java & Kotlin Resource Lifecycle, Concurrency, Nullability & Injection Safety".to_string(),
+                pattern: "**/*.{java,kt,kts}".to_string(),
+                checklist: concat!(
+                    "- **Resource lifecycle**: Ensure `AutoCloseable` streams, JDBC connections, statements and sockets close on every path (`try-with-resources` in Java, `use {}` in Kotlin).\n",
+                    "- **Concurrency & equality**: Flag unsynchronized mutation of shared collections or fields, locks held while calling external code, and broken `equals`/`hashCode` contracts.\n",
+                    "- **Nullability, exceptions & injection**: Flag swallowed exceptions, unchecked nulls (including Kotlin `!!` and platform types) across API boundaries, and unparameterized SQL, LDAP, command or deserialization inputs."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
+                id: "matlab".to_string(),
+                title: "MATLAB Matrix Dimensions, Numerical Conditioning & Workspace Hygiene".to_string(),
+                pattern: "**/*.m".to_string(),
+                checklist: concat!(
+                    "- **Dimensions & 1-based indexing**: Verify row-vs-column orientation, unintended implicit expansion on mismatched dimensions, and off-by-one bounds under 1-based indexing.\n",
+                    "- **Numerical conditioning**: Flag explicit inversion (`inv(A)*b` instead of `A\\b`), unguarded division by near-zero values, and silent `NaN`/`Inf` propagation.\n",
+                    "- **Preallocation & workspace hygiene**: Flag arrays grown inside loops without preallocation, `eval`/`feval` on built strings, and variables shadowing built-in functions."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
+            ResolvedPlaybook {
+                id: "hdl_rtl".to_string(),
+                title: "Verilog, SystemVerilog & VHDL RTL Latches, CDC, Reset & Width Safety".to_string(),
+                pattern: "**/*.{v,vh,sv,svh,vhd,vhdl}".to_string(),
+                checklist: concat!(
+                    "- **Inferred latches**: Flag `always @(*)`, `always_comb` or combinational `process` blocks whose `if`/`case` paths leave an output unassigned (no default).\n",
+                    "- **Assignments & drivers**: Verify clocked logic uses non-blocking `<=` and combinational logic blocking `=`, and flag signals driven from more than one `always`/`process` block.\n",
+                    "- **CDC, resets & widths**: Flag signals crossing asynchronous clock domains without a synchronizer or FIFO, registers missing reset initialization, and silent width truncation or signed/unsigned mismatch."
+                ).to_string(),
+                active_facets: Vec::new(),
+            },
             ResolvedPlaybook {
                 id: "shell".to_string(),
                 title: "Shell Script Quoting, Exit Traps & Portability".to_string(),
@@ -891,19 +936,30 @@ pub struct ReviewBatch {
 /// Keep repository directories case-sensitive when identifying companions.
 // trace:TASK-3880 | ai:codex
 pub fn canonical_module_stem(path: &str) -> String {
-    let file_name = Path::new(path)
+    let raw_name = Path::new(path)
         .file_name()
         .and_then(|s| s.to_str())
-        .unwrap_or(path)
-        .to_ascii_lowercase();
-
-    let without_ext = match file_name.rfind('.') {
-        Some(idx) if idx > 0 => &file_name[..idx],
-        _ => &file_name,
+        .unwrap_or(path);
+    let raw_stem = match raw_name.rfind('.') {
+        Some(idx) if idx > 0 => &raw_name[..idx],
+        _ => raw_name,
     };
+    // JUnit-style `FooTest`/`FooTests` pair with `Foo`. Case-sensitive, before
+    // lowercasing, so `contest`/`Latest` keep their stems. trace:STORY-3120 | ai:claude
+    let raw_stem = raw_stem
+        .strip_suffix("Tests")
+        .or_else(|| raw_stem.strip_suffix("Test"))
+        .filter(|prefix| {
+            prefix.starts_with(|c: char| c.is_ascii_uppercase())
+                && prefix.ends_with(|c: char| c.is_ascii_alphanumeric())
+        })
+        .unwrap_or(raw_stem);
+    let lowered = raw_stem.to_ascii_lowercase();
+    let without_ext = lowered.as_str();
 
     let mut core_stem = without_ext;
-    for suffix in ["_tests", "_test", ".test", ".spec"] {
+    // `_tb` / `tb_` are HDL testbench conventions. trace:STORY-3120 | ai:claude
+    for suffix in ["_tests", "_test", ".test", ".spec", "_tb"] {
         if let Some(stripped) = without_ext.strip_suffix(suffix) {
             if !stripped.is_empty() {
                 core_stem = stripped;
@@ -912,10 +968,12 @@ pub fn canonical_module_stem(path: &str) -> String {
         }
     }
     if core_stem == without_ext {
-        if let Some(stripped) = without_ext.strip_prefix("test_") {
-            if !stripped.is_empty() {
-                core_stem = stripped;
-            }
+        if let Some(stripped) = ["test_", "tb_"]
+            .iter()
+            .find_map(|prefix| without_ext.strip_prefix(prefix))
+            .filter(|stripped| !stripped.is_empty())
+        {
+            core_stem = stripped;
         }
     }
 
@@ -923,6 +981,26 @@ pub fn canonical_module_stem(path: &str) -> String {
     if dir.ends_with("tests") || dir.ends_with("test") {
         dir = dir.parent().unwrap_or(dir);
     }
+    // Maven/Gradle: `src/test/<lang>/…` mirrors `src/main/<lang>/…`.
+    // trace:STORY-3120 | ai:claude
+    let parts: Vec<_> = dir.components().collect();
+    let mirrored = parts
+        .windows(2)
+        .position(|w| w[0].as_os_str() == "src" && w[1].as_os_str() == "test");
+    let dir = match mirrored {
+        Some(at) => parts
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                if i == at + 1 {
+                    std::ffi::OsStr::new("main")
+                } else {
+                    c.as_os_str()
+                }
+            })
+            .collect::<std::path::PathBuf>(),
+        None => dir.to_path_buf(),
+    };
     dir.join(core_stem).to_string_lossy().into_owned()
 }
 
@@ -2475,5 +2553,128 @@ fn beta() {
         assert!(!res_bad.valid);
         assert_eq!(res_bad.unknown_ids, vec!["obs-999999".to_string()]);
         assert_eq!(res_bad.errored_ids, vec!["obs-000002".to_string()]);
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s6_polyglot_and_hdl_playbooks_match_and_carry_checklists() {
+        let reg = PlaybookRegistry::default();
+        let cases: &[(&str, &[&str], &[&str])] = &[
+            (
+                "c_cpp",
+                &[
+                    "src/engine.c",
+                    "src/engine.cpp",
+                    "lib/a.cc",
+                    "x.cxx",
+                    "include/engine.h",
+                    "include/engine.hpp",
+                    "a.hh",
+                    "a.hxx",
+                ],
+                &["use-after-free", "memcpy", "noexcept"],
+            ),
+            (
+                "java_kotlin",
+                &[
+                    "src/main/java/com/acme/Parser.java",
+                    "app/src/Main.kt",
+                    "build.gradle.kts",
+                ],
+                &["try-with-resources", "use {}", "hashCode", "!!"],
+            ),
+            (
+                "matlab",
+                &["dsp/kalman_filter.m"],
+                &["A\\b", "1-based", "preallocation"],
+            ),
+            (
+                "hdl_rtl",
+                &[
+                    "rtl/axi_fifo.v",
+                    "rtl/defs.vh",
+                    "rtl/axi_fifo.sv",
+                    "rtl/pkg.svh",
+                    "rtl/uart_rx.vhd",
+                    "rtl/uart_tx.vhdl",
+                ],
+                &["always_comb", "<=", "synchronizer"],
+            ),
+        ];
+        for (id, paths, needles) in cases {
+            for path in *paths {
+                let pb = reg.resolve(path);
+                assert_eq!(pb.id, *id, "{path}");
+                for needle in *needles {
+                    assert!(pb.checklist.contains(needle), "{id} lacks {needle:?}");
+                }
+            }
+        }
+        // Lookalikes stay on their own or the general playbook.
+        for (path, id) in [
+            ("a.mk", "general"),
+            ("a.vue", "general"),
+            ("a.svg", "general"),
+            ("a.json", "config_data"),
+            ("a.hs", "general"),
+        ] {
+            assert_eq!(reg.resolve(path).id, id, "{path}");
+        }
+        // Content facets stay Rust-only.
+        let pb = reg.enrich_with_content_facets(reg.resolve("a.cpp"), &[("a.cpp", "unsafe {")]);
+        assert!(pb.active_facets.is_empty());
+    }
+
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s6_junit_and_testbench_companions_share_a_stem() {
+        let pairs = [
+            (
+                "src/main/java/com/acme/Parser.java",
+                "src/test/java/com/acme/ParserTest.java",
+            ),
+            (
+                "src/main/kotlin/Parser.kt",
+                "src/test/kotlin/ParserTests.kt",
+            ),
+            ("rtl/axi_fifo.sv", "rtl/axi_fifo_tb.sv"),
+            ("rtl/uart_rx.vhd", "rtl/tb_uart_rx.vhd"),
+        ];
+        for (src, test) in pairs {
+            assert_eq!(
+                canonical_module_stem(src),
+                canonical_module_stem(test),
+                "{test}"
+            );
+        }
+        assert_eq!(canonical_module_stem("src/contest.rs"), "src/contest");
+        assert_eq!(canonical_module_stem("src/Latest.java"), "src/latest");
+        assert_eq!(canonical_module_stem("src/Test.java"), "src/test");
+        assert_eq!(canonical_module_stem("src/Foo_Test.java"), "src/foo");
+        assert_eq!(canonical_module_stem("rtl/tb_.sv"), "rtl/tb_");
+        // Other directories never pair across the mirror.
+        assert_ne!(
+            canonical_module_stem("a/src/main/java/Parser.java"),
+            canonical_module_stem("b/src/test/java/ParserTest.java")
+        );
+        let file = |path: &str| ReviewableFile {
+            path: path.into(),
+            old_path: None,
+            kind: FileChangeKind::Modified,
+            additions: 10,
+            deletions: 0,
+            estimated_tokens: 200,
+            playbook_id: "hdl_rtl".into(),
+            has_trace_comment: false,
+        };
+        let batches =
+            bundle_review_batches(&[file("rtl/fifo.sv"), file("rtl/fifo_tb.sv")], 10_000, 8)
+                .unwrap();
+        assert_eq!(batches.len(), 1);
+        assert!(
+            batches[0].label.starts_with("module:"),
+            "{:?}",
+            batches[0].label
+        );
     }
 }
