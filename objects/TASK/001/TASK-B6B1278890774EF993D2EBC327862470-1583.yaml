@@ -13,12 +13,31 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:42:56.745961954Z
-modified_at: 2026-11-27T21:46:28.411918351Z
+modified_at: 2026-11-27T21:49:00.747559251Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
   created_at: 2026-11-27T21:43:04.805573521Z
+comments:
+- id: 01a21efb-afcb-71f0-95ec-c95c05635b52
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (command-level, path-isolated child):** new `task3930_low_budget_handler_never_resumes_a_stale_retained_journal` in `aida-cli-lib/src/tests/story_1690_train_tests.rs` drives `pr_train_handler_with_dispatch_ctx` with ADVISOR_LOOP set + `all_ready`, a real git repo whose origin HEAD resolves, `[forge] provider = "github"`, a fake gh (via AIDA_TEST_GH_BINARY + GH_REPO) reporting 1/5000 core, and a stale retained Open journal for #3902. Asserts Ok, the back-off line on stderr, no "Skipping retained train journal" line (proof recovery never ran), no `run.lock` taken, the journal entry untouched, and gh saw only the rate_limit probe.
+    - **AC2 (manual mutation check):** (a) `let requested = Some(&candidates[..])` bypassing recovery_request, (b) the else-arm removed so recovery always runs with candidates; run the test under each, expect FAIL, report in the PR body.
+
+    ### Expected files
+    - `aida-cli-lib/src/tests/story_1690_train_tests.rs` (test only)
+
+    ### Ambiguities / conflicts as questions
+    - None (mutation (a)/(b) interpreted as above since the literal edits would not compile).
+  created_at: 2026-11-27T21:49:00.747559251Z
+  modified_at: 2026-11-27T21:49:00.747559251Z
+  session_id: 01a21ef927b3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ef6-482b-7ce3-8251-555d80433908
   author: joe

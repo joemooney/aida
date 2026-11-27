@@ -13,12 +13,32 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:43:14.935519412Z
-modified_at: 2026-11-27T21:47:27.975133948Z
+modified_at: 2026-11-27T21:49:47.921172913Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a21272-0001-7041-9d91-e0fef9f67516
   created_at: 2026-11-27T21:43:23.689139420Z
+comments:
+- id: 01a21efc-6811-7d40-a652-06984921c53e
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (fixture, unit layer in aida-cli-lib):** new test `task_3931_scheduled_job_reports_every_cause_through_scan` builds a temp project (git repo on main, a store with a drain-mode spec, gate-ledger approvals, a review-watch state file with a held attempt, a held `.aida/train` lock) and runs scan() with a scripted open-PR listing: one PR per cause (conflict with no repair lane, held review, review backlog, waiting on the held train lock, red CI). It asserts each cause appears in the findings, that `failing()` counts exactly the conflict, held and red ones, and that the job's `fail_reason` fires.
+    - **AC2 (manual inspection of the diff):** test-only. The single production edit gives `scan()` the same listing seam `stalled_reviews::scan_open` already has: `scan()` = `scan_listing(exec, open_prs)`, with the listing call at the same point and the same behaviour. That seam is needed because `open_prs` shells out to `gh` against a GitHub remote.
+
+    ### Expected files
+    - `aida-cli-lib/src/landing_drought.rs` (seam only)
+    - `aida-cli-lib/src/tests/story_3131_landing_drought_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - Is a behaviour-preserving listing seam acceptable under "test-only"? I am assuming yes: it copies the stalled-reviews pattern, and stubbing `gh` on PATH would mutate process-global state in a parallel lib test run.
+  created_at: 2026-11-27T21:49:47.921172913Z
+  modified_at: 2026-11-27T21:49:47.921172913Z
+  session_id: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ef6-91ff-7770-8578-01efb02e2b5f
   author: joe
