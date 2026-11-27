@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T00:57:07.008006484Z
+modified_at: 2026-11-27T01:12:08.447313995Z
 req_type: Task
 tags:
 - lanes
@@ -83,6 +83,11 @@ comments:
   modified_at: 2026-11-27T00:55:43.955128611Z
   session_id: 01a21a5d2760
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a8f-4bff-7d93-a7b9-8812f91a8569
+  author: joe
+  content: "DEFERRED (#4702 approval @1e0b7323, 2026-11-26; product-15):\n- aida-core/src/mailbox_lifecycle/activation.rs AdmissionGap doc comment (~line 289) still says replaced-binary writers 'exit on their own', which the new refusal text (retire.rs) now contradicts by telling the operator to stop or restart each one. Update the doc comment.\n- aida-core/src/mailbox_lifecycle/activation.rs restart_step joins the writer's argv unquoted into a backticked `rerun ...` command: an argument containing spaces or shell metacharacters renders a command that does not reproduce the original invocation when copy-pasted, and every argument (possibly a grant id or token passed on the command line) is copied into the refusal reason "
+  created_at: 2026-11-27T01:12:08.447313995Z
+  modified_at: 2026-11-27T01:12:08.447313995Z
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
