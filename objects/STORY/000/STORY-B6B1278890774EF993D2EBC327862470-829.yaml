@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T04:58:57.853650012Z
+modified_at: 2026-11-27T05:03:26.070646354Z
 req_type: Story
 tags:
 - integration
@@ -1798,6 +1798,12 @@ comments:
     A reference merge (commit 22cb068c4683, `(Refs STORY-3120)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-27T04:58:57.853634026Z
   modified_at: 2026-11-27T04:58:57.853634026Z
+- id: 01a21b63-0d76-7f91-ae2c-0e43c854d5ce
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int-story-3120-s5e` at head `7d20434c4bccb6b0249ed0d1922e9de3d29ce532`.'
+  created_at: 2026-11-27T05:03:26.070641694Z
+  modified_at: 2026-11-27T05:03:26.070641694Z
+  session_id: 01a21b3a8040
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
