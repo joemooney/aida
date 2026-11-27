@@ -22396,6 +22396,7 @@ Commands:
                   bundle token-budgeted review batches, verify 100% file coverage ledgers, and
                   anchor quoted code snippets to exact 1-based line numbers
   record          Record a review verdict for a spec as first-class state
+  rule            Record an advisor ruling on a pull request's current head
   claim           Mark a pull request as under review, so nothing merges it before your verdict
                   lands
   verdict         Show the recorded review verdict for a spec, if any
@@ -23007,6 +23008,42 @@ Options:
 
       --pr <PR>
           Change number. Must match the reviewer lease; otherwise the review stays spec-only
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review rule
+Record an advisor ruling on a pull request's current head.
+
+`--fix-first` holds the head out of train candidacy at once, with the reason and who ruled, and
+notes the ruling on the specs the PR covers. Re-running at the same head changes nothing; a new head
+clears it.
+
+Usage: aida review rule [OPTIONS] --fix-first --reason <TEXT> <PR>
+
+Arguments:
+  <PR>
+          Pull request: `4702`, `#4702` or `PR-4702`
+
+Options:
+      --fix-first
+          The head must be fixed before it lands
+
+      --reason <TEXT>
+          What must be fixed, shown wherever the hold surfaces
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -56630,6 +56667,42 @@ Working on aida itself
         "name": "verdict",
         "takes_value": true,
         "help": "The verdict: approved, request-changes, rejected, or waiting"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "rule"
+    ],
+    "about": "Record an advisor ruling on a pull request's current head",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "fix-first",
+        "takes_value": false,
+        "help": "The head must be fixed before it lands"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "What must be fixed, shown wherever the hold surfaces"
       }
     ],
     "hidden": false

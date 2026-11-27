@@ -267,6 +267,8 @@ pub(crate) fn handle_review_command(
         ),
         // trace:STORY-1417 | ai:claude
         ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),
+        // trace:TASK-3923 | ai:claude
+        ReviewCommand::Rule { pr, reason, .. } => crate::review_rule::handle(storage, *pr, reason),
         // trace:STORY-1405 | ai:claude
         ReviewCommand::Claim {
             pr,

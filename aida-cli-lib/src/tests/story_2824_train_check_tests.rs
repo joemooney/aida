@@ -1178,3 +1178,36 @@ exec /usr/bin/git "$@"
         std::fs::read_to_string(s.join("unbounded")).unwrap_or_default()
     );
 }
+
+/// TASK-3923 AC2/AC4: a fix-first ruling on an approved head stops it at the
+/// `fix-first` gate with the reason and who ruled; a new head is eligible.
+// trace:TASK-3923 | ai:claude
+#[test]
+fn task3923_fix_first_ruling_on_an_approved_head_is_reported_with_its_cause() {
+    let mut c = FakeChecks::new();
+    assert!(checked(&mut c).eligible, "approved at its head");
+    let head = "a".repeat(40);
+    crate::pr_train::culprit::record_fix_first(
+        c.root.path(),
+        41,
+        &head,
+        "advisor-122 (advisor seat)",
+        "restart_step echoes the raw argv",
+    )
+    .unwrap();
+    let row = checked(&mut c);
+    assert!(!row.eligible);
+    assert_eq!(row.gate, Some("fix-first"), "{row:?}");
+    let text = render_text(Some("main"), std::slice::from_ref(&row));
+    assert!(
+        text.contains("fix-first: held: FIX-FIRST ruling at aaaaaaa")
+            && text.contains("by advisor-122 (advisor seat): restart_step echoes the raw argv")
+            && text.contains("push the rework as a new head"),
+        "{text}"
+    );
+    // A new head: the ruling does not carry over.
+    let mut moved = FakeChecks::new();
+    crate::pr_train::culprit::record_fix_first(moved.root.path(), 41, &"b".repeat(40), "a", "r")
+        .unwrap();
+    assert!(checked(&mut moved).eligible, "a new head is eligible again");
+}

@@ -5996,7 +5996,10 @@ pub(crate) fn complete_landed_specs(main_worktree: &Path, landed: &[(u64, String
 // trace:BUG-2767 | ai:claude
 fn culprit_admission(root: &Path, opts: &TrainOptions, m: &Member) -> Result<Option<String>> {
     // Naming a drifted head does not clear it: print the route. trace:BUG-2777 | ai:claude
-    if let Some(why) = culprit::drift_hold(root, m.pr, &m.head) {
+    // Nor a fix-first ruling: only a new head clears it. trace:TASK-3923 | ai:claude
+    if let Some(why) = culprit::drift_hold(root, m.pr, &m.head)
+        .or_else(|| culprit::fix_first_hold(root, m.pr, &m.head))
+    {
         return Ok(Some(why));
     }
     if !prs_named_on_command_line(opts) {

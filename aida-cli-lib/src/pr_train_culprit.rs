@@ -46,16 +46,24 @@ fn path(root: &Path) -> PathBuf {
 }
 
 fn load(root: &Path) -> Result<BTreeMap<u64, Culprit>> {
-    match std::fs::read(path(root)) {
+    load_at(&path(root))
+}
+
+fn load_at<T: serde::de::DeserializeOwned>(file: &Path) -> Result<BTreeMap<u64, T>> {
+    match std::fs::read(file) {
         Ok(bytes) => serde_json::from_slice(&bytes)
-            .with_context(|| format!("culprit record {} is unreadable", path(root).display())),
+            .with_context(|| format!("culprit record {} is unreadable", file.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-        Err(e) => Err(e).with_context(|| format!("reading {}", path(root).display())),
+        Err(e) => Err(e).with_context(|| format!("reading {}", file.display())),
     }
 }
 
 fn save(root: &Path, rows: &BTreeMap<u64, Culprit>) -> Result<()> {
-    let target = path(root);
+    save_at(root, &path(root), rows)
+}
+
+fn save_at<T: serde::Serialize>(root: &Path, target: &Path, rows: &BTreeMap<u64, T>) -> Result<()> {
+    let target = target.to_path_buf();
     std::fs::create_dir_all(target.parent().unwrap_or(root))?;
     let temporary = target.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
     std::fs::write(&temporary, serde_json::to_vec_pretty(rows)?)?;
@@ -139,9 +147,82 @@ pub(crate) fn drift_hold(root: &Path, pr: u64, head: &str) -> Option<String> {
     ))
 }
 
+/// An advisor's FIX-FIRST ruling on a head. Kept in its own file, so a binary
+/// that predates it ignores the ruling instead of failing closed on every PR.
+// trace:TASK-3923 | ai:claude
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct FixFirst {
+    pub head: String,
+    pub at: chrono::DateTime<chrono::Utc>,
+    pub ruled_by: String,
+    pub reason: String,
+}
+
+fn fix_first_path(root: &Path) -> PathBuf {
+    root.join(".aida/train-fix-first.json")
+}
+
+/// How a fix-first refusal starts, so `--check` can name its gate.
+pub(crate) const FIX_FIRST: &str = "held: FIX-FIRST ruling";
+
+/// Record a fix-first ruling on `pr` at `head`. Only a new head clears it;
+/// naming the PR on `aida pr train` does not. `false`: already ruled here.
+// trace:TASK-3923 | ai:claude
+pub(crate) fn record_fix_first(
+    root: &Path,
+    pr: u64,
+    head: &str,
+    by: &str,
+    reason: &str,
+) -> Result<bool> {
+    let file = fix_first_path(root);
+    let mut rows: BTreeMap<u64, FixFirst> = load_at(&file)?;
+    if rows
+        .get(&pr)
+        .is_some_and(|r| r.head.eq_ignore_ascii_case(head))
+    {
+        return Ok(false);
+    }
+    let (ruled_by, reason) = (by.to_string(), reason.to_string());
+    let (head, at) = (head.to_string(), chrono::Utc::now());
+    rows.insert(
+        pr,
+        FixFirst {
+            head,
+            at,
+            ruled_by,
+            reason,
+        },
+    );
+    save_at(root, &file, &rows)?;
+    Ok(true)
+}
+
+/// The fix-first ruling holding `pr` at `head`, worded for a refusal. An
+/// unreadable record holds (fail closed); a ruling on another head holds nothing.
+// trace:TASK-3923 | ai:claude
+pub(crate) fn fix_first_hold(root: &Path, pr: u64, head: &str) -> Option<String> {
+    let row = match load_at::<FixFirst>(&fix_first_path(root)) {
+        Ok(mut rows) => rows
+            .remove(&pr)
+            .filter(|r| r.head.eq_ignore_ascii_case(head))?,
+        Err(e) => return Some(format!("held: {e:#}")),
+    };
+    let short = crate::pr_train::short(head);
+    Some(format!(
+        "{FIX_FIRST} at {short} by {}: {}",
+        row.ruled_by,
+        row.reason.trim()
+    ))
+}
+
 /// The hold on `pr` at `head`, worded for a refusal. A row for another head
 /// or a cleared row holds nothing. An unreadable record holds (fail closed).
 pub(crate) fn hold(root: &Path, pr: u64, head: &str) -> Option<String> {
+    // A ruling outranks a culprit row. trace:TASK-3923 | ai:claude
+    if let Some(why) = fix_first_hold(root, pr, head) {
+        return Some(why);
+    }
     let rows = match load(root) {
         Ok(rows) => rows,
         Err(e) => return Some(format!("held: {e:#}")),
@@ -167,7 +248,11 @@ pub(crate) fn hold(root: &Path, pr: u64, head: &str) -> Option<String> {
 /// Returns whether a hold was cleared.
 pub(crate) fn clear(root: &Path, pr: u64, head: &str, by: &str) -> Result<bool> {
     // A drift hold is cleared only by a new head. trace:BUG-2777 | ai:claude
-    if hold(root, pr, head).is_none() || drift(root, pr, head).is_some() {
+    // Nor is a fix-first ruling. trace:TASK-3923 | ai:claude
+    if hold(root, pr, head).is_none()
+        || drift(root, pr, head).is_some()
+        || fix_first_hold(root, pr, head).is_some()
+    {
         return Ok(false);
     }
     let mut rows = load(root)?;
