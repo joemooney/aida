@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T03:21:00.820362781Z
+modified_at: 2026-11-27T03:23:02.390428535Z
 req_type: Bug
 tags:
 - admission
@@ -244,6 +244,13 @@ comments:
     - Single waiter slot: record_waiter overwrites, so with two manual trains that both gave up only the last is kept; and manual_train_admission removes the file on ANY admission, so train X being admitted clears train Y's waiter. N>1 waiters are not covered.
   created_at: 2026-11-27T03:21:00.820362781Z
   modified_at: 2026-11-27T03:21:00.820362781Z
+- id: 01a21b07-6e91-7c50-92d7-c4967aa40673
+  author: joe
+  content: 'ADVISOR RULING (2026-11-26 20:27) on the #4711 deferrals: LAND with a follow-up. Net: today a manual train starves for hours; after this, the worst case is a 15-min auto-train pause after an abandoned give-up, and a lost waiter is no worse than today. BINDING follow-up slice (next BUG-2771 slice, STANDARD): (1) a waiter is released when its manual-train process exits (pid + start-time check), not only by TTL, and train-status shows the waiter with a release command; (2) multiple waiters are queued FIFO, and admission clears only the waiter it admits; (3) the AC2 train-status / --check line tests.'
+  created_at: 2026-11-27T03:23:02.390428535Z
+  modified_at: 2026-11-27T03:23:02.390428535Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
