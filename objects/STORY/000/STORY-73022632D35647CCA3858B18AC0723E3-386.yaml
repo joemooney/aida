@@ -1,0 +1,31 @@
+id: 01a21b36-f334-7a30-ad31-36b97d33e73f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-386
+title: 'Review PR-4718: [AI:claude] fix(lanes): push before the final gate; salvage-push a killed lane''s committed fast-forward work and name what ended it (BUG-2781)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21b0d`) for branch `bug-2781-salvage-push`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4718>
+  - Branch: `bug-2781-salvage-push` → `main`
+
+  ## Covers
+
+  - BUG-2781
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4718` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T04:15:15.764101682Z
+modified_at: 2026-11-27T04:15:15.764101682Z
+req_type: Story
+filed_at:
+  code_sha: 3f8b6015cb047ef13a46f5ed7769f56dc5f6da07
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e59bcd029
