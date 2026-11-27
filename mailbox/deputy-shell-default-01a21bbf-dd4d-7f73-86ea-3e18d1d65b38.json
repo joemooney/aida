@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21bbf-dd4d-7f73-86ea-3e18d1d65b38",
+  "thread_id": "deputy-01a21bbf-dd4d-7f73-86ea-3e18d1d65b38",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795761894894,
+  "body": "Script deputy \"default\" finished script job 01a21bbf-dd4d-7f73-86ea-3e18d1d65b38: rc 0 (ok).\nScript: ssh -n dell1 'bash -lc '\"'\"'cd ~/ai/aida && echo \"agy=$(command -v agy) aida=$(command -v aida)\"; agy --version 2>&1 | head -1; out=\"$HOME/.aida/conformance-aida-agy-$(date +%s)\"; echo \"output: $out\"; python3 scripts/containment/conformance.py --vendor agy --boundary aida --output \"$out\" --timeout 120; echo \"conformance rc=$?\"; [ -f \"$out/report.json\" ] && python3 -c \"import json,sys;d=json.load(open(sys.argv[1]));print(json.dumps({k:d.get(k) for k in [\\\"checks\\\",\\\"whole_lane_pass\\\",\\\"shared_boundary_credit\\\",\\\"production_launcher_credit\\\",\\\"observed_egress_hosts\\\",\\\"auth_inventory_complete\\\",\\\"diagnostic\\\"]},indent=1)[:4000])\" \"$out/report.json\"'\"'\"''\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21bbf-dd4d-7f73-86ea-3e18d1d65b38/transcript.log\nRead it with `aida deputy shell log 01a21bbf-dd4d-7f73-86ea-3e18d1d65b38 --name default`.\n",
+  "subject": "deputy script job 01a21bbf done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
