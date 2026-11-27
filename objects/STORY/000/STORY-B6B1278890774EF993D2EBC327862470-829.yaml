@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T02:00:52.594476742Z
+modified_at: 2026-11-27T02:05:51.546673669Z
 req_type: Story
 tags:
 - integration
@@ -1669,6 +1669,17 @@ comments:
   created_at: 2026-11-27T01:56:53.213831674Z
   modified_at: 2026-11-27T01:56:53.213831674Z
   session_id: 01a21a78b676
+- id: 01a21ac0-bd0c-76e0-a927-b9357838d97b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:05):
+    # STORY-3120 S6: polyglot/HDL review playbooks (advisor-122 2026-11-26 08:24 addenda; product-15). Lane: CLAUDE. STANDARD: pure engine logic; self-merge after the integration pre-check is OK. INTEGRATION, NEW branch int-story-3120-s6 (cut from the integration tip). Title "[AI:claude] feat(review): polyglot and HDL review playbooks [S6] (Refs STORY-3120)". <=300 lines; if over, ship a first part and list the rest.
+    READ: `aida show STORY-3120 --comments` (the S6-S10 addenda comment) and the reference commit 32a7ebd9915 on branch story-3120-ci-review (`git show 32a7ebd9915`). PORT ITS SUBSTANCE onto the current integration tip, adapted to what S1-S5 actually shipped (the playbook registry, classify_exclusion, the bundle rendering). Keep pure engine logic (no runner, spawn or forge changes) and add tests for each new playbook's matching and checklist.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-27T02:05:51.546673669Z
+  modified_at: 2026-11-27T02:05:51.546673669Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
