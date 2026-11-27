@@ -3789,6 +3789,33 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let note = std::fs::read_to_string(&posted).unwrap();
         assert!(note.starts_with("mr note 1 --message") && !note.contains(canary));
         std::fs::remove_file(&posted).unwrap();
+        // A no-read finder with an unconfined challenger (claude finds, codex
+        // challenges: the default --adversarial pick) is refused too, after
+        // the report. Codex here fails its challenge; it ran, so it counts.
+        let challenged = t.join("challenged");
+        install(
+            "codex",
+            &format!(
+                "#!/bin/sh\ncat >/dev/null\necho x >{}\nexit 1\n",
+                challenged.display()
+            ),
+        );
+        std::fs::remove_file(root.join("out.json")).unwrap();
+        let adversarial = ReviewPrepareArgs {
+            adversarial: true,
+            challenger_agent: Some("codex".into()),
+            ..args.clone()
+        };
+        let err = format!(
+            "{:#}",
+            handle_review_prepare(&adversarial, &store).unwrap_err()
+        );
+        assert!(
+            err.contains("--post-comment refused: codex can read"),
+            "{err}"
+        );
+        assert!(challenged.exists() && !posted.exists(), "{err}");
+        assert!(root.join("out.json").exists());
         // Findings an unconfined runner produced out of band (here, the
         // canary-quoting reply) and imported with --anchor-findings carry no
         // verifiable producer, so they are refused too, after the report.
