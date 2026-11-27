@@ -10,17 +10,22 @@ description: |-
   - AC2: conformance-launch reuses the PRODUCTION contained child-grant issuance path verbatim (one shared function); any duplicated issuance in the diagnostic entry is deleted.
   - AC3: SubjectMismatch and the subject check are NEVER relaxed.
   - AC4: a test proves conformance-launch's grant subject equals what a production contained launch presents.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T22:18:16.401588489Z
+modified_at: 2026-11-27T22:24:35.091944563Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1a7b3-0b59-7e62-ae47-3c0283f551ac
   created_at: 2026-11-27T21:50:12.334734159Z
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21f1c-202a-7c60-903d-d505c7ce41d3
+  created_at: 2026-11-27T22:24:35.091912860Z
+  created_by: dirtlab
 comments:
 - id: 01a21f05-2090-7073-b5f5-d66f0f8af422
   author: dirtlab
@@ -79,6 +84,13 @@ comments:
   modified_at: 2026-11-27T22:18:16.401588489Z
   session_id: 01a21efef83d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f1b-ce65-7590-a35e-a396a53bc5fc
+  author: aida-publication-done
+  content: Implementer push e53f2b996516 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T22:24:05.733588770Z
+  modified_at: 2026-11-27T22:24:05.733588770Z
+  session_id: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
@@ -91,6 +103,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21f1b-ce65-7590-a35e-a380f1e2fdbb
+  author: aida-publication-done
+  timestamp: 2026-11-27T22:24:05.733572467Z
+  session_id: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21f1c-495a-7cd1-beaa-f86eabdccf2d
+  author: dirtlab
+  timestamp: 2026-11-27T22:24:37.210964744Z
+  session_id: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main

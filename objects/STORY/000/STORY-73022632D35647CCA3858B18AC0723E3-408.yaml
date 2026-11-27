@@ -1,0 +1,47 @@
+id: 01a21f1c-202a-7c60-903d-d505c7ce41d3
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-408
+title: 'Review PR-4764: [AI:claude] style(launch): rustfmt the grant re-export (TASK-3933)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21efe`) for branch `task-3933-conformance-child-grant`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4764>
+  - Branch: `task-3933-conformance-child-grant` → `main`
+
+  ## Covers
+
+  - TASK-3933
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4764` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T22:24:26.666676515Z
+modified_at: 2026-11-27T22:24:31.011411519Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a21efc-a7c5-7103-97ee-6c262fb5c94b
+  created_at: 2026-11-27T22:24:31.011360877Z
+  created_by: dirtlab
+history:
+- id: 01a21f1c-397b-74a0-b899-3ac70adad24f
+  author: dirtlab
+  timestamp: 2026-11-27T22:24:33.147761636Z
+  session_id: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: e53f2b9965167e963a7197bdac25b31e38699bf8
+  branch: task-3933-conformance-child-grant
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c1684c5b7d
+  vendor: claude
+  session: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
