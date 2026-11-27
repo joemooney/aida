@@ -10,12 +10,12 @@ description: |-
   - AC2: a test with a fake failing probe asserts the exit code, the tail lines and the redaction appear in the refusal, and that a passing probe is unchanged.
 
   Advisor approval 2026-11-27 11:05 (aida-d3). Standard tier; no change to the seat gate itself. After it lands, Joe reruns .aida/tmp/agy-conformance.sh once.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T17:52:18.836279689Z
-modified_at: 2026-11-27T19:08:19.875457813Z
+modified_at: 2026-11-27T19:18:43.378432547Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -76,6 +76,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21e72-182b-7382-bb2e-3e90d95dd798
+  author: dirtlab
+  timestamp: 2026-11-27T19:18:43.499110602Z
+  session_id: 01a21e63c521
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: 3c416dc0f7b8fd75d2dea01c879f50c8f17b8327
@@ -84,3 +93,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 00ed0d188a9
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T19:18:43.378432547Z
+  implemented_by: dirtlab
