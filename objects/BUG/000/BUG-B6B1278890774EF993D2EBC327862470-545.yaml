@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T07:27:39.221840528Z
+modified_at: 2026-11-27T07:28:38.900345225Z
 req_type: Bug
 comments:
 - id: 01a21b43-1a62-7921-9b1a-11e036f97be5
@@ -132,6 +132,12 @@ comments:
   content: Implementer push 9afeaa251dea declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-27T07:27:39.221837731Z
   modified_at: 2026-11-27T07:27:39.221837731Z
+  session_id: 01a21b87a95b
+- id: 01a21be7-fff4-7d10-8bb9-43d3cf4e6937
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2784-ratchet-union-merge` at head `9afeaa251dea1e79a3e52c7025844e32053917bb`.'
+  created_at: 2026-11-27T07:28:38.900342208Z
+  modified_at: 2026-11-27T07:28:38.900342208Z
   session_id: 01a21b87a95b
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
