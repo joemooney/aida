@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T21:18:34.473283715Z
+modified_at: 2026-11-27T21:19:36.391223965Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -117,6 +117,12 @@ comments:
   content: Implementer push fcca407a9066 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-27T21:18:34.473280654Z
   modified_at: 2026-11-27T21:18:34.473280654Z
+  session_id: 01a21eca5185
+- id: 01a21ee0-c3c7-7251-a169-e6bf35200eff
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3928-salvage-red-gate` at head `fcca407a9066fdbd0e995fd6c04d25a028807190`.'
+  created_at: 2026-11-27T21:19:36.391220807Z
+  modified_at: 2026-11-27T21:19:36.391220807Z
   session_id: 01a21eca5185
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
