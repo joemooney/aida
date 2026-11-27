@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21e22-59dd-7951-92e2-71216bdb480e",
+  "thread_id": "deputy-01a21e22-59dd-7951-92e2-71216bdb480e",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795801898808,
+  "body": "Script deputy \"default\" finished script job 01a21e22-59dd-7951-92e2-71216bdb480e: rc 0 (ok).\nScript: ssh -n dell1 'd=~/.aida/conformance-aida-agy-1795801825; ls -la $d | head -30; echo ---; find $d -maxdepth 3 -type f \\( -name \"*preflight*\" -o -name \"*.log\" -o -name \"*diag*\" -o -name \"*stderr*\" \\) 2>/dev/null | head -20; echo ---; python3 -c \"import json;d=json.load(open(\\\"$HOME/.aida/conformance-aida-agy-1795801825/report.json\\\"));print(json.dumps(d.get(\\\"diagnostic\\\"),indent=1)[:2500]); print(json.dumps([s for s in d.get(\\\"setup\\\",[]) if \\\"launch\\\" in s.get(\\\"stage\\\",\\\"\\\")],indent=1)[:2500])\"'\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21e22-59dd-7951-92e2-71216bdb480e/transcript.log\nRead it with `aida deputy shell log 01a21e22-59dd-7951-92e2-71216bdb480e --name default`.\n",
+  "subject": "deputy script job 01a21e22 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a21e22-f817-7f83-93b6-93154813f064",
+  "thread_id": "deputy-01a21e22-f817-7f83-93b6-93154813f064",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795801967083,
+  "body": "Script deputy \"product\" finished script job 01a21e22-f817-7f83-93b6-93154813f064: rc 0 (ok).\nScript: cd /home/joe/ai/aida && aida add --type task --title \"Contained seat preflight refusal names the probe exit code and output tail\" --status approved --priority high --description \"$(cat /tmp/claude-1000/t-desc.txt)\" && echo\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a21e22-f817-7f83-93b6-93154813f064/transcript.log\nRead it with `aida deputy shell log 01a21e22-f817-7f83-93b6-93154813f064 --name product`.\n",
+  "subject": "deputy script job 01a21e22 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

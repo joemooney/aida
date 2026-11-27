@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a21e22-a4d9-7fe0-a4a2-9846c8d15711",
+  "thread_id": "deputy-01a21e22-a4d9-7fe0-a4a2-9846c8d15711",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-122"
+  },
+  "timestamp": 1795801917599,
+  "body": "Script deputy \"default\" finished script job 01a21e22-a4d9-7fe0-a4a2-9846c8d15711: rc 0 (ok).\nScript: ssh -n dell1 'd=~/.aida/conformance-aida-agy-1795801825; cat $d/stderr.txt; echo ---; python3 -c \"\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a21e22-a4d9-7fe0-a4a2-9846c8d15711/transcript.log\nRead it with `aida deputy shell log 01a21e22-a4d9-7fe0-a4a2-9846c8d15711 --name default`.\n",
+  "subject": "deputy script job 01a21e22 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
