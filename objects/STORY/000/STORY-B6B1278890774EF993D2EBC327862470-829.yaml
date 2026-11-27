@@ -1822,6 +1822,15 @@ comments:
   modified_at: 2026-11-27T05:20:38.969325752Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b7d-76ea-76d2-b6b0-34cb694453e7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 35812fa13a (PR #4721, S5e r1). Same-vendor label for a forced --challenger-agent: challenger_call (review_challenger.rs) labels the note 'same-vendor challenger (<vendor>), forced by --challenger-agent' when the forced vendor equals the finder's; the note flows unchanged to the stderr 'adversarial review:' line, AdversarialSummary.note in the bundle, and the report's Note. Evidence: s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing (claude/claude labelled, codex not) and new s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report (bundle JSON + rendered Markdown); targeted 'cargo test -p aida-cli-lib --lib -- s5' 16 passed. Docs: docs/review-process.md says the report labels it. Round-6 items (exit code 4, main merge) were already on this branch via #4706; no change. Residual: make check-ci-fast could not complete in this lane (test-touched planner gate fails: CARGO_HOME read-only); cargo fmt --check clean; CI covers the rest.
+  created_at: 2026-11-27T05:32:17.002064765Z
+  modified_at: 2026-11-27T05:32:17.002064765Z
+  session_id: 01a21b68674f
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21b80-20c3-71b0-b0a2-e9521e062c4f
   author: joe
   content: |-
