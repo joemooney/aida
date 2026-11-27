@@ -17,13 +17,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T04:29:02.464977885Z
+modified_at: 2026-11-27T04:33:19.828148587Z
 req_type: Bug
 tags:
 - ci
 - dell1
 - lanes
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21b47-505a-7922-9c8c-0ef84d87bbf8
+  created_at: 2026-11-27T04:33:19.828131071Z
+  created_by: dirtlab
 comments:
 - id: 01a21ae6-045b-7a73-bd47-93624134d4ca
   author: joe
@@ -124,6 +130,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21b47-86a4-7911-a8b3-202738f5ff37
+  author: dirtlab
+  timestamp: 2026-11-27T04:33:22.084734659Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
