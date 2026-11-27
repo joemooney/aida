@@ -16,12 +16,12 @@ description: |
   - AC1: a SKETCH comment, signed off by the advisor, naming the state file, the functions, and exactly what a concurrent review-watch join or a manual train may do in the gap, with a proof that each is safe.
   - AC2: an implementation of (a)-(d) per the sketch.
   - AC3: tests: a deputy job blocks for longer than the deadline and review-watch admits work meanwhile; main moves during the wait → recompute; a member head moves → recompute; recovery keeps its fairness position.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-27T22:24:14.455004128Z
+modified_at: 2026-11-27T22:30:49.821975212Z
 req_type: Task
 tags:
 - admission
@@ -162,6 +162,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21f21-f8dd-77f0-992c-0eb4c7982b77
+  author: aida-session-start
+  timestamp: 2026-11-27T22:30:49.821973041Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
