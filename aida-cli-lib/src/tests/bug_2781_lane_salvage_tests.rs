@@ -679,3 +679,76 @@ fn bug_2781_imported_commit_without_the_lane_trailer_is_refused() {
         no_imports(&fx.main);
     }
 }
+
+// TASK-3928 AC2: a red fast-gate receipt for the branch keeps the salvage off
+// the open PR's branch; the work goes to the salvage ref and the note names
+// the receipt.
+// trace:TASK-3928 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref() {
+    let fx = fixture();
+    let id = "c0ffee392801";
+    let (clone, tip) = seat_with_commit(&fx, "redgate", id, "seat-redgate", "fix: r (BUG-1)");
+    pr_branch_at_main(&fx, "seat-redgate");
+    let head = git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-redgate"]);
+    crate::lane_fast_gate::set_marker_for_test(&fx.main, "seat-redgate", "fail");
+    let receipt = crate::lane_fast_gate::failed_receipt(&fx.main, "seat-redgate")
+        .expect("red receipt")
+        .display()
+        .to_string();
+    assert!(receipt.starts_with(".aida/fast-gates/"), "{receipt}");
+    let (note, said) = salvage_onto_pr(&fx, &clone, "seat-redgate", id, 31, &tip);
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-redgate"]),
+        head,
+        "the PR branch is untouched"
+    );
+    let salvage = format!("salvage/{id}");
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{salvage}")]),
+        tip
+    );
+    let note = note.expect("a note");
+    assert!(
+        note.starts_with(&format!("{UNVERIFIED}: pushed {tip} to {salvage}")),
+        "{note}"
+    );
+    assert!(
+        note.contains("red fast-gate receipt") && note.contains(&receipt),
+        "{note}"
+    );
+    assert!(said[0].0.contains(&receipt), "{:?}", said[0]);
+    no_imports(&fx.main);
+}
+
+// A green or absent receipt fast-forwards the open PR's branch as before.
+// trace:TASK-3928 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch() {
+    for (n, marker) in [(2, Some("pass")), (3, None)] {
+        let fx = fixture();
+        let id = format!("c0ffee39280{n}");
+        let branch = format!("seat-gate{n}");
+        let (clone, tip) = seat_with_commit(&fx, &branch, &id, &branch, "fix: g (BUG-1)");
+        pr_branch_at_main(&fx, &branch);
+        if let Some(marker) = marker {
+            crate::lane_fast_gate::set_marker_for_test(&fx.main, &branch, marker);
+        }
+        assert!(crate::lane_fast_gate::failed_receipt(&fx.main, &branch).is_none());
+        let (note, said) = salvage_onto_pr(&fx, &clone, &branch, &id, 32, &tip);
+        assert_eq!(
+            git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{branch}")]),
+            tip,
+            "{marker:?}"
+        );
+        assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+        assert_eq!(
+            note.expect("a note"),
+            format!("{UNVERIFIED}: pushed {tip} to {branch}")
+        );
+        assert_eq!(said[0].1, Some(32));
+        no_imports(&fx.main);
+    }
+}
