@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T06:33:43.336721029Z
+modified_at: 2026-11-27T06:34:48.137376272Z
 req_type: Story
 tags:
 - containment
@@ -320,6 +320,12 @@ comments:
   content: Implementer push f5bc908438ba declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-27T06:33:43.336720368Z
   modified_at: 2026-11-27T06:33:43.336720368Z
+  session_id: 01a21b413e7d
+- id: 01a21bb6-b3c9-7392-9214-90c0bab9b195
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int-story-3202-agy-review` at head `f5bc908438bae66ac8e8896cb04032db3bb9950c`.'
+  created_at: 2026-11-27T06:34:48.137373050Z
+  modified_at: 2026-11-27T06:34:48.137373050Z
   session_id: 01a21b413e7d
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
