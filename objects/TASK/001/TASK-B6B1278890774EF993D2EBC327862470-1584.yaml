@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: one end-to-end test runs the scheduled job's entry point against a fixture where each cause is present, and asserts each cause appears in the output (and failing() for the failing ones).
   - AC2: test-only; no behaviour change.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:43:14.935519412Z
-modified_at: 2026-11-27T21:43:14.935519412Z
+modified_at: 2026-11-27T21:47:27.975133948Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-27T21:43:25.439277476Z
   changes: []
+- id: 01a21efa-4567-7f13-b145-04401da198bb
+  author: aida-session-start
+  timestamp: 2026-11-27T21:47:27.975131855Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
