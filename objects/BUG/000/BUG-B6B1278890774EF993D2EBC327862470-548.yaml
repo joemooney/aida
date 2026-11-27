@@ -1,0 +1,24 @@
+id: 01a21e60-60a7-7e40-8794-3f57fe6d6d2a
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-548
+agreed_id: BUG-2787
+title: Lane-host autobuild skips silently for hours when the primary checkout is dirty, leaving a stale live binary
+description: |
+  Observed 2026-11-27 (product-15): dell1's aida-autobuild.sh skipped every 30 min from ~00:00 to 11:30 ("skip: primary checkout must be on main with no visible tracked changes") because the dell1 primary held stray staged hunks (a lane leftover). The live binary went 11h / 12 changes stale and lane-run then refused every launch (TASK-3927 at 10:55), which no seat noticed for an hour.
+
+  ## Acceptance
+  - AC1: `aida doctor --lane-host` (and the lane-run STALE refusal) report "live binary N hours / M changes behind main; autobuild skipping since <time>: <reason from the autobuild log>" with the one command that clears it.
+  - AC2: a test with a fake autobuild log showing consecutive skips and a stale live sha.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T18:59:22.407725451Z
+modified_at: 2026-11-27T18:59:22.407725451Z
+req_type: Bug
+filed_at:
+  code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac48
+  vendor: claude
