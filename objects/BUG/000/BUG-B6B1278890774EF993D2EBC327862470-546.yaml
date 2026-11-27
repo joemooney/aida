@@ -9,17 +9,25 @@ description: |
   - AC1: `aida queue rework SPEC` and the lane launch (queue work --force-claim on a PR branch) REFUSE a rework round when the spec's open PR has a FINAL (not sweep-pending) approval recorded at the PR's CURRENT head, naming the approval (PR, sha, reviewer, recorded_at) and the override (e.g. `--despite-approval` with a reason, recorded on the spec).
   - AC2: the check runs at LAUNCH time (not only at queue time), so a queued round that became stale while waiting for a slot is refused when it would start.
   - AC3: tests: an approved-at-head PR → refused, with the approval named; approved at an OLDER head → allowed; a sweep-pending CR → allowed; the override → allowed and recorded.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-27T06:14:41.499443358Z
+modified_at: 2026-11-27T19:13:35.218626591Z
 req_type: Bug
 tags:
 - lanes
 - queue
 - review
+history:
+- id: 01a21e6d-63f2-7bd0-8149-5657f75e0428
+  author: aida-session-start
+  timestamp: 2026-11-27T19:13:35.218625410Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1914f9fdd1504307eec22ea247f5ac4c2ec562a9
   branch: main
