@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T03:41:48.737458559Z
+modified_at: 2026-11-27T03:42:42.022115974Z
 req_type: Story
 tags:
 - containment
@@ -130,6 +130,19 @@ comments:
     Strict tier (spawn and credentials), so it needs the independent review.
   created_at: 2026-11-27T03:41:48.737458559Z
   modified_at: 2026-11-27T03:41:48.737458559Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b19-6af3-7461-94ba-a4d94ffe0ed4
+  author: joe
+  content: |-
+    ADVISOR RULING 20:50 on #4716 MUST-1, binding for the rework:
+    - (a) is REQUIRED: add --sandbox to AGY's argv and assert it in the spawn-contract test.
+    - (b) is REQUIRED: verify plan mode's tool behaviour in print mode, or record it as a binding residual. Use a no-tools or allowed-tools flag if agy has one.
+    - (c) is the DEFAULT: agy stays OFF the automatic challenger pick until a live, signed-in run verifies its print-mode tool confinement, with that verification recorded on this spec. Explicit --agent agy and --challenger-agent agy still run only with --sandbox plus plan/no-tools.
+    - Size: about 400 lines is ACCEPTED, since about half is tests.
+    - Related: the advisor is filing a HIGH bug on the S3a runner. codex --sandbox=read-only still allows reading the whole disk.
+  created_at: 2026-11-27T03:42:42.022115974Z
+  modified_at: 2026-11-27T03:42:42.022115974Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
