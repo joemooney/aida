@@ -16,8 +16,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T03:43:28.423763933Z
+modified_at: 2026-11-27T03:44:39.520083951Z
 req_type: Bug
+comments:
+- id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
+  author: joe
+  content: |-
+    LIVE agy CONFINEMENT PROBE (product-15 2026-11-26 20:45, imac, agy 1.5.16 signed in; print mode with no TTY; stdin=/dev/null; an empty temp cwd), `agy -p "<task>" --mode plan --sandbox --print-timeout 90s`:
+    - SHELL ("touch <dir>/shell_ran"): NOT run; the turn aborts with "a tool required the write_file permission that headless mode cannot prompt for, so it was auto-denied".
+    - WEB FETCH (https://example.com): NOT done; the same auto-deny abort.
+    - WRITE FILE: NOT done (auto-denied), with or without --sandbox.
+    - READ a workspace file: ALLOWED; it returned the file contents verbatim.
+    - READ OUTSIDE the workspace (/etc/hostname): ALLOWED; it returned "imac".
+    CONCLUSION: plan mode + --sandbox denies write/shell/web in headless print mode, but does NOT confine READS; agy can read anywhere the user can (e.g. ~/.ssh). That's the same exfil class as BUG-2783 (codex read-only). agy's --help has no no-tools / allowed-tools flag; the only knob is settings.json permissions (allow/deny rules) via --settings. Next step to try: `--settings '{"permissions":{"deny":["read_file(*)"...]}}'` or a deny-all rule, plus bwrap with an empty HOME (BUG-2783 AC1).
+  created_at: 2026-11-27T03:44:39.520083951Z
+  modified_at: 2026-11-27T03:44:39.520083951Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
