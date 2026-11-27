@@ -67,6 +67,8 @@
         "s5_post_comment_is_opt_in_and_requires_pr",
         "s5_posted_comment_renders_agent_text_inert",
         "story3202_post_comment_refuses_unverified_agy_before_any_run",
+        "story3202_pr_checkout_vendor_never_picks_the_finder",
+        "story3202_unverified_vendor_is_refused_as_a_default",
         "s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced",
         "s5b_batch_diff_pathspecs_are_literal",
         "s5b_cut_balanced_tracks_tilde_fences_and_inline_spans",

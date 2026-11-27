@@ -6,7 +6,9 @@
 
 use crate::launch::review_challenger::{self as challenger, AdversarialSummary, RefutedFinding};
 use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
-use crate::launch::review_tuning::{resolve_for_run, trusted_review_base};
+use crate::launch::review_tuning::{
+    resolve_for_run, trusted_default_vendor, trusted_review_base, TrustedBase,
+};
 use crate::vendors::review_runner::{review_vendor, ReviewVendor, DEFAULT_REVIEW_VENDOR};
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::exec_context::Environment;
@@ -326,7 +328,7 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     } else if let Some(trusted) = &trusted {
         // trace:STORY-3120 | ai:claude
         let parent_env = Environment::capture().to_pairs();
-        let agent = run_review_agent(args.agent.as_deref(), &project_root, &parent_env)?;
+        let agent = run_review_agent(args.agent.as_deref(), trusted, &parent_env)?;
         let forced = (args.challenger_agent.as_deref().map(review_vendor))
             .transpose()
             .context("--challenger-agent")?;
@@ -817,10 +819,13 @@ fn ensure_postable(
 }
 
 /// The finder's vendor: `--agent`, else none under `AIDA_REVIEW_RUNNER_CMD`,
-/// else `[agents] vendor` (claude, codex or agy), else claude, stated on stderr. trace:BUG-2775 | ai:claude
+/// else the trusted `[agents] vendor` (base revision or `~/.aida/agents.toml`,
+/// never the checkout under review), else claude, stated on stderr. A vendor
+/// whose tool confinement is unverified (agy) is never a default: it runs only
+/// when named by `--agent`. trace:BUG-2775 STORY-3202 | ai:claude
 fn run_review_agent(
     flag: Option<&str>,
-    root: &Path,
+    trusted: &TrustedBase,
     env: &[(std::ffi::OsString, std::ffi::OsString)],
 ) -> Result<Option<&'static ReviewVendor>> {
     if let Some(name) = flag {
@@ -832,11 +837,24 @@ fn run_review_agent(
     if custom {
         return Ok(None);
     }
-    let (vendor, from) = match aida_core::agents_config::resolve_default_vendor(root) {
-        Some(name) => (
-            review_vendor(&name).context("[agents] vendor")?,
-            "[agents] vendor",
-        ),
+    let (resolved, named) = trusted_default_vendor(trusted)?;
+    let unverified =
+        (named.iter().filter_map(|n| review_vendor(n).ok())).find(|v| !v.confinement_verified);
+    if let Some(v) = unverified {
+        eprintln!(
+            "run review: {} (from [agents] vendor) is not used as a default reviewer \
+             (its tool confinement is not verified); pass --agent {} to run it",
+            v.program, v.program
+        );
+    }
+    // A second fence: even a resolved unverified vendor is never the default.
+    let resolved = (resolved.as_deref().map(review_vendor))
+        .transpose()
+        .context("[agents] vendor")?
+        .filter(|v| v.confinement_verified);
+    let (vendor, from) = match resolved {
+        Some(vendor) => (vendor, "[agents] vendor"),
+        None if unverified.is_some() => (DEFAULT_REVIEW_VENDOR, "the built-in default"),
         None => (
             DEFAULT_REVIEW_VENDOR,
             "the built-in default (no [agents] vendor)",
@@ -2201,27 +2219,108 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         }
     }
 
-    // trace:BUG-2775 | ai:claude
+    fn vendor_toml(vendor: &str) -> String {
+        format!("[agents]\nvendor = \"{vendor}\"\n")
+    }
+
+    fn pick_finder(
+        flag: Option<&str>,
+        trusted: &TrustedBase,
+        env: &[(&str, &str)],
+    ) -> Option<&'static str> {
+        let env: Vec<(std::ffi::OsString, std::ffi::OsString)> =
+            env.iter().map(|(k, v)| (k.into(), v.into())).collect();
+        run_review_agent(flag, trusted, &env)
+            .unwrap()
+            .map(|v| v.program)
+    }
+
+    // trace:BUG-2775 STORY-3202 | ai:claude
     #[test]
     fn bug2775_run_review_agent_resolves_and_states_the_default() {
-        let root = tempfile::tempdir().unwrap();
-        let env = |pairs: &[(&str, &str)]| -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
-            pairs.iter().map(|(k, v)| (k.into(), v.into())).collect()
-        };
-        let pick = |flag, e: &[(std::ffi::OsString, std::ffi::OsString)]| {
-            run_review_agent(flag, root.path(), e).map(|v| v.map(|v| v.program))
-        };
-        let custom = env(&[("AIDA_REVIEW_RUNNER_CMD", "/bin/true")]);
-        assert_eq!(pick(None, &custom).unwrap(), None);
-        assert_eq!(pick(Some("codex"), &custom).unwrap(), Some("codex"));
-        let std_dir = root.path().join(".aida");
-        std::fs::create_dir_all(&std_dir).unwrap();
-        std::fs::write(
-            std_dir.join("agents.toml"),
-            "[agents]\nvendor = \"codex\"\n",
-        )
-        .unwrap();
-        assert_eq!(pick(None, &env(&[])).unwrap(), Some("codex"));
+        // The global `~/.aida/agents.toml` is read: run under a fresh HOME.
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let custom = [("AIDA_REVIEW_RUNNER_CMD", "/bin/true")];
+        let none = TrustedBase::default();
+        assert_eq!(pick_finder(None, &none, &custom), None);
+        assert_eq!(pick_finder(Some("codex"), &none, &custom), Some("codex"));
+        assert_eq!(pick_finder(None, &none, &[]), Some("claude"));
+        // A trusted base's tracked config.toml or agents.toml picks the finder.
+        let codex = vendor_toml("codex");
+        let base = TrustedBase::with_seat_files(Some(&codex), None);
+        assert_eq!(pick_finder(None, &base, &[]), Some("codex"));
+        let base = TrustedBase::with_seat_files(None, Some(&codex));
+        assert_eq!(pick_finder(None, &base, &[]), Some("codex"));
+    }
+
+    /// The checkout under review cannot pick its own finder: `[agents] vendor`
+    /// in its `.aida/config.toml` or `.aida/agents.toml` (uncommitted or
+    /// ignored) is never read, and committing either refuses the review.
+    // trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_pr_checkout_vendor_never_picks_the_finder() {
+        if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+            // The checkout's files are not even read: no agy note.
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            assert!(!stderr.contains("agy (from [agents] vendor)"), "{stderr}");
+            let used = "using claude from the built-in default (no [agents] vendor)";
+            assert_eq!(stderr.matches(used).count(), 2, "{stderr}");
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &[]);
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "old\n").unwrap();
+        git_text(&root, &["add", "a.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        std::fs::write(root.join("a.rs"), "new\n").unwrap();
+        git_text(&root, &["add", "a.rs"]).unwrap();
+        let head = crate::test_git::commit_fixture(&root);
+        for vendor in ["agy", "codex"] {
+            for file in ["config.toml", "agents.toml"] {
+                std::fs::write(root.join(".aida").join(file), vendor_toml(vendor)).unwrap();
+            }
+            // The resolver the old code used would have obeyed the checkout
+            // (aida-core never resolves agy at all).
+            let leaked = aida_core::agents_config::resolve_default_vendor(&root);
+            assert_eq!(leaked.as_deref(), (vendor == "codex").then_some(vendor));
+            let trusted = trusted_review_base(&root, &base, Some(&head)).unwrap();
+            assert_eq!(pick_finder(None, &trusted, &[]), Some("claude"), "{vendor}");
+        }
+        git_text(&root, &["add", ".aida/config.toml"]).unwrap();
+        let committed = crate::test_git::commit_fixture(&root);
+        let err = trusted_review_base(&root, &base, Some(&committed)).unwrap_err();
+        assert!(err.to_string().contains(".aida/config.toml"), "{err}");
+    }
+
+    /// agy is never a default reviewer, even from trusted config; only
+    /// `--agent agy` runs it. trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_unverified_vendor_is_refused_as_a_default() {
+        if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let note = "agy (from [agents] vendor) is not used as a default reviewer";
+            assert_eq!(stderr.matches(note).count(), 3, "{stderr}");
+            return;
+        }
+        let home = aida_core::home::home_dir().unwrap();
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        let agy = vendor_toml("agy");
+        for base in [
+            TrustedBase::with_seat_files(Some(&agy), None),
+            TrustedBase::with_seat_files(None, Some(&agy)),
+        ] {
+            assert_eq!(pick_finder(None, &base, &[]), Some("claude"));
+            assert_eq!(pick_finder(Some("agy"), &base, &[]), Some("agy"));
+        }
+        std::fs::write(home.join(".aida/agents.toml"), &agy).unwrap();
+        let none = TrustedBase::default();
+        assert_eq!(pick_finder(None, &none, &[]), Some("claude"));
+        assert_eq!(pick_finder(Some("agy"), &none, &[]), Some("agy"));
     }
 
     /// `--adversarial` end to end: the finder reports two findings, the

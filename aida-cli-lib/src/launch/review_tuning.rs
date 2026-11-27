@@ -86,6 +86,18 @@ fn base_seat_tuning(
     base: &TrustedBase,
     vendor: &str,
 ) -> Result<aida_core::agents_config::ResolvedAgentTuning> {
+    with_base_seat_files(base, |global, config, agents| {
+        resolve_agent_tuning_from(global, config, agents, vendor, AgentSeat::Reviewer)
+    })
+}
+
+/// Run `read` over the operator's global `~/.aida/agents.toml` and the base
+/// revision's `SEAT_PATHS` blobs (written to a private tempdir), in
+/// `(global, config.toml, agents.toml)` order.
+fn with_base_seat_files<T>(
+    base: &TrustedBase,
+    read: impl FnOnce(Option<&Path>, Option<&Path>, Option<&Path>) -> T,
+) -> Result<T> {
     let dir = tempfile::tempdir()?;
     let mut paths = [None, None];
     for (i, body) in base.seat_files.iter().enumerate() {
@@ -97,13 +109,50 @@ fn base_seat_tuning(
     }
     let global = aida_core::home::home_dir().map(|h| h.join(".aida/agents.toml"));
     let [config, agents] = paths;
-    Ok(resolve_agent_tuning_from(
+    Ok(read(
         global.as_deref(),
         config.as_deref(),
         agents.as_deref(),
-        vendor,
-        AgentSeat::Reviewer,
     ))
+}
+
+#[cfg(test)]
+impl TrustedBase {
+    /// A base whose `.aida/config.toml` / `.aida/agents.toml` blobs are given.
+    pub(crate) fn with_seat_files(config: Option<&str>, agents: Option<&str>) -> Self {
+        let blob = |b: Option<&str>| b.map(|s| s.as_bytes().to_vec());
+        Self {
+            seat_files: [blob(config), blob(agents)],
+            ..Default::default()
+        }
+    }
+}
+
+/// The finder's default `[agents] vendor` from trusted sources only: the base
+/// revision's `.aida/config.toml` / `.aida/agents.toml` and the operator's
+/// `~/.aida/agents.toml`. The checkout under review is never read, so a change
+/// cannot pick its own reviewer. Returns the resolved vendor (aida-core
+/// recognizes only claude and codex) and every raw `[agents] vendor` value
+/// those files name, so the caller can say why a named vendor was not used.
+/// trace:STORY-3202 | ai:claude
+pub(crate) fn trusted_default_vendor(base: &TrustedBase) -> Result<(Option<String>, Vec<String>)> {
+    with_base_seat_files(base, |global, config, agents| {
+        let resolved =
+            aida_core::agents_config::resolve_default_vendor_from(global, config, agents);
+        let named = [agents, config, global]
+            .into_iter()
+            .flatten()
+            .filter_map(raw_vendor)
+            .collect();
+        (resolved, named)
+    })
+}
+
+/// The raw `[agents] vendor` string in `path`, trimmed and lowercased.
+fn raw_vendor(path: &Path) -> Option<String> {
+    let value: toml::Value = toml::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let raw = value.get("agents")?.get("vendor")?.as_str()?;
+    Some(raw.trim().to_ascii_lowercase())
 }
 
 /// Resolve in the order flag > environment > review-rules.toml > the
