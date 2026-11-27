@@ -1,0 +1,30 @@
+id: 01a21b9f-9061-7532-9c62-51a709e821f2
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-059
+title: Manual-train waiters are tied to the launching (parent) process, not the aida pr train process
+description: |
+  TASK-3924 AC1 asks that a manual-train waiter be released when "its manual train process exits". The `aida pr train` process exits as soon as it gives up waiting, so recording its own PID would release every waiter at once and undo BUG-2771. The waiter records the parent process instead (getppid: the operator's retry loop or shell), in admission_owner.rs retrier().
+
+  Consequences: a one-off run from a short-lived shell (an agent's Bash call) is released at once. A waiter at the head of the queue whose parent is a long-lived interactive shell that never retries holds later manual trains and the auto-train for up to the 15-minute expiry; `aida advisor loops release-waiter <ID>` clears it. Worth confirming this reading, or choosing another owner (for example the session or seat process).
+
+  Raised by the implementer while working TASK-3924.
+  Branch: task-3924-train-waiters  ·  Commit: a4f7da7206  ·  PR #4728
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T06:09:31.745784818Z
+modified_at: 2026-11-27T06:09:31.745784818Z
+req_type: Task
+tags:
+- from-implementer:TASK-3924
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
+  branch: task-3924-train-waiters
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1914f9fdd1
+  vendor: claude
+  session: 01a21b4b58e3
+  harness_version: 2.1.319 (Claude Code)
