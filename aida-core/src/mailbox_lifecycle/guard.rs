@@ -199,7 +199,7 @@ pub fn retire_clone_checkout(main: Option<&Path>, clone_root: &Path, reason: &st
     }
 }
 
-fn retire_with(
+pub(crate) fn retire_with(
     checkout: &Path,
     reason: &str,
     run: impl FnOnce(&RetireOptions) -> super::Result<(RetireOutcome, Option<RetirementClaim>)>,
