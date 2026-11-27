@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T03:50:31.749247910Z
+modified_at: 2026-11-27T03:51:30.359110630Z
 req_type: Story
 tags:
 - containment
@@ -157,6 +157,22 @@ comments:
     CONCLUSION: plan mode + --sandbox denies write/shell/web in headless print mode, but does NOT confine READS; agy can read anywhere the user can (e.g. ~/.ssh). That's the same exfil class as BUG-2783 (codex read-only). agy's --help has no no-tools / allowed-tools flag; the only knob is settings.json permissions (allow/deny rules) via --settings. Next step to try: `--settings '{"permissions":{"deny":["read_file(*)"...]}}'` or a deny-all rule, plus bwrap with an empty HOME (BUG-2783 AC1).
   created_at: 2026-11-27T03:44:37.390345506Z
   modified_at: 2026-11-27T03:44:37.390345506Z
+- id: 01a21b21-7a6a-7403-aabc-d3299dcec888
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:51):
+    # STORY-3202 r1 on #4716 (integration-30 pre-check MUST-1 + advisor-122 rulings 20:55; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-story-3202-agy-review / PR #4716. Keep the title. ~400 lines accepted. Do NOT merge main.
+    READ: `aida show STORY-3202 --comments`, especially "LIVE agy CONFINEMENT PROBE (product-15 20:45)": in headless print mode, `--mode plan --sandbox` DENIES shell/web/write (auto-denied, the turn aborts) but ALLOWS READS anywhere (/etc/hostname was read), and agy has no no-tools flag; the only knob is settings.json permissions via `--settings`.
+    REQUIRED:
+     (a) `--sandbox` AND `--mode plan` in agy's review argv, asserted in the S3a spawn-contract test.
+     (b) Pass a `--settings` JSON that DENIES file reads and every tool you can name (permissions.deny), and assert it in the contract test. Record as a BINDING RESIDUAL in the PR body and a spec comment that READ confinement is NOT verified live (the probe showed reads allowed without it), so agy is not yet a no-read vendor.
+     (c) agy is OFF the automatic opposite-vendor challenger pick (REVIEW_VENDORS ordering / the pick predicate) until a live signed-in run verifies confinement (recorded on the spec). An explicit --agent agy / --challenger-agent agy still gets --sandbox + plan + the deny settings. TEST: the auto pick never chooses agy.
+     (d) Align with BUG-2783 (in flight): `--post-comment` must refuse when agy is the finder or challenger until no-read confinement is verified. If BUG-2783 hasn't landed, add the refusal for agy here.
+    One targeted cargo test run on this host, make check-ci-source, then push to #4716. COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T03:51:30.359110630Z
+  modified_at: 2026-11-27T03:51:30.359110630Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
