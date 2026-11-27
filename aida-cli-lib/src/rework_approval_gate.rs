@@ -3,7 +3,8 @@
 //! approval that is on its way to landing. The check runs where a round is
 //! queued (`aida queue rework`) and again where it starts (`aida queue work`
 //! on the PR branch), so a round that went stale while waiting for a slot is
-//! refused when it would launch.
+//! refused when it would launch. An approved change that conflicts with its
+//! base or fails CI cannot land as it stands, so its rework is admitted.
 //!
 //! A sweep-pending record is a delivery barrier, not an approval:
 //! `disposition_verdict` already reads it as request-changes, so it never
@@ -129,6 +130,15 @@ pub(crate) enum Gate {
     Approved(HeadApproval),
 }
 
+/// The change's head, and why the approval cannot land as it stands. The
+/// landing reconciler reworks an approved change that conflicts with its base
+/// or fails CI; that round is not stale, so it is admitted.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Head {
+    pub(crate) sha: String,
+    pub(crate) blocked: Option<String>,
+}
+
 /// Evaluate the gate. `head` is called only when some candidate approves, so a
 /// spec without an approval never costs a forge call. An unknown head admits:
 /// it cannot prove the approval is current.
@@ -137,7 +147,7 @@ pub(crate) fn evaluate(
     change: &str,
     ids: &[&str],
     comments: &[aida_core::Comment],
-    head: impl FnOnce() -> Option<String>,
+    head: impl FnOnce() -> Option<Head>,
 ) -> Gate {
     let verdicts = candidate_verdicts(root, change, ids);
     if !verdicts.iter().any(|v| v.kind.approves() && !v.is_closed()) {
@@ -150,21 +160,45 @@ pub(crate) fn evaluate(
         );
         return Gate::Clear;
     };
-    match approval_at_head(&verdicts, change, &head) {
+    match approval_at_head(&verdicts, change, &head.sha) {
         None => Gate::Clear,
+        Some(_) if head.blocked.is_some() => {
+            let why = head.blocked.unwrap_or_default();
+            eprintln!("  {change} is approved at its head but {why}; the rework may proceed");
+            Gate::Clear
+        }
         Some(a) if override_recorded(comments, &a) => Gate::Overridden(a),
         Some(a) => Gate::Approved(a),
     }
 }
 
-/// The change's current head as the forge reports it, `None` on any fault.
-pub(crate) fn forge_head(root: &Path, change: &str) -> Option<String> {
+/// The change's current head and landing blockers as the forge reports them,
+/// `None` when the head cannot be read.
+pub(crate) fn forge_head(root: &Path, change: &str) -> Option<Head> {
     let key = crate::gate::ledger::ChangeKey::parse(change)?;
-    crate::forge::forge_for_open_change(root)
-        .change_metadata(key.number, &mut crate::network_retry::NoopSink)
-        .ok()
-        .map(|m| m.head_sha)
-        .filter(|sha| !sha.trim().is_empty())
+    let forge = crate::forge::forge_for_open_change(root);
+    let status = forge
+        .change_status(&crate::forge::ChangeRef {
+            id: key.number,
+            url: String::new(),
+            branch: String::new(),
+            base: String::new(),
+            title: None,
+        })
+        .ok()?;
+    let sha = status.head_sha.trim().to_string();
+    if sha.is_empty() {
+        return None;
+    }
+    let blocked = if status.mergeable == crate::forge_observed::Observed::Known(false) {
+        Some("conflicts with its base".to_string())
+    } else {
+        let ci = forge.ci_status(crate::forge::CiTarget::Commit(sha.clone()));
+        ci.ok()
+            .filter(|ci| ci.state == crate::gate::dispatch_types::CiState::Failed)
+            .map(|_| "its CI failed".to_string())
+    };
+    Some(Head { sha, blocked })
 }
 
 /// Record a `--despite-approval` override on the spec.
@@ -276,6 +310,7 @@ pub(crate) fn check_launch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aida_core::DatabaseBackend;
 
     const HEAD: &str = "a32d61ac0000000000000000000000000000beef";
     const OLD: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -287,17 +322,16 @@ mod tests {
     }
 
     fn approval(sha: &str) -> serde_json::Value {
-        serde_json::json!({
-            "verdict": "approved",
-            "reviewed_sha": sha,
-            "recorded_by": "reviewer-7",
-            "recorded_at": "2026-11-26T22:28:00Z",
-        })
+        serde_json::json!({"verdict": "approved", "reviewed_sha": sha,
+            "recorded_by": "reviewer-7", "recorded_at": "2026-11-26T22:28:00Z"})
     }
 
     fn gate(root: &Path, comments: &[aida_core::Comment]) -> Gate {
         evaluate(root, "PR-4718", &["BUG-2781"], comments, || {
-            Some(HEAD.into())
+            Some(Head {
+                sha: HEAD.into(),
+                blocked: None,
+            })
         })
     }
 
@@ -318,41 +352,43 @@ mod tests {
         ] {
             assert!(msg.contains(part), "{part} missing from: {msg}");
         }
-    }
-
-    #[test]
-    fn spec_keyed_approval_with_abbreviated_sha_still_counts() {
+        // A spec-keyed approval with an abbreviated sha counts too.
         let tmp = tempfile::tempdir().unwrap();
         write(tmp.path(), "BUG-2781", approval("A32D61AC"));
         assert!(matches!(gate(tmp.path(), &[]), Gate::Approved(_)));
     }
 
     #[test]
-    fn approval_at_an_older_head_admits() {
-        let tmp = tempfile::tempdir().unwrap();
-        write(tmp.path(), "PR-4718", approval(OLD));
-        assert_eq!(gate(tmp.path(), &[]), Gate::Clear);
-    }
+    fn older_head_sweep_pending_and_newer_request_changes_admit() {
+        let older = tempfile::tempdir().unwrap();
+        write(older.path(), "PR-4718", approval(OLD));
+        assert_eq!(gate(older.path(), &[]), Gate::Clear);
 
-    #[test]
-    fn sweep_pending_record_admits() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut pending = approval(HEAD);
-        pending["sweep_pending"] = true.into();
-        write(tmp.path(), "PR-4718", pending);
-        assert_eq!(gate(tmp.path(), &[]), Gate::Clear);
-    }
+        let pending = tempfile::tempdir().unwrap();
+        let mut record = approval(HEAD);
+        record["sweep_pending"] = true.into();
+        write(pending.path(), "PR-4718", record);
+        assert_eq!(gate(pending.path(), &[]), Gate::Clear);
 
-    #[test]
-    fn newer_request_changes_at_head_admits_and_no_approval_skips_forge() {
-        let tmp = tempfile::tempdir().unwrap();
-        write(tmp.path(), "PR-4718", approval(HEAD));
+        let newer = tempfile::tempdir().unwrap();
+        write(newer.path(), "PR-4718", approval(HEAD));
         let mut rc = approval(HEAD);
         rc["verdict"] = "request-changes".into();
         rc["findings"] = serde_json::json!(["still broken"]);
         rc["recorded_at"] = "2026-11-26T23:00:00Z".into();
-        write(tmp.path(), "BUG-2781", rc);
-        assert_eq!(gate(tmp.path(), &[]), Gate::Clear);
+        write(newer.path(), "BUG-2781", rc);
+        assert_eq!(gate(newer.path(), &[]), Gate::Clear);
+
+        // A conflicting or CI-red approved change is the reconciler's rework.
+        let blocked = tempfile::tempdir().unwrap();
+        write(blocked.path(), "PR-4718", approval(HEAD));
+        let g = evaluate(blocked.path(), "PR-4718", &["BUG-2781"], &[], || {
+            Some(Head {
+                sha: HEAD.into(),
+                blocked: Some("conflicts with its base".into()),
+            })
+        });
+        assert_eq!(g, Gate::Clear);
 
         let empty = tempfile::tempdir().unwrap();
         let g = evaluate(empty.path(), "PR-4718", &["BUG-2781"], &[], || {
@@ -362,32 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn override_is_bound_to_change_and_head() {
-        let tmp = tempfile::tempdir().unwrap();
-        write(tmp.path(), "PR-4718", approval(HEAD));
-        let a = HeadApproval {
-            change: "PR-4718".into(),
-            head_sha: HEAD.into(),
-            reviewer: "reviewer-7".into(),
-            recorded_at: "t".into(),
-        };
-        let at_head = aida_core::Comment::new(
-            "advisor".into(),
-            format!("{} redo the parser", override_marker("PR-4718", HEAD)),
-        );
-        assert!(matches!(
-            gate(tmp.path(), std::slice::from_ref(&at_head)),
-            Gate::Overridden(_)
-        ));
-        let older = aida_core::Comment::new(
-            "advisor".into(),
-            format!("{} old", override_marker("PR-4718", OLD)),
-        );
-        assert!(!override_recorded(&[older], &a));
-    }
-
-    #[test]
-    fn despite_approval_admits_and_records_the_reason() {
+    fn despite_approval_admits_records_and_binds_to_the_head() {
         let tmp = tempfile::tempdir().unwrap();
         let store_root = tmp.path().join(".aida-store");
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
@@ -399,28 +410,30 @@ mod tests {
         store.requirements.push(req);
         backend.save(&store).unwrap();
         let req = storage.load().unwrap().requirements[0].clone();
-        let a = HeadApproval {
-            change: "PR-4718".into(),
-            head_sha: HEAD.into(),
-            reviewer: "reviewer-7".into(),
-            recorded_at: "t".into(),
+        write(tmp.path(), "PR-4718", approval(HEAD));
+        let Gate::Approved(a) = gate(tmp.path(), &req.comments) else {
+            panic!("approval at head must refuse");
         };
-        let err = apply(&storage, &req, "BUG-2781", Gate::Approved(a.clone()), None)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("approved-at-head"), "{err}");
+        let err = apply(&storage, &req, "BUG-2781", Gate::Approved(a.clone()), None).unwrap_err();
+        assert!(err.to_string().contains("approved-at-head"), "{err}");
+
+        let why = "reviewer missed a regression";
         apply(
             &storage,
             &req,
             "BUG-2781",
             Gate::Approved(a.clone()),
-            Some("reviewer missed a regression"),
+            Some(why),
         )
         .unwrap();
         let comments = storage.load().unwrap().requirements[0].comments.clone();
-        assert!(override_recorded(&comments, &a));
-        assert!(comments
-            .iter()
-            .any(|c| c.content.contains("reviewer missed a regression")));
+        assert!(comments.iter().any(|c| c.content.contains(why)));
+        // The launch-time check now admits this head, and only this head.
+        assert_eq!(gate(tmp.path(), &comments), Gate::Overridden(a.clone()));
+        let moved = HeadApproval {
+            head_sha: OLD.into(),
+            ..a
+        };
+        assert!(!override_recorded(&comments, &moved));
     }
 }
