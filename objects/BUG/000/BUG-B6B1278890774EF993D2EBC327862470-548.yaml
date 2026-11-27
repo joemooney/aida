@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T20:34:04.208128773Z
+modified_at: 2026-11-27T20:42:56.695212498Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -64,6 +64,12 @@ comments:
   modified_at: 2026-11-27T20:32:41.003635072Z
   session_id: 01a21e9d26a1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21ebf-3337-7072-9011-660e87403d0a
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2787-autobuild-skip-visible` at head `c8a4fbf642a1ab06385225ce78bbf5def9d3bb24`.'
+  created_at: 2026-11-27T20:42:56.695209336Z
+  modified_at: 2026-11-27T20:42:56.695209336Z
+  session_id: 01a21e9d26a1
 history:
 - id: 01a21e61-052d-7350-9e36-a62f92671537
   author: joe
