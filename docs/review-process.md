@@ -305,13 +305,13 @@ The optional CLI ledger check accounts for each reviewable file as reviewed or s
 
 ### Running the review with an agent (`--run-review`)
 
-`aida review prepare --pr <N> --run-review` (or `--from <REF> --run-review`) sends each batch to a review agent, then anchors its findings to exact lines. It needs a range: `--pr` or `--from`. Workspace, commit and scan modes are refused. The review rules, the `[agents]` reviewer seat and the effort defaults are read from the merge base, never from the change under review, so a change cannot loosen its own review.
+`aida review prepare --pr <N> --run-review` (or `--from <REF> --run-review`) sends each batch to a review agent, then anchors its findings to exact lines. It needs a range: `--pr` or `--from`. Workspace, commit and scan modes are refused. `.aida/review-rules.toml` and the project's `[agents]` reviewer seat are read from the merge base, never from the change under review, so a change cannot loosen its own review. Your global `~/.aida/agents.toml` also applies to the seat.
 
 The finder agent is chosen in this order:
 
 1. `--agent claude` or `--agent codex`.
 2. `AIDA_REVIEW_RUNNER_CMD`, when set and non-empty: your own command runs both passes, with `AIDA_REVIEW_PASS` set to `review` or `challenger`.
-3. `vendor` in the project's `[agents]` config (claude or codex only).
+3. `vendor` in `[agents]`: the project's `.aida/agents.toml`, then `.aida/config.toml`, then your `~/.aida/agents.toml` (claude or codex only).
 4. claude, the built-in default.
 
 The command prints the agent it picked and where the choice came from, for example `run review: using claude from [agents] vendor`.
