@@ -10,7 +10,7 @@
 #     first-parent commit (a promotion) -> `git merge -s ours origin/main`
 #   - anything else (main moved on its
 #     own: a train, a direct PR)        -> real `git merge origin/main`
-# Then `make check-ci-fast`, push, and print the line to send the advisor.
+# Then `make check-ci-fast` and `make check-ratchets`, push, and print the line to send the advisor.
 # trace:STORY-2737 | ai:claude
 set -euo pipefail
 
@@ -78,6 +78,8 @@ if [ -n "$promoted" ]; then
 fi
 
 make check-ci-fast || die "check-ci-fast failed on the merge commit $(git rev-parse --short HEAD); NOT pushed. Fix forward, or 'git reset --hard origin/integration' to drop the local merge."
+# check-ci-fast builds nothing; the ratchet set still guards the tip. trace:BUG-2782 | ai:claude
+make check-ratchets || die "check-ratchets failed on the merge commit $(git rev-parse --short HEAD); NOT pushed. Fix forward, or 'git reset --hard origin/integration' to drop the local merge."
 
 if [ "$push" = 1 ]; then
   git push origin integration

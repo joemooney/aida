@@ -22860,6 +22860,10 @@ Options:
       --challenger-effort <LEVEL>
           Reasoning effort for the `--adversarial` challenger
 
+      --challenger-agent <AGENT>
+          Challenger agent for `--adversarial`: `claude` or `codex`. Overrides the automatic pick,
+          which commit `[AI:<tool>]` tags steer
+
       --sarif <PATH>
           Write a SARIF 2.1.0 report inside the repository
 
@@ -56314,6 +56318,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "challenger-agent",
+        "takes_value": true,
+        "help": "Challenger agent for `--adversarial`: `claude` or `codex`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer"
       },
       {
         "name": "challenger-effort",

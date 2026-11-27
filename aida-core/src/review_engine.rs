@@ -664,7 +664,9 @@ pub fn classify_compiled(
         .find_map(|path| classify_path_exclusion(path, user_excludes))
 }
 
-fn classify_path_exclusion(
+/// The exclusion `path` alone hits: secret, substrate, generated or user
+/// pattern. A rename's old path must pass it too. trace:STORY-3120 | ai:claude
+pub fn classify_path_exclusion(
     path: &str,
     user_excludes: &[(&str, CompiledGlob)],
 ) -> Option<ExclusionReason> {

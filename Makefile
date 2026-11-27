@@ -561,20 +561,29 @@ ensure-agent-skill-hooks:
 # trace:TASK-1555 | ai:claude
 # trace:TASK-3791 | ai:codex
 # trace:STORY-2833 | ai:codex
-check-ci-fast: check-ci-source check-ratchets ## Pre-push source gates and the checked ratchet set
+# check-ci-fast builds nothing: the ratchet set compiles three test sets and the
+# aida binary (~18 of 27 min per lane round), so it lives in check-ci-compile,
+# and CI runs it unconditionally in its fast-compile job. trace:BUG-2782 | ai:claude
+# --no-build also skips the fast-tier gates that run cargo (the aida-ci-guards
+# lib tests); check-ratchets runs them, and CI's fast-gates job runs
+# check-ci-source in full.
+check-ci-fast: ## Pre-push gate: every CI gate needing no build
+	@python3 scripts/check-ci-gates.py --tier fast --no-build
 
 check-ci-source: ## Source-only FAST gates (hosted ratchets run after workspace compilation)
 	@python3 scripts/check-ci-gates.py --tier fast
 
-check-ratchets: ## Run the checked ratchet set, including application audit/golden/manual tests
-	@python3 scripts/check-ratchets.py
+# --manual auto: build aida and run docs/cli/verify-manual.py only when the
+# manual or the CLI surface changed vs origin/main; CI always runs it.
+check-ratchets: ## Run the checked ratchet set (compiles), including application audit/golden/manual tests
+	@python3 scripts/check-ratchets.py --manual auto
 
-# check-ci-fast compiles the selected ratchet targets, but other test targets
-# can still stop compiling against main (for example after a struct field addition). This compiles
-# every test target, runs none: CI's `Run tests` body, reshaped by the runner to
+# Other test targets can stop compiling against main (for example after a
+# struct field addition). This runs the ratchet set, then compiles every test
+# target, runs none: CI's `Run tests` body, reshaped by the runner to
 # `--no-run --profile agent`. Run it after every merge of main into a branch.
 # trace:TASK-1763 | ai:claude
-check-ci-compile: ## After merging main: compile every test target, run none (agent profile)
+check-ci-compile: check-ratchets ## After merging main: the ratchet set, then compile every test target, run none (agent profile)
 	@python3 scripts/check-ci-gates.py --tier compile
 
 check-ci: ## Run every CI gate that can run locally, in CI's order (needs a build)
