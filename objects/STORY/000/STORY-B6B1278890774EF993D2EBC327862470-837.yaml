@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:17:25.224448313Z
+modified_at: 2026-11-27T05:17:41.922857699Z
 req_type: Story
 tags:
 - containment
@@ -227,6 +227,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3202 review at 4c941fb51e4a (base: integration, 5 commits behind; the finding is in run_review_agent, which the newer integration commits do not touch). Most of AC-A, AC-B and AC-C passes. The agy vendor goes through the hardened RunnerCall spawn: empty cwd, env allowlist with only GEMINI_API_KEY added, --print= reading stdin, --sandbox, --mode=plan, deny-all --settings, and --print-timeout set inside the deadline. A failed run with agy''s sign-in stderr becomes a typed AuthRequired. The `agy models` lane-host probe returns typed Ready, KeyringOnly, Rejected, Timeout or Failed, is required only when agy is an enabled lane vendor, and is covered by fake-agy tests. The automatic challenger pick filters out agy (confinement_verified=false), and --post-comment refuses agy as finder or challenger before any runner starts. One blocking hole: confinement_verified says an unverified vendor runs only when named explicitly, but the finder is still chosen from `[agents] vendor`, which is read from the reviewed checkout. A PR under review can therefore switch the finder to agy. CI was pending at review time and is not the reason for this verdict.. No triage reason was given.'
   created_at: 2026-11-27T05:17:25.224444746Z
   modified_at: 2026-11-27T05:17:25.224444746Z
+- id: 01a21b70-1bfd-7e72-a72f-2e444d8cc1e0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-3202):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4c941fb51e4a
+    Recorded: 2026-11-27T05:16:27.285466650+00:00
+    Findings:
+    1. [security-authority-bypass] aida-cli-lib/src/review_prepare.rs:821-846 run_review_agent: with no --agent and no AIDA_REVIEW_RUNNER_CMD, the finder comes from aida_core::agents_config::resolve_default_vendor(&project_root). That reads `.aida/agents.toml` and `.aida/config.toml` in the checkout under review. vendors/review_runner.rs:240 now maps agy to AGY, so a PR that adds `[agents] vendor = "agy"` to its own `.aida/agents.toml` makes `aida review prepare --pr N --run-review` run agy as the finder. That breaks the invariant this PR adds in vendors/review_runner.rs:24-28 (confinement_verified: an unverified vendor 'runs only when named explicitly'). agy's tool confinement is unverified: the PR body and the AGY doc comment both say reads were seen allowed anywhere, and the deny settings are not verified live. So a diff that carries a prompt injection could steer an agy finder the reviewed author picked into reading operator files outside the review. Before this PR, that config could only pick verified vendors (claude, codex). Reviewer tuning already refuses the reviewed checkout's copies for this reason (launch/review_tuning.rs:83-84 base_seat_tuning). Fix: refuse a vendor with confinement_verified=false when it comes from `[agents] vendor`, or read it from the trusted base. Require an explicit --agent agy instead. Add a test that a checkout-local `[agents] vendor = agy` does not run agy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T05:17:41.757809818Z
+  modified_at: 2026-11-27T05:17:41.757809818Z
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
