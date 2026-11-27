@@ -4,7 +4,7 @@
 //! runner may inherit.
 
 use aida_core::vendors::LaunchVendor;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ReviewVendor {
@@ -15,7 +15,38 @@ pub(crate) struct ReviewVendor {
     pub efforts: &'static [&'static str],
     /// Codex takes effort as a `-c` config override; the rest take `--effort`.
     pub effort_as_config: bool,
+    /// The vendor's own print-mode time limit, set inside the runner deadline
+    /// so the CLI ends its turn before the group kill. trace:STORY-3202 | ai:claude
+    pub print_timeout: Option<&'static str>,
+    /// Lowercase stderr fragments meaning "not signed in for headless use".
+    pub auth_failure: &'static [&'static str],
+    /// A live, signed-in run has verified this vendor's print-mode tool
+    /// confinement. An unverified vendor runs only when named explicitly: it is
+    /// never the automatic challenger and refuses `--post-comment`.
+    /// trace:STORY-3202 | ai:claude
+    pub confinement_verified: bool,
 }
+
+/// A review runner that exited because it is not signed in for headless use.
+/// trace:STORY-3202 | ai:claude
+#[derive(Debug)]
+pub(crate) struct AuthRequired {
+    pub vendor: &'static str,
+    pub stderr: String,
+}
+
+impl std::fmt::Display for AuthRequired {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} is not signed in for non-interactive use; `aida doctor --lane-host` names \
+             the fix (stderr: {})",
+            self.vendor, self.stderr
+        )
+    }
+}
+
+impl std::error::Error for AuthRequired {}
 
 impl ReviewVendor {
     /// The fixed argv plus `--model`/effort flags, inserted before any `--`.
@@ -40,6 +71,12 @@ impl ReviewVendor {
             .unwrap_or(argv.len());
         argv.splice(at..at, extra);
         argv
+    }
+
+    /// Whether `output` carries one of this vendor's not-signed-in messages.
+    pub(crate) fn auth_failed(&self, output: &[u8]) -> bool {
+        let lower = String::from_utf8_lossy(output).to_ascii_lowercase();
+        self.auth_failure.iter().any(|m| lower.contains(m))
     }
 }
 
@@ -66,6 +103,9 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     ],
     efforts: &["low", "medium", "high", "xhigh", "max"],
     effort_as_config: false,
+    print_timeout: None,
+    auth_failure: &[],
+    confinement_verified: true,
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -82,6 +122,56 @@ const CODEX: ReviewVendor = ReviewVendor {
     auth: &["OPENAI_API_KEY", "CODEX_HOME"],
     efforts: &["low", "medium", "high", "xhigh"],
     effort_as_config: true,
+    print_timeout: None,
+    auth_failure: &[],
+    // Tool use is confined; its whole-disk read scope is BUG-2783's.
+    confinement_verified: true,
+};
+
+/// Antigravity: print mode with the empty `--print=` value, so the prompt is
+/// read from the piped stdin; plan mode (no edits), no permission bypass, no
+/// slash commands. The runner's empty cwd is an untrusted workspace with no
+/// project settings, hooks or MCP config to load. `--sandbox` plus plan mode
+/// auto-denies shell, web and writes headless (seen live), but reads were seen
+/// allowed anywhere, so `--settings` denies every tool rule agy names. That
+/// deny is not yet verified live: agy stays `confinement_verified: false`.
+/// trace:STORY-3202 | ai:claude
+pub(crate) const AGY: ReviewVendor = ReviewVendor {
+    program: "agy",
+    argv: &[
+        "--output-format=text",
+        "--mode=plan",
+        "--sandbox",
+        AGY_DENY_ALL_SETTINGS,
+        "--disable-slash-commands",
+        "--print=",
+    ],
+    auth: &["GEMINI_API_KEY"],
+    efforts: &["low", "medium", "high", "xhigh", "max"],
+    effort_as_config: false,
+    print_timeout: Some("--print-timeout"),
+    auth_failure: &[
+        "authentication failed",
+        "authentication required",
+        "please sign in",
+        "not logged into antigravity",
+    ],
+    confinement_verified: false,
+};
+
+/// agy's session-only settings: deny every permission rule kind it names
+/// (file reads at any path, writes, shell commands, MCP tools and URL access).
+const AGY_DENY_ALL_SETTINGS: &str = concat!(
+    r#"--settings={"permissions":{"deny":["read_file(*)","read_file(/)","#,
+    r#""write_file(*)","write_file(/)","command(*)","mcp(*)","read_url(*)","#,
+    r#""execute_url(*)","download_url(*)"]}}"#
+);
+
+/// `agy models` for the lane-host auth probe: needs sign-in, sends no prompt.
+pub(crate) const AGY_AUTH_PROBE: ReviewVendor = ReviewVendor {
+    argv: &["models"],
+    print_timeout: None,
+    ..AGY
 };
 
 /// The finder when neither `--agent` nor `[agents] vendor` names one.
@@ -89,17 +179,14 @@ const CODEX: ReviewVendor = ReviewVendor {
 pub(crate) const DEFAULT_REVIEW_VENDOR: &ReviewVendor = &CLAUDE;
 
 /// Every vendor with a hardened review contract. trace:STORY-3120 | ai:claude
-pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 2] = [&CLAUDE, &CODEX];
+pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 3] = [&CLAUDE, &CODEX, &AGY];
 
-/// The review contract for `raw`. Unknown names, and vendors without a
-/// hardened review contract, are refused, never defaulted.
+/// The review contract for `raw`. Unknown names are refused, never defaulted;
+/// every launch vendor has a hardened review contract. trace:STORY-3202 | ai:claude
 pub(crate) fn review_vendor(raw: &str) -> Result<&'static ReviewVendor> {
     match LaunchVendor::parse(raw).map_err(|e| anyhow!("{e}"))? {
         LaunchVendor::Claude => Ok(&CLAUDE),
         LaunchVendor::Codex => Ok(&CODEX),
-        other => bail!(
-            "{} has no review runner; use claude or codex",
-            other.as_str()
-        ),
+        LaunchVendor::Agy => Ok(&AGY),
     }
 }
