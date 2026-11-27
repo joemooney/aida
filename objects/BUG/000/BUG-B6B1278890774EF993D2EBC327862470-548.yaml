@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor --lane-host` (and the lane-run STALE refusal) report "live binary N hours / M changes behind main; autobuild skipping since <time>: <reason from the autobuild log>" with the one command that clears it.
   - AC2: a test with a fake autobuild log showing consecutive skips and a stale live sha.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T21:08:23.948972644Z
+modified_at: 2026-11-27T21:14:05.584738400Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -114,6 +114,12 @@ comments:
   modified_at: 2026-11-27T21:08:23.948972644Z
   session_id: 01a21ec73d19
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21edb-b790-7b11-b1d0-53d111f1daa8
+  author: aida-publication-done
+  content: Implementer push 2497ea339f90 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T21:14:05.584737838Z
+  modified_at: 2026-11-27T21:14:05.584737838Z
+  session_id: 01a21ec73d19
 history:
 - id: 01a21e61-052d-7350-9e36-a62f92671537
   author: joe
@@ -172,6 +178,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21edb-b790-7b11-b1d0-53c222630177
+  author: aida-publication-done
+  timestamp: 2026-11-27T21:14:05.584735480Z
+  session_id: 01a21ec73d19
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
