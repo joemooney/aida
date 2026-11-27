@@ -9,17 +9,33 @@ description: |-
   - AC1: reclaim_exited_branch_clone (queue_cmd/work.rs ~4251) retries do not write duplicate salvage: seat_clone salvage is idempotent per clone + head (skip when an identical salvage already exists).
   - AC2: when retries are spent on writers running a deleted/stale binary, the WriterAdmissionUnknown refusal names the exact stop/restart command for each pid instead of saying they 'should exit on their own'.
   - AC3: wiring tests: retire_with maps WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core mailbox_lifecycle/guard.rs ~214-224), and the two call-site predicates (dispatch.rs lane reuse, queue_cmd/work.rs rework reclaim) retry on it.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:17:10.601015886Z
-modified_at: 2026-11-27T23:25:31.734516700Z
+modified_at: 2026-11-27T23:26:43.673309305Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a2194b-86c4-7a60-9db9-ad2a0317f943
   created_at: 2026-11-27T23:17:36.589735991Z
+comments:
+- id: 01a21f55-19f3-7692-ba4c-3d518f725f2e
+  author: dirtlab
+  content: |-
+    ## Implementer finding: already satisfied on main (duplicate of TASK-3922)
+
+    Reviewed HEAD 82c120dd1c. TASK-3922 (Completed, #4702, commit 3f8b6015cb, an ancestor of main) shipped the same three criteria from BUG-2778 comment 3:
+    - AC1: aida-cli-lib/src/seat_clone.rs:3279-3284 reuses an identical salvage (same body/head and same bundle refs) on a retried teardown. Test: tests/task_3922_admission_followup_tests.rs `the_newest_identical_salvage_is_reused`.
+    - AC2: aida-core/src/mailbox_lifecycle/retire.rs:170-190. The WriterAdmissionUnknown Display no longer says the writers 'should exit on their own'. Each named writer carries its own `stop it with `kill <pid>`, then start/rerun ...` command. Tests are in bug_2778_admission_retry_tests.rs, including credential redaction.
+    - AC3: bug_2778_admission_retry_tests.rs `retire_with_maps_a_transient_admission_refusal` (guard.rs mapping), plus task_3922 tests `lane_reuse_retries_only_a_transient_refusal` (dispatch.rs `reuse_refusal_is_transient`) and `rework_reclaim_retries_only_a_clone_kept_for_a_transient_refusal` (work.rs `kept_for_transient_admission`).
+
+    No code change and no PR. Fail-closed behaviour is unchanged.
+  created_at: 2026-11-27T23:26:40.627348956Z
+  modified_at: 2026-11-27T23:26:40.627348956Z
+  session_id: 01a21f53d483
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21f4c-d3f4-7142-ba60-76a568e39c90
   author: joe
@@ -32,6 +48,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21f55-25d9-70b0-b4b1-6862379ae2a7
+  author: dirtlab
+  timestamp: 2026-11-27T23:26:43.673356155Z
+  session_id: 01a21f53d483
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
   branch: main
@@ -39,3 +64,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0fba3d42ee9
   vendor: claude
+attention_reason:
+  category: other
+  detail: 'TASK-3935 duplicates TASK-3922 (Completed, #4702 on main): AC1-AC3 are already implemented and tested. See the implementer comment for file:line evidence. Nothing to implement, and an empty PR would carry no change.'
+  lean: Close TASK-3935 as a duplicate of TASK-3922 (e.g. status completed or rejected, with a duplicate relationship).
+  raised_by: implementer
+  raised_at: 2026-11-27T23:26:43.673309305Z
