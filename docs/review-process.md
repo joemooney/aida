@@ -291,7 +291,7 @@ Git is required in every mode. Workspace mode compares local changes with HEAD a
 The optional CLI ledger check accounts for each reviewable file as reviewed or skipped with a reason. Merge gates operate independently.
 
 1. **SHA-256-Sealed Inventory & 100% File Coverage (`--verify-coverage <ledger.json>`)**:
-   - Classifies every changed or scanned file into `reviewable_files` vs `excluded_files` (with explicit exclusion reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, `user_excluded:<glob>`, or `oversize: N estimated tokens > cap M`).
+   - Classifies every changed or scanned file into `reviewable_files` vs `excluded_files` (with explicit exclusion reasons: `non_regular:symlink|gitlink|other` (never followed or read), `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, `user_excluded:<glob>`, or `oversize: N estimated tokens > cap M`).
    - Seals the scope with `inventory_sha256` and records whether the file contains the literal `trace:` marker, without validating an ID.
    - When `--verify-coverage` is passed, `aida review prepare` fails closed unless 100% of `reviewable_files` are explicitly marked `reviewed` or `skipped` (with a non-empty reason).
 2. **Zero-LLM Token-Budgeted Semantic Batching**:
