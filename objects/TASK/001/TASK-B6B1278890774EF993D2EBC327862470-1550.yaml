@@ -1,0 +1,31 @@
+id: 01a21afa-a13b-74f0-9f21-ef91c9a15511
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1550
+title: 'Review follow-up: Single waiter slot: record_waiter overwrites the file, so two manual trains for different '
+description: |-
+  From BUG-2771
+  Reviewed sha: cbaddf47705827f69c721df0d82dfa12c11cc558
+
+  Single waiter slot: record_waiter overwrites the file, so two manual trains for different PRs that both give up keep only the last; and manual_train_admission removes the file on any admission, so train X admitted clears train Y's waiter and the auto-train may start its next train ahead of Y's retry (admission_owner.rs manual_train_admission Ok branch). Multiplicity N>1 not covered.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T03:09:22.619303877Z
+modified_at: 2026-11-27T03:09:22.619303877Z
+req_type: Task
+tags:
+- carried-from:BUG-2771
+- finding-hash:d687032f
+- from-review:BUG-2771
+relationships:
+- rel_type: References
+  target_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
+  created_at: 2026-11-27T03:09:42.469410463Z
+filed_at:
+  code_sha: cbaddf47705827f69c721df0d82dfa12c11cc558
+  branch: pr-4711
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 956b13f4da4
+  vendor: claude
+  session: 01a21af6a9fa
