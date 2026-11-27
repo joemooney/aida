@@ -542,6 +542,36 @@ fn task_2053_bwrap_destroy_salvages_then_removes_clone_target_and_pin() {
     assert!(fx.main.join("README.md").exists());
 }
 
+/// TASK-3922 AC1: repeated teardowns of an unchanged clone (the transient
+/// writer-admission retries) reuse one salvage; a new change writes another.
+// trace:TASK-3922 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_task_3922_repeated_teardown_writes_one_salvage() {
+    if !bwrap_live() {
+        return;
+    }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let clone = seat(&fx, "again", "c0ffee003922");
+    seat_commit(&clone, "committed.txt");
+    let teardown = || match destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap() {
+        Destroyed::Kept {
+            salvage: Some(patch),
+            ..
+        } => patch,
+        other => panic!("reap mode keeps unshipped work: {other:?}"),
+    };
+    let first = teardown();
+    assert_eq!(teardown(), first, "an unchanged clone reuses its salvage");
+    let dir = first.parent().unwrap().to_path_buf();
+    let count = || std::fs::read_dir(&dir).unwrap().count();
+    assert_eq!(count(), 2, "one patch and its bundle");
+    std::fs::write(clone.join("later.txt"), "later\n").unwrap();
+    assert_ne!(teardown(), first, "a changed clone gets a new salvage");
+    assert_eq!(count(), 4);
+}
+
 /// T7: the seat plants a `core.fsmonitor`, a clean filter and hooks in its
 /// clone. The host's probe, reap scan, salvage and destroy never run them on
 /// the host, and no host git invocation lands in the clone outside the
