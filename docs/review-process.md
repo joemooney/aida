@@ -345,7 +345,7 @@ AIDA picks the challenger from the installed vendors. It prefers a vendor that i
 
 When the challenger cannot run (signed out, rate-limited, not installed) or answers with output that cannot be parsed, the finder's work is kept. AIDA does not call the challenger again for the later batches. Every finding it did not judge is marked unchallenged: the report lists it as Unchallenged, and SARIF gives it the property `unchallenged: true`. The report also shows `challenger: unavailable (<cause>)`, with the cause as inert text.
 
-The `--write` report, the SARIF file and any `--post-comment` are still written. The run then exits with code 4, so a partial review never reads as a clean adversarial pass. The error names the challenger, and for claude or codex it suggests `--challenger-agent` to pick another vendor.
+The `--write` report, the SARIF file and any permitted `--post-comment` are still written. The run then exits with code 4, so a partial review never reads as a clean adversarial pass. The error names the challenger, and for claude or codex it suggests `--challenger-agent` to pick another vendor.
 
 ### Gating (`--fail-on`) and exit codes
 
@@ -372,13 +372,16 @@ When `--fail-on` matches and the challenger was also unavailable, exit code 1 wi
 
 It is also refused when agy is the finder or the challenger. agy's tool confinement in print mode has not been verified, and it may read files outside the review, so its output is not published. For the same reason the automatic challenger pick never chooses agy; name it with `--challenger-agent agy`.
 
+The comment is also refused when any producer of the findings can read local files, because a diff that tells the reviewer to quote a secret, such as a key under `~/.ssh`, could then publish it. That covers codex as the finder or the challenger (its read-only sandbox still reads any file you can), a custom runner set with `AIDA_REVIEW_RUNNER_CMD`, and findings imported with `--anchor-findings`, whose producer AIDA cannot verify. Only a `--run-review` whose finder and challenger are claude, which runs with no tools, can post. This check runs after the run, so the local report (the `--write` file or standard output) and the `--sarif` file are still written; the command then exits with the refusal and posts nothing.
+<!-- trace:BUG-2783 | ai:claude -->
+
 The comment goes through AIDA's forge client for the origin, the same one that reads the `--pr` metadata. AIDA makes no separate forge CLI or HTTP call for it.
 
 Agent text in the report never renders as Markdown. Each finding's message and each challenger reason sits in a code block whose fence is longer than any backtick run in the text. Paths, severities and categories are code spans. Mentions, HTML, links and headings in that text show up as literal characters.
 
 On GitHub the body goes to `gh` on standard input, not the command line, so a large report cannot overflow the argument limit. A comment is capped at 60,000 characters, under GitHub's 65,536 limit. The summary, coverage and findings come first and the file inventory last, so the inventory is trimmed first. A cut falls on a line boundary, any open code block is closed, and a closing note says how many findings were left out and where the full report is: the `--write` file, else the `--sarif` file.
 
-The comment is posted before the `--fail-on` and coverage checks, so a run that fails still publishes its findings.
+The comment is posted before the `--fail-on` and coverage checks, so a run that fails those checks still publishes its findings, unless one of the refusals above applies.
 <!-- trace:STORY-3120 | ai:claude -->
 
 ## Related
