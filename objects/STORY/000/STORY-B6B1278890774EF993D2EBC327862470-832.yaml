@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-26T23:02:29.987839930Z
+modified_at: 2026-11-27T15:21:19.148460202Z
 req_type: Story
 tags:
 - agents
@@ -194,6 +194,11 @@ comments:
   created_at: 2026-11-26T23:02:29.987832067Z
   modified_at: 2026-11-26T23:02:29.987832067Z
   session_id: 01a219e0aa68
+- id: 01a21d98-be2c-71e1-a4bf-cf4d48e632c2
+  author: joe
+  content: 'DEFERRED FOLLOW-UP from #4680 S1a r1 review (approved @9e1ce186; p3), for S1b: standalone_implementer.rs note_failed_run records the outage (~1839), but the retained-merge early return (~1854-1877) builds its StandaloneImplementerExit from `detail` alone. A usage-limit stop on that path refuses later launches, yet the lane''s failure message never says `agent usage limit: ...`. Prefix outage_note there too, or move the prefixing into S1b''s vendor_unavailable_exit.'
+  created_at: 2026-11-27T15:21:19.148460202Z
+  modified_at: 2026-11-27T15:21:19.148460202Z
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
