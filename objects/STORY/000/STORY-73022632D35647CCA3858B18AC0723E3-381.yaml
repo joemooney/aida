@@ -1,0 +1,34 @@
+id: 01a21aa8-145f-7fc0-a5ab-7cb1e34170c6
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-381
+title: 'Review PR-4705: [AI:claude] fix(claims): stale-claim heal fails closed on unreadable clone state, legacy claims and non-canonical paths (BUG-2780)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21a83`) for branch `bug-2780-claim-dirty-probe`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4705>
+  - Branch: `bug-2780-claim-dirty-probe` → `main`
+
+  ## Covers
+
+  - BUG-2780
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4705` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T01:39:12.607716012Z
+modified_at: 2026-11-27T01:39:12.607716012Z
+req_type: Story
+filed_at:
+  code_sha: b6870d4561a3f7da48db859858bf9bf0bac64a7b
+  branch: bug-2780-claim-dirty-probe
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461b694e0
+  vendor: claude
+  session: 01a21a83cee5
+  harness_version: 2.1.319 (Claude Code)

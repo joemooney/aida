@@ -11,12 +11,12 @@ description: |
   ## Acceptance criteria
   1. A dirty-state probe returns tri-state (clean / dirty / unknown). Unknown (any git error) → NOT eligible, and the hint names the cause. A test injects a git failure.
   2. Legacy claims without `claim_id` go through the same lane-record / session-registry check (or are ineligible, with a hint to salvage by hand). A test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:55:23.049530615Z
-modified_at: 2026-11-27T01:25:06.475228659Z
+modified_at: 2026-11-27T01:39:44.874662200Z
 req_type: Bug
 comments:
 - id: 01a21a15-9400-74a3-87c6-bf99b4c09def
@@ -64,6 +64,20 @@ comments:
   modified_at: 2026-11-27T01:25:06.475228659Z
   session_id: 01a21a83cee5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21aa7-8217-7493-af5c-6317c256a7ad
+  author: aida-publication-done
+  content: Implementer push b6870d4561a3 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T01:38:35.159458833Z
+  modified_at: 2026-11-27T01:38:35.159458833Z
+  session_id: 01a21a83cee5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21aa8-926a-72c2-8e77-4fcc65fada41
+  author: dirtlab
+  content: 'PR #4705 is open at head b6870d4561. That is the self-reviewed commit 45a5967 rebased onto main, with no content change. make check-ci-fast: 503 gates ok, 0 FAIL. The CLI-manual drift check was still running at publish time.'
+  created_at: 2026-11-27T01:39:44.874662200Z
+  modified_at: 2026-11-27T01:39:44.874662200Z
+  session_id: 01a21a83cee5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a12-6c3f-7730-9c6f-499787b1b8e0
   author: joe
@@ -89,6 +103,15 @@ history:
   session_id: 01a21a83cee5
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a21aa7-8217-7493-af5c-63080a3e1296
+  author: aida-publication-done
+  timestamp: 2026-11-27T01:38:35.159454476Z
+  session_id: 01a21a83cee5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
