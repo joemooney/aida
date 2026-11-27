@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T15:09:49.599692200Z
-modified_at: 2026-11-27T00:16:40.955466787Z
+modified_at: 2026-11-27T00:16:45.420281897Z
 req_type: Story
 relationships:
 - rel_type:
@@ -52,6 +52,11 @@ comments:
   content: 'BINDING (advisor-122 2026-11-26 16:06): shadow with claude/claude NOW, gated on STORY-3120 S5d (partial-exit path) and BUG-2779 (no panic) landing. Record the vendor PAIR (finder/challenger) in each shadow row, so the Nov 29+ codex pairing can be compared. A same-vendor challenger must be labelled "same-vendor" in the bundle and the report.'
   created_at: 2026-11-26T23:03:55.420918187Z
   modified_at: 2026-11-26T23:03:55.420918187Z
+- id: 01a21a5c-976c-7950-a0d2-a7133c51c638
+  author: joe
+  content: 'CORRECTION (product-15 2026-11-26 17:30): the earlier "TRIAL DATA" and "BINDING (advisor-122 16:06)" comments, and the depends-on BUG-2775 link, were put on THIS spec by mistake; the shadow adversarial-review trial is STORY-3183 (a mis-numbered reference). They have been copied to STORY-3183 and the link removed here. Ignore them for this PR-4663 review story.'
+  created_at: 2026-11-27T00:16:45.420281897Z
+  modified_at: 2026-11-27T00:16:45.420281897Z
 history:
 - id: 01a21869-37e3-7e72-a909-63aee48d0ebf
   author: dirtlab
