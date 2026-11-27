@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:39:02.589686374Z
+modified_at: 2026-11-27T05:46:08.618764471Z
 req_type: Story
 tags:
 - containment
@@ -295,6 +295,26 @@ comments:
   modified_at: 2026-11-27T05:39:02.589686374Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b8a-276a-7f30-bb4c-1d8cfdb65041
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (r1, PR #4716 MUST-1)
+    Reviewed HEAD: f5bc908438 (int-story-3202-agy-review)
+
+    Acceptance evidence for the rulings:
+    - (a) [evidence: behavioral-test] AGY argv: --output-format=text --mode=plan --sandbox --settings=<deny-all> --disable-slash-commands --print= (vendors/review_runner.rs AGY). s3a_runner_spawn_contract asserts --sandbox, --mode=plan, each deny rule, and no 'dangerously' flag.
+    - (b) [evidence: behavioral-test] agy has no no-tools flag. --settings passes {"permissions":{"deny":[read_file(*), read_file(/), write_file(*), write_file(/), command(*), mcp(*), read_url(*), execute_url(*), download_url(*)]}}. The rule kinds come from the agy 1.5.18 binary. Live on dell1: agy accepts this argv and settings object and rejects malformed --settings JSON, but it is not signed in, so the deny itself was not exercised.
+    - (c) [evidence: behavioral-test] ReviewVendor.confinement_verified=false for agy; pick_challenger filters on it. story3202_auto_pick_never_chooses_agy_explicit_override_is_confined checks that agy is not picked even when it is the only other installed vendor, and that --challenger-agent agy runs with --sandbox, plan mode and the deny settings.
+    - (d) [evidence: behavioral-test] BUG-2783 has not landed on integration, so the refusal is added here. ensure_postable refuses --post-comment before any runner starts when agy is the finder or the challenger. story3202_post_comment_refuses_unverified_agy_before_any_run covers both roles and checks that no runner ran.
+
+    BINDING RESIDUAL: READ confinement is NOT verified live. The signed-in probe (product-15, 2026-11-26 20:45) showed plan+--sandbox allowing reads anywhere, without the deny settings. Whether permissions.deny blocks reads in print mode needs a live signed-in run, so agy is not yet a no-read vendor. It stays off the auto pick and refused for --post-comment until that run is recorded here. Flip confinement_verified only then.
+
+    Other residuals: user-level ~/.gemini hooks still apply (operator-owned, accepted by pre-check). Codex whole-disk read scope is BUG-2783's.
+    Validation: targeted lane cargo test, 37 passed / 0 failed (story3202, s3a_runner_spawn_contract, s4_, s5c_, s5_post, help golden). Fast-tier gates were run one by one, because the whole make target exceeds this lane's per-call limit and the lane job runner refuses make. Every gate relevant to this diff passed: formatting, help-golden co-change, test portability, ExecContext, glob import, executable fixture, trace stranding, docs audience, structural. Four gates fail only on sandbox limits (AF_UNIX denied, read-only /tmp), in scripts this diff doesn't touch: test-touched planner, containment conformance, store mutation channel, self-hosted routing.
+  created_at: 2026-11-27T05:46:08.618764471Z
+  modified_at: 2026-11-27T05:46:08.618764471Z
+  session_id: 01a21b413e7d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe

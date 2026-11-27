@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T05:43:51.901272722Z
+modified_at: 2026-11-27T05:46:34.041759551Z
 req_type: Bug
 comments:
 - id: 01a21b43-1a62-7921-9b1a-11e036f97be5
@@ -41,6 +41,27 @@ comments:
   modified_at: 2026-11-27T04:38:16.917242726Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b8a-8ab9-79b0-8156-f7221e7e0643
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (fixture):** `tests/test_json_union_merge.py` builds a temp git repo with the .gitattributes entry and the driver configured, merges two branches that each add a different test to the same ratchet group (and one adds a new group), and asserts a clean merge, valid JSON, both entries present. Rework prep configures the driver per git invocation (host `-c` and sandbox GIT_CONFIG_*), pointing at the primary checkout's trusted copy of the script, never the lane's copy.
+    - **AC2 (fixture):** same test file: both branches change the same scalar differently -> driver exits non-zero, git reports a conflict.
+
+    ### Expected files
+    - `scripts/json-union-merge.py` (new driver)
+    - `.gitattributes` (allowlist: scripts/ratchet-set.json)
+    - `aida-cli-lib/src/seat_clone.rs` (register driver in rework-prep git)
+    - `tests/test_json_union_merge.py`
+
+    ### Ambiguities / conflicts as questions
+    - GitHub server-side merges ignore custom drivers; the brief prefers a restructure but the acceptance names the driver. Following acceptance; a missing/unconfigured driver falls back to the ordinary text merge (today's behavior), so it fails closed.
+  created_at: 2026-11-27T05:46:34.041759551Z
+  modified_at: 2026-11-27T05:46:34.041759551Z
+  session_id: 01a21b87a95b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
