@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-27T02:47:23.955251130Z
+modified_at: 2026-11-27T03:03:37.757505830Z
 req_type: Bug
 tags:
 - hubs
@@ -180,6 +180,20 @@ comments:
   created_at: 2026-11-27T02:47:23.955236692Z
   modified_at: 2026-11-27T02:47:23.955236692Z
   session_id: 01a21a852a1c
+- id: 01a21af5-5e1d-75c1-909e-b9a462b18426
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 93f4e52f10. Round 2 fixes on #4708.
+    - R1 (AC1, push-race reason text): new bug_2759_reconcile_reports_the_race_after_its_bounded_retries. A concurrent writer wins origin on every pass. The test asserts reconcile_with_push errs, origin's push seam ran exactly RECONCILE_ATTEMPTS (2) times, the error contains 'origin: rejected — a concurrent push moved it again after 2 reconcile attempts', and it does not say 'once they are reachable'. Merge-refusal reason text is already covered by reconcile_refusal_displays_merge_validation_cause.
+    - R2 (folded in): the bail now appends push_failures joined by ' | ', so each failing hub and its cause stays in agent-mode's one-line error. 'once they are reachable' appears only when there is a non-race failure. Tested by bug_2759_unreachable_hub_error_names_hub_and_cause.
+    Evidence: lane job: cargo test -p aida-cli-lib --lib bug_2759 + reconcile_refusal, 6 passed. rustfmt --check clean.
+    Residual: make check-ci-source could not finish in this lane. Its test-touched planner step failed because CARGO_HOME is read-only in the sandbox, which is an environment problem. CI runs the full gates.
+    Probes: a mixed race+unreachable failure keeps the reachability advice, which is correct. The retry warning on stderr is not asserted.
+  created_at: 2026-11-27T03:03:37.757505830Z
+  modified_at: 2026-11-27T03:03:37.757505830Z
+  session_id: 01a21aecb33b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
