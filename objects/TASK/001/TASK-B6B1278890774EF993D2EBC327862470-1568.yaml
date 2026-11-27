@@ -15,11 +15,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T10:10:23.089170025Z
-modified_at: 2026-11-27T10:15:48.921042466Z
+modified_at: 2026-11-27T10:19:07.285058858Z
 req_type: Task
 tags:
 - agy
 - review
+comments:
+- id: 01a21c84-5558-7103-b189-57d19a69ce7d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:19):
+    # TASK-3926: the STORY-3202 follow-up (advisor-122 01:13, BINDING small; after p54 landed it on main; product-15). Lane: CLAUDE. MAIN, NEW branch story-3202-fu-agy-probe (cut from main after p54). <=80 lines. Title "... (Refs STORY-3202)" unless this completes the story.
+     (a) NO outward agy call from `aida init`: lane_host::report (reached from init_cmd.rs ~2252) must skip agy_lane_probe / the networked `agy models` call; only `aida doctor --lane-host` runs it. TEST: init's report path makes no agy spawn (a fake agy on PATH that would record a call).
+     (b) agy_auth_probe classifies a Timeout by a TYPED deadline error from RunnerCall::run (as AuthRequired already does), not `e.to_string().contains("deadline")`. TEST: a stderr containing "deadline" from a failing fake agy is reported as Failed, and a real deadline as Timeout.
+    One targeted cargo test run, make check-ci-fast, then publish a NEW PR to main. COMMIT and PUSH before the final gate.
+     (c) From the p54 #4736 review: the KeyringOnly fix text in vendors/host_diagnostics.rs agy_auth_probe_check says `env -u DBUS_SESSION_BUS_ADDRESS agy` (or GEMINI_API_KEY). The LIVE finding (STORY-3202 comment, product-15 23:42) is that agy picks FILE-based token storage when it detects an SSH session and the keyring otherwise. So the fix text must say: "sign in once from an ssh session (`ssh -t <host> agy`), which writes ~/.gemini/antigravity-cli/antigravity-oauth-token; lanes run over ssh and read that file". TEST the text.
+     (d) docs/review-process.md "Running the review with an agent": list `--agent agy` too (explicit only; never a default or an automatic challenger until its confinement is verified), and state that `[agents] vendor` is read from the MERGE BASE / trusted config (never the PR checkout).
+  created_at: 2026-11-27T10:19:07.285058858Z
+  modified_at: 2026-11-27T10:19:07.285058858Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21c81-2c0f-79c2-8d45-bb35bf0dc892
   author: joe
