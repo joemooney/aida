@@ -17,12 +17,12 @@ description: |
   - AC2: an agy implementer lane runs end to end on dell1 (claim, edit, commit, push, publish) under the chosen containment; a canary on one small standard spec.
   - AC3: `aida doctor --lane-host` checks agy auth NON-INTERACTIVELY (the way a lane will run it) and, when the token is keyring-only, names the fix (a headless-usable credential mode, or keyring unlock guidance).
   - AC4 (follow-up slice): agy as a `review prepare` runner vendor through the S3a hardened spawn helper (with STORY-3120 S9), giving a real opposite-vendor challenger when one vendor is rate-limited.
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T08:08:27.864379953Z
+modified_at: 2026-11-27T10:04:45.864422425Z
 req_type: Story
 tags:
 - containment
@@ -476,6 +476,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a21c76-eda8-7343-8660-dfd77df7fa17
+  author: joe
+  timestamp: 2026-11-27T10:04:45.864415152Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
@@ -484,6 +491,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b728c3373d1
   vendor: claude
+implementation_info:
+  implemented: false
+  reopened_at_sha: 2e8ddd85c03548d81f785070961c6879a2ab58be
 failure_reason:
   phase: reviewer
   phase_index: 3
