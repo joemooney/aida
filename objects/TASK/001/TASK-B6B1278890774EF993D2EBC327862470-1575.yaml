@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T20:55:20.350588677Z
+modified_at: 2026-11-27T21:08:42.371043437Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -98,6 +98,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T20:51:16.547267059Z
   modified_at: 2026-11-27T20:51:16.547267059Z
+- id: 01a21ed6-c903-7450-9cfb-bffe7411f6c0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fcca407a90 (round 2 of #4756)
+    - Finding 1 (unreadable receipt untested): new test bug_3928_unreadable_fast_gate_receipt_salvages_to_the_salvage_ref covers corrupt JSON and a chmod-000 (EACCES) receipt. In each case the PR branch is untouched, the work lands on salvage/<lane>, and the note and PR comment carry the reason. Mutation check by hand: changing failed_receipt's Err arm to None made the new test FAIL (exit 101); the red and green tests still passed. Restored.
+    - Finding 2 (message): failed_receipt now returns the veto reason, either 'red fast-gate receipt <path> for <branch> reads fail' or 'unreadable fast-gate receipt <path> for <branch> (<cause>)'. guarded_push passes it through unchanged, so the note and PR comment tell the two apart. The test asserts the unreadable note does not say 'red fast-gate'.
+    - Probe 5 (fail-open): Err still vetoes, so the read fails closed. No test was weakened; the red test's assertions now match the full reason string.
+    - Residual risk: the EACCES case skips itself when running as root, because root ignores mode bits. This host is uid 1000, so the case ran. Corrupt JSON always runs.
+    Tests: cargo test -p aida-cli-lib --lib bug_3928: 3 passed.
+  created_at: 2026-11-27T21:08:42.371043437Z
+  modified_at: 2026-11-27T21:08:42.371043437Z
+  session_id: 01a21eca5185
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe

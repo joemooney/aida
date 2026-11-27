@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T20:40:24.870403328Z
+modified_at: 2026-11-27T21:11:38.474596398Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -264,6 +264,20 @@ comments:
   content: 'DEFERRED (#4751 final CR @5d1434c3, p2; product-15): Plausible operational gap, not verified with a live run. The confined codex sees ~/.codex/auth.json only as a read-only bind mount (launch/review_runner.rs confined()). When its access token expires, codex''s refresh rewrites auth.json, and an atomic rename onto a bind-mounted file fails (EBUSY/EROFS), so confined codex reviews may start failing with an auth error once the token ages out. agy''s oauth token refresh is in the same position. The failure is closed (the run errors), not a leak. Verify with a live expired-token run, and if it reproduces, bind the auth directory''s token into a writable copy that is not written back, or document that a host refresh is needed.'
   created_at: 2026-11-27T20:23:47.544736087Z
   modified_at: 2026-11-27T20:23:47.544736087Z
+- id: 01a21ed9-78ea-7610-8bd6-0f02057afa9a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2e13e2c923356162a669f95ffbd221ec42d45d5a (PR #4751, round 3)
+    Acceptance evidence: AC1 [evidence: behavioral-test] s3a_runner_spawn_contract + bug2783_confined_runner_fails_closed_without_bwrap + new bug2783_confined_auth_source_never_lies_inside_the_checkout (launch/review_runner.rs). AC2 report half [evidence: behavioral-test] review_prepare::tests::bug_2783_bwrap_confined_codex_never_reads_the_canary, now listed in CI's Live bwrap OS-wrap confinement gate (filter + expected/ran counts) and failing, not skipping, under AIDA_REQUIRE_BWRAP_LIVE=1; ran live (ok, no SKIP) on this host.
+    Fixes this round: config-trust [readers] entry for vendors/review_runner.rs (other-file: operator's own codex config, bind source only); the confined runner refuses an auth source resolving inside the checkout (direct, HOME=repo, not-yet-created, symlinked file, relative, '..'); RunnerCall::no_read() removed (may_post is the only publish gate; field doc says no_read != safe to publish); a confined codex/agy auth failure is typed AuthRequired{confined} with the 'token refresh needs a writable auth file; run the vendor CLI once outside AIDA to refresh' hint; the live test is disposed in ci-structural-exclusions.json; its env read goes through Environment::capture (ExecContext ledger: zero additions).
+    Probe findings: the '..' under a missing ancestor would have bypassed resolved(); fixed by refusing ParentDir components. resolved() falls back to the raw path only for paths with no canonicalizable ancestor, which can only be relative ones, and those are refused first.
+    Validation: targeted cargo 68 passed / 0 failed; make check-ci-fast exit 0 (47 fast gates). Rust structural ratchets/ratchet set are SKIP in the lane (cargo-only, the lane refuses make check-ratchets); the bug_1723 tests that panicked there pass in the targeted run.
+    Residual risks: the codex auth markers are heuristic (an unmatched message stays a plain 'review runner failed'); codex/agy token refresh against the read-only auth bind is deferred (product files it).
+  created_at: 2026-11-27T21:11:38.474596398Z
+  modified_at: 2026-11-27T21:11:38.474596398Z
+  session_id: 01a21ebc8d27
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
