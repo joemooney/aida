@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T14:17:48.271073012Z
+modified_at: 2026-11-27T14:17:51.048354116Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -199,6 +199,13 @@ comments:
   content: Reference merge `0b980329f9a2ffbd5e0dd6da9b3cfd33f94c6e29` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-27T14:17:48.271064781Z
   modified_at: 2026-11-27T14:17:48.271064781Z
+- id: 01a21d5e-a2c8-75f0-8ab9-83bdd65db7c2
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 0b980329f9a2
+    A reference merge (commit 0b980329f9a2, `(Refs BUG-2783)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-27T14:17:51.048345055Z
+  modified_at: 2026-11-27T14:17:51.048345055Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
