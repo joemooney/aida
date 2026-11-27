@@ -128,7 +128,8 @@ pub struct ProjectReviewRulesConfig {
     #[serde(default)]
     pub rules: Vec<CustomPathRule>,
     /// Review-runner defaults; the CLI validates both against its allowlists
-    /// and reads them only from the trusted base. trace:STORY-3120 | ai:claude
+    /// and reads them only from the trusted base.
+    // trace:STORY-3120 | ai:claude
     #[serde(default)]
     pub default_effort: Option<String>,
     #[serde(default)]
@@ -710,7 +711,8 @@ pub fn classify_compiled(
 }
 
 /// The exclusion `path` alone hits: secret, substrate, generated or user
-/// pattern. A rename's old path must pass it too. trace:STORY-3120 | ai:claude
+/// pattern. A rename's old path must pass it too.
+// trace:STORY-3120 | ai:claude
 pub fn classify_path_exclusion(
     path: &str,
     user_excludes: &[(&str, CompiledGlob)],
@@ -1489,7 +1491,8 @@ pub fn findings_to_sarif_json(findings: &[RawReviewFinding]) -> serde_json::Valu
 
 /// As [`findings_to_sarif_json`], plus `suppressed` findings, each with its
 /// justification, emitted as SARIF results carrying an `external` suppression
-/// rather than dropped. trace:STORY-3120 | ai:claude
+/// rather than dropped.
+// trace:STORY-3120 | ai:claude
 pub fn findings_to_sarif_json_with_suppressed(
     findings: &[RawReviewFinding],
     suppressed: &[(RawReviewFinding, String)],
