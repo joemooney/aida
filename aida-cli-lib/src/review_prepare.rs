@@ -704,7 +704,8 @@ fn run_review_base<'a>(mode: &str, merge_base: Option<&'a str>) -> Result<&'a st
 /// Reviewable renames whose old path passes every inventory exclusion
 /// (secret, substrate, generated, user pattern); only those old paths reach
 /// a runner's diff. Inventory already drops such renames; this keeps the
-/// prompt safe on its own. trace:STORY-3120 | ai:claude
+/// prompt safe on its own.
+// trace:STORY-3120 | ai:claude
 fn rename_sources<'a>(
     inventory: &'a ClassifiedInventory,
     excludes: &[(&str, CompiledGlob)],
@@ -786,10 +787,12 @@ fn batch_prompt(
 }
 
 /// One-line runner error naming who ran, the pass, the batch and the whole
-/// cause chain: agent-mode errors keep only the first line. trace:BUG-2775 | ai:claude
+/// cause chain: agent-mode errors keep only the first line.
 /// A vendor challenger's failure also names the way out: it may be signed
 /// out or rate-limited, and `--challenger-agent` picks another vendor. Never
-/// under `AIDA_REVIEW_RUNNER_CMD`, where the flag does not apply. trace:STORY-3120 | ai:claude
+/// under `AIDA_REVIEW_RUNNER_CMD`, where the flag does not apply.
+// trace:BUG-2775 | ai:claude
+// trace:STORY-3120 | ai:claude
 fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyhow::Error {
     let (who, pass) = (call.label(), call.pass);
     let hint = if pass == "challenger" && call.vendor().is_some() {
@@ -802,7 +805,8 @@ fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyho
 
 /// `--post-comment` publishes runner output. A vendor whose tool confinement
 /// is not verified live may have read any file the user can, so it is refused
-/// before any runner starts. trace:STORY-3202 | ai:claude
+/// before any runner starts.
+// trace:STORY-3202 | ai:claude
 fn ensure_postable(
     post_comment: bool,
     vendors: impl IntoIterator<Item = Option<&'static ReviewVendor>>,
@@ -822,7 +826,8 @@ fn ensure_postable(
 /// else the trusted `[agents] vendor` (base revision or `~/.aida/agents.toml`,
 /// never the checkout under review), else claude, stated on stderr. A vendor
 /// whose tool confinement is unverified (agy) is never a default: it runs only
-/// when named by `--agent`. trace:BUG-2775 STORY-3202 | ai:claude
+/// when named by `--agent`.
+// trace:BUG-2775 STORY-3202 | ai:claude
 fn run_review_agent(
     flag: Option<&str>,
     trusted: &TrustedBase,
@@ -972,7 +977,7 @@ struct Unchallenged {
 /// `aida review prepare` exits 4 when the challenger was unavailable: the
 /// report is the finder's alone. No other review-prepare path uses 4, so it
 /// never reads as `--fail-on` (1) or an `--auto-complete` hard failure (3).
-/// trace:STORY-3120 | ai:claude
+// trace:STORY-3120 | ai:claude
 pub(crate) const PARTIAL_REVIEW_EXIT_CODE: i32 = 4;
 
 /// Carries [`PARTIAL_REVIEW_EXIT_CODE`] past the top-level error printer.
@@ -1070,14 +1075,16 @@ fn collect_git_diff_entries(
 }
 
 /// Variables `git_text` keeps; GIT_DIR, GIT_CONFIG*, GIT_INDEX_FILE and the
-/// rest of the caller's environment never reach git. trace:STORY-3120 | ai:claude
+/// rest of the caller's environment never reach git.
+// trace:STORY-3120 | ai:claude
 fn git_env_kept(key: &std::ffi::OsStr) -> bool {
     let key = key.to_string_lossy();
     ["PATH", "HOME", "LANG", "XDG_CONFIG_HOME"].contains(&&*key) || key.starts_with("LC_")
 }
 
 /// Host git (seat-clone refusal, fsmonitor off, store pins) with only the
-/// `git_env_kept` part of the caller's environment. trace:STORY-3120 | ai:claude
+/// `git_env_kept` part of the caller's environment.
+// trace:STORY-3120 | ai:claude
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     let mut cmd = aida_core::git_ops::host_git_command(root);
     // The builder's own pins survive the clear; inherited variables do not.
@@ -2298,7 +2305,8 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
     }
 
     /// agy is never a default reviewer, even from trusted config; only
-    /// `--agent agy` runs it. trace:STORY-3202 | ai:claude
+    /// `--agent agy` runs it.
+    // trace:STORY-3202 | ai:claude
     #[test]
     fn story3202_unverified_vendor_is_refused_as_a_default() {
         if let Some(out) = crate::test_env::run_path_isolated_test_output() {
@@ -2525,6 +2533,55 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let line = |pass| runner_failure(&call(pass), "b 1", anyhow::anyhow!("x")).to_string();
         assert!(line("challenger").ends_with("pick another with --challenger-agent"));
         assert_eq!(line("finder"), "codex finder pass, b 1: x");
+    }
+
+    /// A forced challenger of the finder's own vendor is labelled
+    /// same-vendor in the bundle and the report; another vendor is not.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        for name in ["claude", "codex"] {
+            crate::test_exec::write_executable(&bin.path().join(name), "#!/bin/sh\n");
+        }
+        let env = vec![("PATH".into(), bin.path().as_os_str().to_owned())];
+        let finder = RunnerCall {
+            agent: review_vendor("claude").ok(),
+            checkout: checkout.path(),
+            parent_env: &env,
+            pass: "finder",
+            deadline: RUN_DEADLINE,
+            stdout_cap: STDOUT_CAP,
+            stderr_cap: STDERR_CAP,
+            tuning: Default::default(),
+        };
+        let base = crate::launch::review_tuning::TrustedBase::default();
+        let report = |forced: &str| {
+            let forced = review_vendor(forced).ok();
+            let authors = std::collections::BTreeSet::new();
+            let (_, summary) =
+                challenger::challenger_call(&finder, &authors, forced, None, &base).unwrap();
+            let mut bundle: ReviewPreparationBundle = serde_json::from_value(serde_json::json!({
+                "mode": "range",
+                "inventory": {"reviewable_files": [], "excluded_files": [],
+                    "inventory_sha256": ""},
+                "batches": [], "playbooks": [], "linked_specs": [],
+            }))
+            .unwrap();
+            bundle.adversarial = Some(summary);
+            let json = serde_json::to_value(&bundle).unwrap();
+            let note = json["adversarial"]["note"].as_str().unwrap().to_owned();
+            (note, render_bundle_markdown(&bundle))
+        };
+        let (note, md) = report("claude");
+        assert!(note.contains("same-vendor challenger (claude)"), "{note}");
+        assert!(md.contains("same-vendor challenger (claude)"), "{md}");
+        let (note, md) = report("codex");
+        assert!(note.contains("--challenger-agent picked codex"), "{note}");
+        assert!(
+            !note.contains("same-vendor") && !md.contains("same-vendor"),
+            "{md}"
+        );
     }
 
     /// A rename's old path reaches the runner's diff only when it passes
@@ -2823,7 +2880,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
 
     /// agy's output is never published: as the finder or as an explicit
     /// challenger, `--post-comment` is refused before any runner starts.
-    /// trace:STORY-3202 | ai:claude
+    // trace:STORY-3202 | ai:claude
     #[test]
     fn story3202_post_comment_refuses_unverified_agy_before_any_run() {
         if crate::test_env::run_path_isolated_test() {

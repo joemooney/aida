@@ -22,9 +22,9 @@ pub(crate) const STDERR_CAP: usize = 64 << 10;
 const RUNNER_CMD: &str = "AIDA_REVIEW_RUNNER_CMD";
 const BASE_ENV: [&str; 4] = ["PATH", "HOME", "LANG", "TERM"];
 /// The network route only: a proxied or sandboxed seat reaches its vendor API
-/// solely through these, and without them claude retries until the deadline
-/// (BUG-2775). trace:BUG-2775 | ai:claude
+/// solely through these, and without them claude retries until the deadline.
 /// Matched in either case, as curl and the vendor CLIs read both.
+// trace:BUG-2775 | ai:claude
 const PROXY_ENV: [&str; 4] = ["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY"];
 /// How much of a failed runner's stderr its error quotes.
 const STDERR_TAIL: usize = 600;
@@ -53,7 +53,8 @@ impl RunnerCall<'_> {
         found.map(|(_, v)| v.as_os_str())
     }
 
-    /// Whether `AIDA_REVIEW_RUNNER_CMD` replaces the vendor. trace:BUG-2775 | ai:claude
+    /// Whether `AIDA_REVIEW_RUNNER_CMD` replaces the vendor.
+    // trace:BUG-2775 | ai:claude
     pub(crate) fn runner_cmd_set(&self) -> bool {
         self.var(RUNNER_CMD).is_some()
     }
@@ -273,14 +274,16 @@ impl RunnerCall<'_> {
 }
 
 /// The vendor print-mode limit in whole seconds: the runner deadline less a
-/// margin for the CLI to exit, never 0 (which means no limit). trace:STORY-3202 | ai:claude
+/// margin for the CLI to exit, never 0 (which means no limit).
+// trace:STORY-3202 | ai:claude
 fn print_timeout(deadline: Duration) -> u64 {
     let margin = (deadline / 4).min(Duration::from_secs(30));
     deadline.saturating_sub(margin).as_secs().max(1)
 }
 
 /// The last `STDERR_TAIL` bytes of `stderr` on one line, so an agent-mode
-/// error summary (its first line) keeps the cause. trace:BUG-2775 | ai:claude
+/// error summary (its first line) keeps the cause.
+// trace:BUG-2775 | ai:claude
 fn stderr_tail(stderr: &[u8]) -> String {
     let text = String::from_utf8_lossy(stderr);
     let lines: Vec<_> = text
@@ -596,7 +599,8 @@ mod tests {
     }
 
     /// agy takes `--effort` at its native levels; its print limit tracks the
-    /// runner deadline and is never 0 (no limit). trace:STORY-3202 | ai:claude
+    /// runner deadline and is never 0 (no limit).
+    // trace:STORY-3202 | ai:claude
     #[test]
     fn story3202_agy_effort_mapping_and_print_timeout() {
         let agy = vendor("agy");
@@ -617,7 +621,8 @@ mod tests {
 
     /// A keyring-only agy in a lane (no session bus, no TTY) fails at once with
     /// a typed `AuthRequired`, not a hang or a bare exit status; a vendor
-    /// without auth markers keeps the plain failure. trace:STORY-3202 | ai:claude
+    /// without auth markers keeps the plain failure.
+    // trace:STORY-3202 | ai:claude
     #[test]
     fn story3202_agy_auth_failure_is_a_typed_cause() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -691,7 +696,8 @@ mod tests {
 
     /// A runner that reads stdin to EOF and then waits on an answer gets EOF at
     /// once; one that prompts on the terminal fails at once naming the cause,
-    /// both far inside the deadline. trace:BUG-2775 | ai:claude
+    /// both far inside the deadline.
+    // trace:BUG-2775 | ai:claude
     #[test]
     fn bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());

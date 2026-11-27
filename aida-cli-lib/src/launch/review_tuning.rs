@@ -134,7 +134,7 @@ impl TrustedBase {
 /// cannot pick its own reviewer. Returns the resolved vendor (aida-core
 /// recognizes only claude and codex) and every raw `[agents] vendor` value
 /// those files name, so the caller can say why a named vendor was not used.
-/// trace:STORY-3202 | ai:claude
+// trace:STORY-3202 | ai:claude
 pub(crate) fn trusted_default_vendor(base: &TrustedBase) -> Result<(Option<String>, Vec<String>)> {
     with_base_seat_files(base, |global, config, agents| {
         let resolved =
@@ -213,7 +213,8 @@ fn seat_sources(
 /// challenger vendor's base reviewer seat; model only from that seat. The
 /// finder's `--effort`/`--model`, `AIDA_REVIEW_EFFORT`/`AIDA_REVIEW_MODEL` and
 /// `default_effort`/`default_model` belong to the finder's vendor and are never
-/// read, so one vendor's model never reaches another. trace:STORY-3120 | ai:claude
+/// read, so one vendor's model never reaches another.
+// trace:STORY-3120 | ai:claude
 pub(crate) fn resolve_challenger(
     agent: Option<&ReviewVendor>,
     parent_env: &[(OsString, OsString)],

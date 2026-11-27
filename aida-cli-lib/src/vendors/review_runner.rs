@@ -11,24 +11,26 @@ pub(crate) struct ReviewVendor {
     pub program: &'static str,
     pub argv: &'static [&'static str],
     pub auth: &'static [&'static str],
-    /// Reasoning-effort levels this vendor accepts. trace:STORY-3120 | ai:claude
+    /// Reasoning-effort levels this vendor accepts.
+    // trace:STORY-3120 | ai:claude
     pub efforts: &'static [&'static str],
     /// Codex takes effort as a `-c` config override; the rest take `--effort`.
     pub effort_as_config: bool,
     /// The vendor's own print-mode time limit, set inside the runner deadline
-    /// so the CLI ends its turn before the group kill. trace:STORY-3202 | ai:claude
+    /// so the CLI ends its turn before the group kill.
+    // trace:STORY-3202 | ai:claude
     pub print_timeout: Option<&'static str>,
     /// Lowercase stderr fragments meaning "not signed in for headless use".
     pub auth_failure: &'static [&'static str],
     /// A live, signed-in run has verified this vendor's print-mode tool
     /// confinement. An unverified vendor runs only when named explicitly: it is
     /// never the automatic challenger and refuses `--post-comment`.
-    /// trace:STORY-3202 | ai:claude
+    // trace:STORY-3202 | ai:claude
     pub confinement_verified: bool,
 }
 
 /// A review runner that exited because it is not signed in for headless use.
-/// trace:STORY-3202 | ai:claude
+// trace:STORY-3202 | ai:claude
 #[derive(Debug)]
 pub(crate) struct AuthRequired {
     pub vendor: &'static str,
@@ -135,7 +137,7 @@ const CODEX: ReviewVendor = ReviewVendor {
 /// auto-denies shell, web and writes headless (seen live), but reads were seen
 /// allowed anywhere, so `--settings` denies every tool rule agy names. That
 /// deny is not yet verified live: agy stays `confinement_verified: false`.
-/// trace:STORY-3202 | ai:claude
+// trace:STORY-3202 | ai:claude
 pub(crate) const AGY: ReviewVendor = ReviewVendor {
     program: "agy",
     argv: &[
@@ -175,14 +177,16 @@ pub(crate) const AGY_AUTH_PROBE: ReviewVendor = ReviewVendor {
 };
 
 /// The finder when neither `--agent` nor `[agents] vendor` names one.
-/// trace:BUG-2775 | ai:claude
+// trace:BUG-2775 | ai:claude
 pub(crate) const DEFAULT_REVIEW_VENDOR: &ReviewVendor = &CLAUDE;
 
-/// Every vendor with a hardened review contract. trace:STORY-3120 | ai:claude
+/// Every vendor with a hardened review contract.
+// trace:STORY-3120 | ai:claude
 pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 3] = [&CLAUDE, &CODEX, &AGY];
 
 /// The review contract for `raw`. Unknown names are refused, never defaulted;
-/// every launch vendor has a hardened review contract. trace:STORY-3202 | ai:claude
+/// every launch vendor has a hardened review contract.
+// trace:STORY-3202 | ai:claude
 pub(crate) fn review_vendor(raw: &str) -> Result<&'static ReviewVendor> {
     match LaunchVendor::parse(raw).map_err(|e| anyhow!("{e}"))? {
         LaunchVendor::Claude => Ok(&CLAUDE),

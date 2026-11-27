@@ -89,7 +89,8 @@ pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -
     )
 }
 
-/// Why a non-interactive agy can or cannot authenticate. trace:STORY-3202 | ai:claude
+/// Why a non-interactive agy can or cannot authenticate.
+// trace:STORY-3202 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum AgyAuth {
     Ready,
@@ -181,7 +182,8 @@ pub(crate) fn agy_auth_probe_check(cause: &AgyAuth, required: bool) -> Check {
 
 /// The lane-host agy auth probe when agy is on PATH: required when agy is an
 /// enabled lane vendor, a note when it is only installed (a review challenger
-/// candidate). trace:STORY-3202 | ai:claude
+/// candidate).
+// trace:STORY-3202 | ai:claude
 pub(crate) fn agy_lane_probe(
     enabled: &[&str],
     env: &Environment,
@@ -242,7 +244,8 @@ mod tests {
     use super::*;
 
     /// The probe runs a fake agy without TTY or session bus and types its
-    /// answer; the keyring-only cause names the headless fix. trace:STORY-3202 | ai:claude
+    /// answer; the keyring-only cause names the headless fix.
+    // trace:STORY-3202 | ai:claude
     #[test]
     fn story3202_agy_auth_probe_classifies_without_hanging() {
         let (bin, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
