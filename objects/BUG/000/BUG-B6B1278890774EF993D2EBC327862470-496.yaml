@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: AIDA's own forge pollers (review-watch, auto-train, main-watch, and any seat watcher AIDA ships) check the remaining core budget (`gh api rate_limit` or the response headers) and BACK OFF when below 20% remaining. Landing-critical calls (train CI reads) get priority over watchers. The back-off is reported, not silent.
   - AC2: `aida doctor` (or `aida land status`) shows the remaining core budget and which pollers consumed it, so a seat can see when its own polling is starving the train. Test with a fake rate_limit response below the threshold.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-27T15:21:59.954960091Z
+modified_at: 2026-11-27T16:39:32.868532987Z
 req_type: Bug
 tags:
 - forge
@@ -299,6 +299,11 @@ comments:
   content: 'DEFERRED FOLLOW-UP from #4464 r1 review (approved @5966f423; test gap): bug2735_low_budget_backoff_never_resumes_a_stale_retained_journal (story_1690_train_tests.rs:6660) tests recovery_request and ForgeRails::resume_for directly, not pr_train_handler_with_dispatch_ctx (pr_train.rs:5324-5389). Rewiring the handler (passing &candidates instead of `requested`, or dropping the `else Outcome::default()` arm) would still pass. The behaviour at head fails safe. Add a handler-level test.'
   created_at: 2026-11-27T15:21:59.954960091Z
   modified_at: 2026-11-27T15:21:59.954960091Z
+- id: 01a21de0-5d04-7df0-86c1-3645e1b9420d
+  author: lane-recovery
+  content: Reference merge `bf78a1337bc19f4b269e7302435c0c095cdd555b` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-27T16:39:32.868523291Z
+  modified_at: 2026-11-27T16:39:32.868523291Z
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
@@ -407,6 +412,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21de0-5d04-7df0-86c1-365974c7642c
+  author: lane-recovery
+  timestamp: 2026-11-27T16:39:32.868530929Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0

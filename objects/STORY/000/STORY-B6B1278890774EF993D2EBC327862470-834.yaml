@@ -13,12 +13,12 @@ description: |
   - AC5: `aida dev rollback` restores the previous pair and clears the PROVISIONAL marker.
   - AC6: an operator doc section, "Outage playbook: provisional live" (when to use it, the fail-closed rule, how to roll back), in the operator docs.
   - AC7: tests for the refusal rules (non-operator; permissive diff without override), autobuild skip, auto-revert on landing, and rollback clearing the marker.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T03:18:53.713795642Z
-modified_at: 2026-11-27T15:22:41.387343501Z
+modified_at: 2026-11-27T16:39:40.992479654Z
 req_type: Story
 tags:
 - dev
@@ -145,6 +145,11 @@ comments:
   content: 'DEFERRED FOLLOW-UPS from #4638 S1b review (approved @d69af92a): (1, p3) docs/cli/11-dev.md provisional paragraph: add a caution that until S2''s autobuild guard (AC4) ships, the `aida dev build --if-main-green` cron or any plain `aida dev build` from clean main silently replaces a provisional live and moves its marker to prev/. (2, cosmetic) dev_provisional.rs status_line byte-slices `&m.head[..m.head.len().min(12)]`, so a corrupt `.promoted` head with a multi-byte char panics `aida dev status` and `aida dev rollback`. Use chars().take(12) or validate hex on read.'
   created_at: 2026-11-27T15:22:41.387343501Z
   modified_at: 2026-11-27T15:22:41.387343501Z
+- id: 01a21de0-7cc0-7bf2-a13e-905b2285057b
+  author: lane-recovery
+  content: Reference merge `c9ae4cbe1a359a78846fa24d91035e1e8bbe49d4` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-27T16:39:40.992471021Z
+  modified_at: 2026-11-27T16:39:40.992471021Z
 history:
 - id: 01a21612-d92e-7803-b9af-433a3b0c05bb
   author: joe
@@ -198,6 +203,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21de0-7cc0-7bf2-a13e-9061e46830fa
+  author: lane-recovery
+  timestamp: 2026-11-27T16:39:40.992477926Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 68ecbd824098731929e8aeec11fb3525bc342558
