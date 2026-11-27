@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:43:14.935519412Z
-modified_at: 2026-11-27T21:49:47.921172913Z
+modified_at: 2026-11-27T22:14:43.178517708Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -37,6 +37,30 @@ comments:
     - Is a behaviour-preserving listing seam acceptable under "test-only"? I am assuming yes: it copies the stalled-reviews pattern, and stubbing `gh` on PATH would mutate process-global state in a parallel lib test run.
   created_at: 2026-11-27T21:49:47.921172913Z
   modified_at: 2026-11-27T21:49:47.921172913Z
+  session_id: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21f13-38ea-7e03-b484-c01faf6508b8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f340ccd244
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: `landing_drought::tests::task_3931_scheduled_job_reports_every_cause_through_scan` (aida-cli-lib/src/tests/story_3131_landing_drought_tests.rs:644) runs scan_listing() (what scan() delegates to) against one fixture holding every cause. It asserts conflict (PR-1, fail), held review (PR-2, fail), informational backlog (PR-3), held train lock (PR-4, informational because the lock is fresh and Busy), red CI (PR-5, fail) and the informational drought row for main; `failing()==3`; and `fail_reason` = "3 landing-drought findings to investigate". Lane job: 19 passed, 0 failed (`-- landing_drought`).
+    - AC2 [manual-inspection]: the only production edit is landing_drought.rs:569-580. `scan()` becomes `scan_listing(exec, stalled_reviews::open_prs)`, and the listing is called at the same point as before. It copies the stalled_reviews::scan_open seam. Behaviour is unchanged.
+
+    **Every cause is reachable through scan()**: none needed a fix.
+
+    **Probe findings**
+    - P1 (cross-reference): the listing head is uppercase while the watcher, ledger and train use lowercase. The fixture uses both cases, which exercises the case-insensitive matches.
+    - P3 (multiplicity): five PRs plus the drought row; the test asserts the total count, so an extra or duplicated finding fails it.
+    - P4: the `120m` drought text depends on wall-clock time; it holds unless the test takes ~59s.
+
+    **Fixes during self-review**: none beyond fixture corrections (watcher state must be mode 0600; the spec object is serialized with serde_yaml, because a whole-store save needs a node binding).
+
+    **Residual risks**: `open_prs` (gh plus a GitHub remote) and the `doctor_cmd` dispatch line are not exercised. The test copies doctor_cmd's `fail_reason(failing())` composition instead of calling it. The failing lock states (Slow/Stuck/Orphaned) are not reached through scan(); evaluate()-level tests already cover them.
+  created_at: 2026-11-27T22:14:43.178517708Z
+  modified_at: 2026-11-27T22:14:43.178517708Z
   session_id: 01a21efa0ee3
   harness_version: 2.1.319 (Claude Code)
 history:
