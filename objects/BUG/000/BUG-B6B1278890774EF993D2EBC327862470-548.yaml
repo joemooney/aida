@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T21:14:05.584738400Z
+modified_at: 2026-11-27T21:15:03.646367849Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -119,6 +119,12 @@ comments:
   content: Implementer push 2497ea339f90 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-27T21:14:05.584737838Z
   modified_at: 2026-11-27T21:14:05.584737838Z
+  session_id: 01a21ec73d19
+- id: 01a21edc-9a5e-7b51-9000-b980df302e72
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2787-autobuild-skip-visible` at head `2497ea339f90a66cc4e643bdc99d4b9a02077ac7`.'
+  created_at: 2026-11-27T21:15:03.646364606Z
+  modified_at: 2026-11-27T21:15:03.646364606Z
   session_id: 01a21ec73d19
 history:
 - id: 01a21e61-052d-7350-9e36-a62f92671537
