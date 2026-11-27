@@ -603,8 +603,9 @@
         <div class="facet-panel" id="facet-polyglot" role="tabpanel" aria-labelledby="tab-polyglot" tabindex="0">
           <p><strong>Built-in Polyglot Playbooks + Project <code>.aida/review-rules.toml</code> Overrides:</strong></p>
           <ul>
-            <li>Built-in playbooks cover <code>rust</code> (<code>**/*.rs</code>), <code>cargo_toml</code> (<code>**/Cargo.toml</code>), <code>go</code> (<code>**/*.go</code>), <code>typescript_js</code> (<code>**/*.{ts,tsx,js,jsx,mjs,cjs}</code>), <code>python</code> (<code>**/*.py</code>), <code>shell</code> (<code>**/*.sh</code>), <code>sql</code> (<code>**/*.sql</code>), and <code>config_data</code> (<code>**/*.{toml,yaml,yml,json}</code>).</li>
+            <li>Built-in playbooks cover <code>rust</code> (<code>**/*.rs</code>), <code>cargo_toml</code> (<code>**/Cargo.toml</code>), <code>go</code> (<code>**/*.go</code>), <code>typescript_js</code> (<code>**/*.{ts,tsx,js,jsx,mjs,cjs}</code>), <code>python</code> (<code>**/*.py</code>), <code>c_cpp</code> (<code>**/*.{c,cc,cpp,cxx,h,hh,hpp,hxx}</code>), <code>java_kotlin</code> (<code>**/*.{java,kt,kts}</code>), <code>matlab</code> (<code>**/*.m</code>), <code>hdl_rtl</code> (<code>**/*.{v,vh,sv,svh,vhd,vhdl}</code>), <code>shell</code> (<code>**/*.sh</code>), <code>sql</code> (<code>**/*.sql</code>), and <code>config_data</code> (<code>**/*.{toml,yaml,yml,json}</code>).</li>
             <li>Projects can layer custom path rules in <code>.aida/review-rules.toml</code> with <code>merge_builtin = true</code> (appends to the built-in language playbook) or <code>merge_builtin = false</code> (replaces it).</li>
+            <li>Test companions are batched with their source: <code>foo_test</code>, <code>test_foo</code>, JUnit-style <code>FooTest</code> (including <code>src/test/</code> mirroring <code>src/main/</code>), and HDL testbenches <code>foo_tb</code> or <code>tb_foo</code>.</li>
           </ul>
         </div>
       </div>
