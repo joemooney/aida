@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T08:27:01.469227329Z
+modified_at: 2026-11-27T11:41:03.244180456Z
 req_type: Task
 tags:
 - review
@@ -346,6 +346,13 @@ comments:
   created_at: 2026-11-27T08:27:01.469224388Z
   modified_at: 2026-11-27T08:27:01.469224388Z
   session_id: 01a21c04979d
+- id: 01a21ccf-158c-77b0-ba9f-98513deb506a
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 6617230dc6a2
+    A reference merge (commit 6617230dc6a2, `(Refs TASK-3869)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-27T11:41:03.244176075Z
+  modified_at: 2026-11-27T11:41:03.244176075Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
