@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-27T01:01:17.859957636Z
+modified_at: 2026-11-27T01:03:52.888516239Z
 req_type: Bug
 tags:
 - hubs
@@ -84,6 +84,25 @@ comments:
   modified_at: 2026-11-27T00:55:48.582819591Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a87-bc38-7912-b0e1-bf460504f2ce
+  author: dirtlab
+  content: |-
+    ## Implementer approach (slice 2)
+
+    ### Acceptance criteria and evidence
+    - **Consent gate (comment 7), unit/fixture:** `bug_2759_consent_gate_skips_emails_every_hub_already_has` — an email already on every receiving hub passes; a genuinely new email is still refused and the refusal names the email and the hub that lacks it (never says "one hub only"). Existing `reconcile_refusal_displays_merge_validation_cause` (absent hub) keeps refusing.
+    - **AC2 bounded retry, fixture:** `bug_2759_reconcile_retries_once_after_a_concurrent_push` — an injected push hook makes a second clone push to origin just before reconcile's push (a real non-fast-forward race); reconcile re-fetches, re-unions, and lands on origin in attempt 2. Retry is MAX 2 attempts and only for NonFastForward; other push failures keep their own git message.
+    - **Agent-mode cause chain (comment 4), unit:** `bug_2759_agent_error_block_keeps_every_cause` — the reconcile error is flattened to one line (causes and their internal lines joined with " | "), then rendered through `agent_error_block` (the redirected-stdout path) and asserted to contain the root cause.
+
+    ### Expected files
+    - `aida-cli-lib/src/remote_create.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-27T01:03:52.888516239Z
+  modified_at: 2026-11-27T01:03:52.888516239Z
+  session_id: 01a21a852a1c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
