@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a21f5b-8702-75a1-bb8a-840a70043884",
+  "thread_id": "deputy-01a21f5b-8702-75a1-bb8a-840a70043884",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795822423026,
+  "body": "Script deputy \"product\" finished script job 01a21f5b-8702-75a1-bb8a-840a70043884: rc 1 (exit).\nScript: cd /home/joe/ai/aida && aida edit TASK-3935 --status superseded --superseded-by TASK-3922 && aida comment add TASK-3935 \"Superseded by TASK-3922 (#4702, completed): the implementer showed AC1-AC3 already on main with tests. Filed in error by product-15 (did not check for an existing child).\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a21f5b-8702-75a1-bb8a-840a70043884/transcript.log\nRead it with `aida deputy shell log 01a21f5b-8702-75a1-bb8a-840a70043884 --name product`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a21f5b-8702-75a1-bb8a-840a70043884 --name product`.\n",
+  "subject": "deputy script job 01a21f5b FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
