@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T00:31:33.554502759Z
+modified_at: 2026-11-27T00:31:37.479068255Z
 req_type: Task
 tags:
 - review
@@ -131,6 +131,11 @@ comments:
   modified_at: 2026-11-27T00:23:29.742278242Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a6a-3407-77d0-b0a1-15dcc17228db
+  author: joe
+  content: 'AC4 KEPT HERE (advisor-122 2026-11-26 17:34): the lossless non-UTF-8 path round trip with escaping (proven by a test) stays in TASK-3869''s scope as a remaining item. The lane-filed TASK-3525 is superseded by TASK-3869. #4701 ships with (Refs TASK-3869); the ~415-line size is accepted as an exception, and it merges after STORY-3120 S5d.'
+  created_at: 2026-11-27T00:31:37.479068255Z
+  modified_at: 2026-11-27T00:31:37.479068255Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
