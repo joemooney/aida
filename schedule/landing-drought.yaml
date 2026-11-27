@@ -1,13 +1,10 @@
 job: landing-drought
-last_run: 2026-11-27T14:49:41.477718705Z
+last_run: 2026-11-27T15:05:43.926534837Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
 failure_trips:
-- trip_id: landing-drought@2026-11-27T07:28:34.013251426Z
-  at: 2026-11-27T07:28:34.013251426Z
-  status: 1
 - trip_id: landing-drought@2026-11-27T07:47:36.522384725Z
   at: 2026-11-27T07:47:36.522384725Z
   status: 1
@@ -64,4 +61,7 @@ failure_trips:
   status: 1
 - trip_id: landing-drought@2026-11-27T14:49:41.477718705Z
   at: 2026-11-27T14:49:41.477718705Z
+  status: 1
+- trip_id: landing-drought@2026-11-27T15:05:43.926534837Z
+  at: 2026-11-27T15:05:43.926534837Z
   status: 1
