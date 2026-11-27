@@ -12,12 +12,12 @@ description: |
   - AC2: the PRE-PUSH lane gate needs no compile beyond what the lane's own targeted test already built. Options for the advisor sketch: (a) split `check-ratchets` out of `check-ci-fast` into `check-ci-compile` (CI already runs `check-ratchets.py --profile dev` in its own job), so lanes run `check-ci-source` + their one targeted cargo run; (b) make check-ratchets reuse the lane's already-built test binaries and the binary from its targeted run (the same --profile agent), skipping a rebuild when the tree is unchanged; (c) verify-manual runs only when docs/cli or CLI surface files are touched. Whichever is chosen, the documented ~90s must be TRUE on a lane, or the doc must change.
   - AC3: any check-ci-fast step blocked >120s with ~0% CPU fails fast, naming the step and what it waits on (e.g. "cargo build lock held by pid N").
   - AC4: a regression timing check: check-ci-fast on a lane with a warm overlay and no Rust change completes under the documented budget.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T02:46:35.171672779Z
+modified_at: 2026-11-27T03:19:04.844086644Z
 req_type: Bug
 tags:
 - ci
@@ -47,6 +47,13 @@ history:
   author: joe
   timestamp: 2026-11-27T02:44:34.208172394Z
   changes: []
+- id: 01a21b03-838c-7f42-870c-121be7123756
+  author: aida-session-start
+  timestamp: 2026-11-27T03:19:04.844084997Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
