@@ -10,12 +10,12 @@ description: |
   - AC2 (alternative or in addition, the implementer contract): push the committed work BEFORE running the final local gate, and re-push after a fix.
   - AC3: the lane log records WHICH signal ended the agent, and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator), so the next incident names its cause.
   - AC4: tests: a SIGTERM after a commit → salvage-pushed; uncommitted work only → nothing pushed and retained; a non-fast-forward → refused and retained.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877077Z
-modified_at: 2026-11-27T03:56:22.016710482Z
+modified_at: 2026-11-27T04:11:34.734064451Z
 req_type: Bug
 tags:
 - lanes
@@ -86,6 +86,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21b33-945d-7f30-87a5-5c896e6cac2f
+  author: joe
+  timestamp: 2026-11-27T04:11:34.877186273Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
   branch: main
