@@ -1,5 +1,6 @@
 id: 01a21ac2-507f-7580-b25f-e7e086dd48c5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-382
+agreed_id: STORY-3208
 title: 'Review PR-4708: [AI:claude] fix(remote): reconcile''s consent gate flags only emails a hub lacks, retries a push race once (BUG-2759)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21a85`) for branch `bug-2759-s2-consent-gate`.
@@ -59,6 +60,12 @@ history:
   timestamp: 2026-11-27T02:08:30.154726632Z
   session_id: 01a21a852a1c
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21ad6-1a95-7732-9fdd-aef0a413bcb5
+  author: joe
+  timestamp: 2026-11-27T02:29:28.853823553Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 2b87920bb9e1b2aa9ddfe671bf8a9c765f9de551

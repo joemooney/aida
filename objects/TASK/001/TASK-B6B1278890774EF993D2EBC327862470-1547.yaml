@@ -1,5 +1,6 @@
 id: 01a21acb-a94d-7b91-ae3d-0d65ba6cf0d1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1547
+agreed_id: TASK-3532
 title: 'Review follow-up: The returned error on push failure (remote_create.rs:3016) says only ''the union is committ'
 description: |-
   From BUG-2759
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2103b-bf79-7b72-9290-da137ec1563d
   created_at: 2026-11-27T02:18:21.356812105Z
+history:
+- id: 01a21ad5-d197-7bd1-bb88-0533cb1ef292
+  author: joe
+  timestamp: 2026-11-27T02:29:10.167786088Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2b87920bb9e1b2aa9ddfe671bf8a9c765f9de551
   branch: pr-4708

@@ -1,5 +1,6 @@
 id: 01a21a7e-340b-72c1-8390-6379eb4f79b0
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-379
+agreed_id: STORY-3209
 title: 'Review PR-4701: [AI:claude] fix(review): skip non-regular entries unread, store-only --specs, pinned-root proofs (Refs TASK-3869)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21a34`) for branch `int-task-3869-hardening`.
@@ -49,6 +50,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a21ad6-5e49-7833-991c-58766fa79392
+  author: joe
+  timestamp: 2026-11-27T02:29:46.185880644Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ed4507ea9e106150682eded6379bbe515958e26f
   branch: main
