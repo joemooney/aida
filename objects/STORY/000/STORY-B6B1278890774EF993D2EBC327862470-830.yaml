@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-27T01:47:51.751682113Z
+modified_at: 2026-11-27T01:48:33.028693336Z
 req_type: Story
 tags:
 - landing
@@ -405,6 +405,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T01:47:51.591393621Z
   modified_at: 2026-11-27T01:47:51.591393621Z
+- id: 01a21ab0-4910-75b1-aa59-1d6fb55e1fdc
+  author: joe
+  content: PR-4695 at bd517cb44d22bfae3f0d3f9c9177d6034a81a433 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-27T01:48:10.384816401Z
+  modified_at: 2026-11-27T01:48:10.384816401Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
