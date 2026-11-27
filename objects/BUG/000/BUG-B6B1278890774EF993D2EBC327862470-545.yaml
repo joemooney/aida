@@ -8,12 +8,12 @@ description: |
   ## Acceptance criteria
   1. scripts/ratchet-set.json (and any other append-only list files named in a small allowlist) never produces a merge conflict for disjoint additions. Use a custom git merge driver registered via .gitattributes (`merge=aida-json-union`) that unions the lists, keeps sorted order and emits valid JSON. Rework prep / sync configures the driver for lanes. A test merges two branches that each add different entries.
   2. If a union still conflicts (the same key edited differently), it stays a real conflict and the existing gating applies.
-status: Approved
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T06:59:30.021932356Z
+modified_at: 2026-11-27T07:27:39.221840528Z
 req_type: Bug
 comments:
 - id: 01a21b43-1a62-7921-9b1a-11e036f97be5
@@ -127,6 +127,12 @@ comments:
   modified_at: 2026-11-27T06:59:30.021932356Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21be7-16d5-7530-a4a8-56225977c0a1
+  author: aida-publication-done
+  content: Implementer push 9afeaa251dea declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T07:27:39.221837731Z
+  modified_at: 2026-11-27T07:27:39.221837731Z
+  session_id: 01a21b87a95b
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
@@ -170,6 +176,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21be7-16d5-7530-a4a8-56101f0f8772
+  author: aida-publication-done
+  timestamp: 2026-11-27T07:27:39.221836104Z
+  session_id: 01a21b87a95b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
