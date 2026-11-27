@@ -9,12 +9,12 @@ description: |
   - AC1: `aida queue rework SPEC` and the lane launch (queue work --force-claim on a PR branch) REFUSE a rework round when the spec's open PR has a FINAL (not sweep-pending) approval recorded at the PR's CURRENT head, naming the approval (PR, sha, reviewer, recorded_at) and the override (e.g. `--despite-approval` with a reason, recorded on the spec).
   - AC2: the check runs at LAUNCH time (not only at queue time), so a queued round that became stale while waiting for a slot is refused when it would start.
   - AC3: tests: an approved-at-head PR → refused, with the approval named; approved at an OLDER head → allowed; a sweep-pending CR → allowed; the override → allowed and recorded.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-27T20:05:17.698270270Z
+modified_at: 2026-11-27T21:44:17.651449001Z
 req_type: Bug
 tags:
 - lanes
@@ -103,6 +103,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T20:05:19.808767303Z
   changes: []
+- id: 01a21ef7-5dac-7ea3-9baa-5ebadfde9fa9
+  author: aida-auto-bump
+  timestamp: 2026-11-27T21:44:17.580877642Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21ef7-5df3-7e91-a386-3d10b004b133
+  timestamp: 2026-11-27T21:44:17.651445633Z
+  agent: aida
+  commit_sha: 67466f848a1dacd94cce0b0effb0749fe0d32c59
+  summary: 'BUG-2785 PASS. AC1 verified by rework_approval_gate::tests::approved_at_head_is_refused_naming_the_approval_and_override (refusal names PR, head sha, reviewer, recorded_at, --despite-approval) and check_rework wired first in handle_rework_entry before any write; override recorded as a head-bound spec comment (despite_approval_admits_records_and_binds_to_the_head). AC2 verified by source inspection: check_launch runs in handle_queue_work right after the BUG-2500 waiting gate whenever an open rework change is selected, honouring only an override bound to PR@head; no behavioral test of the launch wiring (follow-up). AC3 verified by the three module tests (at-head refused, older head admits, sweep-pending admits, newer request-changes admits, override admits and is recorded, moved head not overridden). Type protocol ''PR touches at least one test file'': met (in-module #[cfg(test)] tests plus help golden). Fail-open on forge read failure matches status quo and never grants authority. CI pending at review time (fast gates green, fast compile pending). Remaining findings are p3/test-gap/style follow-ups outside the blocking classes.'
+  review_verdict: approved
 filed_at:
   code_sha: 1914f9fdd1504307eec22ea247f5ac4c2ec562a9
   branch: main
@@ -114,3 +128,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T19:54:22.530205064Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T21:44:17.580870242Z
+  completion_sha: 67466f848a1dacd94cce0b0effb0749fe0d32c59
