@@ -1,0 +1,31 @@
+id: 01a21b3e-9781-7721-b2f4-15eaa59b4760
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-387
+title: 'Review PR-4716: [AI:claude] feat(review): agy as a review runner vendor and a non-interactive agy auth probe in doctor --lane-host (STORY-3202)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21ab2`) for branch `int-story-3202-agy-review`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4716>
+  - Branch: `int-story-3202-agy-review` → `integration`
+
+  ## Covers
+
+  - STORY-3202
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4716` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T04:23:36.577735474Z
+modified_at: 2026-11-27T04:23:36.577735474Z
+req_type: Story
+filed_at:
+  code_sha: 3f8b6015cb047ef13a46f5ed7769f56dc5f6da07
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3f8b6015cb
