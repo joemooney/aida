@@ -1,0 +1,24 @@
+id: 01a21f2b-1886-7281-9d51-e131b72a9c64
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1587
+agreed_id: TASK-3934
+title: Consolidate the remaining inline AIDA_USER exports in headless.rs onto issue_contained_child (TASK-3933 follow-up)
+description: |-
+  Advisor aida-d3 2026-11-27 15:44 (filed by product-15): #4764 introduced issue_contained_child as the one production path for minting/binding the contained child grant (AIDA_USER = grant.subject). headless.rs still exports AIDA_USER inline at other launch sites, which can drift from it.
+
+  ## Acceptance
+  - AC1: every contained/headless launch site in headless.rs sets AIDA_USER via issue_contained_child (or a single helper it owns); no other inline AIDA_USER export remains (a grep-style test or ratchet pins it).
+  - AC2: no behaviour change; existing launch tests pass, the subject check is not relaxed.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T22:40:47.750566381Z
+modified_at: 2026-11-27T22:40:47.750566381Z
+req_type: Task
+filed_at:
+  code_sha: c1684c5b7d088b615e5e583d0aa2105743c99ffc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b90f128a082
+  vendor: claude
