@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T04:20:01.476882181Z
+modified_at: 2026-11-27T04:29:02.464977885Z
 req_type: Bug
 tags:
 - ci
@@ -97,6 +97,12 @@ comments:
   modified_at: 2026-11-27T04:19:48.777697608Z
   session_id: 01a21b0347d5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21b43-9080-7d32-95f7-60185ce66346
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2782-ccf-no-build` at head `50a3387de5d419d7cd3289c74837234c1febea0c`.'
+  created_at: 2026-11-27T04:29:02.464973130Z
+  modified_at: 2026-11-27T04:29:02.464973130Z
+  session_id: 01a21b0347d5
 history:
 - id: 01a21ae3-eb20-7df1-9d88-cb4b0d85885c
   author: joe
