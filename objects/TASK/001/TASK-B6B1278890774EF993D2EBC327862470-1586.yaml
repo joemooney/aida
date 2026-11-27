@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T22:40:02.614956781Z
+modified_at: 2026-11-27T22:40:05.825441410Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -108,6 +108,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3933 at e53f2b99 (2 commits behind main; none of the findings depend on code main has changed since). The root-cause fix is correct: the contained child env allowlist keeps AIDA_USER and drops USER, and conformance-launch now issues its grant through the shared launch::issue_contained_child, which exports AIDA_USER = grant.subject. The production Codex/wrapper headless path uses the same issuer. Moving the AIDA_USER export ahead of apply_child_agent_identity/assign_seat is safe: nothing in between writes or removes AIDA_USER. prepare_runtime_diagnostic builds the child env from selected_environment, so the AC4 test models the real path. AC1 is verified by task_3933_contained_child_presents_its_grant_subject at the helper level only (the probe emission is untested, see finding 2). AC2 is verified by task_3933_diagnostic_and_production_share_the_contained_issuer plus inspection: agy.rs has no issuance of its own, and headless.rs calls issue_contained_child. AC3 is verified by inspection: grant_check_for and the subject comparison are unchanged, no override was added, and no SubjectMismatch test was weakened. AC4 is verified by task_3933_contained_child_presents_its_grant_subject (Valid with the binding, SubjectMismatch without). Blocking: CI (fast compile) is red at this head in the ''Ratchet set'' step (exit 101). The job log could not be fetched (blob host denied in the sandbox), but source analysis points to story_2539_vendor_literal_ratchet: the PR adds a new HeadlessVendor::Codex comparison inside spawn_vendor_headless_forking, and that ledger may only go down.. No triage reason was given.'
   created_at: 2026-11-27T22:40:02.614954338Z
   modified_at: 2026-11-27T22:40:02.614954338Z
+- id: 01a21f2a-7420-7331-b2ef-342b3af47c73
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3933):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e53f2b996516
+    Recorded: 2026-11-27T22:39:09.506657969+00:00
+    Findings:
+    1. [p1, blocking; file aida-cli-lib/src/session/headless.rs] CI (fast compile) is red at e53f2b99: the 'Ratchet set' step exits 101. The most likely cause is story_2539_vendor_literal_ratchet (aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs; ledger story_2539_vendor_literals.tsv: 'Counts may only go down'). The new `let child_grant = if vendor == HeadlessVendor::Codex || wrapper {` in spawn_vendor_headless_forking adds one HeadlessVendor and one Codex token to that function, above the ledgered session/headless.rs|spawn_vendor_headless_forking|typed:HeadlessVendor 6 / typed:Codex 2 rows. Fix without raising the ledger: compute `let contained_env = vendor == HeadlessVendor::Codex || wrapper;` once and reuse it for both the issuance branch and the later AIDA_PROJECT_ROOT export, so the token count does not rise. Then confirm the Ratchet set step is green (the job log was not readable from the reviewer sandbox, so check the named failing test in the log).
+    2. [test-gap / untested-path, blocking under ADR-76; file aida-cli-lib/src/role_cmd.rs] AC1's diagnostic surface is the seat probe in handle_role_seat_probe. The new eprintln of reason.subject_mismatch_evidence(...) beside the unchanged 'seat_grant_valid=false cause=SubjectMismatch' line has no test. The tests call only the GrantRejection::subject_mismatch_evidence helper. Add a test showing the probe's SubjectMismatch refusal emits the redacted expected/presented line, with no raw subject or grant id, and still ends with the exact machine-matched cause line.
+    3. [p3, deferred follow-up; file aida-cli-lib/src/gate/seat_authority.rs] redacted_subject infers kind=fallback from the value (subject == "default") rather than from where it came from. A real AIDA_USER/USER named 'default' is labelled fallback, and the expected side carries no source. The presented side's source= field partly covers this. Rationale: diagnostic-only labelling; refusal behaviour is unaffected.
+    4. [p3, deferred follow-up; file aida-cli-lib/src/session/headless.rs] Other contained or Codex child builders in headless.rs still export AIDA_USER = current_user_id(None) inline (around lines 1783, 1826, 2772, 3469) instead of using the new shared issue_contained_child. AC2 covers only conformance-launch vs the production headless launch, so this is a consolidation follow-up, not an unmet AC. Rationale: the values are identical today; consolidating would prevent future drift.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T22:40:05.664373298Z
+  modified_at: 2026-11-27T22:40:05.664373298Z
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
