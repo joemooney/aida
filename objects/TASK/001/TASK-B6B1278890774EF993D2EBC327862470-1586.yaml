@@ -15,12 +15,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T21:52:52.058673545Z
+modified_at: 2026-11-27T21:59:19.440098893Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1a7b3-0b59-7e62-ae47-3c0283f551ac
   created_at: 2026-11-27T21:50:12.334734159Z
+comments:
+- id: 01a21f05-2090-7073-b5f5-d66f0f8af422
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Root cause (from code): a contained child runs under an env allowlist (launch/contained.rs ENV) that keeps AIDA_USER but drops USER. The grant subject is `current_user_id(None)` (AIDA_USER, else USER) in the launcher. Production contained launches (session/headless.rs wrapper/codex branch) export `AIDA_USER` to the child; `conformance-launch` (launch/agy.rs diagnostic_launch) does not, so when the operator shell has no AIDA_USER the grant names `$USER` while the child presents `default` -> SubjectMismatch.
+
+    ### Acceptance criteria and evidence
+    - AC1 (unit): role probe prints an extra redacted line on SubjectMismatch (expected/presented: kind + sha256 fingerprint + length, never the raw id/grant id). Test in role_cmd/seat_authority unit tests; the exact `cause=` line is unchanged so codex_tool_env and contained_lane.py matching is untouched.
+    - AC2 (unit + inspection): one shared `launch::grant::issue_contained_child` (issue via issue_launch_child with the production subject + bind AIDA_USER to grant.subject) used by the production headless wrapper launch and diagnostic_launch; diagnostic duplicate sequence deleted.
+    - AC3 (inspection + existing tests): grant_check_identity_at subject comparison untouched; no flag/env override; bug_2011/bug_1983 SubjectMismatch tests unchanged.
+    - AC4 (unit): test mints a child through the shared fn with USER-only env, filters the command env through the contained allowlist, and asserts the presented subject == grant.subject and grant_check_for passes (and that without the binding it is SubjectMismatch).
+
+    ### Expected files
+    - aida-cli-lib/src/launch/grant.rs, launch/agy.rs, session/headless.rs, role_cmd.rs, gate/seat_authority.rs (+ a test module)
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-27T21:59:19.440098893Z
+  modified_at: 2026-11-27T21:59:19.440098893Z
+  session_id: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
