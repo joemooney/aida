@@ -385,7 +385,6 @@ pub(crate) struct FailedExit<'a> {
 /// lane opened, else the PR it launched on, else `salvage/<lane>`. Folds the
 /// note into the attempt's `leftover` note, which the attempt then records.
 // trace:BUG-2781 | ai:claude
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn failed_exit_note(
     exit: &FailedExit<'_>,
     cause: &str,
