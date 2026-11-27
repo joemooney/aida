@@ -9,12 +9,12 @@ description: |
   - AC1: manual-train waiter identity uses the ORDER-INSENSITIVE (sorted, deduplicated) PR set, not the exact argv order.
   - AC2: a manual train whose PR set equals a LIVE waiter's ADOPTS that waiter (takes over its queue position, refreshes its owner pid + start time) instead of queueing behind it, so retrying from another terminal or a deputy never self-blocks.
   - AC3: tests: the same set in a different order → adopts; the same set from a different parent → adopts; a different set → queues FIFO; a recycled pid (same pid, different start time) → treated as dead and released.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:27:07.544697554Z
-modified_at: 2026-11-27T20:21:47.151308782Z
+modified_at: 2026-11-27T22:35:33.851351696Z
 req_type: Task
 tags:
 - admission
@@ -90,6 +90,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T20:21:49.305959480Z
   changes: []
+- id: 01a21f26-4e13-7ae0-9baa-2aa3391942d8
+  author: aida-auto-bump
+  timestamp: 2026-11-27T22:35:33.780001245Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21f26-4e5b-7890-829a-8aca15825dbe
+  timestamp: 2026-11-27T22:35:33.851347440Z
+  agent: aida
+  commit_sha: 340621bb6a528af003bc67952f2ffaae5ba080fc
+  summary: 'TASK-3925 all ACs met. AC1 verified by task3925_same_set_in_another_order_adopts_its_waiter: queued_train_admission keys waiter identity on pr_set() (sorted+dedup) on both sides of the comparison, so legacy unsorted rows still match, and stores new rows as the sorted set. AC2 verified by task3925_same_set_from_another_parent_adopts_its_waiter: identity no longer includes owner, and the adopt branch keeps id/since/position and replaces owner (pid+starttime) and expiry; after the old parent exits the adopted waiter survives. AC3 verified by those two tests plus task3925_recycled_pid_is_dead_and_released (same pid with starttime+1 is observed Dead, released, and yield_reason returns None); a different set queues FIFO behind the head (asserted order [10],[1,2],[30]). Admission removes every row with the same set; record_test_waiter updated consistently; other callers (advisor_loop_service, pr_train_check) only use record_test_waiter/manual_waiters and are unaffected. Waiters grant no authority (they only order yields), so letting any retrier of the same set adopt one is not an authority bypass. The aida-criteria ''untraced'' list names the long origin IDs while the tests trace TASK-3925.ACn; the tests do exist in the diff. Stale base (1 commit behind): no finding depends on base changes. CI fast gates and Build green at review time; full CI not required for judgment.'
+  review_verdict: approved
 filed_at:
   code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5
   branch: main
@@ -101,3 +115,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T20:09:48.636789849Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T22:35:33.779994167Z
+  completion_sha: 340621bb6a528af003bc67952f2ffaae5ba080fc
