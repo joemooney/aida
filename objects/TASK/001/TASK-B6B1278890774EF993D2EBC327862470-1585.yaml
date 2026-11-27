@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: merge_publication_head runs its git merge with the same union-merge env (json_union_merge_config / sandbox_git_config_env) that rework prep applies, if it does not already; a test proves a disjoint ratchet-set.json addition merges cleanly through merge_publication_head.
   - AC2: a doc note (docs, not code unless trivial) records the read_allowlist visibility residual: if main's scripts/json-union-merge.py is absent or unreadable inside the sandbox, the wrapper falls back to a text merge (markers on conflict; a clean text merge passes as git's default).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:46:26.200731475Z
-modified_at: 2026-11-27T21:58:39.791728326Z
+modified_at: 2026-11-27T22:18:53.336790305Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,21 @@ comments:
   modified_at: 2026-11-27T21:58:39.791728326Z
   session_id: 01a21eff74ba
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f16-c2a0-7a00-89a5-9ff11e49e826
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d862b39140
+
+    **AC1** [behavioral-test]: no code change needed. `merge_publication_head` (aida-cli-lib/src/seat_clone.rs:3762) already sets `merge_env = lane_merge_env(main, &identity)`, the same helper `prepare_rework_merge` uses (seat_clone.rs:3548), which chains `json_union_merge_config(main)`. `bug_2784_publication_merge_unions_json_list_additions` (aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:7130) pins it: a disjoint ratchet-set.json addition on the seat and the remote both land through `merge_publication_head`. Ran it via the lane runner, 1 passed, and with --nocapture there was no `SKIP (bwrap unavailable)` line, so the real sandbox ran.
+
+    **AC2** [documentation-inspection]: docs/internal/testing/ci-test-shards.md has a new paragraph after the ratchet-set paragraph. I checked each claim against the code. The driver script resolves from main (`json_union_merge_script`). The sandbox read_allowlist binds only allowlisted paths (`sandbox_args`), so main's scripts/ may be missing. When the script fails, the wrapper runs `git merge-file`, which leaves markers on a conflict (the missing-script case is pinned by `bug_2784_rework_git_unions_disjoint_json_list_additions`).
+
+    Probes: the diff is docs-only, so there is no parsing, multiplicity or authority surface. Fixes: I reworded one ambiguous closing sentence. Residual risk: none new. `make check-ci-fast` exit 0.
+  created_at: 2026-11-27T22:18:35.040522853Z
+  modified_at: 2026-11-27T22:18:35.040522853Z
+  session_id: 01a21eff74ba
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21efa-0428-7050-ac1c-f16e53e5eea0
   author: joe
@@ -50,6 +65,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21f17-0a49-7482-8d7b-274ae9de59a3
+  author: dirtlab
+  timestamp: 2026-11-27T22:18:53.385371945Z
+  session_id: 01a21eff74ba
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
@@ -57,3 +81,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b90f128a082
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T22:18:53.336790305Z
+  implemented_by: dirtlab

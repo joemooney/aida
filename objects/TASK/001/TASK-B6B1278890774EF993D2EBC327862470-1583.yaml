@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: a test drives pr_train_handler_with_dispatch_ctx under a low core budget (below 20%) with a stale retained journal and asserts no recovery/resume happens.
   - AC2: mutation-checked: the two rewirings named above each make the test FAIL (report it).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:42:56.745961954Z
-modified_at: 2026-11-27T21:49:00.747559251Z
+modified_at: 2026-11-27T22:19:02.248617683Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,21 @@ comments:
   modified_at: 2026-11-27T21:49:00.747559251Z
   session_id: 01a21ef927b3
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f16-bb47-78e0-8289-2a6767f6a150
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 694812015010b9d28282160d3e3fc780f697b576 (`git diff origin/main...HEAD`: one test, +94 lines in aida-cli-lib/src/tests/story_1690_train_tests.rs, no production change).
+
+    - AC1 [behavioral-test]: `pr_train::tests::task3930_low_budget_handler_never_resumes_a_stale_retained_journal` drives `pr_train_handler_with_dispatch_ctx` (ADVISOR_LOOP + all_ready) in a path-isolated child process. The fixture has a real repo with a resolvable origin HEAD, `[forge] provider = "github"`, a fake gh reporting core 1/5000, and a stale retained Open journal for #3902. Asserts: Ok; the back-off line on stderr; no "Skipping retained train journal" line; no run.lock; the journal entry is unchanged (train/stale-1, Open); gh received only the rate_limit probe. The lane job passed (1 passed).
+    - AC2 [manual mutation]: (a) `let requested: Option<&[u64]> = Some(&candidates);` FAILS at the run.lock assertion, and recovery printed the skip line. (b) the else arm removed, recovery always runs with `requested.unwrap_or(&candidates)`: FAILS the same way. Production code restored afterwards (git checkout).
+    - Probes: multiplicity: an empty candidate set is the case under test. Fail-open: a missing gh-calls file fails the test rather than passing. The env is hermetic (child env_clear, gh pinned via AIDA_TEST_GH_BINARY, GH_REPO set so `gh browse` is never needed). No existing test was weakened.
+    - `make check-ci-fast` exited 0 via the lane runner.
+    - Residual risk: the AC2 mutations were interpreted as compilable equivalents, because the literal edits do not compile.
+  created_at: 2026-11-27T22:18:33.159687524Z
+  modified_at: 2026-11-27T22:18:33.159687524Z
+  session_id: 01a21ef927b3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ef6-482b-7ce3-8251-555d80433908
   author: joe
@@ -50,6 +65,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21f17-2d14-7252-9dd2-7288fe19ae26
+  author: dirtlab
+  timestamp: 2026-11-27T22:19:02.292951115Z
+  session_id: 01a21ef927b3
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
@@ -57,3 +81,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b90f128a082
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T22:19:02.248617683Z
+  implemented_by: dirtlab

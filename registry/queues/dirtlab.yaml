@@ -197,12 +197,6 @@
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
 - user_id: dirtlab
-  requirement_id: 01a21ef6-21e9-71d0-b3d0-4bb45ceef44b
-  position: 1571000
-  added_by: dirtlab
-  added_at: 2026-11-27T21:45:40.405406742Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a21ef6-68f7-7b63-bf37-3c4e9c35551a
   position: 1572000
   added_by: dirtlab
@@ -213,10 +207,4 @@
   position: 1573000
   added_by: dirtlab
   added_at: 2026-11-27T21:51:56.765781825Z
-  for_role: implementer
-- user_id: dirtlab
-  requirement_id: 01a21ef9-5418-7740-aee6-c62648546e6b
-  position: 1574000
-  added_by: dirtlab
-  added_at: 2026-11-27T21:52:02.756819002Z
   for_role: implementer

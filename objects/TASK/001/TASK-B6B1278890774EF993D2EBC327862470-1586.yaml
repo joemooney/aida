@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T22:16:14.279266036Z
+modified_at: 2026-11-27T22:18:16.401588489Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -49,6 +49,34 @@ comments:
   content: Commit 1404de5e2d references this requirement
   created_at: 2026-11-27T22:16:14.279266036Z
   modified_at: 2026-11-27T22:16:14.279266036Z
+  session_id: 01a21efef83d
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21f16-79d1-71e0-8365-b9d9d86d1f3c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1404de5e2d
+
+    Root cause: the contained child env is the allowlist in launch/contained.rs (AIDA_USER kept, USER dropped). Production contained/Codex headless launches exported AIDA_USER; conformance-launch did not, so from an operator shell without AIDA_USER the grant named $USER while the child presented `default` -> SubjectMismatch.
+
+    Acceptance evidence
+    - AC1 [behavioral-test]: GrantRejection::subject_mismatch_evidence (gate/seat_authority.rs) prints, on its own stderr line beside the unchanged `seat_grant_valid=false cause=SubjectMismatch` line (role_cmd.rs probe), expected/presented as kind + 12-hex sha256 + length + presented source. task_3933_contained_child_presents_its_grant_subject asserts no raw subject and no grant id appear.
+    - AC2 [behavioral-test + inspection]: launch::issue_contained_child (launch/grant.rs) is the single issuer; session/headless.rs (Codex||wrapper) and launch/agy.rs assign_diagnostic_child call it, and the diagnostic's own issuance is deleted. task_3933_diagnostic_and_production_share_the_contained_issuer pins it.
+    - AC3 [manual-inspection]: grant_check_identity_at's subject comparison is untouched. No flag or env override was added, and no existing test was weakened.
+    - AC4 [behavioral-test]: with USER-only env, the issuer's child env, filtered by contained::selected_environment, presents grant.subject and grant_check_for returns Valid. The pre-fix negative control presents `default` and gets SubjectMismatch.
+
+    Tests: lane job `cargo test --profile agent -p aida-cli-lib --lib -- task_3933 task_3048` 25 passed / 0 failed.
+
+    Probe findings and fixes
+    - Fixed: inserted items had displaced diagnostic_launch's doc comment.
+    - P1/P4: the evidence line avoids contained_lane.py redaction triggers (no key/token words, runs < 32 chars). safe_probe_failure still matches the exact cause line, and the extra line is ignored.
+    - P5: no authority path widened. The production change only moves the AIDA_USER export earlier, with the same value (grant.subject == current_user_id(None)). Nothing between the old and new points touches AIDA_USER.
+
+    Residual risks
+    - The agy conformance rerun on dell1 is not re-run from this lane.
+    - AC4 issues with sandboxed=false because the keyring may be unavailable in the test sandbox. Subject binding does not depend on the key binding.
+  created_at: 2026-11-27T22:18:16.401588489Z
+  modified_at: 2026-11-27T22:18:16.401588489Z
   session_id: 01a21efef83d
   harness_version: 2.1.319 (Claude Code)
 history:
