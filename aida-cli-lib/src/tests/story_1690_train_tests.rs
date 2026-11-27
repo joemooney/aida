@@ -7161,3 +7161,96 @@ fn bug2735_low_budget_backoff_never_resumes_a_stale_retained_journal() {
     }
     assert_eq!(journal::entries(dir.path()).unwrap().len(), 1);
 }
+
+// The same back-off, through the handler: the automatic train below 20% core
+// budget skips recovery, so a stale retained journal is never resumed.
+// trace:TASK-3930 | ai:claude
+#[test]
+fn task3930_low_budget_handler_never_resumes_a_stale_retained_journal() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("auto-train: skipping candidate discovery: backing off"),
+            "{stderr}"
+        );
+        // Recovery ran nowhere: it would report skipping the stale journal.
+        assert!(
+            !stderr.contains("Skipping retained train journal"),
+            "{stderr}"
+        );
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let origin = root.join("origin.git");
+    crate::test_git::commit_fixture(root);
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    git(&[
+        "init",
+        "-q",
+        "--bare",
+        "-b",
+        "main",
+        origin.to_str().unwrap(),
+    ]);
+    git(&["remote", "add", "origin", origin.to_str().unwrap()]);
+    git(&["push", "-q", "origin", "main"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    // A forge with 1/5000 core budget left; any other call is recorded.
+    let gh = root.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\n[ \"$1\" = --version ] && { echo 'gh version 2.60.0'; exit 0; }\necho \"$*\" >> \"$(dirname \"$0\")/gh-calls\"\ncase \"$*\" in\n  'api rate_limit --cache 60s') echo '{\"resources\":{\"core\":{\"limit\":5000,\"remaining\":1}}}' ;;\n  *) exit 1 ;;\nesac\n",
+    );
+    let journal_dir = root.join(".aida/train");
+    let mut entry = journal::Entry::new(train_of("main", &fms(&[3902])), "train/stale-1".into());
+    entry.step = journal::Step::Open;
+    journal::activate(&journal_dir, entry).unwrap();
+    journal::clear();
+    assert!(journal::recovery_needed(&journal_dir).unwrap());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+            ("GH_REPO", Some("github.com/org/repo")),
+        ],
+    );
+    ADVISOR_LOOP.with(|v| v.set(true));
+    let result = pr_train_handler_with_dispatch_ctx(
+        &TrainOptions {
+            prs: &[],
+            all_ready: true,
+            dry_run: false,
+            local_ci: None,
+            max: 10,
+            no_pull: true,
+        },
+        None,
+    );
+    ADVISOR_LOOP.with(|v| v.set(false));
+    result.unwrap();
+    // Recovery never took the run lock or touched the retained journal.
+    assert!(!journal_dir.join("run.lock").exists());
+    let entries = journal::entries(&journal_dir).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].branch, "train/stale-1");
+    assert_eq!(entries[0].step, journal::Step::Open);
+    let calls = std::fs::read_to_string(root.join("gh-calls")).unwrap();
+    assert!(
+        calls.lines().all(|l| l == "api rate_limit --cache 60s"),
+        "{calls}"
+    );
+}
