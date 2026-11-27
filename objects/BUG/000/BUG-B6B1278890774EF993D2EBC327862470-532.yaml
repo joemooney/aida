@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T03:15:27.581643719Z
+modified_at: 2026-11-27T03:21:00.820362781Z
 req_type: Bug
 tags:
 - admission
@@ -235,6 +235,15 @@ comments:
   created_at: 2026-11-27T03:10:47.900274351Z
   modified_at: 2026-11-27T03:10:47.900274351Z
   session_id: 01a21abeb49c
+- id: 01a21b05-4894-7d71-a057-dd31fcfc3c82
+  author: joe
+  content: |-
+    DEFERRED (#4711 approval @cbaddf47, final, 2026-11-26; product-15):
+    - AC2 wiring untested: the line from ManualWaiter::describe() is not asserted in `aida advisor loops train-status` (advisor_loop_service.rs status_lines) or in `aida pr train --check` text/JSON (pr_train_check.rs check_report).
+    - An abandoned waiter blocks the auto-train for up to WAITER_TTL_SECS (15 min). There is no release/cancel surface other than deleting .aida/admission/manual-train.waiter; name the file and its expiry in the status line, or add a release command.
+    - Single waiter slot: record_waiter overwrites, so with two manual trains that both gave up only the last is kept; and manual_train_admission removes the file on ANY admission, so train X being admitted clears train Y's waiter. N>1 waiters are not covered.
+  created_at: 2026-11-27T03:21:00.820362781Z
+  modified_at: 2026-11-27T03:21:00.820362781Z
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
