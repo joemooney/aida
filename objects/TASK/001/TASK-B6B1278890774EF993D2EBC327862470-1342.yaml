@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T07:55:39.830501329Z
+modified_at: 2026-11-27T07:55:52.088768950Z
 req_type: Task
 tags:
 - review
@@ -288,6 +288,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.. No triage reason was given.'
   created_at: 2026-11-27T07:55:39.830492054Z
   modified_at: 2026-11-27T07:55:39.830492054Z
+- id: 01a21c00-ead8-7fa2-939e-325f3e3f6e42
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3869):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4a29fea49379
+    Recorded: 2026-11-27T07:55:00.972039874+00:00
+    Findings:
+    1. REGRESSION (security-relevant): open_confined runs BEFORE classify_compiled, so excluded scan paths (secret_sensitive_path, user_excluded, generated) are OPENED. Credential files like .env are now opened by the review scan, and an unreadable excluded file (a chmod-000 .env) fails the whole scan where it used to be skipped. Fix: lstat + classify first; open (confined) only reviewable files; never open an excluded path; test both a readable and a chmod-000 excluded secret.
+    2. The concurrent symlink-swap test can flake: ENOTEMPTY leaves the swapper stuck. Make the swapper loop bounded and tolerant of ENOTEMPTY, with a deadline, so the test cannot hang.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T07:55:51.896611963Z
+  modified_at: 2026-11-27T07:55:51.896611963Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
