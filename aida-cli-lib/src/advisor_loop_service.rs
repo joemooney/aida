@@ -697,6 +697,74 @@ pub(crate) fn deputy_binary_finding(root: &Path) -> Option<crate::DoctorFinding>
     })
 }
 
+/// Test fixture: a service receipt whose live deputy host is `pid`.
+// trace:TASK-3936 | ai:claude
+#[cfg(test)]
+pub(crate) fn write_test_host_receipt(root: &Path, deputy: &str, pid: u32) {
+    let binding = Binding {
+        grant: "fixture-grant".into(),
+        subject: "fixture-subject".into(),
+        principal: "fixture-principal".into(),
+        issued_at: Utc::now(),
+        delegations: Vec::new(),
+    };
+    let state = Service {
+        version: 1,
+        deputy: deputy.into(),
+        binding,
+        worker: None,
+        child_grant: None,
+        retired_grants: Vec::new(),
+        host_active: true,
+        host: Some(Identity::of(pid).unwrap()),
+        checked_at: None,
+        retry_after: Utc::now(),
+        last_exit: None,
+        image_handoff: false,
+    };
+    write(&directory(root, true).unwrap().unwrap(), &state).unwrap();
+}
+
+/// Test fixture: a sleeping process whose image was deleted after exec, as a
+/// deputy looks once a promotion removed its binary. Killed on drop.
+// trace:TASK-3936 | ai:claude
+#[cfg(test)]
+pub(crate) struct DeletedImageChild {
+    pub(crate) child: std::process::Child,
+    pub(crate) image: PathBuf,
+}
+#[cfg(test)]
+impl Drop for DeletedImageChild {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+#[cfg(test)]
+pub(crate) fn spawn_deleted_image_child(dir: &Path) -> DeletedImageChild {
+    let sleep = ["/usr/bin/sleep", "/bin/sleep"]
+        .into_iter()
+        .map(Path::new)
+        .find(|p| p.is_file())
+        .expect("a sleep binary");
+    let images = dir.join("deputy-image");
+    std::fs::create_dir_all(&images).unwrap();
+    let image = images.canonicalize().unwrap().join("aida");
+    std::fs::copy(sleep, &image).unwrap();
+    // A concurrent fork can briefly hold the copy's write fd open.
+    let child = (0..100)
+        .find_map(|_| match Command::new(&image).arg("300").spawn() {
+            Err(e) if e.raw_os_error() == Some(26) => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                None
+            }
+            spawned => Some(spawned.unwrap()),
+        })
+        .expect("image stayed busy");
+    std::fs::remove_file(&image).unwrap();
+    DeletedImageChild { child, image }
+}
+
 // A promotion is an orderly retirement, not a failed dispatch episode.
 // trace:BUG-2645 | ai:codex
 #[derive(Debug)]
@@ -3639,6 +3707,40 @@ mod loop_tests {
         }
         let quiet = status_lines("running", &serde_json::json!({}), None, &[]);
         assert!(!quiet.iter().any(|l| l.contains("runs a")), "{quiet:?}");
+    }
+
+    // A receipt naming a live deputy on a deleted image yields a doctor
+    // finding that names the deputy, pid, binary and the fix; once the deputy
+    // is gone the finding clears. trace:TASK-3936 | ai:claude
+    #[test]
+    fn task3936_deputy_on_a_deleted_image_is_reported_with_pid_binary_and_fix() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic(root, None);
+        env.set_key("AIDA_DEV_LIVE_DIR", root);
+        assert!(deputy_binary_finding(root).is_none(), "no receipt");
+        let deputy = spawn_deleted_image_child(root);
+        let pid = deputy.child.id();
+        write_test_host_receipt(root, "night", pid);
+
+        let finding = deputy_binary_finding(root).expect("a deputy on a deleted image");
+        assert_eq!(finding.category, DEPUTY_BINARY_CATEGORY);
+        assert_eq!(finding.id, format!("night:{pid}"));
+        assert!(!finding.safe_heal);
+        for part in [
+            format!("deputy night (pid {pid}) runs a deleted binary"),
+            format!("{} (deleted)", deputy.image.display()),
+            format!("{NAME} blocks behind it"),
+            "restart the deputy on the live build with the binding reset".into(),
+            "`aida advisor loops rebind --deputy night`".into(),
+        ] {
+            assert!(finding.summary.contains(&part), "{part}: {}", finding.summary);
+        }
+        assert!(finding.action.contains("restart the deputy"), "{}", finding.action);
+        assert!(finding.action.contains("rebind --deputy night"), "{}", finding.action);
+
+        drop(deputy);
+        assert!(deputy_binary_finding(root).is_none(), "an exited deputy");
     }
 }
 
