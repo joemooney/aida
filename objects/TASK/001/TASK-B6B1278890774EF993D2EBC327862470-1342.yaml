@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T04:24:00.914205427Z
+modified_at: 2026-11-27T04:26:26.729419233Z
 req_type: Task
 tags:
 - review
@@ -223,6 +223,17 @@ comments:
      (3) Push to #4710. COMMIT and PUSH. integration-30 re-pre-checks it; the advisor needs a final independent review at the new head.
   created_at: 2026-11-27T03:54:22.659179909Z
   modified_at: 2026-11-27T03:54:22.659179909Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b41-7b90-75f0-b4f7-6b75e95737bc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:26):
+    # TASK-3869 FRESH #3 (replaces closed #4710; product-15 2026-11-26 21:25). Lane: CLAUDE. STRICT. INTEGRATION, NEW branch int-task-3869-fresh3 (cut from the current integration tip, which has S5d + S6). Do NOT merge main. Title "[AI:claude] fix(review): skip non-regular entries unread, store-only --specs, pinned-root proofs (Refs TASK-3869)". ~415 lines accepted (advisor 17:34).
+    PORT #4710's change: `git diff origin/integration...origin/int-task-3869-fresh` is the reference (integration-30's pre-check passed the content). In scripts/ratchet-set.json keep BOTH S6's names and t3869's (a union). No new RawDiffEntry literal landed, so the non_regular field breaks nothing.
+    Targeted tests: `cargo test --profile agent -p aida-cli-lib --lib -- review_prepare:: t3869_ s6_ s5d_ bug2779` and `-p aida-core --lib -- review_engine`; then make check-ci-source. COMMIT and PUSH, then publish a NEW PR to integration whose body says "Replaces #4710 (rework-prep refused the merge; closed)".
+  created_at: 2026-11-27T04:26:26.729419233Z
+  modified_at: 2026-11-27T04:26:26.729419233Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
