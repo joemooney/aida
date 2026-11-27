@@ -1,0 +1,26 @@
+id: 01a21b41-e49b-7e81-a102-7d5aadb5c472
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-545
+agreed_id: BUG-2784
+title: 'Append-only ratchet-set.json conflicts force conflict-repair gating (3 ports of TASK-3869): union-merge driver for list files'
+description: |
+  2026-11-26: TASK-3869 was ported THREE times. Its rework prep refused to merge origin/integration because scripts/ratchet-set.json conflicted, and that conflict was a trivial list union (S6's names next to TASK-3869's). Any conflict counts as a conflict repair, and a self-published Claude lane is refused conflict repair (the codex-only rule, while codex is limited until Nov 29). The same file conflicted in S5c/S5d and #4710 today.
+
+  ## Acceptance criteria
+  1. scripts/ratchet-set.json (and any other append-only list files named in a small allowlist) never produces a merge conflict for disjoint additions. Use a custom git merge driver registered via .gitattributes (`merge=aida-json-union`) that unions the lists, keeps sorted order and emits valid JSON. Rework prep / sync configures the driver for lanes. A test merges two branches that each add different entries.
+  2. If a union still conflicts (the same key edited differently), it stays a real conflict and the existing gating applies.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T04:27:12.923122169Z
+modified_at: 2026-11-27T04:27:12.923122169Z
+req_type: Bug
+filed_at:
+  code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e59bcd029e
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
