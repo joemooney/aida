@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:36:03.420173Z
+modified_at: 2026-11-27T05:39:02.589686374Z
 req_type: Story
 tags:
 - containment
@@ -280,6 +280,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T05:35:44.266299690Z
   modified_at: 2026-11-27T05:35:44.266299690Z
+- id: 01a21b83-ebcc-7710-a17b-f701e16d5a9b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:39):
+    # STORY-3202 r3 on #4716 (head f5bc908438; advisor-122 SECURITY ruling 22:19 is STILL UNDELIVERED, since r2 shipped only the golden fix; integration-30 22:35; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-story-3202-agy-review / PR #4716. Keep the title. Do NOT merge main. THIS ROUND HAS ONE JOB: the security fix below. Verify each item is present in your diff before pushing.
+    THE BUG: a PR can choose its own reviewer vendor. review_prepare.rs:329 passes &project_root (the PR checkout UNDER REVIEW) into run_review_agent → aida_core::agents_config::resolve_default_vendor, so an `[agents] vendor = "agy"` (or "codex") line in the PR's own .aida/config.toml picks the reviewer.
+    BINDING:
+     1. run_review_agent must NOT receive &project_root. Pass TRUSTED roots only: the main worktree (main_worktree_root) or merge-base .aida config, plus ~/.aida/agents.toml. resolve_default_vendor must NEVER read [agents] vendor from the PR checkout.
+     2. agy is NEVER a default vendor from ANY source (even trusted config); only an explicit --agent agy / --challenger-agent agy runs it.
+     3. TESTS: (a) a PR checkout setting [agents] vendor = "agy" leaves the finder unchanged; (b) the same with vendor = "codex"; (c) agy configured as the default in TRUSTED config is refused as a default (falls back with a clear note).
+    Targeted tests: story3202, bug2775, review_prepare::; then make check-ci-source. In the PR body, list items 1-3 with the file:line where each is implemented. COMMIT and PUSH to #4716.
+  created_at: 2026-11-27T05:39:02.589686374Z
+  modified_at: 2026-11-27T05:39:02.589686374Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
