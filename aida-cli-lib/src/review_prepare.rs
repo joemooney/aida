@@ -177,9 +177,17 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
 
 /// Execute `aida review prepare`. The top-level error carries its whole cause
 /// chain on one line: agent-mode output keeps only the outermost message.
-// trace:BUG-2779 | ai:claude
+/// A partial review passes through untouched: its type carries exit code 4,
+/// and its message already holds the cause.
+// trace:BUG-2779 STORY-3120 | ai:claude
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
-    review_prepare(args, storage).map_err(|e| anyhow::anyhow!("{e:#}"))
+    review_prepare(args, storage).map_err(|e| {
+        if e.is::<PartialReviewExit>() {
+            e
+        } else {
+            anyhow::anyhow!("{e:#}")
+        }
+    })
 }
 
 // trace:STORY-3076 | ai:antigravity
