@@ -1,0 +1,24 @@
+id: 01a21e99-d4fa-7e12-8cca-77a6ef3aa27f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1575
+agreed_id: TASK-3928
+title: 'Lane salvage: when the lane''s fast-gate receipt is red, salvage to salvage/<lane> instead of the open PR branch, and say so (BUG-2781 follow-up)'
+description: |-
+  Advisor ruling 2026-11-27 01:20 on the #4718 r3 deferral (filed by product-15 13:10 per advisor 13:08). Today lane_salvage.rs guarded_push salvages onto an open PR's branch without the BUG-2596 red fast-gate veto (lane_fast_gate::refuse_failed_gate, which ship --from-seat runs at ship_from_seat.rs ~2147).
+
+  ## Acceptance
+  - AC1: when the lane's fast-gate receipt for the branch reads fail, salvage pushes to salvage/<lane> (never the PR branch) and the salvage note/comment says why (red fast-gate receipt, naming it).
+  - AC2: tests: red receipt -> salvage/<lane> and PR branch untouched; green or absent receipt -> PR branch as before.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T20:02:07.738693828Z
+modified_at: 2026-11-27T20:02:07.738693828Z
+req_type: Task
+filed_at:
+  code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac48
+  vendor: claude
