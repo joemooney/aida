@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T05:52:30.934151266Z
+modified_at: 2026-11-27T06:00:44.843697171Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -100,6 +100,17 @@ comments:
   created_at: 2026-11-27T05:49:05.040667115Z
   modified_at: 2026-11-27T05:49:05.040667115Z
   session_id: 01a21b24f112
+- id: 01a21b97-cd8d-7220-8aa3-2726d209302e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:00):
+    # BUG-2783 S1 FRESH (replaces closed #4725, unreviewed; product-15 2026-11-26 23:00). Lane: CLAUDE. STRICT. MAIN, NEW branch bug-2783-s1-fresh (cut from the current main tip). Keep #4725's title, ending in (Refs BUG-2783).
+    PORT #4725 onto current main: `git diff origin/main...origin/bug-2783-review-no-read` is the reference (ReviewVendor.no_read per vendor: claude true via --tools "", codex false, custom AIDA_REVIEW_RUNNER_CMD never verified; --post-comment refuses when the finder OR challenger is not no_read, after writing the local report + SARIF; the end-to-end canary red-team test with a planted $HOME/.ssh/id_test). ALSO: mark agy no_read=false (STORY-3202 is adding agy on integration; if agy isn't in the vendor table on main yet, add a TODO-free note in the PR body that agy must default to false). Resolve against BUG-2775's vendor table and tonight's main.
+    Targeted tests, make check-ci-source, then publish a NEW PR to main whose body says "Replaces #4725 (conflicted; closed)". COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T06:00:44.843697171Z
+  modified_at: 2026-11-27T06:00:44.843697171Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
