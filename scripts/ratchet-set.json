@@ -69,6 +69,9 @@
         "s5b_cut_balanced_tracks_tilde_fences_and_inline_spans",
         "s5b_pinned_post_names_repo_and_hung_gh_times_out",
         "s5c_rename_old_paths_apply_every_inventory_exclusion",
+        "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
+        "bug2775_runner_errors_name_runner_pass_batch_and_cause",
+        "bug2775_run_review_agent_resolves_and_states_the_default",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
@@ -89,6 +92,7 @@
       "source": "aida-cli-lib/src/launch/review_challenger.rs",
       "tests": [
         "s4_challenger_effort_injection_refused_at_every_source",
+        "bug2775_runner_cmd_note_only_when_the_variable_is_set",
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags",
@@ -104,6 +108,7 @@
       "filter": "launch::review_runner::tests::",
       "source": "aida-cli-lib/src/launch/review_runner.rs",
       "tests": [
+        "bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast",
         "s3a_runner_deadline_and_output_caps_fail_closed",
         "s3a_runner_spawn_contract",
         "s3a_runner_survives_default_sigpipe",

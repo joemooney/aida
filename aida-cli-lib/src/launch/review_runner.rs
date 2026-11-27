@@ -21,6 +21,13 @@ pub(crate) const STDOUT_CAP: usize = 4 << 20;
 pub(crate) const STDERR_CAP: usize = 64 << 10;
 const RUNNER_CMD: &str = "AIDA_REVIEW_RUNNER_CMD";
 const BASE_ENV: [&str; 4] = ["PATH", "HOME", "LANG", "TERM"];
+/// The network route only: a proxied or sandboxed seat reaches its vendor API
+/// solely through these, and without them claude retries until the deadline
+/// (BUG-2775). trace:BUG-2775 | ai:claude
+/// Matched in either case, as curl and the vendor CLIs read both.
+const PROXY_ENV: [&str; 4] = ["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "ALL_PROXY"];
+/// How much of a failed runner's stderr its error quotes.
+const STDERR_TAIL: usize = 600;
 /// How long the pipe threads may outlive the killed group before the run fails.
 const JOIN_GRACE: Duration = Duration::from_secs(5);
 /// One runner invocation. `parent_env` is the operator's environment: the only
@@ -38,12 +45,22 @@ pub(crate) struct RunnerCall<'a> {
 }
 
 impl RunnerCall<'_> {
-    fn var(&self, key: &str) -> Option<&OsStr> {
+    pub(crate) fn var(&self, key: &str) -> Option<&OsStr> {
         let found = self
             .parent_env
             .iter()
             .find(|(k, v)| k == key && !v.is_empty());
         found.map(|(_, v)| v.as_os_str())
+    }
+
+    /// Whether `AIDA_REVIEW_RUNNER_CMD` replaces the vendor. trace:BUG-2775 | ai:claude
+    pub(crate) fn runner_cmd_set(&self) -> bool {
+        self.var(RUNNER_CMD).is_some()
+    }
+
+    /// Who runs this pass, for error messages: the vendor or the custom command.
+    pub(crate) fn label(&self) -> &'static str {
+        self.vendor().map_or(RUNNER_CMD, |agent| agent.program)
     }
 
     /// The vendor whose argv and auth apply: none for `AIDA_REVIEW_RUNNER_CMD`.
@@ -85,14 +102,25 @@ impl RunnerCall<'_> {
         let vendor = self.vendor();
         let workdir = tempfile::tempdir()?;
         let mut cmd = Command::new(&program);
-        cmd.env_clear().current_dir(workdir.path()).process_group(0);
+        cmd.env_clear().current_dir(workdir.path());
+        // A new session, so its own process group with no controlling terminal:
+        // a vendor CLI that prompts on /dev/tty fails at once instead of
+        // stopping on SIGTTIN until the deadline. trace:BUG-2775 | ai:claude
+        // SAFETY: setsid(2) is async-signal-safe and touches no parent state.
+        unsafe {
+            cmd.pre_exec(|| match libc::setsid() {
+                -1 => Err(std::io::Error::last_os_error()),
+                _ => Ok(()),
+            });
+        }
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let auth = vendor.map_or(&[][..], |agent| agent.auth);
         for (key, value) in self.parent_env {
             let k = &*key.to_string_lossy();
-            if BASE_ENV.contains(&k) || k.starts_with("LC_") || auth.contains(&k) {
+            let route = PROXY_ENV.iter().any(|p| p.eq_ignore_ascii_case(k));
+            if BASE_ENV.contains(&k) || route || k.starts_with("LC_") || auth.contains(&k) {
                 cmd.env(key, value);
             }
         }
@@ -216,20 +244,39 @@ impl RunnerCall<'_> {
             .map_err(|_| anyhow!("stdin writer panicked"))?;
         let stdout = out.join().map_err(|_| anyhow!("stdout reader panicked"))?;
         let stderr = err.join().map_err(|_| anyhow!("stderr reader panicked"))?;
+        let (out_cap, err_cap) = (self.stdout_cap, self.stderr_cap);
         ensure!(
             !tripped.load(SeqCst),
-            "review runner output exceeded its cap"
+            "review runner output exceeded its cap ({out_cap} bytes stdout, {err_cap} stderr)"
         );
         let secs = self.deadline.as_secs();
         ensure!(finished, "review runner exceeded its {secs}s deadline");
-        let detail = String::from_utf8_lossy(&stderr);
         ensure!(
             status.success(),
-            "review runner failed ({status}): {}",
-            detail.trim()
+            "review runner failed ({status}); stderr: {}",
+            stderr_tail(&stderr)
         );
         wrote.context("review runner did not read the whole prompt")?;
         String::from_utf8(stdout).context("review runner output is not UTF-8")
+    }
+}
+
+/// The last `STDERR_TAIL` bytes of `stderr` on one line, so an agent-mode
+/// error summary (its first line) keeps the cause. trace:BUG-2775 | ai:claude
+fn stderr_tail(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let lines: Vec<_> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    let joined = lines.join(" / ");
+    let cut = joined.len().saturating_sub(STDERR_TAIL);
+    let start = (cut..=joined.len()).find(|&i| joined.is_char_boundary(i));
+    match &joined[start.unwrap_or(0)..] {
+        "" => "(empty)".into(),
+        tail if cut > 0 => format!("...{tail}"),
+        tail => tail.into(),
     }
 }
 
@@ -333,6 +380,8 @@ mod tests {
             ("AIDA_SESSION_GRANT", "sentinel-grant"),
             ("ANTHROPIC_API_KEY", "sentinel-anthropic"),
             ("OPENAI_API_KEY", "sentinel-openai"),
+            ("HTTPS_PROXY", "http://127.0.0.1:3128"),
+            ("no_proxy", "localhost"),
         ]);
         let prompt = "x".repeat(200 << 10); // over Linux's 128 KiB per-argument limit
         let stdin = format!("stdin={}\n", prompt.len());
@@ -350,6 +399,12 @@ mod tests {
             assert!(out.contains("cwd=\n") && out.contains(&stdin), "{out}");
             assert!(out.contains(own) && !out.contains(other), "{out}");
             assert!(out.contains("env=LC_ALL=C") && out.contains("env=AIDA_REVIEW_PASS=finder"));
+            // trace:BUG-2775 | ai:claude
+            let proxy = [
+                "env=HTTPS_PROXY=http://127.0.0.1:3128",
+                "env=no_proxy=localhost",
+            ];
+            assert!(proxy.iter().all(|p| out.contains(p)), "{out}");
             assert!(
                 !out.contains("sentinel-gh") && !out.contains("sentinel-grant"),
                 "{out}"
@@ -519,6 +574,34 @@ mod tests {
         assert!(run("#!/bin/sh\necho boom >&2\nexit 3\n", "p", 20, full).contains("boom"));
         let deaf = run("#!/bin/sh\necho '{}'\n", &"x".repeat(1 << 20), 20, full);
         assert!(deaf.contains("whole prompt"), "{deaf}");
+    }
+
+    /// A runner that reads stdin to EOF and then waits on an answer gets EOF at
+    /// once; one that prompts on the terminal fails at once naming the cause,
+    /// both far inside the deadline. trace:BUG-2775 | ai:claude
+    #[test]
+    fn bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let run = |body: &str| {
+            let cmd = script(bin.path(), "runner", body).display().to_string();
+            let env = vars(&[("PATH", "/usr/bin:/bin"), (RUNNER_CMD, &cmd)]);
+            let runner = RunnerCall {
+                deadline: Duration::from_secs(30),
+                ..call(checkout.path(), &env)
+            };
+            let started = Instant::now();
+            let res = runner.run("the prompt");
+            assert!(started.elapsed() < Duration::from_secs(10), "{res:?}");
+            res
+        };
+        let asks = "#!/bin/sh\nn=$(wc -c)\nread answer && exit 9\necho \"read=$n eof\"\n";
+        assert_eq!(run(asks).unwrap().trim(), "read=10 eof");
+        let tty = "#!/bin/sh\ncat >/dev/null\nread answer </dev/tty || exit 5\necho answered\n";
+        let err = format!("{:#}", run(tty).unwrap_err());
+        assert!(
+            err.contains("failed (exit status") && err.contains("tty"),
+            "{err}"
+        );
     }
 
     /// Re-runs itself in a child test process with SIGPIPE at SIG_DFL, as the

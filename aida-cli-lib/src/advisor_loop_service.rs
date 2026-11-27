@@ -1613,6 +1613,41 @@ mod loop_tests {
     use std::os::unix::fs::PermissionsExt;
 
     // trace:BUG-2720 | ai:codex
+    /// A change held behind a kept reviewer checkout ages across passes and
+    /// degrades the worker after 30 minutes, naming the fix; a pass that no
+    /// longer finds it held clears it. trace:BUG-2776 | ai:claude
+    #[test]
+    fn bug2776_retained_checkout_block_surfaces_after_thirty_minutes() {
+        let held = Unadmitted { key: "PR-4638".into(), head: "d69af92a".into(), cause: "dirty".into() };
+        let counts = PassCounts { retained: vec![held], ..Default::default() };
+        let start = Utc::now() - chrono::Duration::minutes(RETAINED_STALE_MINUTES + 1);
+        let first = next_pass_report(None, &counts, &[], start);
+        assert!(retained_blocks(&first, start + chrono::Duration::minutes(29)).is_empty());
+        let now = Utc::now();
+        let later = next_pass_report(Some(&first), &counts, &[], now);
+        let blocks = retained_blocks(&later, now);
+        assert_eq!(blocks.len(), 1, "{blocks:?}");
+        let (key, line) = &blocks[0];
+        assert_eq!(key, "PR-4638");
+        assert!(line.starts_with("review blocked by a retained reviewer worktree: PR-4638 held"), "{line}");
+        assert!(line.contains("(dirty)") && line.contains("aida session end --branch pr-4638 --yes"), "{line}");
+        assert!(line.contains("aida review watch --release PR-4638"), "{line}");
+        assert!(pass_degradation(&Ok(Some(later.clone())), None, now).iter().any(|r| r == line));
+        let findings = crate::landing_drought::retained_findings(blocks);
+        assert_eq!(findings[0].id, "PR-4638");
+        assert!(findings[0].action.starts_with("inspect the `pr-4638` checkout"));
+        // A capped retry surfaces at once, with the next step. trace:TASK-3921 | ai:claude
+        let cause = crate::review_watch::PICKUP_RETRY_CAP.to_string();
+        let capped = Unadmitted { key: "PR-4639".into(), head: "e0".into(), cause };
+        let capped = PassCounts { retained: vec![capped], ..Default::default() };
+        let blocks = retained_blocks(&next_pass_report(None, &capped, &[], now), now);
+        assert_eq!(blocks.len(), 1, "{blocks:?}");
+        assert!(blocks[0].1.contains("held 0 min (pickup retry cap reached)"), "{}", blocks[0].1);
+        assert!(blocks[0].1.contains("aida review watch --release PR-4639"), "{}", blocks[0].1);
+        let cleared = next_pass_report(Some(&later), &PassCounts::default(), &[], now);
+        assert!(cleared.retained.is_empty());
+    }
+
     #[test]
     fn bug2720_pass_summary_names_skipped_heads() {
         let mut counts = PassCounts::default();
@@ -3607,6 +3642,9 @@ pub(super) struct PassCounts {
     /// Heads local state found eligible that the admission hub holds for
     /// another node, with no recorded verdict yet.
     pub(super) unadmitted: Vec<Unadmitted>,
+    /// Changes an exited attempt holds behind a kept leftover review
+    /// checkout, with why it was kept. trace:BUG-2776 | ai:claude
+    pub(super) retained: Vec<Unadmitted>,
     /// Changes that found watcher admission busy.
     pub(super) busy: usize,
     pub(super) stopped: Option<String>,
@@ -3663,6 +3701,10 @@ struct PassReport {
     /// was first found held.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     held: Vec<Held>,
+    /// Every change held behind a retained review checkout, with when a pass
+    /// first found it so. trace:BUG-2776 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    retained: Vec<Held>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     errors: Vec<String>,
 }
@@ -3675,6 +3717,9 @@ const PASS_STALE_MINUTES: i64 = 15;
 // remote review in progress. Longer than a review normally takes.
 // trace:BUG-2674 | ai:claude
 const HELD_STALE_MINUTES: i64 = 60;
+// A review blocked this long by a kept reviewer checkout needs an operator.
+// trace:BUG-2776 | ai:claude
+const RETAINED_STALE_MINUTES: i64 = 30;
 
 // trace:BUG-2674 | ai:claude
 fn next_pass_report(
@@ -3703,8 +3748,23 @@ fn next_pass_report(
                 .map_or(now, |h| h.since),
         })
         .collect();
+    // Aged by change: the block persists while the change waits on it.
+    // trace:BUG-2776 | ai:claude
+    let retained = counts
+        .retained
+        .iter()
+        .map(|u| Held {
+            key: u.key.clone(),
+            head: u.head.clone(),
+            cause: bounded_diagnostic(&u.cause),
+            since: previous
+                .and_then(|p| p.retained.iter().find(|h| h.key == u.key))
+                .map_or(now, |h| h.since),
+        })
+        .collect();
     PassReport {
         at: now,
+        retained,
         skipped: counts.skipped.clone(),
         changes: counts.changes,
         dispatched: counts.dispatched,
@@ -3859,10 +3919,36 @@ fn pass_degradation(
             ));
         }
     }
+    reasons.extend(retained_blocks(report, now).into_iter().map(|(_, line)| line));
     if minutes(report.at) >= PASS_STALE_MINUTES {
         reasons.push(format!("no discovery pass for {} min", minutes(report.at)));
     }
     reasons
+}
+
+/// Each change held behind a retained reviewer checkout for at least
+/// [`RETAINED_STALE_MINUTES`], with the fix. trace:BUG-2776 | ai:claude
+fn retained_blocks(report: &PassReport, now: DateTime<Utc>) -> Vec<(String, String)> {
+    report
+        .retained
+        .iter()
+        // A capped retry will not try again: surface it now. trace:TASK-3921 | ai:claude
+        .filter(|h| {
+            now.signed_duration_since(h.since).num_minutes() >= RETAINED_STALE_MINUTES
+                || h.cause.starts_with(crate::review_watch::PICKUP_RETRY_CAP)
+        })
+        .map(|h| {
+            let branch = h.key.to_ascii_lowercase();
+            let line = format!(
+                "review blocked by a retained reviewer worktree: {} held {} min ({}); fix: inspect the `{branch}` checkout (`git worktree list`), and once it is safe to drop run `aida session end --branch {branch} --yes`, then `aida review watch --release {}`",
+                h.key,
+                now.signed_duration_since(h.since).num_minutes(),
+                h.cause,
+                h.key
+            );
+            (h.key.clone(), line)
+        })
+        .collect()
 }
 
 /// The pass evidence status reports, and why it degrades a live worker. Only

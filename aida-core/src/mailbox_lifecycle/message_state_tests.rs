@@ -158,7 +158,16 @@ fn task3420_writer_appearing_after_fencing_is_caught_even_with_current_activatio
         ))
     });
     let (reason, _) = refusal(retire_source(root.path(), &opts()).unwrap());
-    assert_eq!(reason, RefusalReason::WriterAdmissionUnknown);
+    assert!(
+        matches!(
+            reason,
+            RefusalReason::WriterAdmissionUnknown {
+                transient: false,
+                ..
+            }
+        ),
+        "{reason:?}"
+    );
     assert!(mailbox(root.path()).join("unacked.json").exists());
     assert_open(root.path());
 }

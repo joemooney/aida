@@ -256,19 +256,20 @@ pub(crate) fn dry_run_report_at(
 /// Compatible permit markers admit older/replaced writers (BUG-2437).
 /// Unit tests use [`FRESH_SCAN`] so they never depend on the host's processes.
 // trace:TASK-3420 | ai:codex
-pub(crate) fn fresh_scan_admits() -> bool {
+pub(crate) fn fresh_scan() -> Result<(), AdmissionGap> {
+    let unnamed = |ok: bool| ok.then_some(()).ok_or_else(AdmissionGap::default);
     #[cfg(all(feature = "mailbox-test-support", not(test)))]
     if let Some(admitting) = TEST_WRITER_SCAN.with(|f| f.get()) {
-        return admitting;
+        return unnamed(admitting);
     }
     #[cfg(test)]
     {
-        FRESH_SCAN.with(|f| f.get())
+        unnamed(FRESH_SCAN.with(|f| f.get()))
     }
     #[cfg(not(test))]
     {
         let Ok(meta) = std::fs::metadata("/proc/self/exe") else {
-            return false;
+            return unnamed(false);
         };
         let me = BuildIdentity {
             exe_id: (meta.dev(), meta.ino()),
@@ -278,13 +279,85 @@ pub(crate) fn fresh_scan_admits() -> bool {
         let proc = Path::new("/proc");
         let (mut processes, incomplete) = scan_proc(proc, std::process::id());
         let me = fill_digests(proc, &mut processes, me, &proc.join("self/exe"));
-        classify(&processes, Some(&me), std::process::id(), incomplete, false).would_record
+        admission_gap(&processes, Some(&me), std::process::id(), incomplete).map_or(Ok(()), Err)
     }
+}
+
+/// The writers a fresh scan could not verify, each named by pid, command,
+/// executable and digest. `transient` holds only when every one runs a
+/// deleted binary, or a stale one (its path now holds another file): the
+/// processes left over from a binary switch, which exit on their own. A
+/// writer on a present binary of another build, an unreadable one, or an
+/// incomplete scan is a live unknown writer and is never transient.
+// trace:BUG-2778 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct AdmissionGap {
+    pub writers: Vec<String>,
+    pub transient: bool,
+}
+
+/// `None` when the scan verifies every writer, as [`classify`] decides.
+// trace:BUG-2778 | ai:claude
+pub(crate) fn admission_gap(
+    processes: &[ProcessView],
+    me: Option<&BuildIdentity>,
+    self_pid: u32,
+    incomplete: Option<String>,
+) -> Option<AdmissionGap> {
+    let report = classify(processes, me, self_pid, incomplete.clone(), false);
+    if report.would_record {
+        return None;
+    }
+    let mut gap = AdmissionGap {
+        writers: Vec::new(),
+        transient: incomplete.is_none() && me.is_some(),
+    };
+    for host in report
+        .hosts
+        .iter()
+        .filter(|h| h.verdict != HostVerdict::Admitting)
+    {
+        let view = processes.iter().find(|p| p.pid == host.pid);
+        let path = host.exe.trim_end_matches(" (deleted)");
+        let comm = Path::new(path).file_name().map(|n| n.to_string_lossy());
+        let sha = view
+            .and_then(|p| p.exe_digest.as_deref())
+            .map_or("sha unknown".to_string(), |d| {
+                format!("sha {}", &d[..d.len().min(12)])
+            });
+        let on_disk = std::fs::metadata(path).ok().map(|m| (m.dev(), m.ino()));
+        let kind = if host.exe.ends_with(" (deleted)") {
+            "on a deleted binary".to_string()
+        } else if view.is_some_and(|p| p.exe_id.is_some() && p.exe_id != on_disk) {
+            "on a stale binary (its path now holds another file)".to_string()
+        } else {
+            gap.transient = false;
+            match &host.verdict {
+                HostVerdict::Unverified { why } => format!("live: {why}"),
+                HostVerdict::Admitting => unreachable!(),
+            }
+        };
+        gap.writers.push(format!(
+            "pid {} ({}, {}, {sha}, {kind})",
+            host.pid,
+            comm.unwrap_or_default(),
+            host.exe
+        ));
+    }
+    if let Some(why) = incomplete {
+        gap.writers
+            .push(format!("the process scan is incomplete: {why}"));
+    }
+    if me.is_none() {
+        gap.writers
+            .push("this build could not identify itself".into());
+    }
+    Some(gap)
 }
 
 #[cfg(test)]
 thread_local! {
-    /// What [`fresh_scan_admits`] answers in this test thread.
+    /// What [`fresh_scan`] answers in this test thread.
     // trace:BUG-2411 | ai:claude
     pub(crate) static FRESH_SCAN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static PROMOTION_PROC_ROOT: std::cell::RefCell<Option<PathBuf>> = const {

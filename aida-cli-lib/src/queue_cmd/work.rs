@@ -4068,6 +4068,177 @@ fn review_worktree_retirement(
     Ok(Some(path))
 }
 
+/// What review-watch found holding a PR branch before it retried pickup.
+// trace:BUG-2776 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RetainedReview {
+    /// No checkout holds the branch.
+    Free,
+    /// The leftover checkout's lease was ended and the checkout is gone.
+    /// trace:TASK-3921 | ai:claude
+    Reclaimed,
+    /// A checkout is kept; the text says why (dirty, live pid N, merge-hold, lock, ...).
+    Kept(String),
+}
+
+/// Review-watch's reclaim of a leftover default review checkout whose
+/// reviewer exited before the PR moved to `pr_head`: ends its lease with
+/// `aida session end <lease> --yes`, the command an operator runs by hand.
+// trace:BUG-2776 | ai:claude
+pub(crate) fn reclaim_retained_review_tree(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    pr_head: &str,
+) -> RetainedReview {
+    reclaim_retained_review_tree_with(root, forge, n, pr_head, |lease| {
+        let out = std::process::Command::new(crate::aida_exe_path())
+            .current_dir(root)
+            .args(["session", "end", &lease.id, "--yes", "--skip-ci"])
+            .stdin(std::process::Stdio::null())
+            .output()?;
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let tail = stderr
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("");
+        anyhow::ensure!(out.status.success(), "session end refused: {}", tail.trim());
+        Ok(())
+    })
+}
+
+/// Reclaims only a clean, unlocked, process-free, hold-free checkout at the
+/// head its single stale or ending-retained reviewer lease recorded (so it
+/// carries no reviewer commits), and only once the PR has moved past it.
+/// Every other shape is kept, with the reason; a failed check keeps it too.
+// trace:BUG-2776 | ai:claude
+pub(crate) fn reclaim_retained_review_tree_with(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    pr_head: &str,
+    end: impl FnOnce(&SessionLease) -> Result<()>,
+) -> RetainedReview {
+    // trace:TASK-3921 | ai:claude
+    let mut ended = false;
+    let result = retained_review_tree(root, forge, n, pr_head, |lease| {
+        ended = true;
+        end(lease)
+    });
+    match result {
+        Ok(None) if ended => RetainedReview::Reclaimed,
+        Ok(None) => RetainedReview::Free,
+        Ok(Some(why)) => RetainedReview::Kept(why),
+        Err(error) => RetainedReview::Kept(format!("reclaim check failed: {error:#}")),
+    }
+}
+
+fn retained_review_tree(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    pr_head: &str,
+    end: impl FnOnce(&SessionLease) -> Result<()>,
+) -> Result<Option<String>> {
+    let branch = forge.local_branch_for(n);
+    let output = aida_core::git_ops::host_git_command(root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()?;
+    anyhow::ensure!(output.status.success(), "could not list worktrees");
+    let inventory = String::from_utf8_lossy(&output.stdout);
+    let records: Vec<&str> = inventory
+        .split("\n\n")
+        .filter(|r| {
+            r.lines()
+                .any(|l| l == format!("branch refs/heads/{branch}"))
+        })
+        .collect();
+    let path =
+        match crate::worktree_reclaim::parse_worktree_entries(&records.join("\n\n")).as_slice() {
+            [] => return Ok(None),
+            [one] => crate::worktree::canonical_or_self(&one.path),
+            _ => return Ok(Some("several checkouts".into())),
+        };
+    if !is_default_review_worktree(root, &branch, &path)? {
+        return Ok(Some("not the default review checkout".into()));
+    }
+    if records
+        .iter()
+        .any(|r| r.lines().any(|l| l.starts_with("locked")))
+    {
+        return Ok(Some("lock".into()));
+    }
+    if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&path) {
+        let pids: Vec<String> = in_use.holders.iter().map(|h| h.pid.to_string()).collect();
+        return Ok(Some(if pids.is_empty() {
+            in_use.summary()
+        } else {
+            format!("live pid {}", pids.join(", "))
+        }));
+    }
+    if working_tree_clean(&path) != Some(true) {
+        return Ok(Some("dirty".into()));
+    }
+    let tree_head = aida_core::git_ops::host_git_command(&path)
+        .args(["rev-parse", "HEAD"])
+        .output()?;
+    anyhow::ensure!(
+        tree_head.status.success(),
+        "could not read the checkout head"
+    );
+    let tree_head = String::from_utf8_lossy(&tree_head.stdout)
+        .trim()
+        .to_string();
+    if tree_head.eq_ignore_ascii_case(pr_head) {
+        return Ok(Some("checkout is at the current head".into()));
+    }
+    let leases: Vec<SessionLease> = crate::leases::list_leases_strict_all(root)
+        .map_err(anyhow::Error::msg)?
+        .into_iter()
+        .filter(|l| {
+            l.branch == branch || crate::worktree::canonical_or_self(&l.worktree_path) == path
+        })
+        .collect();
+    let [lease] = leases.as_slice() else {
+        return Ok(Some(format!("{} leases on the checkout", leases.len())));
+    };
+    if crate::pr_lease_takeover::reviewer_target(lease) != Some((forge, n)) {
+        return Ok(Some(format!(
+            "lease {} is not this PR's reviewer",
+            lease.id
+        )));
+    }
+    let state = crate::ownership::reader::current_lease_state(lease);
+    // A live owner keeps it even when its end was retained: its process may
+    // have left the tree. trace:BUG-2776 | ai:claude
+    if state == crate::LeaseState::Live
+        || (lease.ending_retained_at.is_none() && state != crate::LeaseState::Stale)
+    {
+        return Ok(Some(format!("lease {} {}", lease.id, state.label())));
+    }
+    if !lease
+        .pr_head_sha
+        .as_deref()
+        .is_some_and(|h| h.eq_ignore_ascii_case(&tree_head))
+    {
+        return Ok(Some("checkout moved past its recorded review head".into()));
+    }
+    if let Some(why) = crate::review_draft::unconsumed_draft_retention(&path) {
+        return Ok(Some(why));
+    }
+    // BUG-2176: collect this PR's legacy marker onto the ledger before the
+    // tree goes; any marker that remains keeps the tree.
+    if !crate::merge_hold::preserve_review_worktree_holds(root, &path, n, lease.started_at.into())?
+    {
+        return Ok(Some("merge-hold".into()));
+    }
+    end(lease)?;
+    Ok(path
+        .exists()
+        .then(|| "session end kept the checkout".to_string()))
+}
+
 /// [`preflight_queue_work_branch`], except that the orphan's tree `adopting`
 /// (`aida queue work --resume`) holds its own branch: that is the tree the
 /// pickup re-enters, and session start re-verifies it.
@@ -4246,12 +4417,23 @@ pub(crate) fn reclaim_exited_branch_clone(
     let lease = check_exited_branch_clone(root, branch, path)?;
     // KeepUnshipped re-probes immediately before teardown and checks live
     // holders. Any new dirty or unpushed work retains the clone and lease.
-    match crate::seat_clone::destroy(
-        root,
-        path,
-        crate::seat_clone::DestroyMode::KeepUnshipped,
-        None,
-    )? {
+    // A transient writer-admission refusal retries before the relaunch
+    // gives up. trace:BUG-2778 | ai:claude
+    let destroyed = aida_core::mailbox_lifecycle::guard::retry_transient_admission(
+        || {
+            crate::seat_clone::destroy(
+                root,
+                path,
+                crate::seat_clone::DestroyMode::KeepUnshipped,
+                None,
+            )
+        },
+        |out| {
+            matches!(out, Ok(crate::seat_clone::Destroyed::Kept { retention: Some(r), .. })
+                if r.transient_admission)
+        },
+    )?;
+    match destroyed {
         crate::seat_clone::Destroyed::Removed { .. } => {
             crate::session_reap::release_lease_files(root, &lease.id);
             anyhow::ensure!(

@@ -35,6 +35,13 @@ pub(crate) struct AdversarialSummary {
     pub refuted: Vec<RefutedFinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// Why the challenger could not run; set, the report is partial.
+    /// trace:STORY-3120 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_unavailable: Option<String>,
+    /// Finder findings the challenger never judged. They still gate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unchallenged: Vec<RawReviewFinding>,
 }
 
 /// Review vendors named by `[AI:<tool>]` tags (`+` joins several) in commit
@@ -60,9 +67,12 @@ fn pick_challenger(
     finder: &RunnerCall<'_>,
     authors: &BTreeSet<&str>,
 ) -> (Option<&'static ReviewVendor>, Option<String>) {
+    // trace:BUG-2775 | ai:claude
     let Some(own) = finder.vendor() else {
-        let note = "AIDA_REVIEW_RUNNER_CMD runs both passes (AIDA_REVIEW_PASS=challenger)";
-        return (finder.agent, Some(note.into()));
+        let note = finder.runner_cmd_set().then(|| {
+            "AIDA_REVIEW_RUNNER_CMD runs both passes (AIDA_REVIEW_PASS=challenger)".to_owned()
+        });
+        return (finder.agent, note);
     };
     let mut order = REVIEW_VENDORS.to_vec();
     order.sort_by_key(|v| v.program == own.program);
@@ -262,6 +272,25 @@ mod tests {
             .unwrap()
             .0
             .is_empty());
+    }
+
+    // trace:BUG-2775 | ai:claude
+    #[test]
+    fn bug2775_runner_cmd_note_only_when_the_variable_is_set() {
+        let checkout = tempfile::tempdir().unwrap();
+        let none = BTreeSet::new();
+        let unset: Vec<(OsString, OsString)> = vec![("PATH".into(), "/bin".into())];
+        let call = RunnerCall {
+            agent: None,
+            ..finder("claude", checkout.path(), &unset)
+        };
+        assert_eq!(pick_challenger(&call, &none).1, None);
+        let mut set = unset.clone();
+        set.push(("AIDA_REVIEW_RUNNER_CMD".into(), "/bin/true".into()));
+        let note = pick_challenger(&finder("claude", checkout.path(), &set), &none).1;
+        assert!(note
+            .unwrap()
+            .contains("AIDA_REVIEW_RUNNER_CMD runs both passes"));
     }
 
     #[test]
