@@ -237,12 +237,6 @@
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
 - user_id: dirtlab
-  requirement_id: 01a21f4c-6749-7c43-9b52-12b3b82a452e
-  position: 1584000
-  added_by: dirtlab
-  added_at: 2026-11-27T23:24:14.037771844Z
-  for_role: implementer
-- user_id: dirtlab
   requirement_id: 01a21f4d-2871-76e0-a66d-7e8c8b20ef67
   position: 1585000
   added_by: dirtlab
