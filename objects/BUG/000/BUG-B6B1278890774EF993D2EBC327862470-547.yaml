@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T19:08:19.301952940Z
+modified_at: 2026-11-27T19:23:06.443268962Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -42,6 +42,35 @@ comments:
     - "Draft" is read as the barrier's own payload (it is the draft's recorded copy; `restore_pending_handoff` already treats it so). Reading the reviewer's on-disk launch draft is left to S2 with checkout cleanup.
   created_at: 2026-11-27T19:08:19.301952940Z
   modified_at: 2026-11-27T19:08:19.301952940Z
+  session_id: 01a21e6517d0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21e76-1b4b-74a0-8393-02326a572828
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6acf5cb6ff (slice 1, Refs-only: AC1 + its AC4 tests; AC2/AC3 deferred to S2).
+
+    Acceptance evidence (behavioral, unit):
+    - exited + complete draft => finalized: `gate::ledger::abandoned_sweep::tests::exited_reviewer_with_complete_draft_is_finalized`, plus end-to-end through the real writer and findings delivery: `review_draft::...::bug_2786_exited_reviewers_complete_barrier_is_finalized_by_the_expiry_pass` (an approved-with-deferred barrier from an injected delivery failure becomes an approval with both findings).
+    - exited + incomplete => sweep_abandoned, read as needs-review: `exited_reviewer_with_incomplete_draft_is_marked_sweep_abandoned_and_needs_review` (kind is neither approve nor requires_changes; `refuse_conclusive_head` refuses before and admits after; a second pass is a no-op).
+    - live reviewer / younger than N => untouched: `live_or_recent_reviewer_sweeps_are_untouched`.
+    - registry evidence: `session_registry_decides_whether_the_reviewer_ended` (no lease => ended; unreadable lease or no named session => not ended).
+    - failed finalize => expired rather than standing forever: `a_failed_finalize_expires_the_barrier_instead_of_leaving_it_standing`.
+    Targeted run: 6 passed (lane job j20261127T192010404-33-0).
+
+    Probe findings and fixes:
+    - P1/P4: the barrier always stores `request-changes`, so its original verdict is lost under tier policy (siblings of a delivery batch are barriered too). Restoring every barrier to "approved" could flip a CR or a finding-free sibling into an approval. Fix: only a barrier with non-empty, all-deferred findings (which the recorder normalizes to approval anyway) counts as complete; all others are abandoned.
+    - P3: spec-only unbound records share the spec label with bound ones; excluded from slot selection.
+    - P4 race: abandonment appends via `append_delivered` against the read barrier, so a reviewer finishing concurrently wins and the pass refuses.
+    - Test env guard nesting fixed (split test).
+
+    Residual risks:
+    - The finalize retry uses the slot's spec label (or the change key) as findings source; if the original delivery used a different source label, dedup may not match and a follow-up could be filed twice.
+    - Liveness: a lease classified Dormant (worktree retained, no pid evidence) is not treated as ended, so a reviewer whose checkout is retained may not expire until S2's cleanup. Session ids are taken from `recorded_by: reviewer:<id>` and `session:` tokens; all must be ended.
+    - Abandoned records surface as UNKNOWN in generic verdict displays; a dedicated "needs review" label is left for S2 with the doctor listing.
+    - Diff is ~440 lines vs the 300 budget: ~200 are tests.
+  created_at: 2026-11-27T19:23:06.443268962Z
+  modified_at: 2026-11-27T19:23:06.443268962Z
   session_id: 01a21e6517d0
   harness_version: 2.1.319 (Claude Code)
 history:

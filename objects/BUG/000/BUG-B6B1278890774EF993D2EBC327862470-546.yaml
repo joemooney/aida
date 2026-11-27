@@ -14,12 +14,36 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-27T19:13:35.218626591Z
+modified_at: 2026-11-27T19:22:20.817903800Z
 req_type: Bug
 tags:
 - lanes
 - queue
 - review
+comments:
+- id: 01a21e75-6911-76f1-ac63-7d10cb438cff
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, aida-cli-lib `rework_approval_gate` tests):** a new gate reads the current verdict for the open PR key (`PR-N`) and the spec labels; a non-closed `Approved` verdict (sweep_pending reads as RequestChanges via `disposition_verdict`, so it never counts) whose `reviewed_sha` matches the PR's CURRENT head refuses `aida queue rework`/`aida rework` before any write, naming PR, sha, reviewer, recorded_at and the override `--despite-approval <reason>`. With the flag the reason is recorded as a spec comment bound to `PR-N@<head>`.
+    - **AC2 (unit + wiring):** `handle_queue_work` runs the same gate at admission, right after the BUG-2500 waiting gate, whenever the pickup resolves an open rework PR (the `--force-claim` on a PR branch path). A queued round that went stale is refused at launch unless an override comment for that exact PR+head is on the spec.
+    - **AC3 tests:** approved-at-head → refused with approval named; approved at older head → allowed; sweep-pending → allowed; override → allowed and comment recorded/honored.
+    - Forge lookup failure (no head sha) fails open with a warning (status quo), noted as a residual risk.
+
+    ### Expected files
+    - `aida-cli-lib/src/rework_approval_gate.rs` (new) + `lib.rs` mod line
+    - `aida-cli-lib/src/queue_cmd/rework.rs` (flag + gate call), `queue_cmd_args.rs` (flag)
+    - `aida-cli-lib/src/queue_cmd/work.rs` (launch gate)
+    - help golden snapshot
+
+    ### Ambiguities / conflicts as questions
+    - Override at launch: `queue work` does not get its own flag (13 call sites of `handle_queue_work`); its refusal names `aida queue rework <SPEC> --despite-approval <reason>`, whose recorded comment the launch gate honors for that exact PR+head. Acceptable?
+  created_at: 2026-11-27T19:22:20.817903800Z
+  modified_at: 2026-11-27T19:22:20.817903800Z
+  session_id: 01a21e6d2fde
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e6d-63f2-7bd0-8149-5657f75e0428
   author: aida-session-start
