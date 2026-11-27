@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2759",
+  "publishes": [
+    {
+      "at": "2026-11-27T05:40:54.829858397Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-25T02:34:47.331956712Z",
+      "spec": "BUG-2759",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4555,
+        "verdict": "APPROVED",
+        "reviewed_sha": "fdf7d380d986caa57fef981f5f6d117396f3b779"
+      }
+    },
+    {
+      "ts": "2026-11-27T02:18:24.363784246Z",
+      "spec": "BUG-2759",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4708,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "2b87920bb9e1b2aa9ddfe671bf8a9c765f9de551"
+      }
+    },
+    {
+      "ts": "2026-11-27T02:18:37.328988840Z",
+      "spec": "BUG-2759",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2759 slice 2 (completing). Base main 956b13f4, 1 commit, 2 files (remote_create.rs incl. inline #[cfg(test)] module; store-writers.toml). CI pending at review time. AC walk: AC1 PARTIAL — merge-refusal reason text verified by reconcile_refusal_displays_merge_validation_cause (slice 1) and bug_2759_consent_gate_skips_emails_every_hub_already_has (names the new email and the hubs that lack it); push-race reason text UNVERIFIED: no test asserts the race-exhausted message (remote_create.rs:2974) or the retry warning (:2650). AC2 verified by bug_2759_reconcile_retries_once_after_a_concurrent_push (a real second-clone push between union and push; both writes land on both hubs, raced==1); the 2-attempt bound itself (every attempt raced) has no test. Comment-7 slice ACs: (1) gate flags only emails the receiving hub lacks — verified by the consent test (known email on both hubs passes after scrub; new email refused); (2) message no longer says 'one hub only' — verified (same test); (3) agent-mode cause chain — verified by bug_2759_agent_error_block_keeps_every_cause, which renders through agent_error_block with the same {:?} msg cli_entry.rs:213 builds. Deep pass: the gate stays fail-closed (git grep failure or no match leaves hub_has empty; both sides use emails_in on '+'-stripped lines so the tokens agree); only NonFastForward is retried; the retry re-runs the full lock, merge and validate path including the consent gate; dry-run never returns Raced. The store-writers inventory follows the moved sinks. Type protocol: BUG-2759 bug protocol 'PR touches at least one test file' — met (inline test module in remote_create.rs, three new tests). Verdict request-changes: AC1 is claimed (completing trailer) but its push-race reason text has no asserting test.",
+        "recovery_hint": "address the review findings, move BUG-2759 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T03:36:15.464740118Z",
+      "spec": "BUG-2759",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4708,
+        "verdict": "APPROVED",
+        "reviewed_sha": "93f4e52f10c22eb3ff71fcc5fdb77190347a6310"
+      }
+    },
+    {
+      "ts": "2026-11-27T05:36:40.069281190Z",
+      "spec": "BUG-2759",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4708
+      }
+    },
+    {
+      "ts": "2026-11-27T05:40:54.590692505Z",
+      "spec": "BUG-2759",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6a72f54777f5c364c1989ef56acdae39604e2f33",
+        "pr": 4708,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
