@@ -3403,7 +3403,13 @@ fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, 
 // trace:BUG-2784 | ai:claude
 fn json_union_merge_config(main: &Path) -> [(&'static str, std::ffi::OsString); 7] {
     let script = main.join("scripts/json-union-merge.py");
-    let quoted = format!("'{}'", script.to_string_lossy().replace('\'', r"'\''"));
+    let script = script.to_string_lossy();
+    // A quote in the path would need shell escaping; `false` keeps it a conflict.
+    let driver = if script.contains("'") {
+        "false".to_string()
+    } else {
+        format!("python3 -I '{script}' %O %A %B")
+    };
     [
         ("GIT_CONFIG_COUNT", "3".into()),
         ("GIT_CONFIG_KEY_0", "core.hooksPath".into()),
@@ -3411,10 +3417,7 @@ fn json_union_merge_config(main: &Path) -> [(&'static str, std::ffi::OsString); 
         ("GIT_CONFIG_KEY_1", "core.fsmonitor".into()),
         ("GIT_CONFIG_VALUE_1", "false".into()),
         ("GIT_CONFIG_KEY_2", "merge.aida-json-union.driver".into()),
-        (
-            "GIT_CONFIG_VALUE_2",
-            format!("python3 -I {quoted} %O %A %B").into(),
-        ),
+        ("GIT_CONFIG_VALUE_2", driver.into()),
     ]
 }
 
@@ -5685,7 +5688,7 @@ mod rework_merge_tests {
     // without that trusted script the same merge stays a conflict.
     // trace:BUG-2784 | ai:claude
     #[test]
-    fn bug_2784_rework_git_unions_disjoint_ratchet_additions() {
+    fn bug_2784_rework_git_unions_disjoint_json_list_additions() {
         let fx = tests::fixture();
         let g = |args: &[&str]| tests::git_ok(&fx.main, args);
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
