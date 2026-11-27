@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T02:52:09.941143112Z
+modified_at: 2026-11-27T03:10:47.900277926Z
 req_type: Bug
 tags:
 - admission
@@ -224,6 +224,12 @@ comments:
   modified_at: 2026-11-27T02:51:40.851302375Z
   session_id: 01a21abeb49c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21afb-ee5c-7322-b7e0-895a32f2f4d6
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `train-fair-admission-fresh2` at head `cbaddf47705827f69c721df0d82dfa12c11cc558`.'
+  created_at: 2026-11-27T03:10:47.900274351Z
+  modified_at: 2026-11-27T03:10:47.900274351Z
+  session_id: 01a21abeb49c
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
