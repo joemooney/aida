@@ -523,6 +523,8 @@ fn status_value(
         // A manual train the auto-train yields its next train to. trace:BUG-2771 | ai:claude
         // Every queued waiter, first in line first. trace:TASK-3924 | ai:claude
         value["manual_waiters"] = serde_json::json!(crate::admission_owner::waiter_lines(root));
+        // A recovery parked on its train's CI. trace:TASK-3920 | ai:claude
+        value["parked_recovery"] = serde_json::json!(crate::pr_train::parked_line(root));
     }
     // trace:BUG-2703 | ai:claude
     let admission = admission_status(root, state, Utc::now());
@@ -552,6 +554,9 @@ fn status_lines(
     lines.push(format!("{NAME}: {}", admission_line(value))); // trace:BUG-2703 | ai:claude
     if let Some(line) = value["admission_hold"].as_str() {
         lines.push(line.to_string()); // trace:BUG-2769 | ai:claude
+    }
+    if let Some(line) = value["parked_recovery"].as_str() {
+        lines.push(format!("{NAME}: {line}")); // trace:TASK-3920 | ai:claude
     }
     for line in value["manual_waiters"].as_array().into_iter().flatten() {
         lines.push(format!("{NAME}: {}", line.as_str().unwrap_or_default())); // trace:BUG-2771 TASK-3924 | ai:claude

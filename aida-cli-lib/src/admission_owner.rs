@@ -370,6 +370,7 @@ pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim>
             Mode::Exclusive
         },
         Deadline::start(Duration::ZERO),
+        None,
     )
 }
 
@@ -408,12 +409,69 @@ enum Mode {
     Legacy,
     CooperativeTrain,
 }
-fn acquire_mode(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -> Result<Claim> {
+/// Run `f` under the admission receipt serializer. trace:TASK-3920 | ai:claude
+#[cfg_attr(not(test), allow(dead_code))] // the park point (slice 2) calls it
+pub(crate) fn serialized<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let dir = directory(root);
+    std::fs::create_dir_all(&dir)?;
+    let _serial = lock_serial(&dir, std::time::Instant::now() + SERIAL_GRACE)?;
+    f()
+}
+
+/// The live parked recovery, and its fairness position when `ticket` (the
+/// record's token) names it and this process owns it; never a position
+/// from anywhere else. Callers hold the serializer. trace:TASK-3920 | ai:claude
+type Parked = crate::pr_train::Parked;
+fn parked_position(
+    root: &Path,
+    ticket: Option<&str>,
+) -> Result<(Option<Parked>, Option<DateTime<Utc>>)> {
+    let parked = crate::pr_train::parked_recovery(root, true)?;
+    let me = ProcIdentity::capture(std::process::id()).map_err(anyhow::Error::msg)?;
+    let position = (parked.as_ref())
+        .filter(|p| ticket == Some(p.token.as_str()) && p.owner == me)
+        .map(|p| p.position);
+    Ok((parked, position))
+}
+
+/// The parked recovery's own re-acquire: passes the train check its record
+/// imposes on others and ignores intents registered after its position.
+// trace:TASK-3920 | ai:claude
+#[cfg_attr(not(test), allow(dead_code))] // the loop (slice 2) calls it
+pub(crate) fn resume_train(root: &Path, ticket: &str) -> Result<Claim> {
+    let deadline = Deadline::start(Duration::ZERO);
+    acquire_mode(
+        root,
+        "legacy auto-train",
+        Mode::Legacy,
+        deadline,
+        Some(ticket),
+    )
+}
+
+fn acquire_mode(
+    root: &Path,
+    purpose: &str,
+    mode: Mode,
+    deadline: Deadline,
+    ticket: Option<&str>,
+) -> Result<Claim> {
     let dir = directory(root);
     std::fs::create_dir_all(&dir)?;
     // trace:BUG-2703 | ai:claude
     let _serial = lock_serial(&dir, deadline.serial_until())?;
     let rows = receipts(&dir)?;
+    // A live parked recovery withholds what a live auto-train receipt does:
+    // no other train, land or ship while its CI result stands. Review
+    // controllers are still admitted (run.lock is free; they never merge).
+    // trace:TASK-3920 | ai:claude
+    let (parked, position) = parked_position(root, ticket)?;
+    let train = mode == Mode::CooperativeTrain
+        || mode == Mode::Exclusive
+        || (mode == Mode::Legacy && purpose == "legacy auto-train");
+    if let Some(parked) = parked.filter(|_| train && position.is_none()) {
+        return Err(AdmissionBusy(parked.describe()).into());
+    }
     // Serialize trains from discovery onward, even before run.lock exists.
     // Review controllers alone may coexist with a manual train.
     // trace:BUG-2650 | ai:codex
@@ -436,10 +494,11 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -> R
             return Err(AdmissionBusy(drain.to_string()).into());
         }
     }
-    if let Some(intent) = intents(&dir, Utc::now())?
-        .iter()
-        .find(|intent| yields_to(mode, purpose, intent.kind))
-    {
+    // A resumed recovery keeps its place: intents registered after its
+    // position wait for it. trace:TASK-3920 | ai:claude
+    if let Some(intent) = intents(&dir, Utc::now())?.iter().find(|intent| {
+        yields_to(mode, purpose, intent.kind) && position.is_none_or(|p| intent.registered_at <= p)
+    }) {
         return Err(AdmissionBusy(intent.describe()).into());
     }
     let lock = open(&dir.join("mode.lock"))?;
@@ -1062,7 +1121,7 @@ fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -
     let step = poll_step(deadline.bound);
     let mut intent: Option<IntentGuard> = None;
     loop {
-        let error = match acquire_mode(root, purpose, mode, deadline) {
+        let error = match acquire_mode(root, purpose, mode, deadline, None) {
             Ok(claim) => return Ok(claim),
             Err(error) => error,
         };
@@ -1138,6 +1197,16 @@ fn gave_up(error: anyhow::Error, deadline: Deadline) -> anyhow::Error {
 /// a waiting requester it defers to. Unreadable evidence is a reason too.
 // trace:BUG-2703 | ai:claude
 pub(crate) fn yield_reason(root: &Path, purpose: &str) -> Option<String> {
+    yield_reason_before(root, purpose, None)
+}
+
+/// [`yield_reason`] for a parked recovery about to resume: intents and
+/// waiters that arrived after its position wait for it. trace:TASK-3920 | ai:claude
+pub(crate) fn yield_reason_before(
+    root: &Path,
+    purpose: &str,
+    ticket: Option<&str>,
+) -> Option<String> {
     let inner = || -> Result<Option<String>> {
         if let Some(drain) = crate::admission_drain::active(root)? {
             return Ok(Some(drain.to_string()));
@@ -1149,17 +1218,22 @@ pub(crate) fn yield_reason(root: &Path, purpose: &str) -> Option<String> {
         // Bounded: a stalled serializer holder makes the controller yield
         // (fail closed), never hang between passes. trace:BUG-2703 | ai:claude
         let _serial = lock_serial(&dir, std::time::Instant::now() + SERIAL_GRACE)?;
-        if let Some(intent) = intents(&dir, Utc::now())?
-            .iter()
-            .find(|intent| yields_to(Mode::Legacy, purpose, intent.kind))
-        {
+        let (_, position) = parked_position(root, ticket)?;
+        let before = |at: DateTime<Utc>| position.is_none_or(|p| at <= p);
+        if let Some(intent) = intents(&dir, Utc::now())?.iter().find(|intent| {
+            yields_to(Mode::Legacy, purpose, intent.kind) && before(intent.registered_at)
+        }) {
             return Ok(Some(intent.describe()));
         }
         // A manual train that gave up waiting goes before the auto-train's
         // next train; review controllers coexist with it. trace:BUG-2771 | ai:claude
         // Any live queued waiter: the head is named. trace:TASK-3924 | ai:claude
         Ok((purpose == "legacy auto-train")
-            .then(|| manual_waiters(root).into_iter().next())
+            .then(|| {
+                manual_waiters(root)
+                    .into_iter()
+                    .find(|waiter| before(waiter.since))
+            })
             .flatten()
             .map(|waiter| waiter.describe()))
     };
@@ -2460,5 +2534,104 @@ mod tests {
             .expect("B is admitted next");
         assert!(queued(root).is_empty());
         drop(claim);
+    }
+
+    fn park(root: &Path, owner: ProcIdentity, age: i64, ttl: i64) -> Parked {
+        let record = crate::pr_train::test_parked(owner, age, ttl);
+        assert!(crate::pr_train::park_recovery(root, Some(&record), "").unwrap());
+        record
+    }
+
+    /// TASK-3920 T1 (admission half): while a recovery is parked, review
+    /// watch is admitted and a manual train, land, ship or other auto-train
+    /// is refused naming it. Its own ticket re-acquires past an intent and a
+    /// waiter newer than its position, not past an older one; a forged
+    /// ticket gets no position. trace:TASK-3920 | ai:claude
+    #[test]
+    fn task3920_review_watch_admits_while_recovery_parked() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let record = park(
+            root,
+            ProcIdentity::capture(std::process::id()).unwrap(),
+            60,
+            120,
+        );
+        drop(acquire(root, "legacy review-watch", true).expect("review watch is admitted"));
+        let named = |error: anyhow::Error| {
+            assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error}");
+            assert!(
+                error
+                    .to_string()
+                    .contains("recovery of train PR #900 parked since"),
+                "{error}"
+            );
+        };
+        named(manual_train_admission(root, false, &[5]).err().unwrap());
+        named(land_admission(root).err().unwrap());
+        named(ship_admission(root).err().unwrap());
+        named(acquire(root, "legacy auto-train", true).err().unwrap());
+        assert!(crate::pr_train::parked_line(root)
+            .unwrap()
+            .contains("holds no lock"));
+        let intent = register_intent(
+            root,
+            "manual",
+            IntentKind::Train,
+            Deadline::start(Duration::from_secs(60)),
+        )
+        .unwrap();
+        let ticket = Some(record.token.as_str());
+        assert!(yield_reason(root, "legacy auto-train").is_some());
+        assert_eq!(yield_reason_before(root, "legacy auto-train", ticket), None);
+        drop(resume_train(root, &record.token).expect("the owner keeps its position"));
+        named(resume_train(root, "forged").err().unwrap());
+        assert!(yield_reason_before(root, "legacy auto-train", Some("forged")).is_some());
+        let mut row: Intent = serde_json::from_slice(&std::fs::read(&intent.0).unwrap()).unwrap();
+        row.registered_at = record.position - chrono::Duration::seconds(1);
+        std::fs::write(&intent.0, serde_json::to_vec(&row).unwrap()).unwrap();
+        let error = resume_train(root, &record.token).err().unwrap();
+        assert!(
+            error.to_string().contains("train admission requested"),
+            "{error}"
+        );
+        drop(intent);
+        assert!(!crate::pr_train::park_recovery(root, None, "forged").unwrap());
+        assert!(crate::pr_train::park_recovery(root, None, &record.token).unwrap());
+        assert!(manual_train_admission(root, false, &[5]).unwrap().is_some());
+    }
+
+    /// TASK-3920 T5: a record whose owner died, that expired, that is dated
+    /// past any lifetime or that does not parse lets a manual train
+    /// through; a live one does not. trace:TASK-3920 | ai:claude
+    #[test]
+    fn task3920_stale_parked_records_never_withhold() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let me = ProcIdentity::capture(std::process::id()).unwrap();
+        let path = root.join(".aida/train/recovery.parked");
+        let admitted = |kept: bool| {
+            assert!(manual_train_admission(root, false, &[]).unwrap().is_some());
+            assert_eq!(path.exists(), kept);
+        };
+        park(root, exited_child(), 0, 120);
+        admitted(false);
+        park(root, me.clone(), 300, -1);
+        admitted(false);
+        park(root, me.clone(), 0, 30 * 86400);
+        admitted(true);
+        std::fs::write(&path, b"{broken").unwrap();
+        admitted(true);
+        let old = std::time::SystemTime::now() - Duration::from_secs(31);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        admitted(false);
+        park(root, me, 0, 120);
+        let error = manual_train_admission(root, false, &[]).err().unwrap();
+        assert!(error.to_string().contains("parked since"), "{error}");
     }
 }
