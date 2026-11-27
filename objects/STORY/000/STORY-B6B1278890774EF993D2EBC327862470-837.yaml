@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:19:46.669861199Z
+modified_at: 2026-11-27T05:34:29.901882753Z
 req_type: Story
 tags:
 - containment
@@ -253,6 +253,20 @@ comments:
   created_at: 2026-11-27T05:19:46.669861199Z
   modified_at: 2026-11-27T05:19:46.669861199Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b7f-ca5f-7022-822b-130981c71131
+  author: joe
+  content: |-
+    INTEGRATION RE-PRE-CHECK PR #4716 r2 (head f5bc908438): INCOMPLETE. The golden fix is in, but the 22:19 security ruling is NOT.
+    - r2 is one commit (f5bc908438b) that touches only cli_help_snapshot.txt. The JSON half now matches, so FAST should go green.
+    - Still missing:
+      - (1) review_prepare.rs:329 still calls run_review_agent(args.agent, &project_root, …), so resolve_default_vendor reads [agents] vendor from the PR checkout under review;
+      - (2) agy can still be the default vendor;
+      - (3) there is no test that a PR setting vendor = agy or codex leaves the finder unchanged.
+    - The lane probably launched before the brief was patched at 22:24. The ruling still binds, so r3 must carry (1) to (3). The advisor must not merge #4716 at f5bc908438.
+  created_at: 2026-11-27T05:34:29.901882753Z
+  modified_at: 2026-11-27T05:34:29.901882753Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
