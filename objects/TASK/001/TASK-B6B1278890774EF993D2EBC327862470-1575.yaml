@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: when the lane's fast-gate receipt for the branch reads fail, salvage pushes to salvage/<lane> (never the PR branch) and the salvage note/comment says why (red fast-gate receipt, naming it).
   - AC2: tests: red receipt -> salvage/<lane> and PR branch untouched; green or absent receipt -> PR branch as before.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T20:08:17.201030678Z
+modified_at: 2026-11-27T20:24:12.296378627Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -40,6 +40,29 @@ comments:
   modified_at: 2026-11-27T20:08:17.201030678Z
   session_id: 01a21e9e1a91
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21ead-b096-7ef0-8b02-2fe39bb5ce1e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7ba7fc3512 (git diff origin/main...HEAD, 3 files +114/-3).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: lane_salvage.rs guarded_push checks crate::lane_fast_gate::failed_receipt(main, branch) before the BUG-2618 PR head guard. A red receipt sends the push to salvage/<lane>. The reason "PR #N head not moved: red fast-gate receipt .aida/fast-gates/<hash>.json for <branch> reads fail" goes into pr_refused, so the lane note, attempt record and spec/PR announcement all name it. push_fast_forward (the no-force ff check) is unchanged.
+    - AC2 [behavioral-test, real-git fixture]: bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref: the PR branch stays at its old head, salvage/<lane> is at the tip, and the note and announcement name the receipt. bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch covers both the pass and absent cases. Lane job: 23 passed, 0 failed (bug_2781 + bug_3928 filters). make check-ci-fast exited 0 (47 fast gates).
+
+    Probes: (1) The receipt is keyed on the lease branch, the same key that ship --from-seat's refuse_failed_gate uses. (4) A corrupt receipt is treated as red. (5) Fail-closed: an unreadable or corrupt receipt counts as red and goes to the salvage ref, never the PR branch. The refusal path is tested. No test was weakened. The no-PR path already targeted salvage/<lane> and is unchanged.
+    Residual risks: for an unreadable receipt the note still says "reads fail" (a wording imprecision only). The diff is 114 lines against a budget of about 100; 73 of those lines are tests.
+  created_at: 2026-11-27T20:23:49.142118504Z
+  modified_at: 2026-11-27T20:23:49.142118504Z
+  session_id: 01a21e9e1a91
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21eae-0b08-7f83-8c48-6d3637c2f154
+  author: aida-publication-done
+  content: Implementer push 7ba7fc3512b2 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T20:24:12.296378078Z
+  modified_at: 2026-11-27T20:24:12.296378078Z
+  session_id: 01a21e9e1a91
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe
@@ -52,6 +75,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21eae-0b08-7f83-8c48-6d2fc9680e1e
+  author: aida-publication-done
+  timestamp: 2026-11-27T20:24:12.296374646Z
+  session_id: 01a21e9e1a91
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
