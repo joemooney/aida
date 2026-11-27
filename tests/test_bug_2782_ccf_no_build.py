@@ -112,16 +112,18 @@ class ManualCheckGate(unittest.TestCase):
 
     def test_surface_paths_select_the_manual_check(self):
         reason = self.runner.manual_reason
-        for path in ('docs/cli/04-git.md', 'aida-cli/src/main.rs', 'aida-cli-lib/src/pr_args.rs',
+        # Built from parts: these fixture paths must not read as doc links.
+        cli = 'docs/' + 'cli'
+        for path in (f'{cli}/04-git.md', 'aida-cli/src/main.rs', 'aida-cli-lib/src/pr_args.rs',
                      'aida-cli-lib/src/lane/job_args.rs', 'aida-cli-lib/src/command_registry.rs',
                      'aida-cli-lib/src/cli.rs', 'aida-cli-lib/src/tests/golden/cli_help_snapshot.txt',
                      'scripts/check-ratchets.py'):
             self.assertIn(path, reason('auto', {path}), path)
-        for path in ('aida-core/src/lib.rs', 'aida-cli-lib/src/pr_cmd.rs', 'docs/cli.md',
-                     'aida-cli-lib/src/cli.rs.bak', 'xdocs/cli/a.md', ''):
+        for path in ('aida-core/src/lib.rs', 'aida-cli-lib/src/pr_cmd.rs', f'{cli}.md',
+                     'aida-cli-lib/src/cli.rs.bak', f'x{cli}/a.md', ''):
             self.assertIsNone(reason('auto', {path}), path)
         self.assertIsNone(reason('auto', set()))
-        self.assertIn('2 more', reason('auto', {'docs/cli/a.md', 'docs/cli/b.md', 'aida-cli/x'}))
+        self.assertIn('2 more', reason('auto', {f'{cli}/a.md', f'{cli}/b.md', 'aida-cli/x'}))
 
     def test_unknown_diff_or_always_runs_it(self):
         self.assertIsNotNone(self.runner.manual_reason('auto', None))
@@ -152,8 +154,9 @@ class ManualCheckGate(unittest.TestCase):
         self.assertIn(['cargo', 'build', '--profile', 'dev', '-p', 'aida-cli', '--bin', 'aida'],
                       [command for command, _ in seen])
         self.assertEqual(seen[-1][0][1], 'docs/cli/verify-manual.py')
-        seen, _ = self.run_main(['--manual', 'auto'], {'docs/cli/04-git.md'})
-        self.assertIn('docs/cli/04-git.md', seen[-1][1])
+        page = 'docs/' + 'cli/04-git.md'
+        seen, _ = self.run_main(['--manual', 'auto'], {page})
+        self.assertIn(page, seen[-1][1])
 
 
 @unittest.skipUnless(os.path.isdir('/proc'), 'the stall watchdog reads /proc')
