@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T08:01:54.237270740Z
+modified_at: 2026-11-27T08:08:52.367376717Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -180,6 +180,12 @@ comments:
   modified_at: 2026-11-27T08:01:54.237270740Z
   session_id: 01a21bedcc3c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21c0c-d38f-7262-8400-514efc757edf
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2784-ratchet-union-merge` at head `5ba01320a9ea2a4cffcd06b3c93cf8793499db1a`.'
+  created_at: 2026-11-27T08:08:52.367373197Z
+  modified_at: 2026-11-27T08:08:52.367373197Z
+  session_id: 01a21bedcc3c
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
