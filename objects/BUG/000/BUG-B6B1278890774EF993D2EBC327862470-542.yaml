@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T05:21:59.620382456Z
+modified_at: 2026-11-27T05:28:42.965911928Z
 req_type: Bug
 tags:
 - lanes
@@ -172,6 +172,15 @@ comments:
     - aida-cli-lib/src/lane_salvage.rs:456 keeps #[allow(clippy::too_many_arguments)] on failed_exit_note, which takes 7 arguments. Clippy's default too_many_arguments threshold is 7 (the lint fires only above it), so the allow is unnecessary and hides a future real trigger. Remove it. Flagged in round 2 and still present.
   created_at: 2026-11-27T05:21:59.620382456Z
   modified_at: 2026-11-27T05:21:59.620382456Z
+- id: 01a21b7a-32d6-7d92-aa1b-c857358044d1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (addendum)
+    Reviewed HEAD: a32d61ace2. The second commit fixes two ratchets my first round-2 push tripped: the portability ratchet refused branching on journalctl's stderr text, so an unreadable kernel log is now detected from the exit status plus empty output and reported as unknown; the git-maintenance ratchet wanted the -c maintenance.auto=false -c gc.auto=0 pair on the salvage tests' git push/commit-tree calls. Evidence at a32d61ace2: CI (fast gates) pass, CI (fast compile, includes the ratchet set) pass; local lane-job make check-ci-fast rc=0 (1729s; the lane log recorded 'seed: overlay-stale', the AC3 condition); bug_2781 tests 18/18.
+  created_at: 2026-11-27T05:28:42.965911928Z
+  modified_at: 2026-11-27T05:28:42.965911928Z
+  session_id: 01a21b3a5cd9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
