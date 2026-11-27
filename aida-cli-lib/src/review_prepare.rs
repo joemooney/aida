@@ -3921,7 +3921,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             Ok(out) if out.status.success() => {}
             other => {
                 assert!(
-                    std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+                    Environment::capture()
+                        .get("AIDA_REQUIRE_BWRAP_LIVE")
+                        .is_none(),
                     "AIDA_REQUIRE_BWRAP_LIVE=1 but bubblewrap cannot run here: {other:?}"
                 );
                 eprintln!("SKIP (bwrap unavailable): confined canary ({other:?})");
