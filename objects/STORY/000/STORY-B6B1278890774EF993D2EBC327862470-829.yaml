@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-26T23:30:00.019941828Z
+modified_at: 2026-11-27T00:01:58.984252191Z
 req_type: Story
 tags:
 - integration
@@ -1514,6 +1514,29 @@ comments:
   modified_at: 2026-11-26T23:26:58.891274690Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a4f-10c8-70d3-a9f4-b074ee427679
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6fb95e670a (S5d, Refs-only slice, branch int-story-3120-s5d off integration tip 24f1c9e735).
+
+    Acceptance evidence (behavioral tests):
+    - AC1 (a) to (f): s5d_unavailable_challenger_keeps_finder_report_and_exits_partial. It uses 2 batches (max_files_per_batch = 1 from the trusted base) and a stub challenger that prints 'rate limit exceeded' and exits 1. The challenger is called once per run (no call after the first failure). Both finder rows land in adversarial.unchallenged and challenger_unavailable carries the cause. The SARIF results carry properties.unchallenged = true and no suppression. The Markdown has '**challenger: unavailable** (<code span>)' and two Unchallenged rows. With --fail-on high, exit_code_for_error is 1 (fail-on wins). Without it, the exit code is 3 and the message is 'partial: challenger unavailable (...)'. The s4 rate-limit refusal assertion was removed (replaced by this test).
+    - Exit 3: there is a PartialReviewExit downcast in exit_code_for_error. Code 3 already had a row (auto-complete hard failure), and the distinct-codes table test forbids a second row, so its meaning was extended. The partial bail comes after --write, SARIF, --post-comment, --fail-on and coverage.
+    - AC3 n1: '--challenger-agent needs --agent' when --agent and AIDA_REVIEW_RUNNER_CMD are both unset (asserted in s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing).
+    - AC3 n2: the EACCES assertion is skipped under euid 0.
+
+    Probes (strict tier): a failing or unparsable challenger now ends in exit 3, never 0, so no adversarial pass is reported. Unchallenged and refuted findings both still feed --fail-on. A finder failure still refuses the run. The cause is agent stderr: it is capped at 2000 chars and code-spanned. Verdict errors (missing or duplicate) now count as unavailable rather than refusing, as AC1(a) requires.
+
+    Deferred: AC2 docs go to S5e, because this slice is ~255 lines and the docs would take it over 300.
+    Round-5 PR #4619 findings 1-4 are already fixed on the integration tip: the ledger is verified in handle_review_prepare, rename_sources gives rename context, s3a2_run_review_end_to_end_uses_base_rules_and_requires_coverage covers the wiring, and the JOIN_GRACE block SIGKILLs pipe holders. No change was needed.
+
+    Residual risk: the SARIF marker relies on findings_to_sarif_json_with_suppressed emitting results in input order. That holds today, but nothing enforces it.
+    Tests: targeted lane run, 45 passed. One unrelated process fixture (bug2187, needs a built CLI binary) matched the exit_code filter and failed on the missing binary.
+  created_at: 2026-11-27T00:01:58.984252191Z
+  modified_at: 2026-11-27T00:01:58.984252191Z
+  session_id: 01a21a317486
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe

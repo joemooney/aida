@@ -1,0 +1,38 @@
+id: 01a21a4f-9bb8-7d00-8c20-a0d815312e69
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-057
+title: 'TASK-3869 AC4: lossless non-UTF-8 path round trip in review prepare'
+description: |
+  TASK-3869 shipped AC1-AC3 as a Refs slice because the full change passed the brief's 300-line cap. AC4 is still to do.
+
+  Today `git_text` (aida-cli-lib/src/review_prepare.rs) runs `String::from_utf8` on all git output, so one non-UTF-8 path in `diff -z` or `ls-files -z` output fails the whole prepare. The design was prototyped in the lane, then removed to stay under the cap:
+  - `git_bytes(root, &[&OsStr]) -> Vec<u8>`, with `git_text` as a thin UTF-8 wrapper, plus `-c core.quotePath=true` so patch headers stay ASCII whatever the user's config.
+  - `path_text(bytes)` turns `\` into `\\` and each invalid byte into `\xHH` (using `utf8_chunks`). `path_os(text)` inverts it exactly.
+  - Numstat, raw and ls-files parsing would go through `path_text`. `batch_prompt` pathspecs, `rev:path` in `read_file_at_revision`, and `open_confined` would go through `path_os`.
+  - `read_file_at_revision` should return None for non-UTF-8 content, as the workspace branch already does, rather than erroring.
+  - Test: commit a path with byte 0x80 and a backslash. Check that the inventory shows the escaped form, that `path_os(path_text(b)) == b`, and that the batch diff and content read reach the exact file.
+
+  Raised by the implementer while working TASK-3869.
+  Branch: int-task-3869-hardening  ·  Commit: e015710e8d
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T00:02:34.552231441Z
+modified_at: 2026-11-27T00:02:34.552231441Z
+req_type: Task
+tags:
+- from-implementer:TASK-3869
+- kind:deviation
+- review
+- severity:minor
+- story-3076
+- track:integration
+filed_at:
+  code_sha: e015710e8d557d96e65bf714d5cf44b875862cdc
+  branch: int-task-3869-hardening
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8bdf384adf
+  vendor: claude
+  session: 01a21a34695d
+  harness_version: 2.1.319 (Claude Code)

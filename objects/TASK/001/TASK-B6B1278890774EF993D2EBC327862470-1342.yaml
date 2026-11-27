@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-26T23:35:47.015443071Z
+modified_at: 2026-11-27T00:02:55.306737894Z
 req_type: Task
 tags:
 - review
@@ -76,6 +76,32 @@ comments:
     - If the diff exceeds ~300 lines, AC1+AC2 ship with `(Refs TASK-3869)` per the brief and the rest is listed.
   created_at: 2026-11-26T23:35:47.015443071Z
   modified_at: 2026-11-26T23:35:47.015443071Z
+  session_id: 01a21a34695d
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21a4f-ecca-7202-b46f-4417d43b36e5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e015710e8d (diff vs origin/integration 24f1c9e735; branch cut from integration, so origin/main...HEAD also carries integration's unreleased STORY-3120 work, which is not in scope here).
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: `t3869_non_regular_entries_skipped_with_named_reason`. In range mode a symlink is labelled `non_regular:symlink` and a 160000 gitlink `non_regular:gitlink`, while the regular file stays reviewable. In worktree/scan mode it covers a symlink, a path through a symlinked dir, a FIFO (`non_regular:other`), a nested repo dir `sub/` (gitlink), and a missing path, which is skipped. None of these is read (patch_bytes 0; `read_workspace_file` returns None).
+    - AC2 [behavioral-test]: `t3869_specs_resolve_only_through_store_and_refuse_unknown`. A case-insensitive known ID resolves. An unknown ID refuses. An unreadable store refuses under `--specs`, but stays empty when the IDs come from commits.
+    - AC3 [behavioral-test]: `t3869_pinned_root_survives_concurrent_symlink_swap`. A thread re-parents `d` onto a symlink to an outside dir and back while 3000 reads and 150 writes run. No read returns the outside content, no write lands outside, and some ops still succeed (asserted). `write_confines_new_and_existing_paths` still passes on the shared walk.
+    - AC4: NOT delivered (300-line cap). Filed as TASK-73022632d35647cca3858b18ac0723e3-057 with the design. The commit uses the Refs trailer.
+    - Tests: `cargo test --profile agent -p aida-cli-lib --lib -- review_prepare::` gave 24 passed, 0 failed.
+
+    **Probe findings / fixes**
+    - P4: Linux returns ENOTDIR, not ELOOP, for O_NOFOLLOW|O_DIRECTORY on a symlinked directory. That made a path through a symlinked dir drop silently. Fixed: `confined_dir` re-checks with lstat and reports ELOOP, so the entry is named `symlink`. The test caught it.
+    - P5: there is no fail-open path. Any errno other than ELOOP/ENOENT/ENOTDIR propagates as an error. A regular file is opened with O_NOFOLLOW|O_NONBLOCK and re-checked with fstat, so a swap after the lstat is reported as non-regular rather than read. The `--specs` refusal paths are tested.
+    - P1/P3: a deleted entry's mode comes from its old side, so a deleted symlink is still named. A typechange from symlink to file uses the new mode, so it stays reviewable.
+
+    **Residual risks**
+    - Opening is Linux-specific (`/proc/self/fd`), as `write_output` already was.
+    - A symlink or special file that matches a secret pattern is now reported as `non_regular:*` rather than `secret_sensitive_path`. It is excluded either way.
+    - Diff is about 360 lines, over the 300 cap even without AC4.
+  created_at: 2026-11-27T00:02:55.306737894Z
+  modified_at: 2026-11-27T00:02:55.306737894Z
   session_id: 01a21a34695d
   harness_version: 2.1.319 (Claude Code)
 history:
