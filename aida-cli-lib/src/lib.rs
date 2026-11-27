@@ -561,6 +561,8 @@ mod agy_outcome;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;
+// trace:STORY-3134 | ai:claude
+mod vendor_outage;
 // trace:BUG-2396 | ai:claude — vendor-aware next-step hints.
 mod vendor_hints;
 // trace:STORY-2539 | ai:codex

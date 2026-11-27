@@ -2,6 +2,7 @@
 // trace:STORY-2539 | ai:codex
 pub(crate) mod profile;
 pub(crate) mod review_runner;
+pub(crate) mod usage_limit; // trace:STORY-3134 | ai:claude
 
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
 
