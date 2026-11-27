@@ -606,7 +606,7 @@ pub(crate) const DEPUTY_BINARY_CATEGORY: &str = "deputy-binary";
 /// deputy on an old binary cannot run current jobs, so the service blocks
 /// behind it. An unreadable image or live build reports nothing.
 // trace:BUG-2774 | ai:claude
-fn deputy_binary(
+pub(crate) fn deputy_binary(
     deputy: &str,
     pid: u32,
     exe: &Path,

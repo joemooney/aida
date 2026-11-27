@@ -33,7 +33,7 @@ use crate::gate::seat_authority::SeatGrant;
 #[cfg(all(unix, test))]
 pub(crate) use unix::serve;
 #[cfg(unix)]
-pub(crate) use unix::{request, serve_service, Server};
+pub(crate) use unix::{connect_through_reexec, request, serve_service, Server};
 
 /// How far up the process tree the ancestry walk goes.
 pub(crate) const MAX_ANCESTRY: usize = 64;
@@ -687,6 +687,33 @@ mod unix {
         }
     }
 
+    /// How long a submit waits for a runner that is re-execing.
+    // trace:TASK-3919 | ai:claude
+    pub(crate) const REEXEC_WAIT: Duration = Duration::from_secs(20);
+
+    /// CLIENT: connect; while the runner's fresh re-exec marker is on file a
+    /// missing or refusing socket is the exec window, so wait it out (up to
+    /// [`REEXEC_WAIT`]) instead of failing the submit. The marker grants
+    /// nothing: the new runner still checks every peer.
+    // trace:TASK-3919 | ai:claude
+    pub(crate) fn connect_through_reexec(q: &Queue, path: &Path) -> std::io::Result<UnixStream> {
+        let deadline = std::time::Instant::now() + REEXEC_WAIT;
+        loop {
+            let e = match UnixStream::connect(path) {
+                Ok(s) => return Ok(s),
+                Err(e) => e,
+            };
+            let window = matches!(e.raw_os_error(), Some(libc::ENOENT | libc::ECONNREFUSED))
+                && std::fs::metadata(q.reexec_marker())
+                    .and_then(|m| m.modified())
+                    .is_ok_and(|at| at.elapsed().is_ok_and(|age| age < REEXEC_WAIT));
+            if !window || std::time::Instant::now() >= deadline {
+                return Err(e);
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     /// CLIENT: send `req` to deputy `q`'s runner and read its reply. Errors name
     /// what to do: start the runner, or (sandboxed) the `excludedCommands`
     /// opt-in.
@@ -699,7 +726,7 @@ mod unix {
             q.name
         )
         };
-        let mut stream = match UnixStream::connect(&path) {
+        let mut stream = match connect_through_reexec(q, &path) {
             Ok(s) => s,
             Err(e) => {
                 return Err(match e.raw_os_error() {

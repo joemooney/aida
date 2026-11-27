@@ -23,6 +23,29 @@ pub(crate) fn service_child() -> Result<Command> {
     Ok(child)
 }
 
+/// The script deputy runner's re-exec onto the live build: its own argv
+/// (name, `--refresh`, seats…) and the grant it holds now, a refreshed one
+/// when it re-minted. The pid, start time, parent and session do not change
+/// across exec, so the grant's binding still names it; nothing is minted.
+// trace:TASK-3919 | ai:claude
+pub(crate) fn runner_reexec(
+    live: &Path,
+    args: impl IntoIterator<Item = std::ffi::OsString>,
+    grant_id: &str,
+) -> Command {
+    let mut cmd = Command::new(live);
+    cmd.args(args)
+        .env("AIDA_BIN", live)
+        .env(crate::gate::seat_authority::GRANT_ENV, grant_id);
+    cmd
+}
+
+/// Replace this process with [`runner_reexec`]; returns only on failure.
+// trace:TASK-3919 | ai:claude
+pub(crate) fn exec_runner(live: &Path, grant_id: &str) -> std::io::Error {
+    runner_reexec(live, std::env::args_os().skip(1), grant_id).exec()
+}
+
 // Compare image coordinates, including deleted executables. No process
 // is signalled: controllers yield at their normal admission/pass boundary.
 // trace:BUG-2645 | ai:codex
