@@ -26,12 +26,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4685` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T20:26:10.177683711Z
-modified_at: 2026-11-26T20:26:54.992384694Z
+modified_at: 2026-11-27T01:46:02.552607040Z
 req_type: Story
 relationships:
 - rel_type:
@@ -59,6 +59,12 @@ relationships:
   target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   created_at: 2026-11-26T20:26:54.992346545Z
   created_by: dirtlab
+comments:
+- id: 01a21aae-65f2-7ea2-8913-489986067fd2
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4685 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-27T01:46:06.706226864Z
+  modified_at: 2026-11-27T01:46:06.706226864Z
 history:
 - id: 01a21989-9433-71a1-8519-9704feed4efe
   author: dirtlab
@@ -96,6 +102,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21aae-65f2-7ea2-8913-48ae8e4b665d
+  author: aida-auto-bump
+  timestamp: 2026-11-27T01:46:06.706231722Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
   branch: bug-2777-ejection-routing
@@ -105,3 +118,6 @@ filed_at:
   vendor: claude
   session: 01a219535435
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T01:46:06.706225320Z
