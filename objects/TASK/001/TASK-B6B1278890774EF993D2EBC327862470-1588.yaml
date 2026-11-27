@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:17:10.601015886Z
-modified_at: 2026-11-27T23:27:04.871182793Z
+modified_at: 2026-11-27T23:27:16.012663973Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,12 @@ comments:
   content: 'Lane exit evidence: retained branch `task-3935-admission-retry-followups` at head `82c120dd1cf960e4272004b5cae7243b8d45aa67`.'
   created_at: 2026-11-27T23:27:04.871179853Z
   modified_at: 2026-11-27T23:27:04.871179853Z
+  session_id: 01a21f53d483
+- id: 01a21f55-a42c-7a72-9b8b-497f741c50e7
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `task-3935-admission-retry-followups` at head `82c120dd1cf960e4272004b5cae7243b8d45aa67`.'
+  created_at: 2026-11-27T23:27:16.012660755Z
+  modified_at: 2026-11-27T23:27:16.012660755Z
   session_id: 01a21f53d483
 history:
 - id: 01a21f4c-d3f4-7142-ba60-76a568e39c90
