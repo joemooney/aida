@@ -1,0 +1,24 @@
+id: 01a21ef6-21e9-71d0-b3d0-4bb45ceef44b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1583
+agreed_id: TASK-3930
+title: 'Handler-level test: a low-budget train back-off never resumes a stale retained journal (BUG-2735 follow-up)'
+description: |-
+  Deferred from the #4464 r1 review (approved @5966f423), filed by product-15 per advisor 13:08. bug2735_low_budget_backoff_never_resumes_a_stale_retained_journal (story_1690_train_tests.rs ~6660) tests recovery_request and ForgeRails::resume_for directly, not pr_train_handler_with_dispatch_ctx (pr_train.rs ~5324-5389), so rewiring the handler (passing &candidates instead of requested, or dropping the else Outcome::default() arm) would still pass.
+
+  ## Acceptance
+  - AC1: a test drives pr_train_handler_with_dispatch_ctx under a low core budget (below 20%) with a stale retained journal and asserts no recovery/resume happens.
+  - AC2: mutation-checked: the two rewirings named above each make the test FAIL (report it).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T21:42:56.745961954Z
+modified_at: 2026-11-27T21:42:56.745961954Z
+req_type: Task
+filed_at:
+  code_sha: b90f128a0821d45db1f24420e64de1516fc18698
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b90f128a082
+  vendor: claude
