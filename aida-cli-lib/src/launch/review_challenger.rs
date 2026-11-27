@@ -74,7 +74,11 @@ fn pick_challenger(
         });
         return (finder.agent, note);
     };
-    let mut order = REVIEW_VENDORS.to_vec();
+    // An unverified vendor (agy) is never picked; only `--challenger-agent`
+    // names it. trace:STORY-3202 | ai:claude
+    let mut order: Vec<_> = (REVIEW_VENDORS.into_iter())
+        .filter(|v| v.confinement_verified)
+        .collect();
     order.sort_by_key(|v| v.program == own.program);
     let pick = order
         .into_iter()
@@ -501,25 +505,18 @@ mod tests {
         assert!(review_vendor("gemini").is_err() && review_vendor("sh").is_err());
     }
 
-    /// With claude finding and codex absent or an author, the opposite-vendor
-    /// pick is agy, spawned through the S3a contract. trace:STORY-3202 | ai:claude
+    /// agy's confinement is not verified live, so the automatic pick never
+    /// chooses it, not even when it is the only other installed vendor; an
+    /// explicit `--challenger-agent agy` runs it through the S3a contract with
+    /// `--sandbox`, plan mode and the deny-all settings. trace:STORY-3202 | ai:claude
     #[test]
-    fn story3202_challenger_picks_agy_when_claude_finds() {
+    fn story3202_auto_pick_never_chooses_agy_explicit_override_is_confined() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let dump = "#!/bin/sh\necho \"cwd=$(ls -A)\"; env | sed 's/^/env=/'\n\
             for a in \"$@\"; do echo \"arg=$a\"; done; echo \"stdin=$(wc -c | tr -d ' ')\"\n";
-        let src = bin.path().join("src");
-        std::fs::write(&src, dump).unwrap();
-        let install = |name: &str| {
-            let cp = std::process::Command::new("install")
-                .arg("-m755")
-                .arg(&src)
-                .arg(bin.path().join(name))
-                .status();
-            assert!(cp.unwrap().success());
-        };
-        install("claude");
-        install("agy");
+        for name in ["claude", "agy"] {
+            crate::test_exec::write_executable(&bin.path().join(name), dump);
+        }
         let path = format!("{}:/usr/bin:/bin", bin.path().display());
         let pairs = [
             ("PATH", path.as_str()),
@@ -532,20 +529,30 @@ mod tests {
             TrustedBase::default(),
             finder("claude", checkout.path(), &env),
         );
-        let pick = |tags: &str, effort| {
-            challenger_call(&call, &detect_ai_authors(tags), None, effort, &base).unwrap()
+        let pick = |tags: &str, forced, effort| {
+            challenger_call(&call, &detect_ai_authors(tags), forced, effort, &base).unwrap()
         };
-        let (pass, summary) = pick("[AI:claude] x", Some("max"));
-        assert_eq!(
-            (summary.challenger_agent.as_deref(), summary.note),
-            (Some("agy"), None)
-        );
+        // Only claude and agy installed, and claude wrote it: still not agy.
+        for tags in ["[AI:claude] x", "human commit"] {
+            let (pass, summary) = pick(tags, None, None);
+            assert_eq!(pass.vendor().map(|v| v.program), Some("claude"), "{tags}");
+            assert_eq!(summary.challenger_agent.as_deref(), Some("claude"));
+            assert!(summary.note.is_some(), "{tags}");
+        }
+        assert!(REVIEW_VENDORS
+            .iter()
+            .any(|v| v.program == "agy" && !v.confinement_verified));
+        let agy = review_vendor("agy").ok();
+        let (pass, summary) = pick("[AI:claude] x", agy, Some("max"));
+        assert_eq!(summary.challenger_agent.as_deref(), Some("agy"));
         let out = pass.run("the prompt").unwrap();
         let want = [
             "cwd=\n",
             "env=GEMINI_API_KEY=gem",
-            "arg=--print=",
+            "arg=--sandbox",
             "arg=--mode=plan",
+            "arg=--settings={\"permissions\":{\"deny\":[\"read_file(*)\"",
+            "arg=--print=",
             "arg=max",
             "arg=--print-timeout=15s",
             "stdin=10",
@@ -553,15 +560,6 @@ mod tests {
         assert!(
             want.iter().all(|w| out.contains(w)) && !out.contains("sentinel"),
             "{out}"
-        );
-        // Codex installed but an author of the change: still agy.
-        install("codex");
-        assert_eq!(
-            pick("[AI:claude+codex] x", None)
-                .1
-                .challenger_agent
-                .as_deref(),
-            Some("agy")
         );
     }
 

@@ -110,8 +110,9 @@ pub struct ReviewPrepareArgs {
     #[clap(long, value_name = "LEVEL", requires = "adversarial")]
     pub challenger_effort: Option<String>,
 
-    /// Challenger agent for `--adversarial`: `claude` or `codex`. Overrides
-    /// the automatic pick, which commit `[AI:<tool>]` tags steer.
+    /// Challenger agent for `--adversarial`: `claude`, `codex` or `agy`.
+    /// Overrides the automatic pick, which commit `[AI:<tool>]` tags steer
+    /// and which never chooses agy.
     // trace:STORY-3120 | ai:claude
     #[clap(long, value_name = "AGENT", requires = "adversarial")]
     pub challenger_agent: Option<String>,
@@ -375,6 +376,8 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
             None
         };
         let pass = challenge.as_ref().map(|(pass, _)| pass);
+        let passes = [Some(call.vendor()), pass.map(|p| p.vendor())];
+        ensure_postable(args.post_comment, passes.into_iter().flatten())?;
         let (found, ledger, refuted, unchallenged) =
             review_batches(&call, pass, &batches, prompt, &inventory)?;
         let read = |path: &str| content_cache.get(path).cloned();
@@ -793,6 +796,24 @@ fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyho
         ""
     };
     anyhow::anyhow!("{who} {pass} pass, {batch}: {e:#}{hint}")
+}
+
+/// `--post-comment` publishes runner output. A vendor whose tool confinement
+/// is not verified live may have read any file the user can, so it is refused
+/// before any runner starts. trace:STORY-3202 | ai:claude
+fn ensure_postable(
+    post_comment: bool,
+    vendors: impl IntoIterator<Item = Option<&'static ReviewVendor>>,
+) -> Result<()> {
+    let unverified = (vendors.into_iter().flatten()).find(|v| !v.confinement_verified);
+    match unverified {
+        Some(v) if post_comment => anyhow::bail!(
+            "--post-comment refused: {} may read files outside the review, so its output \
+             is not published; drop --post-comment, or review with claude or codex",
+            v.program
+        ),
+        _ => Ok(()),
+    }
 }
 
 /// The finder's vendor: `--agent`, else none under `AIDA_REVIEW_RUNNER_CMD`,
@@ -2699,6 +2720,60 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             err.to_string().contains("--post-comment needs --pr"),
             "{err}"
         );
+    }
+
+    /// agy's output is never published: as the finder or as an explicit
+    /// challenger, `--post-comment` is refused before any runner starts.
+    /// trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_post_comment_refuses_unverified_agy_before_any_run() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
+        std::fs::create_dir_all(&bin).unwrap();
+        let ran = temp.path().join("ran");
+        let body = format!("#!/bin/sh\necho x >>{}\nexit 1\n", ran.display());
+        for name in ["agy", "claude"] {
+            crate::test_exec::write_executable(&bin.join(name), &body);
+        }
+        let path = format!("{}:/usr/bin:/bin", bin.display());
+        let extra = [
+            ("PATH", Some(path.as_str())),
+            ("AIDA_REVIEW_RUNNER_CMD", None),
+        ];
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &extra);
+        std::fs::create_dir_all(&root).unwrap();
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "fn a() {}\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        std::fs::write(root.join("a.rs"), "fn a() { x }\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        crate::test_git::commit_fixture(&root);
+        let store = Storage::new(root.join("requirements.yaml"));
+        let finder_agy = ReviewPrepareArgs {
+            from: Some(base),
+            run_review: true,
+            agent: Some("agy".into()),
+            pr: Some(7),
+            post_comment: true,
+            write: Some("out.md".into()),
+            ..Default::default()
+        };
+        let challenger_agy = ReviewPrepareArgs {
+            agent: Some("claude".into()),
+            adversarial: true,
+            challenger_agent: Some("agy".into()),
+            ..finder_agy.clone()
+        };
+        for args in [finder_agy, challenger_agy] {
+            let err = handle_review_prepare(&args, &store).unwrap_err();
+            let text = err.to_string();
+            assert!(text.contains("--post-comment refused: agy"), "{text}");
+            assert!(!ran.exists(), "a runner started before the refusal");
+        }
+        // Verified vendors, or no --post-comment, pass.
+        assert!(super::ensure_postable(true, [review_vendor("claude").ok()]).is_ok());
+        assert!(super::ensure_postable(false, [review_vendor("agy").ok()]).is_ok());
     }
 
     // trace:STORY-3120 | ai:claude

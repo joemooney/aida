@@ -20,6 +20,11 @@ pub(crate) struct ReviewVendor {
     pub print_timeout: Option<&'static str>,
     /// Lowercase stderr fragments meaning "not signed in for headless use".
     pub auth_failure: &'static [&'static str],
+    /// A live, signed-in run has verified this vendor's print-mode tool
+    /// confinement. An unverified vendor runs only when named explicitly: it is
+    /// never the automatic challenger and refuses `--post-comment`.
+    /// trace:STORY-3202 | ai:claude
+    pub confinement_verified: bool,
 }
 
 /// A review runner that exited because it is not signed in for headless use.
@@ -100,6 +105,7 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     effort_as_config: false,
     print_timeout: None,
     auth_failure: &[],
+    confinement_verified: true,
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -118,17 +124,25 @@ const CODEX: ReviewVendor = ReviewVendor {
     effort_as_config: true,
     print_timeout: None,
     auth_failure: &[],
+    // Tool use is confined; its whole-disk read scope is BUG-2783's.
+    confinement_verified: true,
 };
 
 /// Antigravity: print mode with the empty `--print=` value, so the prompt is
 /// read from the piped stdin; plan mode (no edits), no permission bypass, no
 /// slash commands. The runner's empty cwd is an untrusted workspace with no
-/// project settings, hooks or MCP config to load. trace:STORY-3202 | ai:claude
+/// project settings, hooks or MCP config to load. `--sandbox` plus plan mode
+/// auto-denies shell, web and writes headless (seen live), but reads were seen
+/// allowed anywhere, so `--settings` denies every tool rule agy names. That
+/// deny is not yet verified live: agy stays `confinement_verified: false`.
+/// trace:STORY-3202 | ai:claude
 pub(crate) const AGY: ReviewVendor = ReviewVendor {
     program: "agy",
     argv: &[
         "--output-format=text",
         "--mode=plan",
+        "--sandbox",
+        AGY_DENY_ALL_SETTINGS,
         "--disable-slash-commands",
         "--print=",
     ],
@@ -142,7 +156,16 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         "please sign in",
         "not logged into antigravity",
     ],
+    confinement_verified: false,
 };
+
+/// agy's session-only settings: deny every permission rule kind it names
+/// (file reads at any path, writes, shell commands, MCP tools and URL access).
+const AGY_DENY_ALL_SETTINGS: &str = concat!(
+    r#"--settings={"permissions":{"deny":["read_file(*)","read_file(/)","#,
+    r#""write_file(*)","write_file(/)","command(*)","mcp(*)","read_url(*)","#,
+    r#""execute_url(*)","download_url(*)"]}}"#
+);
 
 /// `agy models` for the lane-host auth probe: needs sign-in, sends no prompt.
 pub(crate) const AGY_AUTH_PROBE: ReviewVendor = ReviewVendor {

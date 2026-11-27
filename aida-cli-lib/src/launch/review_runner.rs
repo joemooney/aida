@@ -436,6 +436,28 @@ mod tests {
                 assert_eq!(argv.remove(0), "--print-timeout=15s");
             }
             assert_eq!(argv, agent.unwrap().argv, "prompt or extra args in argv");
+            // agy: sandboxed plan mode, and session settings that deny every
+            // tool rule, reads included. trace:STORY-3202 | ai:claude
+            if own == "gemini" {
+                assert!(argv.contains(&"--sandbox") && argv.contains(&"--mode=plan"));
+                let settings = argv.iter().find_map(|a| a.strip_prefix("--settings="));
+                let settings: serde_json::Value =
+                    serde_json::from_str(settings.expect("--settings")).unwrap();
+                let deny = settings["permissions"]["deny"].as_array().unwrap();
+                for rule in [
+                    "read_file(*)",
+                    "read_file(/)",
+                    "write_file(*)",
+                    "command(*)",
+                    "mcp(*)",
+                    "read_url(*)",
+                    "execute_url(*)",
+                    "download_url(*)",
+                ] {
+                    assert!(deny.iter().any(|r| r == rule), "{rule} not denied");
+                }
+                assert!(!argv.iter().any(|a| a.contains("dangerously")));
+            }
         }
         env.push((RUNNER_CMD.into(), custom.into()));
         let agent = vendor("claude");
