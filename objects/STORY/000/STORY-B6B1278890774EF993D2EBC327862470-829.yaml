@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T05:20:38.969325752Z
+modified_at: 2026-11-27T05:34:52.422529197Z
 req_type: Story
 tags:
 - integration
@@ -1820,6 +1820,18 @@ comments:
     - If #4716 stalls past 2026-11-27, either the fix is pulled onto main or S5e's line is reworded before it promotes alone.
   created_at: 2026-11-27T05:20:38.969325752Z
   modified_at: 2026-11-27T05:20:38.969325752Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b80-20c3-71b0-b0a2-e9521e062c4f
+  author: joe
+  content: |-
+    INTEGRATION RE-PRE-CHECK PR #4721 r1 (S5e, head 35812fa13a): PASS.
+    - 35812fa13aa: challenger_call's forced arm labels 'same-vendor challenger (X), forced by --challenger-agent' when X is the finder's vendor. It is tested at the challenger_call level and end to end in the bundle JSON note and the rendered Markdown, and a codex override has no label.
+    - The docs line says the report labels it. The trace sits on a // comment.
+    - 8ea61d2ffc0 merges integration 4a76108fb71 cleanly.
+    - HOLD for p54: per the 22:24 plan, S5e merges and promotes only together with STORY-3202 #4716's trusted-config vendor fix, which is not in #4716 r2 yet.
+  created_at: 2026-11-27T05:34:52.422529197Z
+  modified_at: 2026-11-27T05:34:52.422529197Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
