@@ -1849,6 +1849,13 @@ comments:
   created_at: 2026-11-27T05:41:02.466027462Z
   modified_at: 2026-11-27T05:41:02.466027462Z
   session_id: 01a21b68674f
+- id: 01a21b87-2786-7ab2-abfa-15829ef113ad
+  author: joe
+  content: 'CORRECTION to the S5e #4721 r1 pre-check: FAST is red for a real reason. tests/test_ratchet_set.py fails because the new test s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report is not listed in scripts/ratchet-set.json. r2: add it to the review_prepare.rs list. Content PASS stands, and S5e still holds for p54.'
+  created_at: 2026-11-27T05:42:34.743720505Z
+  modified_at: 2026-11-27T05:42:34.743720505Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
