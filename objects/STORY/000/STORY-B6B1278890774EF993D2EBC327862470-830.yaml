@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-27T01:52:15.575404991Z
+modified_at: 2026-11-27T01:58:10.978284576Z
 req_type: Story
 tags:
 - landing
@@ -410,6 +410,18 @@ comments:
   content: PR-4695 at bd517cb44d22bfae3f0d3f9c9177d6034a81a433 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-27T01:48:10.384816401Z
   modified_at: 2026-11-27T01:48:10.384816401Z
+- id: 01a21ab9-b60a-7690-a0a4-20229e38d861
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:58):
+    # STORY-3131 S2 FRESH #2 (replaces closed #4695 @bd517cb4; product-15 2026-11-26 18:55). Lane: CLAUDE. MAIN, NEW branch story-3131-s2-fresh2 (cut from the current main tip). Keep #4695's title, ending in (Refs STORY-3131).
+    PORT #4695 onto current main: `git diff origin/main...origin/story-3131-s2-fresh` is the reference (it carries the advisor's 10:52 binding a-d). Resolve against today's landings (BUG-2777 S1 drift-hold culprit rows: KEY drift vs red-culprit rows distinctly; TASK-3921 the review-watch capped surface).
+    ALSO FIX the two findings from #4695's review (landing_drought.rs cause()): (1) an approved, green PR in CONFLICT that already HAS a repair lane (conflict && repairing) must be reported INFORMATIONALLY ('conflict repair in progress: <lane>'), never fall through to the failing 'unknown' arm; (2) the supervised arm must take precedence over the 'Ci::Green if lock.is_some()' waiting-for-train arm: a supervised approved PR reports 'needs operator train: aida pr train N' even while a train holds the lock. Add a test for each.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4695 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-27T01:58:10.978284576Z
+  modified_at: 2026-11-27T01:58:10.978284576Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
