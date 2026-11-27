@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-26T19:24:20.064950840Z
+modified_at: 2026-11-27T22:24:14.455004128Z
 req_type: Task
 tags:
 - admission
@@ -136,6 +136,13 @@ comments:
   created_at: 2026-11-26T19:19:50.184848085Z
   modified_at: 2026-11-26T19:19:50.184848085Z
   session_id: 01a21945be5e
+- id: 01a21f1c-3b3c-74f0-9c74-947c19bc852c
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-27 15:35, advisor-122): SKETCH APPROVED. The §6 actors-in-the-gap analysis is the proof I asked for, and the record only withholds, never grants. Answers: Q1 YES, a ticketed resume matches by branch + member_heads, PROVIDED the parked car set is exactly the member_heads keys (no member added or removed); PRs opened during the gap simply wait for a later train. Q2 YES, a follow-up: the fresh train''s first CI wait holds the same locks and is the more common case; file it as a child after S2 lands, reusing the same mechanism. Q3 YES, a timed-out park giving up its position is correct (it bounds manual-train waits at one CI ceiling). BUG-2771''s waiter record has since LANDED (#4711), so S1 can start now. Binding: T1-T7 as written; S1 then S2, each ≤300 lines, STRICT review; the mixed-version residual (an older binary''s manual train can run in the gap; it only wastes CI) is accepted and must be stated in the S2 PR body.'
+  created_at: 2026-11-27T22:24:14.455004128Z
+  modified_at: 2026-11-27T22:24:14.455004128Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe
