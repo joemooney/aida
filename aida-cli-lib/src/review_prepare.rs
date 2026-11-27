@@ -169,9 +169,15 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
     ProjectReviewRulesConfig::load_from_root(project_root).context("load .aida/review-rules.toml")
 }
 
-/// Execute `aida review prepare`.
-// trace:STORY-3076 | ai:antigravity
+/// Execute `aida review prepare`. The top-level error carries its whole cause
+/// chain on one line: agent-mode output keeps only the outermost message.
+// trace:BUG-2779 | ai:claude
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
+    review_prepare(args, storage).map_err(|e| anyhow::anyhow!("{e:#}"))
+}
+
+// trace:STORY-3076 | ai:antigravity
+fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     // clap's `requires` alone lets `--from` through. trace:STORY-3120 | ai:claude
     anyhow::ensure!(
         !args.post_comment || args.pr.is_some(),
@@ -1441,6 +1447,40 @@ fn fenced(text: &str) -> String {
 mod tests {
     use super::*;
 
+    /// A top-level failure keeps its cause even under a plain `Display`.
+    // trace:BUG-2779 | ai:claude
+    #[test]
+    fn bug2779_top_level_error_keeps_its_cause() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "old").unwrap();
+        git_text(root, &["add", "a.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(root);
+        let input = root.join("findings.json");
+        std::fs::write(&input, "[]").unwrap();
+        let sarif = outside.path().join("x.sarif");
+        let args = ReviewPrepareArgs {
+            from: Some(base),
+            anchor_findings: Some(input),
+            sarif: Some(sarif.clone()),
+            write: Some("out.json".into()),
+            ..Default::default()
+        };
+        let err = handle_review_prepare(&args, &store)
+            .unwrap_err()
+            .to_string();
+        let want = format!(
+            "write SARIF {}: --write outside repository",
+            sarif.display()
+        );
+        assert!(err.contains(&want), "{err}");
+        assert!(!sarif.exists());
+    }
+
     // trace:STORY-3120 | ai:codex
     #[test]
     fn s2_export_gate_checks_changed_paths() {
@@ -1574,7 +1614,13 @@ mod tests {
         let _guard = crate::test_env::AmbientGuard::hermetic(root.path(), None);
         let store = Storage::new(root.path().join("requirements.yaml"));
         let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store).unwrap_err();
-        assert_eq!(error.to_string(), "load .aida/review-rules.toml");
+        // The cause rides along with the context. trace:BUG-2779 | ai:claude
+        let error = error.to_string();
+        assert!(
+            error.starts_with("load .aida/review-rules.toml: parse "),
+            "{error}"
+        );
+        assert!(error.contains("invalid table header"), "{error}");
         let pattern = format!("{{{}z}}", "x,".repeat(256));
         std::fs::write(
             config_dir.join("review-rules.toml"),

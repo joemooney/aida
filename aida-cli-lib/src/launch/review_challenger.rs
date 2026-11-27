@@ -145,16 +145,45 @@ struct Verdicts {
     verdicts: Vec<Verdict>,
 }
 
+/// The one verdict object in untrusted challenger output, found by running a
+/// JSON parser from each `{` (no slicing, so stray braces cannot panic).
+/// None, or a second one, is an error. trace:BUG-2779 | ai:claude
+fn find_verdicts(raw: &str) -> Result<Verdicts> {
+    let parse_at = |at: usize| {
+        let mut stream = serde_json::Deserializer::from_str(&raw[at..]).into_iter::<Verdicts>();
+        match stream.next() {
+            Some(Ok(v)) => Ok((v, at + stream.byte_offset())),
+            Some(Err(e)) => Err(e.to_string()),
+            None => Err("no JSON value".to_owned()),
+        }
+    };
+    let starts = |from: usize| raw[from..].match_indices('{').map(move |(i, _)| from + i);
+    let mut first_error = None;
+    for at in starts(0) {
+        match parse_at(at) {
+            Ok((verdicts, end)) => {
+                ensure!(
+                    !starts(end).any(|next| parse_at(next).is_ok()),
+                    "challenger output holds two verdict objects"
+                );
+                return Ok(verdicts);
+            }
+            Err(e) => {
+                first_error.get_or_insert(e);
+            }
+        }
+    }
+    let cause = first_error.unwrap_or_else(|| "no JSON object".to_owned());
+    bail!("challenger output is not verdict JSON: {cause}")
+}
+
 /// Keep reproduced findings and set refuted ones aside. A missing,
 /// duplicate, out-of-range or unknown verdict refuses the run.
 pub(crate) fn apply_verdicts(
     findings: Vec<RawReviewFinding>,
     raw: &str,
 ) -> Result<(Vec<RawReviewFinding>, Vec<RefutedFinding>)> {
-    let span = raw.find('{').zip(raw.rfind('}'));
-    let payload = span.map_or(raw, |(start, end)| &raw[start..=end]);
-    let parsed: Verdicts =
-        serde_json::from_str(payload).context("challenger output is not verdict JSON")?;
+    let parsed = find_verdicts(raw)?;
     let mut slots: Vec<Option<Verdict>> = findings.iter().map(|_| None).collect();
     for verdict in parsed.verdicts {
         let i = verdict.index;
@@ -250,6 +279,41 @@ mod tests {
             .unwrap()
             .0
             .is_empty());
+    }
+
+    /// Untrusted challenger output never panics: stray, reversed or missing
+    /// braces refuse the challenge, and braces inside strings or prose around a
+    /// fenced block still parse. trace:BUG-2779 | ai:claude
+    #[test]
+    fn bug2779_untrusted_challenger_output_fails_closed() {
+        let one = || vec![finding("real")];
+        for raw in [
+            "} sorry {",
+            "done} {",
+            "}",
+            "{",
+            "",
+            "{}",
+            "{\"verdicts\": [",
+            "}{\"x\":1}",
+        ] {
+            let err = format!("{:#}", apply_verdicts(one(), raw).unwrap_err());
+            assert!(err.contains("not verdict JSON"), "{raw:?}: {err}");
+        }
+        let body = r#"{"verdicts":[{"index":0,"verdict":"refuted","reason":"see {x} and }{"}]}"#;
+        let shapes = [
+            format!("```json\n{body}\n```\nThat is all. }} bye {{"),
+            format!("done}} {{ preamble {body} trailing }}"),
+            body.to_owned(),
+        ];
+        for raw in &shapes {
+            let (kept, refuted) = apply_verdicts(one(), raw).unwrap();
+            assert!(kept.is_empty(), "{raw}");
+            assert_eq!(refuted[0].reason, "see {x} and }{", "{raw}");
+        }
+        let twice = format!("{body}\n{}", body.replace("refuted", "reproduced"));
+        let err = format!("{:#}", apply_verdicts(one(), &twice).unwrap_err());
+        assert!(err.contains("two verdict objects"), "{err}");
     }
 
     // trace:BUG-2775 | ai:claude
