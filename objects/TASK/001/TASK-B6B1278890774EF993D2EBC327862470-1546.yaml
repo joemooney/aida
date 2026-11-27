@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:05:03.817488762Z
-modified_at: 2026-11-27T22:48:10.158483283Z
+modified_at: 2026-11-27T23:04:58.756214685Z
 req_type: Task
 tags:
 - advisor
@@ -42,6 +42,33 @@ comments:
     - AC1 allows verdict OR hold; I chose the head-scoped train hold because a request-changes verdict runs the rework/hold machinery and its text does not reach --check. Train-status (lock-only today) is not changed; --check carries the cause.
   created_at: 2026-11-27T22:48:10.158483283Z
   modified_at: 2026-11-27T22:48:10.158483283Z
+  session_id: 01a21f2b2fc0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21f41-3c84-71a1-82ef-fd340c6ef4fe
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2a3080aee9
+
+    **Acceptance evidence**
+    - AC1: `aida review rule <PR> --fix-first --reason TEXT` (`review_rule.rs`): one step reads the PR's current forge head, records a head-scoped FIX-FIRST ruling (who + reason) in `.aida/train-culprits` sibling `.aida/train-fix-first.json` (main worktree), and comments the ruling on each covered spec. It is idempotent per head. It is refused under the standalone-implementer marker, with a rejected grant, from any seat other than advisor/operator, when the PR is not open, and when the reason is empty. Test: `review_rule::tests::task3923_ruling_holds_the_head_notes_the_spec_once_and_refuses_other_seats`.
+    - AC2: `check_one` reports gate `fix-first` with "held: FIX-FIRST ruling at <sha> by <who>: <reason>"; the train refuses it through `culprit_admission` (which the auto-train pre-scan also uses). Tests: `story_2824_train_check_tests::task3923_fix_first_ruling_on_an_approved_head_is_reported_with_its_cause`, `pr_train::tests::task3923_a_fix_first_head_is_refused_even_when_named`.
+    - AC3: the ruling binds the head; a new head is eligible (same tests). Naming the PR on `aida pr train` does not clear it, and neither does `culprit::clear`.
+    - AC4: the tests above. 37 tests pass (task3923, bug2767, bug2777 and story_2824 filters) via the lane runner.
+
+    **Probe findings / fixes**
+    - Fixed: a first draft added a new `kind` value to `train-culprits.json`. An older binary (rollback) would then fail to parse the file and fail closed for every PR. Rulings now live in their own file, which older binaries ignore.
+    - Probe 1: head compare is case-insensitive on both write and read. Reason whitespace is collapsed so the one-line `--check` row stays intact.
+    - Probe 3: one ruling per PR; a new ruling at a new head replaces the old one. A stale ruling on an old head holds nothing.
+    - Probe 5: the command only adds a block and cannot release anything. An unreadable ruling file holds (fail closed); a test covers the refusal paths.
+
+    **Residual risks**
+    - `aida pr train --status` reports trains, not member eligibility, so it is unchanged; `--check` carries the cause.
+    - There is no undo for a mistaken ruling except pushing a new head (by design per AC3).
+    - The change is ~330 lines against the 250 budget (tests + help golden).
+    - No lock on the ruling file's read-modify-write; it matches the culprit file and the writes are rare.
+  created_at: 2026-11-27T23:04:58.756214685Z
+  modified_at: 2026-11-27T23:04:58.756214685Z
   session_id: 01a21f2b2fc0
   harness_version: 2.1.319 (Claude Code)
 history:
