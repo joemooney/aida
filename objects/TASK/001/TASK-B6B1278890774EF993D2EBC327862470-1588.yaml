@@ -1,0 +1,25 @@
+id: 01a21f4c-6749-7c43-9b52-12b3b82a452e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1588
+agreed_id: TASK-3935
+title: 'Writer-admission retry: idempotent salvage per clone+head, the refusal names the exact stop/restart command, and wiring tests (BUG-2778 follow-up)'
+description: |-
+  Advisor aida-d3 2026-11-27 16:20 (filed by product-15), from the #4693 approval deferrals (BUG-2778 comment 3).
+
+  ## Acceptance
+  - AC1: reclaim_exited_branch_clone (queue_cmd/work.rs ~4251) retries do not write duplicate salvage: seat_clone salvage is idempotent per clone + head (skip when an identical salvage already exists).
+  - AC2: when retries are spent on writers running a deleted/stale binary, the WriterAdmissionUnknown refusal names the exact stop/restart command for each pid instead of saying they 'should exit on their own'.
+  - AC3: wiring tests: retire_with maps WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core mailbox_lifecycle/guard.rs ~214-224), and the two call-site predicates (dispatch.rs lane reuse, queue_cmd/work.rs rework reclaim) retry on it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T23:17:10.601015886Z
+modified_at: 2026-11-27T23:17:10.601015886Z
+req_type: Task
+filed_at:
+  code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
