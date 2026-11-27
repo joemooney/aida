@@ -1,5 +1,6 @@
 id: 01a21aff-ca9e-7d62-90c0-6932e85ffa17
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-383
+agreed_id: STORY-3210
 title: 'Review PR-4711: [AI:claude] fix(auto-train): yield the next train to a manual train that gave up waiting (BUG-2771)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21abe`) for branch `train-fair-admission-fresh2`.
@@ -33,6 +34,12 @@ history:
 - id: 01a21b00-2613-76c0-af0b-dfb276dcb3cd
   author: dirtlab
   timestamp: 2026-11-27T03:15:24.307717411Z
+  changes: []
+- id: 01a21b0a-2877-77c2-bf94-8eb652eb2ba4
+  author: joe
+  timestamp: 2026-11-27T03:26:20.279746209Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df

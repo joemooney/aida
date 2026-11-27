@@ -1,5 +1,6 @@
 id: 01a21afa-4e4e-7493-aab4-6ffb5b242376
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1549
+agreed_id: TASK-3534
 title: 'Review follow-up: Abandoned waiter blocks the auto-train for up to WAITER_TTL_SECS (15 min): admission_owner'
 description: |-
   From BUG-2771
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
   created_at: 2026-11-27T03:09:22.511102665Z
+history:
+- id: 01a21b09-7bd7-70f0-a943-6f3850f02dc5
+  author: joe
+  timestamp: 2026-11-27T03:25:36.087212319Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cbaddf47705827f69c721df0d82dfa12c11cc558
   branch: pr-4711
