@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T06:26:56.950643049Z
+modified_at: 2026-11-27T07:01:10.083957345Z
 req_type: Task
 tags:
 - admission
@@ -86,6 +86,12 @@ comments:
   modified_at: 2026-11-27T06:26:56.950643049Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21bce-d743-7983-9f9d-a9ecf21aaf96
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3924-train-waiters` at head `a4f7da7206450b57610db4aa4bdd76a78aa0cad3`.'
+  created_at: 2026-11-27T07:01:10.083952069Z
+  modified_at: 2026-11-27T07:01:10.083952069Z
+  session_id: 01a21b4b58e3
 history:
 - id: 01a21b41-dd2f-7263-af2a-f110d621552d
   author: joe
