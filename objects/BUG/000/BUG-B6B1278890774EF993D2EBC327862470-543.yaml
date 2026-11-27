@@ -17,13 +17,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T02:44:34.123087112Z
+modified_at: 2026-11-27T02:46:35.171672779Z
 req_type: Bug
 tags:
 - ci
 - dell1
 - lanes
 - throughput
+comments:
+- id: 01a21ae6-045b-7a73-bd47-93624134d4ca
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:46):
+    # BUG-2782: check-ci-fast is build-free again (advisor-122 ruling 20:05: options (a) + (c); STANDARD; no knob needed because CI coverage doesn't change; product-15). Lane: CLAUDE. MAIN, NEW branch bug-2782-ccf-no-build. <=250 lines. Completing (BUG-2782) trailer.
+    READ: `aida show BUG-2782` (the evidence: check-ratchets.py compiled 77+240+343+432s per lane round), the Makefile (check-ci-fast / check-ci-source / check-ratchets / check-ci-compile / check-ci-list), scripts/check-ratchets.py, scripts/check-ci-gates.py, .github/workflows/ci.yml (CI already runs `python3 scripts/check-ratchets.py --profile dev` in its own job, so coverage is unchanged).
+    DO:
+     (a) MOVE check-ratchets OUT of check-ci-fast INTO check-ci-compile (or its own documented target that check-ci-compile includes). check-ci-fast becomes compile-free: source gates only.
+     (c) Gate docs/cli/verify-manual.py (and the `cargo build -p aida-cli --bin aida` it needs) on docs/cli or CLI-surface changes vs origin/main (define the path set; when unsure, run it). It must still run in CI's ratchet job.
+     Keep `make check-ci-list` HONEST: it prints the new placement and why.
+     Fix the CLAUDE.md template text via aida-core/templates (the master), then `make sync-templates` and `make check-templates`, so "check-ci-fast = every CI gate needing no build (~90s)" is TRUE again and check-ci-compile is described as including the ratchets. Never edit a generated mirror.
+     AC1: every check-ci-fast step prints its own duration (source gates already do; confirm). AC3: a step blocked >120s with ~0% CPU fails fast naming the step. If that's larger than ~60 lines, list it under "Still to do" and use (Refs BUG-2782). AC4: a test asserting check-ci-fast's target list contains no cargo build/test step.
+    Validation: make check-ci-source, then make check-ci-fast (it should now be compile-free and fast; put its wall time in the PR body). Then publish a NEW PR to main. COMMIT and PUSH before running the final gate.
+  created_at: 2026-11-27T02:46:35.171672779Z
+  modified_at: 2026-11-27T02:46:35.171672779Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21ae3-eb20-7df1-9d88-cb4b0d85885c
   author: joe
