@@ -2,20 +2,26 @@ id: 01a218e5-49c1-7770-a7ef-a048f0d79ca9
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1525
 agreed_id: TASK-3919
 title: Deputy shell runner re-execs itself onto the current live binary between jobs when its exe is deleted or stale
-description: |
-  advisor-122 2026-11-26 10:27 (filed by product-15). BUG-2774's new reporting caught it again: deputy "default" (pid 3364365) runs a DELETED live binary after the advisor's two promotions today, so the auto-train is blocked-deputy, and only Joe may restart that deputy. This happens after EVERY format-changing promotion (memory: BUG-2654 ENOENT, restart-runners-after-promotion), and each time it costs an operator step and a stalled train.
+description: 'advisor-122 2026-11-26 10:27 (filed by product-15). BUG-2774''s new reporting caught it again: deputy "default" (pid 3364365) runs a DELETED live binary after the advisor''s two promotions today, so the auto-train is blocked-deputy, and only Joe may restart that deputy. This happens after EVERY format-changing promotion (memory: BUG-2654 ENOENT, restart-runners-after-promotion), and each time it costs an operator step and a stalled train.
+
 
   ## Acceptance
-  - AC1: the deputy shell runner checks between jobs, only when IDLE (no job running). When /proc/self/exe reads "(deleted)", or its build sha differs from the live binary's, it execs the live binary with the SAME args, name, binding and grant, and logs the old sha, the new sha and the reason.
+
+  - AC1: the deputy shell runner checks between jobs, only when IDLE (no job running). When /proc/self/exe reads "(deleted)", or its build sha differs from the live binary''s, it execs the live binary with the SAME args, name, binding and grant, and logs the old sha, the new sha and the reason.
+
   - AC2: it NEVER re-execs mid-job. A job in flight finishes first, and a job submitted during the re-exec window is queued, not lost.
+
   - AC3: tests: deleted exe → re-exec when idle; a sha mismatch → re-exec when idle; a job in flight → no re-exec until it ends; the binding survives (a job after the re-exec still binds and runs).
+
   - AC4: the same rule for the relay/runner loops that hold the live binary, if they share the runner code.
+
+  '
 status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-27T00:53:22.965268657Z
+created_at: 2026-11-26 17:26:49.537367+00:00
+modified_at: 2026-11-27 00:53:22.965268+00:00
 req_type: Task
 tags:
 - deputy
@@ -26,180 +32,222 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a2196b-813e-7270-8a07-0c7b37524709
-  created_at: 2026-11-26T19:53:34.310433599Z
+  created_at: 2026-11-26 19:53:34.310433+00:00
   created_by: dirtlab
 comments:
 - id: 01a218ea-937e-73b3-95c9-fa881b1c1225
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:32):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 10:32):
+
     # TASK-3919: the deputy shell runner re-execs onto the live binary between jobs (advisor-122 10:27; product-15). Lane: CLAUDE. STRICT (deputy runner: grant/binding). MAIN, NEW branch task-3919-deputy-reexec. <=250 lines. Completing (TASK-3919) trailer.
-    READ: `aida show TASK-3919` (AC1-AC4), the deputy shell runner loop (`aida deputy shell`), how it records its binding and grant, and BUG-2774's stale-binary detection (reuse it; don't duplicate it).
-    AC1: when IDLE, if /proc/self/exe is "(deleted)" or its sha != the live binary's, exec the live binary with the same args, name, binding and grant, and log the old and new sha. AC2: never mid-job; a job submitted during the window is queued, not lost. AC3: tests (deleted, a sha mismatch, a job in flight, the binding survives). AC4: the same for relay/runner loops if they share the code; otherwise list them in the PR body. Never widen the grant or the binding.
-    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
-  created_at: 2026-11-26T17:32:20.427908064Z
-  modified_at: 2026-11-26T17:32:20.427908064Z
+
+    READ: `aida show TASK-3919` (AC1-AC4), the deputy shell runner loop (`aida deputy shell`), how it records its binding and grant, and BUG-2774''s stale-binary detection (reuse it; don''t duplicate it).
+
+    AC1: when IDLE, if /proc/self/exe is "(deleted)" or its sha != the live binary''s, exec the live binary with the same args, name, binding and grant, and log the old and new sha. AC2: never mid-job; a job submitted during the window is queued, not lost. AC3: tests (deleted, a sha mismatch, a job in flight, the binding survives). AC4: the same for relay/runner loops if they share the code; otherwise list them in the PR body. Never widen the grant or the binding.
+
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.'
+  created_at: 2026-11-26 17:32:20.427908+00:00
+  modified_at: 2026-11-26 17:32:20.427908+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a218fd-381e-71c3-9c60-3b736afb8775
   author: dirtlab
-  content: |-
-    ## Implementer approach
+  content: '## Implementer approach
+
 
     ### Acceptance criteria and evidence
+
     - **AC1 (unit + fixture):** `runner::stale_image` reuses BUG-2774 `deputy_binary` (deleted marker / replaced inode with other sha) and requires the live build to answer `--version`; a non-deleted image outside the live dir (a worktree build) is left alone. The loop probes it only on an idle round (no job claimed this round), throttled; on a hit it audits `runner-reexec` {old_sha,new_sha,reason}, writes runner.log, drops socket/services/lock, and execs the live path with the same argv and `AIDA_SESSION_GRANT` = the grant it currently holds (pid, start time, ppid, sid unchanged => binding unchanged; grant never re-minted or widened). Tests: `task3919_*` in deputy_shell/tests.rs.
+
     - **AC2 (fixture):** exec closure asserts the in-flight job finished first; a job filed during the window stays in accepted/ and the next runner claims it. Submit client retries ENOENT/ECONNREFUSED briefly while a fresh `reexec.json` marker is present (removed once the new runner serves).
+
     - **AC3:** tests for deleted, sha mismatch, job in flight, binding survives (second runner run under the passed grant claims and runs the window job).
+
     - **AC4:** the `--loop` supervisor does not share the runner loop; it already respawns via `stale_binary::service_program`, and with re-exec its runner child keeps pid. Listed in PR body.
 
+
     ### Expected files
+
     - aida-cli-lib/src/deputy_shell/{runner.rs,mod.rs,socket.rs,tests.rs}
+
     - aida-cli-lib/src/deputy_shell_cmd.rs
+
     - aida-cli-lib/src/advisor_loop_service.rs (make `deputy_binary` pub(crate))
 
+
     ### Ambiguities / conflicts as questions
-    - None blocking. Design choice: a replaced-but-not-deleted image outside the live dir is not re-exec'd.
-  created_at: 2026-11-26T17:52:57.886568336Z
-  modified_at: 2026-11-26T17:52:57.886568336Z
+
+    - None blocking. Design choice: a replaced-but-not-deleted image outside the live dir is not re-exec''d.'
+  created_at: 2026-11-26 17:52:57.886568+00:00
+  modified_at: 2026-11-26 17:52:57.886568+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2190f-0565-7292-81b3-8bb7fac594dc
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 4a005dc2f6 (git diff origin/main...HEAD).
 
+
     Acceptance evidence:
+
     - AC1 [behavioral]: `runner::stale_image` (reuses BUG-2774 `deputy_binary`), idle-only probe in `runner::run`, `runner-reexec` audit row + runner.log line with old_sha/new_sha/reason, `reexec_command` keeps argv and sets AIDA_SESSION_GRANT to the held grant. Tests: task3919_stale_image_is_a_deleted_or_older_live_image_only, task3919_reexec_keeps_args_name_and_the_held_grant.
+
     - AC2 [behavioral]: the probe runs only on a round where no job ran; exec stand-in asserts the in-flight job (sleep 0.3) is Done first; a job filed during the window stays in accepted/; the client waits on ENOENT/ECONNREFUSED only while a fresh marker exists (task3919_a_submit_waits_out_the_exec_window_only_with_the_marker).
+
     - AC3 [behavioral]: task3919_deleted_image_reexecs_when_idle_and_the_binding_survives, task3919_sha_mismatch_reexecs_when_idle_and_the_binding_survives (successor under the handed-over grant claims and runs the window job, grant prefix matches). 7/7 pass (lane job, incl. bug2774 tests).
+
     - AC4: the `--loop` supervisor shares no runner-loop code; it respawns via stale_binary::service_program and its child now re-execs in place. Listed in the PR body, not changed.
 
+
     Probe findings / fixes:
+
     - Fixed: marker was written after the socket was dropped (a submit in that gap failed outright); now written before.
+
     - Authority: exec passes only the grant already held; start() re-validates it with the presenter check (fails closed). The marker grants nothing, it only delays a client up to 20s.
 
+
     Residual risks:
+
     - A hosted review-watch controller that exits after a re-exec stays a zombie until the runner exits (liveness reads zombies as dead, so it does not block).
+
     - The exec itself (std exec of the live path) is not exercised end-to-end in tests; the stand-in covers everything around it.
-    - Diff is 384 lines (~175 production, ~210 tests), over the 250-line guide.
-  created_at: 2026-11-26T18:12:24.549782660Z
-  modified_at: 2026-11-26T18:12:24.549782660Z
+
+    - Diff is 384 lines (~175 production, ~210 tests), over the 250-line guide.'
+  created_at: 2026-11-26 18:12:24.549782+00:00
+  modified_at: 2026-11-26 18:12:24.549782+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2196a-66ad-70a2-be36-415fcafc8597
   author: dirtlab
-  content: |-
-    ## Implementer self-review (update)
-    Reviewed HEAD: 209f21abba. Since 4a005dc2f6: the re-exec Command build and exec moved into launch/control.rs (`runner_reexec`, `exec_runner`) so the STORY-2326 launch ledger is unchanged; recorded launch/control.rs in the BUG-2398 LAUNCH_INVENTORY as NotACodexLaunch; classified the marker write in scripts/store-writers.toml (one row). make check-ci-fast: exit 0. Targeted: task3919 (5), bug2774 (2), story_2326 ratchets pass.
-  created_at: 2026-11-26T19:52:13.229910018Z
-  modified_at: 2026-11-26T19:52:13.229910018Z
+  content: '## Implementer self-review (update)
+
+    Reviewed HEAD: 209f21abba. Since 4a005dc2f6: the re-exec Command build and exec moved into launch/control.rs (`runner_reexec`, `exec_runner`) so the STORY-2326 launch ledger is unchanged; recorded launch/control.rs in the BUG-2398 LAUNCH_INVENTORY as NotACodexLaunch; classified the marker write in scripts/store-writers.toml (one row). make check-ci-fast: exit 0. Targeted: task3919 (5), bug2774 (2), story_2326 ratchets pass.'
+  created_at: 2026-11-26 19:52:13.229910+00:00
+  modified_at: 2026-11-26 19:52:13.229910+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2196a-b3b7-77f3-aa94-e10ca66e574c
   author: dirtlab
   content: Commit 51fa960c9f references this requirement
-  created_at: 2026-11-26T19:52:32.951556349Z
-  modified_at: 2026-11-26T19:52:32.951556349Z
+  created_at: 2026-11-26 19:52:32.951556+00:00
+  modified_at: 2026-11-26 19:52:32.951556+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2196b-1200-7f41-8f5c-6c7b7937c64a
   author: aida-publication-done
   content: Implementer push 0f7f446ae70f declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-26T19:52:57.088254481Z
-  modified_at: 2026-11-26T19:52:57.088254481Z
+  created_at: 2026-11-26 19:52:57.088254+00:00
+  modified_at: 2026-11-26 19:52:57.088254+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21982-5121-7e22-836c-65c955902701
   author: joe
   content: 'FOLLOW-UP (advisor-122 2026-11-26 13:12, on the #4683 approval; not blocking): Joe''s default deputy runs WITHOUT --loop, so a failed re-exec (which exits rather than continuing stale) leaves NO default deputy. `aida doctor` should flag a "no default deputy" state (no live runner bound for the default name) with the restart command, and train-status should name it when the auto-train is blocked on it.'
-  created_at: 2026-11-26T20:18:20.576641417Z
-  modified_at: 2026-11-26T20:18:20.576641417Z
+  created_at: 2026-11-26 20:18:20.576641+00:00
+  modified_at: 2026-11-26 20:18:20.576641+00:00
 - id: 01a2198e-fe89-7082-9b21-b25301dca502
   author: aida-publication-done
   content: Implementer push 0f7f446ae70f declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-26T20:32:11.401840626Z
-  modified_at: 2026-11-26T20:32:11.401840626Z
+  created_at: 2026-11-26 20:32:11.401840+00:00
+  modified_at: 2026-11-26 20:32:11.401840+00:00
   session_id: 01a218eed076
 - id: 01a21990-21cc-7ac3-9454-39a449bf8445
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-3919-deputy-reexec` at head `0f7f446ae70fbae45f220a8d9a7e6477cae3c25d`.'
-  created_at: 2026-11-26T20:33:25.964388974Z
-  modified_at: 2026-11-26T20:33:25.964388974Z
+  created_at: 2026-11-26 20:33:25.964388+00:00
+  modified_at: 2026-11-26 20:33:25.964388+00:00
   session_id: 01a218eed076
 - id: 01a219ae-9f69-73f2-86b3-dcd047630974
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:06):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:06):
+
     # TASK-3919 r1 on #4683 (product-15 2026-11-26 14:10; train #4686 went RED on this alone). Lane: CLAUDE. MAIN, existing branch task-3919-deputy-reexec / PR #4683. Keep the "(TASK-3919)" title. <=20 lines.
+
     CAUSE (train run 45891504610, job CI (lib-0)): all 8614 tests PASSED. The test-timings gate failed: "BUDGET: aida-cli-lib codex_tool_env::tests::bug_2398_final_spawn_boundary_ratchet: 30.1s with no budget entry (limit 30s for an unbudgeted test)". It is a TOUCHED test (this PR edits aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs), so it gets the strict limit. The Build job failed only as the aggregate of lib-0.
-    FIX: first check whether this PR's edit made the ratchet slower (e.g. a new scanned file or a new spawn site). If a cheap speedup exists, take it. Otherwise add the test to scripts/test-time-budget.toml with the measured time plus headroom (e.g. 45s) and a one-line reason (it is a whole-tree spawn-boundary ratchet scan). Follow the file's existing entry format. Say which you did in the PR body.
-    make check-ci-fast, then push to #4683. COMMIT your work.
-  created_at: 2026-11-26T21:06:28.046019811Z
-  modified_at: 2026-11-26T21:06:28.046019811Z
+
+    FIX: first check whether this PR''s edit made the ratchet slower (e.g. a new scanned file or a new spawn site). If a cheap speedup exists, take it. Otherwise add the test to scripts/test-time-budget.toml with the measured time plus headroom (e.g. 45s) and a one-line reason (it is a whole-tree spawn-boundary ratchet scan). Follow the file''s existing entry format. Say which you did in the PR body.
+
+    make check-ci-fast, then push to #4683. COMMIT your work.'
+  created_at: 2026-11-26 21:06:28.046019+00:00
+  modified_at: 2026-11-26 21:06:28.046019+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a219c9-5872-7e22-85f4-d4cfd34fa5bd
   author: dirtlab
-  content: |-
-    ## Implementer approach (r1: test-timings budget on #4683)
+  content: '## Implementer approach (r1: test-timings budget on #4683)
+
 
     ### Acceptance criteria and evidence
+
     - Rework is the CI test-time gate, not an AC change. Evidence: targeted `bug_2398_final_spawn_boundary_ratchet` timings, 3 runs on origin/main vs 3 on this branch, same host, via lane runner.
+
     - If the branch is slower: fix the slowdown, no budget entry. If equal: budget entry = p90 x1.3 with reason "pre-existing, touched by TASK-3919" + BUG-2398 comment with timings.
 
+
     ### Expected files
+
     - `scripts/test-time-budget.toml` (likely), or `aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs` if a slowdown exists.
 
+
     ### Ambiguities / conflicts as questions
-    - Local agent-profile timings differ from CI debug/nextest; the entry uses local measurements scaled by CI evidence (30.1s) where needed?
-  created_at: 2026-11-26T21:35:55.506408051Z
-  modified_at: 2026-11-26T21:35:55.506408051Z
+
+    - Local agent-profile timings differ from CI debug/nextest; the entry uses local measurements scaled by CI evidence (30.1s) where needed?'
+  created_at: 2026-11-26 21:35:55.506408+00:00
+  modified_at: 2026-11-26 21:35:55.506408+00:00
   session_id: 01a219c6b4dc
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21a0b-f956-7c03-a251-8f083458bdb2
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 7498cace94 (r1 delta: scripts/test-time-budget.toml only).
+
 
     Acceptance evidence: AC1-AC4 are unchanged from the reviewed r0 (deputy_shell runner/tests). r1 addresses only the CI test-timings gate.
 
+
     Probe findings:
+
     - P1 cross-reference: the key `aida-cli-lib codex_tool_env::tests::bug_2398_final_spawn_boundary_ratchet` matches the gate message byte for byte (binary id + test path).
+
     - P2 format: the TOML parses (tomllib reads 40 under [budget]). The entry sits in [budget], not in the trailing per-module tables.
+
     - P3/P4: there is one CI sample (30.1s), so it is used as the p90; 40s gives about 33% headroom. Nothing is weakened: no test removed or ignored, and default_limit is untouched.
 
+
     Timings, same host, 3 runs each (agent profile): main 7.95/7.57/5.27s, branch 7.76/8.14/7.42s. Noise, so not a regression from this PR.
+
     make check-ci-fast: exit 0 via the lane runner.
-    Residual risk: the ratchet stays near the limit for untouched-file runs (30s x3 factor tolerates that). A speedup is requested on BUG-2398.
-  created_at: 2026-11-26T22:48:42.070327866Z
-  modified_at: 2026-11-26T22:48:42.070327866Z
+
+    Residual risk: the ratchet stays near the limit for untouched-file runs (30s x3 factor tolerates that). A speedup is requested on BUG-2398.'
+  created_at: 2026-11-26 22:48:42.070327+00:00
+  modified_at: 2026-11-26 22:48:42.070327+00:00
   session_id: 01a219c6b4dc
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21a24-cc4a-74f1-97ca-a62b51bae740
   author: aida-publication-done
   content: Implementer push 7498cace9411 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-26T23:15:48.938078618Z
-  modified_at: 2026-11-26T23:15:48.938078618Z
+  created_at: 2026-11-26 23:15:48.938078+00:00
+  modified_at: 2026-11-26 23:15:48.938078+00:00
   session_id: 01a219c6b4dc
 - id: 01a21a25-d141-79b0-bbde-1c085c938ac6
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-3919-deputy-reexec` at head `7498cace9411de9d1d3f6572ff77c801cc643ca1`.'
-  created_at: 2026-11-26T23:16:55.745171912Z
-  modified_at: 2026-11-26T23:16:55.745171912Z
+  created_at: 2026-11-26 23:16:55.745171+00:00
+  modified_at: 2026-11-26 23:16:55.745171+00:00
   session_id: 01a219c6b4dc
 history:
 - id: 01a218ef-06e9-70b1-85a7-aae51066fd02
   author: aida-session-start
-  timestamp: 2026-11-26T17:37:27.785582233Z
+  timestamp: 2026-11-26 17:37:27.785582+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a2196b-1200-7f41-8f5c-6c64aac908b6
   author: aida-publication-done
-  timestamp: 2026-11-26T19:52:57.088251904Z
+  timestamp: 2026-11-26 19:52:57.088251+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -208,13 +256,13 @@ history:
     new_value: Done
 - id: 01a2196b-ab96-7741-8b19-ed48573d867a
   author: dirtlab
-  timestamp: 2026-11-26T19:53:36.406703586Z
+  timestamp: 2026-11-26 19:53:36.406703+00:00
   session_id: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a2198e-fe89-7082-9b21-b24e6cbbf831
   author: aida-publication-done
-  timestamp: 2026-11-26T20:32:11.401837881Z
+  timestamp: 2026-11-26 20:32:11.401837+00:00
   session_id: 01a218eed076
   changes:
   - field_name: status
@@ -222,21 +270,21 @@ history:
     new_value: Done
 - id: 01a219ab-c62e-7f23-9014-2080a129ead0
   author: joe
-  timestamp: 2026-11-26T21:03:37.518530826Z
+  timestamp: 2026-11-26 21:03:37.518530+00:00
   changes:
   - field_name: status
     old_value: Done
     new_value: Approved
 - id: 01a219c7-2315-7bf1-b20b-2efa399c5228
   author: aida-session-start
-  timestamp: 2026-11-26T21:33:30.773608379Z
+  timestamp: 2026-11-26 21:33:30.773608+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21a24-cc4a-74f1-97ca-a612cf17941f
   author: aida-publication-done
-  timestamp: 2026-11-26T23:15:48.938075812Z
+  timestamp: 2026-11-26 23:15:48.938075+00:00
   session_id: 01a219c6b4dc
   changes:
   - field_name: status
@@ -244,17 +292,24 @@ history:
     new_value: Done
 - id: 01a21a7e-1f47-7710-bc5d-45439a2f115b
   author: aida-auto-bump
-  timestamp: 2026-11-27T00:53:22.887559047Z
+  timestamp: 2026-11-27 00:53:22.887559+00:00
   changes:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a21a81-4cbb-7031-8dd2-223d16ead28f
+  author: dirtlab
+  timestamp: 2026-11-27 00:56:51.131696+00:00
+  session_id: 01a21a5d2760
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a21a7e-1f95-7df2-b7b4-121dfb8505cf
-  timestamp: 2026-11-27T00:53:22.965263345Z
+  timestamp: 2026-11-27 00:53:22.965263+00:00
   agent: aida
   commit_sha: ffc12ad011165bfefa48257ca6f4c1e7d70c338e
-  summary: 'PR-4683 (TASK-3919) reviewed at 7498cace; 2 commits behind main, no finding depends on base changes. CI pending at review time. AC1 verified by task3919_stale_image_is_a_deleted_or_older_live_image_only, task3919_deleted_image_reexecs_when_idle_and_the_binding_survives, task3919_sha_mismatch_reexecs_when_idle_and_the_binding_survives and task3919_reexec_keeps_args_name_and_the_held_grant. The idle check (runner.rs) runs only after a round that claimed no job, because handle() is synchronous and is followed by continue. exec_runner keeps argv (args_os().skip(1)) and sets GRANT_ENV to the current (possibly refreshed) grant and AIDA_BIN to live. The runner-reexec audit row and the runner.log line record old_sha, new_sha and reason. Pid, start time and ancestry survive exec, so runner_grant/grant_check and the service host identity still match. One deliberate narrowing: a non-deleted image outside the live directory, such as a worktree build the operator chose, is not re-exec''d even when its sha differs. This matches the provisional-binary practice, and the test documents it. AC2 verified: the round-trip test asserts the in-flight job is Done before the exec and that a job written during the window stays in accepted/. task3919_a_submit_waits_out_the_exec_window_only_with_the_marker covers the marker-gated connect wait. The marker is written before the socket is dropped, removed on exec failure and on successor start, and grants nothing. AC3 verified by the four tests above; the successor run under the handed-over grant binds and runs the window''s job. The real execve is not unit-run, but its command builder is tested. AC4 not-applicable-because the --loop supervisor shares no runner code and already spawns service_program() (the live image, BUG-2654), so each respawned child re-execs by this rule. Inventory (store-writers, launch inventory) and test-time-budget updates are consistent. No defects found.'
+  summary: 'PR-4683 (TASK-3919) reviewed at 7498cace; 2 commits behind main, no finding depends on base changes. CI pending at review time. AC1 verified by task3919_stale_image_is_a_deleted_or_older_live_image_only, task3919_deleted_image_reexecs_when_idle_and_the_binding_survives, task3919_sha_mismatch_reexecs_when_idle_and_the_binding_survives and task3919_reexec_keeps_args_name_and_the_held_grant. The idle check (runner.rs) runs only after a round that claimed no job, because handle() is synchronous and is followed by continue. exec_runner keeps argv (args_os().skip(1)) and sets GRANT_ENV to the current (possibly refreshed) grant and AIDA_BIN to live. The runner-reexec audit row and the runner.log line record old_sha, new_sha and reason. Pid, start time and ancestry survive exec, so runner_grant/grant_check and the service host identity still match. One deliberate narrowing: a non-deleted image outside the live directory, such as a worktree build the operator chose, is not re-exec''d
+    even when its sha differs. This matches the provisional-binary practice, and the test documents it. AC2 verified: the round-trip test asserts the in-flight job is Done before the exec and that a job written during the window stays in accepted/. task3919_a_submit_waits_out_the_exec_window_only_with_the_marker covers the marker-gated connect wait. The marker is written before the socket is dropped, removed on exec failure and on successor start, and grants nothing. AC3 verified by the four tests above; the successor run under the handed-over grant binds and runs the window''s job. The real execve is not unit-run, but its command builder is tested. AC4 not-applicable-because the --loop supervisor shares no runner code and already spawns service_program() (the live image, BUG-2654), so each respawned child re-execs by this rule. Inventory (store-writers, launch inventory) and test-time-budget updates are consistent. No defects found.'
   review_verdict: approved
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
@@ -265,6 +320,6 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
-  completed_at: 2026-11-27T00:53:22.887550184Z
+  completed_at: 2026-11-27 00:53:22.887550+00:00
   completion_sha: ffc12ad011165bfefa48257ca6f4c1e7d70c338e
   reopened_at_sha: aab3a10d798ca22e48470cc7a3f1e5e1d02e99ae

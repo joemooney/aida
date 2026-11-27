@@ -9,12 +9,12 @@ description: |
   - AC1: a salvage is IDEMPOTENT per clone + head: reclaim_exited_branch_clone (queue_cmd/work.rs ~4251) / seat_clone destroy_inner skip writing a salvage when an identical one (same clone, same head, same checkpoint refs) already exists, so the transient-admission retries never write duplicate salvage copies. Test.
   - AC2: the final writer-admission refusal names the STOP/RESTART command for each unverified pid (e.g. a deleted-binary MCP/server or deputy), instead of "should exit on their own". Test.
   - AC3: wiring tests: retire_with maps WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core mailbox_lifecycle/guard.rs ~214), and both dispatch.rs call-site predicates route a transient refusal into the retry.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T00:19:52.096880801Z
+modified_at: 2026-11-27T00:57:07.008006484Z
 req_type: Task
 tags:
 - lanes
@@ -51,6 +51,38 @@ comments:
   modified_at: 2026-11-27T00:19:52.096880801Z
   session_id: 01a21a5d2760
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a7f-f01d-7263-b892-0adf53e9c8d8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b57763c257
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: seat_clone.rs identical_salvage + salvage_capped returns the newest salvage when patch (now carrying '# head: <oid>') and bundle bytes are identical. Tests: seat_clone::task_3922_tests::the_newest_identical_salvage_is_reused (unit), lifecycle_tests::task_2053_bwrap_task_3922_repeated_teardown_writes_one_salvage (ran live under bwrap: two teardowns -> one patch+bundle; a new change -> a second pair).
+    - AC2 [behavioral-test]: activation.rs restart_step appends 'stop it with `kill <pid>`, then <restart>' to each unverified writer (MCP: reconnect from its client; else rerun its args, first 6 shown; empty cmdline named). Display no longer says 'should exit on their own'. Tests: bug_2778_admission_retry_tests::{a_deleted_binary_writer_is_named_and_transient, a_live_unknown_writer_is_named_and_never_transient, a_non_mcp_writer_is_restarted_with_its_own_arguments}.
+    - AC3 [behavioral-test]: retire_with_maps_a_transient_admission_refusal (aida-core, injected run); dispatch::reuse_refusal_is_transient and queue_cmd::work::kept_for_transient_admission are now named and passed directly at both call sites; tests lane_reuse_retries_only_a_transient_refusal, rework_reclaim_retries_only_a_clone_kept_for_a_transient_refusal.
+
+    Probe findings / fixes:
+    - Probe 5 (fail-open): a first draft compared only the bundle header; a damaged earlier bundle with an intact header would have skipped a fresh bundle before SalvageUnshipped removes the clone. Fixed to full byte comparison (any difference writes a new salvage).
+    - Probe 3: newest patch chosen by stamp name (lexicographic = chronological); a truncated earlier patch never matches (marker line); a truncated new salvage skips dedupe.
+
+    Residual risks:
+    - The restart command joins argv with spaces, unquoted; an argument with spaces is shown ambiguously (informational text only).
+    - If git bundle output ever varied for identical refs, a retry writes a duplicate (safe direction). Live bwrap test showed it stable.
+    - Diff ~290 lines incl. tests, over the brief's 200-line budget; production code ~110.
+
+    Tests: aida-core bug_2778 8/8; aida-cli-lib task_3922 + neighbouring task_2053 salvage tests 7/7; make check-ci-fast exit 0.
+  created_at: 2026-11-27T00:55:21.885444350Z
+  modified_at: 2026-11-27T00:55:21.885444350Z
+  session_id: 01a21a5d2760
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21a80-4653-7672-b056-328839798a0f
+  author: aida-publication-done
+  content: Implementer push 1e0b7323fcaa declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T00:55:43.955128611Z
+  modified_at: 2026-11-27T00:55:43.955128611Z
+  session_id: 01a21a5d2760
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
@@ -63,6 +95,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21a80-4653-7672-b056-327aea3157d7
+  author: aida-publication-done
+  timestamp: 2026-11-27T00:55:43.955125366Z
+  session_id: 01a21a5d2760
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21a81-934a-7e41-9121-091246cedd0d
+  author: dirtlab
+  timestamp: 2026-11-27T00:57:09.194369058Z
+  session_id: 01a21a5d2760
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
@@ -71,3 +118,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aab3a10d798
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T00:57:07.008006484Z
+  implemented_by: dirtlab
