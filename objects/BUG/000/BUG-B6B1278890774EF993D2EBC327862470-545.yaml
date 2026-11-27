@@ -8,12 +8,12 @@ description: |
   ## Acceptance criteria
   1. scripts/ratchet-set.json (and any other append-only list files named in a small allowlist) never produces a merge conflict for disjoint additions. Use a custom git merge driver registered via .gitattributes (`merge=aida-json-union`) that unions the lists, keeps sorted order and emits valid JSON. Rework prep / sync configures the driver for lanes. A test merges two branches that each add different entries.
   2. If a union still conflicts (the same key edited differently), it stays a real conflict and the existing gating applies.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T04:38:16.917242726Z
+modified_at: 2026-11-27T05:43:51.901272722Z
 req_type: Bug
 comments:
 - id: 01a21b43-1a62-7921-9b1a-11e036f97be5
@@ -53,6 +53,13 @@ history:
   author: joe
   timestamp: 2026-11-27T04:34:23.254239407Z
   changes: []
+- id: 01a21b88-115d-7793-9915-27a8a16d6db9
+  author: aida-session-start
+  timestamp: 2026-11-27T05:43:51.901271130Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
