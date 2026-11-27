@@ -19,6 +19,7 @@ use aida_core::review_engine::{
     ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
 };
 use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
+use aida_core::review_engine::{decode_path, encode_path};
 use aida_core::review_engine::{FileCoverageEntry, FileCoverageStatus};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -778,9 +779,17 @@ fn batch_prompt(
     }
     for path in &batch.files {
         let mut args = vec!["diff", "--no-ext-diff", "--no-color", "--find-renames"];
-        args.extend(["--end-of-options", range, "--", path]);
-        args.extend(renames.get(path.as_str()));
-        let patch = git_text(root, &args)?;
+        args.extend(["--end-of-options", range, "--"]);
+        let mut args: Vec<std::ffi::OsString> = args.into_iter().map(Into::into).collect();
+        args.extend(
+            std::iter::once(path.as_str())
+                .chain(renames.get(path.as_str()).copied())
+                .map(path_arg),
+        );
+        let args: Vec<&OsStr> = args.iter().map(|a| a.as_os_str()).collect();
+        // The patch is prompt text only; its header names the file escaped.
+        // trace:TASK-3869 | ai:claude
+        let patch = String::from_utf8_lossy(&git_bytes(root, &args)?).into_owned();
         let patch = if patch.trim().is_empty() {
             "(no textual change)\n"
         } else {
@@ -1039,42 +1048,50 @@ fn collect_git_diff_entries(
         ("commit" | "range", Some(base), Some(head)) => format!("{base}..{head}"),
         _ => "HEAD".into(),
     };
+    // Paths stay raw bytes until `encode_path`; git output is never decoded as
+    // UTF-8. trace:TASK-3869 | ai:claude
     let diff = |flag: &str, renames: &str| {
-        git_text(
-            project_root,
-            &["diff", "--no-ext-diff", renames, "-z", flag, &range, "--"],
-        )
+        let args = ["diff", "--no-ext-diff", renames, "-z", flag, &range, "--"];
+        git_bytes(project_root, &args.map(OsStr::new))
+    };
+    let field = |bytes: Option<&[u8]>, what: &str| -> Result<String> {
+        let bytes = bytes.with_context(|| format!("missing {what}"))?;
+        Ok(std::str::from_utf8(bytes)?.to_owned())
     };
     let mut stats = BTreeMap::new();
-    for row in diff("--numstat", "--no-renames")?.split_terminator('\0') {
-        let mut fields = row.splitn(3, '\t');
-        let added = fields.next().context("missing additions")?;
-        let removed = fields.next().context("missing deletions")?;
-        let path = fields.next().context("missing numstat path")?;
+    for row in diff("--numstat", "--no-renames")?.split(|&b| b == 0) {
+        if row.is_empty() {
+            continue;
+        }
+        let mut fields = row.splitn(3, |&b| b == b'\t');
+        let added = field(fields.next(), "additions")?;
+        let removed = field(fields.next(), "deletions")?;
+        let path = encode_path(fields.next().context("missing numstat path")?);
         let binary = added == "-" && removed == "-";
         let counts = if binary {
             (0, 0, true)
         } else {
             (added.parse::<usize>()?, removed.parse::<usize>()?, false)
         };
-        stats.insert(path.to_owned(), counts);
+        stats.insert(path, counts);
     }
     // `--raw` carries each side's mode, so a symlink or gitlink is named and
     // never read. trace:TASK-3869 | ai:claude
     let raw = diff("--raw", "--find-renames")?;
-    let mut fields = raw.split_terminator('\0');
+    let mut fields = raw.split(|&b| b == 0).filter(|f| !f.is_empty());
     let mut entries = Vec::new();
     while let Some(header) = fields.next() {
+        let header = field(Some(header), "diff --raw row")?;
         let meta: Vec<&str> = header.trim_start_matches(':').split(' ').collect();
         let [old_mode, new_mode, _, _, code] = meta[..] else {
             anyhow::bail!("unexpected git diff --raw row {header:?}");
         };
-        let first = fields.next().context("missing status path")?;
+        let first = encode_path(fields.next().context("missing status path")?);
         let (kind, path, old_path) = match code.as_bytes().first() {
             Some(b'R') => (
                 FileChangeKind::Renamed,
-                fields.next().context("missing rename target")?,
-                Some(first.to_owned()),
+                encode_path(fields.next().context("missing rename target")?),
+                Some(first),
             ),
             Some(b'A') => (FileChangeKind::Added, first, None),
             Some(b'D') => (FileChangeKind::Deleted, first, None),
@@ -1086,7 +1103,7 @@ fn collect_git_diff_entries(
         } else {
             new_mode
         };
-        let &(additions, deletions, is_binary) = stats.get(path).context("missing diff stats")?;
+        let &(additions, deletions, is_binary) = stats.get(&path).context("missing diff stats")?;
         entries.push(RawDiffEntry {
             path: path.into(),
             old_path,
@@ -1099,10 +1116,8 @@ fn collect_git_diff_entries(
         });
     }
     if mode == "workspace" {
-        let paths = git_text(
-            project_root,
-            &["ls-files", "-z", "--others", "--exclude-standard"],
-        )?;
+        let args = ["ls-files", "-z", "--others", "--exclude-standard"];
+        let paths = git_bytes(project_root, &args.map(OsStr::new))?;
         entries.extend(worktree_entries(
             project_root,
             &paths,
@@ -1125,6 +1140,13 @@ fn git_env_kept(key: &std::ffi::OsStr) -> bool {
 /// `git_env_kept` part of the caller's environment.
 // trace:STORY-3120 | ai:claude
 fn git_text(root: &Path, args: &[&str]) -> Result<String> {
+    let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+    Ok(String::from_utf8(git_bytes(root, &args)?)?)
+}
+
+/// `git_text` with raw-byte arguments and output, for repository paths that
+/// need not be UTF-8. trace:TASK-3869 | ai:claude
+fn git_bytes(root: &Path, args: &[&OsStr]) -> Result<Vec<u8>> {
     let mut cmd = aida_core::git_ops::host_git_command(root);
     // The builder's own pins survive the clear; inherited variables do not.
     let pins: Vec<_> = cmd
@@ -1146,31 +1168,45 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
         .arg("--literal-pathspecs");
     // No textconv driver from the reviewed tree's attributes ever runs.
     match args.split_first() {
-        Some((sub @ (&"diff" | &"show" | &"log"), rest)) => {
+        Some((sub, rest)) if ["diff", "show", "log"].map(OsStr::new).contains(sub) => {
             cmd.arg(sub).arg("--no-textconv").args(rest)
         }
         _ => cmd.args(args),
     };
-    let out = cmd
-        .output()
-        .with_context(|| format!("run git {}", args[0]))?;
+    let sub = args[0].to_string_lossy();
+    let out = cmd.output().with_context(|| format!("run git {sub}"))?;
     anyhow::ensure!(
         out.status.success(),
-        "git {} failed: {}",
-        args[0],
+        "git {sub} failed: {}",
         String::from_utf8_lossy(&out.stderr).trim()
     );
-    Ok(String::from_utf8(out.stdout)?)
+    Ok(out.stdout)
+}
+
+/// The git argument a path's `encode_path` text form names.
+// trace:TASK-3869 | ai:claude
+fn path_arg(text: &str) -> std::ffi::OsString {
+    use std::os::unix::ffi::OsStringExt;
+    std::ffi::OsString::from_vec(decode_path(text))
 }
 
 fn path_matches_any_scope(candidate: &str, scopes: &[String]) -> bool {
-    let norm_cand = candidate.replace('\\', "/");
-    let norm_cand = norm_cand.trim_matches('/');
+    // Scope the raw bytes: an escape's `\` is never a separator.
+    // trace:TASK-3869 | ai:claude
+    let norm = |b: &[u8]| -> Vec<u8> {
+        let b: Vec<u8> = b
+            .iter()
+            .map(|&c| if c == b'\\' { b'/' } else { c })
+            .collect();
+        let start = b.iter().position(|&c| c != b'/').unwrap_or(b.len());
+        let end = b.iter().rposition(|&c| c != b'/').map_or(start, |e| e + 1);
+        b[start..end].to_vec()
+    };
+    let norm_cand = norm(&decode_path(candidate));
     for s in scopes {
-        let norm_s = s.replace('\\', "/");
-        let norm_s = norm_s.trim_matches('/');
-        if norm_s.is_empty() || norm_cand == norm_s || norm_cand.starts_with(&format!("{norm_s}/"))
-        {
+        let norm_s = norm(s.as_bytes());
+        let under = norm_cand.strip_prefix(&norm_s[..]);
+        if norm_s.is_empty() || under.is_some_and(|rest| rest.is_empty() || rest[0] == b'/') {
             return true;
         }
     }
@@ -1204,21 +1240,23 @@ fn collect_git_scan_entries(
         "--",
     ];
     args.extend(paths.iter().map(String::as_str));
-    let paths = git_text(project_root, &args)?;
+    let args: Vec<&OsStr> = args.into_iter().map(OsStr::new).collect();
+    let paths = git_bytes(project_root, &args)?;
     worktree_entries(project_root, &paths, FileChangeKind::Scanned, excludes)
 }
 
 fn worktree_entries(
     root: &Path,
-    paths: &str,
+    paths: &[u8],
     kind: FileChangeKind,
     excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
     use std::io::Read;
     let mut entries = Vec::new();
-    for path in paths.split_terminator('\0').collect::<BTreeSet<_>>() {
+    let paths = paths.split(|&b| b == 0).filter(|p| !p.is_empty());
+    for path in paths.collect::<BTreeSet<_>>() {
         let mut entry = RawDiffEntry {
-            path: path.into(),
+            path: encode_path(path),
             old_path: None,
             kind,
             additions: 0,
@@ -1232,12 +1270,12 @@ fn worktree_entries(
         // it still exists, and an lstat error (an unreadable parent) keeps it
         // listed as excluded instead of failing the scan. trace:TASK-3869 | ai:claude
         if classify_compiled(&entry, excludes).is_some() {
-            if !matches!(locate_confined(root, path.as_bytes()), Ok(Located::Missing)) {
+            if !matches!(locate_confined(root, path), Ok(Located::Missing)) {
                 entries.push(entry);
             }
             continue;
         }
-        match open_confined(root, path.as_bytes())? {
+        match open_confined(root, path)? {
             Confined::Missing => continue,
             Confined::NonRegular(kind) => entry.non_regular = Some(kind),
             Confined::File(mut file) => {
@@ -1257,15 +1295,22 @@ fn worktree_entries(
 
 fn read_file_at_revision(root: &Path, rev: Option<&str>, path: &str) -> Result<Option<String>> {
     if let Some(rev) = rev {
-        let spec = format!("{rev}:{path}");
-        return git_text(root, &["show", "--end-of-options", &spec, "--"]).map(Some);
+        let mut spec = std::ffi::OsString::from(format!("{rev}:"));
+        spec.push(path_arg(path));
+        let args = [
+            "show".as_ref(),
+            "--end-of-options".as_ref(),
+            &*spec,
+            "--".as_ref(),
+        ];
+        return Ok(Some(String::from_utf8(git_bytes(root, &args)?)?));
     }
     Ok(read_workspace_file(root, path)?.and_then(|bytes| String::from_utf8(bytes).ok()))
 }
 
 fn read_workspace_file(root: &Path, path: &str) -> Result<Option<Vec<u8>>> {
     use std::io::Read;
-    let Confined::File(mut file) = open_confined(root, path.as_bytes())? else {
+    let Confined::File(mut file) = open_confined(root, &decode_path(path))? else {
         return Ok(None);
     };
     let mut bytes = Vec::new();
@@ -3065,7 +3110,8 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let fifo = Command::new("mkfifo").arg(root.join("fifo")).status();
         assert!(fifo.unwrap().success());
         let listed = "link.rs\0dirlink/secret.rs\0sub/\0fifo\0ok.rs\0gone.rs\0";
-        let entries = worktree_entries(&root, listed, FileChangeKind::Scanned, &[]).unwrap();
+        let entries =
+            worktree_entries(&root, listed.as_bytes(), FileChangeKind::Scanned, &[]).unwrap();
         let kinds: Vec<_> = entries
             .iter()
             .map(|e| (e.path.as_str(), e.non_regular))
@@ -3222,7 +3268,8 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let excludes = compile_exclusions(&patterns).unwrap();
         let listed = ".env\0.env.local\0.env.prod\0id_rsa\0api.generated.rs\0skip.rs\0ok.rs\0";
         LEAF_OPENS.with(|o| o.borrow_mut().clear());
-        let entries = worktree_entries(root, listed, FileChangeKind::Scanned, &excludes).unwrap();
+        let entries =
+            worktree_entries(root, listed.as_bytes(), FileChangeKind::Scanned, &excludes).unwrap();
         let opened = LEAF_OPENS.with(|o| o.take());
         assert_eq!(opened, [b"ok.rs".to_vec()], "an excluded path was opened");
         let labels: Vec<_> = entries
@@ -3253,6 +3300,89 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             classify_compiled(&link, &[]).map(|r| r.label()).as_deref(),
             Some("secret_sensitive_path")
         );
+    }
+
+    /// A Latin-1 file name is inventoried, batched, read, anchored, reported
+    /// escaped and written to SARIF as the exact bytes; a UTF-8 name beside
+    /// it is unchanged. trace:TASK-3869 | ai:claude
+    #[test]
+    fn t3869_non_utf8_path_round_trips_to_sarif() {
+        use std::os::unix::ffi::OsStrExt;
+        let temp = tempfile::tempdir().unwrap();
+        let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir(&bin).unwrap();
+        let runner = bin.join("runner");
+        let extra = [("AIDA_REVIEW_RUNNER_CMD", runner.to_str())];
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &extra);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("keep.txt"), "x\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        let latin1 = OsStr::from_bytes(b"caf\xe9.rs");
+        std::fs::write(root.join(latin1), "// a\nfn latin() {}\n").unwrap();
+        std::fs::write(root.join("naïve.rs"), "// b\nfn utf8() {}\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        crate::test_git::commit_fixture(&root);
+        let (prompt, canned) = (temp.path().join("prompt"), temp.path().join("canned"));
+        let row = |p: &str, code: &str| {
+            format!(
+                r#"{{"path":"{p}","severity":"low","category":"bug","message":"m","existing_code":"{code}"}}"#
+            )
+        };
+        let (escaped, utf8) = (r"caf\\xE9.rs", "naïve.rs");
+        let finder = format!(
+            r#"{{"findings":[{},{}],"files":[{{"path":"{escaped}","status":"reviewed"}},{{"path":"{utf8}","status":"reviewed"}}]}}"#,
+            row(escaped, "fn latin() {}"),
+            row(utf8, "fn utf8() {}")
+        );
+        std::fs::write(&canned, finder).unwrap();
+        let body = format!(
+            "#!/bin/sh\ncat >{}; cat {}\n",
+            prompt.display(),
+            canned.display()
+        );
+        let src = temp.path().join("src");
+        std::fs::write(&src, body).unwrap();
+        let status = Command::new("install")
+            .arg("-m755")
+            .args([&src, &runner])
+            .status();
+        assert!(status.unwrap().success());
+        let args = ReviewPrepareArgs {
+            from: Some(base),
+            run_review: true,
+            write: Some("out.md".into()),
+            sarif: Some("out.sarif".into()),
+            ..Default::default()
+        };
+        handle_review_prepare(&args, &store).unwrap();
+        let sent = std::fs::read_to_string(&prompt).unwrap();
+        let report = std::fs::read_to_string(root.join("out.md")).unwrap();
+        for (name, added) in [(r"caf\xE9.rs", "+fn latin"), ("naïve.rs", "+fn utf8")] {
+            let header = format!("### File: `{name}`");
+            assert!(sent.contains(&header) && sent.contains(added), "{sent}");
+            assert!(report.contains(name), "{report}");
+        }
+        let sarif: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("out.sarif")).unwrap()).unwrap();
+        let mut uris = BTreeMap::new();
+        for r in sarif["runs"][0]["results"].as_array().unwrap() {
+            let loc = &r["locations"][0]["physicalLocation"];
+            assert_eq!(loc["region"]["startLine"], 2, "anchored: {r}");
+            let uri = loc["artifactLocation"]["uri"].as_str().unwrap();
+            let mut parts = uri.split('%');
+            let mut raw = parts.next().unwrap().as_bytes().to_vec();
+            for p in parts {
+                raw.push(u8::from_str_radix(&p[..2], 16).unwrap());
+                raw.extend(p[2..].as_bytes());
+            }
+            uris.insert(raw, uri.to_owned());
+        }
+        assert_eq!(uris.len(), 2, "{sarif}");
+        assert_eq!(uris[&b"caf\xe9.rs"[..]], "caf%E9.rs");
+        assert!(uris.contains_key("naïve.rs".as_bytes()));
     }
 
     #[test]
