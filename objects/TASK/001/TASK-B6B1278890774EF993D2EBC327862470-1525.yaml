@@ -10,12 +10,12 @@ description: |
   - AC2: it NEVER re-execs mid-job. A job in flight finishes first, and a job submitted during the re-exec window is queued, not lost.
   - AC3: tests: deleted exe → re-exec when idle; a sha mismatch → re-exec when idle; a job in flight → no re-exec until it ends; the binding survives (a job after the re-exec still binds and runs).
   - AC4: the same rule for the relay/runner loops that hold the live binary, if they share the runner code.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:49.537367250Z
-modified_at: 2026-11-26T23:16:55.745175011Z
+modified_at: 2026-11-27T00:53:22.965268657Z
 req_type: Task
 tags:
 - deputy
@@ -242,6 +242,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21a7e-1f47-7710-bc5d-45439a2f115b
+  author: aida-auto-bump
+  timestamp: 2026-11-27T00:53:22.887559047Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21a7e-1f95-7df2-b7b4-121dfb8505cf
+  timestamp: 2026-11-27T00:53:22.965263345Z
+  agent: aida
+  commit_sha: ffc12ad011165bfefa48257ca6f4c1e7d70c338e
+  summary: 'PR-4683 (TASK-3919) reviewed at 7498cace; 2 commits behind main, no finding depends on base changes. CI pending at review time. AC1 verified by task3919_stale_image_is_a_deleted_or_older_live_image_only, task3919_deleted_image_reexecs_when_idle_and_the_binding_survives, task3919_sha_mismatch_reexecs_when_idle_and_the_binding_survives and task3919_reexec_keeps_args_name_and_the_held_grant. The idle check (runner.rs) runs only after a round that claimed no job, because handle() is synchronous and is followed by continue. exec_runner keeps argv (args_os().skip(1)) and sets GRANT_ENV to the current (possibly refreshed) grant and AIDA_BIN to live. The runner-reexec audit row and the runner.log line record old_sha, new_sha and reason. Pid, start time and ancestry survive exec, so runner_grant/grant_check and the service host identity still match. One deliberate narrowing: a non-deleted image outside the live directory, such as a worktree build the operator chose, is not re-exec''d even when its sha differs. This matches the provisional-binary practice, and the test documents it. AC2 verified: the round-trip test asserts the in-flight job is Done before the exec and that a job written during the window stays in accepted/. task3919_a_submit_waits_out_the_exec_window_only_with_the_marker covers the marker-gated connect wait. The marker is written before the socket is dropped, removed on exec failure and on successor start, and grants nothing. AC3 verified by the four tests above; the successor run under the handed-over grant binds and runs the window''s job. The real execve is not unit-run, but its command builder is tested. AC4 not-applicable-because the --loop supervisor shares no runner code and already spawns service_program() (the live image, BUG-2654), so each respawned child re-execs by this rule. Inventory (store-writers, launch inventory) and test-time-budget updates are consistent. No defects found.'
+  review_verdict: approved
 filed_at:
   code_sha: d38eee408f37b69d3ef583ebe7257a3995d6803a
   branch: main
@@ -251,4 +265,6 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
+  completed_at: 2026-11-27T00:53:22.887550184Z
+  completion_sha: ffc12ad011165bfefa48257ca6f4c1e7d70c338e
   reopened_at_sha: aab3a10d798ca22e48470cc7a3f1e5e1d02e99ae
