@@ -2732,7 +2732,9 @@ fn bug2584_remembered_refusal_still_refuses() {
 /// (90 MB, some with hundreds of lines), while a member's own ledger is a
 /// few lines. Ledgers on unrelated specs are never read; ledgers on the
 /// member's spec are each parsed a bounded number of times, however many
-/// events they hold, and the member's gate result is unchanged.
+/// events they hold, and the member's gate result is unchanged. The bound is
+/// proven by counting ledger bytes read on a small fixture, not by timing a
+/// large one (the 8 x 40 + 100 ledger fixture took 85 s in CI).
 // trace:BUG-2584 | ai:claude
 #[test]
 fn bug2584_member_gate_parses_each_sibling_ledger_boundedly() {
@@ -2758,24 +2760,43 @@ fn bug2584_member_gate_parses_each_sibling_ledger_boundedly() {
         (member, bytes)
     };
     // `events` refusals on `spec`, on change `n`, each at a head the member
-    // does not contain; returns the ledger's size.
+    // does not contain; returns the ledger's size. One event is built by the
+    // writer (its patch identity is a git call); the rest copy it with their
+    // own head, and the ledger is appended in one write.
+    // trace:BUG-2584 | ai:claude
     let plant = |n: u64, spec: &str, events: usize, finding: usize| {
-        for e in 0..events {
-            let record = json!({"verdict":"request-changes",
+        let record = |e: usize| {
+            json!({"verdict":"request-changes",
                 "reviewed_sha":format!("{:040x}", n * 1000 + e as u64),
                 "recorded_at":chrono::Utc::now().to_rfc3339(), "recorded_by":"sibling reviewer",
-                "findings":vec!["x".repeat(finding)]});
-            ledger::store::append_one(
-                f.root(),
-                ledger::event::verdict_event(
-                    f.root(),
-                    ledger::ChangeKey::pr(n),
-                    record.as_object().unwrap(),
-                    Some(&ledger::GateSpec::with_key(spec, None)),
-                ),
-            )
-            .unwrap();
-        }
+                "findings":vec!["x".repeat(finding)]})
+        };
+        let first = ledger::event::verdict_event(
+            f.root(),
+            ledger::ChangeKey::pr(n),
+            record(0).as_object().unwrap(),
+            Some(&ledger::GateSpec::with_key(spec, None)),
+        );
+        let batch = (0..events)
+            .map(|e| {
+                let mut event = first.clone();
+                let record = record(e);
+                event.head = Some(record["reviewed_sha"].as_str().unwrap().to_string());
+                event.body = ledger::event::EventBody::Verdict {
+                    record: record.as_object().unwrap().clone(),
+                };
+                event
+            })
+            .collect();
+        let written = ledger::store::append(f.root(), ledger::ChangeKey::pr(n), batch).unwrap();
+        assert_eq!(
+            written
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count(),
+            events,
+            "every planted refusal is on the ledger"
+        );
         fs::metadata(ledger::store::ledger_file(
             f.root(),
             ledger::ChangeKey::pr(n),
@@ -2784,21 +2805,23 @@ fn bug2584_member_gate_parses_each_sibling_ledger_boundedly() {
         .len()
     };
     let (alone, base_bytes) = measure(&mut live, "baseline");
-    let unrelated: u64 = (1000..1100u64)
-        .map(|n| plant(n, &format!("TASK-{n}"), 2, 64 * 1024))
+    let unrelated: u64 = (1000..1010u64)
+        .map(|n| plant(n, &format!("TASK-{n}"), 1, 64 * 1024))
         .sum();
-    let (_, with_unrelated) = measure(&mut live, "100 unrelated ledgers");
+    let (_, with_unrelated) = measure(&mut live, "10 unrelated ledgers");
     assert!(
         with_unrelated.saturating_sub(base_bytes) < unrelated / 20,
         "ledgers on unrelated specs were read: {with_unrelated} bytes against {base_bytes}"
     );
-    let same: u64 = (2000..2008u64)
-        .map(|n| plant(n, "BUG-b6b1278890774ef993d2ebc327862470-173", 40, 16 * 1024))
+    // trace:BUG-2584 | ai:claude — 3 ledgers of 24 events: a per-event
+    // re-read costs >= 24 reads of each ledger, the bounded gate ~5.
+    let same: u64 = (2000..2003u64)
+        .map(|n| plant(n, "BUG-b6b1278890774ef993d2ebc327862470-173", 24, 4 * 1024))
         .sum();
-    let (member, bytes) = measure(&mut live, "8 same-spec ledgers of 40 events");
+    let (member, bytes) = measure(&mut live, "3 same-spec ledgers of 24 events");
     assert_eq!(member, alone, "refusals at other heads change nothing");
     // Reading every same-spec ledger once per spec-keyed selection is
-    // bounded; re-reading a ledger per event in it is 40 times that.
+    // bounded; re-reading a ledger per event in it is 24 times that.
     assert!(
         bytes.saturating_sub(with_unrelated) < 8 * same,
         "the member gate read {bytes} ledger bytes for {same} bytes of same-spec ledgers"
