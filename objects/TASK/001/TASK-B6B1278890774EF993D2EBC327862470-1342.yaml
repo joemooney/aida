@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T03:53:13.326465470Z
+modified_at: 2026-11-27T03:54:22.659179909Z
 req_type: Task
 tags:
 - review
@@ -212,6 +212,18 @@ comments:
   created_at: 2026-11-27T03:46:45.734652808Z
   modified_at: 2026-11-27T03:46:45.734652808Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b24-1c6a-7192-a7af-49170d76b21c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:54):
+    # TASK-3869 r2 on #4710 (integration-30 2026-11-26 20:50; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-task-3869-fresh / PR #4710. Keep the "(Refs TASK-3869)" title. Do NOT merge main.
+     (1) `git fetch origin integration && git merge origin/integration` (>= 4fc9b9ab6c5) as a MERGE COMMIT. The only conflict is scripts/ratchet-set.json (S6's names next to t3869's): resolve it as a UNION. Everything else auto-merges; no new RawDiffEntry literal landed, so the new non_regular field breaks nothing.
+     (2) Targeted tests: `cargo test --profile agent -p aida-cli-lib --lib -- review_prepare:: t3869_ s6_ s5d_ bug2779` and `-p aida-core --lib -- review_engine`; then `make check-ci-source` (NOT check-ci-fast: advisor, BUG-2782).
+     (3) Push to #4710. COMMIT and PUSH. integration-30 re-pre-checks it; the advisor needs a final independent review at the new head.
+  created_at: 2026-11-27T03:54:22.659179909Z
+  modified_at: 2026-11-27T03:54:22.659179909Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
