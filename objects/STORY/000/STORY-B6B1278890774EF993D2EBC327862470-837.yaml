@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T03:47:17.908807720Z
+modified_at: 2026-11-27T03:50:31.749247910Z
 req_type: Story
 tags:
 - containment
@@ -183,6 +183,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21b20-a187-72f2-914e-3983d21d1df6
+  author: joe
+  timestamp: 2026-11-27T03:50:53.063905314Z
+  session_id: 01a21b1d8682
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
@@ -191,3 +196,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b728c3373d1
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'REQUEST CHANGES at 8f859ca83b (14 behind integration; no finding depends on base changes. The base''s runner commits are BUG-2775 and BUG-2779, not confinement). The head is unchanged since the integration pre-check MUST-1 and does not implement the binding advisor ruling: (a) no --sandbox in AGY argv; (c) agy is on the automatic challenger pick although the live probe shows plan+sandbox still allows reads anywhere; (b) the read-confinement residual is not recorded. AC status. AC1 sketch: not-applicable, because the advisor narrowed it to STORY-2460. AC2 lane canary: not-applicable, same reason. AC3 doctor --lane-host non-interactive agy auth probe naming the keyring-only fix: verified by story3202_agy_auth_probe_classifies_without_hanging (KeyringOnly/Rejected/Ready/Timeout/Failed plus fix text); the env -u DBUS fix itself is not verified live. AC4 agy as review runner via S3a spawn: the spawn contract is verified by s3a_runner_spawn_contract, story3202_agy_effort_mapping_and_print_timeout, story3202_agy_auth_failure_is_a_typed_cause and story3202_challenger_picks_agy_when_claude_finds, but it is unmet on the ruled confinement terms (findings 1-3). What passes: env allowlist (GEMINI_API_KEY only), empty cwd, stdin prompt via --print=, print_timeout never 0, AuthRequired only on a failed exit and only from stderr, the [AI:antigravity] alias, effort allowlist. CI: fast gates pass, fast compile pending at review time. Two p3 follow-ups are deferred.'
+  recovery_hint: address the review findings, move STORY-3202 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-27T03:50:31.749247910Z
