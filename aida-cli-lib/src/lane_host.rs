@@ -393,6 +393,10 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
         }
         checks.extend(vendor_checks);
     }
+    // trace:STORY-3202 | ai:claude
+    let names: Vec<_> = vendors.iter().map(|v| v.as_str()).collect();
+    let probe = crate::vendors::host_diagnostics::agy_lane_probe(&names, &env, home.as_deref());
+    checks.extend(probe);
     if vendors.is_empty() {
         checks.push(check(
             "enabled-agents",

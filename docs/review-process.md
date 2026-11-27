@@ -370,6 +370,8 @@ When `--fail-on` matches and the challenger was also unavailable, exit code 1 wi
 
 `aida review prepare --pr <N> --post-comment` posts the Markdown report as a comment on change N. Posting is outward-facing, so it happens only when you pass the flag. It is refused without `--pr`, and no environment variable, review-rules setting, seat or CI default turns it on.
 
+It is also refused when agy is the finder or the challenger. agy's tool confinement in print mode has not been verified, and it may read files outside the review, so its output is not published. For the same reason the automatic challenger pick never chooses agy; name it with `--challenger-agent agy`.
+
 The comment goes through AIDA's forge client for the origin, the same one that reads the `--pr` metadata. AIDA makes no separate forge CLI or HTTP call for it.
 
 Agent text in the report never renders as Markdown. Each finding's message and each challenger reason sits in a code block whose fence is longer than any backtick run in the text. Paths, severities and categories are code spans. Mentions, HTML, links and headings in that text show up as literal characters.

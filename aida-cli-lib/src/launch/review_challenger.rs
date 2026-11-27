@@ -7,7 +7,7 @@
 
 use super::review_runner::RunnerCall;
 use super::review_tuning::{resolve_challenger, TrustedBase};
-use crate::vendors::review_runner::{ReviewVendor, REVIEW_VENDORS};
+use crate::vendors::review_runner::{review_vendor, ReviewVendor, REVIEW_VENDORS};
 use aida_core::review_engine::RawReviewFinding;
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -54,8 +54,8 @@ pub(crate) fn detect_ai_authors(messages: &str) -> BTreeSet<&'static str> {
         let Some(end) = tag.find(']') else { continue };
         let tools = tag[..end].split(':').next().unwrap_or_default();
         for tool in tools.split('+').map(str::trim) {
-            let named = REVIEW_VENDORS.iter().filter(|v| v.program == tool);
-            found.extend(named.map(|v| v.program));
+            // Aliases (`antigravity`) resolve as `--agent` does. trace:STORY-3202 | ai:claude
+            found.extend(review_vendor(tool).ok().map(|v| v.program));
         }
     }
     found
@@ -74,7 +74,11 @@ fn pick_challenger(
         });
         return (finder.agent, note);
     };
-    let mut order = REVIEW_VENDORS.to_vec();
+    // An unverified vendor (agy) is never picked; only `--challenger-agent`
+    // names it. trace:STORY-3202 | ai:claude
+    let mut order: Vec<_> = (REVIEW_VENDORS.into_iter())
+        .filter(|v| v.confinement_verified)
+        .collect();
     order.sort_by_key(|v| v.program == own.program);
     let pick = order
         .into_iter()
@@ -373,9 +377,12 @@ mod tests {
             "[AI:claude] feat(x): y (STORY-1)\n\n[ai:Codex+agy:med] fix\n[AI:gemini] z [AI:bogus";
         assert_eq!(
             detect_ai_authors(log).into_iter().collect::<Vec<_>>(),
-            ["claude", "codex"]
+            ["agy", "claude", "codex"]
         );
         assert!(detect_ai_authors("human commit\n").is_empty());
+        // trace:STORY-3202 | ai:claude
+        let only = detect_ai_authors("[AI:antigravity] x\n");
+        assert_eq!(only.into_iter().collect::<Vec<_>>(), ["agy"]);
     }
 
     /// The challenger spawns through the S3a contract (empty cwd, cleared env,
@@ -515,6 +522,65 @@ mod tests {
         assert!(err.to_string().contains("AIDA_REVIEW_RUNNER_CMD"), "{err}");
         // Outside the allowlist: refused before anything runs.
         assert!(review_vendor("gemini").is_err() && review_vendor("sh").is_err());
+    }
+
+    /// agy's confinement is not verified live, so the automatic pick never
+    /// chooses it, not even when it is the only other installed vendor; an
+    /// explicit `--challenger-agent agy` runs it through the S3a contract with
+    /// `--sandbox`, plan mode and the deny-all settings.
+    // trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_auto_pick_never_chooses_agy_explicit_override_is_confined() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let dump = "#!/bin/sh\necho \"cwd=$(ls -A)\"; env | sed 's/^/env=/'\n\
+            for a in \"$@\"; do echo \"arg=$a\"; done; echo \"stdin=$(wc -c | tr -d ' ')\"\n";
+        for name in ["claude", "agy"] {
+            crate::test_exec::write_executable(&bin.path().join(name), dump);
+        }
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let pairs = [
+            ("PATH", path.as_str()),
+            ("GEMINI_API_KEY", "gem"),
+            ("ANTHROPIC_API_KEY", "sentinel"),
+        ];
+        let env: Vec<(OsString, OsString)> =
+            pairs.iter().map(|(k, v)| (k.into(), v.into())).collect();
+        let (base, call) = (
+            TrustedBase::default(),
+            finder("claude", checkout.path(), &env),
+        );
+        let pick = |tags: &str, forced, effort| {
+            challenger_call(&call, &detect_ai_authors(tags), forced, effort, &base).unwrap()
+        };
+        // Only claude and agy installed, and claude wrote it: still not agy.
+        for tags in ["[AI:claude] x", "human commit"] {
+            let (pass, summary) = pick(tags, None, None);
+            assert_eq!(pass.vendor().map(|v| v.program), Some("claude"), "{tags}");
+            assert_eq!(summary.challenger_agent.as_deref(), Some("claude"));
+            assert!(summary.note.is_some(), "{tags}");
+        }
+        assert!(REVIEW_VENDORS
+            .iter()
+            .any(|v| v.program == "agy" && !v.confinement_verified));
+        let agy = review_vendor("agy").ok();
+        let (pass, summary) = pick("[AI:claude] x", agy, Some("max"));
+        assert_eq!(summary.challenger_agent.as_deref(), Some("agy"));
+        let out = pass.run("the prompt").unwrap();
+        let want = [
+            "cwd=\n",
+            "env=GEMINI_API_KEY=gem",
+            "arg=--sandbox",
+            "arg=--mode=plan",
+            "arg=--settings={\"permissions\":{\"deny\":[\"read_file(*)\"",
+            "arg=--print=",
+            "arg=max",
+            "arg=--print-timeout=15s",
+            "stdin=10",
+        ];
+        assert!(
+            want.iter().all(|w| out.contains(w)) && !out.contains("sentinel"),
+            "{out}"
+        );
     }
 
     #[test]

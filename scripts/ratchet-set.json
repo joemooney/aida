@@ -66,6 +66,9 @@
         "s4_adversarial_run_suppresses_but_gates_refuted_findings",
         "s5_post_comment_is_opt_in_and_requires_pr",
         "s5_posted_comment_renders_agent_text_inert",
+        "story3202_post_comment_refuses_unverified_agy_before_any_run",
+        "story3202_pr_checkout_vendor_never_picks_the_finder",
+        "story3202_unverified_vendor_is_refused_as_a_default",
         "s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced",
         "s5b_batch_diff_pathspecs_are_literal",
         "s5b_cut_balanced_tracks_tilde_fences_and_inline_spans",
@@ -101,7 +104,8 @@
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags",
-        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing"
+        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing",
+        "story3202_auto_pick_never_chooses_agy_explicit_override_is_confined"
       ],
       "scope": "module"
     },
@@ -118,7 +122,9 @@
         "s3a_runner_spawn_contract",
         "s3a_runner_survives_default_sigpipe",
         "s3a2_runner_fails_closed_on_escaped_descendant",
-        "s3b_runner_argv_carries_only_validated_tuning"
+        "s3b_runner_argv_carries_only_validated_tuning",
+        "story3202_agy_auth_failure_is_a_typed_cause",
+        "story3202_agy_effort_mapping_and_print_timeout"
       ],
       "scope": "module"
     },
