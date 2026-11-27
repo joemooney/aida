@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:19:43.340877709Z
+modified_at: 2026-11-27T05:19:46.669861199Z
 req_type: Story
 tags:
 - containment
@@ -239,17 +239,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T05:17:41.757809818Z
   modified_at: 2026-11-27T05:17:41.757809818Z
-- id: 01a21b72-396d-75a2-810e-e22819b66a49
+- id: 01a21b72-456a-79f1-843d-eceec5461ba2
   author: joe
   content: |-
-    ADVISOR RULING 22:19 (review CR), binding in #4716 r2 together with the golden fix:
-    - The default review vendor (run_review_agent → resolve_default_vendor) resolves ONLY from trusted config: the main worktree or merge-base .aida config, plus the user's ~/.aida/agents.toml. Never from the PR checkout under review.
-    - agy is never a default vendor.
-    - Tests: a PR checkout that sets [agents] vendor = agy or codex does not change the finder, and agy is refused as a default.
-    Integration note: this gap predates this PR. BUG-2775's run_review_agent(…, &project_root, …) is already on main, and my S5c/S5d pre-checks missed that it reads [agents] from the checkout under review. The docs from S5e #4721 say the [agents] reviewer seat is read from the merge base; that claim should be checked once r2 lands.
-  created_at: 2026-11-27T05:19:43.340877709Z
-  modified_at: 2026-11-27T05:19:43.340877709Z
-  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:19):
+    # STORY-3202 r2 on #4716 (advisor-122 ruling 2026-11-26 22:19: a VALID security CR at 4c941fb5; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-story-3202-agy-review / PR #4716. Keep the title. Do NOT merge main.
+    THE BUG: a PR can pick its own reviewer vendor by adding `[agents] vendor = "agy"` (or "codex") to the .aida/config.toml in its own checkout, because run_review_agent's default resolves the vendor from the checkout UNDER REVIEW. This is pre-existing from BUG-2775 #4684 on main, for codex too; fix it here for ALL vendors.
+    BINDING:
+     (1) The DEFAULT review vendor resolves ONLY from TRUSTED config: the operator's main worktree (main_worktree_root) or the user's config, NEVER from the PR's tree.
+     (2) A vendor with confinement_verified=false (agy) is NEVER chosen by default resolution, ONLY by an explicit --agent / --challenger-agent.
+     (3) TESTS: a PR checkout setting [agents] vendor = "agy", and one setting "codex", does NOT change the chosen finder (it stays the trusted default); an explicit --agent agy still works (with the --sandbox / plan / deny settings).
+    One targeted cargo test run (review_prepare:: review_challenger:: run_review_agent), make check-ci-source, then push to #4716. COMMIT and PUSH.
+  created_at: 2026-11-27T05:19:46.669861199Z
+  modified_at: 2026-11-27T05:19:46.669861199Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
