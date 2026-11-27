@@ -9,12 +9,12 @@ description: |
   - AC1: release a manual-train waiter when its manual train PROCESS EXITS (record pid + start time; a dead or recycled pid releases it), plus an explicit release command surfaced in `aida advisor loops train-status` (which also names the waiter file and its expiry).
   - AC2: a FIFO waiter QUEUE (not a single slot): each manual train that gives up enqueues itself; admission clears ONLY the waiter it admits; the auto-train yields while any live waiter is queued.
   - AC3: tests asserting the waiter line in `aida advisor loops train-status` (status_lines) and in `aida pr train --check` text/JSON (check_report); pid exit releases; two waiters are both kept and admitted in order.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T04:29:18.194798843Z
+modified_at: 2026-11-27T04:37:57.268888754Z
 req_type: Task
 tags:
 - admission
@@ -36,6 +36,13 @@ history:
   author: joe
   timestamp: 2026-11-27T04:27:11.023177495Z
   changes: []
+- id: 01a21b4b-b994-7383-b0d5-509180c614ff
+  author: aida-session-start
+  timestamp: 2026-11-27T04:37:57.268875728Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
