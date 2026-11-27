@@ -7065,7 +7065,7 @@ fn bug_2696_resume_and_drain_self_published_exits_set_done() {
 /// them, and return a writer for the manifest's single test list.
 // trace:BUG-2784 | ai:claude
 #[cfg(target_os = "linux")]
-fn bug_2784_ratchet_fixture(fx: &Fixture) -> impl Fn(&Path, &[&str]) {
+fn bug_2784_json_list_fixture(fx: &Fixture) -> impl Fn(&Path, &[&str]) {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     std::fs::create_dir_all(fx.main.join("scripts")).unwrap();
     for file in [".gitattributes", "scripts/json-union-merge.py"] {
@@ -7088,12 +7088,12 @@ fn bug_2784_ratchet_fixture(fx: &Fixture) -> impl Fn(&Path, &[&str]) {
 // trace:BUG-2784 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
-fn bug_2784_rework_unions_ratchet_additions_in_sandbox_without_seat_hooks() {
+fn bug_2784_rework_unions_json_list_additions_in_sandbox_without_seat_hooks() {
     if !bwrap_live_or_skip() {
         return;
     }
     let fx = fixture();
-    let write = bug_2784_ratchet_fixture(&fx);
+    let write = bug_2784_json_list_fixture(&fx);
     let id = "c0ffee278401";
     let clone = seat_with_publication_pending(&fx, "ratchet-union", id, "feat");
     write(&clone, &["a", "left"]);
@@ -7127,12 +7127,12 @@ fn bug_2784_rework_unions_ratchet_additions_in_sandbox_without_seat_hooks() {
 // trace:BUG-2784 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
-fn bug_2784_publication_merge_unions_ratchet_additions() {
+fn bug_2784_publication_merge_unions_json_list_additions() {
     if !bwrap_live_or_skip() {
         return;
     }
     let fx = fixture();
-    let write = bug_2784_ratchet_fixture(&fx);
+    let write = bug_2784_json_list_fixture(&fx);
     let clone = seat_with_pending(&fx, "ratchet-publish", "c0ffee278402", "ratchet-publish");
     write(&clone, &["a", "left"]);
     test_commit(
