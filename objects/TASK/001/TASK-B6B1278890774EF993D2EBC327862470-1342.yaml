@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T22:32:06.948507640Z
+modified_at: 2026-11-27T22:34:34.306654965Z
 req_type: Task
 tags:
 - review
@@ -369,6 +369,27 @@ comments:
   content: 'Track moved integration -> main by product-15 15:10: STORY-3120 review prepare has landed on main (p53); AC4 lane (advisor aida-d3 14:47) targets main.'
   created_at: 2026-11-27T21:55:13.456361849Z
   modified_at: 2026-11-27T21:55:13.456361849Z
+- id: 01a21f25-65c2-77c1-953e-cc115a9d06d8
+  author: dirtlab
+  content: |-
+    ## Implementer approach (AC4, Refs slice)
+
+    ### Acceptance criteria and evidence
+    - **AC4 command-level:** `t3869_non_utf8_path_round_trips_to_sarif` (aida-cli-lib review_prepare tests, cfg(unix)): a repo with `caf\xE9.rs` (Latin-1) and `naïve.rs` changed; review prepare --run-review inventories, batches, anchors and writes report + SARIF; the SARIF uri percent-decodes to the exact bytes; the UTF-8 name is unchanged. Unit test for the escape round trip in aida-core review_engine.
+
+    ### Design
+    Path identity stays a String but is an injective, lossless encoding of the raw bytes: valid UTF-8 verbatim, `\` -> `\\`, each invalid byte -> `\xHH`. Every git argument, confined open and the SARIF uri use the DECODED bytes; keys/comparisons use the injective form. A literal OsString identity through aida-core's serde types and agent JSON findings would exceed the 150-line budget, and agents must name files in JSON strings anyway. git output carrying paths is read as bytes (no from_utf8 failure, no lossy decode).
+
+    ### Expected files
+    - aida-core/src/review_engine.rs (encode/decode, SARIF uri)
+    - aida-cli-lib/src/review_prepare.rs (byte-level git output parsing, decoded git args/opens, test)
+
+    ### Ambiguities / conflicts as questions
+    - Valid UTF-8 names containing a backslash now display escaped (`a\\b`); required for injectivity. Acceptable?
+  created_at: 2026-11-27T22:34:34.306654965Z
+  modified_at: 2026-11-27T22:34:34.306654965Z
+  session_id: 01a21f22df4b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
