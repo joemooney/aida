@@ -59,7 +59,7 @@ Combining **Requirement Graphs**, **Clean-Room Rust Constraints**, and **Multi-S
 
 - **Deterministic Classification (`classify_diff_inventory`)**:
   - Git is required. Workspace mode uses HEAD and local changes, range mode uses a merge base, PR mode needs forge metadata and local refs, commit mode needs the parent, and scan mode lists tracked and non-ignored untracked files with `git ls-files`.
-  - Classifies excluded files with explicit reasons: `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, `user_excluded:<glob>`, or `oversize: N estimated tokens > cap M`.
+  - Classifies excluded files with explicit reasons: `non_regular:symlink|gitlink|other`, `binary_file`, `pure_deletion`, `generated_or_lockfile`, `aida_substrate`, `secret_sensitive_path`, `user_excluded:<glob>`, or `oversize: N estimated tokens > cap M`.
   - Seals the review scope with a canonical **SHA-256 inventory digest** (`inventory_sha256`) and flags whether the literal `trace:` occurs, without validating an ID.
 - **Optional CLI File Accountability (`--verify-coverage <ledger.json>`)**:
   - `verify_coverage_ledger` checks that **100% of `reviewable_files`** are explicitly marked `reviewed` or `skipped` (with a mandatory non-empty rationale).
