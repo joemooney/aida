@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-27T23:12:49.679576608Z
+modified_at: 2026-11-27T23:19:30.848365570Z
 req_type: Task
 tags:
 - admission
@@ -169,6 +169,12 @@ comments:
   content: PR-4768 at e0ec67aeabcc64db5b081b5588200a43e7389a00 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-27T23:15:26.382101687Z
   modified_at: 2026-11-27T23:15:26.382101687Z
+- id: 01a21f4e-8b20-7b52-8fb8-8e6e7dd97bc2
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3920-s1-parked` at head `e0ec67aeabcc64db5b081b5588200a43e7389a00`.'
+  created_at: 2026-11-27T23:19:30.848362304Z
+  modified_at: 2026-11-27T23:19:30.848362304Z
+  session_id: 01a21f21a198
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe
