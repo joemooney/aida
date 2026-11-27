@@ -1,0 +1,31 @@
+id: 01a21e9e-5759-7f13-87f1-5d306fdfc741
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1577
+title: 'Review follow-up: Test gap (AC2 wiring): the launch-time call in aida-cli-lib/src/queue_cmd/work.rs (handle_'
+description: |-
+  From BUG-2785
+  Reviewed sha: 3d7f80b08c8bb1c37284131b4705a0ec06decbac
+
+  Test gap (AC2 wiring): the launch-time call in aida-cli-lib/src/queue_cmd/work.rs (handle_queue_work, after refuse_waiting_pickup) and rework_approval_gate::check_launch have no behavioral test; the module tests exercise evaluate/apply only, so a regression that drops or mis-conditions the launch call (plan.entries.len()==1, reviewer skip) would not be caught. Add a test driving check_launch (or the queue-work admission) against an approved-at-head ledger record.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T20:07:03.257956682Z
+modified_at: 2026-11-27T20:07:03.257956682Z
+req_type: Task
+tags:
+- carried-from:BUG-2785
+- finding-hash:678bc22b
+- from-review:BUG-2785
+relationships:
+- rel_type: References
+  target_id: 01a21ba4-4a5b-7a43-8d0a-cd653b280714
+  created_at: 2026-11-27T20:07:22.785612640Z
+filed_at:
+  code_sha: 3d7f80b08c8bb1c37284131b4705a0ec06decbac
+  branch: pr-4753
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac48
+  vendor: claude
+  session: 01a21e9bf096
