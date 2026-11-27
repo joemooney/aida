@@ -12,12 +12,12 @@ description: |
   - AC2: the PRE-PUSH lane gate needs no compile beyond what the lane's own targeted test already built. Options for the advisor sketch: (a) split `check-ratchets` out of `check-ci-fast` into `check-ci-compile` (CI already runs `check-ratchets.py --profile dev` in its own job), so lanes run `check-ci-source` + their one targeted cargo run; (b) make check-ratchets reuse the lane's already-built test binaries and the binary from its targeted run (the same --profile agent), skipping a rebuild when the tree is unchanged; (c) verify-manual runs only when docs/cli or CLI surface files are touched. Whichever is chosen, the documented ~90s must be TRUE on a lane, or the doc must change.
   - AC3: any check-ci-fast step blocked >120s with ~0% CPU fails fast, naming the step and what it waits on (e.g. "cargo build lock held by pid N").
   - AC4: a regression timing check: check-ci-fast on a lane with a warm overlay and no Rust change completes under the documented budget.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T03:40:31.165617643Z
+modified_at: 2026-11-27T04:20:01.476882181Z
 req_type: Bug
 tags:
 - ci
@@ -90,6 +90,13 @@ comments:
   modified_at: 2026-11-27T03:40:31.165617643Z
   session_id: 01a21b0347d5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21b3b-1da9-7b02-bba6-afb07f0ff741
+  author: dirtlab
+  content: 'Self-review addendum: the final HEAD is 50a3387d. After the self-review, the lane gate caught two more defects, both fixed: fixture doc paths tripped the doc-path guard, and the stall fixture read os.environ, which the ExecContext ratchet forbids. The documented ~90s was not true at load average 20, so CLAUDE.md and implementer-discipline.md now give the measured figure. Final make check-ci-fast at 50a3387d: exit 0, 47 gates, 496s, no cargo. PR #4720.'
+  created_at: 2026-11-27T04:19:48.777697608Z
+  modified_at: 2026-11-27T04:19:48.777697608Z
+  session_id: 01a21b0347d5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ae3-eb20-7df1-9d88-cb4b0d85885c
   author: joe
@@ -102,6 +109,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21b3b-4fdc-7c91-a4eb-7bd612c9467d
+  author: dirtlab
+  timestamp: 2026-11-27T04:20:01.628043463Z
+  session_id: 01a21b0347d5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
@@ -110,3 +126,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 956b13f4da4
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T04:20:01.476882181Z
+  implemented_by: dirtlab
