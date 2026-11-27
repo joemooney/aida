@@ -13,12 +13,31 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:03:47.207632415Z
-modified_at: 2026-11-27T20:12:19.194336749Z
+modified_at: 2026-11-27T20:18:19.410217682Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a20d19-bbdd-7c30-8099-cbc7b18ebb9c
   created_at: 2026-11-27T20:03:59.003536417Z
+comments:
+- id: 01a21ea8-a892-7f92-920c-bac9945b78d2
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** `review_watch::train_service::bug2746_train_member_selection_alert`. The alert is not picked from a list: `failures.json` keeps one alert, built from the third failure's reason. The holder line can be absent when the busy reader's best-effort `/proc/locks` read does not show exactly this pid on the inode (e.g. a read racing parallel tests' flock churn). Fix: each recorded failure is the member-selection error that carries the holder line, retried a bounded number of times (no sleeps; `lock()` already waits ~1s per attempt), then the alert body is asserted. Evidence: one lane cargo run executing the test 20x (temporary outer loop) alongside the other bug2746 tests.
+    - **AC2 (inspection):** test-only; the diagnostic is documented best-effort ("never trusted for any decision"), so a missed read is not a product ordering bug. Stated in the PR body.
+
+    ### Expected files
+    - `aida-cli-lib/src/review_watch_train_service.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None (brief's "first alert" hypothesis does not match the code; addressed above).
+  created_at: 2026-11-27T20:18:19.410217682Z
+  modified_at: 2026-11-27T20:18:19.410217682Z
+  session_id: 01a21ea2ef37
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e9b-8e40-74c2-8dbf-64637ee9b6aa
   author: joe

@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T20:08:02.948628836Z
+modified_at: 2026-11-27T20:19:35.870145030Z
 req_type: Bug
 comments:
 - id: 01a21e9f-4084-7dc3-b559-eaaa585d367d
@@ -33,6 +33,22 @@ comments:
     - None (report only; primary checkout is never touched).
   created_at: 2026-11-27T20:08:02.948628836Z
   modified_at: 2026-11-27T20:08:02.948628836Z
+  session_id: 01a21e9d26a1
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21ea9-d33e-7fc2-aa7a-2a92e6399301
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9fe09875fa
+
+    Acceptance evidence:
+    - AC1: dev_fresh.rs autobuild_note/skip_streak/behind_line; the STALE arm of run_check_fresh (what lane-run.sh shows before its REFUSED line) now prints 'live binary Nh / M change(s) behind main; autobuild skipping since <first> (last <last>): <reason>' and 'Clear it: <hint>'. lane_host.rs adds an advisory 'autobuild' row to doctor --lane-host when the dev binary is behind. A missing or unreadable log is reported as text and never fails a check (the row is advisory).
+    - AC2: dev_fresh::tests::stale_binary_names_the_autobuild_skip_streak_and_its_clearing_hint uses a stale built sha (3 changes / 11h) and a fake log (success, then skips mixed with neutral and untimestamped lines). It asserts the since time, last time, reason, the git -C status hint and the combined line. A log ending FAILED then success gives None, and a missing log is reported. lane job: 36 passed (dev_fresh + lane_host).
+
+    Probes: (1) the prefixes match the script's log() format exactly ('skip: ', 'FAILED: ', 'promoted and verified'). (2) Lines without timestamps (git fetch output) are skipped; a 19-byte prefix is parsed by chrono before slicing, so the slice is always on a char boundary. (3) An empty log or one with no skips gives None. Only the last 256 KiB is read, starting at a whole line. (4) CRLF is handled by lines().
+    Residual risks: an up-to-date autobuild run logs nothing, so an old skip streak followed by silent no-op runs would still read as skipping. That only shows when the binary is behind, and the 'last' time lets the operator judge. The doctor row has no dedicated test; its pieces are covered by the dev_fresh tests. Report only: nothing touches the primary checkout.
+  created_at: 2026-11-27T20:19:35.870145030Z
+  modified_at: 2026-11-27T20:19:35.870145030Z
   session_id: 01a21e9d26a1
   harness_version: 2.1.319 (Claude Code)
 history:
