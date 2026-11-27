@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T08:29:14.638983837Z
+modified_at: 2026-11-27T08:33:05.496781320Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -220,6 +220,13 @@ comments:
   modified_at: 2026-11-27T08:26:02.741913653Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21c22-ffd8-7d82-b2f0-38839034a53a
+  author: dirtlab
+  content: Commit 47d9483372 references this requirement
+  created_at: 2026-11-27T08:33:05.496781320Z
+  modified_at: 2026-11-27T08:33:05.496781320Z
+  session_id: 01a21c1f3c2d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
