@@ -584,6 +584,7 @@ impl Fixture {
             max_rounds: Some(2000),
             serve_socket: false,
             pid_observer: host_observer(),
+            reexec: None,
         }
     }
     fn default_cfg(&self) -> RunnerConfig {
@@ -3352,4 +3353,217 @@ fn bug_2625_a_restarted_legacy_runner_does_not_keep_its_predecessors_job_running
         "{shown}"
     );
     assert_eq!(legacy_meta(&f, new)["runner_pid"], b_pid);
+}
+
+// ── TASK-3919: re-exec onto the live build between jobs ────────────────────
+
+/// A runner image fixture: `live/aida`, an older `live/prev/aida`, a worktree
+/// build, and `exe` links standing in for `/proc/self/exe`.
+#[cfg(unix)]
+struct Images(tempfile::TempDir);
+
+#[cfg(unix)]
+impl Images {
+    fn new() -> Self {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("live/prev")).unwrap();
+        std::fs::create_dir_all(d.path().join("wt")).unwrap();
+        for (p, body) in [
+            ("live/aida", "new"),
+            ("live/copy", "new"),
+            ("live/prev/aida", "old"),
+            ("wt/aida", "old"),
+        ] {
+            std::fs::write(d.path().join(p), body).unwrap();
+        }
+        Self(d)
+    }
+    fn live(&self) -> PathBuf {
+        self.0.path().join("live/aida")
+    }
+    fn exe(&self, target: &str) -> PathBuf {
+        let link = self
+            .0
+            .path()
+            .join(format!("exe-{}", target.replace(['/', ' '], "_")));
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(self.0.path().join(target), &link).unwrap();
+        link
+    }
+}
+
+/// The fixture's `--version` sha: the file's bytes.
+#[cfg(unix)]
+fn image_sha(p: &Path) -> Option<String> {
+    std::fs::read_to_string(p).ok()
+}
+
+// trace:TASK-3919 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3919_stale_image_is_a_deleted_or_older_live_image_only() {
+    let i = Images::new();
+    let probe = |target: &str| runner::stale_image(&i.exe(target), &i.live(), image_sha);
+    assert_eq!(probe("live/aida"), None, "the live build itself");
+    assert_eq!(probe("live/copy"), None, "another inode, same sha");
+    assert_eq!(
+        probe("wt/aida"),
+        None,
+        "a worktree build is the operator's choice"
+    );
+    let older = probe("live/prev/aida").expect("a promotion replaced it");
+    assert_eq!(
+        (older.old_sha.as_str(), older.new_sha.as_str()),
+        ("old", "new")
+    );
+    assert!(older.reason.contains("is not the live build"), "{older:?}");
+    let gone = probe("wt/aida (deleted)").expect("a deleted image");
+    assert_eq!(
+        (gone.old_sha.as_str(), gone.new_sha.as_str()),
+        ("unknown", "new")
+    );
+    assert!(gone.reason.contains("was deleted"), "{gone:?}");
+    // A live build that cannot answer `--version` is never exec'd.
+    std::fs::remove_file(i.live()).unwrap();
+    assert_eq!(probe("live/prev/aida"), None);
+    assert_eq!(probe("wt/aida (deleted)"), None);
+}
+
+// trace:TASK-3919 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3919_reexec_keeps_args_name_and_the_held_grant() {
+    let stale = runner::Stale {
+        live: "/live/aida".into(),
+        old_sha: "a".into(),
+        new_sha: "b".into(),
+        reason: "r".into(),
+    };
+    let args = ["deputy", "shell", "run", "--name", "default"].map(std::ffi::OsString::from);
+    let cmd = crate::launch::control::runner_reexec(&stale.live, args.clone(), "refreshed-grant");
+    assert_eq!(cmd.get_program(), "/live/aida");
+    assert_eq!(
+        cmd.get_args().collect::<Vec<_>>(),
+        args.iter().collect::<Vec<_>>()
+    );
+    let env: HashMap<_, _> = cmd.get_envs().collect();
+    let grant = env[std::ffi::OsStr::new(crate::gate::seat_authority::GRANT_ENV)];
+    assert_eq!(grant, Some(std::ffi::OsStr::new("refreshed-grant")));
+}
+
+/// Run a runner whose re-exec probe is `stale_image` over `target`, with a
+/// job in flight when the image goes stale and another submitted during the
+/// exec window; then the "re-exec'd" runner under the grant handed over.
+#[cfg(unix)]
+fn reexec_round_trip(target: &str, why: &str) {
+    let (f, i) = (Fixture::new("t"), Images::new());
+    let first = f.submit("sleep 0.3; touch first");
+    let late = job(
+        &f.q,
+        "touch late",
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "sess-a"),
+    );
+    let exe = i.exe(target);
+    let live = i.live();
+    let execs: Arc<Mutex<Vec<(runner::Stale, String, bool)>>> = Arc::default();
+    let mut cfg = f.default_cfg();
+    cfg.max_jobs = None;
+    let (q, home, seen, late_id) = (f.q.clone(), f.home(), execs.clone(), late.id.clone());
+    cfg.reexec = Some(runner::Reexec {
+        probe: Arc::new(move || runner::stale_image(&exe, &live, image_sha)),
+        exec: Arc::new(move |stale, grant| {
+            // AC2: the in-flight job finished before the exec.
+            let done = q
+                .read_state(&first.id)
+                .is_some_and(|s| s.state == JobState::Done)
+                && home.join("first").exists();
+            // A submit inside the window lands in accepted/ for the successor.
+            crate::deputy::write_private_new(
+                &q.accepted_job(&late.id),
+                &serde_json::to_vec(&late).unwrap(),
+            )
+            .unwrap();
+            assert!(q.reexec_marker().exists(), "submits wait while re-execing");
+            seen.lock()
+                .unwrap()
+                .push((stale.clone(), grant.to_string(), done));
+            anyhow::anyhow!("exec stand-in")
+        }),
+        every: Duration::ZERO,
+    });
+    let err = runner::run(&f.q, &cfg, &AtomicBool::new(false)).unwrap_err();
+    assert!(format!("{err:#}").contains("exec stand-in"), "{err:#}");
+    let execs = execs.lock().unwrap().clone();
+    assert_eq!(execs.len(), 1, "{execs:?}");
+    let (stale, grant, first_done) = &execs[0];
+    assert!(first_done, "re-exec waited for the job in flight");
+    assert!(stale.reason.contains(why), "{stale:?}");
+    assert_eq!(grant, RUNNER_GRANT);
+    let row =
+        f.q.read_audit()
+            .into_iter()
+            .find(|r| r.event == "runner-reexec")
+            .unwrap();
+    let detail = row.detail.unwrap();
+    assert_eq!(detail["old_sha"], stale.old_sha.as_str());
+    assert_eq!(detail["new_sha"], "new");
+    assert!(std::fs::read_to_string(f.q.root.join("runner.log"))
+        .unwrap()
+        .contains("re-exec old_sha="));
+    assert!(
+        f.q.accepted_job(&late_id).exists(),
+        "the window's job is queued, not lost"
+    );
+
+    // The successor (the same pid, so the same binding) under the handed-over
+    // grant still binds and runs the window's job.
+    let mut next = f.default_cfg();
+    next.grant_id = grant.clone();
+    next.grant = Arc::new(|id| match id {
+        RUNNER_GRANT => GrantState::Valid {
+            expires_at: Some(Utc::now() + CDuration::hours(20)),
+        },
+        _ => GrantState::Invalid("not the runner's grant".into()),
+    });
+    assert_eq!(run(&f.q, &next), 1);
+    let s = f.state(&late_id);
+    assert_eq!((s.state, s.rc), (JobState::Done, Some(0)), "{s:?}");
+    assert_eq!(s.runner.unwrap().grant_prefix, &RUNNER_GRANT[..8]);
+    assert!(f.home().join("late").exists());
+}
+
+// trace:TASK-3919 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3919_deleted_image_reexecs_when_idle_and_the_binding_survives() {
+    reexec_round_trip("wt/aida (deleted)", "was deleted");
+}
+
+// trace:TASK-3919 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3919_sha_mismatch_reexecs_when_idle_and_the_binding_survives() {
+    reexec_round_trip("live/prev/aida", "is not the live build");
+}
+
+// trace:TASK-3919 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task3919_a_submit_waits_out_the_exec_window_only_with_the_marker() {
+    let f = Fixture::new("t");
+    let path = f.q.socket_path();
+    let refused = socket::connect_through_reexec(&f.q, &path).unwrap_err();
+    assert_eq!(
+        refused.raw_os_error(),
+        Some(libc::ENOENT),
+        "no marker: no wait"
+    );
+    std::fs::write(f.q.reexec_marker(), "x").unwrap();
+    let bind = path.clone();
+    let server = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(300));
+        std::os::unix::net::UnixListener::bind(&bind).unwrap()
+    });
+    assert!(socket::connect_through_reexec(&f.q, &path).is_ok());
+    drop(server.join().unwrap());
 }
