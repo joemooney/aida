@@ -14,12 +14,34 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:18:00.049566692Z
-modified_at: 2026-11-27T23:33:43.171927832Z
+modified_at: 2026-11-27T23:37:38.436419189Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a2184f-3bb1-71a3-bc25-7077aac7bbc8
   created_at: 2026-11-27T23:18:08.996879592Z
+comments:
+- id: 01a21f5f-2384-7531-9e31-9212c5b702cf
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (fixture):** `task3936_deputy_on_a_deleted_image_is_reported_with_pid_binary_and_fix` (advisor_loop_service.rs loop_tests, runs under both review-watch and auto-train inclusions) writes a fake service receipt whose host is a real sleeping child process whose image was copied then deleted, and asserts `deputy_binary_finding` names deputy, pid, the `(deleted)` binary path and the restart + rebind fix; reaping the child clears the finding.
+    - **AC2 (unit, doctor_cmd):** `task3936_one_deputy_hosting_both_services_is_reported_once` writes both services' receipts for the same deputy:pid, asserts each service reports the same id, and that the doctor wiring yields ONE finding (also the `stale-deputy` alias selects the category).
+    - **AC3:** test-only, with one disclosed exception: the doctor dedup is inline in `doctor_multi_agent`, which only prints, so it is unobservable from a test. I extract it verbatim into `extend_deputy_binary_findings` (behaviour-preserving, ~10 lines). Fixture helpers are `#[cfg(test)]`.
+
+    ### Expected files
+    - aida-cli-lib/src/advisor_loop_service.rs
+    - aida-cli-lib/src/doctor_cmd.rs
+    - aida-cli-lib/src/tests/doctor_cmd_task_3936_deputy_binary_tests.rs (new)
+
+    ### Ambiguities / conflicts as questions
+    - Is a behaviour-preserving extraction of the dedup loop acceptable under AC3? Proceeding with it and disclosing in the PR body.
+  created_at: 2026-11-27T23:37:38.436419189Z
+  modified_at: 2026-11-27T23:37:38.436419189Z
+  session_id: 01a21f5b34f0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21f4d-52bb-7912-beea-868359f153f8
   author: joe
