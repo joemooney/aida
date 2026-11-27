@@ -1,0 +1,28 @@
+id: 01a21baf-ac98-7f01-938f-40aef0abf53d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1559
+agreed_id: TASK-3925
+title: 'Manual-train waiters: an order-insensitive PR set, an identical retry adopts its live waiter, a recycled-pid test (TASK-3924 follow-up)'
+description: |
+  Follow-up to TASK-3924 (advisor-122 2026-11-26 23:34; filed by product-15). #4728 lands with these deferred.
+
+  ## Acceptance
+  - AC1: manual-train waiter identity uses the ORDER-INSENSITIVE (sorted, deduplicated) PR set, not the exact argv order.
+  - AC2: a manual train whose PR set equals a LIVE waiter's ADOPTS that waiter (takes over its queue position, refreshes its owner pid + start time) instead of queueing behind it, so retrying from another terminal or a deputy never self-blocks.
+  - AC3: tests: the same set in a different order → adopts; the same set from a different parent → adopts; a different set → queues FIFO; a recycled pid (same pid, different start time) → treated as dead and released.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T06:27:07.544697554Z
+modified_at: 2026-11-27T06:27:07.544697554Z
+req_type: Task
+tags:
+- admission
+- auto-train
+filed_at:
+  code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1914f9fdd15
+  vendor: claude
