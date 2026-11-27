@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T04:52:35.122492156Z
+modified_at: 2026-11-27T05:15:10.923880283Z
 req_type: Task
 tags:
 - admission
@@ -48,6 +48,27 @@ comments:
     - "its manual train PROCESS": resolved as the launching (parent) process, see AC1; a one-shot invocation from a transient shell therefore releases at once (TTL fallback unchanged otherwise).
   created_at: 2026-11-27T04:52:35.122492156Z
   modified_at: 2026-11-27T04:52:35.122492156Z
+  session_id: 01a21b4b58e3
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b6d-cecb-7c33-b842-38c21fe42556
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b6b8cb49dd (git diff origin/main...HEAD, 7 files).
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: admission_owner::tests::task3924_waiter_released_when_its_retrier_exits (exited, reaped child as owner -> not queued, yield_reason None; a live owner -> auto-train yields). Release command `aida advisor loops release-waiter <ID>` (advisor_cmd_root_args.rs ReleaseWaiter -> admission_owner::release_waiter); train-status line names id, waiter file, expiry and the command: review_watch::{service,train_service}::task3924_waiter_status_tests (release removes the line; unknown id errors).
+    - AC2 [behavioral-test]: admission_owner::tests::task3924_two_waiters_kept_and_admitted_in_order (both kept in order; later refused 'queued behind' and keeps its place; admitting A clears only A; B admitted next). yield_reason yields to the head of any live queue.
+    - AC3 [behavioral-test]: train-status test above (status_value/status_lines); pr_train::check::task3924_waiter_tests (check_report's render_check text 'admission:' line and JSON manual_waiters array, absent when none). Existing bug2771 loop test updated and passing.
+    Targeted lane run: 14 passed, 0 failed (task3924|bug2771|bug2732|bug2769|help golden). Golden regenerated.
+
+    **Design choice**: the waiter's process is the one that LAUNCHED the manual train (getppid: the operator retry loop/shell). The `aida pr train` process exits on give-up, so its own pid would release every waiter at once.
+
+    **Probes**: P1 waiter identity = (prs, owner) exact match; PR order sensitive (cosmetic). P3 N waiters FIFO; same retrier with different PR lists queues separately. P4 head check and admit are not atomic: a race only reorders, the admission flock stays the authority. P5 waiters grant nothing; unreadable queue = empty (fails to prior behaviour); far-future expiry rejected; ForeignUnknown owner kept until TTL.
+
+    **Residual risks**: a head waiter launched from a long-lived interactive shell that never retries holds later manual trains and the auto-train up to 15 min (release-waiter is the remedy). A one-shot invocation from a transient shell (agent Bash) releases at once. JSON key manual_waiter (string) replaced by manual_waiters (array). The old #4711 file manual-train.waiter is ignored. Diff ~340 lines vs <=250 budget (about 150 are tests).
+  created_at: 2026-11-27T05:15:10.923880283Z
+  modified_at: 2026-11-27T05:15:10.923880283Z
   session_id: 01a21b4b58e3
   harness_version: 2.1.319 (Claude Code)
 history:
