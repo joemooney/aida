@@ -1,0 +1,30 @@
+id: 01a21ad3-97f1-7170-87b7-1ded18a206f6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-542
+agreed_id: BUG-2781
+title: 'A lane killed after committing (SIGTERM/137 mid final gate) loses its committed fix: no salvage-push of a fast-forward commit; the kill cause is not logged'
+description: |
+  advisor-122 2026-11-26 19:28 (filed by product-15). Incident: the TASK-3922 r1 lane on dell1 (#4702) COMMITTED its fix (95d33632, 2 files +164/-20) and then started its final `make check-ci-fast` lane job (j20261127T014833361-12-0, timeout 3600s). One of the agent's tool calls was SIGKILLed (exit 137) at 19:09 MST; the implementer then exited with code 143 (SIGTERM) at about 19:22, and the lane job was "stopped at lane end rc=137 after 1288s". Result: "host post-exit commit skipped: the lane exited non-zero; a failed exit is not published", so a finished, committed fix was NOT pushed. Product-15 salvaged it by hand (fetched the clone branch into the primary, verified a fast-forward, pushed). The killer is not identified (no lane wall timeout hit; dell1 had 7 lanes and 28 GiB available). The final gate also ran far longer than usual (21+ min vs ~90s) on a cold or "overlay-stale" lane target.
+
+  ## Acceptance
+  - AC1: when an implementer lane ends non-zero (a signal, a crash or a timeout) with COMMITTED, unpushed work on its PR branch that fast-forwards the remote branch, the host pushes it (salvage-push) and marks the attempt "pushed, unverified: final gate incomplete", so the work reaches review and CI instead of being lost. It never pushes uncommitted changes, a non-fast-forward, or to any branch other than the claimed one.
+  - AC2 (alternative or in addition, the implementer contract): push the committed work BEFORE running the final local gate, and re-push after a fix.
+  - AC3: the lane log records WHICH signal ended the agent, and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator), so the next incident names its cause.
+  - AC4: tests: a SIGTERM after a commit → salvage-pushed; uncommitted work only → nothing pushed and retained; a non-fast-forward → refused and retained.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T02:26:44.337877077Z
+modified_at: 2026-11-27T02:26:44.337877077Z
+req_type: Bug
+tags:
+- lanes
+- salvage
+- throughput
+filed_at:
+  code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461b694e01
+  vendor: claude
