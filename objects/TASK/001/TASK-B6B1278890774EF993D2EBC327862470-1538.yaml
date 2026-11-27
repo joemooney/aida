@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T02:01:26.963281692Z
+modified_at: 2026-11-27T02:22:23.409956753Z
 req_type: Task
 tags:
 - lanes
@@ -121,6 +121,12 @@ comments:
   modified_at: 2026-11-27T02:01:27.079413908Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21acf-9cb1-7bc2-a3de-e57c4ee40d42
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3922-salvage-idempotent` at head `95d33632892dd7438a9e336e96c8d2628c600c37`.'
+  created_at: 2026-11-27T02:22:23.409949038Z
+  modified_at: 2026-11-27T02:22:23.409949038Z
+  session_id: 01a21aa5f819
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
