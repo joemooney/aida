@@ -330,23 +330,16 @@ fn check_report(
         main = Some(roots.1.clone());
         Ok(roots)
     })?;
-    // A manual train the auto-train yields its next train to. trace:BUG-2771 | ai:claude
-    let waiter = main
+    // Manual trains the auto-train yields its next train to.
+    // trace:BUG-2771 TASK-3924 | ai:claude
+    let waiters = main
         .as_deref()
-        .and_then(crate::admission_owner::manual_waiter)
-        .map(|w| w.describe());
-    if opts.json {
-        let mut value = render_json(base.as_deref(), &rows);
-        if let Some(line) = waiter {
-            value["manual_waiter"] = serde_json::json!(line);
-        }
-        println!("{}", serde_json::to_string_pretty(&value)?);
-    } else {
-        print!("{}", render_text(base.as_deref(), &rows));
-        if let Some(line) = waiter {
-            println!("admission: {line}");
-        }
-    }
+        .map(crate::admission_owner::waiter_lines)
+        .unwrap_or_default();
+    print!(
+        "{}",
+        render_check(base.as_deref(), &rows, &waiters, opts.json)?
+    );
     let not_eligible = rows.iter().filter(|r| !r.eligible).count();
     anyhow::ensure!(
         not_eligible == 0,
@@ -354,6 +347,28 @@ fn check_report(
         rows.len()
     );
     Ok(())
+}
+
+/// `--check`'s output: the report plus one `admission:` line (text) or a
+/// `manual_waiters` array (JSON, only when any wait). trace:TASK-3924 | ai:claude
+fn render_check(
+    base: Option<&str>,
+    rows: &[Row],
+    waiters: &[String],
+    json: bool,
+) -> Result<String> {
+    if json {
+        let mut value = render_json(base, rows);
+        if !waiters.is_empty() {
+            value["manual_waiters"] = serde_json::json!(waiters);
+        }
+        return Ok(format!("{}\n", serde_json::to_string_pretty(&value)?));
+    }
+    let mut text = render_text(base, rows);
+    for line in waiters {
+        text.push_str(&format!("admission: {line}\n"));
+    }
+    Ok(text)
 }
 
 #[cfg(test)]
@@ -577,4 +592,37 @@ pub(crate) fn next_actors(
 #[cfg(test)]
 thread_local! {
     pub(crate) static TEST_CHECK_DISPATCH: std::cell::Cell<Option<fn(&CheckOptions<'_>) -> Result<()>>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+mod task3924_waiter_tests {
+    use super::*;
+
+    /// TASK-3924 AC3: `--check` appends each queued manual train as an
+    /// `admission:` line (text) and a `manual_waiters` array (JSON), and
+    /// adds nothing when none wait. trace:TASK-3924 trace:TASK-3924.AC3 | ai:claude
+    #[test]
+    fn task3924_check_report_shows_waiters_in_text_and_json() {
+        let temp = tempfile::tempdir().unwrap();
+        let id = crate::admission_owner::record_test_waiter(temp.path(), &[4464]);
+        let waiters = crate::admission_owner::waiter_lines(temp.path());
+        assert_eq!(waiters.len(), 1);
+        let text = render_check(None, &[], &waiters, false).unwrap();
+        let line = text.lines().last().unwrap();
+        assert!(
+            line.starts_with("admission: operator train for #4464 waiting since "),
+            "{text}"
+        );
+        assert!(line.contains(&format!("release-waiter {id}")), "{text}");
+        let json: serde_json::Value =
+            serde_json::from_str(&render_check(None, &[], &waiters, true).unwrap()).unwrap();
+        assert_eq!(json["manual_waiters"][0], waiters[0]);
+        assert!(render_check(None, &[], &[], false)
+            .unwrap()
+            .find("admission:")
+            .is_none());
+        let json: serde_json::Value =
+            serde_json::from_str(&render_check(None, &[], &[], true).unwrap()).unwrap();
+        assert!(json.get("manual_waiters").is_none(), "{json}");
+    }
 }

@@ -966,7 +966,7 @@ pub(crate) fn report_publication_veto(main: &Path, tree: &Path, spec: &str) -> R
     Ok(false)
 }
 
-fn refuse_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+pub(crate) fn refuse_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<()> {
     if let Some(message) = publication_veto_message(main, tree, spec)? {
         anyhow::bail!("{message}");
     }
@@ -1741,7 +1741,7 @@ fn drop_quarantine_on_refusal<T>(staged: &Staged, dry_run: bool, result: Result<
 }
 
 /// Host git in `main`, stdout trimmed; an error carries stderr.
-fn git_text(main: &Path, args: &[&str]) -> Result<String> {
+pub(crate) fn git_text(main: &Path, args: &[&str]) -> Result<String> {
     let out = aida_core::git_ops::host_git_command(main)
         .args(args)
         .output()
@@ -2036,10 +2036,10 @@ fn run_at_with_fast_gate(cwd: &Path, opts: FromSeatOptions, automatic: bool) -> 
 }
 
 // trace:TASK-2879 | ai:codex
-struct RemoteBranchPin {
+pub(crate) struct RemoteBranchPin {
     main: PathBuf,
     reference: String,
-    tip: String,
+    pub(crate) tip: String,
 }
 impl Drop for RemoteBranchPin {
     fn drop(&mut self) {
@@ -2059,7 +2059,7 @@ impl Drop for RemoteBranchPin {
 /// Observe absence separately from transport failure. Fetch through the host
 /// remote into an invocation-private ref, leaving FETCH_HEAD untouched.
 // trace:TASK-2879 | ai:codex
-fn pin_remote_branch(main: &Path, branch: &str) -> Result<Option<RemoteBranchPin>> {
+pub(crate) fn pin_remote_branch(main: &Path, branch: &str) -> Result<Option<RemoteBranchPin>> {
     let mut observe = aida_core::git_ops::host_remote_git_command(main, "origin");
     observe
         .args([
