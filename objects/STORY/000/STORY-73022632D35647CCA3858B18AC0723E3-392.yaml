@@ -1,0 +1,33 @@
+id: 01a21bb9-8935-7362-b50a-71578e4e4bb7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-392
+title: 'Review PR-4727: [AI:claude] fix(review): skip non-regular entries unread, store-only --specs, pinned-root proofs (Refs TASK-3869)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21b49`) for branch `int-task-3869-fresh3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4727>
+  - Branch: `int-task-3869-fresh3` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3869
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4727` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T06:37:53.845937986Z
+modified_at: 2026-11-27T06:37:53.845937986Z
+req_type: Story
+filed_at:
+  code_sha: 1914f9fdd1504307eec22ea247f5ac4c2ec562a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1914f9fdd1
