@@ -19,12 +19,12 @@ description: |
 
   ## Out of scope
   Making it a gate; that is a follow-up decision based on the report. No vendor or effort changes beyond the defaults.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:20:40.004099676Z
-modified_at: 2026-11-27T04:59:04.333254355Z
+modified_at: 2026-11-27T05:32:04.125094472Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -97,6 +97,13 @@ history:
   author: joe
   timestamp: 2026-11-27T04:56:50.607993248Z
   changes: []
+- id: 01a21b7d-449d-73d1-adf9-f7db105028b5
+  author: aida-session-start
+  timestamp: 2026-11-27T05:32:04.125087957Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: cb26bf94b379497686eaaaae5ad1e1e4b2ab18a0
