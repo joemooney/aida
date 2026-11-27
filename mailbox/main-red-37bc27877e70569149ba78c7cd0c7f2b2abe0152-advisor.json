@@ -1,0 +1,18 @@
+{
+  "id": "main-red-37bc27877e70569149ba78c7cd0c7f2b2abe0152-advisor",
+  "thread_id": "main-red-37bc27877e70569149ba78c7cd0c7f2b2abe0152",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795777279159,
+  "body": "Main is red at 37bc27877e70569149ba78c7cd0c7f2b2abe0152 ([AI:claude] chore(integration): agy review vendor with confinement fences, trusted-config default reviewer, review docs and same-vendor label [promotion 54] (STORY-3202) (#4736)).\nPR: #4736\nSpecs: STORY-3202\nFailing:\n- Build (ubuntu-latest) (https://github.com/joemooney/aida/actions/runs/45978879489/job/140459084307)\n  failed steps: Require every CI lane\n  | (the job log could not be read yet: `/usr/bin/gh api repos/{owner}/{repo}/actions/jobs/140459084307/logs` failed (exit status: 1))\nThe live binary stays on the last green commit, 2e8ddd85c035.\n\nIf the red survives an independent re-run or 30 minutes it is confirmed. Merging continues meanwhile.",
+  "subject": "main is red at 37bc27877e70: Build (ubuntu-latest)",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

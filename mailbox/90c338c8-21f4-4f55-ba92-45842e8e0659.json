@@ -1,0 +1,18 @@
+{
+  "id": "90c338c8-21f4-4f55-ba92-45842e8e0659",
+  "thread_id": "90c338c8-21f4-4f55-ba92-45842e8e0659",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795781643654,
+  "body": "- [STUCK-CONFLICT] #4743 at 0520107d conflicts with its base and nobody owns it, for 36 min\n  -> route a lane to resolve the conflict on #4743\n\n10 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 1 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
