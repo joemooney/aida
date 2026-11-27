@@ -16,12 +16,12 @@ description: |-
     - `parse_runner_findings_json(&str) -> Result<(Vec<RawReviewFinding>, CoverageLedger), String>` parsing structured JSON findings and file coverage emitted by an automated batch review runner.
   - `aida review prepare` in `aida-cli-lib` supports `--sarif <PATH>`, `--post-comment` (requires `--pr <N>`), and `--run-review` (executes per-batch review via `AIDA_REVIEW_RUNNER_CMD` or `claude --print`, anchors findings, and verifies coverage).
   - Unit tests in `aida-core` and `aida-cli-lib` verify SARIF generation, forge markdown rendering, and runner JSON parsing.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T07:56:21.722955657Z
+modified_at: 2026-11-27T08:36:30.891507509Z
 req_type: Story
 tags:
 - integration
@@ -1931,6 +1931,11 @@ comments:
   modified_at: 2026-11-27T07:56:21.722955657Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21c26-222b-7e70-8a13-1775c0a17bc4
+  author: lane-recovery
+  content: Reference merge `f63339b162e526637e0e3e7785388e6184fe27aa` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-27T08:36:30.891500713Z
+  modified_at: 2026-11-27T08:36:30.891500713Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
@@ -2289,6 +2294,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21c26-222b-7e70-8a13-178d26b24864
+  author: lane-recovery
+  timestamp: 2026-11-27T08:36:30.891507391Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
