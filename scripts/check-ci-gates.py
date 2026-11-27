@@ -558,8 +558,51 @@ def stderr_tty_width() -> tuple[bool, int | None]:
         return True, None
 
 
-def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float, bool]:
+# A `make check-ci-fast` step whose process tree stays under 1% CPU for this many
+# seconds is blocked (a build lock, a dead socket), not slow. trace:BUG-2782 | ai:claude
+STALL_SECS_ENV = "AIDA_GATE_STALL_SECS"
+DEFAULT_STALL_SECS = 120.0
+
+
+def process_tree(root_pid: int) -> dict[int, tuple[str, int, str]]:
+    """pid -> (comm, utime+stime+cutime+cstime ticks, wchan) for root_pid and descendants."""
+    procs: dict[int, tuple[int, str, int]] = {}
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        try:
+            stat_text = Path(f"/proc/{entry}/stat").read_text()
+        except OSError:
+            continue
+        comm = stat_text[stat_text.find("(") + 1:stat_text.rfind(")")]
+        fields = stat_text[stat_text.rfind(")") + 2:].split()
+        procs[int(entry)] = (int(fields[1]), comm, sum(int(f) for f in fields[11:15]))
+    tree, frontier = {}, [root_pid]
+    while frontier:
+        pid = frontier.pop()
+        if pid in procs and pid not in tree:
+            try:
+                wchan = Path(f"/proc/{pid}/wchan").read_text().strip()
+                wchan = "running" if wchan in ("", "0") else wchan
+            except OSError:
+                wchan = "?"
+            tree[pid] = (procs[pid][1], procs[pid][2], wchan)
+            frontier.extend(child for child, info in procs.items() if info[0] == pid)
+    return tree
+
+
+def stall_limit(env: dict[str, str]) -> float:
+    try:
+        return float(env.get(STALL_SECS_ENV, DEFAULT_STALL_SECS))
+    except ValueError:
+        return DEFAULT_STALL_SECS
+
+
+def run_gate(
+    root: Path, name: str, command: str, env: dict[str, str], stall_secs: float = 0.0
+) -> tuple[bool, float, bool]:
     started = time.monotonic()
+    last_line = [b""]
     # Preserve both streams and retain only an overlap for split error markers.
     def stream_diagnostics(source, sink):
         fetch_error = False
@@ -581,6 +624,8 @@ def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[
                 # cannot take the write (a broken pipe, a closed file, a full
                 # disk, an odd sink), like the Rust reader.
                 pass
+            if chunk.strip():
+                last_line[0] = chunk.strip().splitlines()[-1]
             evidence = tail + chunk.lower()
             fetch_error |= any(marker in evidence for marker in CARGO_FETCH_ERRORS)
             tail = evidence[-64:]
@@ -599,10 +644,58 @@ def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[
     ) as child, ThreadPoolExecutor(max_workers=2) as readers:
         stdout = readers.submit(stream_diagnostics, child.stdout, sys.stdout)
         stderr = readers.submit(stream_diagnostics, child.stderr, sys.stderr)
-        passed = child.wait() == 0
+        stalled = watch_for_stall(child, stall_secs)
+        passed = child.wait() == 0 and stalled is None
+        if stalled is not None:
+            last = last_line[0].decode("utf-8", "replace")[:200]
+            print(
+                f"STALL {name}\n        under 1% CPU for {stall_secs:.0f}s ({STALL_SECS_ENV}); killed. "
+                f"Waiting on: {stalled}\n        last output: {last or '(none)'}",
+                file=sys.stderr, flush=True,
+            )
         # Read both results even if the first one already contains evidence.
         fetch_error = any([stdout.result(), stderr.result()])
     return passed, time.monotonic() - started, fetch_error
+
+
+def watch_for_stall(child: subprocess.Popen, stall_secs: float) -> str | None:
+    """Wait for child; kill its tree and describe it once it is blocked for stall_secs."""
+    if stall_secs <= 0 or not os.path.isdir("/proc"):
+        child.wait()
+        return None
+    # Progress is 1% of one CPU over the window, at least one clock tick.
+    progress = max(1.0, os.sysconf("SC_CLK_TCK") * stall_secs / 100)
+    window_start, window_ticks = time.monotonic(), 0
+    while True:
+        try:
+            child.wait(timeout=min(5.0, stall_secs / 4))
+            return None
+        except subprocess.TimeoutExpired:
+            pass
+        tree = process_tree(child.pid)
+        ticks = sum(info[1] for info in tree.values())
+        now = time.monotonic()
+        if ticks - window_ticks >= progress:
+            window_start, window_ticks = now, ticks
+        elif now - window_start >= stall_secs:
+            for pid in tree:
+                with contextlib.suppress(OSError):
+                    os.kill(pid, 9)
+            return ", ".join(f"pid {pid} {comm} ({wchan})" for pid, (comm, _, wchan) in tree.items())
+
+
+CARGO_GATE_RE = re.compile(r"\bcargo (?:check|test|build)\b")
+
+# The ratchet set is not a Build-job step, so the plan below cannot show it.
+# trace:BUG-2782 | ai:claude
+RATCHET_PLACEMENT = (
+    "Ratchet set: `make check-ci-compile` runs it (`make check-ratchets`), not `make check-ci-fast`.\n"
+    "        It compiles the ratchet test targets and the aida binary; check-ci-fast builds nothing\n"
+    "        (`--tier fast --no-build` also skips the fast gates that run cargo; check-ratchets runs them).\n"
+    "        CI runs it unconditionally in the fast-compile job's 'Ratchet set' step.\n"
+    "        Locally, the aida build and docs/cli/verify-manual.py run only when docs/cli or\n"
+    "        the CLI surface changed vs origin/main."
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -628,7 +721,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print the resolved plan and exit; run nothing",
     )
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="fast tier only: skip the gates that run cargo (`make check-ci-fast`)",
+    )
     args = parser.parse_args(argv)
+    if args.no_build and args.tier != "fast":
+        parser.error("--no-build applies only to --tier fast")
 
     root = repo_root()
     try:
@@ -656,6 +756,7 @@ def main(argv: list[str] | None = None) -> int:
         plan = [(name, command) for name, tier, _, command in derived_gates if tier == args.tier]
         tiers = {**tiers, **{name: tier for name, tier, _, _ in derived_gates}}
         if args.list:
+            print(RATCHET_PLACEMENT)
             for name, tier, source, command in derived_gates:
                 print(f"PLAN  {name}  [{tier}]  (from CI's {source!r}: {command})")
             return 0
@@ -668,7 +769,13 @@ def main(argv: list[str] | None = None) -> int:
     # cannot hide the failures the fast gate is meant to catch.
     # trace:STORY-2640 | ai:codex
     if args.tier == "fast":
-        plan.sort(key=lambda gate: bool(re.search(r"\bcargo (?:check|test|build)\b", gate[1])))
+        plan.sort(key=lambda gate: bool(CARGO_GATE_RE.search(gate[1])))
+    if args.no_build:
+        for name, command in plan:
+            if CARGO_GATE_RE.search(command):
+                print(f"SKIP  {name}\n        runs cargo; `make check-ci-compile` (check-ratchets) "
+                      "covers it locally and CI's fast-gates job always runs it")
+        plan = [gate for gate in plan if not CARGO_GATE_RE.search(gate[1])]
 
     # Every skip is printed with its reason, naming the gate. A skip nobody sees
     # is how the documented check set came to omit ~25 gates.
@@ -679,6 +786,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"SKIP  {name}\n        not in the {args.tier} tier (it is {tiers[name]})")
 
     if args.list:
+        print(RATCHET_PLACEMENT)
         # trace:STORY-2735 | ai:codex
         print("CI scheduling: PR=fast by default; ci:full or AIDA_PR_CI_TIER=full selects full. "
               "Main pushes, train PRs and merge-group/schedule/manual runs are always full.")
@@ -704,7 +812,10 @@ def main(argv: list[str] | None = None) -> int:
         env = gate_env(root)  # trace:TASK-2772 | ai:claude
         if args.tier == "fast":
             env["PATH"] = aida_stub_dir(root, stack) + os.pathsep + env.get("PATH", "")
-        return run_plan(root, args.tier, plan, tiers, env)
+        # Only the local pre-push gate fails fast on a stall; CI's
+        # check-ci-source keeps its own job timeouts. trace:BUG-2782 | ai:claude
+        stall_secs = stall_limit(env) if args.no_build else 0.0
+        return run_plan(root, args.tier, plan, tiers, env, stall_secs)
 
 
 def compile_env() -> dict[str, str]:
@@ -724,7 +835,8 @@ def compile_env() -> dict[str, str]:
 
 
 def run_plan(
-    root: Path, tier: str, plan: list[tuple[str, str]], tiers: dict[str, str], env: dict[str, str]
+    root: Path, tier: str, plan: list[tuple[str, str]], tiers: dict[str, str], env: dict[str, str],
+    stall_secs: float = 0.0,
 ) -> int:
     branch = default_branch(root)
     for name, command in plan:
@@ -734,7 +846,7 @@ def run_plan(
             print(f"FAIL  {name}\n        {err}", file=sys.stderr)
             return 1
         print(f"RUN   {name}  [{tiers[name]}]", flush=True)
-        passed, seconds, fetch_error = run_gate(root, name, resolved, env)
+        passed, seconds, fetch_error = run_gate(root, name, resolved, env, stall_secs)
         if not passed:
             sccache_active = True
             wrapper_val = env.get("RUSTC_WRAPPER", os.environ.get("RUSTC_WRAPPER"))

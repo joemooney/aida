@@ -372,10 +372,15 @@ pub(crate) fn newest_verdict_event_for_merge(
     let root = store_root(start).ok()?;
     let mut events = verdict_events(&root, key);
     if ChangeKey::parse(key).is_none() {
+        // BUG-2584: whether a bound change stands refused is one answer per
+        // change for this selection, not one fresh read of its whole ledger
+        // per event it holds (a 185-event, 4 MB ledger was parsed 185 times).
+        // trace:BUG-2584 | ai:claude
+        let mut standing = std::collections::HashMap::new();
         events.retain(|event| {
             speaks_for_change(event, change, head)
                 || has_round_at(event, head)
-                || standing_refusal_in_head(&root, event, in_head)
+                || standing_refusal_in_head(&root, event, in_head, &mut standing)
         });
     }
     newest_of(events)
@@ -406,11 +411,15 @@ fn has_round_at(event: &GateEvent, head: Option<&str>) -> bool {
 /// change still stands under, of a commit `in_head` finds in the judged
 /// head. What cannot be read counts: an event with no parseable verdict or
 /// no recorded commit, and a change whose newest verdict does not approve.
+/// `superseded` keeps, per bound change, whether its newest verdict approves,
+/// for the one selection it is passed through.
 // trace:BUG-2569 | ai:claude
+// trace:BUG-2584 | ai:claude
 fn standing_refusal_in_head(
     root: &Path,
     event: &GateEvent,
     in_head: &dyn Fn(&str) -> bool,
+    superseded: &mut std::collections::HashMap<ChangeKey, bool>,
 ) -> bool {
     let approves = |event: &GateEvent| {
         event
@@ -422,9 +431,11 @@ fn standing_refusal_in_head(
     if approves(event) {
         return false;
     }
-    let superseded = ChangeKey::parse(&event.change)
-        .and_then(|bound| newest_of(verdict_events(root, &bound.as_key())))
-        .is_some_and(|newest| approves(&newest));
+    let superseded = ChangeKey::parse(&event.change).is_some_and(|bound| {
+        *superseded.entry(bound).or_insert_with(|| {
+            newest_of(verdict_events(root, &bound.as_key())).is_some_and(|newest| approves(&newest))
+        })
+    });
     !superseded && event.head.as_deref().is_none_or(in_head)
 }
 

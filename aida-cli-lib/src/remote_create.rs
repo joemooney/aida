@@ -2606,6 +2606,67 @@ pub fn handle_remote_reconcile(
     json: bool,
     yes: bool,
 ) -> Result<()> {
+    reconcile_with_push(
+        project_root,
+        execute,
+        json,
+        yes,
+        &mut |store, remote, sha| {
+            aida_core::git_ops::push_exact_outcome(store, remote, sha, STORE_BRANCH)
+        },
+    )
+}
+
+/// Reconcile passes allowed when a concurrent writer wins a push race.
+// trace:BUG-2759 | ai:claude
+const RECONCILE_ATTEMPTS: usize = 2;
+
+type StorePush<'a> = dyn FnMut(&Path, &str, &str) -> Result<aida_core::git_ops::PushOutcome> + 'a;
+
+/// How one reconcile pass ended.
+enum ReconcilePass {
+    Done,
+    /// These hubs rejected the union as non-fast-forward: re-fetch and retry.
+    Raced(Vec<String>),
+}
+
+/// Run reconcile passes, re-fetching and re-unioning after a concurrent-push
+/// race, at most [`RECONCILE_ATTEMPTS`] times. `push` is the store push (a
+/// seam so a test can stage a real concurrent writer).
+// trace:BUG-2759 | ai:claude
+fn reconcile_with_push(
+    project_root: &Path,
+    execute: bool,
+    json: bool,
+    yes: bool,
+    push: &mut StorePush<'_>,
+) -> Result<()> {
+    for attempt in 1..=RECONCILE_ATTEMPTS {
+        let last = attempt == RECONCILE_ATTEMPTS;
+        if let ReconcilePass::Raced(hubs) =
+            reconcile_pass(project_root, execute, json, yes, push, last)?
+        {
+            eprintln!(
+                "  {} {}: rejected by a concurrent push — re-fetching and re-running the union (attempt {} of {RECONCILE_ATTEMPTS})",
+                crate::glyph(crate::glyphs::Glyph::Warning),
+                hubs.join(", "),
+                attempt + 1
+            );
+            continue;
+        }
+        break;
+    }
+    Ok(())
+}
+
+fn reconcile_pass(
+    project_root: &Path,
+    execute: bool,
+    json: bool,
+    yes: bool,
+    push: &mut StorePush<'_>,
+    last_attempt: bool,
+) -> Result<ReconcilePass> {
     use aida_core::git_ops;
 
     let store_dir = project_root.join(".aida-store");
@@ -2750,7 +2811,7 @@ pub fn handle_remote_reconcile(
                     "{} every hub already agrees on {STORE_BRANCH} — nothing to reconcile.",
                     crate::glyph(crate::glyphs::Glyph::Check)
                 );
-                return Ok(());
+                return Ok(ReconcilePass::Done);
             }
             if needs_merge {
                 println!(
@@ -2784,7 +2845,7 @@ pub fn handle_remote_reconcile(
             // Non-zero so scripts (and the mirror-push warning path) can gate.
             std::process::exit(2);
         }
-        return Ok(());
+        return Ok(ReconcilePass::Done);
     }
 
     // ── execute ──
@@ -2862,13 +2923,13 @@ pub fn handle_remote_reconcile(
     })
     // Render the full chain for the CLI after refusal classification and recovery.
     // trace:BUG-2759 | ai:codex
-    .map_err(|err| anyhow::anyhow!("{err:#}"))?;
+    .map_err(|err| one_line_cause_chain(&err))?;
     let Some((union, frontier, merge_notes)) = reconciled else {
         println!(
             "{} every hub already agrees on {STORE_BRANCH} — nothing to reconcile.",
             crate::glyph(crate::glyphs::Glyph::Check)
         );
-        return Ok(());
+        return Ok(ReconcilePass::Done);
     };
 
     // Push the union everywhere. Every hub's old tip is an ancestor of the
@@ -2877,6 +2938,7 @@ pub fn handle_remote_reconcile(
     let mut push_failures: Vec<String> = Vec::new();
     let mut pushed: Vec<String> = Vec::new();
     let mut not_push_hubs: Vec<String> = Vec::new();
+    let mut raced: Vec<String> = Vec::new();
     for h in &hubs {
         if h.sha.as_deref() == Some(union.as_str()) {
             continue;
@@ -2886,15 +2948,34 @@ pub fn handle_remote_reconcile(
             not_push_hubs.push(h.remote.clone());
             continue;
         }
-        match git_ops::push_exact(&store_dir, &h.remote, &union, STORE_BRANCH) {
-            Ok(true) => pushed.push(h.remote.clone()),
-            Ok(false) => {
-                push_failures.push(format!(
-                    "{}: rejected (raced by a concurrent push — re-run reconcile)",
-                    h.remote
-                ));
-            }
-            Err(e) => push_failures.push(format!("{}: {e}", h.remote)),
+        // Only a non-fast-forward is a race worth a re-union; a declined,
+        // protected or unreachable push keeps git's own reason.
+        // trace:BUG-2759 | ai:claude
+        match push(&store_dir, &h.remote, &union) {
+            Ok(git_ops::PushOutcome::Pushed) => pushed.push(h.remote.clone()),
+            Ok(git_ops::PushOutcome::Failed {
+                kind: git_ops::PushFailure::NonFastForward,
+                ..
+            }) => raced.push(h.remote.clone()),
+            Ok(git_ops::PushOutcome::Failed { stderr, .. }) => push_failures.push(format!(
+                "{}: push failed: {}",
+                h.remote,
+                one_line_cause_chain(&anyhow::anyhow!(stderr))
+            )),
+            Err(e) => push_failures.push(format!("{}: {}", h.remote, one_line_cause_chain(&e))),
+        }
+    }
+    // Failures that are not a lost race (unreachable, declined, protected).
+    // trace:BUG-2759 | ai:claude
+    let unreachable = push_failures.len();
+    if !raced.is_empty() {
+        if !last_attempt {
+            return Ok(ReconcilePass::Raced(raced));
+        }
+        for r in raced {
+            push_failures.push(format!(
+                "{r}: rejected — a concurrent push moved it again after {RECONCILE_ATTEMPTS} reconcile attempts; re-run reconcile"
+            ));
         }
     }
 
@@ -2934,16 +3015,46 @@ pub fn handle_remote_reconcile(
         }
     }
     if !push_failures.is_empty() {
+        // Name each hub and its cause on the one line agent mode keeps; only
+        // an unreachable hub warrants "once they are reachable".
+        // trace:BUG-2759 | ai:claude
         anyhow::bail!(
-            "the union is committed locally but {} hub(s) did not receive it — re-run `aida remote reconcile --execute` once they are reachable",
-            push_failures.len()
+            "the union is committed locally but {} hub(s) did not receive it: {} — re-run `aida remote reconcile --execute`{}",
+            push_failures.len(),
+            push_failures.join(" | "),
+            if unreachable > 0 {
+                " once they are reachable"
+            } else {
+                ""
+            }
         );
     }
-    Ok(())
+    Ok(ReconcilePass::Done)
 }
 
 fn short(s: &str) -> String {
     s.chars().take(12).collect()
+}
+
+/// Flatten `err`'s whole cause chain, and any multi-line cause (git stderr),
+/// onto ONE line joined by " | ". Agent output mode (redirected stdout, cron)
+/// keeps only an error's first line, so a multi-line chain would lose the
+/// root cause there.
+// trace:BUG-2759 | ai:claude
+fn one_line_cause_chain(err: &anyhow::Error) -> anyhow::Error {
+    let parts: Vec<String> = err
+        .chain()
+        .flat_map(|cause| {
+            cause
+                .to_string()
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    anyhow::anyhow!(parts.join(" | "))
 }
 
 /// Merge every frontier tip into the store HEAD, then validate the union.
@@ -3054,10 +3165,16 @@ fn merge_and_validate(
     // published; (2) email-bearing registry lines new to some hub need
     // explicit consent (--yes).
     let mut newly_published = String::new();
-    let mut newly_published_registry = String::new();
+    // Email -> the hubs it would be new to. An added registry line whose email
+    // the receiving hub's registry already carries publishes nothing new.
+    // trace:BUG-2759 | ai:claude
+    let mut new_registry_emails: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
     for h in hubs {
+        let mut hub_registry = String::new();
+        let mut hub_has = std::collections::BTreeSet::new();
         match &h.sha {
-            Some(s) if *s == union => {}
+            Some(s) if *s == union => continue,
             Some(s) => {
                 if let Some(diff) = git_out(store_dir, &["diff", &format!("{s}..{union}")]) {
                     for line in diff.lines() {
@@ -3073,10 +3190,20 @@ fn merge_and_validate(
                 ) {
                     for line in diff.lines() {
                         if line.starts_with('+') && !line.starts_with("+++") {
-                            newly_published_registry.push_str(line);
-                            newly_published_registry.push('\n');
+                            // Without the `+`, a line opening with an email
+                            // tokenizes as the hub's own copy does.
+                            hub_registry.push_str(&line[1..]);
+                            hub_registry.push('\n');
                         }
                     }
+                }
+                // What the hub already publishes. Unreadable (or no match)
+                // counts as nothing, so the gate fails closed.
+                if let Some(present) = git_out(
+                    store_dir,
+                    &["grep", "-h", "-I", "-e", "@", s, "--", "registry/"],
+                ) {
+                    hub_has.extend(emails_in(&present));
                 }
             }
             None => {
@@ -3085,9 +3212,17 @@ fn merge_and_validate(
                 for f in ["registry/nodes.toml", "registry/blocks.yaml", "oplog.yaml"] {
                     if let Ok(text) = std::fs::read_to_string(store_dir.join(f)) {
                         newly_published.push_str(&text);
-                        newly_published_registry.push_str(&text);
+                        hub_registry.push_str(&text);
                     }
                 }
+            }
+        }
+        for e in emails_in(&hub_registry) {
+            if !hub_has.contains(&e) {
+                new_registry_emails
+                    .entry(e)
+                    .or_default()
+                    .push(h.remote.clone());
             }
         }
     }
@@ -3107,14 +3242,15 @@ fn merge_and_validate(
         leaks.join("; ")
     );
     }
-    let suspicious: Vec<String> = emails_in(&newly_published_registry)
+    let suspicious: Vec<String> = new_registry_emails
         .into_iter()
-        .filter(|e| e != aida_core::git_ops::REDACTED_EMAIL_PLACEHOLDER)
-        .filter(|e| pub_email.as_deref() != Some(e.as_str()))
+        .filter(|(e, _)| e != aida_core::git_ops::REDACTED_EMAIL_PLACEHOLDER)
+        .filter(|(e, _)| pub_email.as_deref() != Some(e.as_str()))
+        .map(|(e, new_to)| format!("{e} (new to {})", new_to.join(", ")))
         .collect();
     if !suspicious.is_empty() && !yes {
         anyhow::bail!(
-        "reconcile would publish registry content carrying email(s) currently on one hub only: {} — re-run with --yes to consent, or scrub first (docs/internal/security/); nothing was pushed",
+        "reconcile would publish registry content carrying email(s) a hub does not have yet: {} — re-run with --yes to consent, or scrub first (docs/internal/security/); nothing was pushed",
         suspicious.join(", ")
     );
     }
@@ -4323,6 +4459,207 @@ host = \"should.not.count\"
             "{output}"
         );
         assert!(output.contains(contact), "{output}");
+    }
+
+    /// A store worktree on the two-hub fixture, both hubs declared push hubs.
+    // trace:BUG-2759 | ai:claude
+    fn reconcile_store(tmp: &Path, home: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+        let (project, origin, mirror) = two_hub_fixture(tmp);
+        std::fs::write(project.join(".git/info/exclude"), ".aida-store/\n.aida/\n").unwrap();
+        git(
+            &project,
+            &["worktree", "add", "-q", ".aida-store", STORE_BRANCH],
+        );
+        declare_push_hubs(home, &project, &["origin", "mirror"]);
+        let store = project.join(".aida-store");
+        (project, origin, mirror, store)
+    }
+
+    // The consent gate flags only emails a receiving hub lacks: one already on
+    // every hub passes; a new one is still refused, named with its hubs.
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_consent_gate_skips_emails_every_hub_already_has() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, origin, mirror, store) = reconcile_store(tmp.path(), home.path());
+        let known = "operator@example.invalid";
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        commit_file(
+            &store,
+            "registry/contact.txt",
+            &format!("{known}\n"),
+            "known",
+        );
+        git(&store, &["push", "-q", "origin", STORE_BRANCH]);
+        git(&store, &["push", "-q", "mirror", STORE_BRANCH]);
+
+        let fresh = "newcomer@example.invalid";
+        commit_file(
+            &store,
+            "registry/team.txt",
+            &format!("{known}\nowner {fresh}\n"),
+            "new contact",
+        );
+        let err = handle_remote_reconcile(&project, true, false, false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(&format!("{fresh} (new to ")), "{err}");
+        assert!(err.contains("origin") && err.contains("mirror"), "{err}");
+        assert!(!err.contains(known), "{err}");
+        assert!(!err.contains("one hub only"), "{err}");
+
+        let scrubbed = commit_file(&store, "registry/team.txt", &format!("{known}\n"), "scrub");
+        handle_remote_reconcile(&project, true, false, false).unwrap();
+        assert_eq!(
+            tip(&origin, STORE_BRANCH).as_deref(),
+            Some(scrubbed.as_str())
+        );
+        assert_eq!(
+            tip(&mirror, STORE_BRANCH).as_deref(),
+            Some(scrubbed.as_str())
+        );
+    }
+
+    // A second writer pushes to origin between reconcile's union and its push
+    // (a real non-fast-forward race); reconcile re-fetches, re-unions and
+    // lands both writes on every hub in its one retry.
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_reconcile_retries_once_after_a_concurrent_push() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, origin, mirror, store) = reconcile_store(tmp.path(), home.path());
+        let ours = commit_file(&store, "spec.yaml", "id: X\n", "local store write");
+        let other = tmp.path().join("other-writer");
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "-q",
+                "--branch",
+                STORE_BRANCH,
+                origin.to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+        let theirs = commit_file(&other, "theirs.yaml", "id: Y\n", "concurrent write");
+
+        let mut raced = 0;
+        let mut push = |repo: &Path, remote: &str, sha: &str| {
+            if remote == "origin" && raced == 0 {
+                raced += 1;
+                git(&other, &["push", "-q", "origin", STORE_BRANCH]);
+            }
+            aida_core::git_ops::push_exact_outcome(repo, remote, sha, STORE_BRANCH)
+        };
+        reconcile_with_push(&project, true, true, false, &mut push).unwrap();
+        assert_eq!(raced, 1);
+        let landed = tip(&origin, STORE_BRANCH).unwrap();
+        assert_eq!(tip(&mirror, STORE_BRANCH).as_deref(), Some(landed.as_str()));
+        for write in [&ours, &theirs] {
+            assert!(
+                aida_core::git_ops::is_ancestor(&origin, write, &landed).unwrap(),
+                "{write} missing from {landed}"
+            );
+        }
+    }
+
+    // A concurrent writer wins origin on every pass: reconcile stops after
+    // RECONCILE_ATTEMPTS passes and its error names origin and the race cause,
+    // without the misleading "once they are reachable".
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_reconcile_reports_the_race_after_its_bounded_retries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, origin, _mirror, store) = reconcile_store(tmp.path(), home.path());
+        commit_file(&store, "spec.yaml", "id: X\n", "local store write");
+        let other = tmp.path().join("other-writer");
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "-q",
+                "--branch",
+                STORE_BRANCH,
+                origin.to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+
+        let mut origin_pushes = 0;
+        let mut push = |repo: &Path, remote: &str, sha: &str| {
+            if remote == "origin" {
+                origin_pushes += 1;
+                let file = format!("theirs-{origin_pushes}.yaml");
+                commit_file(&other, &file, "id: Y\n", "concurrent write");
+                git(&other, &["push", "-q", "origin", STORE_BRANCH]);
+            }
+            aida_core::git_ops::push_exact_outcome(repo, remote, sha, STORE_BRANCH)
+        };
+        let err = reconcile_with_push(&project, true, true, false, &mut push)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(origin_pushes, RECONCILE_ATTEMPTS, "{err}");
+        assert!(err.contains("1 hub(s) did not receive it"), "{err}");
+        assert!(
+            err.contains(&format!(
+                "origin: rejected — a concurrent push moved it again after {RECONCILE_ATTEMPTS} reconcile attempts"
+            )),
+            "{err}"
+        );
+        assert!(!err.contains("once they are reachable"), "{err}");
+        assert!(!err.contains("mirror"), "{err}");
+    }
+
+    // An unreachable hub's error names the hub and git's cause, and keeps the
+    // "once they are reachable" advice.
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_unreachable_hub_error_names_hub_and_cause() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, _origin, _mirror, store) = reconcile_store(tmp.path(), home.path());
+        commit_file(&store, "spec.yaml", "id: X\n", "local store write");
+        let mut push = |repo: &Path, remote: &str, sha: &str| {
+            if remote == "mirror" {
+                anyhow::bail!("ssh: connect to host mirror: Connection refused");
+            }
+            aida_core::git_ops::push_exact_outcome(repo, remote, sha, STORE_BRANCH)
+        };
+        let err = reconcile_with_push(&project, true, true, false, &mut push)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("mirror: ssh: connect to host mirror: Connection refused"),
+            "{err}"
+        );
+        assert!(err.contains("once they are reachable"), "{err}");
+    }
+
+    // Agent output mode (redirected stdout) keeps only an error's first line:
+    // the flattened chain still carries every cause, multi-line git text too.
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_agent_error_block_keeps_every_cause() {
+        let err = anyhow::anyhow!("CONFLICT in registry/blocks.yaml\nAutomatic merge failed")
+            .context("union merge of abc123 failed")
+            .context("reconcile refused; nothing was pushed");
+        let flat = one_line_cause_chain(&err);
+        let block = crate::agent_errors::agent_error_block(&flat, &format!("{flat:?}"));
+        for part in [
+            "reconcile refused",
+            "union merge of abc123 failed",
+            "CONFLICT in registry/blocks.yaml",
+            "Automatic merge failed",
+        ] {
+            assert!(block.contains(part), "{part} missing: {block}");
+        }
     }
 
     // reconcile on a clone whose push hubs are [mirror] reads origin but
