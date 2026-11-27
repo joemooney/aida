@@ -72,9 +72,10 @@ pub(crate) fn handle(storage: &crate::Storage, pr: u64, reason: &str) -> Result<
     let Some(head) = change.head_sha else {
         bail!("refused: the forge returned no head for PR #{pr}; nothing was recorded");
     };
+    let env = aida_core::exec_context::Environment::capture();
     let by = crate::review_recorded_by_from(
-        std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
-        std::env::var("AIDA_AGENT_TYPE").ok().as_deref(),
+        env.get("AIDA_AGENT_NAME").and_then(|v| v.to_str()),
+        env.get("AIDA_AGENT_TYPE").and_then(|v| v.to_str()),
         Some(seat.as_deref().unwrap_or("operator")),
     );
     let resolve = |n| crate::review_pr_subject_from_forge(&root, n);
