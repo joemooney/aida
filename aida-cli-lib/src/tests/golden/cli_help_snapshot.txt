@@ -56322,7 +56322,7 @@ Working on aida itself
       {
         "name": "challenger-agent",
         "takes_value": true,
-        "help": "Challenger agent for `--adversarial`: `claude` or `codex`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer"
+        "help": "Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never chooses agy"
       },
       {
         "name": "challenger-effort",
