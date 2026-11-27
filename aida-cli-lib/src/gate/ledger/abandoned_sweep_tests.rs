@@ -228,7 +228,10 @@ fn registered_leases_decide_liveness_for_every_named_session() {
 fn gate(root: &Path, pr: u64, head: &str) -> crate::gate::merge_hold_core::CorpusMergeGate {
     let event = project::newest_verdict_event(root, &format!("PR-{pr}")).unwrap();
     let bodies = rv::bodies_with_ledger_history(&store_root(root).unwrap(), &event).unwrap();
-    let keyed: Vec<_> = bodies.into_iter().map(|b| (format!("PR-{pr}"), b)).collect();
+    let keyed: Vec<_> = bodies
+        .into_iter()
+        .map(|b| (format!("PR-{pr}"), b))
+        .collect();
     crate::gate::merge_hold_core::corpus_merge_gate(pr, &keyed, Some(head))
 }
 

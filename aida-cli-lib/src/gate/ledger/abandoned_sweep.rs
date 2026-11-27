@@ -10,8 +10,8 @@
 // mandate-gate
 
 use super::{store, store_root, ChangeKey, GateEvent, GateSpec};
-use crate::gate::review_verdict::{self as rv, JsonObj};
 use crate::gate::kernel_deps::review_blocking::{self as blocking, Effective};
+use crate::gate::review_verdict::{self as rv, JsonObj};
 use std::path::Path;
 
 /// How long a barrier may stand after its reviewer session ended.
