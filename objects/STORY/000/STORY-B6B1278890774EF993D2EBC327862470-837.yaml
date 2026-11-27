@@ -17,12 +17,12 @@ description: |
   - AC2: an agy implementer lane runs end to end on dell1 (claim, edit, commit, push, publish) under the chosen containment; a canary on one small standard spec.
   - AC3: `aida doctor --lane-host` checks agy auth NON-INTERACTIVELY (the way a lane will run it) and, when the token is keyring-only, names the fix (a headless-usable credential mode, or keyring unlock guidance).
   - AC4 (follow-up slice): agy as a `review prepare` runner vendor through the S3a hardened spawn helper (with STORY-3120 S9), giving a real opposite-vendor challenger when one vendor is rate-limited.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:16:34.956406640Z
+modified_at: 2026-11-27T05:17:25.224448313Z
 req_type: Story
 tags:
 - containment
@@ -222,6 +222,11 @@ comments:
   created_at: 2026-11-27T05:16:35.205430776Z
   modified_at: 2026-11-27T05:16:35.205430776Z
   session_id: 01a21b6c8d19
+- id: 01a21b6f-db68-7c41-bf39-1a3e010033a1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: STORY-3202 review at 4c941fb51e4a (base: integration, 5 commits behind; the finding is in run_review_agent, which the newer integration commits do not touch). Most of AC-A, AC-B and AC-C passes. The agy vendor goes through the hardened RunnerCall spawn: empty cwd, env allowlist with only GEMINI_API_KEY added, --print= reading stdin, --sandbox, --mode=plan, deny-all --settings, and --print-timeout set inside the deadline. A failed run with agy''s sign-in stderr becomes a typed AuthRequired. The `agy models` lane-host probe returns typed Ready, KeyringOnly, Rejected, Timeout or Failed, is required only when agy is an enabled lane vendor, and is covered by fake-agy tests. The automatic challenger pick filters out agy (confinement_verified=false), and --post-comment refuses agy as finder or challenger before any runner starts. One blocking hole: confinement_verified says an unverified vendor runs only when named explicitly, but the finder is still chosen from `[agents] vendor`, which is read from the reviewed checkout. A PR under review can therefore switch the finder to agy. CI was pending at review time and is not the reason for this verdict.. No triage reason was given.'
+  created_at: 2026-11-27T05:17:25.224444746Z
+  modified_at: 2026-11-27T05:17:25.224444746Z
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
@@ -273,6 +278,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21b6f-db68-7c41-bf39-1a2b0f880ebd
+  author: joe
+  timestamp: 2026-11-27T05:17:25.224432663Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
@@ -281,11 +293,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b728c3373d1
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STORY-3202 review at 4c941fb51e4a (base: integration, 5 commits behind; the finding is in run_review_agent, which the newer integration commits do not touch). Most of AC-A, AC-B and AC-C passes. The agy vendor goes through the hardened RunnerCall spawn: empty cwd, env allowlist with only GEMINI_API_KEY added, --print= reading stdin, --sandbox, --mode=plan, deny-all --settings, and --print-timeout set inside the deadline. A failed run with agy''s sign-in stderr becomes a typed AuthRequired. The `agy models` lane-host probe returns typed Ready, KeyringOnly, Rejected, Timeout or Failed, is required only when agy is an enabled lane vendor, and is covered by fake-agy tests. The automatic challenger pick filters out agy (confinement_verified=false), and --post-comment refuses agy as finder or challenger before any runner starts. One blocking hole: confinement_verified says an unverified vendor runs only when named explicitly, but the finder is still chosen from `[agents] vendor`, which is read from the reviewed checkout. A PR under review can therefore switch the finder to agy. CI was pending at review time and is not the reason for this verdict.'
-  recovery_hint: address the review findings, move STORY-3202 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-27T05:16:34.956406640Z
