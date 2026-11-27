@@ -2903,6 +2903,13 @@ fn automatic_idle(all_ready: bool, candidates: &[u64]) -> bool {
     all_ready && candidates.is_empty() && ADVISOR_LOOP.with(std::cell::Cell::get)
 }
 
+/// The PR set retained journals must match to resume (BUG-2547), or `None`
+/// when the automatic train backed off and recovery is skipped outright.
+// trace:BUG-2735 | ai:claude
+pub(crate) fn recovery_request(backed_off: bool, candidates: &[u64]) -> Option<&[u64]> {
+    (!backed_off).then_some(candidates)
+}
+
 // Recovery can close the last open rider before discovery. Report those
 // outcomes even though this automatic pass has no new train to run.
 // trace:STORY-2691 | ai:codex
@@ -5590,7 +5597,15 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
     let journal_dir = main_worktree.join(".aida/train");
     // Resolve the requested set before journal recovery. trace:BUG-2547 | ai:codex
-    let mut candidates: Vec<u64> = if opts.all_ready {
+    let backoff = if opts.all_ready && ADVISOR_LOOP.with(std::cell::Cell::get) {
+        crate::forge::watcher_backoff(&project_root, kind, None)
+    } else {
+        None
+    };
+    let mut candidates: Vec<u64> = if let Some(reason) = &backoff {
+        eprintln!("auto-train: skipping candidate discovery: {reason}");
+        Vec::new()
+    } else if opts.all_ready {
         let mut ids: Vec<u64> = forge
             .list_changes(crate::forge::ChangeFilter {
                 base: Some(base.clone()),
@@ -5605,16 +5620,19 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     } else {
         opts.prs.to_vec()
     };
+    // A low-budget back-off never widens recovery: it skips it, so no stale
+    // journal resumes and no forge call is spent. trace:BUG-2735 | ai:claude
+    let requested = recovery_request(backoff.is_some(), &candidates);
     let recovered = if opts.dry_run || !journal::recovery_needed(&journal_dir)? {
         Outcome::default()
-    } else {
+    } else if let Some(requested) = requested {
         // Recovery mutates the journal; discovery and eligibility never hold it.
         let _recovery_lock = journal::lock(&journal_dir)?;
         // Recovery may publish the retained train before fresh selection.
         // trace:BUG-2650 | ai:codex
         let recovery_members: Vec<u64> = journal::entries(&journal_dir)?
             .into_iter()
-            .filter(|entry| entry.step != journal::Step::Done && entry.matches(&candidates))
+            .filter(|entry| entry.step != journal::Step::Done && entry.matches(requested))
             .flat_map(|entry| entry.train.cars.into_iter().map(|car| car.member.pr))
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
@@ -5643,7 +5661,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         .for_recovery(opts);
         ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir)
-            .resume_for(Some(&candidates))?
+            .resume_for(Some(requested))?
+    } else {
+        Outcome::default()
     };
     if report_automatic_idle(
         opts.all_ready,

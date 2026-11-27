@@ -97,6 +97,9 @@ pub(crate) struct JobReport {
 /// the real one; tests use a fake.
 pub(crate) trait Ports {
     fn now(&self) -> DateTime<Utc>;
+    fn watcher_backoff(&self) -> Option<String> {
+        None
+    }
     /// The freshly fetched default branch's newest first-parent commits.
     fn recent(&mut self, max: usize) -> Result<Vec<Commit>>;
     /// First-parent commits after `cursor`, oldest first, at most `max`;
@@ -746,6 +749,10 @@ pub(crate) fn pass(
         flush(&land, &mut state)?;
     }
     deliver(&land, &mut state, ports, &mut notes)?;
+    if let Some(reason) = ports.watcher_backoff() {
+        notes.push(format!("red-main watch: {reason}"));
+        return Ok(notes);
+    }
     let scan = scan_history(&land, &mut state, required, window, ports, &mut notes);
     let deadline = scan.as_ref().is_err_and(|error| error.is::<PassDeadline>());
     if deadline {
@@ -1630,6 +1637,10 @@ impl Live {
 }
 
 impl Ports for Live {
+    fn watcher_backoff(&self) -> Option<String> {
+        crate::forge::main_watch_backoff(&self.root, self.forge.kind())
+    }
+
     fn now(&self) -> DateTime<Utc> {
         Utc::now()
     }

@@ -658,6 +658,19 @@ pub(crate) fn wait_for_ci_terminal(
         // the process cwd can silently switch a GitLab wait to GitHub when the
         // driven worktree is not the agent's cwd. trace:TASK-1273 | ai:codex
         let forge_kind = crate::forge::resolve_forge_kind(git_root);
+        if let Some(reason) = crate::forge::watcher_backoff(git_root, forge_kind, None) {
+            eprintln!("CI watcher: {reason}");
+            if ci_wait_verdict(
+                started.elapsed().as_secs(),
+                last_progress.elapsed().as_secs(),
+                idle_window,
+                absolute_ceiling,
+            ) != CiWaitVerdict::Continue
+            {
+                return CiProbe::NoSignal(reason);
+            }
+            continue;
+        }
         let probe = ci_probe_with_forge(git_root, forge_kind, branch);
         let total_elapsed = started.elapsed().as_secs();
 
@@ -792,11 +805,12 @@ pub(crate) fn emit_ci_terminal(project_root: Option<&std::path::Path>, green: bo
 /// network blip) — the fingerprint then degrades to the base tip only, which
 /// still re-arms on a rebase.
 // trace:TASK-968 | ai:claude
-pub(crate) fn ci_rollup_json_for_branch(branch: &str) -> String {
+pub(crate) fn ci_rollup_json_for_branch(root: &std::path::Path, branch: &str) -> String {
     let Some(gh) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
         return String::new();
     };
     let output = std::process::Command::new(&gh)
+        .current_dir(root)
         .args([
             "pr",
             "list",

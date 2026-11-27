@@ -5736,6 +5736,131 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
     assert!(!leaked().is_empty());
 }
 
+// trace:BUG-2735 | ai:codex
+#[test]
+fn bug2735_watchers_yield_core_budget_to_train_ci() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let gh = root.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+[ "$1" = --version ] || echo "$*" >> calls
+case "$*" in
+    'browse --no-browser') git remote get-url upstream ;;
+    'api rate_limit --cache 60s')
+        case "$GH_HOST" in
+            github.com) /bin/cat origin-budget ;;
+            enterprise.example) /bin/cat budget ;;
+            *) echo '{"resources":{"core":{"limit":5000,"remaining":5000}}}' ;;
+        esac ;;
+    'run list '*) echo '[{"databaseId":42}]' ;;
+    'run watch 42') echo "$GH_REPO" > watched
+        echo '{"resources":{"core":{"limit":5000,"remaining":1}}}' > budget ;;
+    --version) echo 'gh version 2.60.0' ;;
+    *check-runs*) echo '{"total_count":0,"check_runs":[]}' ;;
+    *'/status?'*) cat status ;;
+    'pr list '*) echo '[]' ;;
+    *) exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_TEST_GH_BINARY", None),
+            ("GH_REPO", None),
+            ("GH_HOST", Some("github.com")),
+        ],
+    );
+    for args in [
+        vec!["init", "-q"],
+        vec!["remote", "add", "origin", "https://github.com/org/repo.git"],
+        vec![
+            "remote",
+            "add",
+            "upstream",
+            "https://enterprise.example/org/repo",
+        ],
+    ] {
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let repo = forge::Repository::load(root).unwrap();
+    let budget = |file: &str, remaining| {
+        std::fs::write(
+            root.join(file),
+            format!(r#"{{"resources":{{"core":{{"limit":5000,"remaining":{remaining}}}}}}}"#),
+        )
+        .unwrap()
+    };
+    budget("budget", 999);
+    budget("origin-budget", 999);
+    assert!(crate::queue_cmd::integrate_discovery_backoff(root, true)
+        .unwrap()
+        .contains("999/5000"));
+    assert!(crate::queue_cmd::integrate_discovery_backoff(root, false).is_none());
+    assert!(repo
+        .discover_for_watch(root)
+        .unwrap_err()
+        .to_string()
+        .contains("999/5000"));
+    assert!(crate::main_watch::live_pass(root).unwrap()[0].contains("backing off"));
+    assert!(!std::fs::read_to_string(root.join("calls"))
+        .unwrap()
+        .contains("pr list"));
+    let sha = "a".repeat(40);
+    std::fs::write(
+        root.join("status"),
+        serde_json::json!({"sha":sha,"statuses":[],"total_count":0}).to_string(),
+    )
+    .unwrap();
+    let train_forge = crate::forge::forge_for_kind(root, crate::forge::ForgeKind::GitHub);
+    assert_eq!(train_forge.commit_checks(&sha).unwrap().sha, sha);
+    budget("origin-budget", 1000);
+    assert!(repo.discover_for_watch(root).unwrap().is_empty());
+    budget("origin-budget", 5000);
+    budget("budget", 1000);
+    // Only the bounded resolver can find this gh. The default API host
+    // has ample budget, but the watched host drops below threshold in watch.
+    let bin = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink("/usr/bin/git", bin.path().join("git")).unwrap();
+    env.set_key("PATH", bin.path());
+    env.set_key("AIDA_TEST_FORGE_FALLBACK_DIRS", root);
+    env.set_key("GH_HOST", "default.example");
+
+    std::fs::write(root.join("calls"), "").unwrap();
+    assert!(crate::ci_watch::stream_ci(Some(root), "topic").is_none());
+    assert_eq!(
+        std::fs::read_to_string(root.join("watched"))
+            .unwrap()
+            .trim(),
+        "enterprise.example/org/repo"
+    );
+    let calls = std::fs::read_to_string(root.join("calls")).unwrap();
+    assert_eq!(calls.matches("api rate_limit").count(), 2);
+    assert!(!calls.contains("pr list"));
+    budget("budget", 1000);
+    env.set_key("GH_REPO", "enterprise.example/org/override");
+    assert!(crate::ci_watch::stream_ci(Some(root), "topic").is_none());
+    assert_eq!(
+        std::fs::read_to_string(root.join("watched"))
+            .unwrap()
+            .trim(),
+        "enterprise.example/org/override"
+    );
+}
+
 // trace:BUG-2720 | ai:codex
 #[test]
 fn bug2757_bug2720_exited_pickup_retries_after_worktree_release() {

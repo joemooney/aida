@@ -3267,7 +3267,7 @@ pub(crate) fn run_with_program(
             idle_yielding(&root, &store, args.interval, &mut admission)?;
             continue;
         }
-        let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
+        let changes = match observe_pass_input(&root, "discovery", repo.discover_for_watch(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
