@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T08:36:30.891507509Z
+modified_at: 2026-11-27T23:51:44.101001877Z
 req_type: Story
 tags:
 - integration
@@ -1936,6 +1936,17 @@ comments:
   content: Reference merge `f63339b162e526637e0e3e7785388e6184fe27aa` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-27T08:36:30.891500713Z
   modified_at: 2026-11-27T08:36:30.891500713Z
+- id: 01a21f6c-0ae5-7161-94cc-eecdd117d006
+  author: joe
+  content: |-
+    READY FOR S7-S10 DISPATCH (operator request 2026-11-27 16:51; S1-S6 + S5e + STORY-3202 are promoted to main via p53 #4723 and p54 #4736):
+    Please resume STORY-3120 from comment 87 (SLICE PLAN ADDENDA, S6-S10; reference branch origin/story-3120-ci-review @ a1777130882):
+    - S7: Telemetry ledger (.aida/review-telemetry/reviews.jsonl, --record-telemetry, --ab-arm, --telemetry-report) + online Addressed Rate & F_beta (F0.5/F1/F2) scoring + <=32 KB full target-file context in diff batches + ReviewBench 3-condition rubric (exacerbated_by_pr) (ref commits 6a031693b1e, 5cb4741015e, 4b7e4d2ebfb; keep D1 fail-closed gating and credential/inventory screen).
+    - S8: CodeGraph AST blast-radius & 35-line untouched caller/callee body slicing (--no-codegraph opt-out, trusted index, classify_exclusion screen) + v4 improvements (collect_batch_dependency_manifests nearest package manifests, 4-thread parallel batch execution inside S3a deadline/caps, consolidate_cross_batch_findings, infer_doc_or_omission_anchor, sanitize_unescaped_json_inner_quotes) (ref commits 071afd81467, 41a11958d87, bbdb34898dd).
+    - S9: opencode and pi review runner vendors (through the S3a hardened spawn helper + per-vendor env/effort allowlists) + automatic single-vendor Challenger reasoning-effort step-up (low -> medium -> high -> xhigh, capped at xhigh and shown in bundle) + CLI/Showcase docs (ref commits ed89b6bd632, a1777130882).
+    - S10 (COMPLETING SLICE): 6-Language ReviewBench Evaluation Report (docs/showcase/reviewbench-report.html), Clean-Room Methodology (docs/showcase/about.html), and Slide 08 of docs/showcase/code-review.html (ref commits 6483f05a533, a1777130882).
+  created_at: 2026-11-27T23:51:44.101001877Z
+  modified_at: 2026-11-27T23:51:44.101001877Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
