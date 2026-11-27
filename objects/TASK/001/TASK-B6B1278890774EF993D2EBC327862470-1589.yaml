@@ -1,0 +1,25 @@
+id: 01a21f4d-2871-76e0-a66d-7e8c8b20ef67
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1589
+agreed_id: TASK-3936
+title: 'Fixture test: deputy_binary_finding and the doctor wiring/dedup report a stale deputy once, with pid, binary and restart fix (BUG-2774 follow-up)'
+description: |-
+  Advisor aida-d3 2026-11-27 16:20 (filed by product-15), from the #4667 review deferrals (BUG-2774 comments 4-5).
+
+  ## Acceptance
+  - AC1: a fixture test over deputy_binary_finding (advisor_loop_service.rs) with a fake deputy receipt on a stale/deleted binary asserts the finding names the deputy, pid, binary and the restart fix.
+  - AC2: a doctor_cmd.rs test with two services reporting the same deputy:pid id (the deputy-binary / stale-deputy alias) asserts ONE deduplicated finding.
+  - AC3: test-only.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T23:18:00.049566692Z
+modified_at: 2026-11-27T23:18:00.049566692Z
+req_type: Task
+filed_at:
+  code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
