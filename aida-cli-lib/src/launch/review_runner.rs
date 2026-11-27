@@ -45,7 +45,7 @@ pub(crate) struct RunnerCall<'a> {
 }
 
 impl RunnerCall<'_> {
-    fn var(&self, key: &str) -> Option<&OsStr> {
+    pub(crate) fn var(&self, key: &str) -> Option<&OsStr> {
         let found = self
             .parent_env
             .iter()

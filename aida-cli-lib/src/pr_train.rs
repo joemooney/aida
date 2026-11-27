@@ -83,6 +83,9 @@ struct FinalGatePhase {
     label: String,
     started: std::time::Instant,
     store: (u64, std::time::Duration),
+    /// The phase runs one member gate: name its slow steps too.
+    // trace:BUG-2584 | ai:claude
+    member_gate: bool,
 }
 
 impl FinalGatePhase {
@@ -91,7 +94,17 @@ impl FinalGatePhase {
             label: label.into(),
             started: std::time::Instant::now(),
             store: crate::gate::dispatch_deps::store_load_totals(),
+            member_gate: false,
         }
+    }
+
+    /// A phase that runs one member gate.
+    // trace:BUG-2584 | ai:claude
+    fn start_member_gate(label: impl Into<String>) -> Self {
+        reset_gate_steps();
+        let mut phase = Self::start(label);
+        phase.member_gate = true;
+        phase
     }
 }
 
@@ -107,7 +120,31 @@ impl Drop for FinalGatePhase {
                 load_time.saturating_sub(self.store.1),
             )
         );
+        if let Some(line) = self
+            .member_gate
+            .then(|| member_gate_steps_line(&self.label))
+            .flatten()
+        {
+            println!("{line}");
+        }
     }
+}
+
+/// The slow steps of the member gate that just ran on this thread, as one
+/// progress line; `None` when no step took a second.
+// trace:BUG-2584 | ai:claude
+fn member_gate_steps_line(label: &str) -> Option<String> {
+    let slow: Vec<String> = gate_step_times()
+        .into_iter()
+        .filter(|(_, took)| took.as_secs_f64() >= 1.0)
+        .map(|(gate, took)| format!("{gate:?} {:.1}s", took.as_secs_f64()))
+        .collect();
+    (!slow.is_empty()).then(|| {
+        train_progress(format_args!(
+            "final gate: {label} slow steps: {}",
+            slow.join(", ")
+        ))
+    })
 }
 
 /// Run one final-gate phase and print its line when it ends.
@@ -1944,6 +1981,45 @@ thread_local! { static LAST_GATE: std::cell::Cell<Gate> = const { std::cell::Cel
 // trace:STORY-2824 | ai:claude
 fn at_gate(gate: Gate) {
     LAST_GATE.with(|g| g.set(gate));
+    GATE_STEPS.with(|s| {
+        let mut s = s.borrow_mut();
+        let now = std::time::Instant::now();
+        if let Some((prev, since)) = s.0.replace((gate, now)) {
+            s.1.push((prev, now - since));
+        }
+    });
+}
+
+thread_local! {
+    /// The member gate run on this thread: the step it is in, since when,
+    /// and how long each finished step took. trace:BUG-2584 | ai:claude
+    static GATE_STEPS: std::cell::RefCell<(Option<(Gate, std::time::Instant)>, Vec<(Gate, std::time::Duration)>)> =
+        const { std::cell::RefCell::new((None, Vec::new())) };
+}
+
+/// Forget the step times of an earlier member gate run on this thread.
+// trace:BUG-2584 | ai:claude
+fn reset_gate_steps() {
+    GATE_STEPS.with(|s| *s.borrow_mut() = (None, Vec::new()));
+}
+
+/// How long each step of the last member gate run on this thread took,
+/// summed per step, slowest first; the step it ended in counts to now.
+// trace:BUG-2584 | ai:claude
+pub(crate) fn gate_step_times() -> Vec<(Gate, std::time::Duration)> {
+    let mut out: Vec<(Gate, std::time::Duration)> = Vec::new();
+    GATE_STEPS.with(|s| {
+        let s = s.borrow();
+        let open = s.0.map(|(gate, since)| (gate, since.elapsed()));
+        for (gate, took) in s.1.iter().copied().chain(open) {
+            match out.iter_mut().find(|(g, _)| *g == gate) {
+                Some((_, total)) => *total += took,
+                None => out.push((gate, took)),
+            }
+        }
+    });
+    out.sort_by(|a, b| b.1.cmp(&a.1));
+    out
 }
 
 /// The step the member gate on this thread last entered: after a refusal,
@@ -2151,6 +2227,7 @@ fn typed_gate_member_with(
 ) -> std::result::Result<Member, MemberGateError> {
     // trace:BUG-2584 | ai:codex
     let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
+    reset_gate_steps();
     at_gate(Gate::PrState);
     let meta = checks.metadata(pr).map_err(MemberGateError::Unavailable)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
@@ -5014,7 +5091,8 @@ impl Rails for ForgeRails<'_> {
         let mut fresh: Vec<Member> = Vec::new();
         for car in &train.cars {
             let pr = car.member.pr;
-            let gate = final_gate_phase(&format!("re-gate member #{pr}"), || {
+            let gate = {
+                let _phase = FinalGatePhase::start_member_gate(format!("re-gate member #{pr}"));
                 let first = self.ports.observe_gate(pr);
                 if matches!(&first, crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head)
                 {
@@ -5028,7 +5106,7 @@ impl Rails for ForgeRails<'_> {
                         || std::thread::sleep(backoff),
                     )
                 }
-            });
+            };
             match gate {
                 crate::forge_observed::Observed::Known(Ok(m)) if m.head == car.member.head => {
                     // The audit is already baked into the tested car commit.
