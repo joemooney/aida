@@ -1,5 +1,6 @@
 id: 01a21b8f-c125-7490-a270-00f7e8c353a1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-391
+agreed_id: STORY-3217
 title: 'Review PR-4725: [AI:claude] fix(review): --post-comment refuses review runners without verified no-read confinement (Refs BUG-2783)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21b24`) for branch `bug-2783-review-no-read`.
@@ -49,6 +50,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a21ba7-1242-72d0-9e13-bc125b4483cf
+  author: joe
+  timestamp: 2026-11-27T06:17:43.746263210Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ab00cac8615f5a15066d816b9df95773e07f40e7
   branch: main

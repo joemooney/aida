@@ -1,5 +1,6 @@
 id: 01a21b9f-9061-7532-9c62-51a709e821f2
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-059
+agreed_id: TASK-3541
 title: Manual-train waiters are tied to the launching (parent) process, not the aida pr train process
 description: |
   TASK-3924 AC1 asks that a manual-train waiter be released when "its manual train process exits". The `aida pr train` process exits as soon as it gives up waiting, so recording its own PID would release every waiter at once and undo BUG-2771. The waiter records the parent process instead (getppid: the operator's retry loop or shell), in admission_owner.rs retrier().
@@ -19,6 +20,13 @@ tags:
 - from-implementer:TASK-3924
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a21ba6-8191-77d3-960c-90dc7a8b9eba
+  author: joe
+  timestamp: 2026-11-27T06:17:06.705542976Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
   branch: task-3924-train-waiters

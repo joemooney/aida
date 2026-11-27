@@ -1,5 +1,6 @@
 id: 01a21b66-c99f-7232-899a-8e6653f3a24c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-390
+agreed_id: STORY-3218
 title: 'Review PR-4721: [AI:claude] docs(review): agent run, challenger, effort, exit codes and output rules [S5e] (Refs STORY-3120)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21b3a`) for branch `int-story-3120-s5e`.
@@ -35,6 +36,12 @@ history:
 - id: 01a21b66-fc56-73e2-b03c-b09964b99869
   author: dirtlab
   timestamp: 2026-11-27T05:07:43.830216991Z
+  changes: []
+- id: 01a21ba7-5781-7221-827f-da763863ddd3
+  author: joe
+  timestamp: 2026-11-27T06:18:01.473955181Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 46d207cf1f85b2dd230c4b3393d997fb4ce24279
