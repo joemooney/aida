@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T17:52:18.836279689Z
-modified_at: 2026-11-27T19:04:49.914324716Z
+modified_at: 2026-11-27T19:08:19.875457813Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,23 @@ comments:
     - None. Pass condition unchanged.
   created_at: 2026-11-27T19:04:49.914324716Z
   modified_at: 2026-11-27T19:04:49.914324716Z
+  session_id: 01a21e63c521
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21e68-9423-72b0-be63-2d72397a1d87
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0f229896a4
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: contained_lane.py preflight_refusal/redact_secrets; seat_preflight refusal carries '(exit N)' + last 20 non-blank lines, each code-spanned, redacted, capped at 4 KiB. conformance.py launch_diagnostic() stores the bounded stderr.txt tail as report.launch.diagnostic when the launch is not accepted. Tests: tests/test_store_mutation.py SeatPreflightDiagnosticTests; tests/test_containment_conformance.py LaunchDiagnosticTests (4 pass locally).
+    - AC2 [behavioral-test]: fake probe exits 3 with token=..., Bearer, 48-char hex run, backticks; asserts exit code, tail, redaction, tail window. Passing probe returns None; a zero-exit probe without the grant line still refuses.
+
+    Probe findings fixed in self-review: (1) the line cut by the 4 KiB bound could expose a short secret fragment, so it is dropped (a mutation check confirms the test catches this); (2) control characters (ANSI escapes) are replaced with '?' so they never reach the operator's terminal.
+    Pass condition expression unchanged; seat gate/grant checks untouched.
+    Residual risks: the redaction is heuristic, so a short, unlabelled secret under 32 chars on a line with no key/token/auth label would still show. Over-redaction of paths/hashes of 32+ chars is accepted. The harness wiring (launch.diagnostic set in the not-observed branch) is covered by a helper unit test, not an end-to-end run. Three tests/test_store_mutation.py socket tests error under this sandbox (EPERM) identically on the baseline.
+  created_at: 2026-11-27T19:08:19.875457813Z
+  modified_at: 2026-11-27T19:08:19.875457813Z
   session_id: 01a21e63c521
   harness_version: 2.1.319 (Claude Code)
 history:

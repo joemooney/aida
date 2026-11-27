@@ -15,8 +15,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T19:04:45.431427271Z
+modified_at: 2026-11-27T19:08:19.301952940Z
 req_type: Bug
+comments:
+- id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
+  author: dirtlab
+  content: |-
+    ## Implementer approach (slice 1: AC1 + its AC4 tests)
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, aida-cli-lib `gate::ledger::abandoned_sweep`)**: a new ledger pass `expire_abandoned_sweeps(start, change, now, bound, reviewer_ended)` reads the change's ledger; for each spec slot whose newest verdict is a `sweep_pending` barrier older than `SWEEP_ABANDON_AFTER` (20 min, a parameter in tests) whose reviewer session has ended per the session registry (`.aida/sessions/<id>.toml` absent, or its lease classified Stale; ids from `recorded_by: reviewer:<id>` and the attestation's `session:<id>` tokens; no id => untouched, fail-safe):
+      - complete draft (the barrier restored to its approval parses as an approval with a reviewed head) => finalized through `record_verdict_at` (the normal two-phase delivery; findings dedup by hash);
+      - otherwise => a `sweep_abandoned: true` record is appended (verdict word `sweep-abandoned`).
+    - Readers: `disposition_verdict` maps `sweep_abandoned` to `Unknown` (never approves, never `requires_changes`, so the conclusive-head refusal lets a fresh review dispatch); review-watch History skips it like a barrier; landing-drought reads it as `Missing` (needs review).
+    - Runs from the existing review-watch per-change loop (`watch_changes_into`), best effort, no new daemon.
+    - **AC4 tests (unit)**: exited reviewer + complete draft => finalized approval; exited + incomplete => sweep_abandoned and read as needs-review (Unknown, not CR); live reviewer => untouched; younger than N => untouched.
+    - AC2/AC3 deferred to S2.
+
+    ### Expected files
+    - `aida-cli-lib/src/gate/ledger/abandoned_sweep.rs` (new), `gate/ledger/mod.rs`
+    - `aida-cli-lib/src/gate/review_verdict.rs`
+    - `aida-cli-lib/src/review_watch.rs`
+    - `aida-cli-lib/src/landing_drought.rs`
+
+    ### Ambiguities / conflicts as questions
+    - "Draft" is read as the barrier's own payload (it is the draft's recorded copy; `restore_pending_handoff` already treats it so). Reading the reviewer's on-disk launch draft is left to S2 with checkout cleanup.
+  created_at: 2026-11-27T19:08:19.301952940Z
+  modified_at: 2026-11-27T19:08:19.301952940Z
+  session_id: 01a21e6517d0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21d95-9bce-7210-a003-d78cbc07dd29
   author: joe
