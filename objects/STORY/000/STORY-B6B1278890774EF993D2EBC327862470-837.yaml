@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T01:50:28.404331054Z
+modified_at: 2026-11-27T02:27:44.140066558Z
 req_type: Story
 tags:
 - containment
@@ -82,6 +82,27 @@ comments:
   modified_at: 2026-11-27T01:45:22.533526428Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21ad4-818c-7662-9d22-034cc85bc295
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3baedffcbc (int-story-3202-agy-review; diff vs integration tip 85b2fee16d)
+
+    Acceptance evidence (narrowed scope per advisor brief; AC1/AC2 containment stay in STORY-2460):
+    - AC-A [evidence: behavioral-test] agy is a review vendor via the S3a spawn only: `vendors/review_runner.rs` AGY (argv `--output-format=text --mode=plan --disable-slash-commands --print=`; auth allowlist GEMINI_API_KEY; efforts low..max via `--effort`; `--print-timeout` = deadline minus min(deadline/4, 30s), never 0). Added to REVIEW_VENDORS; `review_vendor("agy"|"antigravity")` resolves. Tests: `s3a_runner_spawn_contract` (agy case: empty cwd, env allowlist, stdin prompt, exact argv), `story3202_agy_effort_mapping_and_print_timeout`, `story3202_challenger_picks_agy_when_claude_finds`.
+    - AC-B [evidence: behavioral-test] `aida doctor --lane-host` runs `agy models` through the same RunnerCall (setsid, no TTY, empty cwd, runner env so no session bus/keyring) and reports `auth-probe-agy`: KeyringOnly names the fix (GEMINI_API_KEY, or sign in once with `env -u DBUS_SESSION_BUS_ADDRESS agy` so the file token is written); Rejected/Timeout/Failed are typed. Required when agy is a lane vendor, a note when merely installed. Test: `story3202_agy_auth_probe_classifies_without_hanging`.
+    - AC-C [evidence: behavioral-test] fake-agy tests above plus `story3202_agy_auth_failure_is_a_typed_cause` (AuthRequired downcast, fails fast, claude keeps the plain failure).
+
+    Live probe findings on this host: piped stdin with `-p=` is read as the prompt (with /dev/null agy says "empty prompt"); a non-interactive `agy -p` says "authentication failed or timed out"; `agy models` logs "Failed to load stored token from keyring, falling back to file: dial unix /run/user/1000/bus" and there is no ~/.gemini/antigravity-cli/antigravity-oauth-token, which confirms the keyring-only diagnosis.
+
+    Fixes during self-review: auth matching narrowed to stderr only (a review's own stdout cannot trigger it); the probe was rewritten to reuse RunnerCall rather than a second spawn path; an E0716 borrow bug in a test; ratchet-set entries for the 3 new module tests.
+
+    Residual risks: (1) agy has no verified settings key to disable USER-level hooks (claude's disableAllHooks equivalent). Repo/project hooks, settings and MCP can't load because the cwd is an empty, untrusted dir, but operator-trusted user hooks in ~/.gemini still apply. (2) The `env -u DBUS_SESSION_BUS_ADDRESS agy` fix is inferred from agy's documented keyring-to-file fallback and hasn't been run end to end here. (3) Not run against a signed-in agy; the stdin and argv contract is checked against agy 1.5.18 flag parsing only. (4) The diff is about 205 production lines plus about 190 test lines, so it's over the 300-line budget if tests count.
+    Validation: targeted `cargo test --profile agent -p aida-cli-lib --lib` reported 41 passed, 0 failed; make check-ci-fast result in the PR body.
+  created_at: 2026-11-27T02:27:44.140066558Z
+  modified_at: 2026-11-27T02:27:44.140066558Z
+  session_id: 01a21ab210ef
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
