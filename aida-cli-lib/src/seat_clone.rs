@@ -6831,6 +6831,11 @@ pub(crate) mod seat_publish_tests;
 #[path = "tests/bug_2705_seat_clone_leftover_tests.rs"]
 mod bug_2705_seat_clone_leftover_tests;
 
+// trace:BUG-2781 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2781_lane_salvage_tests.rs"]
+mod bug_2781_lane_salvage_tests;
+
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
 #[cfg(test)]
 #[path = "tests/story_b6b_100_seat_clone_handshake_tests.rs"]
