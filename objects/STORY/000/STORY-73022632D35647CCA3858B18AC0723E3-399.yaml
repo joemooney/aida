@@ -1,0 +1,31 @@
+id: 01a21e7c-e972-7d93-96b7-11e13bacc77d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-399
+title: 'Review PR-4750: [AI:claude] fix(containment): contained seat preflight refusal names the probe exit code and output tail (TASK-3927)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21e63`) for branch `task-3927-preflight-diag`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4750>
+  - Branch: `task-3927-preflight-diag` → `main`
+
+  ## Covers
+
+  - TASK-3927
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4750` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T19:30:32.434529987Z
+modified_at: 2026-11-27T19:30:32.434529987Z
+req_type: Story
+filed_at:
+  code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e06142ac4
