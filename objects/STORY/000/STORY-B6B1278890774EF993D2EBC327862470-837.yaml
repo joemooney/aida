@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T04:23:55.652171474Z
+modified_at: 2026-11-27T05:08:47.769572867Z
 req_type: Story
 tags:
 - containment
@@ -191,6 +191,21 @@ comments:
   created_at: 2026-11-27T04:20:22.951768352Z
   modified_at: 2026-11-27T04:20:22.951768352Z
   session_id: 01a21ab210ef
+- id: 01a21b68-4251-7a01-a0ba-c65887dd8c65
+  author: joe
+  content: |-
+    INTEGRATION RE-PRE-CHECK PR #4716 r1 (head 4c941fb51e): PASS. MUST-1 is met. Strict tier, so it still needs the independent review.
+    - (a) AGY argv is now --sandbox plus --settings with deny-all permissions (read_file(*) and read_file(/), write_file, command, mcp, read_url, execute_url, download_url) plus --mode=plan. The S3a spawn-contract test asserts all three.
+    - (b) It is documented on AGY: --sandbox plus plan mode auto-denies shell, web and writes when headless (seen live), but reads were seen allowed anywhere. That is why the deny-all is there, and the deny-all itself is not yet verified live. This is recorded as the binding residual.
+    - (c) ReviewVendor.confinement_verified is false for agy. pick_challenger filters out unverified vendors, so agy is never auto-picked, even when it is the only other installed vendor (tested). An explicit --challenger-agent agy still runs, with the confinement flags.
+    - Beyond what was asked: ensure_postable refuses --post-comment before any runner starts when agy is the finder or the challenger. It is tested PATH-isolated, and the refusal is checked to happen before any spawn.
+    - Merge: 16216a9d7fc merges the integration S6 squash, and the branch is clean against the current integration 4a76108fb71.
+    - Residual, acceptable under the ruling: explicit --agent agy without --post-comment still writes runner output to the local --write and SARIF files. If the deny-all fails, that output could contain read content. It stays local, and the docs warn about it.
+    - Question for the advisor: the title is completing (STORY-3202), but the live signed-in confinement verification, which is what clears confinement_verified, is still open. Keep it completing and track the verification as a spec comment, or switch to (Refs STORY-3202)?
+  created_at: 2026-11-27T05:08:47.769572867Z
+  modified_at: 2026-11-27T05:08:47.769572867Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
