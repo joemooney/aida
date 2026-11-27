@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T23:16:51.491669421Z
+modified_at: 2026-11-27T23:33:16.031492331Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -131,6 +131,15 @@ comments:
   content: 'DEFERRED (#4764 CR @e53f2b99, p3; advisor 15:44; product-15): the subject kind in the SubjectMismatch evidence should be labelled from its source (kind-from-source) rather than inferred.'
   created_at: 2026-11-27T22:40:09.968196733Z
   modified_at: 2026-11-27T22:40:09.968196733Z
+- id: 01a21f5b-227f-73f0-9938-cb67b39ce2b5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3219c6fe60 (round 2). CR#1: contained_env computed once in spawn_vendor_headless_forking; vendor-literal ledger unchanged; story_2539_vendor_literal_ratchet passes (4/4). CR#2: seat_probe_refusal extracted from handle_role_seat_probe; task_3933_seat_probe_subject_mismatch_names_redacted_subjects covers the redacted line, the absence of raw subject/grant id, the exact cause line, and the non-subject no-evidence case. Probe 5: the refusal still returns Err on every Rejected path; a diagnostics write error is ignored and cannot turn a refusal into an allow; the subject check is unchanged. make check-ci-fast exit 0. Deferred per brief: CR#3 kind-from-source, CR#4 consolidating the other inline AIDA_USER exports. Residual: no live agy rerun from this lane.
+  created_at: 2026-11-27T23:33:16.031492331Z
+  modified_at: 2026-11-27T23:33:16.031492331Z
+  session_id: 01a21f4bddd3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
