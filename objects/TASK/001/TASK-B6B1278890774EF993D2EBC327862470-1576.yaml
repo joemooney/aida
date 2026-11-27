@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: the test selects the specific member-selection alert (by kind/subject), or waits boundedly for the holder line, instead of taking the first alert; no sleep-based timing.
   - AC2: the fix is test-only unless the alert ordering is a real product bug (then say so in the PR).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:03:47.207632415Z
-modified_at: 2026-11-27T20:03:47.207632415Z
+modified_at: 2026-11-27T20:12:19.194336749Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-27T20:04:00.704959117Z
   changes: []
+- id: 01a21ea3-297a-7e92-98fd-802a5b66d585
+  author: aida-session-start
+  timestamp: 2026-11-27T20:12:19.194335125Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
