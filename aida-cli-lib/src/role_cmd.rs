@@ -1084,22 +1084,33 @@ fn handle_role_seat_probe(
         }
         GrantCheck::Valid(_) => anyhow::bail!("seat_grant_valid=true expected_seat=false"),
         GrantCheck::Absent => anyhow::bail!("seat_grant_valid=false cause=Absent"),
-        GrantCheck::Rejected { reason, .. } => {
-            // Debug's discriminant name gives a cause without the record's
-            // subject, binding, timestamps or selector values.
-            // A subject mismatch also names both subjects, redacted, on its
-            // own line so the exact cause line below stays machine-matchable.
-            // trace:TASK-3933 | ai:claude
-            if let Some(evidence) =
-                reason.subject_mismatch_evidence(&aida_core::exec_context::Environment::capture())
-            {
-                eprintln!("{evidence}");
-            }
-            let detail = format!("{reason:?}");
-            let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
-            anyhow::bail!("seat_grant_valid=false cause={cause}")
-        }
+        GrantCheck::Rejected { reason, .. } => Err(seat_probe_refusal(
+            &reason,
+            &aida_core::exec_context::Environment::capture(),
+            &mut std::io::stderr(),
+        )),
     }
+}
+
+/// The seat probe's refusal for a rejected grant. A subject mismatch first
+/// writes both subjects, redacted, on their own line to `diagnostics`, so the
+/// returned exact cause line stays machine-matchable. Debug's discriminant
+/// name gives a cause without the record's subject, binding, timestamps or
+/// selector values.
+// trace:TASK-3933 | ai:claude
+fn seat_probe_refusal(
+    reason: &crate::gate::seat_authority::GrantRejection,
+    env: &aida_core::exec_context::Environment,
+    diagnostics: &mut dyn std::io::Write,
+) -> anyhow::Error {
+    use std::io::Write as _;
+    if let Some(evidence) = reason.subject_mismatch_evidence(env) {
+        // Best effort: a closed stderr must not mask the refusal itself.
+        let _ = writeln!(diagnostics, "{evidence}");
+    }
+    let detail = format!("{reason:?}");
+    let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
+    anyhow::anyhow!("seat_grant_valid=false cause={cause}")
 }
 
 fn handle_role_current(check: bool) -> Result<()> {
@@ -1630,6 +1641,75 @@ fn handle_role_scaffold() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// AC1 on the probe surface: a SubjectMismatch refusal writes the
+    /// redacted expected/presented line, never a raw subject or grant id,
+    /// and still ends with the exact machine-matched cause line.
+    // trace:TASK-3933 | ai:claude
+    #[test]
+    fn task_3933_seat_probe_subject_mismatch_names_redacted_subjects() {
+        use crate::gate::seat_authority::{grant_check_for, GrantCheck, GrantRejection};
+        use crate::test_env::{AmbientGuard, HERMETIC_TEST_USER};
+        let root = tempfile::tempdir().unwrap();
+        let _ambient = AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_USER", None),
+                ("USER", Some(HERMETIC_TEST_USER)),
+                ("USERNAME", None),
+            ],
+        );
+        let grant = crate::launch::issue_launch_child(
+            root.path(),
+            "implementer",
+            HERMETIC_TEST_USER,
+            false,
+        )
+        .unwrap();
+        let GrantCheck::Rejected { reason, .. } =
+            grant_check_for(root.path(), &grant.id, "default")
+        else {
+            panic!("a child presenting the fallback subject must be refused");
+        };
+        assert!(
+            matches!(reason, GrantRejection::SubjectMismatch { .. }),
+            "{reason:?}"
+        );
+        let mut stderr = Vec::new();
+        let error = super::seat_probe_refusal(
+            &reason,
+            &aida_core::exec_context::Environment::from_pairs([]),
+            &mut stderr,
+        );
+        let stderr = String::from_utf8(stderr).unwrap();
+        let line = stderr.strip_suffix('\n').expect("one diagnostic line");
+        assert!(!line.contains('\n'), "{stderr}");
+        assert!(
+            line.starts_with("subject_mismatch expected=[kind=named sha256="),
+            "{line}"
+        );
+        assert!(line.contains("presented=[kind=fallback sha256="), "{line}");
+        assert!(line.ends_with("source=fallback]"), "{line}");
+        assert!(!line.contains(HERMETIC_TEST_USER), "{line}");
+        assert!(!line.contains(&grant.id), "{line}");
+        assert_eq!(
+            error.to_string(),
+            "seat_grant_valid=false cause=SubjectMismatch"
+        );
+
+        // A non-subject rejection keeps only the cause line.
+        let mut stderr = Vec::new();
+        let error = super::seat_probe_refusal(
+            &GrantRejection::Parent(Box::new(reason)),
+            &aida_core::exec_context::Environment::from_pairs([]),
+            &mut stderr,
+        );
+        assert!(stderr.is_empty());
+        assert_eq!(error.to_string(), "seat_grant_valid=false cause=Parent");
+        crate::session::revoke_headless_child_grant(&grant.id);
+    }
+
     // trace:BUG-2503 | ai:codex
     #[test]
     fn role_status_guides_managed_renewal_with_or_without_visible_harness() {

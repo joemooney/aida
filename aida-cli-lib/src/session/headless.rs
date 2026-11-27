@@ -550,8 +550,10 @@ fn spawn_vendor_headless_forking(
     let sandboxed = sandboxed_child_grant(vendor, contained)?;
     // A child whose env is reduced to the contained allowlist is told the
     // subject it presents, by the issuer shared with conformance-launch.
+    // Decided once so grant issuance and the env export below never disagree.
     // trace:TASK-3933 | ai:claude
-    let child_grant = if vendor == HeadlessVendor::Codex || wrapper {
+    let contained_env = vendor == HeadlessVendor::Codex || wrapper;
+    let child_grant = if contained_env {
         crate::launch::issue_contained_child(
             &headless_worktree_root(),
             seat.as_str(),
@@ -582,7 +584,7 @@ fn spawn_vendor_headless_forking(
             grant: &child_grant.id,
         },
     )?;
-    if vendor == HeadlessVendor::Codex || wrapper {
+    if contained_env {
         cmd.env("AIDA_PROJECT_ROOT", headless_worktree_root());
     }
     if vendor == HeadlessVendor::Codex && posture != ContainmentPosture::Aida {
