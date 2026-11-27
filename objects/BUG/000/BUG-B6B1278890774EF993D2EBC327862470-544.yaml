@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T23:39:37.516656067Z
+modified_at: 2026-11-27T23:50:09.104097770Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -284,6 +284,15 @@ comments:
   created_at: 2026-11-27T21:18:28.653670282Z
   modified_at: 2026-11-27T21:18:28.653670282Z
   session_id: 01a21ebc8d27
+- id: 01a21f6a-97d0-7be1-b10a-cfb3aaeac2ab
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b0312ca7a2. Round 3: the only CI failure at 2e13e2c9 was the ratchet count (34 listed, 35 executed). The review_prepare::tests:: filter also matched the live canary test bug_2783_bwrap_confined_codex_never_reads_the_canary. I listed it in scripts/ratchet-set.json and removed its redundant structural exclusion. No test was removed or weakened, and the live bwrap gate still requires it live. Evidence: python ratchet/structural unit tests OK (14). cargo test -p aida-cli-lib --lib -- review_prepare::tests:: gave 35 passed of 35 listed, with bwrap live on this host. CI fast gates pass at b0312ca7a2. r2 findings 2–4 were already addressed in r2: the bug_2783_bwrap_ gate pattern, the refresh-failure cause text, and no_read() removed. Residual risks: make check-ci-fast/check-ci-compile were not run locally because the lane job runner only accepts cargo; I am relying on CI. The live expired-token refresh (finding 3) is still unverified against a real vendor.
+  created_at: 2026-11-27T23:50:09.104097770Z
+  modified_at: 2026-11-27T23:50:09.104097770Z
+  session_id: 01a21f60b8e9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
