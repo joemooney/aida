@@ -256,6 +256,7 @@ fn start(a: &ShellRunArgs) -> Result<()> {
         max_rounds: None,
         serve_socket: true,
         pid_observer: aida_core::pid_observer::PidObserver::current(),
+        reexec: ds::runner::live_reexec().ok(), // trace:TASK-3919 | ai:claude
     };
     ds::runner::run(&q, &cfg, &stop)?;
     Ok(())

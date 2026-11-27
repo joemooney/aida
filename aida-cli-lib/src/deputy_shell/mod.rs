@@ -390,6 +390,10 @@ impl Queue {
     pub(crate) fn audit_path(&self) -> PathBuf {
         self.root.join("audit.jsonl")
     }
+    /// Present while the runner re-execs onto the live build (TASK-3919).
+    pub(crate) fn reexec_marker(&self) -> PathBuf {
+        self.root.join("reexec.marker")
+    }
     pub(crate) fn runner_json(&self) -> PathBuf {
         self.root.join("runner.json")
     }

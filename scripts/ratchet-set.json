@@ -11,6 +11,8 @@
       "source": "aida-core/src/review_engine.rs",
       "tests": [
         "s1_runner_findings_sarif_and_threshold",
+        "s6_polyglot_and_hdl_playbooks_match_and_carry_checklists",
+        "s6_junit_and_testbench_companions_share_a_stem",
         "config_defaults_only_when_absent",
         "credential_components_at_any_depth",
         "credential_npmrc",
@@ -72,6 +74,7 @@
         "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
+        "bug2779_top_level_error_keeps_its_cause",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
@@ -93,6 +96,7 @@
       "tests": [
         "s4_challenger_effort_injection_refused_at_every_source",
         "bug2775_runner_cmd_note_only_when_the_variable_is_set",
+        "bug2779_untrusted_challenger_output_fails_closed",
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags",

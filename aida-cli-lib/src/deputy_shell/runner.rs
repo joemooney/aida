@@ -77,6 +77,80 @@ pub(crate) struct RunnerConfig {
     /// How startup judges a legacy bash runner's death (tests inject one).
     // trace:BUG-2625 | ai:claude
     pub pid_observer: aida_core::pid_observer::PidObserver,
+    /// Re-exec onto the live build between jobs; `None` in most tests.
+    // trace:TASK-3919 | ai:claude
+    pub reexec: Option<Reexec>,
+}
+
+/// Why the runner's own image is not the live build.
+// trace:TASK-3919 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Stale {
+    pub live: PathBuf,
+    pub old_sha: String,
+    pub new_sha: String,
+    pub reason: String,
+}
+
+/// The idle-time check, and the exec that replaces this process (it returns
+/// only on failure). The exec keeps the pid, its start time, parent and
+/// session, so the grant's binding still names this process.
+// trace:TASK-3919 | ai:claude
+#[derive(Clone)]
+pub(crate) struct Reexec {
+    pub probe: Arc<dyn Fn() -> Option<Stale> + Send + Sync>,
+    pub exec: Arc<dyn Fn(&Stale, &str) -> anyhow::Error + Send + Sync>,
+    /// The check's cadence while idle (it may run `--version` twice).
+    pub every: Duration,
+}
+
+/// The runner image `exe` against the `live` build, by BUG-2774's probe: the
+/// image was deleted, or it is an older image from the live directory with
+/// another sha. A worktree build that was not deleted is left alone, and so
+/// is any image when the live build does not answer `--version`.
+// trace:TASK-3919 | ai:claude
+pub(crate) fn stale_image(
+    exe: &Path,
+    live: &Path,
+    sha: impl Fn(&Path) -> Option<String>,
+) -> Option<Stale> {
+    let now = std::time::SystemTime::now();
+    let found = crate::review_watch::service::deputy_binary("", 0, exe, live, &sha, now)?;
+    let deleted = found["deleted"] == true;
+    let path = found["path"].as_str().unwrap_or_default();
+    if !deleted && !Path::new(path).starts_with(live.parent()?) {
+        return None;
+    }
+    Some(Stale {
+        live: live.to_path_buf(),
+        new_sha: sha(live)?,
+        old_sha: sha(exe).unwrap_or_else(|| "unknown".into()),
+        reason: if deleted {
+            format!("the runner's binary {path} was deleted")
+        } else {
+            format!("the runner's binary {path} is not the live build")
+        },
+    })
+}
+
+/// The live runner's [`Reexec`].
+// trace:TASK-3919 | ai:claude
+pub(crate) fn live_reexec() -> Result<Reexec> {
+    let live = crate::dev_build::default_live_dir()?.join("aida");
+    Ok(Reexec {
+        probe: Arc::new(move || {
+            stale_image(
+                Path::new("/proc/self/exe"),
+                &live,
+                crate::dev_build::binary_sha_label,
+            )
+        }),
+        exec: Arc::new(|stale, grant_id| {
+            let e = crate::launch::control::exec_runner(&stale.live, grant_id);
+            anyhow::Error::from(e).context(format!("re-exec {}", stale.live.display()))
+        }),
+        every: Duration::from_secs(30),
+    })
 }
 
 /// Holds the single-runner lock for one deputy name.
@@ -168,6 +242,9 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
     } else {
         None
     };
+    // This process now serves: a submit that waited out a re-exec connects.
+    // trace:TASK-3919 | ai:claude
+    let _ = std::fs::remove_file(q.reexec_marker());
     let me = std::process::id();
     let mut grant_id = cfg.grant_id.clone();
     let now = (cfg.clock)();
@@ -187,6 +264,8 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
     let mut was_paused = false;
     let mut handled = 0usize;
     let mut rounds = 0usize;
+    let mut stale: Option<Stale> = None;
+    let mut next_check = Instant::now();
     let stop_why: String = loop {
         if stop.load(Ordering::SeqCst) {
             break "stopped at the operator's terminal".into();
@@ -281,9 +360,48 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
                 }
             }
         }
+        // Idle (no job ran this round): an image a promotion replaced or
+        // deleted re-execs onto the live build. Never mid-job.
+        // trace:TASK-3919 | ai:claude
+        if let Some(r) = cfg.reexec.as_ref().filter(|_| Instant::now() >= next_check) {
+            next_check = Instant::now() + r.every;
+            if let Some(found) = (r.probe)() {
+                stale = Some(found);
+                break "re-exec onto the live build".into();
+            }
+        }
         std::thread::sleep(cfg.poll);
     };
+    // Before the socket goes: submits that then find none wait for the new
+    // image instead of failing (AC2). trace:TASK-3919 | ai:claude
+    if stale.is_some() {
+        let _ = std::fs::remove_file(q.reexec_marker());
+        let _ = crate::deputy::write_private_new(&q.reexec_marker(), b"re-exec");
+    }
     drop(server);
+    if let (Some(found), Some(r)) = (stale, cfg.reexec.as_ref()) {
+        let now = (cfg.clock)();
+        q.audit_event(now, "runner-reexec", None, &actor(&grant_id), |rec| {
+            rec.reason = Some(found.reason.clone());
+            rec.detail = Some(serde_json::json!({
+                "old_sha": found.old_sha, "new_sha": found.new_sha,
+                "live": found.live.display().to_string(),
+            }))
+        });
+        let line = format!(
+            "re-exec old_sha={} new_sha={} reason={}",
+            found.old_sha, found.new_sha, found.reason
+        );
+        let _ = super::supervisor::record_exit(q, &line);
+        say(cfg, &format!("[deputy shell] {line}\r\n"));
+        drop(_train_services);
+        drop(_services);
+        drop(_lock);
+        let e = (r.exec)(&found, &grant_id);
+        let _ = std::fs::remove_file(q.reexec_marker());
+        let _ = std::fs::remove_file(q.runner_json());
+        return Err(e.context("the script deputy could not re-exec onto the live build"));
+    }
     let now = (cfg.clock)();
     q.audit_event(now, "runner-stop", None, &actor(&grant_id), |r| {
         r.reason = Some(stop_why.clone())
