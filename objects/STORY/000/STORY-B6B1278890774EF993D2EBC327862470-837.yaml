@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T02:27:44.140066558Z
+modified_at: 2026-11-27T03:40:40.532103680Z
 req_type: Story
 tags:
 - containment
@@ -101,6 +101,13 @@ comments:
     Validation: targeted `cargo test --profile agent -p aida-cli-lib --lib` reported 41 passed, 0 failed; make check-ci-fast result in the PR body.
   created_at: 2026-11-27T02:27:44.140066558Z
   modified_at: 2026-11-27T02:27:44.140066558Z
+  session_id: 01a21ab210ef
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b17-48d4-7b11-8b51-9d300f6e4320
+  author: dirtlab
+  content: 'PR #4716 (base integration) opened at 8f859ca83b. Changes since the self-review comment: vendor literals moved behind vendors/ (tag detection now uses review_vendor(), and the lane-host probe decision is host_diagnostics::agy_lane_probe); the probe reads env via Environment::capture(). Final validation at 8f859ca83b: targeted aida-cli-lib lib tests 70 passed, 0 failed; make check-ci-fast rc=0.'
+  created_at: 2026-11-27T03:40:40.532103680Z
+  modified_at: 2026-11-27T03:40:40.532103680Z
   session_id: 01a21ab210ef
   harness_version: 2.1.319 (Claude Code)
 history:

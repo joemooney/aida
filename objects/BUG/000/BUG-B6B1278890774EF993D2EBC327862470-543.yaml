@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T03:21:37.229852065Z
+modified_at: 2026-11-27T03:40:31.165617643Z
 req_type: Bug
 tags:
 - ci
@@ -63,6 +63,31 @@ comments:
     - verify-manual also checks spec-graph interface_changes, which a path diff cannot see; is CI-only coverage for spec-only surface changes acceptable? (Assumed yes: CI's Ratchet set still runs it unconditionally.)
   created_at: 2026-11-27T03:21:37.229852065Z
   modified_at: 2026-11-27T03:21:37.229852065Z
+  session_id: 01a21b0347d5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b17-243d-7431-9ecf-daaf7b123e97
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 71f95102f1 (git diff origin/main...HEAD; lane is self-publishing, working tree clean apart from sandbox mount stubs).
+
+    Acceptance evidence:
+    - AC1: check-ci-gates prints RUN/ok/FAIL <step> (Ns) for every check-ci-fast gate (unchanged). check-ratchets.py now prints 'ratchets: step: <what it builds and why>' before each command, as well as its existing duration line. Test: ManualCheckGate.test_auto_skips_build_without_surface_change_and_ci_default_always_runs asserts every step carries a why.
+    - AC2 (advisor options a + c): Makefile check-ci-fast = check-ci-gates.py --tier fast --no-build. check-ci-compile depends on check-ratchets. check-ratchets passes --manual auto, so the aida build and verify-manual run only when docs/cli/, aida-cli/, aida-cli-lib/src/**/*_args.rs, command_registry.rs, cli.rs, the help golden or check-ratchets.py changed (committed, staged, unstaged or untracked; a git failure means run it). CI is unchanged: the ci.yml Ratchet set step still runs check-ratchets.py --profile dev with the default --manual always, and fast-gates still runs check-ci-source in full. Tests: test_ratchets_run_in_check_ci_compile_and_integration_sync, test_surface_paths_select_the_manual_check, test_unknown_diff_or_always_runs_it, test_git_failure_means_unknown.
+    - AC3: a check-ci-fast (--no-build) step whose process tree stays under 1% CPU for AIDA_GATE_STALL_SECS (default 120, 0 disables) is SIGKILLed. The failure prints STALL <step>, each pid/comm/wchan and the last output line. Tests: StallWatchdog.* (an idle sleep is killed under 20s with a 1s window; a busy loop is not; the knob parses), and test_no_build_fast_plan_runs_no_cargo_step asserts the watchdog is armed only for --no-build.
+    - AC4: test_check_ci_fast_closure_has_no_cargo_or_ratchet_step walks check-ci-fast's Makefile prerequisite closure. test_no_build_fast_plan_runs_no_cargo_step asserts the resolved plan has no cargo build/test/check. New tests run in CI's 'CI tier policy fixtures' step.
+    - check-ci-list prints the Ratchet set placement (tested for --tier all and compile).
+
+    Probe findings, fixed:
+    1. The fast tier deliberately contains one cargo gate ('Rust structural ratchets', aida-ci-guards, TASK-3791), and CI's fast-gates job runs check-ci-source, so retiering it would change CI. Added --no-build for check-ci-fast only. check-ratchets runs both halves of the skipped gate (test_ci_structural_guards.py and aida-ci-guards --lib).
+    2. The watchdog first applied to every fast-tier run, which would have changed CI's check-ci-source. Now limited to --no-build.
+    3. git quotes non-ASCII paths, so they could slip past the surface match. Now runs with core.quotePath=false.
+    4. The first lane gate failed 'Documentation audience coverage' because fixture doc paths in the new test read as broken links. Now built from parts.
+    5. integration-sync-main.sh relied on check-ci-fast to run the ratchets. It now runs make check-ratchets as well.
+
+    Residual risks: verify-manual also checks spec-graph interface_changes, which a path diff cannot see; CI still covers those. Linux /proc only; elsewhere there is no watchdog. make sync-templates/check-templates cannot run in this sandbox (.claude/skills is read-only; check-templates also fails on clean HEAD here). The discipline mirror was copied by hand, exactly as the sync step does.
+  created_at: 2026-11-27T03:40:31.165617643Z
+  modified_at: 2026-11-27T03:40:31.165617643Z
   session_id: 01a21b0347d5
   harness_version: 2.1.319 (Claude Code)
 history:
