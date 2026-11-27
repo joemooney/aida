@@ -551,66 +551,9 @@ mod tests {
                 assert_eq!(argv.remove(0), "--print-timeout=15s");
             }
             assert_eq!(argv, agent.unwrap().argv, "prompt or extra args in argv");
-            // codex and agy run only inside the bubblewrap view: exactly the
-            // system dirs, TLS/DNS files, an empty HOME with the vendor's own
-            // auth files, and the binary. trace:BUG-2783 | ai:claude
-            let wrapper = std::fs::read_to_string(bin.join("bwrap.argv"));
-            let wrapper = wrapper.unwrap_or_default();
-            let _ = std::fs::remove_file(bin.join("bwrap.argv"));
-            let auth = match own {
-                "openai" => [".codex/auth.json", ".codex/config.toml"],
-                "gemini" => [
-                    ".gemini/antigravity-cli/antigravity-oauth-token",
-                    ".gemini/antigravity-cli/settings.json",
-                ],
-                _ => {
-                    assert_eq!(wrapper, "", "claude must not be wrapped");
-                    continue;
-                }
-            };
-            let program = bin.join(agent.unwrap().program).canonicalize().unwrap();
-            let program = program.to_str().unwrap();
-            let mut want = vec!["--die-with-parent", "--unshare-all", "--share-net"];
-            for path in [
-                "/usr",
-                "/bin",
-                "/lib",
-                "/lib32",
-                "/lib64",
-                "/libx32",
-                "/etc/ssl",
-                "/etc/ca-certificates",
-                "/etc/resolv.conf",
-                "/etc/hosts",
-                "/etc/nsswitch.conf",
-            ] {
-                want.extend(["--ro-bind-try", path, path]);
-            }
-            want.extend(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]);
-            want.extend([
-                "--tmpfs",
-                "/nonexistent",
-                "--dir",
-                "/review",
-                "--chdir",
-                "/review",
-            ]);
-            let binds: Vec<_> = auth.iter().map(|f| format!("/nonexistent/{f}")).collect();
-            for bind in &binds {
-                want.extend(["--ro-bind-try", bind, bind]);
-            }
-            if own == "openai" {
-                want.extend(["--setenv", "CODEX_HOME", "/nonexistent/.codex"]);
-            }
-            want.extend(["--ro-bind", program, program, "--", program]);
-            want.extend(agent.unwrap().argv.iter().copied());
-            if own == "gemini" {
-                want.insert(want.len() - argv.len(), "--print-timeout=15s");
-            }
-            assert_eq!(wrapper.lines().collect::<Vec<_>>(), want);
-            assert!(!wrapper
-                .lines()
-                .any(|a| a == "/etc" || a == "/" || a == "--bind"));
+            // trace:BUG-2783 | ai:claude
+            #[cfg(target_os = "linux")]
+            assert_confined_wrapper(bin, agent.unwrap(), own);
             // agy: sandboxed plan mode, and session settings that deny every
             // tool rule, reads included. trace:STORY-3202 | ai:claude
             if own == "gemini" {
@@ -726,6 +669,71 @@ mod tests {
             assert!(err.contains("needs an absolute HOME"), "{home}: {err}");
         }
         assert!(!ran.exists(), "codex ran unconfined");
+    }
+
+    /// codex and agy run only inside the bubblewrap view: exactly the system
+    /// dirs, TLS/DNS files, an empty HOME with the vendor's own auth files, and
+    /// the binary; claude is not wrapped.
+    // trace:BUG-2783 | ai:claude
+    #[cfg(target_os = "linux")]
+    fn assert_confined_wrapper(bin: &Path, agent: &ReviewVendor, own: &str) {
+        let wrapper = std::fs::read_to_string(bin.join("bwrap.argv"));
+        let wrapper = wrapper.unwrap_or_default();
+        let _ = std::fs::remove_file(bin.join("bwrap.argv"));
+        let auth = match own {
+            "openai" => [".codex/auth.json", ".codex/config.toml"],
+            "gemini" => [
+                ".gemini/antigravity-cli/antigravity-oauth-token",
+                ".gemini/antigravity-cli/settings.json",
+            ],
+            _ => {
+                assert_eq!(wrapper, "", "claude must not be wrapped");
+                return;
+            }
+        };
+        let program = bin.join(agent.program).canonicalize().unwrap();
+        let program = program.to_str().unwrap();
+        let mut want = vec!["--die-with-parent", "--unshare-all", "--share-net"];
+        for path in [
+            "/usr",
+            "/bin",
+            "/lib",
+            "/lib32",
+            "/lib64",
+            "/libx32",
+            "/etc/ssl",
+            "/etc/ca-certificates",
+            "/etc/resolv.conf",
+            "/etc/hosts",
+            "/etc/nsswitch.conf",
+        ] {
+            want.extend(["--ro-bind-try", path, path]);
+        }
+        want.extend(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]);
+        want.extend([
+            "--tmpfs",
+            "/nonexistent",
+            "--dir",
+            "/review",
+            "--chdir",
+            "/review",
+        ]);
+        let binds: Vec<_> = auth.iter().map(|f| format!("/nonexistent/{f}")).collect();
+        for bind in &binds {
+            want.extend(["--ro-bind-try", bind, bind]);
+        }
+        if own == "openai" {
+            want.extend(["--setenv", "CODEX_HOME", "/nonexistent/.codex"]);
+        }
+        want.extend(["--ro-bind", program, program, "--", program]);
+        want.extend(agent.argv.iter().copied());
+        if own == "gemini" {
+            want.insert(want.len() - agent.argv.len(), "--print-timeout=15s");
+        }
+        assert_eq!(wrapper.lines().collect::<Vec<_>>(), want);
+        assert!(!wrapper
+            .lines()
+            .any(|a| a == "/etc" || a == "/" || a == "--bind"));
     }
 
     // trace:STORY-3120 | ai:claude
