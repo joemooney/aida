@@ -539,9 +539,11 @@ mod tests {
         for name in ["claude", "agy"] {
             crate::test_exec::write_executable(&bin.path().join(name), dump);
         }
+        crate::launch::review_runner::passthrough_bwrap(bin.path());
         let path = format!("{}:/usr/bin:/bin", bin.path().display());
         let pairs = [
             ("PATH", path.as_str()),
+            ("HOME", "/nonexistent"),
             ("GEMINI_API_KEY", "gem"),
             ("ANTHROPIC_API_KEY", "sentinel"),
         ];

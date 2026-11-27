@@ -833,8 +833,9 @@ mod tests {
             stored token from keyring' >&2\necho 'error: Authentication failed or timed out' >&2\nexit 1\n";
         script(bin.path(), "agy", body);
         script(bin.path(), "claude", body);
+        passthrough_bwrap(bin.path());
         let path = format!("{}:/usr/bin:/bin", bin.path().display());
-        let env = vars(&[("PATH", &path)]);
+        let env = vars(&[("PATH", &path), ("HOME", "/nonexistent")]);
         let run = |agent| {
             let started = Instant::now();
             let err = RunnerCall {
