@@ -177,13 +177,8 @@ pub fn classify(
         hosts.push(WriterHost {
             pid: p.pid,
             exe: exe.clone(),
-            command: p
-                .cmdline
-                .iter()
-                .take(3)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(" "),
+            // trace:TASK-3922 | ai:claude
+            command: redacted_command(&p.cmdline, 3),
             verdict,
         });
     }
@@ -286,7 +281,8 @@ pub(crate) fn fresh_scan() -> Result<(), AdmissionGap> {
 /// The writers a fresh scan could not verify, each named by pid, command,
 /// executable and digest. `transient` holds only when every one runs a
 /// deleted binary, or a stale one (its path now holds another file): the
-/// processes left over from a binary switch, which exit on their own. A
+/// processes left over from a binary switch, which the retry waits out and
+/// the final refusal names with a stop/restart command for each. A
 /// writer on a present binary of another build, an unreadable one, or an
 /// incomplete scan is a live unknown writer and is never transient.
 // trace:BUG-2778 | ai:claude
@@ -337,11 +333,15 @@ pub(crate) fn admission_gap(
                 HostVerdict::Admitting => unreachable!(),
             }
         };
-        gap.writers.push(format!(
-            "pid {} ({}, {}, {sha}, {kind})",
+        let comm = comm.unwrap_or_default();
+        let step = restart_step(
             host.pid,
-            comm.unwrap_or_default(),
-            host.exe
+            &comm,
+            view.map_or(&[][..], |p| p.cmdline.as_slice()),
+        );
+        gap.writers.push(format!(
+            "pid {} ({comm}, {}, {sha}, {kind}): {step}",
+            host.pid, host.exe
         ));
     }
     if let Some(why) = incomplete {
@@ -353,6 +353,110 @@ pub(crate) fn admission_gap(
             .push("this build could not identify itself".into());
     }
     Some(gap)
+}
+
+/// The stop and restart command for one unverified writer. The hint is built
+/// only from an allowlist: the writer subcommands AIDA recognises and their
+/// non-secret flags. The raw command line is never echoed, so a credential
+/// passed as an argument cannot reach a refusal or a log; an unrecognised
+/// writer is named by its executable alone.
+// trace:TASK-3922 | ai:claude
+fn restart_step(pid: u32, comm: &str, cmdline: &[String]) -> String {
+    let args = cmdline.get(1..).unwrap_or_default();
+    let words = subcommand_words(args);
+    let has = |seq: &[&str]| words.windows(seq.len()).any(|w| w == seq);
+    let restart = if has(&["mcp-serve"]) || has(&["mcp"]) {
+        "reconnect it from its MCP client (`/mcp` in Claude Code)".to_string()
+    } else if has(&["deputy", "shell", "run"]) {
+        format!("rerun `{comm} deputy shell run{}`", allowed_flags(args))
+    } else if has(&["deputy", "run"]) {
+        format!("rerun `{comm} deputy run{}`", allowed_flags(args))
+    } else {
+        format!("start `{comm}` again as it was started")
+    };
+    format!("stop it with `kill {pid}`, then {restart}")
+}
+
+/// Whether an argument or flag name names a credential: grant, token,
+/// secret, key, password or session, in any case.
+// trace:TASK-3922 | ai:claude
+fn names_secret(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    ["grant", "token", "secret", "key", "password", "session"]
+        .iter()
+        .any(|s| name.contains(s))
+}
+
+/// The bare words of a command line that can be subcommand names: no flag,
+/// no `key=value`, and not the value following a credential flag.
+// trace:TASK-3922 | ai:claude
+fn subcommand_words(args: &[String]) -> Vec<&str> {
+    let mut words = Vec::new();
+    let mut skip = false;
+    for a in args {
+        if std::mem::take(&mut skip) {
+            continue;
+        }
+        if let Some(flag) = a.strip_prefix('-') {
+            skip = !flag.contains('=') && names_secret(flag);
+        } else if !a.contains('=') {
+            words.push(a.as_str());
+        }
+    }
+    words
+}
+
+/// The recognised non-secret deputy flags, `--name` (when its value is a
+/// plain name) and `--loop`, rendered for a restart hint.
+// trace:TASK-3922 | ai:claude
+fn allowed_flags(args: &[String]) -> String {
+    let plain = |v: &str| {
+        !v.is_empty()
+            && v.len() <= 64
+            && v.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+    };
+    let mut out = String::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        let name = match a.strip_prefix("--name=") {
+            Some(v) => Some(v),
+            None if a == "--name" => it.next().map(String::as_str),
+            None => None,
+        };
+        match name {
+            Some(v) if plain(v) => out.push_str(&format!(" --name {v}")),
+            Some(_) => out.push_str(" --name <name>"),
+            None if a == "--loop" => out.push_str(" --loop"),
+            None => {}
+        }
+    }
+    out
+}
+
+/// A command line for a listing, with every credential value replaced: the
+/// value after a credential flag, and the value of a credential `--flag=v`
+/// or `key=v` argument.
+// trace:TASK-3922 | ai:claude
+pub(crate) fn redacted_command(cmdline: &[String], take: usize) -> String {
+    let mut out = Vec::new();
+    let mut hide = false;
+    for a in cmdline.iter().take(take) {
+        if std::mem::take(&mut hide) {
+            out.push("<redacted>".to_string());
+            continue;
+        }
+        let shown = match a.split_once('=') {
+            Some((k, _)) if names_secret(k) => format!("{k}=<redacted>"),
+            Some(_) => a.clone(),
+            None => {
+                hide = a.starts_with('-') && names_secret(a);
+                a.clone()
+            }
+        };
+        out.push(shown);
+    }
+    out.join(" ")
 }
 
 #[cfg(test)]
