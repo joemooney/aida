@@ -17,10 +17,10 @@ impl Drop for Automatic {
 }
 
 fn git(root: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let out = crate::test_git::git_command()
+        .args(["-c", "user.name=t", "-c", "user.email=t@t"])
         .args(args)
+        .current_dir(root)
         .output()
         .unwrap();
     assert!(
@@ -39,18 +39,7 @@ fn clone_with(committed: &str, worktree: Option<&str>) -> tempfile::TempDir {
     std::fs::create_dir_all(r.join(".aida")).unwrap();
     std::fs::write(r.join(".aida/config.toml"), committed).unwrap();
     git(r, &["add", "."]);
-    git(
-        r,
-        &[
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "commit",
-            "-qm",
-            "base",
-        ],
-    );
+    git(r, &["commit", "-qm", "base"]);
     if let Some(body) = worktree {
         std::fs::write(r.join(".aida/config.toml"), body).unwrap();
     }
