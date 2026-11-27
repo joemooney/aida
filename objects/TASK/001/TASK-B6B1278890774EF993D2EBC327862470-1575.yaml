@@ -13,12 +13,33 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T20:07:01.886872807Z
+modified_at: 2026-11-27T20:08:17.201030678Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a21ad3-97f1-7170-87b7-1ded18a206f6
   created_at: 2026-11-27T20:02:27.808354593Z
+comments:
+- id: 01a21e9f-7831-7c70-abe8-66347f84ed53
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 [behavioral-test]: `lane_salvage::guarded_push` reads the branch's fast-gate receipt (new `lane_fast_gate::failed_receipt`) before the PR head guard. A `fail` receipt, or one it cannot read (fail-closed), routes the push to `salvage/<lane>`; the note/announcement says `PR #N head not moved: fast-gate receipt .aida/fast-gates/<hash>.json for <branch> reads fail`. No-force fast-forward check unchanged.
+    - AC2 [behavioral-test, fixture layer, real git]: `bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref` (PR branch untouched, salvage ref at tip, note names the receipt) and `bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch` in tests/bug_2781_lane_salvage_tests.rs.
+
+    ### Expected files
+    - aida-cli-lib/src/lane_salvage.rs
+    - aida-cli-lib/src/lane_fast_gate.rs (reader + cfg(test) receipt setter)
+    - aida-cli-lib/src/tests/bug_2781_lane_salvage_tests.rs
+
+    ### Ambiguities / conflicts as questions
+    - None (a red receipt with no open PR already targets salvage/<lane>; unchanged).
+  created_at: 2026-11-27T20:08:17.201030678Z
+  modified_at: 2026-11-27T20:08:17.201030678Z
+  session_id: 01a21e9e1a91
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe

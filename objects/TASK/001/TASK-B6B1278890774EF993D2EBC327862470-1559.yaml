@@ -9,12 +9,12 @@ description: |
   - AC1: manual-train waiter identity uses the ORDER-INSENSITIVE (sorted, deduplicated) PR set, not the exact argv order.
   - AC2: a manual train whose PR set equals a LIVE waiter's ADOPTS that waiter (takes over its queue position, refreshes its owner pid + start time) instead of queueing behind it, so retrying from another terminal or a deputy never self-blocks.
   - AC3: tests: the same set in a different order → adopts; the same set from a different parent → adopts; a different set → queues FIFO; a recycled pid (same pid, different start time) → treated as dead and released.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:27:07.544697554Z
-modified_at: 2026-11-27T19:57:59.755506923Z
+modified_at: 2026-11-27T20:09:48.636789849Z
 req_type: Task
 tags:
 - admission
@@ -39,6 +39,24 @@ comments:
   modified_at: 2026-11-27T19:57:59.755506923Z
   session_id: 01a21e94b9b6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21e9f-1b93-7bd1-bedc-778fab665dc1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ed07101ce1 (git diff origin/main...HEAD, 1 file, +117/-5).
+
+    **Acceptance evidence**
+    - AC1: `pr_set` (sort+dedup) is the waiter identity in `queued_train_admission`; legacy unsorted rows are normalized at comparison; new/adopted rows store the set. Test `task3925_same_set_in_another_order_adopts_its_waiter` ([2,1] then [1,2,1] then [2,1,2] all hit one row).
+    - AC2: owner dropped from the match; on refusal the matching row keeps id/since/position and takes the new owner + expiry; on admission it is removed. Test `task3925_same_set_from_another_parent_adopts_its_waiter` (other live parent → me; old parent exit no longer releases it).
+    - AC3: the two tests above + FIFO assertion ([10],[1,2],[30]) + `task3925_recycled_pid_is_dead_and_released` (same pid, starttime+1 → released, no yield). 5/5 admission_owner task39* tests pass via lane job.
+
+    **Probes**: (1) both sides normalize via `pr_set`. (3) legacy duplicate rows of one set: first is adopted, admission removes all; others expire by TTL/owner death. (4) empty set ("all ready PRs") retries adopt each other — intended. (5) waiters grant nothing; no authority path changed; no tests weakened.
+
+    **Residual risk**: two different operators training the same set now share one waiter (intended by AC2).
+  created_at: 2026-11-27T20:07:53.491399063Z
+  modified_at: 2026-11-27T20:07:53.491399063Z
+  session_id: 01a21e94b9b6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e94-f0b1-7662-aeb9-7250525292d7
   author: aida-session-start
@@ -47,6 +65,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21ea0-dd93-7471-8ffd-2a42d656585e
+  author: dirtlab
+  timestamp: 2026-11-27T20:09:48.691017501Z
+  session_id: 01a21e94b9b6
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5
   branch: main
@@ -54,3 +81,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 1914f9fdd15
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-27T20:09:48.636789849Z
+  implemented_by: dirtlab
