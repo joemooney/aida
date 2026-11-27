@@ -1,0 +1,47 @@
+id: 01a21f18-981c-75c3-8026-681a94ac6044
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-407
+title: 'Review PR-4763: [AI:claude] test(doctor): the scheduled landing-drought job reports every cause through scan() (TASK-3931)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21efa`) for branch `task-3931-drought-scan-wiring`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4763>
+  - Branch: `task-3931-drought-scan-wiring` → `main`
+
+  ## Covers
+
+  - TASK-3931
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4763` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T22:20:35.228298840Z
+modified_at: 2026-11-27T22:20:39.692971657Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a21ef6-68f7-7b63-bf37-3c4e9c35551a
+  created_at: 2026-11-27T22:20:39.692938844Z
+  created_by: dirtlab
+history:
+- id: 01a21f18-b1aa-7de0-a1c9-2a6e0df89ac5
+  author: dirtlab
+  timestamp: 2026-11-27T22:20:41.770542424Z
+  session_id: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: f340ccd2443588f82c99a002349df25de7a683bc
+  branch: task-3931-drought-scan-wiring
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c1684c5b7d
+  vendor: claude
+  session: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)

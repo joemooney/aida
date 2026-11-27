@@ -8,17 +8,22 @@ description: |-
   ## Acceptance
   - AC1: one end-to-end test runs the scheduled job's entry point against a fixture where each cause is present, and asserts each cause appears in the output (and failing() for the failing ones).
   - AC2: test-only; no behaviour change.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:43:14.935519412Z
-modified_at: 2026-11-27T22:14:43.178517708Z
+modified_at: 2026-11-27T22:20:43.689884654Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a21272-0001-7041-9d91-e0fef9f67516
   created_at: 2026-11-27T21:43:23.689139420Z
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21f18-981c-75c3-8026-681a94ac6044
+  created_at: 2026-11-27T22:20:43.689852738Z
+  created_by: dirtlab
 comments:
 - id: 01a21efc-6811-7d40-a652-06984921c53e
   author: dirtlab
@@ -63,6 +68,13 @@ comments:
   modified_at: 2026-11-27T22:14:43.178517708Z
   session_id: 01a21efa0ee3
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f18-464f-7262-af6b-37c482b7a5c0
+  author: aida-publication-done
+  content: Implementer push f340ccd24435 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T22:20:14.287316020Z
+  modified_at: 2026-11-27T22:20:14.287316020Z
+  session_id: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ef6-91ff-7770-8578-01efb02e2b5f
   author: joe
@@ -75,6 +87,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21f18-464f-7262-af6b-37be5ff84362
+  author: aida-publication-done
+  timestamp: 2026-11-27T22:20:14.287313683Z
+  session_id: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a21f18-c141-7fd3-b681-7543a2968716
+  author: dirtlab
+  timestamp: 2026-11-27T22:20:45.761232792Z
+  session_id: 01a21efa0ee3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
