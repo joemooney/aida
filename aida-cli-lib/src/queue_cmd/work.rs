@@ -5146,6 +5146,24 @@ pub(crate) fn handle_queue_work(
             selected_change.as_deref(),
         )
         .map_err(|why| anyhow::anyhow!(why))?;
+        // BUG-2785: a round queued before its PR was approved at the current
+        // head is refused when it would start, not only when it was queued.
+        // trace:BUG-2785 | ai:claude
+        if let (Some(change), Some(entry)) = (selected_change.as_deref(), plan.entries.first()) {
+            if plan.entries.len() == 1
+                && !list_sessions
+                && !plan_only
+                && !role.eq_ignore_ascii_case("reviewer")
+            {
+                crate::rework_approval_gate::check_launch(
+                    storage,
+                    &project_root,
+                    &plan.anchor_display,
+                    &entry.spec_id,
+                    change,
+                )?;
+            }
+        }
         // BUG-022: say which existing branch the rework must continue.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
         if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
@@ -7826,6 +7844,7 @@ pub(crate) fn run_standalone_reviewer(
                 pr,
                 head,
                 &crate::gate::kernel_deps::review_blocking::effective_warned(project_root),
+                &crate::landing_policy::load(project_root),
             )?),
             None => {
                 eprintln!(

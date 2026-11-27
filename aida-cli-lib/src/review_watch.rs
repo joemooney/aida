@@ -4947,7 +4947,11 @@ fn report(
             None,
         ),
     };
-    let line = bounded_diagnostic(&readiness.line(change));
+    let mut line = readiness.line(change);
+    if let Some(info) = approval.as_ref().and_then(|a| a.ci_info.as_deref()) {
+        line.push_str(&format!("; {info}"));
+    }
+    let line = bounded_diagnostic(&line);
     eprintln!("{key} at {}: {line}", &change.head[..12]);
     let wake = store.transaction(&key, |state| {
         let repository = state.repository.clone();
