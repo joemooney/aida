@@ -11,12 +11,12 @@ description: |
   1. Codex review runs have NO filesystem read beyond what the prompt carries. Use codex's no-tool / no-shell execution mode if one exists, or run it inside an AIDA bubblewrap with an empty HOME and only the codex auth file bind-mounted read-only. A spawn-contract test asserts the flags or the wrapper.
   2. A red-team test: a fake codex that tries to read a planted `$HOME/.ssh/canary` gets ENOENT/EACCES, and the canary never appears in the report.
   3. Until AC1 lands, `--post-comment` refuses when the finder or challenger vendor is codex (or any vendor without verified no-read confinement), with a clear message. Local reports are still allowed.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T21:18:28.653673599Z
+modified_at: 2026-11-27T23:35:34.986106912Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -367,6 +367,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21f5d-4bf8-7fc2-9e34-4537eb2da035
+  author: joe
+  timestamp: 2026-11-27T23:35:37.720690613Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
