@@ -1,0 +1,31 @@
+id: 01a21c2a-da26-7792-a071-0a6197b434ab
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1566
+title: 'Review follow-up: aida-cli-lib/src/vendors/host_diagnostics.rs agy_auth_probe_check KeyringOnly fix text tel'
+description: |-
+  From STORY-3202
+  Reviewed sha: e82f91c3ca988e163ee867fafd0651bab5ce57ee
+
+  aida-cli-lib/src/vendors/host_diagnostics.rs agy_auth_probe_check KeyringOnly fix text tells the operator to sign in with `env -u DBUS_SESSION_BUS_ADDRESS agy` (or set GEMINI_API_KEY). The live dell1 finding recorded on STORY-3202 (product-15 2026-11-26 23:42) is that agy picks file-based token storage when it detects an SSH session (cli.log: 'Using file-based token storage because SSH session detected'), and the verified fix was signing in from `ssh -t <host> agy`. Unsetting DBUS_SESSION_BUS_ADDRESS is not shown to switch agy to file storage, so the named fix may leave the operator keyring-only. Name the verified `ssh -t <host> agy` path (keep GEMINI_API_KEY only if agy honours it headless) and assert it in story3202_agy_auth_probe_classifies_without_hanging.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T08:41:40.134934247Z
+modified_at: 2026-11-27T08:41:40.134934247Z
+req_type: Task
+tags:
+- carried-from:STORY-3202
+- finding-hash:84f66c8d
+- from-review:STORY-3202
+relationships:
+- rel_type: References
+  target_id: 01a21a2e-62ea-7e00-8684-13f8ad52587b
+  created_at: 2026-11-27T08:41:59.309253898Z
+filed_at:
+  code_sha: e82f91c3ca988e163ee867fafd0651bab5ce57ee
+  branch: pr-4736
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5e565715f20
+  vendor: claude
+  session: 01a21c280ea0
