@@ -15,12 +15,12 @@ description: |-
   Wanted: (1) find what the CPU is spent on (a profile or timing log around the final gate) and make the green-to-merge step take seconds; (2) print one line per phase of the final gate so progress is visible.
 
   Acceptance: on a 3-member train, time from 'train PR is green' to the merge call is under 30 seconds, and each final-gate phase logs a line with its duration.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T16:58:10.857853786Z
-modified_at: 2026-11-27T01:04:22.184595204Z
+modified_at: 2026-11-27T01:08:08.385291772Z
 req_type: Bug
 tags:
 - landing
@@ -319,6 +319,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a21a8b-a241-7c73-8622-665e6f7c638c
+  author: aida-session-start
+  timestamp: 2026-11-27T01:08:08.385284707Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 5ea861d7358b33c4422c965a8e2285fd41b2ba6e
