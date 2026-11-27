@@ -1,0 +1,28 @@
+id: 01a21d95-3a89-73c0-99fd-ea51efd1fe57
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-547
+agreed_id: BUG-2786
+title: 'Review sweeps stall: provisional CRs never finalize, and released reviews are re-held by the exited reviewer''s checkout'
+description: |
+  Observed 2026-11-26/27: reviewer verdicts recorded as provisional `request-changes` with `sweep_pending: true` are often never finalized by the reviewer's own sweep. Seen on #4695 and #4727 (stalled ~45 min, advisor recorded the final verdict by hand), and on #4717, #4638, #4680 and #4464 (still pending hours later; live=0). Other seats then misread provisional records (the #4678 case: a provisional CR was finalized as approved while seats ruled rework on the provisional one). A second problem: after `aida review watch --release PR-N`, the watcher re-holds the PR with "checkout is at the current head", because the exited reviewer's checkout still exists (#4741, #4652, #4717, #4638). It needs a manual session end / worktree cleanup before a relaunch.
+
+  ## Acceptance criteria
+  1. A sweep-pending verdict whose reviewer process has exited (verified by session registry, not /proc) is finalized or expired within N minutes. Finalize from the draft when it is complete, else mark it `sweep_abandoned`. The ledger, review-watch and doctor all treat an abandoned sweep as "needs review", never as a CR.
+  2. `review watch --release PR-N` (or the watcher itself) also ends the exited reviewer session and removes its clean checkout, preserving any unrecorded draft by moving it aside under .aida/, so the next pass can dispatch.
+  3. `aida doctor` lists stuck sweeps and retained checkouts with the one command that clears them.
+  4. Tests for each.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T15:17:28.841464752Z
+modified_at: 2026-11-27T15:17:28.841464752Z
+req_type: Bug
+filed_at:
+  code_sha: 1d956ee6792d6b737c3e17d88ba92f818002348d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1d956ee6792
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
