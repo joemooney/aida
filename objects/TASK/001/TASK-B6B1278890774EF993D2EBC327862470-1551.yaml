@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T06:24:10.227070Z
+modified_at: 2026-11-27T06:26:56.950643049Z
 req_type: Task
 tags:
 - admission
@@ -79,6 +79,13 @@ comments:
     - AC1 says a recycled pid releases the waiter, but the tests cover only an exited child; add a same-pid, different-start-time (forged start time) owner case.
   created_at: 2026-11-27T06:24:10.227070Z
   modified_at: 2026-11-27T06:24:10.227070Z
+- id: 01a21baf-ca6c-71a1-b166-b0180b0ef7e3
+  author: joe
+  content: 'ADVISOR RULING (2026-11-26 23:33) on the #4728 deferrals: LAND. (a) The self-block (the same PR set from another terminal or deputy queues behind its own earlier waiter, up to the TTL) is a papercut, not a correctness issue: Joe''s /tmp/train loop retries from one parent, so its own retries match. Follow-up: identity = the sorted PR set (order-insensitive), and a waiter whose parent is alive but whose PR set equals the new request is ADOPTED rather than queued behind. (b) Follow-up: the recycled-pid/different-start-time test. Both go in the next slice; not blocking.'
+  created_at: 2026-11-27T06:26:56.950643049Z
+  modified_at: 2026-11-27T06:26:56.950643049Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a21b41-dd2f-7263-af2a-f110d621552d
   author: joe
