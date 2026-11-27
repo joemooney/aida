@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T00:17:49.723566509Z
+modified_at: 2026-11-27T00:19:52.096880801Z
 req_type: Task
 tags:
 - lanes
@@ -31,6 +31,26 @@ comments:
   modified_at: 2026-11-27T00:13:04.036399217Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21a5f-70a0-7d12-af4d-c81b15f1a7e3
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + bwrap fixture):** `salvage_capped` records `# head: <oid>` in the patch and, before writing, compares the new patch body and bundle ref header with the newest salvage in `.aida/salvage/<clone>/`; identical (same clone, head, checkpoint/unpushed refs, changes) returns the existing path and writes nothing. Pure helper `identical_salvage` unit-tested without bwrap; `task_3922_bwrap_repeated_destroy_writes_one_salvage` drives `destroy` twice (skips without bwrap).
+    - **AC2 (unit, aida-core):** `admission_gap` appends a per-pid next step to every unverified writer: `kill <pid>` plus the restart (MCP: reconnect from its client; otherwise rerun its command line). Display drops "should exit on their own". Test in bug_2778_admission_retry_tests.
+    - **AC3 (unit):** test that `retire_with`'s refusal maps `WriterAdmissionUnknown{transient:true}` to `transient_admission` (factor the mapping into a named fn), and that the two dispatch/work.rs predicates are named fns (`refusal_is_transient`, `kept_is_transient`) tested against transient/non-transient outcomes.
+
+    ### Expected files
+    - aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/dispatch.rs, aida-cli-lib/src/queue_cmd/work.rs, aida-cli-lib/src/tests/ (new test file)
+    - aida-core/src/mailbox_lifecycle/{activation,guard,retire}.rs, bug_2778_admission_retry_tests.rs, mailbox_lifecycle_stub.rs
+
+    ### Ambiguities / conflicts as questions
+    - None (the brief cites dispatch.rs for both call sites; the second is in queue_cmd/work.rs).
+  created_at: 2026-11-27T00:19:52.096880801Z
+  modified_at: 2026-11-27T00:19:52.096880801Z
+  session_id: 01a21a5d2760
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
