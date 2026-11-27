@@ -68,6 +68,8 @@
         "s5b_batch_diff_pathspecs_are_literal",
         "s5b_cut_balanced_tracks_tilde_fences_and_inline_spans",
         "s5b_pinned_post_names_repo_and_hung_gh_times_out",
+        "s5c_rename_old_paths_apply_every_inventory_exclusion",
+        "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",
@@ -95,7 +97,8 @@
         "bug2779_untrusted_challenger_output_fails_closed",
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
-        "s4_detect_ai_authors_from_commit_tags"
+        "s4_detect_ai_authors_from_commit_tags",
+        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing"
       ],
       "scope": "module"
     },

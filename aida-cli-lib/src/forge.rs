@@ -2413,7 +2413,10 @@ impl GitHubForge {
             .context("forge deadline expired before `gh` ran")?;
         let mut cmd = Command::new(&gh);
         cmd.current_dir(&self.project_root).args(args).stdin(body);
-        match crate::bounded_process::command_output_with_timeout_detail(cmd, timeout) {
+        // The spawn errno (ENOENT, EACCES) stays in the error chain.
+        let run = crate::bounded_process::command_output_with_timeout_io(cmd, timeout)
+            .with_context(|| format!("could not invoke `gh` at {}", gh.display()))?;
+        match run {
             Bounded::Completed(out) => Ok(out),
             Bounded::TimedOut => {
                 anyhow::bail!("`gh` timed out after {:.1}s", timeout.as_secs_f32())
@@ -3583,7 +3586,12 @@ impl Forge for GitHubForge {
         // A pinned client posts to the repository it read. trace:STORY-3120 | ai:claude
         args.extend(self.metadata_repo.iter().flat_map(|r| ["-R", r.as_str()]));
         let out = self.gh_stdin(&args, body)?;
-        anyhow::ensure!(out.status.success(), "gh pr comment failed for #{}", c.id);
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr comment failed for #{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         Ok(())
     }
 
