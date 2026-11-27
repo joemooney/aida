@@ -220,7 +220,7 @@
   requirement_id: 01a21f1c-202a-7c60-903d-d505c7ce41d3
   position: 1575000
   added_by: dirtlab
-  note: auto-queued by `aida pr` (01a21efe); covers 1 spec
-  added_at: 2026-11-27T22:24:38.337389986Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-27T22:25:00.896442573Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
