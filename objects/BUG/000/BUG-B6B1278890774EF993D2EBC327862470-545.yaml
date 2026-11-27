@@ -13,8 +13,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T04:27:55.360059259Z
+modified_at: 2026-11-27T04:28:10.979314473Z
 req_type: Bug
+comments:
+- id: 01a21b43-1a62-7921-9b1a-11e036f97be5
+  author: joe
+  content: |-
+    INTEGRATION NOTE for the BUG-2784 lane (design caution): git's built-in  driver is line-based and unsafe for JSON. When two sides each append a string after the same last element of a list, union keeps both lines verbatim. One of them then lacks the separating comma, or a trailing comma lands before ']', so the result is invalid JSON or silently wrong. In ratchet-set.json the conflicting entries are usually the last element of a "tests" array.
+    Options:
+    - (a) A custom merge driver (a small script) that parses ours, theirs and the base, unions the arrays per source entry, and re-serializes deterministically. It must exit non-zero on anything it cannot parse.
+    - (b) Change the file format so union is safe: one entry per line, with no separators to reconcile.
+    - Either way, add a test that merges two disjoint appends to the same array and asserts the result is valid JSON containing both entries.
+    Also confirm the driver config travels to lanes and CI. A .gitattributes merge= line needs a [merge "name"] driver entry in each clone's git config. Built-in union needs none, but it is unsafe here.
+  created_at: 2026-11-27T04:28:10.979314473Z
+  modified_at: 2026-11-27T04:28:10.979314473Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
