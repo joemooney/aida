@@ -123,6 +123,7 @@
       "source": "aida-cli-lib/src/launch/review_runner.rs",
       "tests": [
         "bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast",
+        "bug2783_confined_auth_source_never_lies_inside_the_checkout",
         "bug2783_confined_runner_fails_closed_without_bwrap",
         "s3a_runner_deadline_and_output_caps_fail_closed",
         "s3a_runner_spawn_contract",

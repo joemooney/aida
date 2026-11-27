@@ -87,13 +87,6 @@ impl RunnerCall<'_> {
         self.agent.filter(|_| self.var(RUNNER_CMD).is_none())
     }
 
-    /// Whether this pass is verified unable to read local files: a custom
-    /// runner never is.
-    // trace:BUG-2783 | ai:claude
-    pub(crate) fn no_read(&self) -> bool {
-        self.vendor().is_some_and(|agent| agent.no_read)
-    }
-
     /// Whether this pass may publish a PR comment: no-read, and no readable
     /// token either (a confined vendor still reads its own auth file).
     // trace:BUG-2783 | ai:claude
@@ -127,9 +120,8 @@ impl RunnerCall<'_> {
                  review with claude"
             )
         })?;
-        let inside = bwrap
-            .canonicalize()?
-            .starts_with(self.checkout.canonicalize()?);
+        let checkout = self.checkout.canonicalize()?;
+        let inside = bwrap.canonicalize()?.starts_with(&checkout);
         ensure!(!inside, "bwrap must live outside the checkout");
         let home = (self.var("HOME").map(PathBuf::from))
             .filter(|h| h.is_absolute() && h.parent().is_some())
@@ -140,6 +132,26 @@ impl RunnerCall<'_> {
             Some(dir) => PathBuf::from(dir),
             None => home.join(auth.dir),
         };
+        // The auth source is the operator's own vendor config ($CODEX_HOME or
+        // ~/<dir>), never a repo-controlled path: a checkout-resident one
+        // (directly, or through a symlinked file) is refused, so the change
+        // under review cannot supply the vendor's config.toml.
+        // trace:BUG-2783 | ai:claude
+        ensure!(
+            source.is_absolute(),
+            "the confined {label} review runner needs an absolute {} directory",
+            auth.dir_env.unwrap_or(auth.dir)
+        );
+        let sources =
+            std::iter::once(source.clone()).chain(auth.files.iter().map(|f| source.join(f)));
+        for path in sources {
+            ensure!(
+                !resolved(&path).starts_with(&checkout),
+                "the {label} review runner's auth source {} lies inside the checkout under \
+                 review; it must be your own vendor config outside the repository",
+                path.display()
+            );
+        }
         let target = home.join(auth.dir);
         let mut cmd = Command::new(bwrap);
         cmd.args(["--die-with-parent", "--unshare-all", "--share-net"]);
@@ -354,7 +366,13 @@ impl RunnerCall<'_> {
         // trace:STORY-3202 | ai:claude
         if let Some(agent) = vendor.filter(|a| !status.success() && a.auth_failed(&stderr)) {
             let (vendor, stderr) = (agent.program, stderr_tail(&stderr));
-            return Err(AuthRequired { vendor, stderr }.into());
+            let confined = agent.confined_auth.is_some();
+            return Err(AuthRequired {
+                vendor,
+                stderr,
+                confined,
+            }
+            .into());
         }
         ensure!(
             status.success(),
@@ -420,6 +438,26 @@ fn pipe_holders(pipes: &[PathBuf]) -> Vec<libc::pid_t> {
     let mut found: Vec<_> = pids.filter(|&pid| pid != me && holds(pid)).collect();
     found.sort_unstable();
     found
+}
+
+/// `path` with symlinks resolved through its nearest existing ancestor, so a
+/// not-yet-created file is still placed where it would be.
+// trace:BUG-2783 | ai:claude
+fn resolved(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut cur = path;
+    loop {
+        if let Ok(real) = cur.canonicalize() {
+            return rest.iter().rev().fold(real, |p: PathBuf, c| p.join(c));
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_owned());
+                cur = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
 }
 
 /// Test stand-in for bwrap: records its argv in `<dir>/bwrap.argv`, then runs
@@ -614,16 +652,12 @@ mod tests {
             review_vendor("antigravity").unwrap(),
             vendor("agy").unwrap()
         );
-        // Only claude, with no tools, is verified unable to read local files;
-        // a custom runner never is. trace:BUG-2783 | ai:claude
-        assert!(!call(dir, &env).no_read());
-        let confined = |name| {
-            RunnerCall {
-                agent: vendor(name),
-                ..call(dir, &vars(&[]))
-            }
-            .no_read()
-        };
+        // Every built-in vendor's file reads are confined (claude has no
+        // tools; codex and agy run in bubblewrap), but no_read is not "safe
+        // to publish": may_post() is the only publish gate. A custom runner
+        // has no vendor, so it is never treated as either. trace:BUG-2783 | ai:claude
+        assert!(call(dir, &env).vendor().is_none());
+        let confined = |name| vendor(name).unwrap().no_read;
         assert!(confined("claude") && confined("codex") && confined("agy"));
         // Confined runners still read their own token: only claude posts.
         let posts = |name| {
@@ -669,6 +703,85 @@ mod tests {
             assert!(err.contains("needs an absolute HOME"), "{home}: {err}");
         }
         assert!(!ran.exists(), "codex ran unconfined");
+    }
+
+    /// The codex config.toml a confined run binds is the operator's own
+    /// ($CODEX_HOME or ~/.codex), never a path inside the checkout under
+    /// review: a CODEX_HOME, a HOME, or a symlinked auth file that resolves
+    /// into the repository is refused before anything runs.
+    // trace:BUG-2783 | ai:claude
+    #[test]
+    fn bug2783_confined_auth_source_never_lies_inside_the_checkout() {
+        let (bin, checkout, own) = (
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        );
+        let ran = bin.path().join("ran");
+        script(
+            bin.path(),
+            "codex",
+            &format!("#!/bin/sh\ncat >/dev/null\ntouch {}\n", ran.display()),
+        );
+        passthrough_bwrap(bin.path());
+        let path = bin.path().display().to_string();
+        let repo = checkout.path();
+        let run = |pairs: &[(&str, &str)]| {
+            let env = vars(pairs);
+            RunnerCall {
+                agent: vendor("codex"),
+                ..call(repo, &env)
+            }
+            .run("p")
+        };
+        let inside = "lies inside the checkout under review";
+        let repo_codex = repo.join(".codex");
+        std::fs::create_dir_all(&repo_codex).unwrap();
+        std::fs::write(repo_codex.join("config.toml"), "model = \"x\"\n").unwrap();
+        for pairs in [
+            vec![
+                ("CODEX_HOME", repo_codex.to_str().unwrap()),
+                ("HOME", "/nonexistent"),
+            ],
+            vec![("HOME", repo.to_str().unwrap())],
+            // Not yet created, still inside.
+            vec![
+                ("CODEX_HOME", repo.join("new/.codex").to_str().unwrap()),
+                ("HOME", "/nonexistent"),
+            ],
+        ] {
+            let mut pairs = pairs;
+            pairs.push(("PATH", &path));
+            let err = format!("{:#}", run(&pairs).unwrap_err());
+            assert!(err.contains(inside), "{pairs:?}: {err}");
+        }
+        let err = format!(
+            "{:#}",
+            run(&[
+                ("PATH", &path),
+                ("HOME", "/nonexistent"),
+                ("CODEX_HOME", "rel")
+            ])
+            .unwrap_err()
+        );
+        assert!(err.contains("needs an absolute CODEX_HOME"), "{err}");
+        // A symlinked auth file pointing into the repo is refused too.
+        let codex_home = own.path().join(".codex");
+        std::fs::create_dir_all(&codex_home).unwrap();
+        std::os::unix::fs::symlink(
+            repo_codex.join("config.toml"),
+            codex_home.join("config.toml"),
+        )
+        .unwrap();
+        let home = own.path().to_str().unwrap();
+        let err = format!("{:#}", run(&[("PATH", &path), ("HOME", home)]).unwrap_err());
+        assert!(err.contains(inside), "{err}");
+        assert!(!ran.exists(), "codex ran with a repo-controlled config");
+        // The operator's own config outside the checkout runs.
+        std::fs::remove_file(codex_home.join("config.toml")).unwrap();
+        std::fs::write(codex_home.join("config.toml"), "").unwrap();
+        run(&[("PATH", &path), ("HOME", home)]).unwrap();
+        assert!(ran.exists());
     }
 
     /// codex and agy run only inside the bubblewrap view: exactly the system
@@ -890,6 +1003,31 @@ mod tests {
         assert!(
             text.contains("not signed in") && text.contains("--lane-host"),
             "{text}"
+        );
+        // agy runs confined, so the read-only auth bind is named with its
+        // remedy. trace:BUG-2783 | ai:claude
+        assert!(cause.confined, "{text}");
+        assert!(
+            text.contains("token refresh needs a writable auth file; run the vendor CLI once outside AIDA to refresh"),
+            "{text}"
+        );
+        // A confined codex whose token cannot be refreshed (its auth.json is a
+        // read-only bind) gets the same typed cause and remedy.
+        script(
+            bin.path(),
+            "codex",
+            "#!/bin/sh\ncat >/dev/null\necho 'Error: Your access token could not be refreshed' >&2\nexit 1\n",
+        );
+        let codex = run("codex");
+        let cause = codex
+            .downcast_ref::<AuthRequired>()
+            .expect("typed codex cause");
+        assert!(cause.vendor == "codex" && cause.confined, "{codex:#}");
+        assert!(
+            codex
+                .to_string()
+                .contains("run the vendor CLI once outside AIDA"),
+            "{codex:#}"
         );
         let plain = run("claude");
         assert!(plain.downcast_ref::<AuthRequired>().is_none(), "{plain:#}");

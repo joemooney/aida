@@ -27,9 +27,9 @@ pub(crate) struct ReviewVendor {
     /// never the automatic challenger and refuses `--post-comment`.
     // trace:STORY-3202 | ai:claude
     pub confinement_verified: bool,
-    /// Verified unable to read files beyond the prompt. Only such a vendor may
-    /// publish a PR comment: a prompt-injected diff could otherwise make it
-    /// quote a local secret.
+    /// Verified unable to read the user's files beyond the prompt. NOT "safe to
+    /// publish": a confined codex or agy still reads its own auth token, so
+    /// the publish gate is `RunnerCall::may_post` (this AND `post_allowed`).
     // trace:BUG-2783 | ai:claude
     pub no_read: bool,
     /// Run inside bubblewrap with an empty HOME holding only these auth files:
@@ -64,7 +64,17 @@ pub(crate) struct ConfinedAuth {
 pub(crate) struct AuthRequired {
     pub vendor: &'static str,
     pub stderr: String,
+    /// The run was bubblewrap-confined, so its auth file was read-only.
+    // trace:BUG-2783 | ai:claude
+    pub confined: bool,
 }
+
+/// Why a confined run's auth can fail where an unconfined one would not: the
+/// vendor's own token refresh cannot rewrite its read-only auth bind.
+// trace:BUG-2783 | ai:claude
+pub(crate) const CONFINED_AUTH_HINT: &str = "inside the review confinement its auth file is \
+     read-only, and a token refresh needs a writable auth file; run the vendor CLI once \
+     outside AIDA to refresh";
 
 impl std::fmt::Display for AuthRequired {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -73,7 +83,11 @@ impl std::fmt::Display for AuthRequired {
             "{} is not signed in for non-interactive use; `aida doctor --lane-host` names \
              the fix (stderr: {})",
             self.vendor, self.stderr
-        )
+        )?;
+        if self.confined {
+            write!(f, "; {}: {CONFINED_AUTH_HINT}", self.vendor)?;
+        }
+        Ok(())
     }
 }
 
@@ -158,7 +172,14 @@ const CODEX: ReviewVendor = ReviewVendor {
     efforts: &["low", "medium", "high", "xhigh"],
     effort_as_config: true,
     print_timeout: None,
-    auth_failure: &[],
+    // A rejected or unrefreshable token: inside bubblewrap its auth.json is a
+    // read-only bind, so a refresh that must rewrite it fails. trace:BUG-2783 | ai:claude
+    auth_failure: &[
+        "could not be refreshed",
+        "refresh token",
+        "401 unauthorized",
+        "not logged in",
+    ],
     // Tool use is confined; its whole-disk read scope is BUG-2783's.
     confinement_verified: true,
     // `--sandbox=read-only` reads anything visible, so the runner sees only
