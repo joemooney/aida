@@ -1,5 +1,6 @@
 id: 01a21f40-5cd3-72f2-b255-6f7d793fbb4c
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-063
+agreed_id: TASK-3555
 title: 'review prepare: non-UTF-8 path identity is an injective escaped String, not OsString'
 description: |
   PR #4766 (TASK-3869 AC4) keeps path identity a String: an injective encoding of the raw bytes (valid UTF-8 verbatim, `\` -> `\\`, invalid byte -> `\xHH`; aida-core/src/review_engine.rs encode_path/decode_path). The brief asked for OsStr/bytes end to end. Every git argument, confined open, scope match and SARIF uri uses the decoded bytes, and keys compare the injective form. Why: agents return findings as JSON strings, so anchoring needs a lossless string form anyway, and an OsString through aida-core's serde types would have blown the line budget. Side effect: valid names containing a backslash now display doubled. The diff is about 280 lines against the 150 budget (around 100 are tests).
@@ -18,6 +19,11 @@ tags:
 - kind:design-choice
 - review
 - severity:minor
+history:
+- id: 01a21f4e-3baa-7492-8250-380dac2c48b8
+  author: joe
+  timestamp: 2026-11-27T23:19:10.506435695Z
+  changes: []
 filed_at:
   code_sha: 1ff82d81e3b8245fd22d371ed9dc2f34551832fc
   branch: task-3869-ac4-non-utf8

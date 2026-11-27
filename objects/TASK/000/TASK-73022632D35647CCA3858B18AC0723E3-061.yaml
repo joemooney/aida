@@ -1,5 +1,6 @@
 id: 01a21eb7-4b13-7be3-9c35-0bd6826d2103
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-061
+agreed_id: TASK-3557
 title: Autobuild script should log a line on an up-to-date run so a stale skip streak is not misread
 description: |
   scripts/aida-autobuild.sh logs nothing when the live binary is already at the newest green commit (no "promoted and verified" line). The BUG-2787 reader (aida-cli-lib/src/dev_fresh.rs skip_streak) treats only "promoted and verified" or "FAILED:" as ending a skip run. So if the log holds an old skip streak followed by silent no-op runs, it still reads as "autobuild skipping since ...". This only appears when the binary is behind, and the note shows the last skip time, so the risk is low. Suggested fix: log e.g. "ok: live <sha> is the newest green" at the end of a no-op run, and treat it as ending the streak in skip_streak.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:BUG-2787
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a21f4e-3bbb-7851-8876-8e240474f302
+  author: joe
+  timestamp: 2026-11-27T23:19:10.523984639Z
+  changes: []
 filed_at:
   code_sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24
   branch: bug-2787-autobuild-skip-visible

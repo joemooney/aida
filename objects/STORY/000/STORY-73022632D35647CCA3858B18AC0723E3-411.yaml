@@ -1,5 +1,6 @@
 id: 01a21f49-24bf-7e50-a2ee-c4d4a2a3ca0e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-411
+agreed_id: STORY-3234
 title: 'Review PR-4766: [AI:claude] fix(review): review prepare keeps non-UTF-8 file names lossless from inventory to SARIF [AC4] (Refs TASK-3869)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21f22`) for branch `task-3869-ac4-non-utf8`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21f49-4b25-7d92-9366-d677d12ec3e6
   author: dirtlab
   timestamp: 2026-11-27T23:13:46.789189392Z
+  changes: []
+- id: 01a21f4e-3f6f-7580-92b0-b7d0ed05bbe5
+  author: joe
+  timestamp: 2026-11-27T23:19:11.471186218Z
   changes: []
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d

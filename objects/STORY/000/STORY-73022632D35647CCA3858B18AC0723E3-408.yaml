@@ -1,5 +1,6 @@
 id: 01a21f1c-202a-7c60-903d-d505c7ce41d3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-408
+agreed_id: STORY-3233
 title: 'Review PR-4764: [AI:claude] style(launch): rustfmt the grant re-export (TASK-3933)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21efe`) for branch `task-3933-conformance-child-grant`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-27T22:24:33.147761636Z
   session_id: 01a21efef83d
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21f4e-3f40-72f2-846e-c0e8dae4956d
+  author: joe
+  timestamp: 2026-11-27T23:19:11.424601255Z
   changes: []
 filed_at:
   code_sha: e53f2b9965167e963a7197bdac25b31e38699bf8

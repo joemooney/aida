@@ -1,5 +1,6 @@
 id: 01a21e99-fb84-7b21-9394-e94e6add68c9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-400
+agreed_id: STORY-3231
 title: 'Review PR-4751: [AI:claude] fix(review): run codex and agy review runners in a no-read confinement [slice 2] (Refs BUG-2783)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21e69`) for branch `bug-2783-s2-no-read-confinement`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21e9a-38e7-7c72-b995-9f57070e0485
   author: dirtlab
   timestamp: 2026-11-27T20:02:33.319787909Z
+  changes: []
+- id: 01a21f4e-3f13-7f33-8b9b-99a27d8742e5
+  author: joe
+  timestamp: 2026-11-27T23:19:11.379761787Z
   changes: []
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5

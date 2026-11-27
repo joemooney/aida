@@ -1,5 +1,6 @@
 id: 01a21e92-e96a-74a2-9acf-1288e23eee87
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-060
+agreed_id: TASK-3556
 title: BUG-2785 gate admits an approved rework when the change conflicts or CI failed; queue work honours a recorded override instead of its own flag
 description: |
   Two calls made in aida-cli-lib/src/rework_approval_gate.rs (PR #4753):
@@ -20,6 +21,11 @@ tags:
 - from-implementer:BUG-2785
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a21f4e-3baf-79e3-843d-1d3281c054e5
+  author: joe
+  timestamp: 2026-11-27T23:19:10.511389992Z
+  changes: []
 filed_at:
   code_sha: 3d7f80b08c8bb1c37284131b4705a0ec06decbac
   branch: bug-2785-stale-rework-refusal

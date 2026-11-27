@@ -1,5 +1,6 @@
 id: 01a21f1f-c23d-72c1-8b2b-23c715a71b71
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-410
+agreed_id: STORY-3237
 title: 'Review PR-4762: [AI:claude] test(train): a low-budget back-off never resumes a stale journal, through the handler (TASK-3930)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ef9`) for branch `task-3930-lowbudget-handler-test`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21f1f-f943-7e20-b6c0-60c6f0c31e9d
   author: dirtlab
   timestamp: 2026-11-27T22:28:38.851024932Z
+  changes: []
+- id: 01a21f4e-3fbf-7000-9d15-f54f2ad11974
+  author: joe
+  timestamp: 2026-11-27T23:19:11.551045676Z
   changes: []
 filed_at:
   code_sha: c1684c5b7d088b615e5e583d0aa2105743c99ffc

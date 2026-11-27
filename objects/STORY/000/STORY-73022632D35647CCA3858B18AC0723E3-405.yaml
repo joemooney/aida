@@ -1,5 +1,6 @@
 id: 01a21eb6-f532-7aa2-b707-64d57cab2a57
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-405
+agreed_id: STORY-3238
 title: 'Review PR-4758: [AI:claude] fix(doctor): lane-host doctor and the stale-binary refusal name why autobuild is skipping (BUG-2787)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21e9d`) for branch `bug-2787-autobuild-skip-visible`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-27T20:34:02.609313183Z
   session_id: 01a21e9d26a1
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21f4e-3fcb-75a3-9c0d-5d75130bf6fc
+  author: joe
+  timestamp: 2026-11-27T23:19:11.563950745Z
   changes: []
 filed_at:
   code_sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24

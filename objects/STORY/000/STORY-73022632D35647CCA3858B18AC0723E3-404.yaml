@@ -1,5 +1,6 @@
 id: 01a21eae-83f4-7d00-b43e-241bbfa9fcd4
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-404
+agreed_id: STORY-3235
 title: 'Review PR-4756: [AI:claude] fix(lanes): salvage a lane with a red fast-gate receipt to salvage/<lane>, not the PR branch (TASK-3928)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a21e9e`) for branch `task-3928-salvage-red-gate`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-27T20:24:50.302942979Z
   session_id: 01a21e9e1a91
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a21f4e-3f7e-7fe1-b009-2993e5a51d96
+  author: joe
+  timestamp: 2026-11-27T23:19:11.486895126Z
   changes: []
 filed_at:
   code_sha: 7ba7fc3512b200ca1bfed3d6a56f31b75e78d42e

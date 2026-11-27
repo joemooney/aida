@@ -1,5 +1,6 @@
 id: 01a21f19-3b94-7c20-a425-56c9115bfe1d
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-062
+agreed_id: TASK-3554
 title: landing_drought::scan gained a listing seam (scan_listing) for the TASK-3931 end-to-end test
 description: |
   TASK-3931 asked for a test-only change. Driving scan() end to end needed one behaviour-preserving production edit: scan() now delegates to scan_listing(exec, stalled_reviews::open_prs) (aida-cli-lib/src/landing_drought.rs:569-580). It copies the stalled_reviews::scan_open seam, and the listing call stays at the same point. Without it the test would need a gh stub on PATH, which mutates process-global state.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:TASK-3931
 - kind:design-choice
 - severity:cosmetic
+history:
+- id: 01a21f4e-3b8b-7a12-95f9-b9e34d7baa49
+  author: joe
+  timestamp: 2026-11-27T23:19:10.475063221Z
+  changes: []
 filed_at:
   code_sha: f340ccd2443588f82c99a002349df25de7a683bc
   branch: task-3931-drought-scan-wiring

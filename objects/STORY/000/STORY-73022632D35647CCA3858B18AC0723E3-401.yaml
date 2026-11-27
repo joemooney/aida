@@ -1,5 +1,6 @@
 id: 01a21e9a-98a9-7f30-b3de-00ac2b561cf3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-401
+agreed_id: STORY-3227
 title: 'Review PR-4752: [AI:claude] fix(review): a sweep-pending verdict whose reviewer exited is finalized or marked sweep_abandoned [slice 1] (Refs BUG-2786)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21e65`) for branch `bug-2786-s1-abandoned-sweep`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21e9a-d762-7720-8616-fde10c557bce
   author: dirtlab
   timestamp: 2026-11-27T20:03:13.890400421Z
+  changes: []
+- id: 01a21f4e-3ec9-7ab3-a8b0-2de9a67ea30b
+  author: joe
+  timestamp: 2026-11-27T23:19:11.305980803Z
   changes: []
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5

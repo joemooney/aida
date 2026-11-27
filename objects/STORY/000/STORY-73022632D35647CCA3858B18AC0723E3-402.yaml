@@ -1,5 +1,6 @@
 id: 01a21e9c-66bd-79d2-a08b-569cec3b5a6e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-402
+agreed_id: STORY-3229
 title: 'Review PR-4753: [AI:claude] fix(queue): refuse a rework round whose PR is already approved at its current head (BUG-2785)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21e6d`) for branch `bug-2785-stale-rework-refusal`.
@@ -59,6 +60,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21f4e-3efc-7483-9108-dde61b10dbc4
+  author: joe
+  timestamp: 2026-11-27T23:19:11.356618223Z
+  changes: []
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
