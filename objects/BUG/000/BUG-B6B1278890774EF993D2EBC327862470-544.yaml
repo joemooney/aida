@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T05:12:28.439991755Z
+modified_at: 2026-11-27T05:17:22.714509300Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -89,6 +89,11 @@ comments:
   content: PR-4725 at cf3e1770fe8b2aed415394c28205f155416d8fcf conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-27T05:12:28.277200372Z
   modified_at: 2026-11-27T05:12:28.277200372Z
+- id: 01a21b6f-d19a-7501-979f-0825446ce29b
+  author: joe
+  content: 'NOTE (advisor-122 2026-11-26 22:19, from the #4716 STORY-3202 review): a PRE-EXISTING vendor-selection hole on main since BUG-2775 #4684: run_review_agent resolves the default review vendor from the .aida/config.toml in the checkout UNDER REVIEW, so a PR can choose its own reviewer vendor (e.g. a weaker-confined one). It is being fixed for ALL vendors in STORY-3202 r2 (#4716): trusted config only (main_worktree_root or user config); confinement_verified=false vendors are never a default. Relevant to this spec''s threat model: an attacker-controlled diff must not be able to pick a vendor without no-read confinement.'
+  created_at: 2026-11-27T05:17:22.714509300Z
+  modified_at: 2026-11-27T05:17:22.714509300Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
