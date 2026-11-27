@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-27T01:47:10.322236025Z
+modified_at: 2026-11-27T01:47:51.751682113Z
 req_type: Story
 tags:
 - landing
@@ -392,6 +392,19 @@ comments:
   created_at: 2026-11-26T23:10:35.509031968Z
   modified_at: 2026-11-26T23:10:35.509031968Z
   session_id: 01a219c6d913
+- id: 01a21aaf-ffa7-73e1-8d75-fb1fa9ae631c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bd517cb44d22
+    Recorded: 2026-11-26T22:55:27.813399893+00:00
+    Findings:
+    1. landing_drought.rs cause(): an approved, green PR that is in conflict but already has a repair lane (conflict && repairing) skips the conflict arm and falls through to the final `Ci::Green => "unknown"` arm, so it is reported as a FAILING landing-drought finding ('unknown; investigate aida land stalls...') on every 10-minute tick while the rework lane is working. The test story_3131_s2_conflict_without_repair_lane pins PR-21 into that row (asserting only that it does not mention 'conflict'). A PR whose known cause is an active repair lane should be informational (e.g. 'conflict repair in progress'), consistent with the slice's 'a watchdog that cries wolf gets ignored' intent. Reporting code, not gate code.
+    2. landing_drought.rs cause(): the `Ci::Green if lock.is_some()` arm precedes the `ready.supervised` arm, so while any train holds the lock (Busy) a supervised, approved PR is reported informationally as 'waiting for the running train ... none: the next train picks up PR N'. Supervised PRs are not drain-eligible and the automatic train will not pick them up; the real cause ('needs operator train: aida pr train N') is hidden until the lock frees. Order the supervised check before the lock cause, or word the lock row differently for supervised PRs.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T01:47:51.591393621Z
+  modified_at: 2026-11-27T01:47:51.591393621Z
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe
