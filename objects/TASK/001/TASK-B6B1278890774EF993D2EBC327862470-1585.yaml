@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:46:26.200731475Z
-modified_at: 2026-11-27T22:18:53.336790305Z
+modified_at: 2026-11-27T22:25:42.958490029Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -53,6 +53,12 @@ comments:
   modified_at: 2026-11-27T22:18:35.040522853Z
   session_id: 01a21eff74ba
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f1d-4a2e-7550-bac3-72ca55e356bc
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3932-publication-union-merge` at head `d862b39140f06f98adf3242df5c35005f7467be2`.'
+  created_at: 2026-11-27T22:25:42.958486367Z
+  modified_at: 2026-11-27T22:25:42.958486367Z
+  session_id: 01a21eff74ba
 history:
 - id: 01a21efa-0428-7050-ac1c-f16e53e5eea0
   author: joe
