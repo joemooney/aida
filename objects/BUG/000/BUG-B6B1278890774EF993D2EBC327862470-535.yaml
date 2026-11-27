@@ -26,6 +26,9 @@ relationships:
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T14:46:30.868251175Z
   created_by: joe
+- rel_type: Parent
+  target_id: 01a21f4d-2871-76e0-a66d-7e8c8b20ef67
+  created_at: 2026-11-27T23:18:08.996879592Z
 comments:
 - id: 01a21853-f6f4-7283-b9f5-8589df780877
   author: joe
@@ -152,6 +155,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a21f4d-5f49-74c3-8272-ac19bc41a15f
+  author: joe
+  timestamp: 2026-11-27T23:18:14.089474255Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
