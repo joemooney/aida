@@ -9,12 +9,12 @@ description: |
   - AC1: a manual train waiting on admission is admitted BEFORE the auto-train starts its NEXT train: FIFO across waiters, or the auto-train yields whenever a cooperative manual waiter is recorded.
   - AC2: the waiting manual train is visible in `aida advisor loops train-status` / `aida pr train --check` ("operator train for #N waiting since HH:MM; auto-train yields next").
   - AC3: a test: an auto-train finishing train A with a recorded manual waiter does not start train B until the manual train has run (or released).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T03:23:02.390428535Z
+modified_at: 2026-11-27T04:31:12.972636890Z
 req_type: Bug
 tags:
 - admission
@@ -342,6 +342,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T03:15:30.484804199Z
   changes: []
+- id: 01a21b45-8d50-7a31-b381-f7a1e3c8b156
+  author: aida-auto-bump
+  timestamp: 2026-11-27T04:31:12.720824399Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21b45-8e4c-7ad1-a0e3-f7134ed5f647
+  timestamp: 2026-11-27T04:31:12.972631724Z
+  agent: aida
+  commit_sha: e1f238b9a2c287c6c646b0a0c90f14a80688db23
+  summary: 'BUG-2771: a manual train that gives up on admission is recorded (.aida/admission/manual-train.waiter, 15-min TTL, far-future expiry rejected) and yield_reason makes only the legacy auto-train yield at pass boundaries until it is admitted; the waiter grants nothing. AC1 verified by admission_owner.rs manual_train_admission/yield_reason + bug2771_auto_train_yields_its_next_train_to_a_recorded_manual_waiter (train B waits, no claim held, starts only after the manual claim drops). AC2 verified by inspection: advisor_loop_service.rs status_value/status_lines and pr_train_check.rs check_report print the describe() line (format asserted in the test; wiring untested, deferred). AC3 verified by the same test through run_passes. Bug protocol ''PR touches at least one test file'': met (advisor_loop_train.rs tests, task_1993_review_watch_tests.rs). Stale base (1 commit behind) affects no finding. CI pending at review time. Three non-blocking follow-ups (test-gap in reporting, p3 x2).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 15bbbc682226e8d2e8ecaad3cdb8ca055425ac94
@@ -354,4 +368,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T02:52:09.941143112Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T04:31:12.720816715Z
+  completion_sha: e1f238b9a2c287c6c646b0a0c90f14a80688db23
   reopened_at_sha: 7461b694e0109a4a1ca68401e9bda5e773f03f87
