@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2784",
+  "publishes": [
+    {
+      "at": "2026-11-27T11:30:39.319238287Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T06:56:53.193342512Z",
+      "spec": "BUG-2784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4733,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "9afeaa251dea1e79a3e52c7025844e32053917bb"
+      }
+    },
+    {
+      "ts": "2026-11-27T06:57:05.876838907Z",
+      "spec": "BUG-2784",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2784 at 9afeaa25 (5 commits behind main; store-writers.toml also changed on base, landed tree applies cleanly). AC1 acc6fc44 is verified for the driver: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly covers the union, sorted order and valid JSON, and the round-trip keeps ratchet-set.json formatting byte-identical. .gitattributes is registered. The rework-prep wiring at seat_clone.rs:3484 is present but untested through the real execute path (finding 2). AC2 ac5d1d65 is unmet: the conflict exit is tested, but a failed driver leaves no conflict markers, which defeats the existing marker gating (finding 1). Protocol 'PR touches at least one test file': met. CI pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2784 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T08:22:43.251292540Z",
+      "spec": "BUG-2784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4733,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5ba01320a9ea2a4cffcd06b3c93cf8793499db1a"
+      }
+    },
+    {
+      "ts": "2026-11-27T08:22:47.526399489Z",
+      "spec": "BUG-2784",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2784 at 5ba01320 (1 commit behind main; the base commit touches only .aida/config.toml, so no finding depends on it). The round-1 findings are fixed. AC1 passes: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly, the host merge-tree test, and the bwrap e2e rework and publication tests. The driver output round-trips scripts/ratchet-set.json byte-identically. AC2 passes: same-key, removal-vs-edit, duplicate, invalid-JSON and clean-text-merge failures all leave standard markers with both sides (exit 3 maps to 1). A missing script or a quoted path falls back to git merge-file, so a failed driver never leaves a clean OURS file. Sandbox wiring is sound. SANDBOX_GIT_CONFIG and sandbox_git_config_env keep core.hooksPath=/dev/null and core.fsmonitor=false when the driver key raises GIT_CONFIG_COUNT to 3. An over-long list panics rather than dropping keys. bug_2784_lane_merge_env_keeps_sandbox_forced_git_config pins this through commit_sandbox_args. The bwrap e2e test plants a seat post-merge hook and checks that it does not run. The read-only --ro-bind-try exposes one trusted file from main. python3 -I keeps the seat's cwd and the script dir off sys.path, and the seat cannot influence the driver string. No fail-open path was found. One blocker remains: CI is red at this head (Ratchet set, fast gates, and the Require-every-lane rollup). Static analysis attributes the red to this PR (finding 1).",
+        "recovery_hint": "address the review findings, move BUG-2784 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T09:09:51.175235436Z",
+      "spec": "BUG-2784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4733,
+        "verdict": "APPROVED",
+        "reviewed_sha": "47d9483372a12c02f2e54337fc6cc8502b5b32b4"
+      }
+    },
+    {
+      "ts": "2026-11-27T10:52:22.507738840Z",
+      "spec": "BUG-2784",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4733
+      }
+    },
+    {
+      "ts": "2026-11-27T11:30:39.075911396Z",
+      "spec": "BUG-2784",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "9688b3c820a2f14ba0f228a827c984eb3d967939",
+        "pr": 4733,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
