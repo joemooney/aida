@@ -27,6 +27,11 @@ pub(crate) struct ReviewVendor {
     /// never the automatic challenger and refuses `--post-comment`.
     // trace:STORY-3202 | ai:claude
     pub confinement_verified: bool,
+    /// Verified unable to read files beyond the prompt. Only such a vendor may
+    /// publish a PR comment: a prompt-injected diff could otherwise make it
+    /// quote a local secret.
+    // trace:BUG-2783 | ai:claude
+    pub no_read: bool,
 }
 
 /// A review runner that exited because it is not signed in for headless use.
@@ -108,6 +113,8 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     print_timeout: None,
     auth_failure: &[],
     confinement_verified: true,
+    // `--tools ""` leaves the session with no file-read tool at all.
+    no_read: true,
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -128,6 +135,8 @@ const CODEX: ReviewVendor = ReviewVendor {
     auth_failure: &[],
     // Tool use is confined; its whole-disk read scope is BUG-2783's.
     confinement_verified: true,
+    // `--sandbox=read-only` still reads any file the user can.
+    no_read: false,
 };
 
 /// Antigravity: print mode with the empty `--print=` value, so the prompt is
@@ -159,6 +168,8 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         "not logged into antigravity",
     ],
     confinement_verified: false,
+    // Its read deny is unverified, and reads were seen allowed anywhere.
+    no_read: false,
 };
 
 /// agy's session-only settings: deny every permission rule kind it names
