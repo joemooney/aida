@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:27:07.544697554Z
-modified_at: 2026-11-27T20:09:48.636789849Z
+modified_at: 2026-11-27T20:19:12.780496413Z
 req_type: Task
 tags:
 - admission
@@ -57,6 +57,12 @@ comments:
   modified_at: 2026-11-27T20:07:53.491399063Z
   session_id: 01a21e94b9b6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21ea9-790c-7a71-a15d-4945a5eaca01
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3925-waiter-adopt` at head `ed07101ce193413aee1397792c18a9fdb6bf170f`.'
+  created_at: 2026-11-27T20:19:12.780492773Z
+  modified_at: 2026-11-27T20:19:12.780492773Z
+  session_id: 01a21e94b9b6
 history:
 - id: 01a21e94-f0b1-7662-aeb9-7250525292d7
   author: aida-session-start
