@@ -2,54 +2,75 @@ id: 01a21aff-ca9e-7d62-90c0-6932e85ffa17
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-383
 agreed_id: STORY-3210
 title: 'Review PR-4711: [AI:claude] fix(auto-train): yield the next train to a manual train that gave up waiting (BUG-2771)'
-description: |
-  Auto-filed by `aida session end` (backup trigger) (session `01a21abe`) for branch `train-fair-admission-fresh2`.
+description: 'Auto-filed by `aida session end` (backup trigger) (session `01a21abe`) for branch `train-fair-admission-fresh2`.
+
 
   - PR: <https://github.com/joemooney/aida/pull/4711>
+
   - Branch: `train-fair-admission-fresh2` → `main`
+
 
   ## Covers
 
+
   - BUG-2771
+
 
   ## Acceptance
 
-  - Generate a structured review prompt with `aida review prompt --pr 4711` and verify each spec's acceptance criteria.
+
+  - Generate a structured review prompt with `aida review prompt --pr 4711` and verify each spec''s acceptance criteria.
+
   - Approve and merge, or request changes by spec id.
+
   - Mark this story `completed` once the PR is merged.
+
+  '
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-27T03:15:00.894700520Z
-modified_at: 2026-11-27T04:28:34.463045777Z
+created_at: 2026-11-27 03:15:00.894700+00:00
+modified_at: 2026-11-27 04:28:34.463045+00:00
 req_type: Story
 relationships:
 - rel_type:
     custom: implements
   target_id: 01a217fc-331f-7cd0-b876-f48ff142dcb2
-  created_at: 2026-11-27T03:15:20.268084385Z
+  created_at: 2026-11-27 03:15:20.268084+00:00
   created_by: dirtlab
 comments:
 - id: 01a21b43-231f-7a22-80c8-fe33ef666b38
   author: aida-auto-bump
   content: 'Auto-completed: PR #4711 is merged on the forge (its merge commit was outside the local scan window).'
-  created_at: 2026-11-27T04:28:34.463262089Z
-  modified_at: 2026-11-27T04:28:34.463262089Z
+  created_at: 2026-11-27 04:28:34.463262+00:00
+  modified_at: 2026-11-27 04:28:34.463262+00:00
+- id: 01a21b43-6bff-77d0-a90a-4ad04e5a48fa
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4711 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-27 04:28:53.119905+00:00
+  modified_at: 2026-11-27 04:28:53.119905+00:00
 history:
 - id: 01a21b00-2613-76c0-af0b-dfb276dcb3cd
   author: dirtlab
-  timestamp: 2026-11-27T03:15:24.307717411Z
+  timestamp: 2026-11-27 03:15:24.307717+00:00
   changes: []
 - id: 01a21b0a-2877-77c2-bf94-8eb652eb2ba4
   author: joe
-  timestamp: 2026-11-27T03:26:20.279746209Z
+  timestamp: 2026-11-27 03:26:20.279746+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
 - id: 01a21b43-231f-7a22-80c8-fe412cc52e7c
   author: aida-auto-bump
-  timestamp: 2026-11-27T04:28:34.463268451Z
+  timestamp: 2026-11-27 04:28:34.463268+00:00
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 01a21b43-6bff-77d0-a90a-4ae66a53eaf1
+  author: aida-auto-bump
+  timestamp: 2026-11-27 04:28:53.119909+00:00
   changes:
   - field_name: status
     old_value: Draft
@@ -62,4 +83,4 @@ filed_at:
   aida_build_sha: 956b13f4da
 implementation_info:
   implemented: false
-  completed_at: 2026-11-27T04:28:34.463260188Z
+  completed_at: 2026-11-27 04:28:34.463260+00:00
