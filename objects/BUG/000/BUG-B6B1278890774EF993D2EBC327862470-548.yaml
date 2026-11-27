@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T20:52:05.765901145Z
+modified_at: 2026-11-27T21:08:23.948972644Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -101,6 +101,19 @@ comments:
   content: 'DEFERRED (#4758 CR @c8a4fbf6, p3; advisor 13:50; product-15): the doctor hint should name ONE concrete command (e.g. the autobuild script invocation with its path) instead of the multi-step dirty-primary instruction / generic fix-the-skip-reason hint.'
   created_at: 2026-11-27T20:48:07.993919968Z
   modified_at: 2026-11-27T20:48:07.993919968Z
+- id: 01a21ed6-810d-79e3-9103-06aae40b535f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2497ea339f. Round 2 of #4758.
+    Fixes: AIDA_AUTOBUILD_LOG is classified in AMBIENT_AIDA_KEYS and documented in docs/environment-variables.md. autobuild_check now takes the log path (inspect resolves it from the env as before).
+    Evidence: story_2326_ambient_aida_inputs_have_a_disposition passes, and so does the new lane_host::tests::behind_binary_row_names_autobuild_skip_streak_and_hint, which pins the advisory row's detail (since/last/reason) and its hint, the row after a promotion, and the not-behind case. make check-ci-fast exited 0 (it skips Rust structural ratchets locally; CI fast-gates runs them).
+    Probes: refusal or authority paths are not touched; the row is advisory only. No existing test was weakened.
+    Residual: the p3 one-command hint wording is deferred per the brief.
+  created_at: 2026-11-27T21:08:23.948972644Z
+  modified_at: 2026-11-27T21:08:23.948972644Z
+  session_id: 01a21ec73d19
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e61-052d-7350-9e36-a62f92671537
   author: joe
