@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T04:14:59.529157173Z
+modified_at: 2026-11-27T04:16:06.239137320Z
 req_type: Story
 tags:
 - integration
@@ -1718,6 +1718,19 @@ comments:
   created_at: 2026-11-27T04:08:24.680370702Z
   modified_at: 2026-11-27T04:08:24.680370702Z
   session_id: 01a21ad0e211
+- id: 01a21b37-fc65-7c10-b400-7664b952b6d8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:16):
+    # STORY-3120 S5e: docs for S1-S5d (product-15 2026-11-26). Lane: CLAUDE. INTEGRATION, NEW branch int-story-3120-s5e (cut from the integration tip AFTER S6's lane ends; integration already contains main). Do NOT merge main. Title "[AI:claude] docs(review): ... [S5e] (Refs STORY-3120)". <=300 lines. Docs plus doc-comment demotion only; no behaviour change.
+    READ: `aida show STORY-3120 --comments` (S5 item F; the S5d "AC2 docs go to S5e" note; integration-30's S5e item).
+     (A) DOCS (showcase slide 07 + docs/review-process.md or the review docs): --run-review, --adversarial, --effort and --challenger-effort (resolution order: flag > AIDA_REVIEW_EFFORT > review-rules default_effort > the [agents] seat effort; the allowlists), --challenger-agent (operator-only; "same-vendor" labelled), the default vendor resolution (BUG-2775), EXIT CODES 1 (--fail-on) / 3 (--auto-complete hard fail) / 4 (partial: challenger unavailable; the finder report and SARIF are still written, findings are "unchallenged", and fail-on wins), --fail-on with refuted/unchallenged findings, --post-comment (opt-in, needs --pr, the 60k cap with the truncation note, agent text inert), --sarif/--write paths must be inside the repo, and literal pathspecs for --scan --path. No nested lists, no *italics*.
+     (B) integration-30's item: demote the `/// trace:` doc comments the pre-commit hook flags to `//` (doc comments must carry no spec-ID provenance).
+    make check-ci-source (NOT check-ci-fast: advisor-122 20:05, BUG-2782; check-ci-fast compiles the ratchets for ~18 min on dell1, and CI's ratchet job runs them) (plus the docs/help snapshot tests if touched), then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-27T04:16:06.239137320Z
+  modified_at: 2026-11-27T04:16:06.239137320Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
