@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a21f01-5316-70e3-808a-a015c9f7a76f",
+  "thread_id": "deputy-01a21f01-5316-70e3-808a-a015c9f7a76f",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795816514962,
+  "body": "Script deputy \"product\" finished script job 01a21f01-5316-70e3-808a-a015c9f7a76f: rc 0 (ok).\nScript: cd /home/joe/ai/aida && aida edit TASK-3869 --remove-tag track:integration && aida comment add TASK-3869 \"Track moved integration -> main by product-15 15:10: STORY-3120 review prepare has landed on main (p53); AC4 lane (advisor aida-d3 14:47) targets main.\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a21f01-5316-70e3-808a-a015c9f7a76f/transcript.log\nRead it with `aida deputy shell log 01a21f01-5316-70e3-808a-a015c9f7a76f --name product`.\n",
+  "subject": "deputy script job 01a21f01 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
