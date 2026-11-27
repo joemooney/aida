@@ -9,12 +9,12 @@ description: |
   - AC1: a salvage is IDEMPOTENT per clone + head: reclaim_exited_branch_clone (queue_cmd/work.rs ~4251) / seat_clone destroy_inner skip writing a salvage when an identical one (same clone, same head, same checkpoint refs) already exists, so the transient-admission retries never write duplicate salvage copies. Test.
   - AC2: the final writer-admission refusal names the STOP/RESTART command for each unverified pid (e.g. a deleted-binary MCP/server or deputy), instead of "should exit on their own". Test.
   - AC3: wiring tests: retire_with maps WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core mailbox_lifecycle/guard.rs ~214), and both dispatch.rs call-site predicates route a transient refusal into the retry.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T01:16:52.566955325Z
+modified_at: 2026-11-27T01:34:16.635574038Z
 req_type: Task
 tags:
 - lanes
@@ -156,6 +156,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a21aa3-903b-7702-80d1-868bc2f8fc6c
+  author: aida-pr-open
+  timestamp: 2026-11-27T01:34:16.635573147Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: b728c3373d145e5ba1e12a2b875313d1d1399ccc
