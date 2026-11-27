@@ -108,6 +108,12 @@ comments:
   created_at: 2026-11-27T01:28:54.734723452Z
   modified_at: 2026-11-27T01:28:54.734723452Z
   session_id: 01a21a5d2760
+- id: 01a21a9f-b859-7fc0-b3c7-d6edb8658703
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3922-salvage-idempotent` at head `1e0b7323fcaa8ba2928dea62a3589b5640e0177a`.'
+  created_at: 2026-11-27T01:30:04.761201460Z
+  modified_at: 2026-11-27T01:30:04.761201460Z
+  session_id: 01a21a5d2760
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
