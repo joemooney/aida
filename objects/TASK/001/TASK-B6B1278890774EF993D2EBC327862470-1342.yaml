@@ -13,12 +13,12 @@ description: |
   - AC3 (2)(6): PROOF tests for pinned-root confinement on reads AND writes, including a concurrent re-parent / symlink swap.
   - AC4 (13): a lossless non-UTF-8 path round trip, with escaping, proven by a test.
   <=300 lines; lane after STORY-3120 S5c merges (same files).
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T03:46:45.734652808Z
+modified_at: 2026-11-27T03:53:13.326465470Z
 req_type: Task
 tags:
 - review
@@ -294,6 +294,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21b22-c56e-7dd1-9bfa-e3bda670a108
+  author: joe
+  timestamp: 2026-11-27T03:53:13.326459367Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
