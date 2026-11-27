@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T20:23:44.136208966Z
+modified_at: 2026-11-27T20:23:47.544736087Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -259,6 +259,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T20:23:43.943656207Z
   modified_at: 2026-11-27T20:23:43.943656207Z
+- id: 01a21ead-aa58-7153-b07f-f2ad74fc7852
+  author: joe
+  content: 'DEFERRED (#4751 final CR @5d1434c3, p2; product-15): Plausible operational gap, not verified with a live run. The confined codex sees ~/.codex/auth.json only as a read-only bind mount (launch/review_runner.rs confined()). When its access token expires, codex''s refresh rewrites auth.json, and an atomic rename onto a bind-mounted file fails (EBUSY/EROFS), so confined codex reviews may start failing with an auth error once the token ages out. agy''s oauth token refresh is in the same position. The failure is closed (the run errors), not a leak. Verify with a live expired-token run, and if it reproduces, bind the auth directory''s token into a writable copy that is not written back, or document that a host refresh is needed.'
+  created_at: 2026-11-27T20:23:47.544736087Z
+  modified_at: 2026-11-27T20:23:47.544736087Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
