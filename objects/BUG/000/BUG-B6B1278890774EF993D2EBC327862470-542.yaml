@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T07:07:23.166312301Z
+modified_at: 2026-11-27T07:37:30.840611357Z
 req_type: Bug
 tags:
 - lanes
@@ -249,6 +249,20 @@ comments:
   modified_at: 2026-11-27T07:07:23.166312301Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21bf0-1dd8-78f0-adb5-5bcec9de7543
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 654544da3f (round 4 on #4718).
+    - Finding 1 (PR head guard): lane_salvage.rs:317 runs the injected pr_head guard (production: pr_head_guard::check_branch, standalone_implementer.rs:1971) before any push to an open PR branch. Err (approval at head, train pin, unreadable evidence) falls back to salvage/<lane>; the reason lands in the lane note, the attempt record and the announcement. Ownership re-checked at lane_salvage.rs:330 just before the push (BUG-2633). Tests: bug_2781_approved_pr_head_is_not_moved_and_salvages_to_the_salvage_ref (real pr_head_guard::check with protect=true and a recorded approval at the live head), bug_2781_unapproved_pr_head_is_fast_forwarded.
+    - Finding 2 (trailers): lane_salvage.rs:345 imported_trailers. Every non-merge imported commit must carry a (SPEC) or (Refs SPEC) trailer, seat_trailer_check resolves every ID, and explicit_spec_check requires the lane spec. Refusal keeps the commits in the seat. Test: bug_2781_imported_commit_without_the_lane_trailer_is_refused (no trailer; other-spec-only).
+    - Probes: fail-open: a guard error, including 'cannot verify', routes to the salvage ref and never to the PR branch. Range is default-branch..tip, so earlier PR commits are checked too (merges are excluded via --no-merges). Store unreachable: IDs resolve live, the same as ship --from-seat.
+    - Residual risk: a TOCTOU window between the guard and the push, the same as ship_from_seat. A stricter every-commit rule can refuse a lane with an untrailered WIP commit; that refusal keeps the work in the seat (fail-safe).
+    Validation: cargo test -p aida-cli-lib --lib bug_2781: 21 passed. make check-ci-fast: see the PR.
+  created_at: 2026-11-27T07:37:30.840611357Z
+  modified_at: 2026-11-27T07:37:30.840611357Z
+  session_id: 01a21be56dae
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
