@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T15:20:40.004099676Z
-modified_at: 2026-11-27T04:56:50.417173055Z
+modified_at: 2026-11-27T04:59:04.333254355Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -54,6 +54,23 @@ comments:
   content: 'BINDING (advisor-122 2026-11-26 16:06): shadow with claude/claude NOW, gated on STORY-3120 S5d (partial-exit path) and BUG-2779 (no panic) landing. Record the vendor PAIR (finder/challenger) in each shadow row, so the Nov 29+ codex pairing can be compared. A same-vendor challenger must be labelled "same-vendor" in the bundle and the report.'
   created_at: 2026-11-27T00:16:25.787906781Z
   modified_at: 2026-11-27T00:16:25.787906781Z
+- id: 01a21b5f-56d3-77e1-b36d-5566cdcec279
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:59):
+    # STORY-3183 SLICE 1: the shadow adversarial review knob + launch (advisor-122 21:58; prerequisites S5c/S5d (p52) + BUG-2779 are on main; product-15). Lane: CLAUDE. STANDARD. MAIN, NEW branch story-3183-s1-shadow. <=300 lines. Title "... [slice 1] (Refs STORY-3183)". The AC2 report is slice 2.
+    READ: `aida show STORY-3183 --comments` (scope, AC1, the TRIAL DATA comment, and the advisor's 16:06 BINDING: record the vendor PAIR per row; a same-vendor challenger is labelled "same-vendor").
+    DO (AC1):
+     - A project knob `[review] shadow_adversarial = false` (DEFAULT OFF; documented). When on, review-watch launches a SHADOW run of `aida review prepare --pr N --run-review --adversarial --agent claude --challenger-agent claude` (same-vendor, labelled) for each review it dispatches.
+     - SHADOW means: it NEVER records a verdict, never sets or clears a merge hold, never posts to the forge (NEVER pass --post-comment; BUG-2783 no-read confinement isn't fixed), and never blocks or delays the normal review. A failure, timeout or exit 4 (partial) is logged and ignored.
+     - At most 2 shadow runs concurrently, counted INSIDE the existing review concurrency budget (they never starve real reviews). S3a runner path only, with the normal deadline and caps.
+     - Results go to a LOCAL results file (e.g. .aida/review-shadow/runs.jsonl, 0600), one row per run: PR, head sha, finder/challenger vendor pair + the same-vendor flag, exit code, duration, and each finding (severity, path:line, refuted or not, the refutation reason). NO file contents beyond the finding text.
+     - TESTS: with the knob on, a dispatched review spawns a shadow run (with a stub runner) that writes NOTHING to the gate ledger, merge holds or the forge (assert each); the knob off → no shadow; the concurrency cap of 2 is respected; a shadow failure doesn't affect the normal review.
+    One targeted cargo test run on this host, make check-ci-source, then publish a NEW PR to main. COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T04:59:04.333254355Z
+  modified_at: 2026-11-27T04:59:04.333254355Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21872-4482-70c2-adeb-85e10a5821e5
   author: joe
