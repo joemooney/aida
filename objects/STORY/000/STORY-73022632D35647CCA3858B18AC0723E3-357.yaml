@@ -18,12 +18,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4663` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T15:09:49.599692200Z
-modified_at: 2026-11-27T00:16:45.420281897Z
+modified_at: 2026-11-27T17:11:17.359946104Z
 req_type: Story
 relationships:
 - rel_type:
@@ -57,6 +57,11 @@ comments:
   content: 'CORRECTION (product-15 2026-11-26 17:30): the earlier "TRIAL DATA" and "BINDING (advisor-122 16:06)" comments, and the depends-on BUG-2775 link, were put on THIS spec by mistake; the shadow adversarial-review trial is STORY-3183 (a mis-numbered reference). They have been copied to STORY-3183 and the link removed here. Ignore them for this PR-4663 review story.'
   created_at: 2026-11-27T00:16:45.420281897Z
   modified_at: 2026-11-27T00:16:45.420281897Z
+- id: 01a21dfd-6c70-7fe2-b615-09c1e24f9747
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #4663 closed on the forge without merging.'
+  created_at: 2026-11-27T17:11:17.360193214Z
+  modified_at: 2026-11-27T17:11:17.360193214Z
 history:
 - id: 01a21869-37e3-7e72-a909-63aee48d0ebf
   author: dirtlab
@@ -91,6 +96,13 @@ history:
   author: joe
   timestamp: 2026-11-27T00:16:42.628287751Z
   changes: []
+- id: 01a21dfd-6c70-7fe2-b615-09d53aeff6e6
+  author: aida-auto-bump
+  timestamp: 2026-11-27T17:11:17.360197996Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: bug-2738-shelve-completed
