@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T04:33:38.053536907Z
+modified_at: 2026-11-27T04:35:39.154194150Z
 req_type: Story
 tags:
 - integration
@@ -1779,6 +1779,17 @@ comments:
   created_at: 2026-11-27T04:33:38.053536907Z
   modified_at: 2026-11-27T04:33:38.053536907Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21b4a-24ae-76f3-a3e6-3025e986a328
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 21:35):
+    # STORY-3120 S5e r1 on #4721 (integration-30 pre-check + advisor-122 21:36; product-15). Lane: CLAUDE. INTEGRATION, existing branch int-story-3120-s5e / PR #4721. Keep the title. Do NOT merge main. ~10 lines + a test.
+    The docs PASS. Fold in the deferred S5d item: when a forced --challenger-agent EQUALS the finder's vendor, the adversarial note, the bundle and the report all say "same-vendor challenger (<vendor>)". Add a TEST (forced claude/claude → the label appears in the note, bundle and report; a different vendor → no label).
+    One targeted cargo test run (review_prepare:: s5), make check-ci-source, then push to #4721. COMMIT and PUSH.
+  created_at: 2026-11-27T04:35:39.154194150Z
+  modified_at: 2026-11-27T04:35:39.154194150Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
