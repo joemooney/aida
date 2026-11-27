@@ -136,8 +136,9 @@ every open PR's merge latency, not just yours.
 
 **The rules:**
 
-1. `make check-ci-fast` before every push, no exceptions. It is ~90s and needs
-   no build; "I ran my own test file" does not substitute.
+1. `make check-ci-fast` before every push, no exceptions. It runs no cargo
+   (about 7 minutes of source gates on a host at load average 20); "I ran my
+   own test file" does not substitute.
    **After merging main into a branch, run `make check-ci-compile` when the
    change touches shared test infra (`test_env`, `test_git`, ratchet baselines)
    or more than 10 files** (runs the ratchet set, then compiles every test
