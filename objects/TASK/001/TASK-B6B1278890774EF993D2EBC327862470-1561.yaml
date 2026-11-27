@@ -1,0 +1,31 @@
+id: 01a21bca-9521-7ca0-90c9-27f088953224
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1561
+title: 'Review follow-up: The AC names ''rework prep / sync'', but the other lane merge path, merge_publication_head ('
+description: |-
+  From BUG-2784
+  Reviewed sha: 9afeaa251dea1e79a3e52c7025844e32053917bb
+
+  The AC names 'rework prep / sync', but the other lane merge path, merge_publication_head (seat_clone.rs ~3664, TASK-2879), still runs run_commit_sandboxed with the bare identity, so a disjoint ratchet-set.json addition there still aborts publication. Extend merge_env to that path or record the scope decision.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-27T06:56:31.009993585Z
+modified_at: 2026-11-27T06:56:31.009993585Z
+req_type: Task
+tags:
+- carried-from:BUG-2784
+- finding-hash:ec0007c9
+- from-review:BUG-2784
+relationships:
+- rel_type: References
+  target_id: 01a21b41-e49b-7e81-a102-7d5aadb5c472
+  created_at: 2026-11-27T06:56:49.323006163Z
+filed_at:
+  code_sha: 9afeaa251dea1e79a3e52c7025844e32053917bb
+  branch: pr-4733
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1914f9fdd15
+  vendor: claude
+  session: 01a21bc707ff
