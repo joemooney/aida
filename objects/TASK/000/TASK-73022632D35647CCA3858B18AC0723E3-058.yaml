@@ -1,0 +1,32 @@
+id: 01a21b19-492b-72e0-a395-a6a9ff3d2457
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-058
+title: Lane job runner queues make check-ci-fast behind a host compile slot although the gate no longer compiles
+description: |
+  After BUG-2782, `make check-ci-fast` builds nothing (check-ci-gates.py --tier fast --no-build). The lane job runner still queues it behind lanes.max_compile_concurrency. On dell1 on 2026-11-27, job j20261127T033727851-70-0 logged "queued: all 4 host compile slots (lanes.max_compile_concurrency) are in use". The first run of the same gate waited ~7 min in the queue before its 187s run, so most of a lane's pre-push wall time is still slot wait.
+
+  Suggestion: for `fast_gate_job` (aida-cli-lib/src/lane_job.rs:2270), skip the compile-slot admission or give it a separate pool, so the gate stays near its source-gate runtime on a busy host.
+
+  Raised by the implementer while working BUG-2782.
+  Branch: bug-2782-ccf-no-build  ·  Commit: 71f95102f1  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T03:42:51.691935317Z
+modified_at: 2026-11-27T03:42:51.691935317Z
+req_type: Task
+tags:
+- ci-gates
+- from-implementer:BUG-2782
+- kind:followup-suggestion
+- lane-job
+- severity:minor
+filed_at:
+  code_sha: 71f95102f1d8c0bec2d04160642f479d442360a6
+  branch: bug-2782-ccf-no-build
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e59bcd029
+  vendor: claude
+  session: 01a21b0347d5
+  harness_version: 2.1.319 (Claude Code)
