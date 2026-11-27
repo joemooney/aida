@@ -1,0 +1,33 @@
+id: 01a21b66-c99f-7232-899a-8e6653f3a24c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-390
+title: 'Review PR-4721: [AI:claude] docs(review): agent run, challenger, effort, exit codes and output rules [S5e] (Refs STORY-3120)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21b3a`) for branch `int-story-3120-s5e`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4721>
+  - Branch: `int-story-3120-s5e` → `integration`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-3120
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4721` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T05:07:30.847373446Z
+modified_at: 2026-11-27T05:07:30.847373446Z
+req_type: Story
+filed_at:
+  code_sha: 46d207cf1f85b2dd230c4b3393d997fb4ce24279
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 46d207cf1f
