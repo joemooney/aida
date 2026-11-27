@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:20:40.004099676Z
-modified_at: 2026-11-27T05:50:47.658830428Z
+modified_at: 2026-11-27T06:57:23.855898019Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -105,6 +105,13 @@ comments:
     **Residual risks:** (1) a hung `review prepare` holds a shadow slot until its runner deadline fires (no extra wall cap); real reviews are unaffected. (2) a watcher restart drops in-flight shadow rows; `--once` launches none. (3) a real review admitted while 2 shadows run can briefly put the total above `max_concurrent` (shadows never delay real admission, by design). (4) diff is ~470 lines vs the 300 budget; ~200 are tests.
   created_at: 2026-11-27T05:50:47.658830428Z
   modified_at: 2026-11-27T05:50:47.658830428Z
+  session_id: 01a21b7cc357
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21bcb-638f-7a50-a98b-8d631c38b457
+  author: dirtlab
+  content: 'Slice 1 published: PR #4729 (Refs STORY-3183), final HEAD f71adb9d33. After the self-review at 74028f03cd, two gate fixes landed: the vendor pair now comes from DEFAULT_REVIEW_VENDOR instead of ''claude'' literals (vendor-literal ratchet), and the knob doc no longer cites --once (the manual flag check attributed it to the wrong command). Targeted tests: story_3183, 5 passed (lane job j20261127T060306618-92-0). make check-ci-fast: exit 0 on f71adb9d33 (lane job j20261127T063152528-71-0). AC2 (the report) is slice 2.'
+  created_at: 2026-11-27T06:57:23.855898019Z
+  modified_at: 2026-11-27T06:57:23.855898019Z
   session_id: 01a21b7cc357
   harness_version: 2.1.319 (Claude Code)
 history:
