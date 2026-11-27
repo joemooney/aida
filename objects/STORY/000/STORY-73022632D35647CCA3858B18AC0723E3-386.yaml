@@ -1,5 +1,6 @@
 id: 01a21b36-f334-7a30-ad31-36b97d33e73f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-386
+agreed_id: STORY-3213
 title: 'Review PR-4718: [AI:claude] fix(lanes): push before the final gate; salvage-push a killed lane''s committed fast-forward work and name what ended it (BUG-2781)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21b0d`) for branch `bug-2781-salvage-push`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21b37-33fc-7810-ac5e-a7b91455c0f3
   author: dirtlab
   timestamp: 2026-11-27T04:15:32.348023553Z
+  changes: []
+- id: 01a21b5f-7029-7c22-87bb-3b971b2de8cc
+  author: joe
+  timestamp: 2026-11-27T04:59:29.193066367Z
   changes: []
 filed_at:
   code_sha: 3f8b6015cb047ef13a46f5ed7769f56dc5f6da07

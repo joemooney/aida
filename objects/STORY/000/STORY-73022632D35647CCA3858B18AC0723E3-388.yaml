@@ -1,5 +1,6 @@
 id: 01a21b47-505a-7922-9c8c-0ef84d87bbf8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-388
+agreed_id: STORY-3214
 title: 'Review PR-4720: [AI:claude] fix(ci-gates): check-ci-fast builds nothing; ratchets move to check-ci-compile, verify-manual runs on CLI-surface changes (BUG-2782)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21b03`) for branch `bug-2782-ccf-no-build`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21b47-75f7-7c51-abae-303f97bc6ed5
   author: dirtlab
   timestamp: 2026-11-27T04:33:17.815145331Z
+  changes: []
+- id: 01a21b5f-7045-75a0-bde2-b9ea121389f7
+  author: joe
+  timestamp: 2026-11-27T04:59:29.221688665Z
   changes: []
 filed_at:
   code_sha: 3f8b6015cb047ef13a46f5ed7769f56dc5f6da07

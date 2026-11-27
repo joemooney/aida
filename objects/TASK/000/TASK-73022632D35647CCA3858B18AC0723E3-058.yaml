@@ -1,5 +1,6 @@
 id: 01a21b19-492b-72e0-a395-a6a9ff3d2457
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-058
+agreed_id: TASK-3537
 title: Lane job runner queues make check-ci-fast behind a host compile slot although the gate no longer compiles
 description: |
   After BUG-2782, `make check-ci-fast` builds nothing (check-ci-gates.py --tier fast --no-build). The lane job runner still queues it behind lanes.max_compile_concurrency. On dell1 on 2026-11-27, job j20261127T033727851-70-0 logged "queued: all 4 host compile slots (lanes.max_compile_concurrency) are in use". The first run of the same gate waited ~7 min in the queue before its 187s run, so most of a lane's pre-push wall time is still slot wait.
@@ -21,6 +22,11 @@ tags:
 - kind:followup-suggestion
 - lane-job
 - severity:minor
+history:
+- id: 01a21b5f-6b8b-71d2-8aa7-afa09d55128b
+  author: joe
+  timestamp: 2026-11-27T04:59:28.011926100Z
+  changes: []
 filed_at:
   code_sha: 71f95102f1d8c0bec2d04160642f479d442360a6
   branch: bug-2782-ccf-no-build

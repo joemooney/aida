@@ -1,5 +1,6 @@
 id: 01a21b15-8a33-77f3-b33f-1d52dfb81f1d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-385
+agreed_id: STORY-3216
 title: 'Review PR-4712: [AI:claude] perf(train): the member gate judges each refused sibling change once per selection, not once per event (Refs BUG-2584)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21a8b`) for branch `bug-2584-s2-member-gate`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21b15-ae8c-7ba2-897b-bdeda5633e43
   author: dirtlab
   timestamp: 2026-11-27T03:38:55.500972569Z
+  changes: []
+- id: 01a21b5f-704d-7fa0-9f1f-819bcc9f5e7a
+  author: joe
+  timestamp: 2026-11-27T04:59:29.229815774Z
   changes: []
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4

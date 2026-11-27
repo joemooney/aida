@@ -1,5 +1,6 @@
 id: 01a21b48-b76e-7951-bf50-5093940300dc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-389
+agreed_id: STORY-3212
 title: 'Review PR-4717: [AI:claude] feat(doctor): landing-drought classifies conflict, missing review and held train lock (Refs STORY-3131)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ad3`) for branch `story-3131-s2-fresh2`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21b48-dbd7-71a2-9c0c-a7af720365f3
   author: dirtlab
   timestamp: 2026-11-27T04:34:49.431702507Z
+  changes: []
+- id: 01a21b5f-6fda-7d42-acc6-a15fc7781c00
+  author: joe
+  timestamp: 2026-11-27T04:59:29.114101574Z
   changes: []
 filed_at:
   code_sha: 3f8b6015cb047ef13a46f5ed7769f56dc5f6da07

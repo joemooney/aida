@@ -1,5 +1,6 @@
 id: 01a21b3e-9781-7721-b2f4-15eaa59b4760
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-387
+agreed_id: STORY-3215
 title: 'Review PR-4716: [AI:claude] feat(review): agy as a review runner vendor and a non-interactive agy auth probe in doctor --lane-host (STORY-3202)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ab2`) for branch `int-story-3202-agy-review`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21b3e-d553-75a0-b735-2f5c81bc9075
   author: dirtlab
   timestamp: 2026-11-27T04:23:52.403595446Z
+  changes: []
+- id: 01a21b5f-7046-70e3-baaf-1dfa82175579
+  author: joe
+  timestamp: 2026-11-27T04:59:29.222630885Z
   changes: []
 filed_at:
   code_sha: 3f8b6015cb047ef13a46f5ed7769f56dc5f6da07
