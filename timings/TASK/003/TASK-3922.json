@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3922",
+  "publishes": [
+    {
+      "at": "2026-11-27T03:54:03.034748593Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T01:11:26.448855090Z",
+      "spec": "TASK-3922",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4702,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1e0b7323fcaa8ba2928dea62a3589b5640e0177a"
+      }
+    },
+    {
+      "ts": "2026-11-27T02:01:21.405061379Z",
+      "spec": "TASK-3922",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4702,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "1e0b7323fcaa8ba2928dea62a3589b5640e0177a"
+      }
+    },
+    {
+      "ts": "2026-11-27T02:01:28.358466168Z",
+      "spec": "TASK-3922",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Advisor FIX-FIRST ruling (18:17) recorded as a verdict so trains don't admit this head: secret-leak class in the refusal text. The r1 lane is in flight.",
+        "recovery_hint": "address the review findings, move TASK-3922 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T02:35:21.851241593Z",
+      "spec": "TASK-3922",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4702,
+        "verdict": "APPROVED",
+        "reviewed_sha": "95d33632892dd7438a9e336e96c8d2628c600c37"
+      }
+    },
+    {
+      "ts": "2026-11-27T03:49:14.242758632Z",
+      "spec": "TASK-3922",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4702
+      }
+    },
+    {
+      "ts": "2026-11-27T03:54:02.668750700Z",
+      "spec": "TASK-3922",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "275cca828707ad8506b59f5dda2ea6dae8397a1b",
+        "pr": 4702,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
