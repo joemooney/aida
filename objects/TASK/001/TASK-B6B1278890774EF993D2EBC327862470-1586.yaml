@@ -1,0 +1,26 @@
+id: 01a21efc-a7c5-7103-97ee-6c262fb5c94b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1586
+agreed_id: TASK-3933
+title: conformance-launch mints the contained child grant through the production issuance path (agy SubjectMismatch)
+description: |-
+  Advisor aida-d3 ruling 2026-11-27 15:00 (filed by product-15). Joe's agy conformance rerun on dell1 at b90f128 (report dell1:~/.aida/conformance-aida-agy-1795816094/report.json) refused at seat_preflight: `seat_grant_valid=false cause=SubjectMismatch`. All setup stages passed. Production contained claude lanes cross the same boundary daily with a valid delegated child grant, so the boundary and the subject check are correct. The defect is that the hidden diagnostic entry `conformance-launch` does not mint/bind the contained child grant the way production does (likely binding the fixture launcher's subject, or a pid-namespace-relative identity, instead of the contained child's).
+
+  ## Acceptance
+  - AC1: the SubjectMismatch diagnostic names BOTH subjects (expected vs presented: kind + redacted ids, no secrets).
+  - AC2: conformance-launch reuses the PRODUCTION contained child-grant issuance path verbatim (one shared function); any duplicated issuance in the diagnostic entry is deleted.
+  - AC3: SubjectMismatch and the subject check are NEVER relaxed.
+  - AC4: a test proves conformance-launch's grant subject equals what a production contained launch presents.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T21:50:04.229258473Z
+modified_at: 2026-11-27T21:50:04.229258473Z
+req_type: Task
+filed_at:
+  code_sha: b90f128a0821d45db1f24420e64de1516fc18698
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b90f128a082
+  vendor: claude
