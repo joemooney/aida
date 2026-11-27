@@ -246,6 +246,7 @@ pub(crate) fn handle_review_command(
         // trace:BUG-775 | ai:claude
         ReviewCommand::Record {
             no_carry,
+            needs,
             spec,
             verdict,
             sha,
@@ -264,6 +265,7 @@ pub(crate) fn handle_review_command(
             finding_class,
             *pr,
             *no_carry,
+            needs,
         ),
         // trace:STORY-1417 | ai:claude
         ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),
