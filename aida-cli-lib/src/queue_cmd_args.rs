@@ -1341,6 +1341,12 @@ pub enum QueueCommand {
         // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
         #[clap(long, allow_hyphen_values = true, value_name = "TEXT")]
         ruling: Option<String>,
+        /// Rework although the spec's open PR is already approved at its
+        /// current head. Without it such a rework is refused, because its
+        /// push would void the approval. The reason is recorded on the spec.
+        // trace:BUG-2785 | ai:claude
+        #[clap(long, allow_hyphen_values = true, value_name = "REASON")]
+        despite_approval: Option<String>,
         /// Chain `aida queue work --resume` to resume a prior claude
         /// session for this spec instead of cold-launching. Implies
         /// `--work`.
