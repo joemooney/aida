@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2779",
+  "publishes": [
+    {
+      "at": "2026-11-27T01:49:56.296537403Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T23:59:06.724505231Z",
+      "spec": "BUG-2779",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4698,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a963decc80235e4a5d15b2382fd08c3dab1b58e6"
+      }
+    },
+    {
+      "ts": "2026-11-27T01:44:56.473712592Z",
+      "spec": "BUG-2779",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4698
+      }
+    },
+    {
+      "ts": "2026-11-27T01:49:56.061347880Z",
+      "spec": "BUG-2779",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "51a308a18d7c461a7cc2022ee105412ba5604ac0",
+        "pr": 4698,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
