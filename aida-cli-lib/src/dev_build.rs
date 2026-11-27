@@ -521,6 +521,35 @@ pub(crate) fn green_head_mismatch(
     })
 }
 
+/// PURE: the promotion plan of a provisional build: its fresh checkout must be
+/// clean and exactly at the marker's full head SHA.
+// trace:STORY-3148 | ai:claude
+pub(crate) fn provisional_plan(
+    state: &CheckoutState,
+    marker: &crate::dev_provisional::ProvisionalMarker,
+) -> PromotionPlan {
+    let mut reasons = Vec::new();
+    if !state.tracked_changes.is_empty() {
+        reasons.push("the provisional checkout has uncommitted tracked changes".to_string());
+    }
+    let head = state.head.as_deref().unwrap_or_default().trim();
+    let want = marker.head.trim();
+    if want.len() < 40
+        || !crate::git_arg_guard::is_hex_sha(want)
+        || !head.eq_ignore_ascii_case(want)
+    {
+        reasons.push(format!(
+            "HEAD is {}, not the provisional head {want}",
+            if head.is_empty() { "unreadable" } else { head }
+        ));
+    }
+    if reasons.is_empty() {
+        PromotionPlan::Promote { warnings: vec![] }
+    } else {
+        PromotionPlan::Refuse { reasons }
+    }
+}
+
 /// The CI gate of a live promotion under `[landing] promote_live_binary_from`:
 /// `Ok(Ok(decision))` allows (the decision is `Some` under
 /// `no-new-failures`, kept in the promotion record), `Ok(Err(why))` refuses.
@@ -784,12 +813,37 @@ pub(crate) fn run_dev_build(
     steps: &mut dyn BuildSteps,
     out: &mut dyn Write,
 ) -> Result<BuildOutcome> {
+    run_dev_build_with(layout, opts, None, steps, out)
+}
+
+/// [`run_dev_build`]; with `provisional`, the checkout is a fresh detached
+/// worktree of the marker's head, promoted without the landing-branch and CI
+/// gates (it has not landed) and recorded with the marker.
+// trace:STORY-3148 | ai:claude
+pub(crate) fn run_dev_build_with(
+    layout: &DevLayout,
+    opts: &DevBuildOptions,
+    provisional: Option<&crate::dev_provisional::ProvisionalMarker>,
+    steps: &mut dyn BuildSteps,
+    out: &mut dyn Write,
+) -> Result<BuildOutcome> {
     let state = steps.probe(&layout.repo)?;
     // trace:BUG-2687 | ai:claude
     let green = opts.green_commit.as_deref();
-    let plan = plan_promotion_at(&state, opts.no_promote, opts.allow_dirty, green);
+    let plan_for = |state: &CheckoutState, no_promote: bool, allow_dirty: bool| match provisional {
+        Some(marker) => provisional_plan(state, marker),
+        None => plan_promotion_at(state, no_promote, allow_dirty, green),
+    };
+    let plan = plan_for(&state, opts.no_promote, opts.allow_dirty);
     match &plan {
         // trace:STORY-1689 | ai:claude
+        PromotionPlan::Refuse { reasons } if provisional.is_some() => {
+            return Err(PromotionRefused(format!(
+                "refusing the provisional promote; the live binaries are untouched:\n  - {}",
+                reasons.join("\n  - ")
+            ))
+            .into())
+        }
         PromotionPlan::Refuse { reasons } => {
             return Err(PromotionRefused(refusal_message(reasons)).into())
         }
@@ -803,8 +857,10 @@ pub(crate) fn run_dev_build(
             for w in crate::landing_policy::load(&layout.repo).warnings {
                 writeln!(out, "warning: {w}")?;
             }
-            if let Err(why) = ci_gate(layout, steps, state.head.as_deref(), out)? {
-                return Err(PromotionRefused(why).into());
+            if provisional.is_none() {
+                if let Err(why) = ci_gate(layout, steps, state.head.as_deref(), out)? {
+                    return Err(PromotionRefused(why).into());
+                }
             }
         }
         PromotionPlan::BuildOnly(_) => {}
@@ -987,7 +1043,7 @@ pub(crate) fn run_dev_build(
             // Anything but `Promote` refuses: a linked worktree that left
             // `integration` during the build plans `BuildOnly`, not `Refuse`.
             // trace:STORY-2737 | ai:claude
-            let recheck = match plan_promotion_at(&state, false, opts.allow_dirty, green) {
+            let recheck = match plan_for(&state, false, opts.allow_dirty) {
                 PromotionPlan::Promote { .. } => None,
                 PromotionPlan::Refuse { reasons } => Some(reasons),
                 PromotionPlan::BuildOnly(_) => Some(vec![format!(
@@ -1008,7 +1064,12 @@ pub(crate) fn run_dev_build(
             let head = state.head.clone().unwrap_or_default();
             // The staged build must be the selected green commit itself, not
             // merely whatever HEAD became. trace:BUG-2687 | ai:claude
-            let expected = green.map_or_else(|| head.clone(), |g| g.trim().to_ascii_lowercase());
+            let expected = match (provisional, green) {
+                // trace:STORY-3148 | ai:claude
+                (Some(m), _) => m.head.trim().to_ascii_lowercase(),
+                (None, Some(g)) => g.trim().to_ascii_lowercase(),
+                (None, None) => head.clone(),
+            };
             if !opts.allow_dirty {
                 let staged = steps.version_sha(&incoming.join("aida"));
                 if let Err(why) = check_staged_sha(staged.as_deref(), &expected) {
@@ -1025,14 +1086,22 @@ pub(crate) fn run_dev_build(
             // `--allow-dirty` or not. trace:STORY-2897 | ai:claude
             // trace:STORY-2912 | ai:claude
             let policy = steps.promote_from(&layout.repo);
-            if policy != crate::landing_policy::PromoteFrom::CleanMain {
+            // A provisional build must be the clean build of its head too.
+            // trace:STORY-3148 | ai:claude
+            if policy != crate::landing_policy::PromoteFrom::CleanMain || provisional.is_some() {
                 let staged = steps.version_sha(&incoming.join("aida"));
                 if let Some(why) = green_main_staged_refusal(staged.as_deref(), &expected) {
                     let _ = std::fs::remove_dir_all(&incoming);
+                    let rule = match provisional {
+                        Some(_) => "a provisional promote needs the clean build of its head".into(),
+                        None => format!(
+                            "`--allow-dirty` does not override `[landing] \
+                             promote_live_binary_from = {}`",
+                            aida_core::toml_quote::toml_string(policy.as_str())
+                        ),
+                    };
                     return Err(PromotionRefused(format!(
-                        "{why}; the live binaries were not touched (`--allow-dirty` does not \
-                         override `[landing] promote_live_binary_from = {}`)",
-                        aida_core::toml_quote::toml_string(policy.as_str())
+                        "{why}; the live binaries were not touched ({rule})"
                     ))
                     .into());
                 }
@@ -1040,7 +1109,13 @@ pub(crate) fn run_dev_build(
             // The CI decision is pinned to the exact commit being promoted
             // and re-read at the swap: main can move, or its CI change,
             // while the build runs. trace:STORY-2897 | ai:claude
-            let ci_comparison = match ci_gate(layout, steps, Some(&head), out) {
+            // A provisional head has not landed: no CI result gates it.
+            // trace:STORY-3148 | ai:claude
+            let gate = match provisional {
+                Some(_) => Ok(Ok(None)),
+                None => ci_gate(layout, steps, Some(&head), out),
+            };
+            let ci_comparison = match gate {
                 Ok(Ok(decision)) => decision,
                 Ok(Err(why)) => {
                     let _ = std::fs::remove_dir_all(&incoming);
@@ -1072,6 +1147,8 @@ pub(crate) fn run_dev_build(
                 repo: Some(canonical_or_self(&layout.repo).display().to_string()),
                 // trace:STORY-2912 | ai:claude
                 ci_comparison,
+                // trace:STORY-3148 | ai:claude
+                provisional: provisional.cloned(),
             };
             commit_staged(layout, &meta)?;
             drop(lock);
@@ -1758,6 +1835,11 @@ pub(crate) struct PromotionMeta {
     // trace:STORY-2912 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ci_comparison: Option<crate::promotion_failures::Decision>,
+    /// Set by `aida dev provisional`: this pair runs an unlanded head. It
+    /// moves with the pair, so a rollback takes it off live.
+    // trace:STORY-3148 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provisional: Option<crate::dev_provisional::ProvisionalMarker>,
 }
 
 /// Read a `.promoted` record from `dir` (the live dir or `prev/`).
@@ -2575,8 +2657,19 @@ pub(crate) fn run_dev_rollback(
             .guard(&layout.repo, &layout.live("aida"), after_wave)
             .map_err(|e| anyhow!("{e:#}\n(or `aida dev rollback --force` to swap anyway)"))?;
     }
+    // trace:STORY-3148 | ai:claude
+    let was_provisional =
+        read_promotion_meta(&layout.live_dir).is_some_and(|m| m.provisional.is_some());
     for note in rollback(layout)? {
         writeln!(out, "note: {note}")?;
+    }
+    match read_promotion_meta(&layout.live_dir).and_then(|m| m.provisional) {
+        Some(m) => writeln!(out, "{}", crate::dev_provisional::status_line(&m))?,
+        None if was_provisional => writeln!(
+            out,
+            "PROVISIONAL marker cleared: live is no longer the provisional build."
+        )?,
+        None => {}
     }
     writeln!(
         out,
@@ -2788,9 +2881,14 @@ pub(crate) fn print_live_status() {
         .as_ref()
         .and_then(|l| binary_sha_label(&l.built("aida")));
     let show = |v: &Option<String>| v.clone().unwrap_or_else(|| "(none)".to_string());
-    println!("Live binary:  {} ({})", show(&live), live_dir.display());
     // trace:STORY-1646 | ai:claude
     let live_meta = read_promotion_meta(&live_dir);
+    // First and loud: live runs an unlanded head. trace:STORY-3148 | ai:claude
+    if let Some(m) = live_meta.as_ref().and_then(|m| m.provisional.as_ref()) {
+        use colored::Colorize;
+        println!("{}", crate::dev_provisional::status_line(m).red().bold());
+    }
+    println!("Live binary:  {} ({})", show(&live), live_dir.display());
     if let Some(meta) = &live_meta {
         println!("{}", promoted_line(meta));
     }
