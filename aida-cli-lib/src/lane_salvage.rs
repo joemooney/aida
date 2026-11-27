@@ -142,7 +142,9 @@ fn operator_stop(
 }
 
 /// The host kernel log since `since`, through `journalctl -k`; `None` when
-/// it cannot be read (no journal access, no journalctl, a timeout).
+/// it cannot be read (no journalctl, a failure, a timeout). Without journal
+/// access `journalctl -k` prints no kernel lines, so an empty log is also
+/// `None`: unknown, never "no OOM kill".
 // trace:BUG-2781 | ai:claude
 pub(crate) fn read_kernel_log(since: std::time::SystemTime) -> Option<String> {
     let secs = since.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
@@ -150,8 +152,7 @@ pub(crate) fn read_kernel_log(since: std::time::SystemTime) -> Option<String> {
     cmd.args(["-k", "--no-pager", "-q", "-o", "short-iso"])
         .arg(format!("--since=@{secs}"));
     let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(10))?;
-    let err = String::from_utf8_lossy(&out.stderr);
-    (out.status.success() && !err.contains("insufficient permissions"))
+    (out.status.success() && !out.stdout.is_empty())
         .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 

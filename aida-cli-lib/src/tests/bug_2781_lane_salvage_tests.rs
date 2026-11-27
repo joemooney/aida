@@ -102,6 +102,10 @@ fn bug_2781_open_pr_branch_is_fast_forwarded() {
     git_ok(
         &fx.main,
         &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "push",
             "-q",
             "origin",
@@ -171,6 +175,10 @@ fn bug_2781_non_fast_forward_is_refused_and_retained() {
             "user.name=Other",
             "-c",
             "user.email=other@example.com",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "commit-tree",
             "origin/main^{tree}",
             "-p",
@@ -182,6 +190,10 @@ fn bug_2781_non_fast_forward_is_refused_and_retained() {
     git_ok(
         &fx.main,
         &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "push",
             "-q",
             "origin",
@@ -251,6 +263,10 @@ fn pr_branch_at_main(fx: &super::tests::Fixture, branch: &str) {
     git_ok(
         &fx.main,
         &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
             "push",
             "-q",
             "origin",
